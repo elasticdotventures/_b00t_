@@ -1,0 +1,60 @@
+[b00t]
+name = "codex"
+type = "runtime"
+hint = "OpenAI Codex CLI — sandboxed launch via b00t wrapper"
+
+[b00t.runtime]
+binary = "codex"
+# workdir is inherited from parent process
+
+[b00t.runtime.isolation]
+share_net = true
+new_session = true
+
+# Minimal filesystem: /usr, /lib*, /bin, /etc ro-bind, home config rw, /tmp tmpfs
+[[b00t.runtime.isolation.mounts]]
+src = "/usr"
+dest = "/usr"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib"
+dest = "/lib"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib64"
+dest = "/lib64"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/bin"
+dest = "/bin"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/etc"
+dest = "/etc"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/home/brianh/.codex"
+dest = "/home/brianh/.codex"
+type = "bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = ""
+dest = "/tmp"
+type = "tmpfs"
+
+[[b00t.runtime.isolation.mounts]]
+src = ""
+dest = "/proc"
+type = "proc"
+
+# b00t:map v1
+# summary: sandboxed codex runtime — declarative isolation via b00t wrapper
+# tags: codex, runtime, sandbox, openai
+# tier: ch0nky
+# cmds: b00t codex
+# complexity: 3

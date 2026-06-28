@@ -1,0 +1,147 @@
+---
+name: DARED
+description: |
+  DARED::DecisionAlternativeRiskExecutiveDecision — codified OODA state-change
+  proposal framework for b00t architecture governance. Each section maps to UFO
+  stereotypes in Rust generics (crates/ufo-types/src/dare.rs). A DARED is an
+  OODA Act-phase transition from Observe/Orient → Decide/Act → Verify.
+version: 2.0.0
+tags: [DARED, DARE, ADR, proposal, decision, architecture, OODA, governance, framework, set-theory]
+tier: frontier
+complexity: 8
+applies_to:
+  - "architecture decision"
+  - "proposal"
+  - "OODA state change"
+  - "governance"
+  - "first-order logic"
+output_types: [.tomllmd, .rs]
+depends_on: ["ufo-types-crate-511"]
+unlocks:
+  - "all architecture proposals"
+metadata:
+  ufo_stereotype: Relator
+  acronym: "Decision Alternative Risk ExecutiveDecision"
+  predecessor: "DARE v1 (Endurant) → DARED v2 (ExecutiveDecision)"
+  ooda_phase: "Act"
+  rust_module: "crates/ufo-types/src/dare.rs"
+  test_count: 28
+---
+## DARED::DecisionAlternativeRiskExecutiveDecision
+
+<|🤓|>define DARED as the OODA Act-phase governor that classifies every
+architecture proposal into b00t's first-order logic via set/category
+theoretic grounding. Each section is a Rust generic implementing
+Stereotyped + Serialize + Deserialize, yielding ontology-triple
+evidence through NS-9 (record_is_a) and NS-10 (record_audited_by).
+The ExecutiveDecision's summary field is the semantic sugar — a
+⊆-separated category chain that enables querying "all decisions of
+type ArchitectureDecision" without walking the AST.</🤓|>
+
+### Set-Theoretic Grounding
+
+```
+DARED ⊆ ADR ∪ {ExecutiveDecision, summary, Rust types, FOL}
+Decision    ∈ Perdurant  — committed process unfolding in time
+Alternative ∈ Kind       — counterfactual entity, never instantiated
+Risk        ∈ Mode       — potential quality inhering in the decision
+ExecDec     ∈ Relator    — mediates Decision → Artifacts, captain's sign-off
+
+ExecutiveDecision.summary ⊂ b00t_Ontology_Categories
+  where summary = "LeafCategory ⊆ ParentCategory ⊆ RootCategory"
+  and   RootCategory ∈ {ArchitectureDecision, ProcessChange, ToolAdoption, …}
+```
+
+### Category-Theoretic Relationship
+
+```
+                        Captain (operator)
+                            │
+                       sign_off
+                            │
+                            ▼
+Decision ──┬── produces ──→ ExecutiveDecision ── contains ──→ Artifacts
+           │                      │
+           │                 summary : Category
+           │                      │
+           ▼                      ▼
+     Alternative              AcceptanceCriteria
+     (rejected)               (iso 31000 auditable)
+           │
+           ▼
+         Risk
+     (mitigation)
+```
+
+The ExecutiveDecision is the **natural transformation** between the
+Decision functor (what to do) and the Artifacts functor (what persists).
+The summary field is the **object classifier** in the subobject
+classifier Ω of b00t's governance topos.
+
+### OODA State Machine (Rust enum)
+
+```rust
+pub enum OodaPhase { Observe, Orient, Decide, Act, Verify }
+// PartialOrd: Observe < Orient < Decide < Act < Verify
+// Stereotyped: each phase → UfoStereotype::Role("OodaPhase:{name}")
+```
+
+### DARED acceptance gate (Satisfies<DaredAcceptanceCriteria>)
+
+A DARED satisfies acceptance iff:
+1. |alternatives| ≥ min_alternatives
+2. ∀ r ∈ risks: r.mitigation ≠ ∅
+3. ExecutiveDecision.summary ≠ ""  (⊆ chain present)
+4. artifacts ∪ removed ≠ ∅
+5. ∀ c ∈ acceptance_criteria: c ≠ ""
+6. phase ≥ Decide
+
+Scored as confidence = checks_passed / 5.0. Passes at confidence = 1.0.
+
+### DARED Document Template
+
+```toml
+[decision]
+what = "<committed action>"
+who = "<owner>"
+when = "<timeline>"
+scope = ["<in-scope>", …]
+explicitly_out_of_scope = ["<excluded>", …]
+
+[[alternatives]]
+name = "<name>"
+viable = "<why viable>"
+rejected_because = "<why rejected>"
+
+[[risks]]
+name = "<risk name>"
+severity = "LOW|MEDIUM|HIGH|CRITICAL"
+description = "<what could go wrong>"
+mitigation = "<how mitigated>"
+
+[executive_decision]
+summary = "LeafCategory ⊆ ParentCategory ⊆ RootCategory"
+artifacts = ["<persistent file/recipe/gate>", …]
+removed = ["<file/pattern to delete>", …]
+acceptance_criteria = ["<verifiable condition>", …]
+```
+
+### DARED vs DARE v1
+
+| Aspect | DARE v1 | DARED v2 |
+|--------|---------|----------|
+| Fourth section | Endurant (Kind) | ExecutiveDecision (Relator) |
+| Category label | Implicit | `summary` field (⊆ chain) |
+| UFO grounding | Sections → stereotypes | Sections + Rust generics |
+| FOL queryable | No | Yes (summary ∈ categories) |
+| Rust types | N/A | `dare.rs` module, 28 tests |
+| Captain binding | Text reference | `ExecutiveDecision` struct |
+
+
+
+# b00t:map v1
+# summary: DARED::DecisionAlternativeRiskExecutiveDecision — set/category-theoretic OODA governance framework with Rust generics
+# tags: DARED, DARE, ADR, decision, set-theory, category-theory, OODA, governance, FOL
+# tier: frontier
+# cmds: just ufo-test, cargo test -p ufo-types dare
+# complexity: 8

@@ -177,6 +177,52 @@ impl Default for SceneTheme {
     }
 }
 
+// ── Bridge: SceneGraph ↔ InvariantGraph (b00t-l3dg3rr-viz) ───────────────
+
+impl From<SemanticRole> for b00t_l3dg3rr_viz::VisualizationRole {
+    fn from(role: SemanticRole) -> Self {
+        match role {
+            SemanticRole::Ingest => b00t_l3dg3rr_viz::VisualizationRole::Ingest,
+            SemanticRole::Validate => b00t_l3dg3rr_viz::VisualizationRole::Validate,
+            SemanticRole::Classify => b00t_l3dg3rr_viz::VisualizationRole::Classify,
+            SemanticRole::Review => b00t_l3dg3rr_viz::VisualizationRole::Review,
+            SemanticRole::Reconcile => b00t_l3dg3rr_viz::VisualizationRole::Reconcile,
+            SemanticRole::Commit => b00t_l3dg3rr_viz::VisualizationRole::Commit,
+            SemanticRole::Decision => b00t_l3dg3rr_viz::VisualizationRole::Decision,
+            SemanticRole::Step => b00t_l3dg3rr_viz::VisualizationRole::Step,
+        }
+    }
+}
+
+impl From<SceneNode> for b00t_l3dg3rr_viz::InvariantNode {
+    fn from(node: SceneNode) -> Self {
+        b00t_l3dg3rr_viz::InvariantNode::new(node.id, node.label, node.role.into())
+    }
+}
+
+impl From<SceneEdge> for b00t_l3dg3rr_viz::InvariantEdge {
+    fn from(edge: SceneEdge) -> Self {
+        let mut e = b00t_l3dg3rr_viz::InvariantEdge::new(edge.from, edge.to);
+        if let Some(label) = edge.label {
+            e = e.with_label(label);
+        }
+        e
+    }
+}
+
+impl From<SceneGraph> for b00t_l3dg3rr_viz::InvariantGraph {
+    fn from(scene: SceneGraph) -> Self {
+        let mut graph = b00t_l3dg3rr_viz::InvariantGraph::new("b00t-scene");
+        for node in scene.nodes {
+            graph.nodes.push(node.into());
+        }
+        for edge in scene.edges {
+            graph.edges.push(edge.into());
+        }
+        graph
+    }
+}
+
 pub fn scene_to_svg(scene: &SceneGraph, theme: &SceneTheme) -> String {
     let (width, height) = match scene.bounding_box() {
         Some((min, max)) => {
@@ -335,29 +381,6 @@ pub fn blessing_to_rhai_dsl(graph: &BlessingGraph) -> String {
     out
 }
 
-pub fn blessing_to_plantuml(graph: &BlessingGraph) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for node in &graph.nodes {
-        out.push_str(&format!(
-            "component \"{}\\ncost={}\\nroles={}\" as {}\n",
-            plantuml_label(&node.id),
-            node.cost_tokens,
-            plantuml_label(&node.role_access.join(",")),
-            plantuml_id(&node.id)
-        ));
-    }
-    for edge in &graph.edges {
-        out.push_str(&format!(
-            "{} --> {} : {}\n",
-            plantuml_id(&edge.from),
-            plantuml_id(&edge.to),
-            plantuml_label(&edge.relationship)
-        ));
-    }
-    out.push_str("@enduml\n");
-    out
-}
-
 pub fn tasks_to_scene(tasks: &[Task]) -> SceneGraph {
     let ids: Vec<String> = tasks.iter().map(|task| task.id.to_string()).collect();
     let edges: Vec<(String, String)> = tasks
@@ -428,27 +451,6 @@ pub fn tasks_to_rhai_dsl(tasks: &[Task]) -> String {
                 .join(", ")
         ));
     }
-    out
-}
-
-pub fn tasks_to_plantuml(tasks: &[Task]) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for task in tasks {
-        out.push_str(&format!(
-            "component \"#{} {}\\nstatus={}\\npriority={}\" as T{}\n",
-            task.id,
-            plantuml_label(&task.title),
-            task.status,
-            task.priority,
-            task.id
-        ));
-    }
-    for task in tasks {
-        for dep in &task.dependencies {
-            out.push_str(&format!("T{} --> T{} : depends_on\n", dep, task.id));
-        }
-    }
-    out.push_str("@enduml\n");
     out
 }
 
@@ -529,33 +531,6 @@ pub fn datum_graph_to_rhai_dsl(graph: &DatumGraph) -> String {
             escape_rhai(&edge.edge_type)
         ));
     }
-    out
-}
-
-pub fn datum_graph_to_plantuml(graph: &DatumGraph) -> String {
-    let mut out = String::from("@startuml\nleft to right direction\n");
-    for node in &graph.nodes {
-        let datum_type = node
-            .datum_type
-            .as_ref()
-            .map(|dtype| format!("{dtype:?}"))
-            .unwrap_or_else(|| "?".into());
-        out.push_str(&format!(
-            "component \"{}\\n{}\" as {}\n",
-            plantuml_label(&node.key),
-            plantuml_label(&datum_type),
-            plantuml_id(&node.key)
-        ));
-    }
-    for edge in &graph.edges {
-        out.push_str(&format!(
-            "{} --> {} : {}\n",
-            plantuml_id(&edge.from),
-            plantuml_id(&edge.to),
-            plantuml_label(&edge.edge_type)
-        ));
-    }
-    out.push_str("@enduml\n");
     out
 }
 
@@ -643,14 +618,6 @@ fn mermaid_label(raw: &str) -> String {
     raw.replace('"', "'")
 }
 
-fn plantuml_id(raw: &str) -> String {
-    mermaid_id(raw)
-}
-
-fn plantuml_label(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "'")
-}
-
 fn escape_rhai(raw: &str) -> String {
     raw.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -666,6 +633,8 @@ fn escape_xml(raw: &str) -> String {
 mod tests {
     use super::*;
     use crate::blessing::{BlessingEdge, BlessingNode};
+    use crate::datum_utils::{DatumGraphEdge, DatumGraphNode};
+    use crate::DatumType;
 
     #[test]
     fn iso_project_matches_l3dg3rr_contract() {
@@ -710,7 +679,6 @@ mod tests {
         assert_eq!(scene.nodes.len(), 2);
         assert_eq!(scene.edges.len(), 1);
         assert!(blessing_to_rhai_dsl(&graph).contains("role(\"executive\""));
-        assert!(blessing_to_plantuml(&graph).contains("@startuml"));
     }
 
     #[test]
@@ -748,7 +716,62 @@ mod tests {
         let scene = tasks_to_scene(&tasks);
         assert_eq!(scene.edges.len(), 1);
         assert!(tasks_to_rhai_dsl(&tasks).contains("blocked_by: [\"1\"]"));
-        assert!(tasks_to_plantuml(&tasks).contains("T1 --> T2"));
         assert!(scene_to_ascii(&scene).contains("depends_on"));
+    }
+
+    #[test]
+    fn datum_graph_emits_mermaid_and_scene() {
+        let graph = DatumGraph {
+            nodes: vec![
+                DatumGraphNode {
+                    key: "b00t.cli".into(),
+                    name: "b00t".into(),
+                    datum_type: Some(DatumType::Cli),
+                    hint: "b00t CLI tool".into(),
+                },
+                DatumGraphNode {
+                    key: "rust.c".into(),
+                    name: "rustc".into(),
+                    datum_type: Some(DatumType::Cli),
+                    hint: "Rust compiler".into(),
+                },
+            ],
+            edges: vec![DatumGraphEdge {
+                from: "b00t.cli".into(),
+                to: "rust.c".into(),
+                edge_type: "depends_on".into(),
+            }],
+        };
+        let mermaid = datum_graph_to_mermaid(&graph);
+        assert!(mermaid.contains("b00t.cli"));
+        assert!(mermaid.contains("rust.c"));
+        assert!(mermaid.contains("-->"));
+        let scene = datum_graph_to_scene(&graph);
+        assert_eq!(scene.nodes.len(), 2);
+        assert_eq!(scene.edges.len(), 1);
+    }
+
+    #[test]
+    fn datum_graph_rhai_dsl_emits_entanglement() {
+        let graph = DatumGraph {
+            nodes: vec![DatumGraphNode {
+                key: "git.cli".into(),
+                name: "git".into(),
+                datum_type: Some(DatumType::Cli),
+                hint: "Git VCS".into(),
+            }],
+            edges: vec![],
+        };
+        let rhai = datum_graph_to_rhai_dsl(&graph);
+        assert!(rhai.contains("datum(\"git.cli\""));
+        assert!(rhai.contains("type: \"Cli\""));
+    }
+
+    #[test]
+    fn empty_datum_graph_produces_empty_scene() {
+        let graph = DatumGraph { nodes: vec![], edges: vec![] };
+        let scene = datum_graph_to_scene(&graph);
+        assert_eq!(scene.nodes.len(), 0);
+        assert_eq!(scene.edges.len(), 0);
     }
 }

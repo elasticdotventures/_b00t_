@@ -135,7 +135,6 @@ pub mod memory_provider;
 pub mod model_manager;
 pub mod model_registry;
 pub mod orchestrator;
-pub mod sandbox;
 pub mod runtime_sandbox;
 pub mod scheduler;
 pub mod session_memory;
@@ -229,15 +228,6 @@ pub struct UnifiedConfig {
     pub env: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub sections: Option<std::collections::HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-#[serde(default)]
-pub struct VisualizationSpec {
-    #[serde(rename = "type")]
-    pub viz_type: String,
-    pub render_opts: Vec<String>,
-    pub auto_scope: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -1671,7 +1661,6 @@ pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
         return Ok(primary);
     }
 
-    // Fallback to legacy ~/.dotfiles/_b00t_ if primary missing
     let legacy = PathBuf::from(shellexpand::tilde("~/.dotfiles/_b00t_").to_string());
     if legacy.exists() {
         if !WARNED_LEGACY.swap(true, Ordering::SeqCst) {
@@ -1680,8 +1669,55 @@ pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
         return Ok(legacy);
     }
 
-    // Return the primary even if it doesn't exist to preserve prior behavior
     Ok(primary)
+}
+
+/// Find a project by walking up from cwd to git root looking for .git/🥾.tomllmd
+fn find_project_b00t() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut current = cwd.as_path();
+    loop {
+        let marker = current.join(".git").join("🥾.tomllmd");
+        if marker.exists() {
+            return current.join("_b00t_").is_dir().then(|| current.join("_b00t_"));
+        }
+        if current.join(".git").exists() {
+            break;
+        }
+        current = current.parent()?;
+    }
+    None
+}
+
+/// Load project-local version overrides from .git/🥾.tomllmd
+pub fn load_project_overrides() -> std::collections::HashMap<String, String> {
+    let mut overrides = std::collections::HashMap::new();
+    let path = {
+        let cwd = match std::env::current_dir() { Ok(d) => d, Err(_) => return overrides };
+        let mut cur = cwd.as_path();
+        loop {
+            let git_boot = cur.join(".git").join("🥾.tomllmd");
+            if git_boot.exists() {
+                break Some(git_boot);
+            }
+            if cur.join(".git").exists() { break None; }
+            cur = match cur.parent() { Some(p) => p, None => break None };
+        }
+    };
+    if let Some(path) = path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(toml) = content.parse::<toml::Table>() {
+                if let Some(o) = toml.get("overrides").and_then(|v| v.as_table()) {
+                    for (k, v) in o {
+                        if let Some(val) = v.as_str() {
+                            overrides.insert(k.clone(), val.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    overrides
 }
 
 pub fn get_ai_tools_status(path: &str) -> Result<Vec<Box<dyn StatusProvider>>> {
@@ -1712,34 +1748,40 @@ pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    let expanded = shellexpand::tilde(path);
-    let dir = std::path::Path::new(expanded.as_ref());
+    // Try project-local _b00t_/ first, then fall back to global path
+    let dirs: Vec<std::path::PathBuf> = {
+        let mut v = Vec::new();
+        if let Some(project) = find_project_b00t() {
+            v.push(project);
+        }
+        if let Ok(expanded) = get_expanded_path(path) {
+            v.push(expanded);
+        }
+        v
+    };
 
-    for base in DatumType::all_base_suffixes() {
-        for ext in [".tomllmd", ".tomllm", ".toml"] {
-            let path = dir.join(format!("{}{}{}", command, base, ext));
-            if path.exists() {
-                let filename = path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_string();
-                let content = std::fs::read_to_string(&path)?;
-                let mut config: UnifiedConfig = toml::from_str(&content)?;
-                crate::datum_utils::apply_git_attributes_to_config(&mut config, &path);
-                return Ok((config, filename));
+    for dir in &dirs {
+        for base in DatumType::all_base_suffixes() {
+            for ext in [".tomllmd", ".tomllm", ".toml"] {
+                let p = dir.join(format!("{}{}{}", command, base, ext));
+                if p.exists() {
+                    let filename = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                    let content = std::fs::read_to_string(&p)?;
+                    let mut config: UnifiedConfig = toml::from_str(&content)?;
+                    crate::datum_utils::apply_git_attributes_to_config(&mut config, &p);
+                    return Ok((config, filename));
+                }
             }
         }
-    }
-    // fallback: plain .tomllmd then .tomllm then .toml (Unknown type — no typed suffix)
-    for ext in [".tomllmd", ".tomllm", ".toml"] {
-        let plain = dir.join(format!("{}{}", command, ext));
-        if plain.exists() {
-            let filename = format!("{}{}", command, ext);
-            let content = std::fs::read_to_string(&plain)?;
-            let mut config: UnifiedConfig = toml::from_str(&content)?;
-            crate::datum_utils::apply_git_attributes_to_config(&mut config, &plain);
-            return Ok((config, filename));
+        for ext in [".tomllmd", ".tomllm", ".toml"] {
+            let plain = dir.join(format!("{}{}", command, ext));
+            if plain.exists() {
+                let filename = format!("{}{}", command, ext);
+                let content = std::fs::read_to_string(&plain)?;
+                let mut config: UnifiedConfig = toml::from_str(&content)?;
+                crate::datum_utils::apply_git_attributes_to_config(&mut config, &plain);
+                return Ok((config, filename));
+            }
         }
     }
 
@@ -3307,16 +3349,29 @@ where
     T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
 {
     let mut tools: Vec<Box<dyn traits::DatumProvider>> = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
+    let mut seen = std::collections::HashSet::new();
 
-    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
-        for entry in entries.flatten() {
-            let entry_path = entry.path();
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(extension) {
-                    if let Some(tool_name) = file_name.strip_suffix(extension) {
-                        if let Ok(datum) = T::try_from((tool_name, path)) {
-                            tools.push(Box::new(datum));
+    // Scan project-local first, then global — project overrides global
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(project) = find_project_b00t() {
+        dirs.push(project);
+    }
+    if let Ok(global) = get_expanded_path(path) {
+        dirs.push(global);
+    }
+
+    for dir in &dirs {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(extension) {
+                        if let Some(tool_name) = file_name.strip_suffix(extension) {
+                            if seen.insert(tool_name.to_string()) {
+                                if let Ok(datum) = T::try_from((tool_name, path)) {
+                                    tools.push(Box::new(datum));
+                                }
+                            }
                         }
                     }
                 }

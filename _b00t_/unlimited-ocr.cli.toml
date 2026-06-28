@@ -1,0 +1,73 @@
+[b00t]
+name = "unlimited-ocr"
+type = "cli"
+desires = "latest"
+hint = "Baidu Unlimited-OCR — OCR engine for unlimited-length text recognition via podman container"
+depends_on = ["podman.cli"]
+
+install = '''
+echo "📦 Installing Unlimited-OCR via podman..."
+
+IMAGE="ghcr.io/baidu/unlimited-ocr:latest"
+# Pull + verify
+podman pull "$IMAGE"
+# Create wrapper script
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/unlimited-ocr <<'WRAPPER'
+#!/usr/bin/env bash
+# unlimited-ocr podman wrapper
+# Usage: unlimited-ocr <input_image> [output_file]
+PODMAN_ARGS=(
+  --rm
+  --device nvidia.com/gpu=all
+  -v "$(pwd):/workspace:Z"
+  -v "$HOME/.cache/unlimited-ocr:/root/.cache:Z"
+)
+exec podman run "$${PODMAN_ARGS[@]}" ghcr.io/baidu/unlimited-ocr:latest "$@"
+WRAPPER
+chmod +x ~/.local/bin/unlimited-ocr
+
+# Verify
+unlimited-ocr --version 2>/dev/null || echo "unlimited-ocr installed (version check TBD)"
+'''
+
+update = '''
+echo "🔄 Updating Unlimited-OCR..."
+podman pull ghcr.io/baidu/unlimited-ocr:latest
+echo "Updated to latest image"
+'''
+
+version = "podman image inspect ghcr.io/baidu/unlimited-ocr:latest --format '{{.Created}}' 2>/dev/null || echo 'unknown'"
+version_regex = '(.+)'
+lfmf_category = "ocr"
+
+[b00t.learn]
+topic = "unlimited-ocr"
+auto_digest = false
+
+[[b00t.usage]]
+description = "OCR an image file"
+command = "unlimited-ocr input.png"
+
+[[b00t.usage]]
+description = "OCR to output text file"
+command = "unlimited-ocr scan.png output.txt"
+
+[[b00t.usage]]
+description = "Update to latest image"
+command = "podman pull ghcr.io/baidu/unlimited-ocr:latest"
+
+[validate]
+command = "podman image exists ghcr.io/baidu/unlimited-ocr:latest || podman pull ghcr.io/baidu/unlimited-ocr:latest"
+regex = ""
+
+[roles]
+required_for = []
+optional_for = ["developer", "analyst"]
+
+# b00t:map v1
+# summary: Baidu Unlimited-OCR — unlimited-length text recognition via podman container
+# tags: ocr, podman, gpu, baidu, text-recognition
+# tier: ch0nky
+# cmds: b00t install unlimited-ocr, b00t detect unlimited-ocr, unlimited-ocr input.png
+# complexity: 3

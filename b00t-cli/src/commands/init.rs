@@ -2,268 +2,397 @@ use crate::load_datum_providers;
 use crate::session_memory::SessionMemory;
 use crate::traits::*;
 use crate::whoami;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
-use std::path::Path;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 pub enum InitCommands {
     #[clap(
-        about = "Initialize command aliases",
-        long_about = "Initialize command aliases for CLI tools.\n\nExamples:\n  b00t-cli init aliases"
+        about = "Initialize a b00t project in the current directory",
+        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
     )]
-    Aliases,
-    #[clap(
-        about = "👋 Initialize hello world protocol - wake up all systems",
-        long_about = "Execute the b00t hello_world protocol:\n  • Verify and start Redis server\n  • Load MCP server configurations\n  • Run system diagnostics\n  • Configure agent preferences\n  • Display interactive system tour\n\nExamples:\n  b00t-cli init hello-world\n  b00t-cli init hello-world --skip-redis"
-    )]
-    HelloWorld {
-        #[clap(long, help = "Skip Redis server startup")]
-        skip_redis: bool,
-        #[clap(long, help = "Skip system diagnostics")]
-        skip_diagnostics: bool,
-        #[clap(long, help = "Skip interactive tour")]
-        skip_tour: bool,
+    Project {
+        #[clap(long, help = "Project name (default: directory name)")]
+        name: Option<String>,
+        #[clap(long, help = "Primary technology stack (rust|python|nodejs|auto)")]
+        stack: Option<String>,
+        #[clap(long, help = "Force agent onboarding (detect tools, start Redis, show capabilities)")]
+        setup: bool,
+        #[clap(long, help = "Skip agent onboarding")]
+        no_setup: bool,
     },
 }
 
-/// Execute the comprehensive b00t hello_world protocol
-fn execute_hello_world_protocol(
+// ── Project initialization ────────────────────────────────────────────────
+
+fn handle_project_init(
+    name: Option<String>,
+    stack: Option<String>,
+    force_setup: bool,
+    no_setup: bool,
     path: &str,
-    skip_redis: bool,
-    _skip_diagnostics: bool,
-    skip_tour: bool,
 ) -> Result<()> {
-    println!("👋 b00t hello_world protocol - enlightening agent capabilities...\n");
+    let cwd = std::env::current_dir().context("current dir")?;
 
-    // Initialize session memory and agent identity
-    let mut memory = SessionMemory::load()?;
+    // Must be at the root of a git repo
+    if !cwd.join(".git").exists() {
+        anyhow::bail!(
+            "not a git repository root ({}). Run 'git init' first.",
+            cwd.display()
+        );
+    }
+    let project_name = name.unwrap_or_else(|| {
+        cwd.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("b00t-project")
+            .to_string()
+    });
 
-    // Phase 1: Agent Identity & Role Detection
-    println!("🤖 Phase 1: Agent Identity Detection");
-    detect_agent_role(&mut memory)?;
+    let b00t_dir = cwd.join("_b00t_");
+    let existed = b00t_dir.exists();
 
-    // Phase 2: Project Context Detection
-    println!("\n📂 Phase 2: Project Context Analysis");
-    detect_project_context(&mut memory)?;
-
-    // Phase 3: Datum-based Tool Discovery
-    println!("\n🔧 Phase 3: Tool & Service Discovery");
-    discover_available_tools(path, &mut memory)?;
-
-    // Phase 4: Redis & Infrastructure (if needed)
-    if !skip_redis {
-        println!("\n💾 Phase 4: Infrastructure Setup");
-        setup_infrastructure(&mut memory)?;
+    if existed {
+        println!("  ⏭️  _b00t_/ already exists");
+    } else {
+        std::fs::create_dir(&b00t_dir).context("create _b00t_/")?;
+        println!("  📁 created {}", b00t_dir.display());
     }
 
-    // Phase 5: Agent Enlightenment - What can you do?
-    if !skip_tour {
-        println!("\n🧠 Phase 5: Agent Capability Mapping");
-        enlighten_agent_capabilities(path, &mut memory)?;
+    let primary_stack = stack.unwrap_or_else(|| detect_project_stack(&cwd));
+
+    // ── Write project soul: .git/🥾.tomllmd (canonical) ──────────────
+    // Symlinked to _b00t_/🥾.tomllmd for visibility.
+    // .git/ is never tracked — safe deterministic access point.
+
+    let git_dir = cwd.join(".git");
+    let git_boot = git_dir.join("🥾.tomllmd");
+    if !git_boot.exists() {
+        let content = format!(
+            r#"# 🥾 {project_name} — b00t project soul
+
+[project]
+name = "{project_name}"
+primary_stack = "{primary_stack}"
+
+[overrides]
+# Pin tool versions for this project:
+# rustc = "1.85.0"
+# node = "22.0.0"
+
+# b00t:map v1
+# summary: {project_name} b00t project configuration
+# tags: project, {project_name}, {primary_stack}
+# tier: sm0l
+# cmds: b00t init project
+# complexity: 1
+"#,
+        );
+        std::fs::write(&git_boot, &content)?;
+        println!("  📝 wrote {}", git_boot.display());
+
+        // Symlink into _b00t_/ for visibility
+        let b00t_boot = b00t_dir.join("🥾.tomllmd");
+        std::os::unix::fs::symlink(&git_boot, &b00t_boot).ok();
+        println!("  🔗 linked {}", b00t_boot.display());
     }
 
-    // Final status report
-    memory.incr("hello_world_completions")?;
-    println!("\n✅ Agent enlightenment complete!");
-    println!("📊 {}", memory.get_summary());
+    // ── System validation + .env / .envrc setup ───────────────────────
+
+    println!("\n🔍 System validation");
+    let env = collect_environment(&cwd, &project_name, &primary_stack);
+
+    write_env_files(&cwd, &env)?;
+    print_validation_report(&env);
+
+    println!("\n✅ Project '{}' initialized ({})", project_name, primary_stack);
+
+    // ── Agent onboarding ─────────────────────────────────────────────
+
+    if !no_setup && (!existed || force_setup) {
+        if existed && force_setup {
+            println!("\n🔧 Forcing agent setup...");
+        } else {
+            println!("\n🔧 First-time agent setup...");
+        }
+        run_setup(path)?;
+    } else if existed {
+        println!("   Run 'b00t init project --setup' to re-run agent setup");
+    }
+
+    println!("   Run 'b00t cli up' to check tool versions");
+    Ok(())
+}
+
+// ── Environment detection + .env / .envrc generation ──────────────────────
+
+struct ProjectEnv {
+    project_name: String,
+    primary_stack: String,
+    b00t_version: String,
+    has_direnv: bool,
+    container_runtime: String,
+    rust_version: Option<String>,
+    node_version: Option<String>,
+    python_version: Option<String>,
+    go_version: Option<String>,
+    missing_critical: Vec<String>,
+}
+
+fn collect_environment(_cwd: &Path, project_name: &str, primary_stack: &str) -> ProjectEnv {
+    let mut env = ProjectEnv {
+        project_name: project_name.to_string(),
+        primary_stack: primary_stack.to_string(),
+        b00t_version: env!("CARGO_PKG_VERSION").to_string(),
+        has_direnv: which::which("direnv").is_ok(),
+        container_runtime: detect_container_runtime(),
+        rust_version: None,
+        node_version: None,
+        python_version: None,
+        go_version: None,
+        missing_critical: Vec::new(),
+    };
+
+    // Detect tool versions
+    env.rust_version = detect_version("rustc", &["--version"], r"(\d+\.\d+\.\d+)");
+    env.node_version = detect_version("node", &["--version"], r"v?(\d+\.\d+\.\d+)");
+    env.python_version = detect_version("python3", &["--version"], r"(\d+\.\d+\.\d+)");
+    env.go_version = detect_version("go", &["version"], r"go(\d+\.\d+\.\d+)");
+
+    // Critical tools for the detected stack
+    match primary_stack {
+        "rust" => {
+            if env.rust_version.is_none() { env.missing_critical.push("rustc".into()); }
+            if !which::which("cargo").is_ok() { env.missing_critical.push("cargo".into()); }
+        }
+        "nodejs" => {
+            if env.node_version.is_none() { env.missing_critical.push("node".into()); }
+            if !which::which("npm").is_ok() { env.missing_critical.push("npm".into()); }
+        }
+        "python" => {
+            if env.python_version.is_none() { env.missing_critical.push("python3".into()); }
+        }
+        "go" => {
+            if env.go_version.is_none() { env.missing_critical.push("go".into()); }
+        }
+        _ => {}
+    }
+    if !which::which("git").is_ok() { env.missing_critical.push("git".into()); }
+
+    if env.container_runtime == "none" {
+        env.missing_critical.push("podman/docker".into());
+    }
+
+    env
+}
+
+fn detect_version(bin: &str, args: &[&str], regex: &str) -> Option<String> {
+    let output = std::process::Command::new(bin).args(args).output().ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let re = regex::Regex::new(regex).ok()?;
+    re.captures(&stdout)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+fn detect_container_runtime() -> String {
+    if which::which("podman").is_ok() { return "podman".into(); }
+    if which::which("docker").is_ok() { return "docker".into(); }
+    "none".into()
+}
+
+fn write_env_files(cwd: &Path, env: &ProjectEnv) -> Result<()> {
+    // .envrc (direnv)
+    let envrc_path = cwd.join(".envrc");
+    let envrc_new = !envrc_path.exists();
+    if envrc_new {
+        let container_block = if env.container_runtime == "podman" {
+            "export DOCKER_HOST=\"unix:///run/user/1000/podman/podman.sock\"\n"
+        } else {
+            ""
+        };
+        let content = format!(
+            r#"# b00t-managed .envrc — {project}
+# Auto-generated by 'b00t init project'
+
+export _B00T_Project="{project}"
+export _B00T_Stack="{stack}"
+export _B00T_Path="$PWD/_b00t_"
+
+# Container runtime ({runtime})
+{container_block}
+
+# Tool overrides (detected versions)
+{rust_line}{node_line}{python_line}{go_line}
+# end b00t
+"#,
+            project = env.project_name,
+            stack = env.primary_stack,
+            runtime = env.container_runtime,
+            container_block = container_block,
+            rust_line = env.rust_version.as_ref()
+                .map(|v| format!("export RUST_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            node_line = env.node_version.as_ref()
+                .map(|v| format!("export NODE_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            python_line = env.python_version.as_ref()
+                .map(|v| format!("export PYTHON_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            go_line = env.go_version.as_ref()
+                .map(|v| format!("export GO_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+        );
+        std::fs::write(&envrc_path, &content)?;
+        println!("  📝 wrote {}", envrc_path.display());
+    }
+
+    // .env (standard)
+    let dotenv_path = cwd.join(".env");
+    let dotenv_new = !dotenv_path.exists();
+    if dotenv_new {
+        let content = format!(
+            r#"# b00t-managed .env — {project}
+# Auto-generated by 'b00t init project'
+_B00T_Project={project}
+_B00T_Stack={stack}
+_B00T_Path=./_b00t_
+"#,
+            project = env.project_name,
+            stack = env.primary_stack,
+        );
+        std::fs::write(&dotenv_path, &content)?;
+        println!("  📝 wrote {}", dotenv_path.display());
+    }
+
+    if envrc_new || dotenv_new {
+        if env.has_direnv {
+            println!("  💡 Run 'direnv allow' to activate the environment");
+        } else {
+            println!("  💡 Run 'source .envrc' or 'direnv allow' to load settings");
+        }
+    }
 
     Ok(())
 }
 
-/// Verify Redis server is running and start if needed
-fn verify_and_start_redis(memory: &mut SessionMemory) -> Result<()> {
-    println!("  🔍 Checking Redis server status...");
+fn print_validation_report(env: &ProjectEnv) {
+    let mut ok = 0;
+    let mut warn = 0;
 
-    // Check if Redis is already running
-    let redis_running = Command::new("redis-cli")
-        .args(&["ping"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false);
+    let checks: Vec<(&str, Option<&str>, bool)> = vec![
+        ("rustc", env.rust_version.as_deref(), env.primary_stack == "rust"),
+        ("node", env.node_version.as_deref(), env.primary_stack == "nodejs"),
+        ("python3", env.python_version.as_deref(), env.primary_stack == "python"),
+        ("go", env.go_version.as_deref(), env.primary_stack == "go"),
+        ("git", Some(if which::which("git").is_ok() { "✓" } else { "" }), true),
+        (&env.container_runtime, Some("✓"), true),
+    ];
 
-    if redis_running {
-        println!("  ✅ Redis server is already running");
-        memory.set_flag("redis_running", true)?;
-        return Ok(());
-    }
-
-    println!("  🚀 Starting Redis server...");
-
-    // Try to start Redis using different methods
-    let redis_started = try_start_redis_server()?;
-
-    if redis_started {
-        // Wait a moment for Redis to fully start
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-
-        // Verify it's running
-        let ping_result = Command::new("redis-cli").args(&["ping"]).output();
-
-        match ping_result {
-            Ok(output) if output.status.success() => {
-                let response = String::from_utf8_lossy(&output.stdout);
-                if response.trim() == "PONG" {
-                    println!("  ✅ Redis server started and verified (PONG received)");
-                    memory.set_flag("redis_running", true)?;
-                    memory.incr("redis_start_count")?;
-                } else {
-                    println!(
-                        "  ⚠️  Redis server started but ping response unexpected: {}",
-                        response.trim()
-                    );
-                    memory.set_flag("redis_running", false)?;
-                }
+    for (tool, version, important) in checks {
+        match version {
+            Some(v) if !v.is_empty() => {
+                let tag = if important { "required" } else { "available" };
+                println!("  ✅ {:<20} {:>12}  ({})", tool, if v == "✓" { v.into() } else { format!("v{}", v) }, tag);
+                ok += 1;
             }
             _ => {
-                println!("  ❌ Redis server may have started but ping verification failed");
-                memory.set_flag("redis_running", false)?;
+                let tag = if important { "❌ missing" } else { "optional" };
+                println!("  ❌ {:<20} {:>12}  ({})", tool, "—", tag);
+                if important { warn += 1; }
             }
         }
-    } else {
-        println!("  ❌ Failed to start Redis server");
-        memory.set_flag("redis_running", false)?;
-        memory.incr("redis_start_failures")?;
     }
 
+    if warn > 0 {
+        println!("\n  ⚠️  {} critical tool(s) missing. Install them and re-run 'b00t init project --setup'.", warn);
+    }
+    if ok > 0 && warn == 0 {
+        println!("\n  ✅ All critical tools available.");
+    }
+}
+
+// ── Project stack detection ───────────────────────────────────────────────
+
+fn detect_project_stack(cwd: &Path) -> String {
+    if cwd.join("Cargo.toml").exists() { return "rust".into(); }
+    if cwd.join("package.json").exists() { return "nodejs".into(); }
+    if cwd.join("pyproject.toml").exists() || cwd.join("requirements.txt").exists() {
+        return "python".into();
+    }
+    if cwd.join("go.mod").exists() { return "go".into(); }
+    "unknown".into()
+}
+
+// ── Agent setup (onboarding) ───────────────────────────────────────────────
+
+fn run_setup(path: &str) -> Result<()> {
+    let mut memory = SessionMemory::load()?;
+
+    println!("🤖 Agent Identity");
+    detect_agent_role(&mut memory)?;
+
+    println!("\n📂 Project Context");
+    detect_project_context(&mut memory)?;
+
+    println!("\n🔧 Tool & Service Discovery");
+    discover_available_tools(path, &mut memory)?;
+
+    println!("\n💾 Infrastructure Setup");
+    setup_infrastructure(&mut memory)?;
+
+    println!("\n🧠 Capability Reference");
+    show_capabilities(&mut memory)?;
+
+    memory.incr("hello_world_completions")?;
+    println!("\n📊 {}", memory.get_summary());
     Ok(())
 }
 
-/// Try different methods to start Redis server
-fn try_start_redis_server() -> Result<bool> {
-    // Method 1: systemctl (systemd)
-    if let Ok(status) = Command::new("systemctl")
-        .args(&["start", "redis-server"])
-        .status()
-    {
-        if status.success() {
-            println!("  📦 Started Redis via systemctl");
-            return Ok(true);
-        }
-    }
-
-    // Method 2: service command
-    if let Ok(status) = Command::new("service")
-        .args(&["redis-server", "start"])
-        .status()
-    {
-        if status.success() {
-            println!("  📦 Started Redis via service command");
-            return Ok(true);
-        }
-    }
-
-    // Method 3: direct redis-server command
-    if let Ok(_child) = Command::new("redis-server")
-        .args(&["--daemonize", "yes"])
-        .spawn()
-    {
-        println!("  📦 Started Redis server directly");
-        return Ok(true);
-    }
-
-    // Method 4: Docker fallback
-    if let Ok(status) = Command::new("docker")
-        .args(&[
-            "run",
-            "-d",
-            "--name",
-            "b00t-redis",
-            "-p",
-            "6379:6379",
-            "redis:alpine",
-        ])
-        .status()
-    {
-        if status.success() {
-            println!("  🐳 Started Redis via Docker");
-            return Ok(true);
-        }
-    }
-
-    println!("  ⚠️  All Redis startup methods failed");
-    Ok(false)
-}
-
-/// Detect agent role and capabilities
 fn detect_agent_role(memory: &mut SessionMemory) -> Result<()> {
     let agent = whoami::detect_agent(false);
-
     if !agent.is_empty() {
         memory.set("detected_agent", &agent)?;
         println!("  🎯 Agent: {}", agent);
-
-        // Map agent to role/capabilities
-        let role = match agent.as_str() {
-            "claude" => "AI Assistant (Development, Analysis, Documentation)",
-            _ => "Generic Agent (Multi-purpose)",
-        };
-        memory.set("agent_role", role)?;
-        println!("  🏷️  Role: {}", role);
     } else {
         println!("  🤖 Generic agent mode");
         memory.set("agent_role", "Generic Agent")?;
     }
-
     Ok(())
 }
 
-/// Detect project context by analyzing current directory
 fn detect_project_context(memory: &mut SessionMemory) -> Result<()> {
     let mut project_types = Vec::new();
     let mut primary_stack = "unknown";
 
-    // Check for common project indicators
-    if Path::new("Cargo.toml").exists() {
-        project_types.push("rust");
-        primary_stack = "rust";
-        println!("  🦀 Rust project detected (Cargo.toml)");
-    }
+    let checks: &[(&str, &str, &str)] = &[
+        ("Cargo.toml", "rust", "🦀 Rust"),
+        ("package.json", "nodejs", "🦄 Node.js"),
+        ("pyproject.toml", "python", "🐍 Python"),
+        ("requirements.txt", "python", "🐍 Python"),
+        ("Dockerfile", "docker", "🐳 Docker"),
+        (".git", "git", "📂 Git"),
+    ];
 
-    if Path::new("package.json").exists() {
-        project_types.push("nodejs");
-        if primary_stack == "unknown" {
-            primary_stack = "nodejs";
+    for (file, stack, emoji) in checks {
+        if Path::new(file).exists() {
+            project_types.push(*stack);
+            if primary_stack == "unknown" { primary_stack = stack; }
+            println!("  {} {} ({})", emoji, stack, file);
         }
-        println!("  🦄 Node.js project detected (package.json)");
     }
 
-    if Path::new("pyproject.toml").exists() || Path::new("requirements.txt").exists() {
-        project_types.push("python");
-        if primary_stack == "unknown" {
-            primary_stack = "python";
-        }
-        println!("  🐍 Python project detected");
-    }
-
-    if Path::new("Dockerfile").exists() || Path::new("docker-compose.yml").exists() {
-        project_types.push("docker");
-        println!("  🐳 Docker configuration detected");
-    }
-
-    if Path::new(".git").exists() {
-        project_types.push("git");
-        println!("  📂 Git repository detected");
-    }
-
-    // Store project context
     memory.set("primary_stack", primary_stack)?;
     memory.set("project_types", &project_types.join(","))?;
 
     if project_types.is_empty() {
         println!("  ❓ No specific project type detected");
     }
-
     Ok(())
 }
 
-/// Discover available tools using datum system
 fn discover_available_tools(path: &str, memory: &mut SessionMemory) -> Result<()> {
-    // Load all datums from different subsystems
     let cli_tools =
         load_datum_providers::<crate::datum_cli::CliDatum>(path, ".cli.toml").unwrap_or_default();
     let mcp_servers =
@@ -272,58 +401,39 @@ fn discover_available_tools(path: &str, memory: &mut SessionMemory) -> Result<()
         load_datum_providers::<crate::datum_docker::DockerDatum>(path, ".docker.toml")
             .unwrap_or_default();
 
-    // Count available vs installed
     let mut available_count = 0;
     let mut installed_count = 0;
     let mut missing_important = Vec::new();
 
-    // Check CLI tools
     for tool in &cli_tools {
         available_count += 1;
         if DatumChecker::is_installed(tool.as_ref()) {
             installed_count += 1;
         } else {
-            // Check if this is an important tool for the current project
             let tool_name = StatusProvider::name(tool.as_ref());
             let unknown = "unknown".to_string();
             let project_stack = memory.get("primary_stack").unwrap_or(&unknown);
-
             if is_tool_important_for_stack(tool_name, project_stack) {
                 missing_important.push(tool_name.to_string());
             }
         }
     }
 
-    println!(
-        "  🔧 {} CLI tools available, {} installed",
-        available_count, installed_count
-    );
-    println!("  🔌 {} MCP servers configured", mcp_servers.len());
-    println!(
-        "  🐳 {} Docker containers available",
-        docker_containers.len()
-    );
+    println!("  🔧 {} CLI tools ({} installed)", available_count, installed_count);
+    println!("  🔌 {} MCP servers", mcp_servers.len());
+    println!("  🐳 {} Docker containers", docker_containers.len());
 
-    // Report missing important tools
     if !missing_important.is_empty() {
-        println!(
-            "  ⚠️  Missing important tools for {} stack: {}",
-            memory
-                .get("primary_stack")
-                .unwrap_or(&"project".to_string()),
-            missing_important.join(", ")
-        );
+        println!("  ⚠️  Missing: {}", missing_important.join(", "));
         memory.set("missing_important_tools", &missing_important.join(","))?;
     }
 
     memory.set_num("tools_available", available_count as i64)?;
     memory.set_num("tools_installed", installed_count as i64)?;
     memory.set_num("mcp_servers_available", mcp_servers.len() as i64)?;
-
     Ok(())
 }
 
-/// Check if a tool is important for a given technology stack
 fn is_tool_important_for_stack(tool_name: &str, stack: &str) -> bool {
     match stack {
         "rust" => matches!(tool_name, "rustc" | "cargo" | "git"),
@@ -333,26 +443,16 @@ fn is_tool_important_for_stack(tool_name: &str, stack: &str) -> bool {
     }
 }
 
-/// Setup infrastructure (renamed from configure_system_preferences)
 fn setup_infrastructure(memory: &mut SessionMemory) -> Result<()> {
     verify_and_start_redis(memory)?;
 
-    // Detect container runtime
-    let container_runtime = if cmd!("podman", "--version").read().is_ok() {
-        "podman"
-    } else if cmd!("docker", "--version").read().is_ok() {
-        "docker"
-    } else {
-        "none"
-    };
-    memory.set("preferred_container_runtime", container_runtime)?;
-
-    memory.set("last_hello_world", &chrono::Utc::now().to_rfc3339())?;
+    let container_runtime = detect_container_runtime();
+    memory.set("preferred_container_runtime", &container_runtime)?;
+    memory.set("last_setup", &chrono::Utc::now().to_rfc3339())?;
     Ok(())
 }
 
-/// Agent enlightenment (renamed from interactive_documentation_tour)
-fn enlighten_agent_capabilities(_path: &str, memory: &mut SessionMemory) -> Result<()> {
+fn show_capabilities(memory: &mut SessionMemory) -> Result<()> {
     let unknown = "unknown".to_string();
     let empty = "".to_string();
     let project_stack = memory.get("primary_stack").unwrap_or(&unknown);
@@ -360,342 +460,127 @@ fn enlighten_agent_capabilities(_path: &str, memory: &mut SessionMemory) -> Resu
 
     if !missing_tools.is_empty() {
         println!(
-            "  💡 Install for {}: b00t cli install {}",
+            "  💡 Install for {}: b00t install {}",
             project_stack,
             missing_tools.replace(",", " ")
         );
     }
-
-    println!("  🎓 Key commands: b00t status, b00t mcp list, b00t cli up");
+    println!("  🎓 Commands: b00t status, b00t mcp list, b00t cli up");
     memory.set_flag("enlightenment_completed", true)?;
     Ok(())
 }
 
-/// Run session-aware system diagnostics with agent context
+// ── Redis helpers ──────────────────────────────────────────────────────────
+
+fn verify_and_start_redis(memory: &mut SessionMemory) -> Result<()> {
+    println!("  🔍 Checking Redis...");
+
+    let redis_running = std::process::Command::new("redis-cli")
+        .args(&["ping"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if redis_running {
+        println!("  ✅ Redis already running");
+        memory.set_flag("redis_running", true)?;
+        return Ok(());
+    }
+
+    println!("  🚀 Starting Redis...");
+    let started = try_start_redis_server()?;
+    if started {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        let ping = std::process::Command::new("redis-cli").args(&["ping"]).output();
+        match ping {
+            Ok(o) if o.status.success() => {
+                if String::from_utf8_lossy(&o.stdout).trim() == "PONG" {
+                    println!("  ✅ Redis started");
+                    memory.set_flag("redis_running", true)?;
+                } else {
+                    println!("  ⚠️  Unexpected ping response");
+                }
+            }
+            _ => println!("  ❌ Redis ping failed"),
+        }
+    } else {
+        println!("  ❌ Failed to start Redis");
+        memory.set_flag("redis_running", false)?;
+    }
+    Ok(())
+}
+
+fn try_start_redis_server() -> Result<bool> {
+    for (bin, args) in &[
+        ("systemctl", &["start", "redis-server"][..]),
+        ("service", &["redis-server", "start"][..]),
+    ] {
+        if let Ok(s) = std::process::Command::new(bin).args(*args).status() {
+            if s.success() {
+                println!("  📦 Started via {}", bin);
+                return Ok(true);
+            }
+        }
+    }
+    if std::process::Command::new("redis-server")
+        .args(&["--daemonize", "yes"])
+        .spawn()
+        .is_ok()
+    {
+        println!("  📦 Started redis-server directly");
+        return Ok(true);
+    }
+    println!("  ⚠️  All startup methods failed");
+    Ok(false)
+}
+
+// ── Diagnostics (public — used by whatismy) ───────────────────────────────
+
 pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
     let context = memory.get_agent_context();
 
     println!("  🩺 Agent Context Diagnostics");
     println!("  🤖 Agent: {}", context.agent_name);
+    println!("  📅 Session: {}s ({})", context.session_duration, format_duration(context.session_duration));
+    println!("  🌿 Branch: {} ({} builds)", context.current_branch, context.build_count);
     println!(
-        "  📅 Session: {}s ({})",
-        context.session_duration,
-        format_duration(context.session_duration)
-    );
-    println!(
-        "  🌿 Branch: {} ({}🔨 builds)",
-        context.current_branch, context.build_count
-    );
-    println!(
-        "  📊 Activity: {}🐚 shells, {}⚙️ compiles, {}🧪 tests",
+        "  📊 Activity: {} shells, {} compiles, {} tests",
         context.shell_count, context.compile_count, context.test_count
     );
 
-    let mut diagnostic_results = Vec::new();
+    let mut passing = 0;
+    let total = 4;
 
-    // Check Git status with session context
-    if let Ok(output) = cmd!("git", "--version").read() {
-        println!("  ✅ Git: {}", output.trim());
-        diagnostic_results.push(("git", true));
-
-        // Add git context
-        if let Ok(branch) = cmd!("git", "branch", "--show-current").read() {
-            let branch = branch.trim();
-            if branch != context.current_branch {
-                println!(
-                    "  ⚠️  Branch changed: {} → {}",
-                    context.current_branch, branch
-                );
-            }
-        }
-
-        if let Ok(status) = cmd!("git", "status", "--porcelain").read() {
-            if !status.trim().is_empty() {
-                let file_count = status.lines().count();
-                println!("  📝 Git: {} modified files", file_count);
-            }
-        }
-    } else {
-        println!("  ❌ Git: Not available");
-        diagnostic_results.push(("git", false));
-    }
-
-    // Check Rust/Cargo with build context
-    if let Ok(output) = cmd!("cargo", "--version").read() {
-        println!("  ✅ Cargo: {}", output.trim());
-        diagnostic_results.push(("cargo", true));
-
-        // Check for Cargo.toml and recent build artifacts
-        if std::path::Path::new("Cargo.toml").exists() {
-            if let Ok(metadata) = std::fs::metadata("target") {
-                let target_age = chrono::Utc::now().timestamp()
-                    - metadata
-                        .modified()
-                        .unwrap_or(std::time::UNIX_EPOCH)
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                if target_age < 300 {
-                    // 5 minutes
-                    println!("  🔥 Cargo: Recent build ({}s ago)", target_age);
-                }
-            }
-        }
-    } else {
-        println!("  ❌ Cargo: Not available");
-        diagnostic_results.push(("cargo", false));
-    }
-
-    // Check Node.js with package context
-    if let Ok(output) = cmd!("node", "--version").read() {
-        println!("  ✅ Node.js: {}", output.trim());
-        diagnostic_results.push(("node", true));
-
-        if std::path::Path::new("package.json").exists() {
-            if let Ok(metadata) = std::fs::metadata("node_modules") {
-                let modules_age = chrono::Utc::now().timestamp()
-                    - metadata
-                        .modified()
-                        .unwrap_or(std::time::UNIX_EPOCH)
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                if modules_age < 1800 {
-                    // 30 minutes
-                    println!("  📦 Node: Recent install ({}s ago)", modules_age);
-                }
-            }
-        }
-    } else {
-        println!("  ❌ Node.js: Not available");
-        diagnostic_results.push(("node", false));
-    }
-
-    // Check Docker with container context
-    if let Ok(output) = cmd!("docker", "--version").read() {
-        println!(
-            "  ✅ Docker: {}",
-            output.lines().next().unwrap_or("").trim()
-        );
-        diagnostic_results.push(("docker", true));
-
-        // Check for running containers
-        if let Ok(containers) = cmd!("docker", "ps", "-q").read() {
-            let container_count = containers.lines().count();
-            if container_count > 0 {
-                println!("  🐳 Docker: {} active containers", container_count);
-            }
-        }
-    } else {
-        println!("  ❌ Docker: Not available");
-        diagnostic_results.push(("docker", false));
-    }
-
-    // Check available package managers
-    let package_managers = vec!["npm", "pnpm", "yarn", "bun"];
-    let mut available_pms = Vec::new();
-    for pm in package_managers {
-        if cmd!(pm, "--version").read().is_ok() {
-            available_pms.push(pm);
-            diagnostic_results.push((pm, true));
-        }
-    }
-
-    if !available_pms.is_empty() {
-        println!("  ✅ Package Managers: {}", available_pms.join(", "));
-    }
-
-    // Store enhanced diagnostic results in session memory
-    let passing_count = diagnostic_results
-        .iter()
-        .filter(|(_, passed)| *passed)
-        .count();
-    memory.set_num("diagnostic_passing", passing_count as i64)?;
-    memory.set_num("diagnostic_total", diagnostic_results.len() as i64)?;
-
-    // OODA Loop Decision Support
-    println!("  🧠 OODA Analysis:");
-    if context.diagnostic_total > 0 {
-        let health_ratio = context.diagnostic_passing as f64 / context.diagnostic_total as f64;
-        if health_ratio >= 0.8 {
-            println!(
-                "  ✅ System Health: Excellent ({:.0}%)",
-                health_ratio * 100.0
-            );
-        } else if health_ratio >= 0.6 {
-            println!(
-                "  ⚠️  System Health: Adequate ({:.0}%)",
-                health_ratio * 100.0
-            );
+    for (label, bin) in &[("git", "git"), ("cargo", "cargo"), ("node", "node"), ("docker", "docker")] {
+        if std::process::Command::new(bin).arg("--version").output().is_ok() {
+            println!("  ✅ {}: available", label);
+            passing += 1;
         } else {
-            println!("  ❌ System Health: Poor ({:.0}%)", health_ratio * 100.0);
+            println!("  ❌ {}: not available", label);
         }
     }
 
-    // Session productivity insights
-    if context.session_duration > 300 {
-        // 5+ minutes
-        let builds_per_hour =
-            (context.build_count as f64 / context.session_duration as f64) * 3600.0;
-        if builds_per_hour > 10.0 {
-            println!(
-                "  🚀 High build velocity: {:.1} builds/hour",
-                builds_per_hour
-            );
-        } else if builds_per_hour > 2.0 {
-            println!(
-                "  ⚙️  Moderate build pace: {:.1} builds/hour",
-                builds_per_hour
-            );
-        }
-    }
-
-    // Next action recommendations
-    if context.compile_count == 0 && std::path::Path::new("Cargo.toml").exists() {
-        println!("  💡 Suggestion: Run `cargo build` to verify compilation");
-    }
-    if context.test_count == 0 && std::path::Path::new("tests").exists() {
-        println!("  💡 Suggestion: Run tests to ensure quality");
-    }
-
-    println!(
-        "  📊 Final: {}/{} systems operational",
-        passing_count,
-        diagnostic_results.len()
-    );
-
+    memory.set_num("diagnostic_passing", passing as i64)?;
+    memory.set_num("diagnostic_total", total as i64)?;
+    println!("  📊 {}/{} systems operational", passing, total);
     Ok(())
 }
 
-/// Format duration in human readable format
 fn format_duration(seconds: i64) -> String {
-    if seconds < 60 {
-        format!("{}s", seconds)
-    } else if seconds < 3600 {
-        format!("{}m{}s", seconds / 60, seconds % 60)
-    } else {
-        format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60)
-    }
+    if seconds < 60 { format!("{}s", seconds) }
+    else if seconds < 3600 { format!("{}m{}s", seconds / 60, seconds % 60) }
+    else { format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60) }
 }
 
-/// Configure system preferences in session memory
-fn configure_system_preferences(memory: &mut SessionMemory) -> Result<()> {
-    println!("  ⚙️  Configuring system preferences...");
-
-    // Detect preferred container runtime
-    let container_runtime = if cmd!("podman", "--version").read().is_ok() {
-        "podman"
-    } else if cmd!("docker", "--version").read().is_ok() {
-        "docker"
-    } else {
-        "none"
-    };
-
-    memory.set("preferred_container_runtime", container_runtime)?;
-    println!("  🐳 Container runtime: {}", container_runtime);
-
-    // Detect Kubernetes environment
-    let k8s_env = if cmd!("minikube", "status").read().is_ok() {
-        "minikube"
-    } else if cmd!("kubectl", "cluster-info").read().is_ok() {
-        "kubectl"
-    } else {
-        "none"
-    };
-
-    memory.set("k8s_environment", k8s_env)?;
-    println!("  ☸️  Kubernetes: {}", k8s_env);
-
-    // Store initialization timestamp
-    memory.set("last_hello_world", &chrono::Utc::now().to_rfc3339())?;
-
-    println!("  ✅ System preferences configured");
-
-    Ok(())
-}
-
-fn check_bashrc(path: &str) {
-    // Best-effort: do not fail init
-    let mut bashrc_path =
-        crate::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
-    bashrc_path.push("_b00t_.bashrc");
-
-    if !bashrc_path.exists() {
-        eprintln!(
-            "⚠️ _b00t_.bashrc missing at {} — run install.sh or copy from .dotfiles/_b00t_/_b00t_.bashrc",
-            bashrc_path.display()
-        );
-        return;
-    }
-
-    // Lightweight content probe for ymd helpers
-    if let Ok(content) = std::fs::read_to_string(&bashrc_path) {
-        let has_ymd = content.contains("alias ymd=") || content.contains("ymd(){");
-        let has_motd = content.contains("motd");
-        if !has_ymd {
-            eprintln!("⚠️ _b00t_.bashrc missing ymd helpers; motd generation may fail.");
-        }
-        if !has_motd {
-            eprintln!("⚠️ _b00t_.bashrc missing motd setup.");
-        }
-    }
-}
-
-/// Interactive documentation tour
-fn interactive_documentation_tour(_path: &str, memory: &mut SessionMemory) -> Result<()> {
-    println!("  📖 Starting interactive documentation tour...");
-
-    // Check for README.md
-    let git_root = crate::utils::get_workspace_root();
-    let readme_path = std::path::PathBuf::from(&git_root).join("README.md");
-
-    if readme_path.exists() {
-        if !memory.is_readme_read() {
-            println!("  📋 README.md found - marking as available for reading");
-            println!("  💡 Remember to run 'b00t-cli session mark-readme-read' after reading");
-        } else {
-            println!("  ✅ README.md already marked as read this session");
-        }
-    } else {
-        println!("  ℹ️  No README.md found in git root");
-    }
-
-    // Show sample b00t commands for different scenarios
-    println!("  🎓 b00t Command Reference:");
-    println!("    # Session management");
-    println!("    b00t-cli session get <key>           # Get session value");
-    println!("    b00t-cli session incr <key>          # Increment counter");
-    println!("    b00t-cli session keys                # List all keys");
-    println!("");
-    println!("    # MCP server management");
-    println!("    b00t-cli mcp list                    # List MCP servers");
-    println!("    b00t-cli app claude-code mcp install <server>  # Install to Claude Code");
-    println!("");
-    println!("    # System status");
-    println!("    b00t-cli status                      # Show all tools status");
-    println!("    b00t-cli checkpoint                  # Create git checkpoint");
-
-    memory.set_flag("tour_completed", true)?;
-    println!("  ✅ Interactive tour completed");
-
-    Ok(())
-}
+// ── Dispatch ────────────────────────────────────────────────────────────────
 
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Aliases => {
-                println!("🔗 Init aliases functionality coming soon...");
-                Ok(())
-            }
-            InitCommands::HelloWorld {
-                skip_redis,
-                skip_diagnostics,
-                skip_tour,
-            } => {
-                execute_hello_world_protocol(path, *skip_redis, *skip_diagnostics, *skip_tour)?;
-                check_bashrc(path);
-                Ok(())
+            InitCommands::Project { name, stack, setup, no_setup } => {
+                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
             }
         }
     }
@@ -706,8 +591,64 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_init_commands_exist() {
-        let aliases_cmd = InitCommands::Aliases;
-        assert!(aliases_cmd.execute("test").is_ok());
+    fn project_init_creates_directory_and_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        handle_project_init(Some("test-proj".into()), Some("rust".into()), false, true, "test").unwrap();
+
+        let b00t = dir.path().join("_b00t_");
+        assert!(b00t.exists());
+        // .git/🥾.tomllmd is canonical; _b00t_/🥾.tomllmd is a symlink
+        assert!(dir.path().join(".git").join("🥾.tomllmd").exists());
+        assert!(b00t.join("🥾.tomllmd").exists());
+        assert!(dir.path().join(".envrc").exists());
+        assert!(dir.path().join(".env").exists());
+
+        let content = std::fs::read_to_string(dir.path().join(".env")).unwrap();
+        assert!(content.contains("test-proj"));
+        assert!(content.contains("_B00T_Path=./_b00t_"));
+    }
+
+    #[test]
+    fn detect_project_stack_detects_rust() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "").unwrap();
+        assert_eq!(detect_project_stack(dir.path()), "rust");
+    }
+
+    #[test]
+    fn detect_project_stack_detects_nodejs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("package.json"), "").unwrap();
+        assert_eq!(detect_project_stack(dir.path()), "nodejs");
+    }
+
+    #[test]
+    fn detect_project_stack_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(detect_project_stack(dir.path()), "unknown");
+    }
+
+    #[test]
+    fn env_file_contains_project_vars() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        handle_project_init(Some("demo".into()), Some("nodejs".into()), false, true, "test").unwrap();
+
+        let envrc = std::fs::read_to_string(dir.path().join(".envrc")).unwrap();
+        assert!(envrc.contains("_B00T_Project=\"demo\""));
+        assert!(envrc.contains("_B00T_Stack=\"nodejs\""));
+        assert!(envrc.contains("_B00T_Path=\"$PWD/_b00t_\""));
+    }
+
+    #[test]
+    fn rejects_non_git_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        let result = handle_project_init(None, None, false, true, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a git repository"));
     }
 }

@@ -59,10 +59,13 @@ impl IndexDispatcher {
                 "raglite" | "rag" => {
                     targets.push(Box::new(RagliteTarget::new()));
                 }
-                "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
-                    targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
-                }
-                other => {
+        "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
+            targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
+        }
+        "store" | "knowledge-store" | "s3" | "object-storage" => {
+            targets.push(Box::new(StoreTarget::new()));
+        }
+        other => {
                     // Try as MCP server name
                     targets.push(Box::new(McpBridgeTarget::new(other)?));
                 }
@@ -379,4 +382,101 @@ mod tests {
         let result = IndexDispatcher::discover(&[]);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_dispatcher_discovers_store_target() {
+        let dispatcher =
+            IndexDispatcher::discover(&["store".to_string()]).unwrap();
+        let target_names: Vec<&str> =
+            dispatcher.targets.iter().map(|t| t.name()).collect();
+        assert!(target_names.contains(&"b00t-store"));
+    }
+}
+
+// ── Store Target: b00t knowledge store (S3/MinIO/R2 backed) ────────────────
+
+use crate::assimilate::content_router::ContentType;
+use std::collections::BTreeMap;
+
+/// Write content to temp file, store via `b00t store put`.
+fn store_doc(class: &str, content: &str, tags: &BTreeMap<String, String>) -> Result<()> {
+    let tmp = tempfile::NamedTempFile::new()?;
+    std::fs::write(tmp.path(), content)?;
+    b00t_c0re_lib::store::put(tmp.path(), class, "assimilate", tags)?;
+    Ok(())
+}
+
+const STORE_SIZE_THRESHOLD: u64 = 1_048_576;
+
+pub struct StoreTarget;
+
+impl StoreTarget {
+    pub fn new() -> Self { Self }
+}
+
+impl IndexTarget for StoreTarget {
+    fn name(&self) -> &str { "b00t-store" }
+
+    fn ingest(&self, docs: &[CrawledDoc], topic: &str) -> Result<IngestReport> {
+        let mut report = IngestReport { target: self.name().to_string(), ..Default::default() };
+
+        for doc in docs {
+            let is_large = doc.content.text.len() as u64 > STORE_SIZE_THRESHOLD;
+            let concepts: Vec<String> = doc.extraction.concepts.iter()
+                .map(|c| format!("- **{}**: {}", c.name, c.description)).collect();
+
+            let (class, body) = match &doc.content.content_type {
+                ContentType::Image(sub) => ("b00t:MediaAsset",
+                    format!("# {topic} (image/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
+                ContentType::Audio(sub) => ("b00t:MediaAsset",
+                    format!("# {topic} (audio/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
+                ContentType::Video(sub) => ("b00t:MediaAsset",
+                    format!("# {topic} (video/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
+                ContentType::Pdf => ("b00t:ExtractedDocument",
+                    format!("# {topic}\nSource: {}\n\n{}", doc.url, doc.content.text)),
+                _ => {
+                    let body = format!("# {topic}\nSource: {}\n\n{}\n## Concepts\n{}",
+                        doc.url, doc.content.text, concepts.join("\n"));
+                    (if is_large { "b00t:LargeDocument" } else { "b00t:AssimilatedDocument" }, body)
+                }
+            };
+
+            let mut tags = BTreeMap::from([
+                ("topic".into(), topic.to_string()),
+                ("source".into(), doc.url.clone()),
+                ("depth".into(), doc.depth.to_string()),
+            ]);
+            if is_large {
+                tags.insert("size_category".into(), "large".into());
+                tags.insert("storage".into(), "s3".into());
+            }
+
+            match store_doc(class, &body, &tags) {
+                Ok(()) => {
+                    report.docs_indexed += 1;
+                    report.concepts_indexed += doc.extraction.concepts.len();
+                }
+                Err(e) => report.errors.push(format!("store put failed for {}: {e}", doc.url)),
+            }
+        }
+        if let Err(e) = emit_assimilation_facts(docs, topic) {
+            report.errors.push(format!("neumann: {e}"));
+        }
+        Ok(report)
+    }
+}
+
+fn emit_assimilation_facts(docs: &[CrawledDoc], topic: &str) -> Result<()> {
+    for doc in docs {
+        for concept in &doc.extraction.concepts {
+            let _ = Command::new("b00t").args([
+                "data", "fabric", "upsert",
+                "--subject", &format!("doc:{}", doc.url),
+                "--predicate", "b00t:hasConcept",
+                "--object", &format!("concept:{}", concept.name),
+                "--namespace", topic,
+            ]).output();
+        }
+    }
+    Ok(())
 }

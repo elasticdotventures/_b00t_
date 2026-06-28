@@ -30,10 +30,6 @@
 	path = just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
-	path = node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
-	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
-
 [submodule "plantuml-server"]
 	path = plantuml-server
 	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
@@ -45,18 +41,6 @@
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
-
-[submodule "test/bats-no-prefix"]
-	path = test/bats-no-prefix
-	url = https://github.com/bats-core/bats-core.git
-
-[submodule "test/test_helper/bats-assert-no-prefix"]
-	path = test/test_helper/bats-assert-no-prefix
-	url = https://github.com/bats-core/bats-assert.git
-
-[submodule "test/test_helper/bats-support-no-prefix"]
-	path = test/test_helper/bats-support-no-prefix
-	url = https://github.com/bats-core/bats-support.git
 
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
@@ -113,6 +97,10 @@
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+
+[submodule "vendor/rust-docs-mcp-b00t"]
+	path = vendor/rust-docs-mcp-b00t
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
 [submodule "vendor/gemm-common"]
 	path = vendor/gemm-common
 	url = https://github.com/PromptExecution/gemm-common.git
@@ -124,3 +112,12 @@
 [submodule "vscode.🆚/vscode-docs"]
 	path = vscode.🆚/vscode-docs
 	url = https://github.com/microsoft/vscode-docs
+[submodule "vendor/agentsea-skillpacks"]
+	path = vendor/agentsea-skillpacks
+	url = https://github.com/PromptExecution/skillpacks-b00t.git
+[submodule "vendor/android-emulator-container-scripts"]
+	path = vendor/android-emulator-container-scripts
+	url = https://github.com/PromptExecution/android-emulator-container-scripts-b00t.git
+[submodule "vendor/opencode-goal-plugin"]
+	path = vendor/opencode-goal-plugin
+	url = https://github.com/PromptExecution/opencode-goal-plugin-b00t.git

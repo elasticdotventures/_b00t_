@@ -1,0 +1,73 @@
+---
+name: josh-project
+description: |
+  The Josh Project organization and ecosystem. Upstream of the josh toolchain
+  at github.com/josh-project. Houses josh core, proxy, CLI, GraphQL, compose,
+  and related tooling. Founded on the principle that git history should be
+  unified — "Just One Single History" — eliminating artificial repo boundaries.
+version: 1.0.0
+tags: [josh-project, git, monorepo, ecosystem, upstream]
+tier: frontier
+complexity: 5
+applies_to:
+  - "monorepo strategy"
+  - "git platform"
+  - "ecosystem research"
+output_types: []
+depends_on: ["josh"]
+unlocks: []
+metadata:
+  ufo_stereotype: Abstract
+  upstream: "https://github.com/josh-project"
+  website: "https://josh-project.dev"
+  docs: "https://josh-project.github.io/josh/"
+---
+## Josh Project — Git at Scale Ecosystem
+
+Organization: [github.com/josh-project](https://github.com/josh-project)
+Documentation: [josh-project.github.io/josh](https://josh-project.github.io/josh/)
+
+### Repositories
+
+| Repo | Purpose |
+|------|---------|
+| josh | Main repo — all josh components in a workspace monorepo |
+| josh-docs | Documentation site source |
+| homebrew-josh | Homebrew tap for macOS installation |
+
+### Core Philosophy
+
+> "Instead of static boundaries — which often reflect organizational
+> boundaries and create silos — the boundaries can be decided in the
+> moment, for any given context, thousands of times per second."
+
+The project rejects the assumption that multi-repo is necessary for scale.
+Josh proves that a single history with on-demand projections provides
+better DX with zero coordination overhead.
+
+### Installation
+
+```bash
+cargo install josh-cli        # CLI only
+docker pull joshproject/josh  # Full proxy + all components
+brew install josh-project/josh/josh-cli  # macOS
+```
+
+### b00t Integration Potential
+
+1. **Submodule consolidation**: Replace vendor/ submodules with josh-filtered
+   projections. Reduces clone time and eliminates submodule drift.
+2. **Agent sandboxing**: Josh proxy + filtered workspaces → zero-clone agent
+   contexts. Each agent sees only its authorized projection.
+3. **CI optimization**: GraphQL query for "has this projection changed since
+   last build" → skip redundant CI runs per subproject.
+4. **Evidence graph**: Josh workspace definitions as NeumannStore fact nodes.
+   `workspace.josh` files map directly to `UfoStereotype::Relator` linking
+   repos to their projections.
+
+# b00t:map v1
+# summary: Josh Project — git at scale ecosystem organization
+# tags: josh-project, git, monorepo, ecosystem, upstream
+# tier: frontier
+# cmds: cargo install josh-cli, docker pull joshproject/josh
+# complexity: 5

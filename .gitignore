@@ -220,7 +220,7 @@ MANIFEST
 __pycache__/
 __pypackages__/
 _archive_/
-agentsea/*
+# agentsea project moved to vendor/agentsea (tracked)
 alembic.ini
 b00t-cli/.b00t/
 bower_components
@@ -293,6 +293,7 @@ togaf-cli/
 togaf-dsl/
 var/
 vendor/l3dg3rr/
+vendor/gemm-common/
 venv.bak/
 venv/
 web_modules/

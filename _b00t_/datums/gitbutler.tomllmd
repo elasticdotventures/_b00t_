@@ -1,0 +1,87 @@
+---
+name: gitbutler
+description: |
+  GitButler — modern Git client (GUI + CLI) with stacked branches, virtual
+  branches, unlimited undo, and AI-powered workflows. Tauri/Rust/Svelte,
+  21k stars, Fair Source (MIT after 2 years). Designed for agentic workflows.
+version: 1.0.0
+tags: [gitbutler, git, tauri, rust, svelte, stacked-branches, virtual-branches, ai, agent]
+tier: ch0nky
+complexity: 6
+applies_to:
+  - "git workflow"
+  - "branch management"
+  - "agent-friendly git"
+  - "commit management"
+  - "forge integration"
+output_types: []
+depends_on: []
+unlocks: []
+metadata:
+  ufo_stereotype: Abstract
+  upstream: "https://github.com/gitbutlerapp/gitbutler"
+  license: "Fair Source → MIT after 2 years"
+  language: "Rust (70%), TypeScript (15%), Svelte (14%)"
+  stars: 21200
+  website: "https://gitbutler.com"
+---
+## GitButler — Git, but better
+
+A Tauri-based Git client (Rust backend + Svelte UI) with a `but` CLI.
+Designed for modern agentic workflows alongside human developers.
+
+### Key Features
+
+| Feature | What it does |
+|---------|-------------|
+| **Stacked branches** | Branches on branches; amend any commit with auto-restacking |
+| **Parallel branches** | Work on multiple branches simultaneously (no switching) |
+| **Commit management** | Uncommit, reword, amend, move, split, squash by drag-and-drop or CLI |
+| **Unlimited undo** | Operations log: undo/revert any operation |
+| **First-class conflicts** | Rebases always succeed; conflicts are marked, NOT blocking |
+| **Forge integration** | GitHub/GitLab: PRs, CI statuses, branch listing |
+| **AI tooling** | Built-in AI for commit messages, branch names, PR descriptions |
+
+### CLI Quick Start
+
+```bash
+brew install gitbutler          # macOS
+# Linux: download from gitbutler.com/downloads
+
+but init                         # initialize repo
+but branch create feature/x --parent main
+but commit -m "feat: thing"
+but pr create
+```
+
+### b00t Integration Potential
+
+- **Agent git operations**: `but` CLI provides safer, undoable git ops for
+  b00t agents (vs raw `git` which has irreversible destructive ops)
+- **Worktree alternative**: Virtual branches provide isolation without
+  full worktree overhead. Could replace `a41ebba` worktree-based sandboxing.
+- **Reviewer pipeline**: Stacked branches → MECE/TRIZ/Eureka agent
+  dispatch per stack. Each agent reviews one layer; synthesis agent
+  merges across stacks.
+- **AI hooks**: GitButler's AI tooling hooks can route through b00t's
+  ch0nky/local inference rather than cloud APIs.
+
+### vs Josh vs GritQL — complementary, not competing
+
+| Tool | Domain | Best for |
+|------|--------|----------|
+| **Josh** | Git history engine | Submodule elimination, repo filtering, monorepo projections |
+| **GitButler** | Git UX + client | Agent-friendly git operations, stacked branches, virtual branches |
+| **GritQL** | Code AST | Code search, transformation, linting |
+
+GitButler's stacked branches build on josh-style history rewriting
+concepts. Together they form a git tooling stack: josh handles the
+history/projection backend, gitbutler provides the agent-friendly UX,
+and GritQL handles the code-level transformations within projections.
+
+# b00t:map v1
+# summary: GitButler — modern Git client with stacked branches, AI workflows (Tauri/Rust, Fair Source, 21k★)
+# tags: gitbutler, git, tauri, rust, stacked-branches, agent, ai
+# tier: ch0nky
+# cmds: brew install gitbutler, but init, but branch create
+# complexity: 6

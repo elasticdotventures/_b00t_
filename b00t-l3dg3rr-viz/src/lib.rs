@@ -43,7 +43,7 @@ impl VisualizationRole {
             Self::Ingest => "#4fc3f7",
             Self::Validate => "#66bb6a",
             Self::Classify => "#ffa726",
-            Self::Review => "#8d6e63",
+            Self::Review => "#ab47bc",
             Self::Reconcile => "#26c6da",
             Self::Commit => "#42a5f5",
             Self::Decision => "#ef5350",

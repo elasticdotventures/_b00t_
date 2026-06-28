@@ -1,0 +1,32 @@
+
+api_version: v1
+kind: TaskAgent
+name: "maxsmart"
+description: "local agent"
+cmd: "poetry run python -m maxsmart.server"
+img_repo: "pbarker/SurfPizza"
+tags:
+  - "gui"
+supports:
+  - "desktop"
+versions:
+  latest: "pbarker/SurfPizza:latest"
+runtimes:
+  - type: "agent"
+    preference:
+      - "process"
+      - "docker"
+      - "kube"
+llm_providers:
+  preference:
+    - "gpt-4o"
+    - "gpt-4-turbo"
+    - "anthropic/claude-3-opus-20240229"
+public: True
+icon: https://tinyurl.com/y5u4u7te
+resource_requests:
+  cpu: "1"
+  memory: "2Gi"
+resource_limits:
+  cpu: "2"
+  memory: "4Gi"

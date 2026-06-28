@@ -1,0 +1,37 @@
+# bubblewrap.polyseme — polyseme datum
+# 🤓 "bubblewrap" is polysemous:
+#    containers/bubblewrap     — Linux sandbox tool (unprivileged user namespaces)
+#    googlechromelabs/bubblewrap — Android developer tool (app4dog consumer)
+#
+# This datum is a knowledge-graph branch point: it holds refs to all meanings.
+# Use `b00t grok assimilate <url>` to add more resolutions.
+
+[b00t]
+name = "bubblewrap"
+type = "polyseme"
+hint = "Polyseme datum — 'bubblewrap' resolves to multiple distinct artifacts"
+
+[[b00t.polyseme.refs]]
+name = "bubblewrap-sandbox"
+canonical = "github:containers/bubblewrap"
+datum = "bubblewrap-containers.cli"
+description = "Linux container/sandbox tool — unprivileged user-namespace isolation (containers/bubblewrap)"
+
+[[b00t.polyseme.refs]]
+name = "bubblewrap-android"
+canonical = "github:googlechromelabs/bubblewrap"
+datum = "bubblewrap-googlechromelabs.cli"
+description = "Android developer tool — app packaging and distribution (googlechromelabs/bubblewrap, used by app4dog)"
+
+[b00t.polyseme]
+sources = [
+    "https://github.com/containers/bubblewrap",
+    "https://github.com/googlechromelabs/bubblewrap",
+]
+
+# b00t:map v1
+# summary: polyseme datum — canonical container of artifact refs for the ambiguous name "bubblewrap"
+# tags: polyseme, bubblewrap, sandbox, android, knowledge-graph, branch-point
+# tier: frontier
+# cmds: b00t bubblewrap, b00t grok assimilate <url>, b00t datum show bubblewrap
+# complexity: 2
