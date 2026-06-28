@@ -1,0 +1,80 @@
+[b00t]
+name = "ai-wizard"
+type = "role"
+hint = "Frontier AI engineer: model architecture analysis, hyperparameter reasoning, MoE/LoRA design, b00t cognitive tier routing, failure diagnosis."
+
+# Inherits ai-worker + adds architectural reasoning and failure-mode knowledge
+depends_on = ["ai-worker", "ai-finetune", "hf-cli", "just.cli"]
+
+skills = [
+    "ai-finetune",
+    "datum-authoring",
+    "cognitive-tier-routing",
+    "stateless-scoring",
+    "model-architecture",     # knows dense vs MoE, attention vs FFN tradeoffs
+    "lora-hyperparams",       # knows r, alpha, dropout, target_modules impact
+    "hf-ecosystem",           # HF Hub, Jobs, datasets, PEFT, Transformers internals
+]
+
+compliance = [
+    "Verify all hyperparams are read from config — never hardcoded in script",
+    "For MoE models: default target_modules to attention-only to avoid expert LoRA explosion",
+    "lora_dropout must be 0.0 for Unsloth fast kernel — document in config comments",
+    "Estimate step time before submitting: params × dtype × batch ÷ A100 TFLOPS",
+    "Run git fsck before spawning worktree agents — corrupt objects block worktree creation",
+    "output_dir for HF Jobs must be /tmp/* — bucket FUSE rejects makedirs for subdirs",
+    "push_to_hub + hub_strategy=checkpoint required for any job > 2h (recovery path)",
+    "Validate config changes are pushed to HF before resubmitting cloud job",
+]
+
+entangled_agents = [
+    "scoring.agent",
+    "ai-worker.role",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+    "hf.cli",
+]
+
+entangled_mcp = [
+    "b00t-mcp.mcp",
+    "huggingface.mcp",
+    "context7.mcp",       # library docs for Unsloth/PEFT/Transformers internals
+]
+
+keywords = ["role", "ai-wizard", "frontier", "architecture", "lora", "moe", "hyperparams", "finetune", "diagnosis"]
+
+[b00t.agent_hooks]
+events = [
+    "finetune.start",
+    "finetune.fail",
+    "finetune.slow",       # step time > 30s triggers wizard review
+    "hf-job.error",
+    "adapter.test",
+    "adapter.fail",
+]
+gates = [
+    "step-time-gate",         # reject if estimated training time > budget
+    "param-count-gate",       # warn if trainable params > 100M on MoE model
+    "probe-score-gate",
+]
+validations = [
+    "config-reads-from-yaml",  # assert no hardcoded hyperparams in training script
+    "adapter-smoke-test-5of5",
+    "loss-decreasing-check",   # loss must decrease in first 10 steps
+]
+
+[b00t.phygital]
+node_type      = "ai-wizard-agent"
+ontology_class = "AIWizardAgent"
+status_fields  = ["node_id", "state", "active_job", "last_step_time_s", "trainable_params_M", "last_probe_score"]
+state_machine  = ["idle", "diagnosing", "configuring", "supervising-training", "evaluating", "promoting", "error"]
+
+# b00t:map v1
+# summary: AI wizard role — architectural reasoning + failure diagnosis above ai-worker; knows why not just how
+# tags: role, ai-wizard, frontier, lora, moe, hyperparams, architecture, diagnosis, hf-jobs
+# tier: frontier
+# cmds: b00t whoami --role=ai-wizard, b00t blessing --manifest --role=ai-wizard
+# complexity: 8

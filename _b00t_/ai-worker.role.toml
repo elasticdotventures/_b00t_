@@ -23,6 +23,27 @@ compliance = [
     "sm0l output contract: PASS or FAIL:<5-line excerpt>",
 ]
 
+# 🤓 HF Jobs failure modes (lfmf: ai-worker-role-hf-jobs)
+[[lfmf]]
+topic = "hf-jobs-scripts-path"
+lesson = "/scripts is non-writable in unsloth container — scripts are at /data (dataset mount)"
+
+[[lfmf]]
+topic = "hf-jobs-output-dir"
+lesson = "HF bucket FUSE mount rejects os.makedirs for subdirs — use output_dir=/tmp/output"
+
+[[lfmf]]
+topic = "unsloth-lora-dropout"
+lesson = "lora_dropout must be 0.0 — any value above 0 disables Unsloth fast kernel (20-30x slower)"
+
+[[lfmf]]
+topic = "unsloth-moe-target-modules"
+lesson = "target_modules with gate_proj/up_proj/down_proj triggers MoE expert LoRA = 843M params = 150s/step; use attention-only [q_proj,v_proj,k_proj,o_proj] for MoE models"
+
+[[lfmf]]
+topic = "hf-jobs-config-hardcoded"
+lesson = "Always verify training scripts read hyperparams from config — hardcoded values silently ignore YAML"
+
 entangled_agents = [
     "scoring.agent",
 ]
