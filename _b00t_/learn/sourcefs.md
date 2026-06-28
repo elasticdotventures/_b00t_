@@ -5,7 +5,7 @@ principle: "The pattern b00t can apply without SourceFS: Docker layer caching fo
 
 benchmarks: "On AWS: AOSP 16 checkout (41min → 1min), build (2h54min → 5min). Cost: $2.98 → $0.09 (97% reduction). Disk: 83x less. Scales linearly — 96 vCPU reaches 5min build time (diminishing returns after 32 vCPU)."
 
-relevance: "For Oreo's app4dog: Gradle build caching in Dockerfile.android already applies this pattern. The 3+ hour Android build → 15-min target is the same principle at smaller scale. When b00t scales to multiple Android targets, SourceFS or equivalent build replay becomes essential."
+relevance: "Gradle build caching in Dockerfile.android already applies the SourceFS pattern. Docker layer caching for SDK/NDK/templates, Gradle configuration cache + build cache, volume-mounted cache across container runs. When b00t scales to multiple Android targets, SourceFS or equivalent build replay becomes essential."
 
 sourcefs-vs: "SourceFS outperforms Bazel/Buck2 migration (no migration needed), compiler wrappers like REClient/Goma (cover <50% of build steps), and ccache (compilation only). It replays ALL build steps — linking, packaging, docs, code generation — not just C/C++ compilation."
 
