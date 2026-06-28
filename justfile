@@ -213,9 +213,32 @@ desktop-deps:
 pm action service="":
     bash {{ justfile_directory() }}/scripts/b00t-pm.sh {{ action }} {{ service }}
 
-# 📊  Launch the admin dashboard on port 31337 via process manager (background).
+# 📊  Bump patch version, build admin dashboard, and restart via pm.
+#     Version change triggers web UI reload in the browser.
 admin:
-    bash {{ justfile_directory() }}/scripts/b00t-pm.sh start admin
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ justfile_directory() }}
+    # Bump patch version
+    current=$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')
+    IFS='.' read -r maj min pat <<< "$current"
+    next="$maj.$min.$((pat+1))"
+    sed -i "s/^version = \"$current\"/version = \"$next\"/" Cargo.toml
+    echo "⬆️  $current → $next"
+    # Build
+    cargo build -p b00t-admin
+    # Restart via pm
+    bash scripts/b00t-pm.sh restart admin
+
+# 🌐  Start Chrome with CDP debugging on Windows host.
+#     Requires Chrome installed on Windows at default path.
+start-chrome:
+    powershell.exe -Command "& { $$cdpPort = 9222; $$profile = [System.IO.Path]::Combine($$env:USERPROFILE, '.b00t-chrome'); Write-Host \"🌐 Starting Chrome CDP on :$$cdpPort — profile: $$profile\"; Start-Process 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList @('--remote-debugging-port=' + $$cdpPort, '--remote-allow-origins=*', '--no-first-run', '--user-data-dir=' + $$profile) -WindowStyle Hidden }"
+
+# 🔌  CDP relay — forward WSL port 9223 → Windows host CDP :9222.
+#     Run in background: just cdp-relay &
+cdp-relay:
+    python3 {{ justfile_directory() }}/scripts/cdp-relay.py
 
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source

@@ -31,11 +31,12 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     # Returns 0 (success) if VSCODE_GIT_IPC_HANDLE is set, 1 (failure) otherwise
     # Usage: if is_vscode_shell; then echo "In VS Code terminal"; fi
     source ~/.dotfiles/vscode.🆚/vscode-detection.sh
+    # Log helper for b00t events (used below)
+    log_📢_记录() { echo "📢 $*" >&2; }
     if ! type is_vscode_shell &>/dev/null; then
         echo "🙈🥾 is_vscode_shell not defined"
     elif is_vscode_shell; then
         log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
-        # b00t-cli vscode
     else
         log_📢_记录 "Not inside VSCODE"
     fi

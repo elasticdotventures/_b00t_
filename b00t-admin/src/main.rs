@@ -1287,20 +1287,36 @@ function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ document.getElementById('viz-status').textContent += ' — no mermaid data'; return; }}
   var target = document.getElementById('mermaid-target');
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-  // Use mermaid.render() which returns SVG string — more reliable than mermaid.run()
-  try {{
-    mermaid.render('viz-graph-' + Date.now(), currentVizData.mermaid).then(function(result) {{
-      target.innerHTML = result.svg;
-      document.getElementById('viz-status').textContent += ' — rendered (' + result.svg.length + ' bytes)';
-    }}).catch(function(e) {{
-      target.innerHTML = '<pre style="color:#ef4444;font-size:11px;">Mermaid error: ' + e.message + '</pre>';
-      document.getElementById('viz-status').textContent = 'Render failed: ' + e.message;
-      console.error('Mermaid error:', e);
-    }});
-  }} catch(e) {{
-    target.innerHTML = '<pre style="color:#ef4444;font-size:11px;">Exception: ' + e.message + '</pre>';
-    console.error('Mermaid exception:', e);
+  var raw = currentVizData.mermaid;
+  // Split multi-graph pipeline output
+  var graphs = [];
+  var parts = raw.split(/\`\`\`(?:mermaid)?\s*/);
+  for (var i = 0; i < parts.length; i++) {{
+    var p = parts[i].trim();
+    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{
+      graphs.push(p);
+    }}
   }}
+  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
+  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
+  document.getElementById('viz-status').textContent += ' — rendering ' + graphs.length + ' graph(s)...';
+  var html = '';
+  var pending = graphs.length;
+  var errors = 0;
+  graphs.forEach(function(g, idx) {{
+    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
+    try {{
+      mermaid.render(graphId, g).then(function(result) {{
+        html += '<div style="margin-bottom:16px;">' + result.svg + '</div>';
+        pending--;
+        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — rendered' + (errors ? ' (' + errors + ' errors)' : ''); }}
+      }}).catch(function(e) {{
+        errors++; pending--;
+        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
+        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — ' + errors + ' error(s)'; }}
+      }});
+    }} catch(e) {{ errors++; pending--; html += '<div style="color:#ef4444;">Exception: ' + e.message + '</div>'; if (pending === 0) {{ target.innerHTML = html; }} }}
+  }});
 }}
 
 // ════════ Knowledge Graph (Cytoscape) ════════
@@ -1316,27 +1332,39 @@ function loadKnowledgeGraph() {{
     fetch('/api/admin/viz/task').then(function(r){{return r.json();}}),
   ]).then(function(results) {{
     var elements = [];
-    function parse(mmd, prefix, color) {{
-      var seen = {{}};
+    var seen = {{}};
+    function addNode(id, label) {{
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      var color = id.startsWith('datum:') ? '#6366f1' : '#f59e0b';
+      elements.push({{ data: {{ id: id, label: (label||id).slice(0,25), color: color }} }});
+    }}
+    function addEdge(src, dst, label) {{
+      if (!src || !dst) return;
+      addNode(src, src.split(':').pop());
+      addNode(dst, dst.split(':').pop());
+      elements.push({{ data: {{ source: src, target: dst, label: label||'' }} }});
+    }}
+    function parseMermaidLines(mmd, prefix) {{
       if (!mmd) return;
       mmd.split('\n').forEach(function(line) {{
         line = line.trim();
-        var nm = line.match(/^(\w+)\[["]([^"]*)["]/);
-        if (nm && !seen[nm[1]]) {{ seen[nm[1]] = true; elements.push({{ data: {{ id: prefix+':'+nm[1], label: nm[2].replace('\\n',' ').slice(0,20), color: color }} }}); }}
-        var em = line.match(/^(\w+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\w+)/);
-        if (em) {{
-          if (!seen[em[1]]) {{ seen[em[1]] = true; elements.push({{ data: {{ id: prefix+':'+em[1], label: em[1].slice(0,20), color: color }} }}); }}
-          if (!seen[em[3]]) {{ seen[em[3]] = true; elements.push({{ data: {{ id: prefix+':'+em[3], label: em[3].slice(0,20), color: color }} }}); }}
-          elements.push({{ data: {{ source: prefix+':'+em[1], target: prefix+':'+em[3], label: em[2]||'' }} }});
-        }}
+        if (!line || line.startsWith('graph ') || line.startsWith('flowchart ')) return;
+        // Match: Nodename["Label"]
+        var nm = line.match(/^(\S+)\["([^"]*)"\]/);
+        if (nm) {{ addNode(prefix + ':' + nm[1], nm[2].replace(/\\n/g, ' ')); return; }}
+        // Match: Nsrc -->|label| Ndst
+        var em = line.match(/^(\S+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\S+)/);
+        if (em) {{ addEdge(prefix + ':' + em[1], prefix + ':' + em[3], em[2]||''); }}
       }});
     }}
-    parse(results[0].mermaid, 'datum', '#6366f1');
-    parse(results[1].mermaid, 'task', '#f59e0b');
-    status.textContent = elements.length + ' elements parsed, building Cytoscape...';
+    parseMermaidLines(results[0].mermaid, 'datum');
+    parseMermaidLines(results[1].mermaid, 'task');
+    status.textContent = elements.length + ' elements parsed';
+    if (elements.length === 0) {{ status.textContent = 'No elements found in Mermaid output'; return; }}
     setTimeout(function() {{
       var container = document.getElementById('cytoscape-target');
-      if (!container) return;
+      if (!container) {{ status.textContent = 'Error: container not found'; return; }}
       if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
       try {{
         var cy = cytoscape({{
@@ -1350,9 +1378,9 @@ function loadKnowledgeGraph() {{
           layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
           wheelSensitivity: 0.3,
         }});
-        status.textContent = elements.length + ' elements — interactive Cytoscape graph ready';
+        status.textContent = elements.length + ' elements — Cytoscape ready (drag to explore)';
       }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
-    }}, 200);
+    }}, 300);
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
 
