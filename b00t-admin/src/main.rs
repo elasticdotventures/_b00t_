@@ -1268,6 +1268,39 @@ function showVizTab(tab) {{
   document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
 }}
 
+function renderMermaid() {{
+  if (!currentVizData || !currentVizData.mermaid) {{ document.getElementById('viz-status').textContent += ' — no mermaid data'; return; }}
+  var target = document.getElementById('mermaid-target');
+  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
+  var raw = currentVizData.mermaid;
+  var graphs = [];
+  var parts = raw.split(/\`\`\`(?:mermaid)?\\s*/);
+  for (var i = 0; i < parts.length; i++) {{
+    var p = parts[i].trim();
+    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{ graphs.push(p); }}
+  }}
+  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
+  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
+  document.getElementById('viz-status').textContent += ' — rendering ' + graphs.length + ' graph(s)...';
+  var html = '';
+  var pending = graphs.length;
+  var errors = 0;
+  graphs.forEach(function(g, idx) {{
+    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
+    try {{
+      mermaid.render(graphId, g).then(function(result) {{
+        html += '<div style="margin-bottom:16px;">' + result.svg + '</div>';
+        pending--;
+        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — rendered' + (errors ? ' (' + errors + ' errors)' : ''); }}
+      }}).catch(function(e) {{
+        errors++; pending--;
+        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
+        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — ' + errors + ' error(s)'; }}
+      }});
+    }} catch(e) {{ errors++; pending--; html += '<div style="color:#ef4444;">Exception: ' + e.message + '</div>'; if (pending === 0) {{ target.innerHTML = html; }} }}
+  }});
+}}
+
 function loadGraph(sel) {{
   var status = document.getElementById('viz-status');
   var title = document.getElementById('viz-title');
