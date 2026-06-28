@@ -200,12 +200,18 @@ verify_after_install() {
   echo ""
   local errors=0
   for pc in "${!PC_CHECKS[@]}"; do
+    local apt_pkg="${PC_CHECKS[$pc]}"
     if pkg-config --exists "$pc" 2>/dev/null; then
       local ver
       ver=$(pkg-config --modversion "$pc" 2>/dev/null)
       echo -e "  ${GREEN}✅${NC} $pc  (v${ver})"
+    elif dpkg -s "$apt_pkg" 2>/dev/null | grep -q 'Status: install ok installed'; then
+      # Some packages (e.g. libxdo-dev) don't ship a .pc file
+      local ver
+      ver=$(dpkg -s "$apt_pkg" 2>/dev/null | grep '^Version:' | cut -d' ' -f2)
+      echo -e "  ${GREEN}✅${NC} $pc  (installed via $apt_pkg ${ver:+v$ver}${ver:+, no .pc file})"
     else
-      echo -e "  ${RED}❌${NC} $pc  (NOT FOUND)"
+      echo -e "  ${RED}❌${NC} $pc  (NOT FOUND — install: $apt_pkg)"
       ((errors++))
     fi
   done
@@ -215,6 +221,7 @@ verify_after_install() {
     echo "  Run: cd vendor/ledgrrr/crates/ledgerr-tauri && cargo check"
   else
     echo -e "${RED}✖ ${errors} dependencies still missing.${NC}"
+    echo "  Run: sudo apt-get install -y ${missing_list[*]}"
     return 1
   fi
 }
