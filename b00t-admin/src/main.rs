@@ -1097,6 +1097,39 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   .ws-dot.connected {{ background: #34d399; }}
   .ws-dot.disconnected {{ background: #ef4444; }}
 
+/* ── Progress bar ── */
+.progress-bar {{
+  width: 100%; height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; margin-top: 8px;
+}}
+.progress-fill {{
+  height: 100%; background: linear-gradient(90deg, #38bdf8, #6366f1); border-radius: 2px;
+  transition: width 0.3s ease; width: 0%;
+}}
+.progress-fill.indeterminate {{
+  width: 30%; animation: progress-indeterminate 1.5s ease-in-out infinite;
+}}
+@keyframes progress-indeterminate {{
+  0% {{ transform: translateX(-100%); }}
+  100% {{ transform: translateX(400%); }}
+}}
+
+/* ── Status log ── */
+.status-log {{
+  margin-top: 8px; max-height: 120px; overflow-y: auto; font-size: 10px; color: #64748b;
+  background: #1e293b; border-radius: 4px; padding: 4px 8px;
+}}
+.status-entry {{
+  padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+}}
+.status-entry .ts {{ color: #475569; margin-right: 6px; }}
+.status-entry .msg {{ color: #94a3b8; }}
+.status-entry.error .msg {{ color: #ef4444; }}
+.status-entry.done .msg {{ color: #34d399; }}
+
+/* ── Fade transitions ── */
+.fade-in {{ animation: fadeIn 0.3s ease-in; }}
+@keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {{ width: 6px; }}
   ::-webkit-scrollbar-track {{ background: #0f172a; }}
@@ -1208,6 +1241,10 @@ function toggleSection(name) {{
   var isOpen = body.classList.contains('open');
   body.classList.toggle('open', !isOpen);
   body.previousElementSibling.classList.toggle('active', !isOpen);
+  // Hide/show corresponding main panel
+  var panelMap = {{ pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' }};
+  var panel = document.getElementById(panelMap[name]);
+  if (panel) panel.style.display = isOpen ? 'none' : 'block';
 }}
 
 // ════════ Mermaid Init ════════
@@ -1268,8 +1305,46 @@ function showVizTab(tab) {{
   document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
 }}
 
+// ════════ Progress + Status Log ════════
+var progressStart = 0;
+function startProgress(total) {{
+  progressStart = Date.now();
+  var bar = document.getElementById('progress-bar');
+  var fill = document.getElementById('progress-fill');
+  bar.style.display = 'block';
+  fill.className = 'progress-fill indeterminate';
+  fill.style.width = '0%';
+  addStatus('info', 'Starting (' + total + ' items)...');
+}}
+function updateProgress(current, total, label) {{
+  var fill = document.getElementById('progress-fill');
+  var pct = Math.round((current / total) * 100);
+  fill.className = 'progress-fill';
+  fill.style.width = pct + '%';
+  var elapsed = ((Date.now() - progressStart) / 1000).toFixed(1);
+  addStatus('info', '[' + elapsed + 's] ' + label + ' (' + current + '/' + total + ')');
+}}
+function finishProgress() {{
+  var fill = document.getElementById('progress-fill');
+  fill.style.width = '100%';
+  var elapsed = ((Date.now() - progressStart) / 1000).toFixed(1);
+  addStatus('done', 'Done in ' + elapsed + 's');
+  setTimeout(function() {{
+    document.getElementById('progress-bar').style.display = 'none';
+  }}, 2000);
+}}
+function addStatus(type, msg) {{
+  var log = document.getElementById('status-log');
+  var ts = new Date().toLocaleTimeString();
+  var entry = document.createElement('div');
+  entry.className = 'status-entry ' + type + ' fade-in';
+  entry.innerHTML = '<span class="ts">[' + ts + ']</span><span class="msg">' + msg + '</span>';
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}}
+
 function renderMermaid() {{
-  if (!currentVizData || !currentVizData.mermaid) {{ document.getElementById('viz-status').textContent += ' — no mermaid data'; return; }}
+  if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
   var raw = currentVizData.mermaid;
@@ -1281,7 +1356,8 @@ function renderMermaid() {{
   }}
   if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
   if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
-  document.getElementById('viz-status').textContent += ' — rendering ' + graphs.length + ' graph(s)...';
+  document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
+  startProgress(graphs.length);
   var html = '';
   var pending = graphs.length;
   var errors = 0;
@@ -1289,15 +1365,22 @@ function renderMermaid() {{
     var graphId = 'viz-graph-' + Date.now() + '-' + idx;
     try {{
       mermaid.render(graphId, g).then(function(result) {{
-        html += '<div style="margin-bottom:16px;">' + result.svg + '</div>';
+        html += '<div class="fade-in" style="margin-bottom:16px;">' + result.svg + '</div>';
         pending--;
-        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — rendered' + (errors ? ' (' + errors + ' errors)' : ''); }}
+        var done = graphs.length - pending;
+        updateProgress(done, graphs.length, 'Graph ' + (idx+1) + ' rendered');
+        if (pending === 0) {{
+          target.innerHTML = html;
+          if (errors) addStatus('error', errors + ' error(s)');
+          finishProgress();
+        }}
       }}).catch(function(e) {{
         errors++; pending--;
         html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
-        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — ' + errors + ' error(s)'; }}
+        addStatus('error', 'Graph ' + (idx+1) + ' failed: ' + e.message);
+        if (pending === 0) {{ target.innerHTML = html; finishProgress(); }}
       }});
-    }} catch(e) {{ errors++; pending--; html += '<div style="color:#ef4444;">Exception: ' + e.message + '</div>'; if (pending === 0) {{ target.innerHTML = html; }} }}
+    }} catch(e) {{ errors++; pending--; addStatus('error', 'Exception: ' + e.message); if (pending === 0) {{ target.innerHTML = html; finishProgress(); }} }}
   }});
 }}
 
