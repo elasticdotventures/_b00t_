@@ -31,6 +31,9 @@ unlocks = [
     "ai-finetune::hf-adapter-pull",         # generic: hf-adapter-pull model_id local_dir
     "ai-finetune::hf-adapter-pull-coder",   # alias: coder-30b to canonical path
     # observability + test
+    # inlined training + test scripts (no separate .py files needed in cloud)
+    "ai-finetune::train",          # inline train: just -f ai-finetune.just train config
+    "ai-finetune::smoke-test",     # inline adapter probe: PASS/FAIL per b00t question
     "ai-finetune::test",
     "ai-finetune::logs",
     "ai-finetune::sparkline",
@@ -126,9 +129,10 @@ verifiable  = true
 
 [b00t.skill.metadata]
 just_module    = "_b00t_/ai-finetune.just"
-training_script = "fine-tune/train_unsloth.py"
-test_script    = "fine-tune/test_adapter.py"
+# 🤓 train + smoke-test are inlined in ai-finetune.just — no separate .py files needed in cloud
+# just -f /data/ai-finetune.just train /data/config.yaml  IS the training entrypoint
 configs        = ["fine-tune/config-smol.yaml", "fine-tune/config-cloud-coder.yaml"]
+dataset_script = "fine-tune/generate_dataset.py"   # too large to inline; justfile is canonical entry
 k8s_manifests  = "_b00t_/k8s.🚢/fine-tune/"
 adapter_hub    = "elasticdotventures/"
 dataset_hub    = "elasticdotventures/b00t-training"
