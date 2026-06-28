@@ -33,6 +33,29 @@ mod qwen-code '_b00t_/qwen-code.justfile'
 # 🧠 AI fine-tuning: dataset gen, local k8s training, HF Jobs cloud, MLflow, adapter test
 mod ai-finetune '_b00t_/ai-finetune.just'
 
+# ── Module guide — `just modules` or `just --list <module>` ──────────────────
+# Lists all submodule justfiles registered in this repo.
+# Each module is a b00t skill scope; load with: b00t learn <module>
+
+@modules:
+    @echo "b00t just modules (just --list <module> for recipes):"
+    @echo ""
+    @echo "  ai-finetune   QLoRA training + HF Jobs cloud (b00t learn ai-finetune)"
+    @echo "  k8s           Kubernetes ops — sm3lly cluster"
+    @echo "  python        Python/uv environment management"
+    @echo "  docker        Container build + run"
+    @echo "  git           Git workflows + hooks"
+    @echo "  bash          Shell utilities"
+    @echo "  terraform     IaC provisioning"
+    @echo "  zellij        Terminal multiplexer"
+    @echo "  b00t          Core b00t CLI wrappers"
+    @echo "  embed         Embedding pipeline"
+    @echo "  qwen-code     Qwen code agent"
+    @echo "  irontology    Ontology + semantic RAG"
+    @echo ""
+    @echo "  Usage: just <module>::<recipe>"
+
+
 next-task:
     #!/bin/bash
     set -euo pipefail
