@@ -687,40 +687,97 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     background: #020617;
     color: #e2e8f0;
     font-family: 'JetBrains Mono', monospace;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto 1fr 1fr;
-    gap: 16px;
-    padding: 20px;
+    display: flex;
     min-height: 100vh;
+    margin: 0;
+    padding: 0;
   }}
 
-  .header {{
-    grid-column: 1 / -1;
+  /* ── Sidebar ── */
+  .sidebar {{
+    width: 200px;
+    min-width: 200px;
+    background: #0f172a;
+    border-right: 1px solid #1e293b;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+  }}
+
+  .sidebar-header {{
+    padding: 16px;
+    border-bottom: 1px solid #1e293b;
+  }}
+
+  .sidebar-header h1 {{
+    font-size: 16px;
+    color: #38bdf8;
+    margin: 0;
+  }}
+
+  .sidebar-header .header-info {{
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+  }}
+
+  .accordion-section {{
+    border-bottom: 1px solid #1e293b;
+  }}
+
+  .accordion-header {{
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #94a3b8;
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px 24px;
+    gap: 8px;
+    user-select: none;
+    transition: background 0.15s;
+  }}
+
+  .accordion-header:hover {{ background: #1e293b; }}
+  .accordion-header.active {{ color: #38bdf8; background: rgba(56,189,248,0.08); }}
+
+  .accordion-arrow {{
+    margin-left: auto;
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: #475569;
+  }}
+
+  .accordion-header.active .accordion-arrow {{ transform: rotate(90deg); }}
+
+  .accordion-body {{
+    display: none;
+    padding: 12px 16px;
+  }}
+
+  .accordion-body.open {{ display: block; }}
+
+  /* ── Main content ── */
+  .main-content {{
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    height: 100vh;
+  }}
+
+  .main-content .panel {{
     background: #0f172a;
     border: 1px solid #1e293b;
     border-radius: 12px;
-  }}
-
-  .header h1 {{
-    font-size: 24px;
-    color: #38bdf8;
-  }}
-
-  .status-dot {{
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: #34d399;
-    animation: pulse 2s infinite;
+    padding: 20px;
+    margin-bottom: 16px;
   }}
 
   @keyframes pulse {{
-    0%, 100% {{ opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }}
-    50% {{ opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }}
+    0%%, 100%% {{ opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }}
+    50%% {{ opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }}
   }}
 
   .header-info {{
@@ -967,7 +1024,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
   .flow-legend .dot {{
     width: 6px; height: 6px;
-    border-radius: 50%;
+    border-radius: 50%%;
     display: inline-block;
     margin-right: 4px;
   }}
@@ -1034,7 +1091,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
   .ws-dot {{
     width: 8px; height: 8px;
-    border-radius: 50%;
+    border-radius: 50%%;
   }}
 
   .ws-dot.connected {{ background: #34d399; }}
@@ -1047,153 +1104,144 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 </style>
 </head>
 <body>
-
-<div class="header">
-  <div class="status-dot" id="status-dot"></div>
-  <h1>b00t Admin Dashboard</h1>
-  <div class="header-info" id="header-info">Pipeline v{} · Loading...</div>
+<!-- ── Sidebar ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div class="sidebar-header" id="status-dot" style="width:8px;height:8px;border-radius:50%%;background:#34d399;animation:pulse 2s infinite;display:inline-block;"></div>
+      <h1 style="font-size:16px;color:#38bdf8;margin:0;">b00t</h1>
+    </div>
+    <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;">Pipeline v{{}} · Loading...</div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header active" onclick="toggleSection('pipeline')">📊 Pipeline <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body open" id="section-pipeline" style="padding:8px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-evidence">0</div><div style="font-size:8px;color:#64748b;">Evidence</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-reqs">0</div><div style="font-size:8px;color:#64748b;">Requirements</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-fol">0</div><div style="font-size:8px;color:#64748b;">FOL</div></div>
+      </div>
+      <div id="pipeline-source" style="margin-top:6px;font-size:9px;color:#64748b;"><strong style="color:#22d3ee;">No pipeline</strong></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header" onclick="toggleSection('types')">🔬 Types <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-types" style="padding:8px 16px;">
+      <div class="type-list" id="type-list" style="max-height:150px;overflow-y:auto;"></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header" onclick="toggleSection('sim')">👥 Simulation <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
+      <button class="sim-btn" onclick="simTick()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
+      <button class="sim-btn rollback" onclick="simRollback()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
+      <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
+      <div style="font-size:10px;margin-top:4px;"><span id="ws-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%%;background:#ef4444;"></span> <span id="ws-text">WS: disconnected</span></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header active" onclick="toggleSection('viz')">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
+      <select id="viz-select" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;">
+        <option value="">— Choose —</option>
+        <option value="entangle">🔗 Entanglement</option>
+        <option value="task">📋 Tasks</option>
+        <option value="pipeline">📊 Pipeline</option>
+        <option value="ato">🏛️ ATO</option>
+        <option value="kg">🕸️ Knowledge Graph</option>
+      </select>
+      <button class="sim-btn" onclick="loadSelectedViz()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">Load</button>
+      <div style="display:flex;gap:2px;margin-bottom:4px;">
+        <div class="code-tab active" onclick="switchVizTab('mermaid')" style="flex:1;text-align:center;font-size:9px;padding:4px;">Mermaid</div>
+        <div class="code-tab" onclick="switchVizTab('cytoscape')" style="flex:1;text-align:center;font-size:9px;padding:4px;">Cytoscape</div>
+      </div>
+      <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
+    </div>
+  </div>
 </div>
 
-<!-- Pipeline Status -->
+<!-- ── Main Content ── -->
+<div class="main-content">
+
 <div class="panel" id="pipeline-panel">
-  <h2><span class="icon">📊</span> Pipeline Status</h2>
-  <div class="pipeline-stats" id="pipeline-stats">
-    <div class="stat"><div class="stat-value" id="stat-chunks">0</div><div class="stat-label">Chunks</div></div>
-    <div class="stat"><div class="stat-value" id="stat-evidence">0</div><div class="stat-label">Evidence</div></div>
-    <div class="stat"><div class="stat-value" id="stat-reqs">0</div><div class="stat-label">Requirements</div></div>
-    <div class="stat"><div class="stat-value" id="stat-fol">0</div><div class="stat-label">FOL Formulas</div></div>
-  </div>
-  <div class="pipeline-source" id="pipeline-source">
-    <strong>No pipeline</strong> — Awaiting document ingestion
+  <h2>📊 Pipeline Status</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="stat"><div class="stat-value" id="stat-chunks-2">0</div><div class="stat-label">Chunks</div></div>
+    <div class="stat"><div class="stat-value" id="stat-evidence-2">0</div><div class="stat-label">Evidence</div></div>
+    <div class="stat"><div class="stat-value" id="stat-reqs-2">0</div><div class="stat-label">Requirements</div></div>
+    <div class="stat"><div class="stat-value" id="stat-fol-2">0</div><div class="stat-label">FOL Formulas</div></div>
   </div>
 </div>
 
-<!-- Type Explorer -->
 <div class="panel" id="type-panel">
-  <h2><span class="icon">🔬</span> Type Explorer</h2>
-  <div class="type-list" id="type-list"></div>
-  <div class="code-tabs" id="code-tabs">
-    <div class="code-tab active" data-tab="diagram">Diagram</div>
-    <div class="code-tab" data-tab="wasm">WASM</div>
-    <div class="code-tab" data-tab="cython">Cython</div>
-    <div class="code-tab" data-tab="schema">Schema</div>
-  </div>
-  <div class="type-detail" id="type-detail">Select a type to inspect</div>
+  <h2>🔬 Type Explorer</h2>
+  <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
 </div>
 
-<!-- Process Flow -->
-<div class="panel" id="flow-panel">
-  <h2><span class="icon">🔄</span> Process Flow</h2>
-  <div class="process-flow">
-    <div class="flow-stages">
-      <div class="flow-stage fetch">
-        <div class="stage-icon">📄</div>
-        <div class="stage-title">FETCH</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:4px;">Arxiv/PDF → Markdown</div>
-      </div>
-      <div class="flow-arrow">
-        <svg viewBox="0 0 40 20">
-          <line class="line" x1="0" y1="10" x2="30" y2="10"/>
-          <polygon class="head" points="30,10 24,6 24,14"/>
-        </svg>
-      </div>
-      <div class="flow-stage chunk">
-        <div class="stage-icon">🧩</div>
-        <div class="stage-title">CHUNK</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:4px;">Split + Embed</div>
-      </div>
-      <div class="flow-arrow">
-        <svg viewBox="0 0 40 20">
-          <line class="line" x1="0" y1="10" x2="30" y2="10"/>
-          <polygon class="head" points="30,10 24,6 24,14"/>
-        </svg>
-      </div>
-      <div class="flow-stage evidence">
-        <div class="stage-icon">🔍</div>
-        <div class="stage-title">EXTRACT</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:4px;">Claims + Stats</div>
-      </div>
-      <div class="flow-arrow">
-        <svg viewBox="0 0 40 20">
-          <line class="line" x1="0" y1="10" x2="30" y2="10"/>
-          <polygon class="head" points="30,10 24,6 24,14"/>
-        </svg>
-      </div>
-      <div class="flow-stage require">
-        <div class="stage-icon">📋</div>
-        <div class="stage-title">DERIVE</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:4px;">SysMLv2 ReqIF</div>
-      </div>
-    </div>
-    <div class="flow-legend">
-      <span><span class="dot dot-cyan"></span> DocumentSource</span>
-      <span><span class="dot dot-green"></span> SemanticChunk</span>
-      <span><span class="dot dot-purp"></span> Evidence</span>
-      <span><span class="dot dot-amber"></span> Requirement</span>
-    </div>
-  </div>
-</div>
-
-<!-- Twin Simulation -->
 <div class="panel" id="sim-panel">
-  <h2><span class="icon">👥</span> Twin Simulation</h2>
-  <div class="sim-controls">
-    <button class="sim-btn tick" onclick="simTick()">▶ Tick</button>
-    <button class="sim-btn rollback" onclick="simRollback()">↩ Rollback</button>
-    <button class="sim-btn" onclick="simDeltas()">+ Delta</button>
-  </div>
-  <div class="sim-state" id="sim-state">
-    <div class="sim-row"><span class="sim-key">Name</span><span class="sim-val">doc-pipeline</span></div>
-    <div class="sim-row"><span class="sim-key">Tick</span><span class="sim-val" id="sim-tick">0</span></div>
-    <div class="sim-row"><span class="sim-key">History</span><span class="sim-val" id="sim-history">0</span></div>
-    <div class="sim-row"><span class="sim-key">Subscribers</span><span class="sim-val" id="sim-subs">0</span></div>
-  </div>
-  <div class="ws-status">
-    <div class="ws-dot disconnected" id="ws-dot"></div>
-    <span id="ws-text">WebSocket: disconnected</span>
+  <h2>👥 Twin Simulation</h2>
+  <div id="sim-state">
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">Name: <span style="color:#e2e8f0;">doc-pipeline</span></div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">Tick: <span id="sim-tick-2" style="color:#e2e8f0;">0</span></div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">History: <span id="sim-history-2" style="color:#e2e8f0;">0</span></div>
+    <div style="font-size:12px;color:#94a3b8;">Subscribers: <span id="sim-subs" style="color:#e2e8f0;">0</span></div>
   </div>
 </div>
 
-<!-- Visualizations Panel -->
-<div class="panel" id="viz-panel" style="grid-column:1/-1;">
-  <h2><span class="icon">🎨</span> Visualizations</h2>
-  <div class="viz-controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <select id="viz-select" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:6px 12px;border-radius:4px;font-family:inherit;">
-      <option value="">— Choose a graph —</option>
-      <option value="entangle">🔗 Datum Entanglement</option>
-      <option value="task">📋 Task Dependencies</option>
-      <option value="pipeline">📊 Pipeline (generic)</option>
-      <option value="ato">🏛️ ATO Legislation</option>
-      <option value="kg">🕸️ Knowledge Graph</option>
-    </select>
-    <button class="sim-btn" onclick="loadSelectedViz()">Load</button>
-    <span style="margin-left:8px;font-size:12px;color:#64748b;" id="viz-status">Select a graph type</span>
-    <div style="margin-left:auto;display:flex;gap:4px;">
-      <div class="code-tab active" data-tab="viz-mermaid" onclick="switchVizTab('mermaid')">Mermaid</div>
-      <div class="code-tab" data-tab="viz-cytoscape" onclick="switchVizTab('cytoscape')">Cytoscape</div>
-    </div>
+<div class="panel" id="viz-panel">
+  <h2>🎨 <span id="viz-title">Visualization</span></h2>
+  <div id="viz-mermaid-container" style="background:#0f172a;border-radius:6px;padding:12px;min-height:200px;overflow:auto;border:1px solid #1e293b;">
+    <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization</div>
   </div>
-  <div id="viz-mermaid-container" style="margin-top:12px;background:#0f172a;border-radius:6px;padding:12px;min-height:200px;overflow:auto;">
-    <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization to render</div>
+  <div id="viz-cytoscape-container" style="background:#0f172a;border-radius:6px;min-height:400px;display:none;border:1px solid #1e293b;">
+    <div id="cytoscape-target" style="width:100%%;height:400px;"></div>
   </div>
-  <div id="viz-cytoscape-container" style="margin-top:12px;background:#0f172a;border-radius:6px;min-height:400px;display:none;">
-    <div id="cytoscape-target" style="width:100%;height:400px;"></div>
-  </div>
+</div>
+
 </div>
 
 <script>
-// ═══════════ Mermaid Setup ═══════════
+// ════════ Accordion ════════
+function toggleSection(name) {{
+  var body = document.getElementById('section-' + name);
+  if (!body) return;
+  var isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  body.previousElementSibling.classList.toggle('active', !isOpen);
+}}
+
+// ════════ Mermaid Init ════════
 mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
 
-// ═══════════ Viz Panel ═══════════
-let currentVizTab = 'mermaid';
-let currentVizData = null;
-let kgData = null;
+// ════════ Pipeline Update ════════
+function updatePipeline() {{
+  var p = PIPELINE;
+  ['chunks','evidence','reqs','fol'].forEach(function(k) {{
+    var v = p[k + '_count'] || 0;
+    var el = document.getElementById('stat-' + k);
+    var el2 = document.getElementById('stat-' + k + '-2');
+    if (el) el.textContent = v;
+    if (el2) el2.textContent = v;
+  }});
+  var src = document.getElementById('pipeline-source');
+  if (src) {{
+    src.innerHTML = p.has_pipeline
+      ? '<strong style="color:#22d3ee;">' + (p.source_id || 'N/A') + '</strong> — ' + (p.source_title || 'Untitled')
+      : '<strong style="color:#22d3ee;">No pipeline</strong>';
+  }}
+  var info = document.getElementById('header-info');
+  if (info) info.textContent = 'Pipeline v' + (p.pipeline_version || '—') + ' · ' + (p.executed_at ? new Date(p.executed_at).toLocaleString() : 'Not executed');
+}}
+
+// ════════ Viz Panel ════════
+var currentVizTab = 'mermaid';
+var currentVizData = null;
 
 function switchVizTab(tab) {{
   currentVizTab = tab;
-  document.querySelectorAll('[data-tab^="viz-"]').forEach(function(el) {{
-    el.classList.toggle('active', el.dataset.tab === 'viz-' + tab);
+  document.querySelectorAll('#section-viz .code-tab').forEach(function(el) {{
+    el.classList.toggle('active', el.textContent.trim().toLowerCase().indexOf(tab) >= 0);
   }});
   document.getElementById('viz-mermaid-container').style.display = tab === 'mermaid' ? 'block' : 'none';
   document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
@@ -1202,341 +1250,160 @@ function switchVizTab(tab) {{
 function loadSelectedViz() {{
   var sel = document.getElementById('viz-select').value;
   if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
-  if (sel === 'pipeline') {{ showPipelineMermaid(); return; }}
-  if (sel === 'ato') {{ showAtoMermaid(); return; }}
+  var status = document.getElementById('viz-status');
+  var title = document.getElementById('viz-title');
+  status.textContent = 'Loading...';
+
+  if (sel === 'pipeline') {{
+    fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
+      currentVizData = {{ mermaid: d.mermaid }};
+      title.textContent = 'Pipeline Flow';
+      status.textContent = 'Pipeline loaded (' + (d.mermaid||'').length + ' chars)';
+      renderMermaid();
+    }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+    return;
+  }}
+  if (sel === 'ato') {{
+    fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
+      var m = d.pipelines && d.pipelines['ato-legislation'] ? d.pipelines['ato-legislation'].mermaid : '';
+      currentVizData = {{ mermaid: m }};
+      title.textContent = 'ATO Legislation Pipeline';
+      status.textContent = m ? 'ATO loaded (' + m.length + ' chars)' : 'No ATO data';
+      renderMermaid();
+    }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+    return;
+  }}
   if (sel === 'kg') {{ loadKnowledgeGraph(); return; }}
-  document.getElementById('viz-status').textContent = 'Loading ' + sel + '...';
-  fetch('/api/admin/viz/' + sel)
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-      currentVizData = data;
-      document.getElementById('viz-status').textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' loaded (' + (data.mermaid ? data.mermaid.length + ' chars' : 'no mermaid') + ')';
-      renderViz();
-    }})
-    .catch(function(err) {{
-      document.getElementById('viz-status').textContent = 'Error: ' + err.message;
-    }});
+
+  fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
+    currentVizData = d;
+    title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
+    status.textContent = 'Loaded: ' + (d.mermaid||'').length + ' chars mermaid';
+    renderMermaid();
+  }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
 
-function showPipelineMermaid() {{
-  document.getElementById('viz-status').textContent = 'Loading pipeline...';
-  fetch('/api/admin/processes')
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-      currentVizData = {{ mermaid: data.mermaid, svg: '', viz_type: 'pipeline' }};
-      document.getElementById('viz-status').textContent = 'Pipeline graph loaded';
-      renderViz();
-    }});
-}}
-
-function showAtoMermaid() {{
-  document.getElementById('viz-status').textContent = 'Loading ATO pipeline...';
-  fetch('/api/admin/processes')
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-      var m = data.pipelines && data.pipelines['ato-legislation'] ? data.pipelines['ato-legislation'].mermaid : '(no ATO pipeline)';
-      currentVizData = {{ mermaid: m, svg: '', viz_type: 'ato' }};
-      document.getElementById('viz-status').textContent = 'ATO pipeline graph loaded';
-      renderViz();
-    }});
-}}
-
-function renderViz() {{
-  if (!currentVizData) return;
+function renderMermaid() {{
+  if (!currentVizData || !currentVizData.mermaid) {{ document.getElementById('viz-status').textContent += ' — no mermaid data'; return; }}
   var target = document.getElementById('mermaid-target');
-  if (currentVizTab === 'mermaid' && currentVizData.mermaid) {{
-    target.textContent = 'Rendering...';
-    try {{
-      mermaid.run({{ nodes: [{{ id: 'mermaid-target', text: currentVizData.mermaid }}], suppressErrors: true }});
-    }} catch(e) {{
-      target.innerHTML = '<pre style="color:#ef4444;">Mermaid render error: ' + e.message + '</pre>';
-    }}
+  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
+  // Use mermaid.render() which returns SVG string — more reliable than mermaid.run()
+  try {{
+    mermaid.render('viz-graph-' + Date.now(), currentVizData.mermaid).then(function(result) {{
+      target.innerHTML = result.svg;
+      document.getElementById('viz-status').textContent += ' — rendered (' + result.svg.length + ' bytes)';
+    }}).catch(function(e) {{
+      target.innerHTML = '<pre style="color:#ef4444;font-size:11px;">Mermaid error: ' + e.message + '</pre>';
+      document.getElementById('viz-status').textContent = 'Render failed: ' + e.message;
+      console.error('Mermaid error:', e);
+    }});
+  }} catch(e) {{
+    target.innerHTML = '<pre style="color:#ef4444;font-size:11px;">Exception: ' + e.message + '</pre>';
+    console.error('Mermaid exception:', e);
   }}
 }}
 
-// ═══════════ Knowledge Graph (Cytoscape) ═══════════
+// ════════ Knowledge Graph (Cytoscape) ════════
 function loadKnowledgeGraph() {{
-  document.getElementById('viz-status').textContent = 'Loading knowledge graph...';
   document.getElementById('viz-select').value = 'kg';
   switchVizTab('cytoscape');
+  var status = document.getElementById('viz-status');
+  var title = document.getElementById('viz-title');
+  title.textContent = 'Knowledge Graph';
+  status.textContent = 'Loading...';
   Promise.all([
-    fetch('/api/admin/viz/entangle').then(function(r) {{ return r.json(); }}),
-    fetch('/api/admin/viz/task').then(function(r) {{ return r.json(); }}),
+    fetch('/api/admin/viz/entangle').then(function(r){{return r.json();}}),
+    fetch('/api/admin/viz/task').then(function(r){{return r.json();}}),
   ]).then(function(results) {{
-    buildCytoscapeGraph(results[0], results[1]);
-    document.getElementById('viz-status').textContent = 'Knowledge graph rendered';
-  }}).catch(function(err) {{
-    document.getElementById('viz-status').textContent = 'KG Error: ' + err.message;
-  }});
+    var elements = [];
+    function parse(mmd, prefix, color) {{
+      var seen = {{}};
+      if (!mmd) return;
+      mmd.split('\n').forEach(function(line) {{
+        line = line.trim();
+        var nm = line.match(/^(\w+)\[["]([^"]*)["]/);
+        if (nm && !seen[nm[1]]) {{ seen[nm[1]] = true; elements.push({{ data: {{ id: prefix+':'+nm[1], label: nm[2].replace('\\n',' ').slice(0,20), color: color }} }}); }}
+        var em = line.match(/^(\w+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\w+)/);
+        if (em) {{
+          if (!seen[em[1]]) {{ seen[em[1]] = true; elements.push({{ data: {{ id: prefix+':'+em[1], label: em[1].slice(0,20), color: color }} }}); }}
+          if (!seen[em[3]]) {{ seen[em[3]] = true; elements.push({{ data: {{ id: prefix+':'+em[3], label: em[3].slice(0,20), color: color }} }}); }}
+          elements.push({{ data: {{ source: prefix+':'+em[1], target: prefix+':'+em[3], label: em[2]||'' }} }});
+        }}
+      }});
+    }}
+    parse(results[0].mermaid, 'datum', '#6366f1');
+    parse(results[1].mermaid, 'task', '#f59e0b');
+    status.textContent = elements.length + ' elements parsed, building Cytoscape...';
+    setTimeout(function() {{
+      var container = document.getElementById('cytoscape-target');
+      if (!container) return;
+      if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
+      try {{
+        var cy = cytoscape({{
+          container: container,
+          elements: elements,
+          style: [
+            {{ selector: 'node', style: {{ label: 'data(label)', 'background-color': 'data(color)', color: '#e2e8f0', 'font-size': '10px', 'text-valign': 'bottom', 'text-halign': 'center', width: 30, height: 30 }} }},
+            {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
+            {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
+          ],
+          layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
+          wheelSensitivity: 0.3,
+        }});
+        status.textContent = elements.length + ' elements — interactive Cytoscape graph ready';
+      }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
+    }}, 200);
+  }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
 
-function buildCytoscapeGraph(entangleData, taskData) {{
-  var cyEl = [];
-  var seen = {{}};
-
-  function addNode(id, label, color) {{
-    if (seen[id]) return;
-    seen[id] = true;
-    cyEl.push({{ data: {{ id: id, label: label, color: color || '#6366f1' }} }});
-  }}
-
-  function addEdge(src, dst, label) {{
-    cyEl.push({{ data: {{ source: src, target: dst, label: label || '' }} }});
-  }}
-
-  function parseMermaidGraph(mmd, prefix) {{
-    if (!mmd) return;
-    var lines = mmd.split('\n');
-    lines.forEach(function(line) {{
-      line = line.trim();
-      var nodeMatch = line.match(/^(\w+)\[["]([^"]*)["]/);
-      if (nodeMatch) {{
-        addNode(prefix + ':' + nodeMatch[1], nodeMatch[2].replace('\\n', ' '));
-      }}
-      var edgeMatch = line.match(/^(\w+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\w+)/);
-      if (edgeMatch) {{
-        addNode(prefix + ':' + edgeMatch[1], edgeMatch[1]);
-        addNode(prefix + ':' + edgeMatch[3], edgeMatch[3]);
-        addEdge(prefix + ':' + edgeMatch[1], prefix + ':' + edgeMatch[3], edgeMatch[2] || '');
-      }}
-    }});
-  }}
-
-  parseMermaidGraph(entangleData.mermaid, 'datum');
-  parseMermaidGraph(taskData.mermaid, 'task');
-
-  kgData = {{ elements: cyEl }};
-
-  var cy = cytoscape({{
-    container: document.getElementById('cytoscape-target'),
-    elements: cyEl,
-    style: [
-      {{ selector: 'node', style: {{ label: 'data(label)', 'background-color': 'data(color)', color: '#e2e8f0', 'font-size': '10px', 'text-valign': 'bottom', 'text-halign': 'center', width: 40, height: 40 }} }},
-      {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
-      {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
-    ],
-    layout: {{ name: 'cose', padding: 30, nodeRepulsion: 8000, idealEdgeLength: 120 }},
-    wheelSensitivity: 0.3,
+// ════════ Type Explorer (simplified) ════════
+function initTypeExplorer() {{
+  var list = document.getElementById('type-list');
+  TYPES.forEach(function(name) {{
+    var el = document.createElement('div');
+    el.className = 'type-list-item';
+    el.textContent = name;
+    el.onclick = function() {{
+      document.querySelectorAll('.type-list-item').forEach(function(x){{x.classList.remove('active');}});
+      el.classList.add('active');
+      loadTypeDetail(name);
+    }};
+    list.appendChild(el);
   }});
 }}
-</script>
+function loadTypeDetail(name) {{
+  document.getElementById('type-detail').textContent = 'Loading ' + name + '...';
+  fetch('/api/admin/types/' + name).then(function(r){{return r.json();}}).then(function(d) {{
+    var html = '<div style="margin-bottom:8px;"><strong>' + name + '</strong></div>';
+    html += '<pre style="background:#1e293b;padding:8px;border-radius:4px;font-size:10px;max-height:300px;overflow:auto;">' + JSON.stringify(d, null, 2).slice(0,2000) + '</pre>';
+    document.getElementById('type-detail').innerHTML = html;
+  }}).catch(function(e){{ document.getElementById('type-detail').textContent = 'Error: ' + e.message; }});
+}}
 
-<script>
-// ═══════════ Pipeline Data ═══════════
+// ════════ Simulation Controls ════════
+function simTick() {{
+  fetch('/api/admin/simulate/tick').then(function(r){{return r.json();}}).then(function(d) {{
+    var el = document.getElementById('sim-tick');
+    var el2 = document.getElementById('sim-tick-2');
+    if (el) el.textContent = d.tick;
+    if (el2) el2.textContent = d.tick;
+    document.getElementById('sim-history').textContent = d.history_len || 0;
+    document.getElementById('sim-history-2').textContent = d.history_len || 0;
+  }});
+}}
+function simRollback() {{
+  fetch('/api/admin/simulate/state').then(function(r){{return r.json();}}).then(function(d) {{ simTick(); }});
+}}
+
+// ════════ Init ════════
 const PIPELINE = {pipeline_json};
 const TYPES = {types_json};
-
-let currentType = null;
-let currentTab = 'diagram';
-let typeData = {{}};
-
-// ═══════════ Initialize Pipeline Panel ═══════════
-function updatePipeline() {{
-  const p = PIPELINE;
-  document.getElementById('stat-chunks').textContent = p.chunk_count || 0;
-  document.getElementById('stat-evidence').textContent = p.evidence_count || 0;
-  document.getElementById('stat-reqs').textContent = p.requirement_count || 0;
-  document.getElementById('stat-fol').textContent = p.fol_formula_count || 0;
-
-  const src = document.getElementById('pipeline-source');
-  if (p.has_pipeline) {{
-    src.innerHTML = '<strong>' + (p.source_id || 'N/A') + '</strong> — ' +
-      (p.source_title || 'Untitled') +
-      (p.pipeline_version ? ' · v' + p.pipeline_version : '');
-  }} else {{
-    src.innerHTML = '<strong>No pipeline</strong> — Awaiting document ingestion';
-  }}
-
-  document.getElementById('header-info').textContent =
-    'Pipeline v' + (p.pipeline_version || '—') + ' · ' +
-    (p.executed_at ? new Date(p.executed_at).toLocaleString() : 'Not executed');
-}}
-
-// ═══════════ Initialize Type Explorer ═══════════
-function initTypeExplorer() {{
-  const list = document.getElementById('type-list');
-  TYPES.forEach(function(name) {{
-    const item = document.createElement('div');
-    item.className = 'type-item';
-    item.textContent = name;
-    item.onclick = function() {{ selectType(name); }};
-    list.appendChild(item);
-  }});
-}}
-
-async function selectType(name) {{
-  currentType = name;
-
-  // Highlight active
-  document.querySelectorAll('.type-item').forEach(function(el) {{
-    el.classList.toggle('active', el.textContent === name);
-  }});
-
-  // Fetch type details
-  try {{
-    const resp = await fetch('/api/admin/types/' + encodeURIComponent(name));
-    if (!resp.ok) throw new Error('Not found');
-    typeData[name] = await resp.json();
-    renderTypeDetail();
-  }} catch(e) {{
-    document.getElementById('type-detail').textContent = 'Error: ' + e.message;
-  }}
-}}
-
-function renderTypeDetail() {{
-  const data = typeData[currentType];
-  if (!data) return;
-
-  const detail = document.getElementById('type-detail');
-  const tab = currentTab;
-
-  if (tab === 'diagram' && data.schema) {{
-    const fields = data.schema.fields || [];
-    let html = '<div style="color:#38bdf8;font-size:11px;margin-bottom:8px;">' +
-      data.schema.name;
-    if (data.schema.ufo_stereotype) {{
-      html += ' <span class="type-tag">' + data.schema.ufo_stereotype + '</span>';
-    }}
-    html += '</div>';
-    fields.forEach(function(f) {{
-      const opt = f.is_optional ? '?' : '';
-      html += '<div style="padding:2px 0;">' +
-        '<span class="field-name">' + f.name + opt + '</span>: ' +
-        '<span class="field-type">' + f.rust_type + '</span>';
-      if (f.description) {{
-        html += ' <span style="color:#475569;font-size:9px;">// ' + f.description + '</span>';
-      }}
-      html += '</div>';
-    }});
-    detail.innerHTML = html;
-  }} else if (tab === 'wasm' && data.codegen && data.codegen.wasm) {{
-    detail.innerHTML = '<pre style="color:#94a3b8;font-size:10px;">' +
-      escapeHtml(data.codegen.wasm.substring(0, 3000)) + '</pre>';
-  }} else if (tab === 'cython' && data.codegen && data.codegen.cython) {{
-    detail.innerHTML = '<pre style="color:#94a3b8;font-size:10px;">' +
-      escapeHtml(data.codegen.cython.substring(0, 3000)) + '</pre>';
-  }} else if (tab === 'schema' && data.schema) {{
-    detail.innerHTML = '<pre style="color:#94a3b8;font-size:10px;">' +
-      escapeHtml(JSON.stringify(data.schema.json_schema, null, 2).substring(0, 3000)) + '</pre>';
-  }} else {{
-    detail.innerHTML = '<span style="color:#64748b;">No ' + tab + ' output available</span>';
-  }}
-}}
-
-function escapeHtml(text) {{
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}}
-
-// ═══════════ Code Tabs ═══════════
-document.getElementById('code-tabs').addEventListener('click', function(e) {{
-  if (e.target.classList.contains('code-tab')) {{
-    document.querySelectorAll('.code-tab').forEach(function(t) {{
-      t.classList.remove('active');
-    }});
-    e.target.classList.add('active');
-    currentTab = e.target.dataset.tab;
-    if (currentType) renderTypeDetail();
-  }}
-}});
-
-// ═══════════ Simulation Controls ═══════════
-async function simTick() {{
-  try {{
-    const resp = await fetch('/api/admin/simulate/tick');
-    const data = await resp.json();
-    document.getElementById('sim-tick').textContent = data.tick;
-    document.getElementById('sim-history').textContent = data.history_len;
-  }} catch(e) {{ console.error('Tick error:', e); }}
-}}
-
-async function simRollback() {{
-  try {{
-    const resp = await fetch('/api/admin/simulate/state');
-    const data = await resp.json();
-    if (data.history_len > 0) {{
-      // Rollback via WebSocket
-      if (ws && ws.readyState === WebSocket.OPEN) {{
-        ws.send('rollback');
-      }}
-    }}
-  }} catch(e) {{ console.error('Rollback error:', e); }}
-}}
-
-function simDeltas() {{
-  const delta = prompt('Enter JSON delta to apply:');
-  if (delta && ws && ws.readyState === WebSocket.OPEN) {{
-    ws.send('delta:' + delta);
-  }}
-}}
-
-// ═══════════ WebSocket ═══════════
-let ws = null;
-
-function connectWebSocket() {{
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = protocol + '//' + window.location.host + '/ws';
-
-  ws = new WebSocket(wsUrl);
-
-  ws.onopen = function() {{
-    document.getElementById('ws-dot').className = 'ws-dot connected';
-    document.getElementById('ws-text').textContent = 'WebSocket: connected';
-    document.getElementById('status-dot').style.background = '#34d399';
-  }};
-
-  ws.onmessage = function(event) {{
-    try {{
-      const update = JSON.parse(event.data);
-      document.getElementById('sim-tick').textContent = update.tick;
-      if (update.event_type === 'tick' || update.event_type === 'rollback') {{
-        fetchSimState();
-      }}
-    }} catch(e) {{}}
-  }};
-
-  ws.onclose = function() {{
-    document.getElementById('ws-dot').className = 'ws-dot disconnected';
-    document.getElementById('ws-text').textContent = 'WebSocket: disconnected (reconnecting...)';
-    document.getElementById('status-dot').style.background = '#ef4444';
-    setTimeout(connectWebSocket, 3000);
-  }};
-
-  ws.onerror = function() {{
-    ws.close();
-  }};
-}}
-
-async function fetchSimState() {{
-  try {{
-    const resp = await fetch('/api/admin/simulate/state');
-    const data = await resp.json();
-    document.getElementById('sim-tick').textContent = data.tick;
-    document.getElementById('sim-history').textContent = data.history_len;
-    document.getElementById('sim-subs').textContent = data.subscriber_count;
-  }} catch(e) {{}}
-}}
-
-// ═══════════ Init ═══════════
-updatePipeline();
 initTypeExplorer();
-connectWebSocket();
-fetchSimState();
-
-// Refresh pipeline state periodically
-setInterval(async function() {{
-  try {{
-    const resp = await fetch('/api/admin/pipeline');
-    const data = await resp.json();
-    Object.assign(PIPELINE, data);
-    updatePipeline();
-  }} catch(e) {{}}
-}}, 5000);
+updatePipeline();
+setInterval(updatePipeline, 5000);
 </script>
 
-</body>
-</html>"#,
-        env!("CARGO_PKG_VERSION"),
+</body></html>"#,
     )
 }
 
