@@ -1153,6 +1153,12 @@ opencode-goal-install:
 opencode-plugins-install: opencode-goal-install
     @echo "✅ All opencode plugins installed"
 
+# ── b00t test harness (ping/pong integration tests) ─────────────────────────
+
+# Run the b00t integration test harness — verifies 5 key subsystems
+b00t-test-harness:
+    @bash _b00t_/scripts/b00t-ping-pong.sh
+
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
