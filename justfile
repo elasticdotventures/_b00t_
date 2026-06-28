@@ -1058,16 +1058,7 @@ tax-lawyer-test: ufo-test
 
 # Show submodule drift: which submodules are ahead/behind/dirty
 submodule-status:
-    @echo "📦 Submodule drift:"
-    @git submodule status 2>/dev/null | while read -r line; do \
-        case "$$line" in \
-            +*) echo "  ⬆️  ahead:  $$line" ;; \
-            -*) echo "  ⬇️  behind: $$line" ;; \
-            " "*) echo "  ✅  clean:  $$line" ;; \
-            U*) echo "  ⚠️  merge:  $$line" ;; \
-            *)   echo "  🔄  $$line" ;; \
-        esac; \
-    done
+    @git submodule status 2>/dev/null
 
 # Commit all submodule pointer updates with a standard message
 submodule-sync msg="chore: bump submodules":
@@ -1108,42 +1099,7 @@ tidy: tidy-branches tidy-stashes tidy-tilde
 
 # Run the reviewer system-normal precriteria gate (RHAI)
 check-system-normal:
-    @b00t script run _b00t_/scripts/reviewer-system-normal.rhai 2>/dev/null || \
-        python3 -c "
-import subprocess, json
-# Fallback: direct bash checks
-import os
-checks = []
-# git stash
-r = subprocess.run('git stash list 2>/dev/null | wc -l', shell=True, capture_output=True, text=True)
-stash_count = r.stdout.strip()
-checks.append(('git-stash', stash_count == '0', 'warn', f'git stash has {stash_count} entries'))
-# merge conflicts
-r = subprocess.run('git status --porcelain 2>/dev/null | grep -c \"^UU\" || echo 0', shell=True, capture_output=True, text=True)
-conflicts = r.stdout.strip()
-checks.append(('merge-conflict', conflicts == '0', 'error', 'unresolved merge conflicts'))
-# detached HEAD
-r = subprocess.run('git symbolic-ref --short HEAD 2>/dev/null && echo ok || echo detached', shell=True, capture_output=True, text=True)
-detached = r.stdout.strip()
-checks.append(('detached-head', 'ok' in detached, 'warn', 'detached HEAD'))
-# not on main
-r = subprocess.run('git branch --show-current 2>/dev/null', shell=True, capture_output=True, text=True)
-branch = r.stdout.strip()
-checks.append(('not-main', branch != 'main', 'warn', 'on main branch'))
-# submodules
-r = subprocess.run('git submodule status 2>/dev/null | grep -c \"^[+M]\" || echo 0', shell=True, capture_output=True, text=True)
-dirty_subs = r.stdout.strip()
-checks.append(('submodule-sync', dirty_subs == '0', 'warn', f'{dirty_subs} submodules dirty'))
-errors = sum(1 for _, p, s, _ in checks if not p and s == 'error')
-warns = sum(1 for _, p, s, _ in checks if not p and s == 'warn')
-passed = sum(1 for _, p, _, _ in checks if p)
-failed = len(checks) - passed
-status = 'FAIL' if errors > 0 else ('WARN' if warns > 0 else 'PASS')
-for name, ok, sev, msg in checks:
-    icon = '✅' if ok else '❌'
-    print(f'{icon} {name}: {\"PASS\" if ok else msg} [{\"sev\"}]')
-print(f'RESULT: {status} ({passed}/{len(checks)} pass)')
-"
+    @b00t script run _b00t_/scripts/reviewer-system-normal.rhai 2>/dev/null || echo "⚠️  RHAI not available — run 'just submodule-status' and check: git stash list, git branch --show-current, git status"
 
 # ── Review & capability analysis ──────────────────────────────────────────
 
@@ -1165,15 +1121,7 @@ review-branch:
 # Index the current repo into codebase-memory (fast mode)
 index-codebase:
     @echo "🔍 Indexing into codebase-memory..."
-    @python3 -c "
-import json, subprocess, sys
-# Trigger via MCP — fallback to mkdir hint
-mcp_dir = '.codebase-memory'
-if not __import__('os').path.exists(mcp_dir):
-    print(f'ℹ️  Run codebase-memory MCP index_repository(repo_path=\".\", mode=\"fast\")')
-else:
-    print('✅ .codebase-memory/ exists — already indexed')
-"
+    @echo "ℹ️  Use MCP: codebase-memory index_repository(repo_path=\".\", mode=\"fast\")"
 
 # ── Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
