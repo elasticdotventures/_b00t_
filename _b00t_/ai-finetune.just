@@ -12,8 +12,8 @@
 #   Observe:   just ai-finetune::logs | just ai-finetune::sparkline
 #   Test:      just ai-finetune::test
 #   Retrieve:  just ai-finetune::hf-adapter-pull
-
 # Paths are relative to repo root (justfile_directory())
+
 set working-directory := ".."
 
 # ── Dataset ────────────────────────────────────────────────────────────────────
@@ -108,8 +108,8 @@ status:
     kubectl get jobs,pods -n b00t-finetune
 
 # ── Adapter smoke-test ─────────────────────────────────────────────────────────
-
 # Run b00t-awareness probes against the LoRA adapter (5/5 = pass)
+
 # 🤓 GPU deadlock: pre-scale sm0l to 0 BEFORE applying job
 test:
     #!/bin/bash
@@ -155,8 +155,8 @@ mlflow-remove:
 #
 # Generic path:  just ai-finetune::cloud-train <flavor> <config-filename>
 # Coder alias:   just ai-finetune::cloud-coder
-
 # One-shot sync: regenerate dataset from corpus + push everything to HF
+
 # Run before any cloud training run to ensure HF dataset is current
 hf-sync:
     #!/bin/bash
@@ -170,6 +170,7 @@ hf-sync:
 
 # Visualize training dataset: token-length distribution + category breakdown → SVG
 # Useful for spotting outliers, padding waste, category imbalance before cloud submit
+
 # Output: fine-tune/dataset-viz.svg (open in browser or VLM for inspection)
 dataset-viz:
     uv run python3 fine-tune/generate_dataset.py --viz fine-tune/dataset-viz.svg
@@ -177,6 +178,7 @@ dataset-viz:
 
 # ── Inlined training script (was train_unsloth.py) ───────────────────────────
 # Entry point for cloud jobs: just -f /data/ai-finetune.just train /data/config.yaml
+
 # sm0l output contract: prints step progress; exit 0 on success, 1 on error
 train config="/data/config-cloud-coder.yaml" resume="":
     #!/usr/bin/env python3
@@ -184,8 +186,8 @@ train config="/data/config-cloud-coder.yaml" resume="":
     from pathlib import Path
     os.environ.setdefault("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 
-    config_path = "{{config}}"
-    resume_from = "{{resume}}" or None
+    config_path = "{{ config }}"
+    resume_from = "{{ resume }}" or None
 
     try:
         import yaml
@@ -290,13 +292,14 @@ train config="/data/config-cloud-coder.yaml" resume="":
 
 # ── Inlined adapter smoke-test (was test_adapter.py) ─────────────────────────
 # Generic: adapter path + base model from args; prints PASS/FAIL per probe
+
 # sm0l output contract: exit 0 if >=3/5 probes return b00t-aware responses
 smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit":
     #!/usr/bin/env python3
     import sys
 
-    adapter = "{{adapter}}"
-    base    = "{{base}}" or None
+    adapter = "{{ adapter }}"
+    base    = "{{ base }}" or None
 
     PROBES = [
         ("b00t basics",    "What command do I run to orient my role and load blessings in b00t?"),
@@ -336,6 +339,7 @@ smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.
     sys.exit(0 if passed >= 3 else 1)
 
 # Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
+
 # Run after: just ai-finetune::dataset
 hf-push:
     #!/bin/bash
@@ -353,50 +357,51 @@ hf-push:
 
 # Push a single config file to HF training dataset (after editing locally)
 hf-push-config config:
-    hf upload elasticdotventures/b00t-training fine-tune/{{config}} {{config}} --type dataset --private
-    @echo "✓ pushed fine-tune/{{config}} → hf://datasets/elasticdotventures/b00t-training/{{config}}"
+    hf upload elasticdotventures/b00t-training fine-tune/{{ config }} {{ config }} --type dataset --private
+    @echo "✓ pushed fine-tune/{{ config }} → hf://datasets/elasticdotventures/b00t-training/{{ config }}"
 
 # Generic cloud training recipe — model + hyperparams are entirely in the YAML config
 # flavor: a100-large ($2.50/h, 80GB) | h200 ($5/h, 141GB) | a10g-large ($1.50/h, 24GB)
 # config: filename in hf://datasets/elasticdotventures/b00t-training (e.g. config-cloud-coder.yaml)
 # 🤓 /data mount is read-only dataset repo; /adapters is writable bucket for checkpoints
 # 🤓 pip install unsloth required even in unsloth image — image has vLLM variant, not training
-cloud-train flavor="a100-large" config="config-cloud-coder.yaml":
+# 🤓 just download: versioned URL avoids GitHub /latest/ redirect → 404 on renamed assets
+
+# 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
+cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="19.0":
     hf jobs run docker.io/unsloth/unsloth:latest \
-      --flavor {{flavor}} \
-      --timeout 10h \
+      --flavor {{ flavor }} \
+      --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
       /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
-        curl -qL https://github.com/casey/just/releases/download/1.40.0/just-1.40.0-x86_64-unknown-linux-musl.tar.gz \
-          | tar -xz -C /usr/local/bin just && \
-        just --version && \
-        just -f /data/ai-finetune.just train /data/{{config}}"
+        command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
+        \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }}"
 
 # Convenience alias: Qwen3-Coder-30B on A100-large
 cloud-coder:
     just ai-finetune::cloud-train a100-large config-cloud-coder.yaml
 
 # Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
+
 # checkpoint: HF Hub path e.g. elasticdotventures/b00t-qwen3-coder-30b/checkpoint-500
-cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml":
+cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" timeout_hours="13.0":
     #!/bin/bash
-    [[ -z "{{checkpoint}}" ]] && { echo "ERROR: checkpoint= required"; exit 1; }
+    [[ -z "{{ checkpoint }}" ]] && { echo "ERROR: checkpoint= required"; exit 1; }
     hf jobs run docker.io/unsloth/unsloth:latest \
-      --flavor {{flavor}} \
-      --timeout 10h \
+      --flavor {{ flavor }} \
+      --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
       /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
-        curl -qL https://github.com/casey/just/releases/download/1.40.0/just-1.40.0-x86_64-unknown-linux-musl.tar.gz \
-          | tar -xz -C /usr/local/bin just && \
-        just -f /data/ai-finetune.just train /data/{{config}} {{checkpoint}}"
+        command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
+        \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }} {{ checkpoint }}"
 
 # List all HF Jobs (active + recent)
 hf-jobs-list:
@@ -404,26 +409,27 @@ hf-jobs-list:
 
 # Poll status of a specific HF job
 hf-job-status job_id:
-    hf jobs inspect {{job_id}}
+    hf jobs inspect {{ job_id }}
 
 # Stream logs from a running or completed HF job
 hf-job-logs job_id:
-    hf jobs logs --follow {{job_id}}
+    hf jobs logs --follow {{ job_id }}
 
 # Cancel a running job
 hf-job-cancel job_id:
-    hf jobs cancel {{job_id}}
+    hf jobs cancel {{ job_id }}
 
 # ── Handoff: open live log stream for human monitoring ────────────────────────
 # Agent calls this after submitting — then STOPS. Human watches + cancels.
 # Protocol: submit → watch-run → agent exits; human monitors; agent re-invoked on completion.
+
 # Uses zellij if $ZELLIJ is set; otherwise prints the command to run.
 watch-run job_id:
     #!/bin/bash
-    CMD="hf jobs logs --follow elasticdotventures/{{job_id}}"
-    CANCEL="just ai-finetune::hf-job-cancel {{job_id}}"
+    CMD="hf jobs logs --follow elasticdotventures/{{ job_id }}"
+    CANCEL="just ai-finetune::hf-job-cancel {{ job_id }}"
     if [[ -n "${ZELLIJ:-}" ]]; then
-        zellij run --name "hf-logs-{{job_id}}" --close-on-exit -- $CMD
+        zellij run --name "hf-logs-{{ job_id }}" --close-on-exit -- $CMD
         echo "PASS: zellij pane opened — watch live; cancel with: $CANCEL"
     else
         echo ""
@@ -439,12 +445,13 @@ watch-run job_id:
 # Blessing evidentiary handler — command syntax IS the proof.
 # Output contract: PASS: <stage> step=<N> rate=<X>s/it ETA=<HH:MM>
 #                  FAIL: <reason>
+
 # Thresholds (A100): warn>90s/it fail>180s/it  (H200): warn>40s/it fail>90s/it
 monitor-run job_id threshold_s="90":
     #!/usr/bin/env python3
     import subprocess, re, sys, os
-    job_id   = "{{job_id}}"
-    threshold = float("{{threshold_s}}")
+    job_id   = "{{ job_id }}"
+    threshold = float("{{ threshold_s }}")
     owner    = "elasticdotventures"
 
     def run(cmd):
@@ -479,10 +486,11 @@ monitor-run job_id threshold_s="90":
 
 # Generic: pull any adapter from HF Hub to local path
 # model_id: e.g. elasticdotventures/b00t-qwen3-coder-30b
+
 # local_dir: destination (default: fine-tune/output-adapter)
 hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
-    hf download {{model_id}} --repo-type model --local-dir {{local_dir}}
-    @echo "✓ adapter at {{local_dir}}"
+    hf download {{ model_id }} --repo-type model --local-dir {{ local_dir }}
+    @echo "✓ adapter at {{ local_dir }}"
 
 # Pull the coder-30b adapter to its canonical path
 hf-adapter-pull-coder:
@@ -506,7 +514,7 @@ cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     code  = "\n".join(l for l in lines if not l.startswith("#!"))
     env   = {
         **os.environ,
-        "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}",
+        "FLAVOR": "{{ flavor }}", "CONFIG": "{{ config }}",
         "CAKE_USD_RATE":    soul("economy.cake.usd_per_cake",    "10"),
         "CAKE_MONTHLY_CAP": soul("economy.cake.monthly_cap_cake", "200"),
         "SLICE_USD_RATE":   soul("economy.cake.usd_per_slice",   "1"),
@@ -547,8 +555,152 @@ budget-gate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
     code  = "\n".join(l for l in lines if not l.startswith("#!"))
     sys.exit(subprocess.run(["bash", "-c", code], env={
         **os.environ,
-        "FLAVOR": "{{flavor}}", "CONFIG": "{{config}}",
+        "FLAVOR": "{{ flavor }}", "CONFIG": "{{ config }}",
         "CAKE_USD_RATE":    soul("economy.cake.usd_per_cake",    "10"),
         "CAKE_MONTHLY_CAP": soul("economy.cake.monthly_cap_cake", "200"),
         "SLICE_USD_RATE":   soul("economy.cake.usd_per_slice",   "1"),
     }).returncode)
+
+# ── Sm0l Translator (semantic pipe: frontier → b00t CLI) ──────────────────────
+# The fine-tuned sm0l adapter translates natural language to b00t CLI commands.
+# Frontier model (not b00t-trained) → sm0l translator → b00t CLI → execution.
+
+# Smoke-test the sm0l translator adapter (5 b00t-aware probes, k8s job)
+# 🤓 GPU deadlock: pre-scale ch0nky+sm0l to 0 BEFORE applying
+translator-test:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧪 translator smoke-test: pre-scaling inference →0"
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    kubectl wait --for=delete pod -n b00t-inference -l app=ch0nky --timeout=60s 2>/dev/null || true
+    kubectl wait --for=delete pod -n b00t-inference -l app=sm0l --timeout=60s 2>/dev/null || true
+    kubectl delete job b00t-translator-test -n b00t-finetune 2>/dev/null || true
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job-translator-test.yaml
+    echo "⏳ waiting for translator test pod (up to 5m)..."
+    kubectl wait --for=condition=complete job/b00t-translator-test -n b00t-finetune --timeout=300s || {
+        echo "  ❌ timed out — logs: kubectl logs -n b00t-finetune -l b00t.io/job=translator-test"
+        kubectl scale deployment ch0nky --replicas=1 -n b00t-inference
+        kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+        exit 1
+    }
+    echo "📋 results:"
+    kubectl logs -n b00t-finetune -l b00t.io/job=translator-test 2>/dev/null | tail -30
+    echo "🔄 restoring inference (ch0nky=1, sm0l=1)"
+    kubectl scale deployment ch0nky --replicas=1 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+
+# One-shot translator query via k8s job (returns b00t CLI command)
+# Usage: just ai-finetune::translator-query "add a task to track the login bug"
+translator-query query:
+    #!/bin/bash
+    set -euo pipefail
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    kubectl wait --for=delete pod -n b00t-inference -l app=sm0l --timeout=60s 2>/dev/null || true
+    kubectl delete job b00t-translator-query -n b00t-finetune 2>/dev/null || true
+    # Patch the job template with query before applying
+    sed "s/__QUERY__/$(echo '{{ query }}' | sed 's/[&/\]/\\&/g')/g" _b00t_/k8s.🚢/fine-tune/job-translator-query.yaml | kubectl apply -f -
+    kubectl wait --for=condition=complete job/b00t-translator-query -n b00t-finetune --timeout=300s
+    kubectl logs -n b00t-finetune -l b00t.io/job=translator-query --tail=5
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+
+# Show translator test marks — output contract: PASS/FAIL per probe
+translator-marks:
+    kubectl logs -n b00t-finetune -l b00t.io/job=translator-test 2>/dev/null || echo "no test results — run: just ai-finetune::translator-test"
+
+# ── Grok failback (keyword RAG over learn/ + datums/) ─────────────────────────
+# When raglite (Qdrant VPN down) + irontology (repo.index missing) are both dead.
+# Zero dependencies — greps 89 learn/ files + all tomllmd datums.
+
+# Keyword search over b00t knowledge corpus
+grok-fallback query="":
+    bash _b00t_/scripts/grok-fallback.sh {{ query }}
+
+# Keyword search with topic filter
+grok-fallback-topic topic query:
+    bash _b00t_/scripts/grok-fallback.sh --topic {{ topic }} {{ query }}
+
+# Transparent grok wrapper — tries b00t-cli grok first, falls back to keyword RAG
+grok-ask query="":
+    bash _b00t_/scripts/b00t-grok.sh ask {{ query }}
+
+grok-ask-topic topic query:
+    bash _b00t_/scripts/b00t-grok.sh ask --topic {{ topic }} {{ query }}
+
+# Translator via keyword: extract cmds: from best-matching datum or cheatsheet
+# Usage: just ai-finetune::translate "add a task to track the login bug"
+translate query:
+    #!/usr/bin/env python3
+    import subprocess, sys, re, tomllib, os
+
+    query = "{{ query }}"
+
+    # ── 1. Search b00t-cli-cheatsheet (highest priority) ────────────────────
+    cheatsheet = os.path.expanduser("~/.b00t/_b00t_/datums/b00t-cli-cheatsheet.tomllmd")
+    try:
+        with open(cheatsheet, "rb") as f:
+            data = tomllib.load(f)
+        best_score = 0
+        best_cmd = ""
+        best_name = ""
+        for key, section in data.items():
+            if not isinstance(section, dict):
+                continue
+            action = section.get("action", "")
+            command = section.get("command", "")
+            if not action or not command:
+                continue
+            qwords = set(query.lower().split())
+            awords = set(action.lower().replace(",", " ").replace("/", " ").split())
+            # filter stop words from query
+            stops = {"a","an","the","to","of","in","is","it","for","on","and","or","not","how","do","what","can","should","would","could","i","me","my","we","you","that","this","be","are","was","were","been","has","have","had","will","shall","may","might","must","does","did","doing","please","need","want"}
+            qwords = qwords - stops
+            score = len(qwords & awords) * 10 + len(qwords & {key.lower().split("_")[-1]}) * 5
+            if score > best_score:
+                best_score = score
+                best_cmd = command
+                best_name = key
+        if best_score >= 5:
+            print(best_cmd)
+            sys.exit(0)
+    except Exception:
+        pass
+
+    # ── 2. Fallback: search all datums ──────────────────────────────────────
+    import glob
+    datums_dir = os.path.expanduser("~/.b00t/_b00t_/datums")
+    scored = []
+    for f in glob.glob(f"{datums_dir}/*.tomllm*") + glob.glob(f"{datums_dir}/*.toml"):
+        fname = os.path.basename(f).replace(".tomllmd","").replace(".toml","")
+        score = 0
+        for w in query.lower().split():
+            if w in fname.lower():
+                score += 10
+        try:
+            with open(f) as fh:
+                content = fh.read()
+        except:
+            continue
+        hint = re.search(r'^#\s*summary:\s*(.+)$', content, re.MULTILINE)
+        hint_text = hint.group(1) if hint else ""
+        for w in query.lower().split():
+            if w in hint_text.lower():
+                score += 5
+        cmds_m = re.search(r'^#\s*cmds:\s*(.+)$', content, re.MULTILINE)
+        cmds_text = cmds_m.group(1) if cmds_m else ""
+        for w in query.lower().split():
+            if w in cmds_text.lower():
+                score += 8
+        if score > 0:
+            scored.append((score, fname, hint_text, cmds_text))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    if scored:
+        top = scored[0]
+        if top[3]:
+            print(top[3])
+        else:
+            print(f"# datum: {top[1]} — no cmds: tail-map")
+        sys.exit(0)
+
+    print(f"# no match for: {query}")
+    sys.exit(1)

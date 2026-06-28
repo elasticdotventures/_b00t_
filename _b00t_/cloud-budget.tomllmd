@@ -72,8 +72,8 @@ source  = "assumed"
 # ── Step-time estimates (s/it, empirically measured) ─────────────────────────
 # 🤓 MoE routing scatter dominates — lora_r / target_modules have NO effect
 [budget.step_time."a100_large_30b_moe"]
-default = 130
-source  = "measured-run7"
+default = 120
+source  = "measured-run8-2026-06-28"
 
 [budget.step_time."h200_30b_moe"]
 default = 50
@@ -186,8 +186,7 @@ except FileNotFoundError:
 batch      = int(cfg.get("batch_size", 2))
 grad_accum = int(cfg.get("grad_accum", 8))
 epochs     = int(cfg.get("num_epochs", 1))
-packing    = cfg.get("packing", False)
-eff_batch  = batch * grad_accum * (2 if packing else 1)
+eff_batch  = batch * grad_accum
 steps      = math.ceil(rows / eff_batch) * epochs
 wall_h     = steps * step_time / 3600
 cost       = wall_h * rate

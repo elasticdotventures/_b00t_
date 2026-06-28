@@ -12,8 +12,9 @@ hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
 private: true        # flip to false to publish publicly on HF Hub
 
-# A100 80GB: load BF16 directly, no quantization compromise
-load_in_4bit: false
+# A100 80GB: 4-bit required — BF16 OOM at step 24 (78.63/79.25 GiB)
+# 🤓 4-bit adds dequant cost but step time delta <10% with Unsloth fast kernel
+load_in_4bit: true
 
 # MoE 30B-A3B: r=16 sufficient (3B active params per forward pass)
 lora_r: 16   # 🤓 MoE: r has NO effect on step time — bottleneck is 30B fwd/bwd pass, not optimizer
