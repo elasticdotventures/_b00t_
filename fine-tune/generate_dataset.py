@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -199,6 +200,118 @@ def parse_agent_instruction(path: Path, content: str) -> list[dict[str, str]]:
     return rows
 
 
+# ─── Mermaid visualization training examples ──────────────────────────────────
+
+
+def _strip_mermaid_fences(raw: str) -> str:
+    """Strip ```mermaid ... ``` fences from b00t viz output."""
+    text = re.sub(r"^```mermaid\s*\n?", "", raw)
+    text = re.sub(r"\n?\s*```\s*$", "", text)
+    return text.strip()
+
+
+def parse_mermaid_viz(path: Path, content: str) -> list[dict[str, str]]:
+    """Generate Mermaid dependency graph training examples via b00t-cli viz.
+
+    For each datum, runs ``b00t viz entangle --datum=<key> --format=mermaid``
+    and produces an Alpaca pair teaching the model to emit raw Mermaid syntax.
+    """
+    rows: list[dict[str, str]] = []
+    datum_key = path.stem  # matches b00t-cli datum key derivation
+
+    # Extract human-readable topic from heading or [datum].name
+    topic = datum_key
+    heading = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+    if heading:
+        topic = heading.group(1).strip()
+    datum_name = re.search(r'^\s*name\s*=\s*"([^"]+)"', content, re.MULTILINE)
+    if datum_name:
+        topic = datum_name.group(1)
+
+    # Safety: datum key must be non-empty and non-pathological
+    if not datum_key or datum_key.startswith("."):
+        return rows
+
+    try:
+        result = subprocess.run(
+            ["b00t", "viz", "entangle",
+             "--datum", datum_key,
+             "--format", "mermaid"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            raw = _strip_mermaid_fences(result.stdout)
+            if raw:
+                rows.append({
+                    "instruction": f"Generate a Mermaid graph showing {topic} dependencies",
+                    "input": "",
+                    "response": raw,
+                })
+        else:
+            stderr = result.stderr.strip()[:200]
+            print(f"  ⚠️  viz entangle --datum={datum_key} exited {result.returncode}: {stderr}",
+                  file=sys.stderr)
+    except FileNotFoundError:
+        print("  ⚠️  b00t not found — install via `cargo build` or `just dev-link`", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        print(f"  ⚠️  viz entangle --datum={datum_key} timed out (30s)", file=sys.stderr)
+
+    return rows
+
+
+def generate_global_mermaid_viz() -> list[dict[str, str]]:
+    """Generate training examples from global Mermaid visualizations.
+
+    Runs ``b00t viz entangle`` (full graph) and ``b00t viz task``,
+    stripping the code fences so the model learns raw Mermaid syntax.
+    """
+    rows: list[dict[str, str]] = []
+
+    try:
+        # Full entanglement graph
+        result = subprocess.run(
+            ["b00t", "viz", "entangle", "--format", "mermaid"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            raw = _strip_mermaid_fences(result.stdout)
+            if raw:
+                rows.append({
+                    "instruction": "Generate a Mermaid graph showing all datum entanglement dependencies",
+                    "input": "",
+                    "response": raw,
+                })
+
+        # Task dependency graph
+        result = subprocess.run(
+            ["b00t", "viz", "task", "--format", "mermaid"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            raw = _strip_mermaid_fences(result.stdout)
+            if raw:
+                rows.append({
+                    "instruction": "Generate a Mermaid graph showing task dependencies",
+                    "input": "",
+                    "response": raw,
+                })
+    except FileNotFoundError:
+        print("  ⚠️  b00t not found — skipping global mermaid viz", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        print("  ⚠️  global mermaid viz timed out (30s)", file=sys.stderr)
+
+    return rows
+
+
+# ─── Main generator ───────────────────────────────────────────────────────────
+
+
 def generate_dataset(output_path: str, format: str = "alpaca", max_rows: int = 5000) -> int:
     """Generate the training dataset from all corpus sources."""
     rows: list[dict[str, str]] = []
@@ -216,6 +329,7 @@ def generate_dataset(output_path: str, format: str = "alpaca", max_rows: int = 5
             before = len(rows)
             if source_name == "datums":
                 rows.extend(parse_datum_instruction(path, content))
+                rows.extend(parse_mermaid_viz(path, content))
             elif source_name == "learn":
                 rows.extend(parse_learn_instruction(path, content))
             elif source_name == "justfile":
@@ -225,6 +339,11 @@ def generate_dataset(output_path: str, format: str = "alpaca", max_rows: int = 5
             after = len(rows)
             if after > before:
                 print(f"  ✓ {path.name}: {after - before} rows", file=sys.stderr)
+
+    # Layer 2: generative Mermaid graph training pairs from viz commands
+    global_mermaid_rows = generate_global_mermaid_viz()
+    rows.extend(global_mermaid_rows)
+    print(f"  ✓ global mermaid viz: {len(global_mermaid_rows)} rows", file=sys.stderr)
 
     print(f"\nTotal: {len(rows)} rows generated", file=sys.stderr)
 
