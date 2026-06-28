@@ -59,10 +59,13 @@ impl IndexDispatcher {
                 "raglite" | "rag" => {
                     targets.push(Box::new(RagliteTarget::new()));
                 }
-                "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
-                    targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
-                }
-                other => {
+        "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
+            targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
+        }
+        "store" | "knowledge-store" | "s3" | "object-storage" => {
+            targets.push(Box::new(StoreTarget::new()));
+        }
+        other => {
                     // Try as MCP server name
                     targets.push(Box::new(McpBridgeTarget::new(other)?));
                 }
@@ -379,4 +382,127 @@ mod tests {
         let result = IndexDispatcher::discover(&[]);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_dispatcher_discovers_store_target() {
+        let dispatcher =
+            IndexDispatcher::discover(&["store".to_string()]).unwrap();
+        let target_names: Vec<&str> =
+            dispatcher.targets.iter().map(|t| t.name()).collect();
+        assert!(target_names.contains(&"b00t-store"));
+    }
+}
+
+// ── Store Target: b00t knowledge store (S3/MinIO/R2 backed) ────────────────
+
+/// StoreTarget — indexes assimilated documents into b00t's knowledge store.
+/// The store provides local object storage with ontological metadata,
+/// and `b00t store sync` pushes to S3/R2/MinIO cloud backends.
+pub struct StoreTarget;
+
+impl StoreTarget {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl IndexTarget for StoreTarget {
+    fn name(&self) -> &str {
+        "b00t-store"
+    }
+
+    fn ingest(&self, docs: &[CrawledDoc], topic: &str) -> Result<IngestReport> {
+        let mut report = IngestReport {
+            target: self.name().to_string(),
+            ..Default::default()
+        };
+
+        for doc in docs {
+            let content = format!(
+                "# {}\n\nSource: {}\n\n{}\n\n## Concepts\n\n{}",
+                topic,
+                doc.url,
+                doc.content.text,
+                doc.extraction
+                    .concepts
+                    .iter()
+                    .map(|c| format!("- **{}**: {}", c.name, c.description))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+
+            let tags: std::collections::BTreeMap<String, String> = vec![
+                ("topic".to_string(), topic.to_string()),
+                ("source".to_string(), doc.url.clone()),
+                ("depth".to_string(), doc.depth.to_string()),
+                ("content_type".to_string(), doc.content.content_type.clone()),
+            ]
+            .into_iter()
+            .collect();
+
+            // Write to temp file, then use b00t store put
+            let tmp = tempfile::NamedTempFile::new()
+                .map_err(|e| anyhow!("create temp: {e}"))?;
+            let tmp_path = tmp.path().to_path_buf();
+            std::fs::write(&tmp_path, &content)
+                .map_err(|e| anyhow!("write temp: {e}"))?;
+
+            match b00t_c0re_lib::store::put(
+                &tmp_path,
+                "b00t:AssimilatedDocument",
+                "assimilate",
+                &tags,
+            ) {
+                Ok(_entry) => {
+                    report.docs_indexed += 1;
+                    report.concepts_indexed += doc.extraction.concepts.len();
+                }
+                Err(e) => {
+                    report
+                        .errors
+                        .push(format!("store put failed for {}: {e}", doc.url));
+                }
+            }
+        }
+
+        // Emit fact records into NeumannStore for ontological linking
+        if let Err(e) = emit_assimilation_facts(docs, topic) {
+            report
+                .errors
+                .push(format!("neumann fact emission: {e}"));
+        }
+
+        Ok(report)
+    }
+}
+
+/// Emit fact records for assimilated documents into the knowledge graph.
+fn emit_assimilation_facts(docs: &[CrawledDoc], topic: &str) -> Result<()> {
+    for doc in docs {
+        for concept in &doc.extraction.concepts {
+            // Record: document → hasConcept → concept
+            let subject = format!("doc:{}", doc.url);
+            let predicate = "b00t:hasConcept";
+            let object = format!("concept:{}", concept.name);
+
+            // Use shell-out to b00t data fabric for now
+            // (NeumannStore direct API when available)
+            let _ = Command::new("b00t")
+                .args([
+                    "data",
+                    "fabric",
+                    "upsert",
+                    "--subject",
+                    &subject,
+                    "--predicate",
+                    predicate,
+                    "--object",
+                    &object,
+                    "--namespace",
+                    topic,
+                ])
+                .output();
+        }
+    }
+    Ok(())
 }
