@@ -1154,8 +1154,8 @@ opencode-plugins-install: opencode-goal-install
     @echo "✅ All opencode plugins installed"
 
 # Run OpenCode via podman with full b00t environment mounted
-# 🤓 Mounts: workspace, config, git/ssh, API keys. Skills dir mounted
-#    if present (project-local .opencode/skills/ or global).
+# 🤓 Mounts: workspace, config, MCP binaries, git/ssh, API keys.
+#    b00t-mcp + codebase-memory-mcp binaries from host PATH.
 opencode-run workspace=".":
     @echo "🚀 Launching OpenCode (podman)..."
     @mkdir -p {{workspace}}/.opencode/skills
@@ -1164,6 +1164,8 @@ opencode-run workspace=".":
         -v {{workspace}}:/workspace \
         -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
         -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
+        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
@@ -1180,6 +1182,9 @@ opencode-app4dog:
         --network host \
         -v ~/promptexecution/app4dog:/workspace \
         -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
+        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
