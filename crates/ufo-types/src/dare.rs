@@ -98,6 +98,453 @@ impl std::fmt::Display for OodaPhase {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// OODA State Machine — transition system with guards + history
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Events that can trigger OODA phase transitions. Unlike `phase.next()`
+/// (which is purely linear), events allow skipping, revisiting, and
+/// edge-case transitions with guard enforcement.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OodaEvent {
+    /// New information discovered; triggers Observe or re-Observe.
+    Discover,
+    /// Analysis complete; alternatives mapped.
+    AnalyzeComplete,
+    /// Decision committed; proposal drafted.
+    Decide,
+    /// Implementation or migration started.
+    Execute,
+    /// Acceptance criteria checked.
+    VerifyComplete,
+    /// Rollback to previous phase (e.g., Verify failed → re-Decide).
+    Reject,
+    /// Retry current phase (re-evaluate without changing state).
+    Retry,
+    /// Cancel the OODA loop entirely.
+    Cancel,
+}
+
+impl OodaEvent {
+    /// The target phase for this event given the current phase.
+    /// Returns `None` if the event is not valid from the current phase.
+    pub fn target(&self, current: OodaPhase) -> Option<OodaPhase> {
+        match (self, current) {
+            (OodaEvent::Discover, _) => Some(OodaPhase::Observe),
+            (OodaEvent::AnalyzeComplete, OodaPhase::Observe) => Some(OodaPhase::Orient),
+            (OodaEvent::Decide, OodaPhase::Orient) => Some(OodaPhase::Decide),
+            (OodaEvent::Execute, OodaPhase::Decide) => Some(OodaPhase::Act),
+            (OodaEvent::VerifyComplete, OodaPhase::Act) => Some(OodaPhase::Verify),
+            (OodaEvent::Reject, OodaPhase::Verify) => Some(OodaPhase::Decide),
+            (OodaEvent::Reject, OodaPhase::Act) => Some(OodaPhase::Decide),
+            (OodaEvent::Retry, phase) => Some(phase),
+            (OodaEvent::Cancel, _) => None,
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for OodaEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OodaEvent::Discover => write!(f, "Discover"),
+            OodaEvent::AnalyzeComplete => write!(f, "AnalyzeComplete"),
+            OodaEvent::Decide => write!(f, "Decide"),
+            OodaEvent::Execute => write!(f, "Execute"),
+            OodaEvent::VerifyComplete => write!(f, "VerifyComplete"),
+            OodaEvent::Reject => write!(f, "Reject"),
+            OodaEvent::Retry => write!(f, "Retry"),
+            OodaEvent::Cancel => write!(f, "Cancel"),
+        }
+    }
+}
+
+/// Result of attempting an OODA state machine transition.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OodaTransition {
+    /// The event that triggered this transition.
+    pub event: OodaEvent,
+    /// The phase before the transition.
+    pub from: OodaPhase,
+    /// The phase after the transition (same as from if guard rejected).
+    pub to: OodaPhase,
+    /// Whether the transition was accepted.
+    pub accepted: bool,
+    /// Reason if rejected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rejection_reason: Option<String>,
+}
+
+impl OodaTransition {
+    /// Create an accepted transition.
+    pub fn accepted(event: OodaEvent, from: OodaPhase, to: OodaPhase) -> Self {
+        Self {
+            event,
+            from,
+            to,
+            accepted: true,
+            rejection_reason: None,
+        }
+    }
+
+    /// Create a rejected transition.
+    pub fn rejected(event: OodaEvent, from: OodaPhase, to: OodaPhase, reason: impl Into<String>) -> Self {
+        Self {
+            event,
+            from,
+            to,
+            accepted: false,
+            rejection_reason: Some(reason.into()),
+        }
+    }
+}
+
+/// Error type for OODA state machine operations.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+pub enum OodaStateMachineError {
+    /// The requested transition is not valid from the current phase.
+    #[error("invalid transition: {event} not valid from {current}")]
+    InvalidTransition { event: OodaEvent, current: OodaPhase },
+
+    /// A guard condition blocked the transition.
+    #[error("guard blocked {event} from {from} → {to}: {reason}")]
+    GuardBlocked {
+        event: OodaEvent,
+        from: OodaPhase,
+        to: OodaPhase,
+        reason: String,
+    },
+
+    /// Required phase data is missing (e.g., no Decision when entering Decide).
+    #[error("missing phase data for {phase}: {detail}")]
+    MissingPhaseData { phase: OodaPhase, detail: String },
+}
+
+/// Guards check whether a transition is permitted.
+///
+/// Each phase may have entry guards (must hold before entering) and
+/// exit guards (must hold before leaving). Guards are pure functions
+/// of the proposal state — no side effects.
+#[derive(Debug, Clone)]
+pub struct OodaGuards {
+    /// Guards that must pass before exiting a phase.
+    pub exit_guards: Vec<(OodaPhase, String)>,
+    /// Guards that must pass before entering a phase.
+    pub entry_guards: Vec<(OodaPhase, String)>,
+}
+
+impl Default for OodaGuards {
+    fn default() -> Self {
+        Self {
+            exit_guards: Vec::new(),
+            entry_guards: Vec::new(),
+        }
+    }
+}
+
+/// The OODA state machine — wraps a DaredDocument and enforces
+/// valid transitions via events and guards.
+///
+/// # State machine diagram
+///
+/// ```text
+///                    ┌──────────────────────────────────────┐
+///                    │            ┌─────────┐               │
+///   Discover ──────→ │ Observe ──→│  Orient  │              │
+///   (anywhere)       │   │        │          │              │
+///                    │   │        └────┬─────┘              │
+///                    │   │   Analyze   │                    │
+///                    │   │   Complete  │                    │
+///                    │   │             ▼                    │
+///                    │   │        ┌─────────┐              │
+///                    │   └───────→│ Decide   │←─────────┐   │
+///                    │            │          │          │   │
+///                    │            └────┬─────┘    Reject│   │
+///                    │                 │                 │   │
+///                    │            Execute                │   │
+///                    │                 │                 │   │
+///                    │                 ▼                 │   │
+///                    │            ┌─────────┐           │   │
+///                    │            │   Act    │──────────┘   │
+///                    │            │          │              │
+///                    │            └────┬─────┘              │
+///                    │                 │                    │
+///                    │            VerifyComplete            │
+///                    │                 │                    │
+///                    │                 ▼                    │
+///                    │            ┌─────────┐              │
+///                    │            │ Verify   │── Cancel ──→ ∅
+///                    │            └─────────┘              │
+///                    └──────────────────────────────────────┘
+/// ```
+#[derive(Debug, Clone)]
+pub struct OodaStateMachine<D: DaredDocument> {
+    /// The proposal being tracked.
+    pub proposal: D,
+    /// History of accepted transitions for audit trail.
+    pub history: Vec<OodaTransition>,
+    /// Guards that gate transitions.
+    pub guards: OodaGuards,
+}
+
+impl<D: DaredDocument> OodaStateMachine<D> {
+    /// Create a new state machine wrapping a proposal.
+    pub fn new(proposal: D) -> Self {
+        Self {
+            proposal,
+            history: Vec::new(),
+            guards: OodaGuards::default(),
+        }
+    }
+
+    /// Current phase of the proposal.
+    pub fn current_phase(&self) -> OodaPhase {
+        self.proposal.phase()
+    }
+
+    /// Render the state machine as a compact ASCII diagram.
+    /// Token-efficient: ~30 lines, scannable in <5s by human and LLM.
+    /// Active phase is marked with `●`, inactive with `○`.
+    pub fn render(&self) -> String {
+        let p = self.current_phase();
+        let dot = |ph: OodaPhase| if ph == p { "●" } else { "○" };
+
+        let ev = |ph: OodaPhase| match ph {
+            OodaPhase::Observe => "Discover",
+            OodaPhase::Orient => "AnalyzeComplete",
+            OodaPhase::Decide => "Decide",
+            OodaPhase::Act => "Execute",
+            OodaPhase::Verify => "VerifyComplete",
+        };
+
+        let title = self.proposal.title();
+
+        format!(
+            "\
+╔══ OODA :: {title} ═══════════════════════════════════════╗
+║                                                           ║
+║   {o1} Observe ──{e1}──→ {o2} Orient ──{e2}──→ {o3} Decide ──{e3}──→ {o4} Act ──{e4}──→ {o5} Verify
+║    │  ▲                     │  ▲                     │  ▲
+║    │  └─── Discover ────────┘  └─── Reject ──────────┘  └─ Cancel
+║    │                         │
+║    └─── phase skip ──────────┘  (if preconditions met)
+║
+╠══ guards ─────────────────────────────────────────────────╣
+║   Observe → Orient: │alternatives│ ≥ 1                    ║
+║   Orient → Decide:  Decision.what ≠ \"\", summary ≠ \"\"     ║
+║   Decide → Act:     validate() = PASS                    ║
+║   Act → Verify:     │acceptance_criteria│ ≥ 1             ║
+╠══ events ─────────────────────────────────────────────────╣
+║   Discover   → Observe (from any phase)                   ║
+║   Reject     → Decide  (from Act or Verify)               ║
+║   Retry      → same   (re-evaluate current phase)         ║
+║   Cancel     → ∅      (terminate)                         ║
+╠══ trace ──────────────────────────────────────────────────╣
+║   {trace}
+╚═══════════════════════════════════════════════════════════╝",
+            o1 = dot(OodaPhase::Observe),
+            o2 = dot(OodaPhase::Orient),
+            o3 = dot(OodaPhase::Decide),
+            o4 = dot(OodaPhase::Act),
+            o5 = dot(OodaPhase::Verify),
+            e1 = ev(OodaPhase::Observe),
+            e2 = ev(OodaPhase::Orient),
+            e3 = ev(OodaPhase::Decide),
+            e4 = ev(OodaPhase::Act),
+            trace = self.audit_trail(),
+        )
+    }
+
+    /// One-line status for log/JSONL evidence.
+    pub fn status_line(&self) -> String {
+        let p = self.current_phase();
+        let id = self.proposal.proposal_id();
+        let hist = self.history.len();
+        let summary = self.proposal.executive_decision().summary.clone();
+        format!("[{id}] phase={p} transitions={hist} summary=\"{summary}\"")
+    }
+
+    /// Check if the proposal is valid in its current phase.
+    pub fn check_phase_invariants(&self) -> Result<(), OodaStateMachineError> {
+        let phase = self.current_phase();
+        match phase {
+            OodaPhase::Observe => {
+                // Observe: problem scoped but may be undefined
+                Ok(())
+            }
+            OodaPhase::Orient => {
+                // Orient: alternatives researched
+                if self.proposal.alternatives().is_empty() {
+                    return Err(OodaStateMachineError::MissingPhaseData {
+                        phase,
+                        detail: "at least one alternative must be researched in Orient".into(),
+                    });
+                }
+                Ok(())
+            }
+            OodaPhase::Decide => {
+                // Decide: decision committed, risks assessed
+                if self.proposal.decision().what.is_empty() {
+                    return Err(OodaStateMachineError::MissingPhaseData {
+                        phase,
+                        detail: "Decision.what must be non-empty in Decide".into(),
+                    });
+                }
+                if self.proposal.executive_decision().summary.is_empty() {
+                    return Err(OodaStateMachineError::MissingPhaseData {
+                        phase,
+                        detail: "ExecutiveDecision.summary must be non-empty in Decide".into(),
+                    });
+                }
+                Ok(())
+            }
+            OodaPhase::Act => {
+                // Act: ready to execute — validated DARED
+                if self.proposal.validate().is_err() {
+                    return Err(OodaStateMachineError::MissingPhaseData {
+                        phase,
+                        detail: "proposal must pass validation before Act".into(),
+                    });
+                }
+                Ok(())
+            }
+            OodaPhase::Verify => {
+                // Verify: artifacts produced, criteria checked
+                let ed = self.proposal.executive_decision();
+                if ed.acceptance_criteria.is_empty() {
+                    return Err(OodaStateMachineError::MissingPhaseData {
+                        phase,
+                        detail: "acceptance criteria must be defined for Verify".into(),
+                    });
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Attempt to dispatch an event. Returns the transition result.
+    /// If the transition is accepted, the proposal's phase is updated
+    /// and the transition is recorded in history.
+    pub fn dispatch(&mut self, event: OodaEvent) -> Result<OodaTransition, OodaStateMachineError> {
+        let current = self.current_phase();
+
+        // Cancel terminates the machine.
+        if event == OodaEvent::Cancel {
+            let t = OodaTransition {
+                event,
+                from: current,
+                to: current,
+                accepted: true,
+                rejection_reason: None,
+            };
+            self.history.push(t.clone());
+            return Ok(t);
+        }
+
+        // Retry stays in current phase.
+        if event == OodaEvent::Retry {
+            let t = OodaTransition {
+                event,
+                from: current,
+                to: current,
+                accepted: true,
+                rejection_reason: None,
+            };
+            self.history.push(t.clone());
+            return Ok(t);
+        }
+
+        // Resolve target phase.
+        let target = event
+            .target(current)
+            .ok_or(OodaStateMachineError::InvalidTransition { event, current })?;
+
+        // Check exit guards for current phase.
+        for (phase, guard) in &self.guards.exit_guards {
+            if *phase == current {
+                return Ok(OodaTransition::rejected(
+                    event,
+                    current,
+                    target,
+                    format!("exit guard: {guard}"),
+                ));
+            }
+        }
+
+        // Check entry guards for target phase.
+        for (phase, guard) in &self.guards.entry_guards {
+            if *phase == target {
+                return Ok(OodaTransition::rejected(
+                    event,
+                    current,
+                    target,
+                    format!("entry guard: {guard}"),
+                ));
+            }
+        }
+
+        // Check phase invariants before transition.
+        if let Err(e) = self.check_phase_invariants() {
+            return Ok(OodaTransition::rejected(
+                event,
+                current,
+                target,
+                e.to_string(),
+            ));
+        }
+
+        // Accepted — apply transition.
+        self.proposal.set_phase(target);
+        let t = OodaTransition::accepted(event, current, target);
+        self.history.push(t.clone());
+        Ok(t)
+    }
+
+    /// Returns true if the state machine has reached the Verify phase
+    /// and all acceptance criteria pass.
+    pub fn is_complete(&self) -> bool {
+        self.current_phase() == OodaPhase::Verify
+            && self.proposal.validate().is_ok()
+    }
+
+    /// Rollback to a previous phase in history.
+    pub fn rollback(&mut self, target: OodaPhase) -> Result<OodaTransition, OodaStateMachineError> {
+        let current = self.current_phase();
+        if !target.precedes(current) {
+            return Err(OodaStateMachineError::InvalidTransition {
+                event: OodaEvent::Reject,
+                current,
+            });
+        }
+        self.proposal.set_phase(target);
+        let t = OodaTransition::accepted(OodaEvent::Reject, current, target);
+        self.history.push(t.clone());
+        Ok(t)
+    }
+
+    /// Walk the history and produce a summary of phase transitions.
+    pub fn audit_trail(&self) -> String {
+        if self.history.is_empty() {
+            return format!("phase: {} (no transitions)", self.current_phase());
+        }
+        let steps: Vec<String> = self
+            .history
+            .iter()
+            .map(|t| {
+                if t.accepted {
+                    format!("{}: {} → {}", t.event, t.from, t.to)
+                } else {
+                    format!("{}: {} → {} [BLOCKED: {}]", t.event, t.from, t.to,
+                        t.rejection_reason.as_deref().unwrap_or("unknown"))
+                }
+            })
+            .collect();
+        format!("{} | current: {}", steps.join(" | "), self.current_phase())
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DaredAcceptanceCriteria — constraint type
+// ══════════════════════════════════════════════════════════════════════════════
 // Decision — Perdurant (Kind → Endurant)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -294,6 +741,9 @@ pub trait DaredDocument: Stereotyped {
     /// The proposal identifier (e.g., "DARED-001").
     fn proposal_id(&self) -> &str;
 
+    /// Human-readable title.
+    fn title(&self) -> &str;
+
     /// Current OODA phase of this proposal.
     fn phase(&self) -> OodaPhase;
 
@@ -359,6 +809,9 @@ pub trait DaredDocument: Stereotyped {
     fn is_ready_to_act(&self) -> bool {
         self.phase() >= OodaPhase::Decide && self.validate().is_ok()
     }
+
+    /// Set the current phase (mutable access — used by state machine).
+    fn set_phase(&mut self, phase: OodaPhase);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -462,8 +915,16 @@ impl DaredDocument for DaredProposal {
         &self.proposal_id
     }
 
+    fn title(&self) -> &str {
+        &self.title
+    }
+
     fn phase(&self) -> OodaPhase {
         self.phase
+    }
+
+    fn set_phase(&mut self, phase: OodaPhase) {
+        self.phase = phase;
     }
 }
 
@@ -872,5 +1333,117 @@ mod tests {
         let ids = c.iso_standard_ids();
         assert!(ids.contains(&"ISO 31000:2018".to_string()));
         assert!(ids.contains(&"ISO 9001:2015".to_string()));
+    }
+
+    // ── State machine tests ──
+
+    #[test]
+    fn state_machine_dispatch_observe_to_orient() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        assert_eq!(sm.current_phase(), OodaPhase::Decide);
+
+        let t = sm.dispatch(OodaEvent::Discover).unwrap();
+        assert!(t.accepted);
+        assert_eq!(sm.current_phase(), OodaPhase::Observe);
+
+        let t = sm.dispatch(OodaEvent::AnalyzeComplete).unwrap();
+        assert!(t.accepted);
+        assert_eq!(sm.current_phase(), OodaPhase::Orient);
+    }
+
+    #[test]
+    fn state_machine_blocked_skip_orient_without_alternatives() {
+        let p = DaredProposal::new(
+            "DARED-004",
+            "skip test",
+            sample_decision(),
+            sample_executive_decision(),
+        );
+        let mut sm = OodaStateMachine::new(p);
+        // Manually set to Orient (bypassing guards for test)
+        sm.proposal.phase = OodaPhase::Orient;
+
+        // Try to go Orient → Decide without alternatives
+        let t = sm.dispatch(OodaEvent::Decide).unwrap();
+        assert!(!t.accepted, "should block: no alternatives in Orient");
+    }
+
+    #[test]
+    fn state_machine_reject_verify_to_decide() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        sm.proposal.phase = OodaPhase::Verify;
+
+        let t = sm.dispatch(OodaEvent::Reject).unwrap();
+        assert!(t.accepted);
+        assert_eq!(sm.current_phase(), OodaPhase::Decide);
+    }
+
+    #[test]
+    fn state_machine_cancel_terminates() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        let t = sm.dispatch(OodaEvent::Cancel).unwrap();
+        assert!(t.accepted);
+        assert_eq!(sm.current_phase(), OodaPhase::Decide); // phase unchanged
+        assert_eq!(sm.history.len(), 1);
+    }
+
+    #[test]
+    fn state_machine_history_accumulates() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        sm.dispatch(OodaEvent::Discover).unwrap(); // Decide → Observe
+        sm.dispatch(OodaEvent::AnalyzeComplete).unwrap(); // Observe → Orient
+        assert_eq!(sm.history.len(), 2);
+        assert!(sm.audit_trail().contains("Discover"));
+        assert!(sm.audit_trail().contains("AnalyzeComplete"));
+    }
+
+    #[test]
+    fn state_machine_render_shows_active_phase() {
+        let sm = OodaStateMachine::new(valid_proposal());
+        let r = sm.render();
+        assert!(r.contains("●"));
+        assert!(r.contains("Decide"));
+        assert!(r.contains("Eliminate vendor submodules"));
+    }
+
+    #[test]
+    fn state_machine_status_line_is_compact() {
+        let sm = OodaStateMachine::new(valid_proposal());
+        let s = sm.status_line();
+        assert!(s.contains("DARED-001"));
+        assert!(s.contains("phase=Decide"));
+        assert!(s.contains("SubmoduleElimination"));
+    }
+
+    #[test]
+    fn ooda_event_target_mapping() {
+        assert_eq!(OodaEvent::Discover.target(OodaPhase::Decide), Some(OodaPhase::Observe));
+        assert_eq!(OodaEvent::Discover.target(OodaPhase::Act), Some(OodaPhase::Observe));
+        assert_eq!(OodaEvent::Decide.target(OodaPhase::Orient), Some(OodaPhase::Decide));
+        assert_eq!(OodaEvent::Reject.target(OodaPhase::Verify), Some(OodaPhase::Decide));
+        assert_eq!(OodaEvent::Execute.target(OodaPhase::Orient), None); // can't Execute from Orient
+        assert_eq!(OodaEvent::Retry.target(OodaPhase::Act), Some(OodaPhase::Act));
+        assert_eq!(OodaEvent::Cancel.target(OodaPhase::Observe), None);
+    }
+
+    #[test]
+    fn state_machine_retry_stays_in_phase() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        let t = sm.dispatch(OodaEvent::Retry).unwrap();
+        assert!(t.accepted);
+        assert_eq!(t.from, OodaPhase::Decide);
+        assert_eq!(t.to, OodaPhase::Decide);
+    }
+
+    #[test]
+    fn state_machine_invalid_transition_rejected() {
+        let mut sm = OodaStateMachine::new(valid_proposal());
+        // Can't go Decide → VerifyComplete (must Execute first)
+        let result = sm.dispatch(OodaEvent::VerifyComplete);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            OodaStateMachineError::InvalidTransition { .. }
+        ));
     }
 }

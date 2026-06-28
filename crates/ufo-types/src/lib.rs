@@ -51,7 +51,8 @@ pub mod stereotype;
 // Re-export key types for convenience
 pub use dare::{
     Alternative, DaredAcceptanceCriteria, DaredDocument, DaredProposal, DaredValidationError,
-    Decision, ExecutiveDecision, OodaPhase, Risk, RiskSeverity,
+    Decision, ExecutiveDecision, OodaEvent, OodaGuards, OodaPhase, OodaStateMachine,
+    OodaStateMachineError, OodaTransition, Risk, RiskSeverity,
 };
 pub use iso::{Ifrs9Classification, Iso4217, Iso4217Error, Lei, LeiError};
 pub use satisfies::{
