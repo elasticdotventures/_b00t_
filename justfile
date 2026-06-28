@@ -206,12 +206,16 @@ desktop-launch display=":0":
 desktop-deps:
     bash {{ justfile_directory() }}/scripts/check-tauri-deps.sh
 
-# 📊 Launch the admin dashboard (b00t-admin) on port 31337.
+# 📟  Process manager — manage background b00t services (admin, tauri, mcp).
+#     Uses batch(1) to detach from shell — survives terminal exit.
 
-# Requires: cargo build -p b00t-admin (first time)
+# Usage: just pm <start|stop|restart|status|logs> <admin|tauri|mcp>
+pm action service="":
+    bash {{ justfile_directory() }}/scripts/b00t-pm.sh {{ action }} {{ service }}
+
+# 📊  Launch the admin dashboard on port 31337 via process manager (background).
 admin:
-    @echo "📊 Starting b00t-admin on http://localhost:31337 ..."
-    {{ justfile_directory() }}/target/debug/b00t-admin
+    bash {{ justfile_directory() }}/scripts/b00t-pm.sh start admin
 
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
