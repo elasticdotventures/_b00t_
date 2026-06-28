@@ -11,31 +11,29 @@ use std::path::Path;
 pub enum InitCommands {
     #[clap(
         about = "Initialize a b00t project in the current directory",
-        long_about = "Create a project-local _b00t_/ directory with:\n  • project.toml — identity + stack detection\n  • overrides.toml — per-project datum version overrides\n\nExamples:\n  b00t init project\n  b00t init project --name my-project"
+        long_about = "Create _b00t_/ with project.toml + overrides.toml.\nRuns agent onboarding automatically unless _b00t_/ already exists.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding even if _b00t_/ exists)\n  b00t init project --no-setup (skip onboarding)"
     )]
     Project {
         #[clap(long, help = "Project name (default: directory name)")]
         name: Option<String>,
         #[clap(long, help = "Primary technology stack (rust|python|nodejs|auto)")]
         stack: Option<String>,
-    },
-    #[clap(
-        about = "Agent onboarding wizard — detect context, discover tools, show capabilities",
-        long_about = "5-phase protocol:\n  1. Agent identity detection\n  2. Project context analysis\n  3. Tool & service discovery\n  4. Infrastructure setup (Redis, container runtime)\n  5. Capability mapping + command reference\n\nExamples:\n  b00t init hello-world\n  b00t init hello-world --skip-redis --skip-diagnostics"
-    )]
-    HelloWorld {
-        #[clap(long, help = "Skip Redis server startup")]
-        skip_redis: bool,
-        #[clap(long, help = "Skip system diagnostics")]
-        skip_diagnostics: bool,
-        #[clap(long, help = "Skip capability reference")]
-        skip_tour: bool,
+        #[clap(long, help = "Force agent onboarding (detect tools, start Redis, show capabilities)")]
+        setup: bool,
+        #[clap(long, help = "Skip agent onboarding")]
+        no_setup: bool,
     },
 }
 
 // ── Project initialization ────────────────────────────────────────────────
 
-fn handle_project_init(name: Option<String>, stack: Option<String>) -> Result<()> {
+fn handle_project_init(
+    name: Option<String>,
+    stack: Option<String>,
+    force_setup: bool,
+    no_setup: bool,
+    path: &str,
+) -> Result<()> {
     let cwd = std::env::current_dir().context("current dir")?;
     let project_name = name.unwrap_or_else(|| {
         cwd.file_name()
@@ -45,17 +43,17 @@ fn handle_project_init(name: Option<String>, stack: Option<String>) -> Result<()
     });
 
     let b00t_dir = cwd.join("_b00t_");
-    if b00t_dir.exists() {
-        println!("  ⏭️  _b00t_/ already exists — skipping");
+    let existed = b00t_dir.exists();
+
+    if existed {
+        println!("  ⏭️  _b00t_/ already exists");
     } else {
         std::fs::create_dir(&b00t_dir).context("create _b00t_/")?;
         println!("  📁 created {}", b00t_dir.display());
     }
 
-    // Detect primary stack if not specified
     let primary_stack = stack.unwrap_or_else(|| detect_project_stack(&cwd));
 
-    // Write project.toml
     let project_toml = b00t_dir.join("project.toml");
     if !project_toml.exists() {
         let content = format!(
@@ -79,7 +77,6 @@ b00t_version = "{b00t_version}"
         println!("  📝 wrote {}", project_toml.display());
     }
 
-    // Write overrides.toml (empty scaffold)
     let overrides_toml = b00t_dir.join("overrides.toml");
     if !overrides_toml.exists() {
         let content = format!(
@@ -103,8 +100,22 @@ b00t_version = "{b00t_version}"
     }
 
     println!("\n✅ Project '{}' initialized ({})", project_name, primary_stack);
+
+    // Auto-run onboarding unless explicitly skipped or _b00t_/ already existed (and no --setup)
+    if !no_setup && (!existed || force_setup) {
+        if existed && force_setup {
+            println!("\n🔧 Forcing agent setup...");
+        } else {
+            println!("\n🔧 First-time agent setup...");
+        }
+        run_setup(path)?;
+    } else if existed {
+        println!("   Run 'b00t init project --setup' to re-run agent setup");
+    } else {
+        println!("   Run 'b00t init project' for agent setup");
+    }
+
     println!("   Run 'b00t cli up' to check tool versions");
-    println!("   Edit _b00t_/overrides.toml to pin versions");
     Ok(())
 }
 
@@ -118,40 +129,28 @@ fn detect_project_stack(cwd: &Path) -> String {
     "unknown".into()
 }
 
-// ── Hello-world onboarding protocol ────────────────────────────────────────
+// ── Agent setup (onboarding) ───────────────────────────────────────────────
 
-fn execute_hello_world_protocol(
-    path: &str,
-    skip_redis: bool,
-    _skip_diagnostics: bool,
-    skip_tour: bool,
-) -> Result<()> {
-    println!("👋 b00t hello_world — agent onboarding\n");
-
+fn run_setup(path: &str) -> Result<()> {
     let mut memory = SessionMemory::load()?;
 
-    println!("🤖 Phase 1: Agent Identity");
+    println!("🤖 Agent Identity");
     detect_agent_role(&mut memory)?;
 
-    println!("\n📂 Phase 2: Project Context");
+    println!("\n📂 Project Context");
     detect_project_context(&mut memory)?;
 
-    println!("\n🔧 Phase 3: Tool & Service Discovery");
+    println!("\n🔧 Tool & Service Discovery");
     discover_available_tools(path, &mut memory)?;
 
-    if !skip_redis {
-        println!("\n💾 Phase 4: Infrastructure Setup");
-        setup_infrastructure(&mut memory)?;
-    }
+    println!("\n💾 Infrastructure Setup");
+    setup_infrastructure(&mut memory)?;
 
-    if !skip_tour {
-        println!("\n🧠 Phase 5: Capability Reference");
-        enlighten_agent_capabilities(path, &mut memory)?;
-    }
+    println!("\n🧠 Capability Reference");
+    show_capabilities(&mut memory)?;
 
     memory.incr("hello_world_completions")?;
-    println!("\n✅ Agent onboarding complete");
-    println!("📊 {}", memory.get_summary());
+    println!("\n📊 {}", memory.get_summary());
     Ok(())
 }
 
@@ -183,9 +182,7 @@ fn detect_project_context(memory: &mut SessionMemory) -> Result<()> {
     for (file, stack, emoji) in checks {
         if Path::new(file).exists() {
             project_types.push(*stack);
-            if primary_stack == "unknown" {
-                primary_stack = stack;
-            }
+            if primary_stack == "unknown" { primary_stack = stack; }
             println!("  {} {} ({})", emoji, stack, file);
         }
     }
@@ -261,11 +258,11 @@ fn setup_infrastructure(memory: &mut SessionMemory) -> Result<()> {
         "none"
     };
     memory.set("preferred_container_runtime", container_runtime)?;
-    memory.set("last_hello_world", &chrono::Utc::now().to_rfc3339())?;
+    memory.set("last_setup", &chrono::Utc::now().to_rfc3339())?;
     Ok(())
 }
 
-fn enlighten_agent_capabilities(_path: &str, memory: &mut SessionMemory) -> Result<()> {
+fn show_capabilities(memory: &mut SessionMemory) -> Result<()> {
     let unknown = "unknown".to_string();
     let empty = "".to_string();
     let project_stack = memory.get("primary_stack").unwrap_or(&unknown);
@@ -273,7 +270,8 @@ fn enlighten_agent_capabilities(_path: &str, memory: &mut SessionMemory) -> Resu
 
     if !missing_tools.is_empty() {
         println!(
-            "  💡 Install: b00t install {}",
+            "  💡 Install for {}: b00t install {}",
+            project_stack,
             missing_tools.replace(",", " ")
         );
     }
@@ -305,17 +303,14 @@ fn verify_and_start_redis(memory: &mut SessionMemory) -> Result<()> {
     let started = try_start_redis_server()?;
     if started {
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        let ping = std::process::Command::new("redis-cli")
-            .args(&["ping"])
-            .output();
+        let ping = std::process::Command::new("redis-cli").args(&["ping"]).output();
         match ping {
             Ok(o) if o.status.success() => {
-                let resp = String::from_utf8_lossy(&o.stdout);
-                if resp.trim() == "PONG" {
+                if String::from_utf8_lossy(&o.stdout).trim() == "PONG" {
                     println!("  ✅ Redis started");
                     memory.set_flag("redis_running", true)?;
                 } else {
-                    println!("  ⚠️  Unexpected ping response: {}", resp.trim());
+                    println!("  ⚠️  Unexpected ping response");
                 }
             }
             _ => println!("  ❌ Redis ping failed"),
@@ -328,26 +323,25 @@ fn verify_and_start_redis(memory: &mut SessionMemory) -> Result<()> {
 }
 
 fn try_start_redis_server() -> Result<bool> {
-    for cmd in &[
+    for (bin, args) in &[
         ("systemctl", &["start", "redis-server"][..]),
         ("service", &["redis-server", "start"][..]),
     ] {
-        if let Ok(s) = std::process::Command::new(cmd.0).args(cmd.1).status() {
+        if let Ok(s) = std::process::Command::new(bin).args(*args).status() {
             if s.success() {
-                println!("  📦 Started via {}", cmd.0);
+                println!("  📦 Started via {}", bin);
                 return Ok(true);
             }
         }
     }
-
-    if let Ok(_) = std::process::Command::new("redis-server")
+    if std::process::Command::new("redis-server")
         .args(&["--daemonize", "yes"])
         .spawn()
+        .is_ok()
     {
         println!("  📦 Started redis-server directly");
         return Ok(true);
     }
-
     println!("  ⚠️  All startup methods failed");
     Ok(false)
 }
@@ -366,41 +360,39 @@ pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
         context.shell_count, context.compile_count, context.test_count
     );
 
-    let mut diagnostic_results = Vec::new();
+    let mut passing = 0;
+    let total = 4;
 
-    let checks: &[(&str, &str, &[&str])] = &[
-        ("git", "git", &["--version"]),
-        ("cargo", "cargo", &["--version"]),
-        ("node", "node", &["--version"]),
-        ("docker", "docker", &["--version"]),
-    ];
+    if std::process::Command::new("git").arg("--version").output().is_ok() {
+        println!("  ✅ git: available");
+        passing += 1;
+    } else { println!("  ❌ git: not available"); }
 
-    for &(name, bin, args) in checks {
-        if cmd!(bin, args[0]).read().is_ok() {
-            println!("  ✅ {}: available", name);
-            diagnostic_results.push((name, true));
-        } else {
-            println!("  ❌ {}: not available", name);
-            diagnostic_results.push((name, false));
-        }
-    }
+    if std::process::Command::new("cargo").arg("--version").output().is_ok() {
+        println!("  ✅ cargo: available");
+        passing += 1;
+    } else { println!("  ❌ cargo: not available"); }
 
-    let passing = diagnostic_results.iter().filter(|(_, p)| *p).count();
+    if std::process::Command::new("node").arg("--version").output().is_ok() {
+        println!("  ✅ node: available");
+        passing += 1;
+    } else { println!("  ❌ node: not available"); }
+
+    if std::process::Command::new("docker").arg("--version").output().is_ok() {
+        println!("  ✅ docker: available");
+        passing += 1;
+    } else { println!("  ❌ docker: not available"); }
+
     memory.set_num("diagnostic_passing", passing as i64)?;
-    memory.set_num("diagnostic_total", diagnostic_results.len() as i64)?;
-
-    println!("  📊 {}/{} systems operational", passing, diagnostic_results.len());
+    memory.set_num("diagnostic_total", total as i64)?;
+    println!("  📊 {}/{} systems operational", passing, total);
     Ok(())
 }
 
 fn format_duration(seconds: i64) -> String {
-    if seconds < 60 {
-        format!("{}s", seconds)
-    } else if seconds < 3600 {
-        format!("{}m{}s", seconds / 60, seconds % 60)
-    } else {
-        format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60)
-    }
+    if seconds < 60 { format!("{}s", seconds) }
+    else if seconds < 3600 { format!("{}m{}s", seconds / 60, seconds % 60) }
+    else { format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60) }
 }
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
@@ -408,15 +400,8 @@ fn format_duration(seconds: i64) -> String {
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Project { name, stack } => {
-                handle_project_init(name.clone(), stack.clone())
-            }
-            InitCommands::HelloWorld {
-                skip_redis,
-                skip_diagnostics,
-                skip_tour,
-            } => {
-                execute_hello_world_protocol(path, *skip_redis, *skip_diagnostics, *skip_tour)
+            InitCommands::Project { name, stack, setup, no_setup } => {
+                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
             }
         }
     }
@@ -430,7 +415,7 @@ mod tests {
     fn project_init_creates_directory_and_files() {
         let dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-        handle_project_init(Some("test-proj".into()), Some("rust".into())).unwrap();
+        handle_project_init(Some("test-proj".into()), Some("rust".into()), false, true, "test").unwrap();
 
         let b00t = dir.path().join("_b00t_");
         assert!(b00t.exists());
@@ -460,5 +445,14 @@ mod tests {
     fn detect_project_stack_unknown() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(detect_project_stack(dir.path()), "unknown");
+    }
+
+    #[test]
+    fn first_time_init_creates_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        // no_setup=true: skip agent onboarding (requires real session config)
+        handle_project_init(Some("auto".into()), Some("rust".into()), false, true, "test").unwrap();
+        assert!(dir.path().join("_b00t_").exists());
     }
 }
