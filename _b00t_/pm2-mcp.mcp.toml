@@ -1,13 +1,14 @@
-[b00t]
+[mcp]
 name = "pm2-mcp"
-type = "mcp"
-hint = "PM2 process manager MCP server - manage, monitor, and control background processes"
-homepage = "https://github.com/PromptExecution/pm2-mcp"
-keywords = ["b00t", "local", "pm2", "process-manager"]
+description = "PM2 process manager MCP — start/stop/restart/status/logs for b00t background services"
+command = "node"
+args = ["{{ script_dir }}/pm2-mcp-server.mjs"]
 
-[[b00t.mcp.stdio]]
-command = "npx"
-args = ["-y", "pm2-mcp"]
-transport = "stdio"
-priority = 0
-requires = ["node"]
+[b00t]
+icon = "⚡"
+status = "active"
+enabled = true
+
+[b00t.lifecycle]
+restart = "always"
+health_check_cmd = "pm2 ping"
