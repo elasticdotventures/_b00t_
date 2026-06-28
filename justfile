@@ -1107,6 +1107,14 @@ check-system-normal:
 review-capabilities:
     b00t capabilities
 
+# Operator survey: load role + check system state
+operator-survey:
+    @echo "🔍 Operator survey"
+    @echo "━━━━━━━━━━━━━━━━━"
+    b00t learn operator 2>/dev/null | head -5
+    @echo ""
+    @just review-branch
+
 # Show recent branch changes with stats
 review-branch:
     @echo "📋 Branch: $$(git branch --show-current)"
