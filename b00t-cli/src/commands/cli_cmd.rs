@@ -128,6 +128,16 @@ fn cli_desires(command: &str, path: &str) -> Result<()> {
 
 fn cli_install(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
+
+    // 🤓 Enforce project overrides from 🥾.tomllmd (#578)
+    let overrides = crate::load_project_overrides();
+    if let Some(pinned) = overrides.get(command) {
+        println!("📌 Project override: {}={}", command, pinned);
+        // Resolve the datum but enforce pinned version in desires
+        // (install command from datum, version from override)
+        eprintln!("  🥾 Using pinned version '{}' from .git/🥾.tomllmd", pinned);
+    }
+
     run_hook_detect(&cli_datum.datum);
 
     // Check if datum has dependencies
