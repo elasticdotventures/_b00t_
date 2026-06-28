@@ -286,6 +286,23 @@ async fn dashboard_handler(State(state): State<Arc<Mutex<AppState>>>) -> Html<St
     Html(dashboard_html(&pipeline_json, &types_json))
 }
 
+/// GET `/wasm/` — Dioxus WASM SPA (next-gen dashboard)
+async fn wasm_handler() -> impl IntoResponse {
+    let wasm_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join("b00t-ui-wasm/dist");
+
+    let index_path = wasm_dir.join("index.html");
+    match tokio::fs::read_to_string(&index_path).await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "WASM SPA not built. Run: just build-wasm".to_string(),
+        ).into_response(),
+    }
+}
+
 /// GET `/health` or `/healthz` — Health check (for container probes)
 async fn health_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
@@ -1434,6 +1451,14 @@ async fn main() {
         // Dashboard
         .route("/", get(dashboard_handler))
         .route("/admin", get(dashboard_handler))
+        // WASM SPA (next-gen)
+        .route("/wasm", get(wasm_handler))
+        .route("/wasm/{*path}", get(wasm_handler))
+        .nest_service("/wasm/wasm", ServeDir::new(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent().unwrap_or(std::path::Path::new("."))
+                .join("b00t-ui-wasm/dist/wasm")
+        ))
         // Health check
         .route("/health", get(health_handler))
         .route("/healthz", get(health_handler))
