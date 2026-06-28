@@ -118,3 +118,6 @@
 [submodule "vendor/android-emulator-container-scripts"]
 	path = vendor/android-emulator-container-scripts
 	url = https://github.com/PromptExecution/android-emulator-container-scripts-b00t.git
+[submodule "vendor/opencode-goal-plugin"]
+	path = vendor/opencode-goal-plugin
+	url = https://github.com/PromptExecution/opencode-goal-plugin-b00t.git
