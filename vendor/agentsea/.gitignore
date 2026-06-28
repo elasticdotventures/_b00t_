@@ -10,3 +10,4 @@ wheels/
 .venv
 
 data/
+minikube-linux-amd64

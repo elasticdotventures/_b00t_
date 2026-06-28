@@ -1140,7 +1140,20 @@ index-codebase:
 android-sandbox:
     b00t script run _b00t_/scripts/android-emu-setup.rhai
 
-# ── Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
+# ── OpenCode plugin management ──────────────────────────────────────────────
+
+# Install opencode-goal-plugin (canonical willytop8 fork)
+opencode-goal-install:
+    @echo "📦 Installing opencode-goal-plugin..."
+    npm install -g opencode-goal-plugin 2>/dev/null || \
+        npm install --save-dev opencode-goal-plugin
+    @echo "✅ Add to opencode.json: {\"plugin\": [\"opencode-goal-plugin\"]}"
+
+# Install all b00t opencode plugins
+opencode-plugins-install: opencode-goal-install
+    @echo "✅ All opencode plugins installed"
+
+# Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
 
