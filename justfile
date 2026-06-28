@@ -1024,6 +1024,32 @@ ask query="":
       -d "{"model":"ch0nky","messages":[{"role":"user","content":"{{query}}"}],"max_tokens":256}" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
 
+# ── ufo-types crate (#511) — Tax-Lawyer UFO stereotypes + Satisfies<T> ──────
+# 🤓 Part of Tax-Lawyer EPIC (#510). ufo-types is the ontological foundation:
+#    UFO stereotypes (Kind/SubKind/Role/Relator/Mode) + Satisfies<T> constraint trait
+#    + ISO wrappers (Lei, Iso4217, Ifrs9Classification).
+# Usage: just ufo check | test | doc | watch
+
+# Fast compile-check for ufo-types crate
+ufo-check:
+    cargo check -p ufo-types
+
+# Run ufo-types tests (40 tests, <1s)
+ufo-test:
+    cargo test -p ufo-types
+
+# Open ufo-types docs in browser
+ufo-doc:
+    cargo doc -p ufo-types --open
+
+# Continuous watch: re-check ufo-types on file changes
+ufo-watch:
+    cargo watch -x 'check -p ufo-types'
+
+# Full Tax-Lawyer test suite (ufo-types + ledgrrr)
+tax-lawyer-test: ufo-test
+    just ledgrrr test
+
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
