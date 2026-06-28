@@ -276,16 +276,187 @@ pub struct OrchestrationConfig {
 #[serde(untagged)]
 pub enum InstallSpec {
     Command(String),
+    Package(PackageInstallSpec),
+    Tool(ToolInstallSpec),
     Metadata { requires: Option<Vec<String>> },
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PackageInstallSpec {
+    pub package: String,
+    pub binary: Option<String>,
+    pub apt: Option<String>,
+    pub dnf: Option<String>,
+    pub pacman: Option<String>,
+    pub brew: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ToolInstallSpec {
+    pub cargo: Option<String>,
+    pub go: Option<String>,
+    pub npm_global: Option<String>,
+    pub uv_tool: Option<String>,
+    pub binary: Option<String>,
+    pub version: Option<String>,
 }
 
 impl InstallSpec {
     pub fn command(&self) -> Option<&str> {
         match self {
             InstallSpec::Command(command) => Some(command),
+            InstallSpec::Package(_) => None,
+            InstallSpec::Tool(_) => None,
             InstallSpec::Metadata { .. } => None,
         }
     }
+
+    pub fn command_string(&self) -> Option<String> {
+        match self {
+            InstallSpec::Command(command) => Some(command.clone()),
+            InstallSpec::Package(package) => Some(package.install_script()),
+            InstallSpec::Tool(tool) => tool.install_script(),
+            InstallSpec::Metadata { .. } => None,
+        }
+    }
+}
+
+impl PackageInstallSpec {
+    fn install_script(&self) -> String {
+        let binary = shell_quote(self.binary.as_deref().unwrap_or(&self.package));
+        let apt = shell_quote(self.apt.as_deref().unwrap_or(&self.package));
+        let dnf = shell_quote(self.dnf.as_deref().unwrap_or(&self.package));
+        let pacman = shell_quote(self.pacman.as_deref().unwrap_or(&self.package));
+        let brew = shell_quote(self.brew.as_deref().unwrap_or(&self.package));
+
+        format!(
+            r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update
+  sudo apt-get install -y {apt}
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y {dnf}
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -S --needed --noconfirm {pacman}
+elif command -v brew >/dev/null 2>&1; then
+  brew install {brew}
+else
+  echo "No supported package manager found for {binary} (apt-get, dnf, pacman, brew)." >&2
+  exit 127
+fi
+"#
+        )
+    }
+}
+
+impl ToolInstallSpec {
+    fn install_script(&self) -> Option<String> {
+        if let Some(crate_name) = &self.cargo {
+            let binary = shell_quote(self.binary.as_deref().unwrap_or(crate_name));
+            let crate_name = shell_quote(crate_name);
+            let version_arg = self
+                .version
+                .as_ref()
+                .map(|version| format!(" --version {}", shell_quote(version)))
+                .unwrap_or_default();
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v cargo >/dev/null 2>&1 || {{ echo "cargo is required to install {binary}" >&2; exit 127; }}
+cargo install {crate_name}{version_arg}
+"#
+            ));
+        }
+
+        if let Some(module) = &self.go {
+            let binary = self
+                .binary
+                .clone()
+                .unwrap_or_else(|| infer_go_binary(module));
+            let binary = shell_quote(&binary);
+            let module = shell_quote(module);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v go >/dev/null 2>&1 || {{ echo "go is required to install {binary}" >&2; exit 127; }}
+GO111MODULE=on go install {module}
+"#
+            ));
+        }
+
+        if let Some(package) = &self.npm_global {
+            let binary = self
+                .binary
+                .clone()
+                .unwrap_or_else(|| infer_npm_binary(package));
+            let binary = shell_quote(&binary);
+            let package = shell_quote(package);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v npm >/dev/null 2>&1 || {{ echo "npm is required to install {binary}" >&2; exit 127; }}
+npm install -g {package}
+"#
+            ));
+        }
+
+        if let Some(package) = &self.uv_tool {
+            let binary = shell_quote(self.binary.as_deref().unwrap_or(package));
+            let package = shell_quote(package);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v uv >/dev/null 2>&1 || {{ echo "uv is required to install {binary}" >&2; exit 127; }}
+uv tool install {package}
+"#
+            ));
+        }
+
+        None
+    }
+}
+
+fn infer_go_binary(module: &str) -> String {
+    module
+        .trim_end_matches("@latest")
+        .rsplit('/')
+        .next()
+        .unwrap_or(module)
+        .to_string()
+}
+
+fn infer_npm_binary(package: &str) -> String {
+    package
+        .split('@')
+        .next()
+        .unwrap_or(package)
+        .rsplit('/')
+        .next()
+        .unwrap_or(package)
+        .to_string()
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -1653,6 +1824,10 @@ impl BootDatum {
 
     pub fn install_command(&self) -> Option<&str> {
         self.install.as_ref().and_then(InstallSpec::command)
+    }
+
+    pub fn install_command_string(&self) -> Option<String> {
+        self.install.as_ref().and_then(InstallSpec::command_string)
     }
 }
 
@@ -3536,6 +3711,8 @@ pub mod test_env {
 
 #[cfg(test)]
 mod tests {
+    use crate::InstallSpec;
+    use serde::Deserialize;
     use std::path::PathBuf;
     use std::sync::{Mutex, MutexGuard};
 
@@ -3911,6 +4088,120 @@ hint = "containers"
         let dir = tempfile::tempdir().unwrap();
         let result = resolve_datum_dispatch("__nonexistent__", dir.path().to_str().unwrap());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn package_install_spec_generates_multi_os_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { package = "mold" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'mold'"));
+        assert!(command.contains("sudo apt-get install -y 'mold'"));
+        assert!(command.contains("sudo dnf install -y 'mold'"));
+        assert!(command.contains("sudo pacman -S --needed --noconfirm 'mold'"));
+        assert!(command.contains("brew install 'mold'"));
+    }
+
+    #[test]
+    fn package_install_spec_supports_package_manager_overrides() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { package = "fd", binary = "fdfind", apt = "fd-find" }"#)
+                .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'fdfind'"));
+        assert!(command.contains("sudo apt-get install -y 'fd-find'"));
+        assert!(command.contains("sudo dnf install -y 'fd'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_cargo_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { cargo = "eureka" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'eureka'"));
+        assert!(command.contains("command -v cargo"));
+        assert!(command.contains("cargo install 'eureka'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_go_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(
+            r#"install = { go = "github.com/go-task/task/v3/cmd/task@latest" }"#,
+        )
+        .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'task'"));
+        assert!(command.contains("command -v go"));
+        assert!(command.contains("GO111MODULE=on go install 'github.com/go-task/task/v3/cmd/task@latest'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_npm_global_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(
+            r#"install = { npm_global = "@google/gemini-cli", binary = "gemini" }"#,
+        )
+        .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'gemini'"));
+        assert!(command.contains("command -v npm"));
+        assert!(command.contains("npm install -g '@google/gemini-cli'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_uv_tool_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { uv_tool = "fastmcp" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'fastmcp'"));
+        assert!(command.contains("command -v uv"));
+        assert!(command.contains("uv tool install 'fastmcp'"));
+    }
+
+    #[test]
+    fn install_metadata_is_not_parsed_as_tool_functor() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { requires = ["node", "npm"] }"#).unwrap();
+
+        assert!(matches!(datum.install, InstallSpec::Metadata { .. }));
+        assert!(datum.install.command_string().is_none());
     }
 
     #[test]

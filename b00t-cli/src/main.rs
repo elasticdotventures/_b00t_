@@ -117,7 +117,7 @@ mod integration_tests;
 #[derive(Parser)]
 #[clap(version = b00t_c0re_lib::version::VERSION, about, long_about = None)]
 struct Cli {
-    #[clap(short, long, env = "_B00T_Path", default_value = "~/.b00t/_b00t_")]
+    #[clap(short, long, env = "_B00T_Path", default_value = "~/.dotfiles/_b00t_")]
     path: String,
     #[clap(
         long,
@@ -125,7 +125,6 @@ struct Cli {
     )]
     doc: bool,
     #[clap(
-        short = 'V',
         long,
         help = "Verbose: show hidden shortcut commands and full help tree"
     )]
@@ -3156,6 +3155,27 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected uninstall command"),
         }
+    }
+
+    #[test]
+    fn cli_default_path_points_to_dotfiles_datums() {
+        let cli = Cli::parse_from(args(&["b00t-cli", "install", "mold", "--dry-run"]));
+        assert_eq!(cli.path, "~/.dotfiles/_b00t_");
+    }
+
+    #[test]
+    fn cli_source_bans_short_v_flags() {
+        let source = include_str!("main.rs");
+        // 🤓 Solomon note: -v/-V are too ambiguous in b00t. Verbose is long-only;
+        // version keeps clap's generated long form. Nobody gets short v/V.
+        assert!(
+            !source.contains("short = 'v'"),
+            "short -v is banned; use an unambiguous long flag"
+        );
+        assert!(
+            !source.contains("short = 'V'"),
+            "short -V is banned; use an unambiguous long flag"
+        );
     }
 
     #[test]
