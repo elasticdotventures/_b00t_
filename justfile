@@ -1153,6 +1153,40 @@ opencode-goal-install:
 opencode-plugins-install: opencode-goal-install
     @echo "✅ All opencode plugins installed"
 
+# Run OpenCode via podman with full b00t environment mounted
+# 🤓 Mounts: workspace, config, skills, MCP servers, git/ssh, env vars.
+#    All b00t agent skills and just recipes available inside container.
+opencode-run workspace=".":
+    @echo "🚀 Launching OpenCode (podman)..."
+    podman run -it --rm \
+        --security-opt label=disable \
+        -v {{workspace}}:/workspace \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v ~/.config/opencode/AGENTS.md:/root/.config/opencode/AGENTS.md:ro \
+        -v ${HOME}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
+# Run OpenCode for app4dog with full game development environment
+opencode-app4dog:
+    @echo "🐶 Launching OpenCode for app4dog..."
+    podman run -it --rm \
+        --security-opt label=disable \
+        --network host \
+        -v ~/promptexecution/app4dog:/workspace \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v ${HOME}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
 # ── b00t test harness (ping/pong integration tests) ─────────────────────────
 
 # Run the b00t integration test harness — verifies 5 key subsystems
