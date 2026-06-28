@@ -76,7 +76,10 @@ next-task:
 viz-entangle datum="ledgrrr" format="mermaid":
     #!/bin/bash
     set -euo pipefail
-    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
+    # 🤓 use prebuilt binary — cargo run fails on b00t repo due to git worktree structure
+    BCLI="./target/release/b00t-cli"
+    [[ -x "$BCLI" ]] || { echo "❌ no prebuilt b00t-cli — run: cargo build -p b00t-cli --release"; exit 1; }
+    "$BCLI" --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
 
 gremlin-graalvm-build:
     docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
@@ -907,8 +910,10 @@ worker-status:
 
 # Render worker ontology graph with ledgrrr visual
 worker-viz format="mermaid":
-    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle \
-      --datum worker --format {{format}}
+    #!/bin/bash
+    BCLI="./target/release/b00t-cli"
+    [[ -x "$BCLI" ]] || { echo "❌ no prebuilt b00t-cli"; exit 1; }
+    "$BCLI" --path _b00t_ viz entangle --datum worker --format {{format}}
 
 # Show recent experiment scores
 worker-experiment-scores:
