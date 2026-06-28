@@ -16,7 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 1
+          submodules: false
+
+      - name: Init required submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr
 
       - name: Setup Rust
         run: |
