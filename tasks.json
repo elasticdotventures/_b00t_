@@ -39,7 +39,7 @@
     {
       "id": 5,
       "title": "P0: Fix fork+malloc async-signal-safety in sandbox child",
-      "description": "format!() allocates after fork() — NOT async-signal-safe. Replace with byte-slice write.",
+      "description": "format!() allocates after fork() \u2014 NOT async-signal-safe. Replace with byte-slice write.",
       "status": "done",
       "priority": 1,
       "tags": [],
@@ -79,7 +79,7 @@
     {
       "id": 9,
       "title": "P2: Make Boot command a polyseme datum",
-      "description": "Boot hardcodes target=opencode — should be runtime datum dispatched via resolve_datum_dispatch.",
+      "description": "Boot hardcodes target=opencode \u2014 should be runtime datum dispatched via resolve_datum_dispatch.",
       "status": "done",
       "priority": 3,
       "tags": [],
@@ -126,8 +126,8 @@
     },
     {
       "id": 14,
-      "title": "fix: grok assimilate auto-creates polyseme for all GitHub URLs — should only create when name is ambiguous",
-      "description": "The assimilate_github_repo function in grok.rs unconditionally creates a .polyseme.tomllmd for every GitHub URL. This is wrong — a polyseme should only be created when a name genuinely resolves to multiple conflicting artifacts (e.g. bubblewrap = sandbox tool vs Android app). For unambiguous repos like Unlimited-OCR, create a regular CLI datum scaffold instead.",
+      "title": "fix: grok assimilate auto-creates polyseme for all GitHub URLs \u2014 should only create when name is ambiguous",
+      "description": "The assimilate_github_repo function in grok.rs unconditionally creates a .polyseme.tomllmd for every GitHub URL. This is wrong \u2014 a polyseme should only be created when a name genuinely resolves to multiple conflicting artifacts (e.g. bubblewrap = sandbox tool vs Android app). For unambiguous repos like Unlimited-OCR, create a regular CLI datum scaffold instead.",
       "status": "done",
       "priority": 2,
       "tags": [],
@@ -214,7 +214,7 @@
     },
     {
       "id": 21,
-      "title": "#532: DRY — delete duplicated finetune scripts (subsumed by fine-tune/ pipeline)",
+      "title": "#532: DRY \u2014 delete duplicated finetune scripts (subsumed by fine-tune/ pipeline)",
       "description": "scripts/generate-b00t-training-data.py and scripts/finetune-b00t.py are fully subsumed by fine-tune/generate_dataset.py + train_unsloth.py + export_gguf.py. 300 lines removed. Justfile updated.",
       "status": "done",
       "priority": 2,

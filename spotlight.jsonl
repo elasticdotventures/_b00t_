@@ -28,3 +28,12 @@
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-27T04:07:09.015607411+00:00"}
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-27T04:07:25.074591923+00:00"}
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-27T04:07:57.118064742+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":2,"model":"ch0nky","ts":"2026-06-28T07:09:38.740763786+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:38.832674367+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:40.766883323+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:40.892825936+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:45.235152141+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:45.248147492+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:53.295003875+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:10:09.342044809+00:00"}
+{"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:10:41.390786182+00:00"}
