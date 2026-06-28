@@ -43,12 +43,18 @@
 //! - IRS Rev. Proc. 2024-28 — Crypto cost basis safe harbor
 //! - ATO QC 53725 — AU crypto CGT treatment
 
+pub mod capability;
 pub mod dare;
 pub mod iso;
 pub mod satisfies;
 pub mod stereotype;
 
 // Re-export key types for convenience
+pub use capability::{
+    ActionRecord, AgentCapability, Attempt, AttemptStatus, CapabilityDomain, CarmackSolution,
+    EnergyBudget, Episode, History, ReviewVerdict, ReviewerType, Solution, StateObservation,
+    Task, TaskStatus, TrainingCorpus,
+};
 pub use dare::{
     Alternative, DaredAcceptanceCriteria, DaredDocument, DaredProposal, DaredValidationError,
     Decision, ExecutiveDecision, OodaEvent, OodaGuards, OodaPhase, OodaStateMachine,
