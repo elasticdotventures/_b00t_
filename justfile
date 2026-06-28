@@ -66,6 +66,18 @@ mod ai-finetune '_b00t_/ai-finetune.just'
     @echo "  Usage: just <module>::<recipe>"
 
 
+# Show which AI models are running locally (k8s inference pods + ollama)
+models:
+    #!/bin/bash
+    echo "=== k8s inference (b00t-inference) ==="
+    kubectl get pods -n b00t-inference -o custom-columns='POD:.metadata.name,STATUS:.status.phase,AGE:.status.startTime' --no-headers 2>/dev/null || echo "(kubectl not available)"
+    echo ""
+    echo "=== GPU memory ==="
+    nvidia-smi --query-gpu=name,memory.used,memory.free,memory.total --format=csv,noheader 2>/dev/null || echo "(nvidia-smi not available)"
+    echo ""
+    echo "=== ollama models ==="
+    ollama list 2>/dev/null || echo "(ollama not running)"
+
 next-task:
     #!/bin/bash
     set -euo pipefail

@@ -73,12 +73,13 @@ SOURCES: dict[str, list[Path]] = {
                       B00T_VENDOR / "just-mcp" / "src",
                       B00T_VENDOR / "l3dg3rr" / "src",
                   ),
-    # ── justfiles (root + sub-modules) ──────────────────────────────────────
+    # ── justfiles (root + all _b00t_ modules) ───────────────────────────────
     "justfile":     [p for p in [
                       B00T / "justfile",
                       B00T / "b00t.just",
                       B00T / "b00t-service.just",
-                  ] if p.exists()],
+                  ] if p.exists()]
+                  + sorted((B00T / "_b00t_").glob("*.just")),
     "hive":         sorted((B00T / "_b00t_").glob("*.hive.toml")),
     # ── graph + diagram ──────────────────────────────────────────────────────
     "mermaid_md":   sorted((B00T / "_b00t_").glob("*.mermaid")),

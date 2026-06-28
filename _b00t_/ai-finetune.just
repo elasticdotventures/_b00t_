@@ -341,6 +341,16 @@ smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.
     print(f"\n{passed}/{len(PROBES)} probes b00t-aware")
     sys.exit(0 if passed >= 3 else 1)
 
+# One-shot sync: regenerate dataset from corpus + push everything to HF
+# Run before any cloud training run to ensure HF dataset is current
+hf-sync:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔄 regenerating dataset from b00t corpus..."
+    uv run python3 fine-tune/generate_dataset.py
+    echo "📤 pushing to hf://datasets/elasticdotventures/b00t-training..."
+    just ai-finetune::hf-push
+
 # Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
 
 # Run after: just ai-finetune::dataset
