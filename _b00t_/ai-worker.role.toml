@@ -38,7 +38,7 @@ lesson = "lora_dropout must be 0.0 — any value above 0 disables Unsloth fast k
 
 [[lfmf]]
 topic = "unsloth-moe-target-modules"
-lesson = "target_modules with gate_proj/up_proj/down_proj triggers MoE expert LoRA = 843M params = 150s/step; use attention-only [q_proj,v_proj,k_proj,o_proj] for MoE models"
+lesson = "Unsloth auto-adds ALL 128 expert LoRA regardless of target_modules — attention-only config has ZERO effect on param count. Only lora_r controls step speed: r=16→843M→150s/step, r=4→~210M→~37s/step"
 
 [[lfmf]]
 topic = "hf-jobs-config-hardcoded"
