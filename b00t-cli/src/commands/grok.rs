@@ -685,44 +685,77 @@ struct ParsedRepo {
     repo: String,
 }
 
+/// Repo language with auto-detected install/version commands (#581).
+#[derive(Debug, Clone, PartialEq)]
+enum RepoLanguage {
+    Rust,
+    Python,
+    JavaScript,
+    TypeScript,
+    Go,
+    Unknown(String),
+}
+
+impl RepoLanguage {
+    fn from_gh_api(owner: &str, repo: &str) -> Self {
+        let output = std::process::Command::new("gh")
+            .args(["api", &format!("repos/{owner}/{repo}"), "--jq", ".language"])
+            .output();
+        let lang = output
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .unwrap_or_default()
+            .trim()
+            .to_lowercase();
+        match lang.as_str() {
+            "rust" => Self::Rust,
+            "python" => Self::Python,
+            "javascript" => Self::JavaScript,
+            "typescript" => Self::TypeScript,
+            "go" => Self::Go,
+            "" => Self::Unknown("unknown".into()),
+            other => Self::Unknown(other.into()),
+        }
+    }
+
+    fn install_cmd(&self, repo: &str, owner: &str) -> String {
+        match self {
+            Self::Rust => format!("install = \"cargo install {repo}\""),
+            Self::Python => format!("install = \"pip install {repo}\""),
+            Self::JavaScript | Self::TypeScript => format!("install = \"npm install -g {repo}\""),
+            Self::Go => format!("install = \"go install github.com/{owner}/{repo}@latest\""),
+            Self::Unknown(lang) => format!("# install = \"TODO: install {repo} ({lang})\""),
+        }
+    }
+
+    fn version_cmd(&self, repo: &str) -> String {
+        match self {
+            Self::Rust | Self::Python | Self::JavaScript | Self::TypeScript => {
+                format!("version = \"{repo} --version\"")
+            }
+            Self::Go => format!("version = \"{repo} version\""),
+            Self::Unknown(_) => format!("# version = \"TODO: version check for {repo}\""),
+        }
+    }
+}
+
+impl std::fmt::Display for RepoLanguage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rust => write!(f, "Rust"),
+            Self::Python => write!(f, "Python"),
+            Self::JavaScript => write!(f, "JavaScript"),
+            Self::TypeScript => write!(f, "TypeScript"),
+            Self::Go => write!(f, "Go"),
+            Self::Unknown(s) => write!(f, "{s}"),
+        }
+    }
+}
+
 /// Detect install command and version check from repo language (#581).
 fn detect_cli_defaults(owner: &str, repo: &str) -> (String, String) {
-    let default_install = "TODO: install command".to_string();
-    let default_version = "TODO: version check command".to_string();
-
-    let output = std::process::Command::new("gh")
-        .args(["api", &format!("repos/{owner}/{repo}"), "--jq", ".language"])
-        .output();
-    let lang = output
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase();
-
-    match lang.as_str() {
-        "rust" => (
-            format!("cargo install {repo}"),
-            format!("{repo} --version"),
-        ),
-        "python" => (
-            format!("pip install {repo}"),
-            format!("{repo} --version"),
-        ),
-        "javascript" | "typescript" => (
-            format!("npm install -g {repo}"),
-            format!("{repo} --version"),
-        ),
-        "go" => (
-            format!("go install github.com/{owner}/{repo}@latest"),
-            format!("{repo} version"),
-        ),
-        _ if lang.is_empty() => (default_install, default_version),
-        _ => (
-            format!("# install = \"TODO: install {repo} ({lang})\""),
-            format!("# version = \"TODO: version check for {repo}\""),
-        ),
-    }
+    let lang = RepoLanguage::from_gh_api(owner, repo);
+    (lang.install_cmd(repo, owner), lang.version_cmd(repo))
 }
 fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
     let stripped = url
