@@ -40,7 +40,7 @@ accounting workflows.
 - **ledgerr-mcp** — MCP server exposing TurboLedgerService tools
 - **host-tauri** — Tauri desktop host (primary UI)
 - **host-tray** — System tray/menubar control surface
-- **host-window** — Slint desktop window (legacy UI)
+- **host-window** — ⚠️ DEPRECATED: Slint desktop host replaced by Tauri (ledgerr-tauri). Will be removed in next major release.
 - **ontology-extractor** — Ontology extraction from bookkeeping sources
 - **rotel-visual** — Evidence graph visualization
 - **mdbook-rhai-mermaid** — Rhai+Mermaid book rendering
@@ -61,7 +61,7 @@ accounting workflows.
 
 - Rust 2024 edition
 - Tauri (desktop host)
-- Slint (legacy UI)
+- Slint (⚠️ DEPRECATED — legacy UI, replaced by Tauri wry/webview)
 - Rhai scripting engine (rule evaluation)
 - arc-kit-au evidence graph library
 

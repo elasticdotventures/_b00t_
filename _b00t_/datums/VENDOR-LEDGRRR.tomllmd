@@ -43,6 +43,7 @@ development workflows that need an independent working tree.
 
 ## Key Binaries
 
+- **host-window** — ⚠️ DEPRECATED: Slint desktop host replaced by Tauri (ledgerr-tauri). Will be removed in next major release.
 
 
 ## CodeRunnerActionProcess
@@ -50,7 +51,7 @@ development workflows that need an independent working tree.
 Shares l3dg3rr codebase — same wrkflw-ci-build.yml + wrkflw-docgen.yml patterns apply.
 See VENDOR-L3DG3RR.tomllmd for full action_runner binding.
 
-Same as l3dg3rr: ledgerr-mcp, host-tauri, host-tray, host-window,
+Same as l3dg3rr: ledgerr-mcp, host-tauri (primary), host-tray, host-window (⚠️ DEPRECATED — see VENDOR-L3DG3RR),
 ontology-extractor, rotel-visual, lfmf-stats
 
 [b00t.services.action_runner]
