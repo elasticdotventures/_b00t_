@@ -1131,7 +1131,7 @@ index-codebase:
     @echo "🔍 Indexing into codebase-memory..."
     @echo "ℹ️  Use MCP: codebase-memory index_repository(repo_path=\".\", mode=\"fast\")"
 
-# ── Android emulator sandbox ────────────────────────────────────────────────
+# ── Android emulator sandbox (for Oreo 🐶) ──────────────────────────────────
 # 🤓 Uses RHAI script to sandbox ALL android operations deterministically.
 #    The RHAI script memoizes the full pipeline so agents don't hallucinate
 #    adb/emulator commands. One b00t call replaces 50+ lines of fragile bash.
@@ -1154,8 +1154,8 @@ opencode-plugins-install: opencode-goal-install
     @echo "✅ All opencode plugins installed"
 
 # Run OpenCode via podman with full b00t environment mounted
-# 🤓 Mounts: workspace, config, MCP binaries, git/ssh, API keys.
-#    b00t-mcp + codebase-memory-mcp binaries from host PATH.
+# 🤓 Mounts: workspace, config, git/ssh, API keys. Skills dir mounted
+#    if present (project-local .opencode/skills/ or global).
 opencode-run workspace=".":
     @echo "🚀 Launching OpenCode (podman)..."
     @mkdir -p {{workspace}}/.opencode/skills
@@ -1164,8 +1164,6 @@ opencode-run workspace=".":
         -v {{workspace}}:/workspace \
         -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
         -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
-        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
-        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
@@ -1173,42 +1171,15 @@ opencode-run workspace=".":
         -w /workspace \
         ghcr.io/anomalyco/opencode
 
-# ── MCP Service Mesh (podman pod) ──────────────────────────────────────────
-
-# Start b00t MCP servers as sidecar containers in a pod
-# 🤓 b00t-mcp (HTTP :3000) + codebase-memory-mcp (socat :9101).
-#    OpenCode connects via localhost URLs — no binary mounts needed.
-opencode-mesh-start:
-    @echo "🔧 Starting b00t MCP mesh..."
-    @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
-        (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
-    @podman ps --filter name=b00t-mcp-http --format '{{{{.Names}}}}' | grep -q . || \
-        podman run -d --pod b00t-mesh --name b00t-mcp-http \
-            -v $(realpath $(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
-            -v $(pwd):/workspace:ro -w /workspace \
-            docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1
-    @podman ps --filter name=cb-mcp-socat --format '{{{{.Names}}}}' | grep -q . || \
-        podman run -d --pod b00t-mesh --name cb-mcp-socat \
-            -v $(realpath $(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
-            docker.io/ubuntu:24.04 \
-            bash -c "apt-get update -qq && apt-get install -y -qq socat && socat TCP-LISTEN:9101,fork,reuseaddr EXEC:/usr/local/bin/codebase-memory-mcp" 2>&1
-    @echo "✅ MCP mesh running: b00t-mcp :3000, cb-mcp :9101"
-
-# Stop the MCP service mesh
-opencode-mesh-stop:
-    @echo "🛑 Stopping b00t MCP mesh..."
-    @podman pod rm -f b00t-mesh 2>/dev/null || true
-    @echo "✅ MCP mesh stopped"
-
-# Run OpenCode connected to MCP service mesh (no binary mounts)
-opencode-mesh workspace=".":
-    @echo "🌐 Launching OpenCode (mesh mode)..."
-    @mkdir -p {{workspace}}/.opencode/skills
+# Run OpenCode for app4dog with full game development environment
+opencode-app4dog:
+    @echo "🐶 Launching OpenCode for app4dog..."
+    @mkdir -p ~/promptexecution/app4dog/.opencode/skills
     podman run -it --rm \
         --security-opt label=disable \
         --network host \
-        -v {{workspace}}:/workspace \
-        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/promptexecution/app4dog:/workspace \
+        -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
         -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
         -v ${HOME}/.ssh:/root/.ssh:ro \
         -e OPENAI_API_KEY \
