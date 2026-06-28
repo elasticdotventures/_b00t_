@@ -13,6 +13,9 @@
 #   Test:      just ai-finetune::test
 #   Retrieve:  just ai-finetune::hf-adapter-pull
 
+# Paths are relative to repo root (justfile_directory())
+set working-directory := ".."
+
 # ── Dataset ────────────────────────────────────────────────────────────────────
 
 # Generate fine-tune dataset from b00t corpus
@@ -150,33 +153,32 @@ mlflow-remove:
 # Upload train.jsonl + training scripts to HF dataset repo (cloud job source of truth)
 # Run after: just ai-finetune::dataset
 hf-push:
-    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --repo-type dataset
-    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --repo-type dataset
-    hf upload elasticdotventures/b00t-training fine-tune/config-cloud-coder.yaml config-cloud-coder.yaml --repo-type dataset
+    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --type dataset --private
+    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --type dataset --private
+    hf upload elasticdotventures/b00t-training fine-tune/config-cloud-coder.yaml config-cloud-coder.yaml --type dataset --private
     @echo "✓ pushed to https://huggingface.co/datasets/elasticdotventures/b00t-training"
 
 # Submit Qwen3-Coder-30B fine-tune to HF Jobs A100 (detached — runs to completion)
 # 🤓 --detach required: job survives client disconnect; timeout 10h fits 3-epoch 30B run
 # Prints job ID — save for: just ai-finetune::hf-job-logs <id>
 cloud-coder:
-    hf jobs run \
-      --image docker.io/unsloth/unsloth:latest \
+    hf jobs run docker.io/unsloth/unsloth:latest \
       --flavor a100-large \
       --timeout 10h \
-      --env HF_HOME=/tmp/hf-cache \
-      --secret HF_TOKEN \
-      --volume hf://datasets/elasticdotventures/b00t-training:/data:ro \
-      --volume hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
+      -e HF_HOME=/tmp/hf-cache \
+      --secrets HF_TOKEN \
+      -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
+      -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      -- /bin/sh -c "pip install -q 'huggingface_hub[hf_xet]>=0.26' && hf download elasticdotventures/b00t-training --repo-type dataset --local-dir /scripts && python3 /scripts/train_unsloth.py --config /scripts/config-cloud-coder.yaml"
+      /bin/sh -c "pip install -q 'huggingface_hub[hf_xet]>=0.26' && hf download elasticdotventures/b00t-training --repo-type dataset --local-dir /scripts && python3 /scripts/train_unsloth.py --config /scripts/config-cloud-coder.yaml"
 
 # Poll status of a HF job
 hf-job-status job_id:
-    hf jobs status {{job_id}}
+    hf jobs inspect {{job_id}}
 
 # Stream logs from a running or completed HF job
 hf-job-logs job_id:
-    hf jobs logs {{job_id}}
+    hf jobs logs --follow {{job_id}}
 
 # Cancel a running job
 hf-job-cancel job_id:

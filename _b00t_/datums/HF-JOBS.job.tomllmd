@@ -50,17 +50,24 @@ description = "Pull completed adapter to sm3lly"
 command     = "just hf-adapter-pull"
 
 [[resource.flavors]]
-# 🤓 A100 is the only flavor with enough VRAM (80GB) for 30B MoE in BF16
+# 🤓 A100 best price/perf for 30B MoE BF16; H200 faster but 2× cost
 name        = "a100-large"
 vram_gb     = 80
-cost_est    = "$2-3/hr"
-use_for     = "30B+ MoE BF16 fine-tune"
+cost_hr     = "$2.50"
+use_for     = "30B+ MoE BF16 fine-tune (~5-8h = $12-20 total)"
+
+[[resource.flavors]]
+# 🤓 H200 available (141GB, $5/hr) — use for 70B+ or when speed matters more than cost
+name        = "h200"
+vram_gb     = 141
+cost_hr     = "$5.00"
+use_for     = "70B+ BF16 or fast 30B run (~3-4h = $15-20)"
 
 [[resource.flavors]]
 name        = "a10g-large"
-vram_gb     = 48
-cost_est    = "$1-2/hr"
-use_for     = "14B-30B with load_in_4bit"
+vram_gb     = 24
+cost_hr     = "$1.50"
+use_for     = "14B with load_in_4bit (24GB fits 14B 4-bit only)"
 
 # b00t:map v1
 # summary: HuggingFace Jobs cloud compute — frontier training tier, A100 80GB, no timeout risk
