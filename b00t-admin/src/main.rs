@@ -1115,6 +1115,16 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   .ws-dot.connected {{ background: #34d399; }}
   .ws-dot.disconnected {{ background: #ef4444; }}
 
+/* ── Autopilot indicator ── */
+#autopilot-badge {{
+  display: none; position: fixed; bottom: 12px; right: 12px; z-index: 9999;
+  padding: 6px 12px; border-radius: 20px; font-size: 10px; font-family: system-ui, sans-serif;
+  background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.4); color: #fbbf24;
+  align-items: center; gap: 6px; backdrop-filter: blur(4px);
+}}
+#autopilot-badge.show {{ display: flex; }}
+.autopilot-dot {{ width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: pulse 1.5s infinite; }}
+
 /* ── Progress bar ── */
 .progress-bar {{
   width: 100%; height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; margin-top: 8px;
@@ -1526,6 +1536,11 @@ function loadGraph(sel) {{
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
 </script>
+
+<div id="autopilot-badge">
+  <div class="autopilot-dot"></div>
+  <span>Autopilot</span>
+</div>
 
 </body></html>"#,
     )
