@@ -193,6 +193,7 @@ marketplace-check:
 
 
 
+
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
 bump-install:
