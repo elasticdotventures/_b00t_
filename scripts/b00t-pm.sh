@@ -10,7 +10,8 @@
 # PID files: /tmp/b00t-pm-<service>.pid
 # Log files: /tmp/b00t-pm-<service>.log
 
-set -euo pipefail
+# 🤓 No set -e: process manager must be resilient to transient failures
+set -uo pipefail
 
 CMD="${1:-help}"
 SERVICE="${2:-}"
@@ -40,34 +41,50 @@ _pid_file() { echo "${PID_DIR}/b00t-pm-${1}.pid"; }
 _log_file() { echo "${PID_DIR}/b00t-pm-${1}.log"; }
 
 _is_running() {
-    local pf="$(_pid_file "$1")"
-    [ -f "$pf" ] && kill -0 "$(cat "$pf" 2>/dev/null)" 2>/dev/null
+    local svc="$1"
+    local pf="$(_pid_file "$svc")"
+    # Check PID file first
+    [ -f "$pf" ] && kill -0 "$(cat "$pf" 2>/dev/null)" 2>/dev/null && return 0
+    # Check PM2
+    command -v pm2 &>/dev/null && pm2 id "b00t-${svc}" 2>/dev/null | grep -q '\[.\+\]' && return 0
+    return 1
 }
 
 _start() {
     local svc="$1" cmd="$2" port="$3"
     local pf="$(_pid_file "$svc")" lf="$(_log_file "$svc")"
     if _is_running "$svc"; then
-        echo "⚠️  $svc already running (PID $(cat "$pf"))"
+        local existing_pid
+        existing_pid="$(pm2 pid "b00t-${svc}" 2>/dev/null || cat "$pf" 2>/dev/null || echo '')"
+        echo "⚠️  $svc already running (PID ${existing_pid:-?})"
+        [ -n "$existing_pid" ] && echo "$existing_pid" > "$pf" 2>/dev/null
         return 0
     fi
     echo "▶ Starting $svc on ${port}..."
     cd "$B00T_HOME"
-    # Write a wrapper script that records its own PID, then exec the command
-    local wrapper="${PID_DIR}/b00t-pm-${svc}-wrapper.sh"
-    # Unquoted heredoc: expand ${pf}, ${B00T_HOME}, ${cmd} now; escape $$ for runtime
-    cat > "$wrapper" <<- WRAPEOF
+    # Use PM2 if available, fallback to batch
+    if command -v pm2 &>/dev/null; then
+        pm2 start $cmd --name "b00t-${svc}" --cwd "$B00T_HOME" 2>/dev/null || {
+            pm2 restart "b00t-${svc}" 2>/dev/null
+        }
+        sleep 1
+        local pm2_pid
+        pm2_pid=$(pm2 pid "b00t-${svc}" 2>/dev/null)
+        [ -n "$pm2_pid" ] && echo "$pm2_pid" > "$pf"
+    else
+        # Fallback: batch detach
+        local wrapper="${PID_DIR}/b00t-pm-${svc}-wrapper.sh"
+        cat > "$wrapper" <<- WRAPEOF
 #!/bin/bash
 echo \$\$ > ${pf}
 cd ${B00T_HOME}
 exec ${cmd}
 WRAPEOF
-    chmod +x "$wrapper"
-    # Submit via batch — fully detached from this shell
-    echo "$wrapper" | batch 2>/dev/null || {
-        # Fallback: direct background
-        nohup "$wrapper" > "$lf" 2>&1 & disown
-    }
+        chmod +x "$wrapper"
+        echo "$wrapper" | batch 2>/dev/null || {
+            nohup "$wrapper" > "$lf" 2>&1 & disown
+        }
+    fi
     sleep 2
     if _is_running "$svc"; then
         echo "  ✅ $svc started (PID $(cat "$pf"))"
@@ -83,33 +100,38 @@ WRAPEOF
 _stop() {
     local svc="$1"
     local pf="$(_pid_file "$svc")"
-    if [ ! -f "$pf" ]; then
-        echo "⚠️  $svc not managed (no PID file)"
-        # Try pkill anyway
-        pkill -f "b00t-admin" 2>/dev/null && echo "  ✅ $svc stopped" || echo "  ℹ️  $svc not running"
+    # Try PM2 first
+    if command -v pm2 &>/dev/null && pm2 id "b00t-${svc}" 2>/dev/null | grep -q '"'; then
+        pm2 stop "b00t-${svc}" 2>/dev/null
+        pm2 delete "b00t-${svc}" 2>/dev/null
+        echo "  ✅ $svc stopped (via PM2)"
+        rm -f "$pf"
         return 0
     fi
-    local pid
-    pid="$(cat "$pf" 2>/dev/null || true)"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        kill "$pid" 2>/dev/null && echo "  ✅ $svc stopped (PID $pid)" || echo "  ⚠️  Could not stop $svc"
+    # Fallback: kill by PID
+    if [ -f "$pf" ]; then
+        local pid
+        pid="$(cat "$pf" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null && echo "  ✅ $svc stopped (PID $pid)" || echo "  ⚠️  Could not stop $svc"
+        else
+            echo "  ℹ️  $svc not running"
+        fi
+        rm -f "$pf"
     else
-        echo "  ℹ️  $svc not running"
+        pkill -f "b00t-${svc}" 2>/dev/null && echo "  ✅ $svc stopped" || echo "  ℹ️  $svc not running"
     fi
-    rm -f "$pf"
 }
 
 _status() {
     local svc="$1" port="${2:-}"
-    local pf="$(_pid_file "$svc")"
     local lf="$(_log_file "$svc")"
     if _is_running "$svc"; then
         local pid
-        pid="$(cat "$pf")"
-        local elapsed=$(( $(date +%s) - $(stat -c %Y "$pf" 2>/dev/null || echo $(date +%s)) ))
-        local mem
-        mem="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')"
-        echo "  ✅ $svc — running (PID $pid, ${elapsed}s up, ${mem:-?}KB RSS)"
+        pid="$(pm2 pid "b00t-${svc}" 2>/dev/null || cat "$(_pid_file "$svc")" 2>/dev/null || echo '?')"
+        local mem=""
+        [ "$pid" != "?" ] && mem="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+        echo "  ✅ $svc — running (PID ${pid}, ${mem:+${mem}KB}${mem:-RSS}${mem:+, })"
         [ -n "$port" ] && echo "     http://localhost:${port}/"
     else
         echo "  ⬜ $svc — stopped"
@@ -138,8 +160,8 @@ list_services() {
         esac
         if _is_running "$svc"; then
             local pid
-            pid="$(cat "$(_pid_file "$svc")" 2>/dev/null)"
-            echo "  $svc       ✅ :$port    (PID $pid)"
+            pid="$(pm2 pid "b00t-${svc}" 2>/dev/null || cat "$(_pid_file "$svc")" 2>/dev/null || echo '?')"
+            echo "  $svc       ✅ :$port    (PID ${pid})"
         else
             echo "  $svc       ⬜ :$port"
         fi
