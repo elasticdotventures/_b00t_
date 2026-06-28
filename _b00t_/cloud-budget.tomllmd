@@ -1,0 +1,69 @@
+# b00t Cloud GPU Budget — FOCUS v1.3 aligned
+# Declares GPU spend limits + per-flavor rates for pre-flight cost gating.
+# Consumed by: just ai-finetune::cost-estimate, just ai-finetune::budget-gate
+# FOCUS custom columns use x_ prefix per spec.
+
+[b00t]
+name = "cloud-budget"
+type = "config"
+hint = "GPU cloud budget: monthly cap, per-flavor hourly rates, cost-estimate + forecast recipes"
+
+[budget]
+# Monthly GPU allowance (USD). Adjust before each sprint.
+monthly_cap_usd = 200.0
+# Warn at this fraction of monthly cap
+warn_threshold  = 0.75
+# Block new job submissions above this fraction
+gate_threshold  = 0.90
+
+[budget.hf_jobs]
+# HuggingFace Jobs pricing (USD/hour, approximate — check hf.co/pricing for current)
+# 🤓 hf jobs are billed per-second; rates here are hourly for human readability
+a10g_large   = 1.50   # 24GB VRAM — sm0l fine-tune, adapter eval
+a100_large   = 2.50   # 80GB VRAM — 30B MoE BF16 training
+a100_xlarge  = 4.50   # 2×A100 — not yet used
+h200         = 5.00   # 141GB — for full 70B or very long runs
+
+[budget.k8s]
+# sm3lly RTX3090 electricity amortized (internal cost signal, not real billing)
+rtx3090_per_hour = 0.05   # ~$40/mo fixed → ~$0.05/h opportunity cost
+
+# ── Per-run step-time estimates (seconds/iteration) ─────────────────────────
+[budget.step_time_estimates]
+# Empirically measured on b00t corpus (Qwen3-Coder-30B-A3B, seq=2048, batch=2 grad_accum=8)
+# 🤓 MoE routing scatter dominates — lora_r and target_modules have NO effect on step time
+a100_large_30b_moe = 130   # A100 80GB BF16, 30B MoE — baseline measured run7
+h200_30b_moe       = 50    # H200 estimate (not yet validated)
+a10g_large_0_5b    = 5     # sm0l Qwen2.5-0.5B (measured, local k8s)
+
+# ── FOCUS v1.3 schema alignment ──────────────────────────────────────────────
+# https://focus.finops.org/focus-specification/v1-3/
+[focus]
+spec_version       = "1.3"
+provider_name      = "HuggingFace"
+service_name       = "HF Jobs"
+charge_category    = "Usage"
+resource_type      = "GPU Compute"
+# Custom b00t columns (x_ prefix = FOCUS extension)
+custom_columns = [
+    "x_ExperimentId",    # job_id from hf jobs ps
+    "x_ModelVariant",    # e.g. qwen3-coder-30b
+    "x_StepTime",        # measured s/it
+    "x_DatasetRows",     # train.jsonl row count
+    "x_LoraR",           # LoRA rank used
+]
+
+# ── Forecast parameters ───────────────────────────────────────────────────────
+[forecast]
+# Expected training cadence (inform monthly projection)
+runs_per_month   = 4       # iterations/experiments per month
+hours_per_run    = 7.0     # expected wall-clock hours per A100 run (30B, 1 epoch)
+# Derived monthly projection = runs_per_month × hours_per_run × a100_large_rate
+# = 4 × 7 × 2.50 = $70/month (baseline) — well within $200 cap
+
+# b00t:map v1
+# summary: GPU cloud budget — monthly cap, per-flavor rates, FOCUS v1.3 alignment, forecast params
+# tags: budget, finops, focus, hf-jobs, gpu, cost, forecast, a100, cloud
+# tier: sm0l
+# cmds: just ai-finetune::cost-estimate, just ai-finetune::cost-report, just ai-finetune::budget-gate
+# complexity: 3

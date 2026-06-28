@@ -487,3 +487,146 @@ hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
 # Pull the coder-30b adapter to its canonical path
 hf-adapter-pull-coder:
     just ai-finetune::hf-adapter-pull elasticdotventures/b00t-qwen3-coder-30b fine-tune/output-cloud-coder/lora-adapter
+
+# ── Budget + Cost Forecasting ────────────────────────────────────────────────
+# Config: _b00t_/cloud-budget.tomllmd
+# FOCUS v1.3 custom columns: x_ExperimentId, x_ModelVariant, x_StepTime
+
+# Pre-flight cost estimate — prints expected cost + hours before submit
+# Reads dataset row count, config params, and flavor rate from cloud-budget.tomllmd
+# sm0l output contract: "ESTIMATE: $N.NN (~Nh) — budget OK|WARN|GATE"
+cost-estimate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
+    #!/usr/bin/env -S uv run --with pyyaml python3
+    import json, sys, math
+    try:
+        import yaml
+        with open("{{config}}") as f:
+            cfg = yaml.safe_load(f)
+        import tomllib
+        with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
+            budget = tomllib.load(f)
+    except Exception as e:
+        print(f"FAIL: config load — {e}"); sys.exit(1)
+
+    # dataset rows
+    dataset_path = cfg.get("dataset_path", "fine-tune/train.jsonl").replace("/data/","fine-tune/")
+    if dataset_path.startswith("/"):
+        dataset_path = "fine-tune/train.jsonl"
+    try:
+        rows = sum(1 for _ in open(dataset_path))
+    except FileNotFoundError:
+        rows = 1200   # fallback estimate
+        print(f"  ⚠️  dataset not found locally; using estimate of {rows} rows")
+
+    batch      = int(cfg.get("batch_size", 2))
+    grad_accum = int(cfg.get("grad_accum", 8))
+    epochs     = int(cfg.get("num_epochs", 1))
+    packing    = cfg.get("packing", False)
+
+    steps_per_epoch = math.ceil(rows / (batch * grad_accum * (2 if packing else 1)))
+    total_steps     = steps_per_epoch * epochs
+
+    # step time from budget datum
+    flavor_key = "{{flavor}}".replace("-","_")
+    step_time_map = budget.get("budget",{}).get("step_time_estimates",{})
+    step_time_s   = step_time_map.get(f"{flavor_key}_30b_moe", 130)
+
+    wall_hours = (total_steps * step_time_s) / 3600
+    rates      = budget.get("budget",{}).get("hf_jobs",{})
+    rate       = rates.get(flavor_key, 2.50)
+    cost_usd   = wall_hours * rate
+
+    # budget gate check
+    cap        = budget.get("budget",{}).get("monthly_cap_usd", 200.0)
+    warn_frac  = budget.get("budget",{}).get("warn_threshold", 0.75)
+    gate_frac  = budget.get("budget",{}).get("gate_threshold", 0.90)
+
+    # actual spend this month from hf jobs history (best effort)
+    import subprocess, re as regex
+    raw = subprocess.run("hf jobs ps --all 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+    spent = 0.0
+    for line in raw.splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 6 and parts[4] not in ("CANCELED","ERROR"):
+            dur = parts[5].strip()
+            m = regex.match(r"(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?", dur)
+            if m:
+                h = int(m.group(1) or 0)
+                mn = int(m.group(2) or 0)
+                s = int(m.group(3) or 0)
+                spent += (h + mn/60 + s/3600) * rate
+
+    remaining = cap - spent - cost_usd
+    frac_after = (spent + cost_usd) / cap
+
+    if frac_after >= gate_frac:
+        gate = "GATE ❌"
+    elif frac_after >= warn_frac:
+        gate = "WARN ⚠️"
+    else:
+        gate = "OK ✅"
+
+    print(f"ESTIMATE: ${cost_usd:.2f} (~{wall_hours:.1f}h) on {flavor_key} — budget {gate}")
+    print(f"  steps={total_steps} ({steps_per_epoch}/epoch × {epochs} epoch)  step_time={step_time_s}s  rate=${rate}/h")
+    print(f"  monthly: spent=${spent:.2f}  this_run=${cost_usd:.2f}  remaining=${remaining:.2f}  cap=${cap:.0f}")
+
+# Actual spend report from HF Jobs history (all completed/running jobs this session)
+# Parses hf jobs ps --all durations × flavor rate → FOCUS x_ExperimentId records
+# sm0l output contract: table of job costs + monthly total
+cost-report:
+    #!/usr/bin/env python3
+    import subprocess, re, sys
+    try:
+        import tomllib
+        with open("_b00t_/cloud-budget.tomllmd", "rb") as f:
+            budget = tomllib.load(f)
+    except Exception as e:
+        print(f"FAIL: budget config — {e}"); sys.exit(1)
+
+    rates = budget.get("budget",{}).get("hf_jobs",{})
+    cap   = budget.get("budget",{}).get("monthly_cap_usd", 200.0)
+
+    raw = subprocess.run("hf jobs ps --all 2>/dev/null", shell=True, capture_output=True, text=True).stdout
+    lines = raw.strip().splitlines()
+    if len(lines) <= 1:
+        print("PASS: no job history"); sys.exit(0)
+
+    total = 0.0
+    print(f"{'JOB_ID':28} {'STATUS':12} {'DURATION':10} {'FLAVOR':14} {'COST':>8}")
+    print("─" * 80)
+    for line in lines[1:]:
+        parts = line.split("\t")
+        if len(parts) < 6:
+            continue
+        job_id, _, _, _, status, dur = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+        dur = dur.strip()
+        m = re.match(r"(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?", dur)
+        h = int(m.group(1) or 0) if m else 0
+        mn = int(m.group(2) or 0) if m else 0
+        s = int(m.group(3) or 0) if m else 0
+        hours = h + mn/60 + s/3600
+        # infer flavor from duration heuristic (a100 is default)
+        rate  = rates.get("a100_large", 2.50)
+        cost  = hours * rate if status not in ("CANCELED","ERROR") else 0.0
+        total += cost
+        cost_s = f"${cost:.3f}" if cost > 0 else "--"
+        print(f"{job_id[:26]:28} {status:12} {dur:10} {'a100-large':14} {cost_s:>8}")
+
+    pct = (total / cap) * 100
+    print("─" * 80)
+    print(f"  Total billed: ${total:.2f}  /  cap ${cap:.0f}  ({pct:.1f}%)")
+    forecast = budget.get("forecast",{})
+    monthly_proj = forecast.get("runs_per_month",4) * forecast.get("hours_per_run",7) * rates.get("a100_large",2.50)
+    print(f"  Monthly forecast ({forecast.get('runs_per_month',4)} runs × {forecast.get('hours_per_run',7)}h): ${monthly_proj:.0f}")
+
+# Budget gate: exit 1 with GATE if estimated cost would exceed gate_threshold of monthly cap
+# Use as pre-condition before cloud-train: just ai-finetune::budget-gate a100-large config.yaml && just cloud-train
+budget-gate flavor="a100-large" config="fine-tune/config-cloud-coder.yaml":
+    #!/bin/bash
+    set -euo pipefail
+    result=$(just ai-finetune::cost-estimate {{flavor}} {{config}})
+    echo "$result"
+    if echo "$result" | grep -q "GATE"; then
+        echo "BLOCKED: monthly budget gate exceeded — adjust budget or use cheaper flavor"
+        exit 1
+    fi
