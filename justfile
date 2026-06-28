@@ -2726,3 +2726,53 @@ ch0nky-probe endpoint="":
 git-prune-corrupt delete="false":
     uv run scripts/git-prune-corrupt.py {{delete}}
 
+
+# ── HF Cloud — frontier training tier ─────────────────────────────────────────
+# Uses HuggingFace Jobs (A100 80GB) for models that won't fit sm3lly or need
+# uninterrupted multi-hour runs. Adapters saved to HF Hub + bucket volume.
+# See: _b00t_/datums/HF-JOBS.job.tomllmd
+#
+# Workflow: hf-dataset-push → hf-job-submit-coder → hf-job-logs <id> → hf-adapter-pull
+
+# Upload train.jsonl + training scripts to HF dataset repo (cloud job source of truth)
+# Run after: just finetune-dataset
+hf-dataset-push:
+    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --repo-type dataset
+    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --repo-type dataset
+    hf upload elasticdotventures/b00t-training fine-tune/config-cloud-coder.yaml config-cloud-coder.yaml --repo-type dataset
+    @echo "✓ pushed to https://huggingface.co/datasets/elasticdotventures/b00t-training"
+
+# Submit Qwen3-Coder-30B fine-tune to HF Jobs A100 (detached — runs to completion)
+# 🤓 --detach required: job survives client disconnect; timeout 10h fits 3-epoch 30B run
+# Returns job ID — save it for status/log commands below
+hf-job-submit-coder:
+    hf jobs run \
+      --image docker.io/unsloth/unsloth:latest \
+      --flavor a100-large \
+      --timeout 10h \
+      --env HF_HOME=/tmp/hf-cache \
+      --secret HF_TOKEN \
+      --volume hf://datasets/elasticdotventures/b00t-training:/data:ro \
+      --volume hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
+      --detach \
+      -- /bin/sh -c "pip install -q 'huggingface_hub[hf_xet]>=0.26' && hf download elasticdotventures/b00t-training --repo-type dataset --local-dir /scripts && python3 /scripts/train_unsloth.py --config /scripts/config-cloud-coder.yaml"
+
+# Poll status of a HF job
+hf-job-status job_id:
+    hf jobs status {{job_id}}
+
+# Stream logs from a running or completed HF job
+hf-job-logs job_id:
+    hf jobs logs {{job_id}}
+
+# Cancel a running job
+hf-job-cancel job_id:
+    hf jobs cancel {{job_id}}
+
+# Pull completed adapter from HF Hub to local sm3lly
+hf-adapter-pull:
+    hf download elasticdotventures/b00t-qwen3-coder-30b \
+      --repo-type model \
+      --local-dir fine-tune/output-cloud-coder/lora-adapter
+    @echo "✓ adapter at fine-tune/output-cloud-coder/lora-adapter"
+
