@@ -1207,6 +1207,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
+      <div class="progress-bar" id="progress-bar" style="display:none;"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="status-log" id="status-log"></div>
     </div>
   </div>
 </div>
@@ -1323,8 +1325,69 @@ function showVizTab(tab) {{
   document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
 }}
 
-// ════════ Progress + Status Log ════════
-var progressStart = 0;
+
+function loadKnowledgeGraph() {{
+  document.getElementById('viz-select').value = 'kg';
+  var status = document.getElementById('viz-status');
+  var title = document.getElementById('viz-title');
+  title.textContent = 'Knowledge Graph';
+  status.textContent = 'Loading...';
+  Promise.all([
+    fetch('/api/admin/viz/entangle').then(function(r){{return r.json();}}),
+    fetch('/api/admin/viz/task').then(function(r){{return r.json();}}),
+  ]).then(function(results) {{
+    var elements = [];
+    var seen = {{}};
+    function addNode(id, label) {{
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      var color = id.startsWith('datum:') ? '#6366f1' : '#f59e0b';
+      elements.push({{ data: {{ id: id, label: (label||id).slice(0,25), color: color }} }});
+    }}
+    function addEdge(src, dst, label) {{
+      if (!src || !dst) return;
+      addNode(src, src.split(':').pop());
+      addNode(dst, dst.split(':').pop());
+      elements.push({{ data: {{ source: src, target: dst, label: label||'' }} }});
+    }}
+    function parseLines(mmd, prefix) {{
+      if (!mmd) return;
+      mmd.split('\n').forEach(function(line) {{
+        line = line.trim();
+        if (!line || line.startsWith('graph ') || line.startsWith('flowchart ')) return;
+        var nm = line.match(/^(\S+)\["([^"]*)"\]/);
+        if (nm) {{ addNode(prefix + ':' + nm[1], nm[2].replace(/\\n/g, ' ')); return; }}
+        var em = line.match(/^(\S+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\S+)/);
+        if (em) {{ addEdge(prefix + ':' + em[1], prefix + ':' + em[3], em[2]||''); }}
+      }});
+    }}
+    parseLines(results[0].mermaid, 'datum');
+    parseLines(results[1].mermaid, 'task');
+    status.textContent = elements.length + ' elements';
+    if (elements.length === 0) {{ status.textContent = 'No elements found'; return; }}
+    setTimeout(function() {{
+      var container = document.getElementById('cytoscape-target');
+      if (!container) {{ status.textContent = 'Container not found'; return; }}
+      if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
+      try {{
+        cytoscape({{
+          container: container,
+          elements: elements,
+          style: [
+            {{ selector: 'node', style: {{ label: 'data(label)', 'background-color': 'data(color)', color: '#e2e8f0', 'font-size': '10px', 'text-valign': 'bottom', 'text-halign': 'center', width: 30, height: 30 }} }},
+            {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
+            {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
+          ],
+          layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
+          wheelSensitivity: 0.3,
+        }});
+        status.textContent = elements.length + ' elements — Cytoscape ready';
+      }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
+    }}, 300);
+  }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+}}
+
+
 function startProgress(total) {{
   progressStart = Date.now();
   var bar = document.getElementById('progress-bar');
