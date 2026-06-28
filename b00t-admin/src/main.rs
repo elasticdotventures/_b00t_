@@ -1,9 +1,9 @@
 //! b00t-admin — Internal admin dashboard server.
 //!
 //! Serves:
-//! - `/` → Admin dashboard SPA (from b00t-ui/dist/spa/)
+//! - `/` → Admin dashboard HTML
 //! - `/v1/*` → Reverse proxy to LLM backend
-//! - `/api/admin/*` → JSON API for pipeline state/type introspection/viz
+//! - `/api/admin/*` → JSON API for pipeline state/type introspection
 //! - `/ws` → WebSocket for live twin simulation updates
 
 use axum::{
@@ -17,8 +17,6 @@ use axum::{
     routing::get,
     Router,
 };
-use axum::http::header;
-use tower_http::services::ServeDir;
 use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
@@ -279,28 +277,13 @@ fn rust_to_json_type(rust_type: &str) -> &str {
 // Route handlers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// GET `/` or `/admin` — Admin dashboard SPA
-async fn dashboard_handler() -> impl IntoResponse {
-    // Serve the SPA index.html — the frontend handles routing client-side
-    let spa_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap_or(std::path::Path::new("."))
-        .join("b00t-ui/dist/spa/index.html");
-
-    match tokio::fs::read_to_string(&spa_path).await {
-        Ok(html) => Html(html).into_response(),
-        Err(_) => {
-            // Fallback: try relative from cwd
-            let cwd_path = std::path::Path::new("b00t-ui/dist/spa/index.html");
-            match std::fs::read_to_string(cwd_path) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("SPA not built. Run: cd b00t-ui && quasar build\nError: {e}"),
-                ).into_response(),
-            }
-        }
-    }
+/// GET `/` or `/admin` — Admin dashboard HTML
+async fn dashboard_handler(State(state): State<Arc<Mutex<AppState>>>) -> Html<String> {
+    let app = state.lock().await;
+    let pipeline_json = serde_json::to_string(&app.pipeline).unwrap_or_default();
+    let types_json = serde_json::json!(app.type_schemas.keys().collect::<Vec<_>>()).to_string();
+    drop(app);
+    Html(dashboard_html(&pipeline_json, &types_json))
 }
 
 /// GET `/health` or `/healthz` — Health check (for container probes)
@@ -685,8 +668,641 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Server setup
+fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>b00t Admin Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+  body {{
+    background: #020617;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+  }}
+
+  /* ── Sidebar ── */
+  .sidebar {{
+    width: 200px;
+    min-width: 200px;
+    background: #0f172a;
+    border-right: 1px solid #1e293b;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+  }}
+
+  .sidebar-header {{
+    padding: 16px;
+    border-bottom: 1px solid #1e293b;
+  }}
+
+  .sidebar-header h1 {{
+    font-size: 16px;
+    color: #38bdf8;
+    margin: 0;
+  }}
+
+  .sidebar-header .header-info {{
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+  }}
+
+  .accordion-section {{
+    border-bottom: 1px solid #1e293b;
+  }}
+
+  .accordion-header {{
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    transition: background 0.15s;
+  }}
+
+  .accordion-header:hover {{ background: #1e293b; }}
+  .accordion-header.active {{ color: #38bdf8; background: rgba(56,189,248,0.08); }}
+
+  .accordion-arrow {{
+    margin-left: auto;
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: #475569;
+  }}
+
+  .accordion-header.active .accordion-arrow {{ transform: rotate(90deg); }}
+
+  .accordion-body {{
+    display: none;
+    padding: 12px 16px;
+  }}
+
+  .accordion-body.open {{ display: block; }}
+
+  /* ── Main content ── */
+  .main-content {{
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    height: 100vh;
+  }}
+
+  .main-content .panel {{
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }}
+
+  @keyframes pulse {{
+    0%%, 100%% {{ opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }}
+    50%% {{ opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }}
+  }}
+
+  .header-info {{
+    margin-left: auto;
+    font-size: 11px;
+    color: #64748b;
+  }}
+
+  /* Four panels grid */
+  .panel {{
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    overflow: auto;
+  }}
+
+  .panel h2 {{
+    font-size: 14px;
+    color: #38bdf8;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }}
+
+  .panel h2 .icon {{
+    font-size: 18px;
+  }}
+
+  /* Pipeline Status panel */
+  .pipeline-stats {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }}
+
+  .stat {{
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }}
+
+  .stat-value {{
+    font-size: 24px;
+    font-weight: 700;
+    color: #38bdf8;
+  }}
+
+  .stat-label {{
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+  }}
+
+  .pipeline-source {{
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(34,211,238,0.05);
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+  }}
+
+  .pipeline-source strong {{
+    color: #22d3ee;
+  }}
+
+  /* Type Explorer panel */
+  .type-list {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+  }}
+
+  .type-item {{
+    padding: 8px 12px;
+    background: rgba(167,139,250,0.05);
+    border: 1px solid rgba(167,139,250,0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    color: #c4b5fd;
+    transition: all 0.2s;
+  }}
+
+  .type-item:hover {{
+    background: rgba(167,139,250,0.12);
+    border-color: rgba(167,139,250,0.3);
+  }}
+
+  .type-item.active {{
+    background: rgba(167,139,250,0.15);
+    border-color: #a78bfa;
+  }}
+
+  .type-tag {{
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    margin-left: 6px;
+    background: rgba(167,139,250,0.2);
+    color: #a78bfa;
+  }}
+
+  .type-detail {{
+    margin-top: 12px;
+    padding: 12px;
+    background: #0a0f1e;
+    border-radius: 8px;
+    font-size: 10px;
+    color: #94a3b8;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: 'JetBrains Mono', monospace;
+  }}
+
+  .type-detail .field {{
+    color: #e2e8f0;
+  }}
+
+  .type-detail .field-name {{
+    color: #38bdf8;
+  }}
+
+  .type-detail .field-type {{
+    color: #a78bfa;
+  }}
+
+  .code-tabs {{
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }}
+
+  .code-tab {{
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    background: #1e293b;
+    color: #64748b;
+    border: 1px solid #334155;
+  }}
+
+  .code-tab.active {{
+    background: #1e3a5f;
+    color: #38bdf8;
+    border-color: #38bdf8;
+  }}
+
+  /* Process Flow panel */
+  .process-flow {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }}
+
+  .flow-stages {{
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }}
+
+  .flow-stage {{
+    background: #0f172a;
+    border: 1.5px solid;
+    border-radius: 10px;
+    padding: 12px 16px;
+    width: 130px;
+    text-align: center;
+    font-size: 10px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }}
+
+  .flow-stage:hover {{
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  }}
+
+  .flow-stage.fetch  {{ border-color: #22d3ee; }}
+  .flow-stage.chunk  {{ border-color: #34d399; }}
+  .flow-stage.evidence {{ border-color: #a78bfa; }}
+  .flow-stage.require {{ border-color: #fbbf24; }}
+
+  .flow-stage .stage-icon {{
+    font-size: 22px;
+    margin-bottom: 6px;
+  }}
+
+  .flow-stage .stage-title {{
+    font-size: 11px;
+    font-weight: 700;
+  }}
+
+  .flow-stage.fetch .stage-title  {{ color: #22d3ee; }}
+  .flow-stage.chunk .stage-title  {{ color: #34d399; }}
+  .flow-stage.evidence .stage-title {{ color: #a78bfa; }}
+  .flow-stage.require .stage-title {{ color: #fbbf24; }}
+
+  .flow-arrow {{
+    display: flex;
+    align-items: center;
+    margin: 0 -4px;
+  }}
+
+  .flow-arrow svg {{
+    width: 40px;
+    height: 20px;
+  }}
+
+  .flow-arrow .line {{
+    stroke: #334155;
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    animation: dash 1s linear infinite;
+  }}
+
+  .flow-arrow .head {{
+    fill: #334155;
+  }}
+
+  @keyframes dash {{
+    to {{ stroke-dashoffset: -14; }}
+  }}
+
+  .flow-legend {{
+    margin-top: 16px;
+    display: flex;
+    gap: 16px;
+    font-size: 10px;
+    color: #64748b;
+  }}
+
+  .flow-legend .dot {{
+    width: 6px; height: 6px;
+    border-radius: 50%%;
+    display: inline-block;
+    margin-right: 4px;
+  }}
+
+  .dot-cyan  {{ background: #22d3ee; }}
+  .dot-green {{ background: #34d399; }}
+  .dot-purp  {{ background: #a78bfa; }}
+  .dot-amber {{ background: #fbbf24; }}
+
+  /* Twin Simulation panel */
+  .sim-controls {{
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }}
+
+  .sim-btn {{
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }}
+
+  .sim-btn:hover {{
+    background: #334155;
+    border-color: #38bdf8;
+  }}
+
+  .sim-btn.tick {{ border-color: #34d399; color: #34d399; }}
+  .sim-btn.rollback {{ border-color: #fbbf24; color: #fbbf24; }}
+
+  .sim-state {{
+    padding: 12px;
+    background: #0a0f1e;
+    border-radius: 8px;
+    font-size: 10px;
+    color: #94a3b8;
+    max-height: 240px;
+    overflow-y: auto;
+  }}
+
+  .sim-state .sim-row {{
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #1e293b;
+  }}
+
+  .sim-state .sim-key {{ color: #64748b; }}
+  .sim-state .sim-val {{ color: #e2e8f0; }}
+
+  .ws-status {{
+    margin-top: 12px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }}
+
+  .ws-dot {{
+    width: 8px; height: 8px;
+    border-radius: 50%%;
+  }}
+
+  .ws-dot.connected {{ background: #34d399; }}
+  .ws-dot.disconnected {{ background: #ef4444; }}
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {{ width: 6px; }}
+  ::-webkit-scrollbar-track {{ background: #0f172a; }}
+  ::-webkit-scrollbar-thumb {{ background: #334155; border-radius: 3px; }}
+</style>
+</head>
+<body>
+<!-- ── Sidebar ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div class="sidebar-header" id="status-dot" style="width:8px;height:8px;border-radius:50%%;background:#34d399;animation:pulse 2s infinite;display:inline-block;"></div>
+      <h1 style="font-size:16px;color:#38bdf8;margin:0;">b00t</h1>
+    </div>
+    <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;">Pipeline v{{}} · Loading...</div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header active" onclick="toggleSection('pipeline')">📊 Pipeline <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body open" id="section-pipeline" style="padding:8px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-evidence">0</div><div style="font-size:8px;color:#64748b;">Evidence</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-reqs">0</div><div style="font-size:8px;color:#64748b;">Requirements</div></div>
+        <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-fol">0</div><div style="font-size:8px;color:#64748b;">FOL</div></div>
+      </div>
+      <div id="pipeline-source" style="margin-top:6px;font-size:9px;color:#64748b;"><strong style="color:#22d3ee;">No pipeline</strong></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header" onclick="toggleSection('types')">🔬 Types <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-types" style="padding:8px 16px;">
+      <div class="type-list" id="type-list" style="max-height:150px;overflow-y:auto;"></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header" onclick="toggleSection('sim')">👥 Simulation <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
+      <button class="sim-btn" onclick="simTick()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
+      <button class="sim-btn rollback" onclick="simRollback()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
+      <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
+      <div style="font-size:10px;margin-top:4px;"><span id="ws-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%%;background:#ef4444;"></span> <span id="ws-text">WS: disconnected</span></div>
+    </div>
+  </div>
+  <div class="accordion-section">
+    <div class="accordion-header active" onclick="toggleSection('viz')">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
+      <select id="viz-select" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
+        <option value="">— Choose —</option>
+        <option value="entangle">🔗 Entanglement</option>
+        <option value="task">📋 Tasks</option>
+        <option value="pipeline">📊 Pipeline</option>
+        <option value="ato">🏛️ ATO</option>
+        <option value="kg">🕸️ Knowledge Graph</option>
+      </select>
+      <div id="viz-mode" style="display:flex;gap:2px;margin-bottom:4px;">
+        <div class="code-tab active" data-viz="mermaid">Mermaid</div>
+        <div class="code-tab" data-viz="cytoscape">Cytoscape</div>
+      </div>
+      <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main Content ── -->
+<div class="main-content">
+
+<div class="panel" id="pipeline-panel">
+  <h2>📊 Pipeline Status</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="stat"><div class="stat-value" id="stat-chunks-2">0</div><div class="stat-label">Chunks</div></div>
+    <div class="stat"><div class="stat-value" id="stat-evidence-2">0</div><div class="stat-label">Evidence</div></div>
+    <div class="stat"><div class="stat-value" id="stat-reqs-2">0</div><div class="stat-label">Requirements</div></div>
+    <div class="stat"><div class="stat-value" id="stat-fol-2">0</div><div class="stat-label">FOL Formulas</div></div>
+  </div>
+</div>
+
+<div class="panel" id="type-panel">
+  <h2>🔬 Type Explorer</h2>
+  <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
+</div>
+
+<div class="panel" id="sim-panel">
+  <h2>👥 Twin Simulation</h2>
+  <div id="sim-state">
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">Name: <span style="color:#e2e8f0;">doc-pipeline</span></div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">Tick: <span id="sim-tick-2" style="color:#e2e8f0;">0</span></div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">History: <span id="sim-history-2" style="color:#e2e8f0;">0</span></div>
+    <div style="font-size:12px;color:#94a3b8;">Subscribers: <span id="sim-subs" style="color:#e2e8f0;">0</span></div>
+  </div>
+</div>
+
+<div class="panel" id="viz-panel">
+  <h2>🎨 <span id="viz-title">Visualization</span></h2>
+  <div id="viz-mermaid-container" style="background:#0f172a;border-radius:6px;padding:12px;min-height:200px;overflow:auto;border:1px solid #1e293b;">
+    <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization</div>
+  </div>
+  <div id="viz-cytoscape-container" style="background:#0f172a;border-radius:6px;min-height:400px;display:none;border:1px solid #1e293b;">
+    <div id="cytoscape-target" style="width:100%%;height:400px;"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ════════ Accordion ════════
+function toggleSection(name) {{
+  var body = document.getElementById('section-' + name);
+  if (!body) return;
+  var isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  body.previousElementSibling.classList.toggle('active', !isOpen);
+}}
+
+// ════════ Mermaid Init ════════
+mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
+
+// ════════ Pipeline Update ════════
+var PIPELINE = {{}};
+var TYPES = [];
+
+// Load initial data from API
+fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
+fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
+setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+
+function updatePipeline() {{
+  var p = PIPELINE;
+  ['chunks','evidence','reqs','fol'].forEach(function(k) {{
+    var v = p[k + '_count'] || 0;
+    var el = document.getElementById('stat-' + k);
+    var el2 = document.getElementById('stat-' + k + '-2');
+    if (el) el.textContent = v;
+    if (el2) el2.textContent = v;
+  }});
+  var src = document.getElementById('pipeline-source');
+  if (src) {{
+    src.innerHTML = p.has_pipeline
+      ? '<strong style="color:#22d3ee;">' + (p.source_id || 'N/A') + '</strong> — ' + (p.source_title || 'Untitled')
+      : '<strong style="color:#22d3ee;">No pipeline</strong>';
+  }}
+  var info = document.getElementById('header-info');
+  if (info) info.textContent = 'Pipeline v' + (p.pipeline_version || '—') + ' · ' + (p.executed_at ? new Date(p.executed_at).toLocaleString() : 'Not executed');
+}}
+
+// ════════ Viz Panel ════════
+var currentVizTab = 'mermaid';
+var currentVizData = null;
+
+function onVizSelect() {{
+  var sel = document.getElementById('viz-select').value;
+  if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+  // Pick render engine per type
+  if (sel === 'kg') {{
+    // Knowledge Graph → Cytoscape
+    showVizTab('cytoscape');
+    loadKnowledgeGraph();
+  }} else {{
+    // Everything else → Mermaid
+    showVizTab('mermaid');
+    loadGraph(sel);
+  }}
+}}
+
+function showVizTab(tab) {{
+  document.querySelectorAll('#viz-mode .code-tab').forEach(function(el) {{
+    el.classList.toggle('active', el.getAttribute('data-viz') === tab);
+  }});
+  document.getElementById('viz-mermaid-container').style.display = tab === 'mermaid' ? 'block' : 'none';
+  document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
+}}
+
+function loadGraph(sel) {{
+  var status = document.getElementById('viz-status');
+  var title = document.getElementById('viz-title');
+  status.textContent = 'Loading...';
+  if (sel === 'pipeline') {{
+    fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
+      currentVizData = {{ mermaid: d.mermaid }};
+      title.textContent = 'Pipeline Flow';
+      status.textContent = 'Pipeline (' + (d.mermaid||'').length + ' chars)';
+      renderMermaid();
+    }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+    return;
+  }}
+  if (sel === 'ato') {{
+    fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
+      var m = d.pipelines && d.pipelines['ato-legislation'] ? d.pipelines['ato-legislation'].mermaid : '';
+      currentVizData = {{ mermaid: m }};
+      title.textContent = 'ATO Pipeline';
+      status.textContent = m ? 'ATO (' + m.length + ' chars)' : 'No ATO data';
+      renderMermaid();
+    }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+    return;
+  }}
+  fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
+    currentVizData = d;
+    title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
+    status.textContent = (d.mermaid||'').length + ' chars';
+    renderMermaid();
+  }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+}}
+</script>
+
+</body></html>"#,
+    )
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Server setup
@@ -699,15 +1315,9 @@ async fn main() {
     let state = Arc::new(Mutex::new(AppState::new(config.clone())));
 
     let app = Router::new()
-        // Dashboard SPA
+        // Dashboard
         .route("/", get(dashboard_handler))
         .route("/admin", get(dashboard_handler))
-        // SPA static assets (JS, CSS, fonts)
-        .nest_service("/assets", ServeDir::new(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent().unwrap_or(std::path::Path::new("."))
-                .join("b00t-ui/dist/spa/assets")
-        ))
         // Health check
         .route("/health", get(health_handler))
         .route("/healthz", get(health_handler))
