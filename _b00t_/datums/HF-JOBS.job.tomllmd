@@ -1,0 +1,70 @@
+# HuggingFace Jobs — Cloud Compute Tier for b00t
+#
+# HF Jobs is the frontier compute tier: submit long-running GPU workloads to
+# managed A100/A10g hardware. Jobs persist until completion regardless of client
+# disconnect — no timeout risk for multi-hour fine-tunes unlike local k8s.
+#
+# Key primitives:
+#   hf://buckets/<org>/<bucket>:/mount:rw  — S3-compatible artifact store; survives job death
+#   hf://datasets/<org>/<repo>:/mount:ro   — read-only dataset mount
+#   --timeout 10h                          — max 24h for Pro orgs
+#   --detach                               — returns immediately with job ID (required for long runs)
+#
+# b00t uses HF Jobs for frontier-tier training (30B+ models) where sm3lly GPU
+# pressure or VRAM limits block local k8s training.
+
+[b00t.schema]
+version   = "1"
+type      = "job"
+type_tags = ["cloud", "training", "gpu", "huggingface"]
+
+[resource]
+name        = "HuggingFace Jobs"
+provider    = "huggingface.co"
+cli_package = "huggingface_hub[hf_xet,cli]>=0.26"
+docs_url    = "https://huggingface.co/docs/huggingface_hub/guides/jobs"
+
+[resource.scope]
+namespace   = "elasticdotventures"
+bucket      = "b00t-adapters"
+dataset     = "b00t-training"
+
+[[resource.usages]]
+description = "Submit Qwen3-Coder-30B fine-tune (runs to completion, detached)"
+command     = "just hf-job-submit-coder"
+
+[[resource.usages]]
+description = "Poll job status"
+command     = "just hf-job-status <job-id>"
+
+[[resource.usages]]
+description = "Stream job logs"
+command     = "just hf-job-logs <job-id>"
+
+[[resource.usages]]
+description = "Cancel a running job"
+command     = "just hf-job-cancel <job-id>"
+
+[[resource.usages]]
+description = "Pull completed adapter to sm3lly"
+command     = "just hf-adapter-pull"
+
+[[resource.flavors]]
+# 🤓 A100 is the only flavor with enough VRAM (80GB) for 30B MoE in BF16
+name        = "a100-large"
+vram_gb     = 80
+cost_est    = "$2-3/hr"
+use_for     = "30B+ MoE BF16 fine-tune"
+
+[[resource.flavors]]
+name        = "a10g-large"
+vram_gb     = 48
+cost_est    = "$1-2/hr"
+use_for     = "14B-30B with load_in_4bit"
+
+# b00t:map v1
+# summary: HuggingFace Jobs cloud compute — frontier training tier, A100 80GB, no timeout risk
+# tags: cloud, training, huggingface, gpu, a100, fine-tune, frontier
+# tier: frontier
+# cmds: just hf-job-submit-coder, just hf-job-status <id>, just hf-job-logs <id>
+# complexity: 4

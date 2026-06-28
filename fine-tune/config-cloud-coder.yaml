@@ -1,0 +1,43 @@
+# b00t cloud fine-tune: Qwen3-Coder-30B-A3B-Instruct on HF Jobs A100
+# Submit with: just hf-job-submit-coder
+# Monitor with: just hf-job-logs <job-id>
+# Adapter lands at: hf://buckets/elasticdotventures/b00t-adapters/qwen3-coder-30b/
+#                   and pushed to: elasticdotventures/b00t-qwen3-coder-30b
+
+base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+adapter_name: "b00t-qwen3-coder-30b"
+dataset_path: "/data/train.jsonl"
+output_dir: "/adapters/qwen3-coder-30b"
+hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
+push_to_hub: true
+
+# A100 80GB: load BF16 directly, no quantization compromise
+load_in_4bit: false
+
+# MoE 30B-A3B: r=16 sufficient (3B active params per forward pass)
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 3
+batch_size: 2
+grad_accum: 8
+learning_rate: 1e-4
+max_seq_length: 2048
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+save_steps: 100
+
+use_gradient_checkpointing: true
+report_to: "none"
+logging_steps: 10
