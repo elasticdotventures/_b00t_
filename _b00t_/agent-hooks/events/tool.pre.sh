@@ -23,8 +23,8 @@ fi
 # ─── WARN/REPLACE patterns (exit 1) ──────────────────────────────────────────
 warnings=()
 
-# grep → rg (ripgrep)
-if echo "$COMMAND" | grep -qE "(^\||\s)grep\s"; then
+# grep → rg (ripgrep): warn for standalone search, not for pipeline filtering (| grep)
+if echo "$COMMAND" | grep -qE "(^|\s)grep\s" && ! echo "$COMMAND" | grep -qE "\|\s*grep\b"; then
     warnings+=("use rg (ripgrep) instead of grep — faster, .gitignore-aware, standardized regex")
 fi
 
