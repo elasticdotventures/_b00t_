@@ -115,3 +115,6 @@
 [submodule "vendor/agentsea-skillpacks"]
 	path = vendor/agentsea-skillpacks
 	url = https://github.com/PromptExecution/skillpacks-b00t.git
+[submodule "vendor/android-emulator-container-scripts"]
+	path = vendor/android-emulator-container-scripts
+	url = https://github.com/PromptExecution/android-emulator-container-scripts-b00t.git

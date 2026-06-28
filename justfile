@@ -1131,6 +1131,15 @@ index-codebase:
     @echo "🔍 Indexing into codebase-memory..."
     @echo "ℹ️  Use MCP: codebase-memory index_repository(repo_path=\".\", mode=\"fast\")"
 
+# ── Android emulator sandbox (for Oreo 🐶) ──────────────────────────────────
+# 🤓 Uses RHAI script to sandbox ALL android operations deterministically.
+#    The RHAI script memoizes the full pipeline so agents don't hallucinate
+#    adb/emulator commands. One b00t call replaces 50+ lines of fragile bash.
+
+# Run the full Android test pipeline via RHAI (sandboxed, CPU-limited)
+android-sandbox:
+    b00t script run _b00t_/scripts/android-emu-setup.rhai
+
 # ── Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
