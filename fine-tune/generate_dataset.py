@@ -1072,6 +1072,8 @@ def main():
     ap.add_argument("--output", default="fine-tune/train.jsonl")
     ap.add_argument("--format", choices=["alpaca", "chatml"], default="alpaca")
     ap.add_argument("--max-rows", type=int, default=15000)
+    ap.add_argument("--viz", metavar="OUT_SVG", default=None,
+                    help="Generate token-length + category SVG after writing dataset")
     args = ap.parse_args()
 
     rows: list[dict] = [_r(i, r) for i, r in COMMAND_PATTERNS]
@@ -1254,6 +1256,67 @@ def main():
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     print(f"\n✅ Generated {len(rows)} training rows → {out}")
+
+    if args.viz:
+        _write_viz(rows, Path(args.viz))
+
+
+def _write_viz(rows: list[dict], out: Path) -> None:
+    """SVG token-length histogram + category breakdown for data quality inspection."""
+    try:
+        import unicodedata
+        # Approximate token count: chars / 4 (rough GPT tokenizer estimate)
+        lengths = [len(r.get("output", "") + r.get("instruction", "")) // 4 for r in rows]
+        # Category from instruction prefix heuristics
+        cats: dict[str, int] = {}
+        for r in rows:
+            instr = r.get("instruction", "")
+            cat = (
+                "datum" if "datum" in instr.lower() else
+                "rust" in instr.lower() and "rust" or
+                "justfile" in instr.lower() and "just" or
+                "lfmf" in instr.lower() and "lfmf" or
+                "mcp" in instr.lower() and "mcp" or
+                "other"
+            )
+            cats[cat] = cats.get(cat, 0) + 1
+
+        # Build minimal SVG histogram (no matplotlib dependency)
+        buckets = [0] * 20   # 0-100, 100-200, ... 1900-2000+
+        for l in lengths:
+            b = min(l // 100, 19)
+            buckets[b] += 1
+        max_b = max(buckets) or 1
+        W, H, pad = 600, 280, 40
+        bar_w = (W - 2 * pad) / 20
+
+        svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H+100}">']
+        svg.append(f'<rect width="{W}" height="{H+100}" fill="#1e1e2e"/>')
+        svg.append(f'<text x="{W//2}" y="20" fill="#cdd6f4" font-size="13" text-anchor="middle">'
+                   f'b00t training dataset — token length distribution ({len(rows)} examples)</text>')
+        for i, cnt in enumerate(buckets):
+            bh = int((cnt / max_b) * (H - 2 * pad))
+            x = pad + i * bar_w
+            y = pad + (H - 2 * pad) - bh
+            color = "#89b4fa" if i < 10 else "#f38ba8"
+            svg.append(f'<rect x="{x:.1f}" y="{y}" width="{bar_w - 1:.1f}" height="{bh}" fill="{color}"/>')
+            if i % 4 == 0:
+                svg.append(f'<text x="{x+bar_w/2:.1f}" y="{H - pad + 14}" fill="#a6adc8" '
+                           f'font-size="9" text-anchor="middle">{i*100}</text>')
+        # Category legend
+        cx, cy = pad, H + pad + 10
+        for cat, cnt in sorted(cats.items(), key=lambda x: -x[1])[:8]:
+            svg.append(f'<text x="{cx}" y="{cy}" fill="#cdd6f4" font-size="10">'
+                       f'{cat}: {cnt}</text>')
+            cx += 90
+            if cx > W - 80:
+                cx, cy = pad, cy + 14
+        svg.append('</svg>')
+
+        out.write_text("\n".join(svg))
+        print(f"📊 dataset viz → {out}  (open in browser; ⚠️ SVG not VLM-compatible — convert to PNG for Qwen3-VL)")
+    except Exception as e:
+        print(f"⚠️  viz skipped: {e}")
 
 
 if __name__ == "__main__":
