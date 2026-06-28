@@ -4,7 +4,7 @@ type = "cli"
 hint = "Google Gemini CLI — interactive AI assistant with filesystem access, MCP support, and Google Search grounding"
 source = "https://github.com/google-gemini/gemini-cli"
 desires = "latest"
-install = "npm install -g @google/gemini-cli"
+install = { npm_global = "@google/gemini-cli", binary = "gemini" }
 version = "gemini --version"
 version_regex = '(\d+\.\d+\.\d+)'
 aliases = ["gemini"]
