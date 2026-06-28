@@ -19,6 +19,7 @@ members = [
     "b00t-datum-core",
     "b00t-zellij",
     "b00t-admin",
+    "crates/ufo-types",
 ]
 exclude = [
     "vendor/embed-anything-b00t",
