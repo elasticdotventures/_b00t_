@@ -59,7 +59,13 @@ tooling limitations, not architectural requirements.
 ### Relevance to b00t
 
 - **Submodule elimination**: Josh could replace the 12+ vendor submodules
-  with filtered projections from a unified history
+  with filtered projections from a unified history. Each `vendor/X` becomes
+  a josh filter `::vendor/X/` — clone once, project infinitely.
+  Zero submodule drift, zero `git submodule update --init --recursive`.
+- **GitButler foundation**: GitButler's stacked branches and virtual branch
+  model builds on josh-style history rewriting. A b00t + josh + gitbutler
+  stack gives: josh for submodule/projection backend, gitbutler for agent
+  git UX, b00t for task dispatch across the unified history.
 - **Worktree isolation**: Current worktree-based agent sandboxing (commit
   a41ebba) could be augmented with josh proxy for zero-clone agent contexts
 - **Evidence graph**: GraphQL introspection of monorepo state maps to

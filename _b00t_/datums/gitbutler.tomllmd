@@ -66,13 +66,18 @@ but pr create
 - **AI hooks**: GitButler's AI tooling hooks can route through b00t's
   ch0nky/local inference rather than cloud APIs.
 
-### vs Josh vs GritQL
+### vs Josh vs GritQL — complementary, not competing
 
 | Tool | Domain | Best for |
 |------|--------|----------|
-| **GitButler** | Git UX | Agent-friendly git operations, stacked branches |
-| **Josh** | Git history | Monorepo scaling, repo filtering |
+| **Josh** | Git history engine | Submodule elimination, repo filtering, monorepo projections |
+| **GitButler** | Git UX + client | Agent-friendly git operations, stacked branches, virtual branches |
 | **GritQL** | Code AST | Code search, transformation, linting |
+
+GitButler's stacked branches build on josh-style history rewriting
+concepts. Together they form a git tooling stack: josh handles the
+history/projection backend, gitbutler provides the agent-friendly UX,
+and GritQL handles the code-level transformations within projections.
 
 # b00t:map v1
 # summary: GitButler — modern Git client with stacked branches, AI workflows (Tauri/Rust, Fair Source, 21k★)
