@@ -30,8 +30,8 @@
 	path = just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
-	path = node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
+[submodule "_b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
+	path = _b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
 	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
 
 [submodule "plantuml-server"]
@@ -46,16 +46,16 @@
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
 
-[submodule "test/bats-no-prefix"]
-	path = test/bats-no-prefix
+[submodule "test/bats"]
+	path = test/bats
 	url = https://github.com/bats-core/bats-core.git
 
-[submodule "test/test_helper/bats-assert-no-prefix"]
-	path = test/test_helper/bats-assert-no-prefix
+[submodule "test/test_helper/bats-assert"]
+	path = test/test_helper/bats-assert
 	url = https://github.com/bats-core/bats-assert.git
 
-[submodule "test/test_helper/bats-support-no-prefix"]
-	path = test/test_helper/bats-support-no-prefix
+[submodule "test/test_helper/bats-support"]
+	path = test/test_helper/bats-support
 	url = https://github.com/bats-core/bats-support.git
 
 [submodule "vendor/agent-framework"]
@@ -112,6 +112,10 @@
 
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+
+[submodule "vendor/rust-docs-mcp-b00t"]
+	path = vendor/rust-docs-mcp-b00t
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
 [submodule "vendor/gemm-common"]
 	path = vendor/gemm-common
