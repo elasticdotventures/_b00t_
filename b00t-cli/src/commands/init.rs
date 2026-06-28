@@ -62,11 +62,13 @@ fn handle_project_init(
 
     let primary_stack = stack.unwrap_or_else(|| detect_project_stack(&cwd));
 
-    // ── Write project soul: 🥾.tomllmd in _b00t_/ ──────────────────
-    // Symlinked from .git/🥾.tomllmd for deterministic access
+    // ── Write project soul: .git/🥾.tomllmd (canonical) ──────────────
+    // Symlinked to _b00t_/🥾.tomllmd for visibility.
+    // .git/ is never tracked — safe deterministic access point.
 
-    let boot_toml = b00t_dir.join("🥾.tomllmd");
-    if !boot_toml.exists() {
+    let git_dir = cwd.join(".git");
+    let git_boot = git_dir.join("🥾.tomllmd");
+    if !git_boot.exists() {
         let content = format!(
             r#"# 🥾 {project_name} — b00t project soul
 
@@ -87,38 +89,13 @@ primary_stack = "{primary_stack}"
 # complexity: 1
 "#,
         );
-        std::fs::write(&boot_toml, &content)?;
-        println!("  📝 wrote {}", boot_toml.display());
+        std::fs::write(&git_boot, &content)?;
+        println!("  📝 wrote {}", git_boot.display());
 
-        // Symlink into .git/ for deterministic access (git never tracks .git/ contents)
-        let git_dir = cwd.join(".git");
-        if git_dir.is_dir() {
-            let git_boot = git_dir.join("🥾.tomllmd");
-            std::os::unix::fs::symlink(&boot_toml, &git_boot).ok();
-            println!("  🔗 linked {}", git_boot.display());
-        }
-    }
-
-    let overrides_toml = b00t_dir.join("overrides.toml");
-    if !overrides_toml.exists() {
-        let content = format!(
-            r#"# b00t project overrides — per-project datum version pins
-
-# Override a datum's desired version:
-# [overrides]
-# rustc = "1.85.0"
-# node = "22.0.0"
-
-# b00t:map v1
-# summary: {project_name} b00t version overrides
-# tags: project, {project_name}, overrides
-# tier: sm0l
-# cmds: b00t init project, b00t cli up
-# complexity: 1
-"#,
-        );
-        std::fs::write(&overrides_toml, content)?;
-        println!("  📝 wrote {}", overrides_toml.display());
+        // Symlink into _b00t_/ for visibility
+        let b00t_boot = b00t_dir.join("🥾.tomllmd");
+        std::os::unix::fs::symlink(&git_boot, &b00t_boot).ok();
+        println!("  🔗 linked {}", b00t_boot.display());
     }
 
     // ── System validation + .env / .envrc setup ───────────────────────
@@ -622,8 +599,9 @@ mod tests {
 
         let b00t = dir.path().join("_b00t_");
         assert!(b00t.exists());
+        // .git/🥾.tomllmd is canonical; _b00t_/🥾.tomllmd is a symlink
+        assert!(dir.path().join(".git").join("🥾.tomllmd").exists());
         assert!(b00t.join("🥾.tomllmd").exists());
-        assert!(b00t.join("overrides.toml").exists());
         assert!(dir.path().join(".envrc").exists());
         assert!(dir.path().join(".env").exists());
 

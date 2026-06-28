@@ -1672,26 +1672,14 @@ pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
     Ok(primary)
 }
 
-/// Find a project-local _b00t_/ directory by walking up from cwd to git root.
-/// Also checks .git/🥾.tomllmd as a fallback (git never tracks .git/ contents).
+/// Find a project by walking up from cwd to git root looking for .git/🥾.tomllmd
 fn find_project_b00t() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let mut current = cwd.as_path();
-
     loop {
-        let candidate = current.join("_b00t_");
-        if candidate.is_dir() {
-            return Some(candidate);
-        }
-        // Check .git/🥾.tomllmd as lightweight project marker
-        if current.join(".git").join("🥾.tomllmd").exists() {
-            // Return parent of .git/ — the _b00t_/ may not exist but project is registered
-            if let Some(parent) = current.join(".git").parent() {
-                let b00t_dir = parent.join("_b00t_");
-                if b00t_dir.is_dir() {
-                    return Some(b00t_dir);
-                }
-            }
+        let marker = current.join(".git").join("🥾.tomllmd");
+        if marker.exists() {
+            return current.join("_b00t_").is_dir().then(|| current.join("_b00t_"));
         }
         if current.join(".git").exists() {
             break;
@@ -1701,22 +1689,21 @@ fn find_project_b00t() -> Option<std::path::PathBuf> {
     None
 }
 
-/// Load project-local version overrides from 🥾.tomllmd
+/// Load project-local version overrides from .git/🥾.tomllmd
 pub fn load_project_overrides() -> std::collections::HashMap<String, String> {
     let mut overrides = std::collections::HashMap::new();
-    let path = find_project_b00t()
-        .map(|p| p.join("🥾.tomllmd"))
-        .or_else(|| {
-            let cwd = std::env::current_dir().ok()?;
-            let mut cur = cwd.as_path();
-            loop {
-                let git_boot = cur.join(".git").join("🥾.tomllmd");
-                if git_boot.exists() { return Some(git_boot); }
-                if cur.join(".git").exists() { break; }
-                cur = cur.parent()?;
+    let path = {
+        let cwd = match std::env::current_dir() { Ok(d) => d, Err(_) => return overrides };
+        let mut cur = cwd.as_path();
+        loop {
+            let git_boot = cur.join(".git").join("🥾.tomllmd");
+            if git_boot.exists() {
+                break Some(git_boot);
             }
-            None
-        });
+            if cur.join(".git").exists() { break None; }
+            cur = match cur.parent() { Some(p) => p, None => break None };
+        }
+    };
     if let Some(path) = path {
         if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(toml) = content.parse::<toml::Table>() {
