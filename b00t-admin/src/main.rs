@@ -1165,7 +1165,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;">Pipeline v{{}} · Loading...</div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('pipeline')">📊 Pipeline <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-header active" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body open" id="section-pipeline" style="padding:8px 16px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
@@ -1177,24 +1177,24 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header" onclick="toggleSection('types')">🔬 Types <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-header" onclick="toggleSection('types')" data-b00t="section:types" data-b00t-action="toggle" data-b00t-label="Type Explorer">🔬 Types <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body" id="section-types" style="padding:8px 16px;">
       <div class="type-list" id="type-list" style="max-height:150px;overflow-y:auto;"></div>
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header" onclick="toggleSection('sim')">👥 Simulation <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-header" onclick="toggleSection('sim')" data-b00t="section:sim" data-b00t-action="toggle" data-b00t-label="Twin Simulation">👥 Simulation <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
-      <button class="sim-btn" onclick="simTick()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
-      <button class="sim-btn rollback" onclick="simRollback()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
+      <button class="sim-btn" onclick="simTick()" data-b00t="action:sim-tick" data-b00t-label="Simulation Tick" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
+      <button class="sim-btn rollback" onclick="simRollback()" data-b00t="action:sim-rollback" data-b00t-label="Simulation Rollback" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
       <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
       <div style="font-size:10px;margin-top:4px;"><span id="ws-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%%;background:#ef4444;"></span> <span id="ws-text">WS: disconnected</span></div>
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('viz')">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-header active" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
-      <select id="viz-select" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
+      <select id="viz-select" data-b00t="control:viz-select" data-b00t-action="select" data-b00t-label="Graph Type Selector" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
         <option value="task">📋 Tasks</option>
@@ -1203,8 +1203,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <option value="kg">🕸️ Knowledge Graph</option>
       </select>
       <div id="viz-mode" style="display:flex;gap:2px;margin-bottom:4px;">
-        <div class="code-tab active" data-viz="mermaid">Mermaid</div>
-        <div class="code-tab" data-viz="cytoscape">Cytoscape</div>
+        <div class="code-tab active" data-viz="mermaid" data-b00t="tab:mermaid" data-b00t-label="Mermaid View">Mermaid</div>
+        <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
     </div>
@@ -1214,7 +1214,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <!-- ── Main Content ── -->
 <div class="main-content">
 
-<div class="panel" id="pipeline-panel">
+<div class="panel" id="pipeline-panel" data-b00t="panel:pipeline" data-b00t-label="Pipeline Status">
   <h2>📊 Pipeline Status</h2>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
     <div class="stat"><div class="stat-value" id="stat-chunks-2">0</div><div class="stat-label">Chunks</div></div>
@@ -1224,12 +1224,12 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
 </div>
 
-<div class="panel" id="type-panel">
+<div class="panel" id="type-panel" data-b00t="panel:types" data-b00t-label="Type Explorer">
   <h2>🔬 Type Explorer</h2>
   <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
 </div>
 
-<div class="panel" id="sim-panel">
+<div class="panel" id="sim-panel" data-b00t="panel:sim" data-b00t-label="Twin Simulation">
   <h2>👥 Twin Simulation</h2>
   <div id="sim-state">
     <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">Name: <span style="color:#e2e8f0;">doc-pipeline</span></div>
@@ -1239,7 +1239,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
 </div>
 
-<div class="panel" id="viz-panel">
+<div class="panel" id="viz-panel" data-b00t="panel:viz" data-b00t-label="Visualizations">
   <h2>🎨 <span id="viz-title">Visualization</span></h2>
   <div id="viz-mermaid-container" style="background:#0f172a;border-radius:6px;padding:12px;min-height:200px;overflow:auto;border:1px solid #1e293b;">
     <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization</div>
