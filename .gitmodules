@@ -30,10 +30,6 @@
 	path = just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "_b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents"]
-	path = _b00t_/node-ts.🦄/claude.🐳.old/awesome-claude-code-subagents
-	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
-
 [submodule "plantuml-server"]
 	path = plantuml-server
 	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
@@ -45,18 +41,6 @@
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
 	url = git@github.com:modelcontextprotocol/rust-sdk.git
-
-[submodule "test/bats"]
-	path = test/bats
-	url = https://github.com/bats-core/bats-core.git
-
-[submodule "test/test_helper/bats-assert"]
-	path = test/test_helper/bats-assert
-	url = https://github.com/bats-core/bats-assert.git
-
-[submodule "test/test_helper/bats-support"]
-	path = test/test_helper/bats-support
-	url = https://github.com/bats-core/bats-support.git
 
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
