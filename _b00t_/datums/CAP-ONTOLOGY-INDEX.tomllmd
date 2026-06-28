@@ -1,0 +1,383 @@
+# CAP: Ontology Capability Index — native b00t ontology + external vocabulary sources
+#
+# Master index of ALL ontology-related capabilities in the b00tyverse.
+# Implements PATTERN-KNOWLEDGE-SOURCE: every external vocabulary has source.url,
+# shape, adapter, and lookup.tier — NEVER an embedded table.
+#
+# Agents: query this datum FIRST (b00t learn cap-ontology-index) before any
+# ontology/vocabulary lookup. Use adapter.* to retrieve; never generate.
+
+[b00t.schema]
+version   = "1"
+type      = "datum"
+type_tags = ["ontology", "knowledge-source", "capability-index", "bfo", "ufo",
+             "sparql", "rdf", "owl2", "horn-clause", "graph-reasoning",
+             "anti-hallucination", "vocabulary", "discovery"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART A: Native b00t capabilities (compiled Rust — no external call needed)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[native]
+# These are available without any network call, API key, or b00t learn.
+
+[native.spo_triple_compiler]
+location  = "b00t-cli/src/datum_triples.rs::compile_datum_triples()"
+what      = "Compiles _b00t_/*.toml datums into Vec<(S,P,O)> triples"
+predicates = ["b00t:hasType", "rdfs:label", "b00t:dependsOn", "b00t:requires",
+              "b00t:hasPart", "b00t:hasKeyword", "b00t:hasSkill"]
+invoke    = "b00t-cli datum triples --format=json"
+tier      = "sm0l"
+
+[native.horn_derivation]
+location  = "b00t-c0re-lib/src/reasoning/graph_rules.rs"
+crate_dep = "crepe = 0.2"
+what      = "Datalog Horn clause derivation over SPO triples"
+derives   = ["Reachable (transitive)", "DependsOn (transitive)", "InformedBy", "Implements"]
+note      = "NOT full OWL2 — Horn subset only; no class subsumption, no property chains beyond listed"
+invoke    = "ReasoningEngine::run(triples).horn.reachable_from(subject)"
+tier      = "sm0l"
+
+[native.lattice_analytics]
+location  = "b00t-c0re-lib/src/reasoning/analytics.rs"
+crate_dep = "ascent = 0.8"
+what      = "Lattice Datalog — shortest path (Dual<u32>), skill frequency top-N"
+invoke    = "ReasoningEngine::run(triples).analytics.shortest_path(a, b)"
+tier      = "sm0l"
+
+[native.sparql_like_query]
+location  = "b00t-cli/src/commands/ontology.rs::sparql_query()"
+what      = "Substring subject match + predicate expansion (type|roles|validate|all)"
+limitation = "No variable binding, no joins, no FILTER — substring match only"
+invoke    = "b00t-cli ontology sparql --subject <NAME> --predicate all"
+mcp_tool  = "b00t_ontology_query"
+tier      = "sm0l"
+
+[native.mermaid_cytoscape_export]
+location  = "b00t-cli/src/commands/ontology.rs::export_topology()"
+what      = "Datum role-graph → Mermaid flowchart or Cytoscape JSON"
+invoke    = "b00t-cli ontology export --format=mermaid"
+note      = "Edges = shared role membership, not semantic predicate graph"
+tier      = "sm0l"
+
+[native.holon_node_type_graph]
+location  = "vendor/ledgrrr/crates/holon-viz + b00t-reflect-types"
+what      = "HolonEmit proc-macro → HolonNode → TypeRelationshipGraph → Cytoscape JSON"
+invoke    = "DatumType::datum_nodes(); VizDomain::emit_nodes()"
+note      = "l3dg3rr workspace only — not wired to b00t-cli binary yet"
+tier      = "sm0l"
+
+[native.ufo_stereotypes]
+location  = "vendor/ledgrrr/crates/ufo-types/src/"
+what      = "EndurantStereotype, PerdurantStereotype, MomentStereotype, UfoCategory; Satisfies<C> trait"
+invoke    = "b00t learn ufo-types"
+note      = "Rust types only; the UFO narrative spec is external (see [external.ufo_spec])"
+tier      = "ch0nky"
+
+[native.rust_ast_extractor]
+location  = "vendor/ledgrrr/crates/ontology-extractor/src/lib.rs"
+what      = "Walks Rust source via syn → RustTerm/OntologyGraph (Entity vs Action classification)"
+invoke    = "cargo run -p ontology-extractor -- --crate-path <PATH>"
+tier      = "ch0nky"
+
+[native.neumann_store]
+location  = "b00t-c0re-lib/src/irontology_bridge.rs"
+crate_dep = "storage-neumann = 0.1 (default feature)"
+what      = "Persistent fact store at ~/.b00t/neumann/<ns>/; FactRecord ingest + triple query"
+invoke    = "b00t grok digest --topic <TOPIC> <CONTENT>; b00t grok ask <QUERY>"
+mcp_tools = ["b00t_grok_digest", "b00t_grok_ask", "b00t_grok_learn", "b00t_grok_status"]
+tier      = "sm0l"
+
+[native.oxigraph_store]
+location  = "b00t-c0re-lib/src/irontology_bridge.rs (feature=store-oxigraph)"
+crate_dep = "oxigraph = 0.5.8"
+what      = "SPARQL 1.1 compliant RDF graph store at ~/.b00t/oxigraph/<ns>/"
+invoke    = "cargo build -p b00t-c0re-lib --features store-oxigraph"
+status    = "AVAILABLE behind feature flag; not active in default build"
+note      = "Enables real SPARQL with variable binding, FILTER, aggregate — upgrade path from sparql_like_query"
+tier      = "sm0l"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART B: External vocabularies — knowledge-source pattern
+# Each entry: source.url → shape → adapter → lookup (sm0l)
+# NEVER embed the table. Pull and cache.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── BFO (Basic Formal Ontology) ───────────────────────────────────────────────
+
+[external.bfo]
+[external.bfo.source]
+name        = "Basic Formal Ontology 2020"
+authority   = "OBO Foundry / IFOMIS"
+url         = "https://raw.githubusercontent.com/BFO-ontology/BFO-2020/master/owl/bfo-2020.owl"
+format      = "owl/rdf+xml"
+license     = "CC-BY 4.0"
+refresh     = "on-release"
+refresh_cmd = "curl -sL https://raw.githubusercontent.com/BFO-ontology/BFO-2020/master/owl/bfo-2020.owl | b00t grok digest --topic bfo-2020"
+
+[external.bfo.shape]
+key_field         = "owl:Class IRI"
+label_field       = "rdfs:label"
+hier_fields       = ["rdfs:subClassOf"]
+entry_count_approx = 35
+key_prefix        = "http://purl.obolibrary.org/obo/BFO_"
+note              = "35 classes only — BFO is intentionally small/upper-level"
+
+[[external.bfo.shape.field_map]]
+field = "rdfs:label"
+predicate = "b00t:bfo_label"
+
+[[external.bfo.shape.field_map]]
+field = "rdfs:subClassOf"
+predicate = "b00t:subClassOf"
+
+[external.bfo.adapter]
+# Native: oxigraph (feature flag) loads the OWL file and answers SPARQL
+cli_cmd   = "b00t grok ask 'BFO class for ${entity_description}'"
+mcp_tool  = "b00t_grok_ask"
+sparql_when_oxigraph = """
+SELECT ?label ?parent WHERE {
+  ?class rdfs:label ?label .
+  ?class rdfs:subClassOf ?parent .
+  FILTER(STRSTARTS(STR(?class), "http://purl.obolibrary.org/obo/BFO_"))
+}"""
+
+[external.bfo.lookup]
+tier            = "sm0l"
+prompt_template = "What BFO 2020 class best describes: {entity}? Return only: IRI, rdfs:label, direct parent label."
+output_schema   = '{"iri": "str", "label": "str", "parent_label": "str"}'
+known_classes   = "IndependentContinuant, GenericallyDependentContinuant, RealizableEntity, Process, TemporalRegion, SpatialRegion, Quality, Role — see source.url for full 35"
+
+[external.bfo.cache]
+path           = "~/.b00t/knowledge/bfo-2020/"
+format         = "jsonl"
+index_cmd      = "b00t grok digest --topic bfo-2020 ~/.b00t/knowledge/bfo-2020/classes.jsonl"
+
+# ── UFO (Unified Foundational Ontology) ──────────────────────────────────────
+
+[external.ufo_spec]
+[external.ufo_spec.source]
+name        = "Unified Foundational Ontology (UFO-A/B/C)"
+authority   = "NEMO research group — Giancarlo Guizzardi"
+url         = "https://research.inf.ufes.br/ontologies/ufo/"
+format      = "html + OWL (gUFO at https://nemo-ufes.github.io/gufo/)"
+gufo_owl    = "https://nemo-ufes.github.io/gufo/gufo.ttl"
+license     = "CC-BY 4.0"
+refresh     = "on-release"
+refresh_cmd = "curl -sL https://nemo-ufes.github.io/gufo/gufo.ttl | b00t grok digest --topic gufo"
+
+[external.ufo_spec.shape]
+# gUFO (gentle UFO) is the OWL2 DL implementation of UFO
+key_field   = "gufo:EndurantType IRI"
+hier_fields = ["rdfs:subClassOf"]
+entry_count_approx = 80
+
+[external.ufo_spec.adapter]
+# Native Rust: ufo-types crate in vendor/ledgrrr IS the Rust implementation
+b00t_skill  = "ufo-types"
+learn_cmd   = "b00t learn ufo-types"
+sparql_when_oxigraph = "SELECT ?class WHERE { ?class rdfs:subClassOf gufo:Endurant }"
+note        = "For Rust usage: b00t learn ufo-types (loads enum definitions). For OWL queries: load gufo.ttl into oxigraph."
+
+[external.ufo_spec.lookup]
+tier            = "ch0nky"
+prompt_template = "Which UFO stereotype fits: {entity}? Options: Kind, SubKind, Role, Phase, Category, Mixin, RoleMixin (Endurant) | Process, Event, State (Perdurant) | Mode, Relator (Moment) | Abstract. Return: stereotype, category, one-sentence justification."
+output_schema   = '{"stereotype": "str", "category": "Endurant|Perdurant|Moment|Abstract", "justification": "str"}'
+note            = "sm0l cannot reliably classify UFO — ch0nky required for stereotype selection"
+
+# ── OWL2 Profiles ─────────────────────────────────────────────────────────────
+
+[external.owl2]
+[external.owl2.source]
+name        = "OWL 2 Web Ontology Language Profiles"
+authority   = "W3C"
+url         = "https://www.w3.org/TR/owl2-profiles/"
+spec_turtle = "https://www.w3.org/2002/07/owl#"
+format      = "html spec + RDF/XML"
+refresh     = "never"
+note        = "OWL 2 is a W3C recommendation — stable"
+
+[external.owl2.shape]
+profiles    = ["OWL2 DL", "OWL2 EL", "OWL2 QL", "OWL2 RL"]
+key_axioms  = ["SubClassOf", "EquivalentClasses", "DisjointClasses",
+               "ObjectPropertyDomain", "ObjectPropertyRange",
+               "SubObjectPropertyOf", "TransitiveObjectProperty"]
+
+[external.owl2.adapter]
+crate     = "horned-owl (https://crates.io/crates/horned-owl)"
+note      = "horned-owl is NOT in b00t workspace yet — EVALUATE for irontology-mcp"
+cli_cmd   = "b00t grok ask 'OWL2 Manchester syntax for ${axiom}'"
+mcp_tool  = "b00t_grok_ask"
+
+[external.owl2.lookup]
+tier      = "ch0nky"
+note      = "OWL2 Manchester syntax is non-trivial for sm0l — ch0nky for axiom generation"
+
+# ── SPARQL 1.1 ─────────────────────────────────────────────────────────────────
+
+[external.sparql]
+[external.sparql.source]
+name     = "SPARQL 1.1 Query Language"
+authority = "W3C"
+url      = "https://www.w3.org/TR/sparql11-query/"
+grammar  = "https://www.w3.org/TR/sparql11-query/#sparqlGrammar"
+refresh  = "never"
+
+[external.sparql.adapter]
+# Native: oxigraph (feature flag) exposes a SPARQL 1.1 endpoint
+crate         = "oxigraph = 0.5.8 (b00t-c0re-lib feature=store-oxigraph)"
+http_endpoint = "http://localhost:7878/query (when oxigraph server active)"
+status        = "behind feature flag — not active in default build"
+activate_cmd  = "cargo build -p b00t-c0re-lib --features store-oxigraph"
+
+[external.sparql.lookup]
+tier      = "sm0l"
+note      = "SPARQL generation for simple SELECT/FILTER is within sm0l capability; complex OPTIONAL/UNION → ch0nky"
+
+# ── SKOS (Simple Knowledge Organization System) ───────────────────────────────
+
+[external.skos]
+[external.skos.source]
+name      = "SKOS Core Vocabulary"
+authority = "W3C"
+url       = "https://www.w3.org/2009/08/skos-reference/skos.rdf"
+format    = "rdf/xml"
+refresh   = "never"
+note      = "SKOS is used as the metadata vocabulary for DDC, AGROVOC, LCSH, Eurovoc"
+
+[external.skos.shape]
+key_concepts   = ["skos:Concept", "skos:ConceptScheme", "skos:Collection"]
+key_properties = ["skos:notation", "skos:prefLabel", "skos:altLabel",
+                  "skos:broader", "skos:narrower", "skos:related",
+                  "skos:definition", "skos:inScheme"]
+
+[external.skos.adapter]
+crate    = "sophia (https://crates.io/crates/sophia) — NOT in b00t workspace yet"
+fallback = "oxigraph feature flag loads SKOS file and answers hierarchy queries"
+
+# ── Dewey Decimal Classification (example knowledge-source pattern) ───────────
+
+[external.ddc]
+[external.ddc.source]
+name        = "Dewey Decimal Classification (DDC 23)"
+authority   = "OCLC"
+url         = "https://dewey.info/scheme/edition/e23/"
+skos_url    = "https://data.oclc.org/dewey/"
+format      = "skos/rdf+xml"
+license     = "proprietary (OCLC) — open summaries at dewey.info"
+refresh     = "on-release"
+open_data   = "https://id.loc.gov/authorities/classification.html (LOC schedules, CC0)"
+refresh_cmd = "curl -sL https://id.loc.gov/authorities/classification.html | b00t grok digest --topic ddc-summaries"
+
+[external.ddc.shape]
+key_field   = "skos:notation"           # the 3-10 digit DDC code
+label_field = "skos:prefLabel"
+hier_fields = ["skos:broader"]
+format_re   = '^[0-9]{3}(\.[0-9]+)?$'  # validate: 3 digits, optional decimal
+
+[[external.ddc.shape.field_map]]
+field     = "skos:notation"
+predicate = "b00t:ddc_code"
+
+[[external.ddc.shape.field_map]]
+field     = "skos:prefLabel"
+predicate = "rdfs:label"
+
+[external.ddc.adapter]
+cli_cmd   = "b00t grok ask 'DDC code for: ${subject_description}'"
+mcp_tool  = "b00t_grok_ask"
+note      = "sm0l lookup is ONLY valid after cache is populated via refresh_cmd"
+
+[external.ddc.lookup]
+tier            = "sm0l"
+prompt_template = "Look up DDC code for: {subject}. Return only: code (skos:notation), prefLabel (English), broader code."
+output_schema   = '{"code": "str", "label": "str", "broader_code": "str | null", "broader_label": "str | null"}'
+hallucination_guard = "Validate code against format_re before returning. If no cache hit: return null, do not generate."
+
+[[external.ddc.examples]]
+query  = "software engineering"
+result = '{"code": "005.1", "label": "Programming", "broader_code": "005", "broader_label": "Computer programming"}'
+
+[[external.ddc.examples]]
+query  = "corporate tax law Australia"
+result = '{"code": "343.9401526", "label": "Income tax – Australia", "broader_code": "343.94", "broader_label": "Law of specific jurisdictions – Australia"}'
+
+[external.ddc.cache]
+path           = "~/.b00t/knowledge/ddc/"
+format         = "jsonl"
+index_cmd      = "b00t grok digest --topic ddc-summaries ~/.b00t/knowledge/ddc/summaries.jsonl"
+last_refreshed = ""
+
+# ── ISO 4217 Currency Codes ────────────────────────────────────────────────────
+
+[external.iso_4217]
+[external.iso_4217.source]
+name        = "ISO 4217 Currency Codes"
+authority   = "ISO / SIX Financial Information"
+url         = "https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml"
+format      = "xml"
+license     = "free to use"
+refresh     = "quarterly"
+refresh_cmd = "curl -sL https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml | b00t grok digest --topic iso-4217"
+note        = "Changes when new currencies added or withdrawn (e.g., SSP South Sudanese Pound)"
+
+[external.iso_4217.shape]
+key_field   = "AlphabeticCode"   # 3-letter code, e.g. AUD
+label_field = "CcyNm"            # e.g. "Australian Dollar"
+num_field   = "CcyNbr"           # numeric code, e.g. 036
+minor_units = "CcyMnrUnts"       # decimal places
+format_re   = '^[A-Z]{3}$'
+
+[external.iso_4217.adapter]
+# Native: ufo-types crate has Currency, FinancialInstrument types
+b00t_skill  = "ufo-types"
+note        = "ufo-types has Currency type but NOT the full ISO 4217 lookup table — only the Rust type shape. Pull from source.url for codes."
+cli_cmd     = "b00t grok ask 'ISO 4217 code for ${currency_name}'"
+mcp_tool    = "b00t_grok_ask"
+
+[external.iso_4217.lookup]
+tier            = "sm0l"
+prompt_template = "ISO 4217 code for: {currency_name}? Return: AlphabeticCode, CcyNm, CcyNbr, CcyMnrUnts."
+output_schema   = '{"alpha": "str", "name": "str", "numeric": "str", "minor_units": "int | null"}'
+hallucination_guard = "Validate alpha against format_re. If uncertain: return null."
+
+[[external.iso_4217.examples]]
+query  = "Australian Dollar"
+result = '{"alpha": "AUD", "name": "Australian Dollar", "numeric": "036", "minor_units": 2}'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART C: Discovery guide for agents
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[discovery]
+# An agent that has loaded this datum knows:
+# 1. What ontology capabilities are native (no network needed)
+# 2. Where each external vocabulary comes from (source.url)
+# 3. Which adapter to call (never generate from memory)
+# 4. Which tier to route to (sm0l for lookup, ch0nky for classification)
+
+[discovery.decision_tree]
+# "I need to classify a Rust struct into an ontology class"
+classify_rust_type     = "ufo-types (b00t learn ufo-types) → ch0nky → Satisfies<C>"
+# "I need to know which BFO class applies to a concept"
+bfo_class_lookup       = "b00t grok ask 'BFO 2020 class for ${concept}' → sm0l → validate IRI"
+# "I need a Dewey Decimal code for a subject"
+ddc_lookup             = "b00t grok ask 'DDC code for ${subject}' → sm0l → validate format_re"
+# "I need to traverse the datum dependency graph"
+datum_graph_traversal  = "compile_datum_triples() → ReasoningEngine::run() → horn.reachable_from()"
+# "I need to query the live capability ontology"
+capability_query       = "b00t_ontology_query (MCP) or b00t-cli ontology query"
+# "I need SPARQL with joins and FILTER"
+real_sparql            = "activate oxigraph feature + load OWL file → sparql endpoint at :7878"
+
+[discovery.search_commands]
+find_knowledge_sources = "fdfind '.' _b00t_/datums/ | xargs grep -l 'knowledge-source' | sort"
+grok_ontology          = "b00t grok ask 'which ontology capability handles ${task}'"
+load_this_datum        = "b00t learn cap-ontology-index"
+
+# b00t:map v1
+# summary: CAP — master index of native b00t ontology capabilities + external vocabulary knowledge-sources; anti-hallucination lookups with source.url + shape + adapter + tier
+# tags: ontology, knowledge-source, capability-index, bfo, ufo, sparql, rdf, owl2, horn-clause, ddc, iso-4217, anti-hallucination
+# tier: frontier
+# cmds: b00t learn cap-ontology-index; b00t grok ask 'ontology capability for ${task}'; b00t-cli ontology sparql --subject b00t:Skill --predicate all
+# complexity: 8

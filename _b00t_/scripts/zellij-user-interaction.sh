@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# DEPRECATED: see b00t zellij {subagent,wizard} (Rust binary in b00t-cli/src/commands/zellij.rs)
 # 🥾 Zellij User Interaction Protocol — Multi-Modal Interface
 # Provides 4 interaction modes for agent↔user communication inside Zellij:
 #   1. fzf-menu     — Complex selection with search (fzf)

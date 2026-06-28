@@ -1,0 +1,211 @@
+# b00t-server Architecture Plan
+# 🤓 OpenAI-compatible REST router + API-key authority + usage telemetry
+#    Built into b00t-mcp (extends existing axum HTTP server — does NOT create a 4th)
+
+## Problem Statement
+
+rust-doc MCP server (and other b00tyverse tools) need an OpenAI REST API to call.
+Today: OPENAI_API_KEY → api.openai.com (external, costly, no key governance).
+Target: b00t-server = local OpenAI-compat endpoint that routes to local models
+(mistral.rs) or upstream providers, mints API keys scoped to sub-agents/MCP-servers,
+and tracks per-consumer usage telemetry ("focus records").
+
+## Architecture: Extend b00t-mcp, Don't Fork
+
+b00t-mcp already runs axum 0.8 + OAuth 2.1 (JWT minting) + streamable-http MCP transport
++ ACL. Adding `/v1/*` routes to the existing server is <200 LOC. Key assets:
+
+    b00t-mcp/src/main.rs:168-189  — existing axum router + serve
+    b00t-mcp/src/oauth_minimal.rs  — JWT issuance (access_token, expires_in)
+    b00t-c0re-lib/src/ai_client.rs  — B00tAiClient (openai/anthropic/ollama/openai-compat)
+    b00t-c0re-lib/src/sm0l_dispatch.rs  — SmolEndpoint (localhost:8000/8001 discovery)
+    b00t-cli/src/model_manager.rs  — ServedEndpointRecord, model discovery
+    b00t-lib-chat/src/metrics.rs  — ChatMetrics OTel (counters, histograms)
+    vendor/irontology-mcp  — reference OpenAI-compat router (axum /v1/models, /v1/chat/completions)
+    vendor/embed-anything-b00t  — reference /v1/embeddings server
+
+## Phase 1: /v1/ router in b00t-mcp (server mode)
+
+Add a `b00t-cli server start` subcommand that launches b00t-mcp in HTTP mode
+with an extra `/v1/` route group. The `b00t mcp` binary already accepts `--http --port`.
+
+### 1a. New subcommand: `b00t server start`
+
+    b00t server start [--port=5273] [--backend=local|upstream] [--model=tier]
+
+Wiring (3 edits):
+  1. b00t-cli/src/commands/mod.rs:    pub mod server; pub use server::ServerCommands;
+  2. b00t-cli/src/main.rs Commands:   Server { #[clap(subcommand)] server_command: ServerCommands }
+  3. b00t-cli/src/main.rs dispatch:   match on Commands::Server
+
+### 1b. OpenAI-compat routes (mount on existing axum Router)
+
+```rust
+// b00t-mcp/src/server_llm.rs (NEW file)
+pub fn llm_router(state: Arc<LlmServerState>) -> Router {
+    Router::new()
+        .route("/v1/models", get(list_models))
+        .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/embeddings", post(embeddings))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), require_api_key))
+}
+
+async fn chat_completions(
+    State(state): State<Arc<LlmServerState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(body): Json<ChatCompletionRequest>,
+) -> Result<Json<ChatCompletionResponse>, AppError> {
+    let consumer = state.validate_key(&auth.token()).await?;  // consumer = agent-id or mcp-server name
+    state.record_usage(&consumer, "chat_completions", body.model.as_deref()).await;
+    let response = state.router.route(&body).await?;  // -> local model or upstream
+    Ok(Json(response))
+}
+```
+
+Backend routing logic: consult ModelRegistry (`b00t-cli/src/model_registry.rs`) →
+`resolve_tier_endpoint(tier)` → POST to `{base_url}/v1/chat/completions` with
+`Authorization: Bearer {upstream_key}`. If local mistral.rs available (`aaiii.rs`
+probes `:8181/v1/models`) prefer it; fallback to the tier's upstream provider.
+
+Reference: `vendor/irontology-mcp/crates/provider-openai/src/lib.rs:302-304`
+(identical axum route structure), `b00t-admin/src/main.rs:1344-1347`
+(`/v1/{*path}` catch-all proxy).
+
+## Phase 2: API Key Authority
+
+Today: `b00t-mcp/src/oauth_minimal.rs` mints JWTs — sessions are in-memory only (🚩).
+Goal: persistent API-key store you can `b00t server key create` → put key in env.
+
+### 2a. Key creation command
+
+    b00t server key create \
+      --consumer "rust-doc" \        # MCP server name or sub-agent id
+      [--scope "chat,embeddings"] \   # allowed /v1/ routes (default: all)
+      [--expires "30d" | "never"] \   # TTL
+      [--backend "local:mistralrs"]  # route key to specific backend
+
+Output: `OPENAI_API_KEY=b00t-sk-<random>` printed to stdout (pipe into .env).
+
+### 2b. Key storage: rmcp CredentialStore trait
+
+`vendor/rmcp-rust-sdk/crates/rmcp/src/transport/auth.rs:110-151` defines:
+```rust
+pub trait CredentialStore: Send + Sync {
+    async fn load(&self, client_id: &str) -> ...;
+    async fn save(&self, client_id: &str, creds: ...) -> ...;
+    async fn clear(&self, client_id: &str) -> ...;
+}
+```
+Implement `KvCredentialStore` backed by `b00t-c0re-lib/src/kv_store.rs` (already persists
+`kv-store.json`). Store: consumer-id → {key_hash, scopes, backend_ref, created_at, expires_at}.
+
+### 2c. Key validation middleware
+
+`require_api_key` middleware: check `Authorization: Bearer b00t-sk-*` header →
+hash-lookup in CredentialStore → attach `ConsumerIdentity { id, scopes, backend_ref }`
+to request extensions. Unknown key → 401. Expired key → 401.
+
+### 2d. Wire rust-doc to b00t-server
+
+After key creation, set OPENAI_API_KEY in rust-doc:
+```bash
+b00t server key create --consumer rust-doc > /tmp/rust-doc-key.env
+# The rust-doc MCP datum's stdio config doesn't support env vars natively,
+# but opencode spawns the server with inherited env. Option 1:
+export OPENAI_API_KEY=$(cat /tmp/rust-doc-key.env | grep -oP 'b00t-sk-\S+')
+# Option 2 (future): b00t-mcp ACL token passthrough to spawned MCP servers.
+```
+
+## Phase 3: Usage Telemetry ("Spotlight" — renamed from FOCUS to avoid collision)
+
+🚩 **Naming**: "FOCUS records" already exists in b00t as FinOps billing records
+(`b00t-cli/src/commands/focus.rs`, sourced from `vendor/ledgrrr`). The new
+popularity/usage concept is renamed **Spotlight** in this plan. (Bikeshed: `Focus`
+→ `Spotlight` preserves the mental model of "what's getting attention" while
+sidestepping the FinOps collision.)
+
+### 3a. What to track
+
+Per consumer (agent-id, MCP server name, or user):
+- `spotlight.llm.requests{counter}` — increment per `/v1/chat/completions` call
+- `spotlight.llm.tokens{prompt,completion}` — histograms from response usage
+- `spotlight.llm.model{model_name}` — per-model breakdown
+- `spotlight.embeddings.requests{counter}` — per `/v1/embeddings` call
+- `spotlight.consumer.active{consumer}` — UpDownCounter, last-N-minutes
+
+Per sub-agent (worker, pi, moltis, etc.) the consumer-id is the agent's
+`b00t whoami` identity. Per MCP server it's the MCP datum name.
+
+### 3b. Infrastructure: extend ChatMetrics OTel
+
+`b00t-lib-chat/src/metrics.rs:23-176` already defines counters/histograms with
+`ChatMetrics::messages_sent`, `send_latency`, etc. Extend with:
+
+```rust
+// b00t-lib-chat/src/metrics.rs (new meters)
+pub struct SpotlightMetrics {
+    pub llm_requests: Counter<u64>,
+    pub llm_tokens_prompt: Histogram<u64>,
+    pub llm_tokens_completion: Histogram<u64>,
+    pub embeddings_requests: Counter<u64>,
+    pub consumer_active: UpDownCounter<i64>,
+}
+```
+
+### 3c. Event log (no OTel collector needed for MVP)
+
+If OTel collector isn't running, fallback to the existing `~/.b00t/events.jsonl`
+pipeline (`b00t-cli/src/main.rs:495`, `governance.rs:203`). Each call emits:
+```json
+{"ts": "2026-06-23T...", "event": "spotlight.llm.request", "detail": {
+  "consumer": "rust-doc", "model": "serde", "provider": "local/mistralrs",
+  "tokens_prompt": 142, "tokens_completion": 89, "latency_ms": 234
+}}
+```
+
+### 3d. Query & transmit
+
+    b00t server spotlight query --consumer rust-doc --since 7d
+    b00t server spotlight transmit --consumer rust-doc --to ~/.b00t/spotlight/
+
+The existing `commands/observability.rs` (`Events`, `Tail`, etc.) is the
+natural query surface to extend.
+
+## Phase 4: b00tyverse integration
+
+    vendor/tomllm      — TOML annotation parser; use for b00t-server config datums (.tomllm/.tomllmd)
+    vendor/moltis-b00t — reference credential store (SQLite for API keys); compare approach with KvStore
+    vendor/rust-docs-mcp-server — primary first consumer (its stdin env needs OPENAI_API_KEY)
+    vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr — future consumer (semantic embeddings via /v1/embeddings)
+
+## Implementation Order (MVP)
+
+| Step | What | LOC est | Depends on |
+|------|------|---------|------------|
+| 1. | `b00t server start` subcommand + /v1/ router (b00t-mcp src/server_llm.rs) | ~150 | nothing |
+| 2. | `B00tAiClient` integration for model routing | ~50 | Step 1 |
+| 3. | `b00t server key create` — API key minting + KvCredentialStore | ~120 | Step 1 |
+| 4. | `require_api_key` middleware | ~40 | Step 3 |
+| 5. | Spotlight meters (ChatMetrics extension) | ~60 | Step 1 |
+| 6. | Spotlog event emission + `b00t server spotlight query` | ~80 | Step 5 |
+| 7. | Wire rust-doc: key creation + env injection | ~30 | Step 3 |
+| **Total** | | **~530 LOC** | |
+
+## Open Questions
+
+- **Local model backend**: mistral.rs is the reference but requires GPU (RTX 3090 per
+  hardware.toml). Should the default backend use a smaller no-GPU fallback (llama.cpp
+  on CPU) when mistral.rs is down? `aaiii.rs` already probes `LLAMA_CPP_BASE_URL`.
+- **Persistent key TTL**: SQLite + `expires_at` column, or delegate to JWT `exp` claim?
+  JWT is stateless (no DB lookup per request) but requires a secret rotation story.
+  KvStore lookup is simpler to implement + revoke. Start with KvStore lookup.
+- **rust-doc embeddings caveat**: rust-doc uses OpenAI `text-embedding-3-small` — a
+  local substitute (nomic/all-MiniLM) would avoid the external API dependency entirely.
+  The `b00t-embed` crate's `EmbedBackend` trait is the abstraction point.
+
+# b00t:map v1
+# summary: b00t-server architecture plan — extend b00t-mcp with OpenAI-compat router, API-key authority, and Spotlight usage telemetry
+# tags: b00t-server, openai-compat, api-key, spotlight, telemetry, b00tyverse, axum
+# tier: frontier
+# cmds: b00t server start, b00t server key create, b00t server spotlight query
+# complexity: 9

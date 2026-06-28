@@ -71,6 +71,10 @@ pub struct LearnArgs {
     // Also auto-enabled via B00T_MCP_CONTEXT=1 env var.
     #[arg(long, help = "Emit MCP follow-up examples in DWIW results")]
     pub mcp: bool,
+
+    // E1: skip learn if evidence already proves competency
+    #[arg(long, help = "Force load even if competency evidence exists (E1)")]
+    pub force: bool,
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
@@ -105,6 +109,22 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     // Default: display knowledge
     let topic =
         topic_val.ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
+
+    // E1: adaptive skip — if competency evidence exists and --force not set, skip full load
+    if !args.force {
+        let skill_key = if topic.contains('.') {
+            topic.clone()
+        } else {
+            format!("{topic}.skill")
+        };
+        if let Ok(chain) = crate::commands::evidence::prove_skill(&skill_key) {
+            if !chain.is_empty() {
+                let latest = chain.last().unwrap();
+                eprintln!("[learn:skip] {skill_key} already proven at {} — use --force to reload", latest.timestamp);
+                return Ok(());
+            }
+        }
+    }
 
     handle_display(
         path,
@@ -434,10 +454,12 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             .collect::<Vec<_>>()
             .join("\n");
 
-        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolSession, dispatch};
+        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolConfig, SmolSession, dispatch};
         let session = SmolSession::new();
+        let config = SmolConfig { max_output_lines: limit };
         match dispatch(
-            &SmolBehavior::Summarize { max_output_lines: limit },
+            &SmolBehavior::Summarize,
+            &config,
             &raw,
             Some(&session),
             32_000,

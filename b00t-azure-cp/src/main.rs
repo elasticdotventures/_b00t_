@@ -403,6 +403,7 @@ struct AzureCpServer {
     credential: Arc<dyn TokenCredential>,
     /// Shared HTTP client with connect/request timeouts for Cost Management queries.
     http_client: reqwest::Client,
+    #[allow(dead_code)]
     tool_router: ToolRouter<AzureCpServer>,
 }
 

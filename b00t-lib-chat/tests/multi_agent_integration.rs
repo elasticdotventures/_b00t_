@@ -4,8 +4,7 @@
 //! multiple transports (Unix sockets, NATS, MQTT, Redis).
 
 use b00t_chat::{
-    ChatClient, ChatMessage, ChatMetrics, Destination, MessageRouter, SocketRegistry,
-    SocketRegistryBuilder,
+    ChatMessage, ChatMetrics, Destination, MessageRouter, SocketRegistryBuilder,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,11 +14,6 @@ use tokio::time::{sleep, timeout};
 /// Timeout duration for operations (prevents tests hanging indefinitely).
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Deadlock detection interval (check for progress every N seconds).
-const DEADLOCK_CHECK_INTERVAL: Duration = Duration::from_secs(2);
-
-/// Maximum number of deadlock checks before failing.
-const MAX_DEADLOCK_CHECKS: usize = 3;
 
 #[tokio::test]
 async fn test_basic_agent_discovery() {

@@ -1,0 +1,12 @@
+[b00t]
+name = "operator"
+type = "cli"
+hint = "This manual page  lists  C  operators  and  their        precedence in evaluation."
+desires = "latest"
+lfmf_category = "operator"
+
+[b00t.learn]
+inline = "See: man operator"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

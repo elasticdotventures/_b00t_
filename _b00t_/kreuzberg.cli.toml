@@ -1,0 +1,69 @@
+[b00t]
+name = "kreuzberg"
+type = "cli"
+desires = "latest"
+install = '''
+# Kreuzberg document intelligence library
+# 🥾 Prefer pip install --user so the MCP datum can use `python3` directly
+if command -v pip3 >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via pip3 --user"
+    pip3 install --user kreuzberg
+    echo "✅ kreuzberg installed"
+elif command -v pip >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via pip --user"
+    pip install --user kreuzberg
+    echo "✅ kreuzberg installed"
+elif command -v uv >/dev/null 2>&1; then
+    echo "📦 Installing kreuzberg via uv tool install"
+    uv tool install kreuzberg
+    echo "✅ kreuzberg installed"
+else
+    echo "⚠️  No pip or uv found. Install pip first."
+    exit 1
+fi
+'''
+
+update = '''
+# Update kreuzberg
+if command -v pip3 >/dev/null 2>&1; then
+    pip3 install --user --upgrade kreuzberg
+elif command -v pip >/dev/null 2>&1; then
+    pip install --user --upgrade kreuzberg
+elif command -v uv >/dev/null 2>&1; then
+    uv tool upgrade kreuzberg
+fi
+'''
+
+version = "python3 -c \"import importlib.metadata; print(importlib.metadata.version('kreuzberg'))\" 2>/dev/null || echo 'not installed'"
+version_regex = '\\d+\\.\\d+\\.\\d+'
+hint = "Kreuzberg is a document intelligence library for PDF parsing, OCR, text extraction, and document processing. See: https://github.com/Goldziher/kreuzberg"
+unlocks = ["kreuzberg *", "python -m kreuzberg *"]
+
+[validate]
+command = "python3 -c \"import kreuzberg; print('ok')\""
+regex = "ok"
+
+[roles]
+required_for = []
+optional_for = ["developer", "analyst", "orchestrator"]
+
+[b00t.learn]
+inline = "See: https://github.com/Goldziher/kreuzberg"
+
+# 🤓: Document processing capabilities:
+#   - PDF parsing (text, metadata, structure)
+#   - OCR for scanned documents
+#   - Text extraction from multiple formats
+#   - Document intelligence pipeline
+
+[[b00t.usage]]
+description = "Extract text from a PDF document"
+command = "python3 -c \"import asyncio; from kreuzberg import extract_text; print(asyncio.run(extract_text('document.pdf')))\""
+
+[[b00t.usage]]
+description = "Run kreuzberg as MCP server"
+command = "uvx kreuzberg-mcp"
+
+[[b00t.usage]]
+description = "Install kreuzberg with all extras (OCR support)"
+command = "uv pip install 'kreuzberg[all]'"

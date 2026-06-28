@@ -1,0 +1,27 @@
+[b00t]
+name = "llama-cpp-server"
+type = "docker"
+hint = "Stock llama.cpp server container — ghcr.io/ggml-org/llama.cpp:server. OpenAI-compat API at /v1/. Supports GGUF models. Full GPU (CUDA) and CPU support."
+
+[b00t.container]
+image = "ghcr.io/ggml-org/llama.cpp:server"
+registry = "ghcr.io"
+repo = "ggml-org/llama.cpp"
+tag = "server"
+runtime = "podman"
+port = 8080
+api = "openai-compat"
+gpu_device = "nvidia.com/gpu=all"
+entrypoint = "/app/llama-server"
+
+[b00t.container.discovery]
+cmd = "podman search ghcr.io/ggml-org/llama.cpp --limit 3 2>&1 | head"
+tags_cmd = "curl -s https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"tag_name\"])'"
+pull_cmd = "podman pull ghcr.io/ggml-org/llama.cpp:server"
+
+# b00t:map v1
+# summary: Stock llama.cpp server container — ghcr.io/ggml-org/llama.cpp:server
+# tags: container, llama-cpp, stock, inference, openai-compat
+# tier: sm0l
+# cmds: podman run -d --name llama -p 8080:8080 -v <model_dir>:/models:ro ghcr.io/ggml-org/llama.cpp:server -m /models/model.gguf --host 0.0.0.0 --port 8080 -fit off
+# complexity: 2

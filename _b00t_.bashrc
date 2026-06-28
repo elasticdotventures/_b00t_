@@ -75,6 +75,78 @@ export -f ensure_b00t_log
 ensure_b00t_log
 
 # Keep VS Code shell detection in b00t bootstrap (not ~/.bash_profile).
+unset -f _b00t_shell_session_marker
+function _b00t_shell_session_marker() {
+    local key="${1:-context}"
+    local sid
+    sid="$(ps -o sid= -p "$$" 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$sid" ] || sid="$$"
+    key="${key//[^A-Za-z0-9_.-]/_}"
+    printf '/tmp/b00t-shell-%s-%s-%s' "$key" "${UID:-$(id -u)}" "$sid"
+}
+export -f _b00t_shell_session_marker
+
+unset -f _b00t_log_once_per_session
+function _b00t_log_once_per_session() {
+    local key="$1"
+    shift || return 0
+    local marker
+    marker="$(_b00t_shell_session_marker "$key")"
+    [ ! -e "$marker" ] || return 0
+    log_b00t "$@"
+    : > "$marker" 2>/dev/null || true
+}
+export -f _b00t_log_once_per_session
+
+unset -f _b00t_shell_transport_context
+function _b00t_shell_transport_context() {
+    if [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        printf 'ssh'
+    else
+        printf 'local'
+    fi
+}
+export -f _b00t_shell_transport_context
+
+unset -f _b00t_shell_display_context
+function _b00t_shell_display_context() {
+    local has_wslg=0
+    local has_x11=0
+    local runtime_dir="${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}"
+    local display_num="${DISPLAY:-}"
+
+    if [ -d /mnt/wslg ]; then
+        if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$runtime_dir/${WAYLAND_DISPLAY:-}" ]; then
+            has_wslg=1
+        elif [ -n "${DISPLAY:-}" ] && [ -S /mnt/wslg/.X11-unix/X0 ]; then
+            has_wslg=1
+        fi
+    fi
+
+    if [ -n "${DISPLAY:-}" ]; then
+        display_num="${display_num#localhost:}"
+        display_num="${display_num#127.0.0.1:}"
+        display_num="${display_num#*:}"
+        display_num="${display_num%%.*}"
+        if [ -S "/tmp/.X11-unix/X${display_num:-0}" ] || [ -S "/mnt/wslg/.X11-unix/X${display_num:-0}" ]; then
+            has_x11=1
+        elif [[ "${DISPLAY:-}" == localhost:* || "${DISPLAY:-}" == 127.0.0.1:* ]]; then
+            has_x11=1
+        fi
+    fi
+
+    if [ "$has_wslg" = 1 ] && [ "$has_x11" = 1 ]; then
+        printf 'wslg+x11'
+    elif [ "$has_wslg" = 1 ]; then
+        printf 'wslg'
+    elif [ "$has_x11" = 1 ]; then
+        printf 'x11'
+    else
+        printf 'headless'
+    fi
+}
+export -f _b00t_shell_display_context
+
 unset -f _b00t_log_vscode_shell_context
 function _b00t_log_vscode_shell_context() {
     local vscode_detection="$HOME/.dotfiles/vscode.🆚/vscode-detection.sh"
@@ -85,9 +157,9 @@ function _b00t_log_vscode_shell_context() {
     if ! type is_vscode_shell &>/dev/null; then
         log_b00t "🙈🥾 is_vscode_shell not defined"
     elif is_vscode_shell; then
-        log_b00t "🥾💻 hi VS Code! running b00t-cli"
+        _b00t_log_once_per_session vscode-context "🥾💻 hi VS Code! running b00t-cli"
     else
-        log_b00t "Not inside VSCODE"
+        _b00t_log_once_per_session vscode-context "Not inside VSCODE ($(_b00t_shell_transport_context); display: $(_b00t_shell_display_context))"
     fi
 }
 export -f _b00t_log_vscode_shell_context
@@ -124,7 +196,7 @@ pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 if [ "/usr/bin/docker" ] ; then 
-    echo "🐳 has d0cker! loading docker extensions"
+    _b00t_log_once_per_session docker-loader "🐳 has d0cker! loading docker extensions"
     source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
 
     ## 😔 docker context? 

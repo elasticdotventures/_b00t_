@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob c01a40ea2cf4be97de9010b927e7cb6817338df3 | gunzip
 #    Validate: git -C ~/.b00t cat-file -e c01a40ea2cf4be97de9010b927e7cb6817338df3
 
+[b00t]
+name = "agent-framework"
+type = "datum"
+hint = "Microsoft Agent Framework — agentic AI patterns and SDK"
+
 [datum]
 topic      = "agent-framework"
 class      = "Concept"

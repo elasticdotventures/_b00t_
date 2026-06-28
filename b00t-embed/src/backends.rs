@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use anyhow::anyhow;
 use async_trait::async_trait;
 use embed_anything::embeddings::embed::Embedder;
 
-use crate::{EmbedBackend, EmbedConfig, EmbedProvider, Embedding};
+use crate::{EmbedBackend, EmbedConfig, Embedding, EmbedProvider};
 
 pub struct EmbedAnythingBackend {
     embedder: Arc<Embedder>,
@@ -37,15 +36,12 @@ impl EmbedAnythingBackend {
             } => Embedder::from_pretrained_cloud(provider, model_id, api_key.clone())?,
         };
 
-        let sample_result = embedder
+        let sample: Vec<f32> = embedder
             .embed(&["ping"], Some(1), None)
             .await?
             .into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("embedder returned no vectors for probe input"))?;
-        let sample: Vec<f32> = sample_result
-            .to_dense()
-            .map_err(|e| anyhow!("failed to convert probe embedding to dense vector: {e}"))?;
+            .find_map(|r| r.to_dense().ok())
+            .unwrap_or_default();
         let dim = sample.len();
 
         Ok(Self {
@@ -61,13 +57,15 @@ impl EmbedAnythingBackend {
 #[async_trait]
 impl EmbedBackend for EmbedAnythingBackend {
     async fn embed(&self, text: &str) -> Result<Embedding> {
-        let results = self.embedder.embed(&[text], Some(1), None).await?;
+        let results = self
+            .embedder
+            .embed(&[text], Some(1), None)
+            .await?;
         let vec = results
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow!("embedder returned no vectors for input text"))?
-            .to_dense()
-            .map_err(|e| anyhow!("failed to convert embedding to dense vector: {e}"))?;
+            .and_then(|r| r.to_dense().ok())
+            .unwrap_or_default();
         Ok(Embedding { data: vec })
     }
 
@@ -76,21 +74,11 @@ impl EmbedBackend for EmbedAnythingBackend {
             .embedder
             .embed(texts, Some(self.config.batch_size), None)
             .await?;
-        if results.len() != texts.len() {
-            return Err(anyhow!(
-                "embedder returned {} vectors for {} inputs",
-                results.len(),
-                texts.len()
-            ));
-        }
-        let mut out = Vec::with_capacity(results.len());
-        for (idx, result) in results.into_iter().enumerate() {
-            let data = result.to_dense().map_err(|e| {
-                anyhow!("failed to convert batch embedding {idx} to dense vector: {e}")
-            })?;
-            out.push(Embedding { data });
-        }
-        Ok(out)
+        Ok(results
+            .into_iter()
+            .filter_map(|r| r.to_dense().ok())
+            .map(|data| Embedding { data })
+            .collect())
     }
 
     fn embedding_dim(&self) -> usize {

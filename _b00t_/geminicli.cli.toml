@@ -1,12 +1,58 @@
 [b00t]
 name = "geminicli"
 type = "cli"
-hint = "Google Gemini CLI tool"
-install = "mkdir -p ~/.local/bin && echo '#!/bin/bash\nnpx -y https://github.com/google-gemini/gemini-cli \"$@\"' > ~/.local/bin/gemini && chmod +x ~/.local/bin/gemini"
-version = "gemini --version 2>/dev/null || echo 'not installed'"
-version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
+hint = "Google Gemini CLI — interactive AI assistant with filesystem access, MCP support, and Google Search grounding"
+source = "https://github.com/google-gemini/gemini-cli"
+desires = "latest"
+install = { npm_global = "@google/gemini-cli", binary = "gemini" }
+version = "gemini --version"
+version_regex = '(\d+\.\d+\.\d+)'
 aliases = ["gemini"]
-
-# 🔗 Entanglements: This CLI tool is used by the MCP server
-# gemini-mcp-tool.mcp depends on geminicli.cli for authentication
+env = { GEMINI_API_KEY = "required" }
+depends_on = ["node.cli"]
 entangled_mcp = ["gemini-mcp-tool"]
+
+[b00t.skill]
+type_tags = ["cli", "ai", "google", "gemini", "mcp", "agent", "code-assist", "grounding"]
+description = """
+Google Gemini CLI — AI-powered interactive coding assistant from Google.
+
+KEY FEATURES
+  gemini                         # interactive REPL with Gemini 2.5 Pro
+  gemini "explain this"          # non-interactive one-shot query
+  gemini --model gemini-2.0-flash-exp  # use flash model
+
+INTEGRATION
+  MCP support built-in: ~/.gemini/settings.json
+  Google Search grounding: real-time web queries
+  Filesystem access: reads/writes files, sandboxed shell
+
+AUTHENTICATION
+  export GEMINI_API_KEY="..."   # from https://aistudio.google.com/apikey
+  Or: gcloud auth application-default login (ADC for Vertex AI)
+  Free tier: Gemini 2.0 Flash available at no cost
+
+INSTALL
+  npm install -g @google/gemini-cli
+  # or: npx -y https://github.com/google-gemini/gemini-cli
+
+GEMINI TIERS (b00t mapping)
+  gemini-2.0-flash       → sm0l/ch0nky (fast, cheap, code-capable)
+  gemini-2.5-flash       → ch0nky (best cost/quality balance)
+  gemini-2.5-pro         → frontier (complex reasoning, large context)
+  gemini-2.0-flash-thinking → frontier reasoning (CoT exposed)
+
+b00t INTEGRATION
+  Alternative executor when claude credits exhausted:
+    GEMINI_API_KEY=... gemini "task description"
+  MCP server: b00t learn gemini-mcp-tool
+"""
+tier = "frontier"
+complexity = 3
+
+# b00t:map v1
+# summary: Google Gemini CLI — AI assistant with MCP support, filesystem access, Google Search grounding
+# tags: cli, ai, google, gemini, mcp, agent, code-assist
+# tier: frontier
+# cmds: gemini, gemini "query", npm install -g @google/gemini-cli
+# complexity: 3

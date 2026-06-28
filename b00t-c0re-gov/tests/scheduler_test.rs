@@ -36,7 +36,10 @@ async fn test_scheduler_timer_fires_via_run() {
 
     // Verify we got at least one notification
     let has_timer = notifications.iter().any(|n| n.hook_id == token.id);
-    assert!(has_timer, "Timer should have fired and pushed a notification");
+    assert!(
+        has_timer,
+        "Timer should have fired and pushed a notification"
+    );
 
     // Shut down the scheduler (it will exit when the broadcast channel is dropped,
     // but the loop runs forever so we just drop it)
@@ -215,12 +218,18 @@ async fn test_composite_allof_integration() {
     // Fire only child1 — AllOf should NOT fire yet
     scheduler.match_event("event-a");
     let composite_fired = scheduler.check_composites();
-    assert_eq!(composite_fired, 0, "AllOf should NOT fire until all children fire");
+    assert_eq!(
+        composite_fired, 0,
+        "AllOf should NOT fire until all children fire"
+    );
 
     // Fire child2 — now AllOf should fire
     scheduler.match_event("event-b");
     let composite_fired = scheduler.check_composites();
-    assert_eq!(composite_fired, 1, "AllOf should fire when all children fire");
+    assert_eq!(
+        composite_fired, 1,
+        "AllOf should fire when all children fire"
+    );
 
     let notifications = ring.drain();
     let parent_fired = notifications.iter().any(|n| n.hook_id == parent.id);

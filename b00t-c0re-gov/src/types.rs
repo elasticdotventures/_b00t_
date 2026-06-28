@@ -26,18 +26,18 @@ pub struct HookToken {
     pub id: Uuid,
     pub hook_type: HookType,
     pub created_at: DateTime<Utc>,
-    pub ttl_ms: Option<u64>,  // None = effectively infinite (2 years)
+    pub ttl_ms: Option<u64>, // None = effectively infinite (2 years)
     pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum HookType {
-    TimerMs(u64),           // Fire after N milliseconds
-    AtTimestamp(i64),       // Fire at Unix timestamp
-    Event(String),          // Fire when event_id is emitted
-    AnyOf(Vec<HookToken>),  // Fire when ANY child fires
-    AllOf(Vec<HookToken>),  // Fire when ALL children fire
-    Cron(String),           // Cron expression
+    TimerMs(u64),          // Fire after N milliseconds
+    AtTimestamp(i64),      // Fire at Unix timestamp
+    Event(String),         // Fire when event_id is emitted
+    AnyOf(Vec<HookToken>), // Fire when ANY child fires
+    AllOf(Vec<HookToken>), // Fire when ALL children fire
+    Cron(String),          // Cron expression
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,7 +49,7 @@ pub struct AgentContext {
     pub reasoning: String,
     pub created_at: DateTime<Utc>,
     pub hook_token: HookToken,
-    pub continuation: String,  // What to do next — agent resumes here
+    pub continuation: String, // What to do next — agent resumes here
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,17 +70,24 @@ pub enum HookEvent {
 /// Each dimension is scored 0.0 - 1.0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreCard {
-    pub roi: f64,          // Return on investment (cake earned / cake spent)
-    pub cost: f64,         // Calorie efficiency (lower calories = higher score)
-    pub time: f64,         // Time to complete (faster = higher)
-    pub accuracy: f64,     // Correctness of solution
-    pub utility: f64,      // Reusability / applied value
-    pub risk: f64,         // Risk level (lower risk = higher score)
+    pub roi: f64,      // Return on investment (cake earned / cake spent)
+    pub cost: f64,     // Calorie efficiency (lower calories = higher score)
+    pub time: f64,     // Time to complete (faster = higher)
+    pub accuracy: f64, // Correctness of solution
+    pub utility: f64,  // Reusability / applied value
+    pub risk: f64,     // Risk level (lower risk = higher score)
 }
 
 impl ScoreCard {
     pub fn new(roi: f64, cost: f64, time: f64, accuracy: f64, utility: f64, risk: f64) -> Self {
-        Self { roi, cost, time, accuracy, utility, risk }
+        Self {
+            roi,
+            cost,
+            time,
+            accuracy,
+            utility,
+            risk,
+        }
     }
 
     /// Weighted sum across all dimensions.
@@ -91,7 +98,14 @@ impl ScoreCard {
     }
 
     pub fn weighted_score_with(&self, weights: &[f64; 6]) -> f64 {
-        let values = [self.roi, self.cost, self.time, self.accuracy, self.utility, self.risk];
+        let values = [
+            self.roi,
+            self.cost,
+            self.time,
+            self.accuracy,
+            self.utility,
+            self.risk,
+        ];
         let weighted_sum: f64 = values.iter().zip(weights.iter()).map(|(v, w)| v * w).sum();
         let weight_sum: f64 = weights.iter().sum();
         if weight_sum == 0.0 {
@@ -152,5 +166,5 @@ pub struct CakeBalance {
     pub total_earned: f64,
     pub total_spent: f64,
     pub missions_completed: u64,
-    pub current_streak: u64,  // consecutive successful missions
+    pub current_streak: u64, // consecutive successful missions
 }

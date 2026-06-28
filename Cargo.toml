@@ -17,16 +17,21 @@ members = [
     "b00t-c0re-a2a",
     "b00t-embed",
     "b00t-datum-core",
+    "b00t-zellij",
+    "b00t-admin",
+    "crates/ufo-types",
+    "b00t-ui-wasm",
 ]
 exclude = [
     "vendor/embed-anything-b00t",
+    "vendor/rust-docs-mcp-server",
 ]
 resolver = "2"
 
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.8.3"
+version = "0.9.1"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
@@ -61,12 +66,17 @@ opentelemetry = { version = "0.31", features = ["trace"] }
 async-trait = "0.1"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 thiserror = "2"
+sha2 = "0.10"
 openssl = "0.10"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 
 # b00t-embed — unified embedding adapter  
 b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
+b00t-zellij = { path = "b00t-zellij" }
+b00t-admin = { path = "b00t-admin" }
+b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
+mti = "1.1.1"
 
 
 
@@ -89,4 +99,4 @@ too_many_lines = { level = "allow", priority = 1 }
 # FMLA (FEAT_FP16) for aarch64 hosts without fullfp16 (rk3588s, cortex-a55).
 # TODO: upstream PR to gemm crate.
 [patch.crates-io]
-gemm-common = { path = "vendor/gemm-common" }
+# gemm-common = { path = "vendor/gemm-common" }  # TODO: init submodule

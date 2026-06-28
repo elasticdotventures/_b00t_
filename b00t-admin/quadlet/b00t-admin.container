@@ -1,0 +1,56 @@
+# b00t-admin Quadlet — Podman auto-restart via systemd
+#
+# Install:
+#   mkdir -p ~/.config/containers/systemd
+#   cp b00t-admin/quadlet/b00t-admin.container ~/.config/containers/systemd/
+#   systemctl --user daemon-reload
+#
+# Manage:
+#   systemctl --user start b00t-admin
+#   systemctl --user status b00t-admin
+#   systemctl --user stop b00t-admin
+#   journalctl --user -u b00t-admin -f
+#
+# Auto-update (if registry image):
+#   systemctl --user enable --now podman-auto-update.timer
+
+[Unit]
+Description=b00t Admin Dashboard + LLM Proxy
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/elasticdotventures/_b00t_
+
+[Container]
+ContainerName=b00t-admin
+Image=b00t-admin:latest
+# For registry-based pull:
+# Image=ghcr.io/elasticdotventures/b00t-admin:latest
+
+# Network — host mode for direct LLM access
+# Use 'publish' for bridged mode
+Network=host
+# PublishPort=31337:31337
+
+# Environment
+Environment=ADMIN_PORT=31337
+Environment=ADMIN_HOST=0.0.0.0
+Environment=LLM_BACKEND_URL=http://localhost:5273
+
+# Volume mounts — for persisting state
+Volume=%h/.b00t/admin:/home/b00t/.b00t/admin:Z
+
+# Resource limits
+Memory=512M
+CPUQuota=200%
+
+# Auto-restart policy
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

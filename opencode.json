@@ -1,0 +1,62 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "b00t-mcp": {
+      "command": [
+        "b00t-mcp",
+        "--stdio"
+      ],
+      "enabled": true,
+      "type": "local"
+    },
+    "codebase-memory": {
+      "command": [
+        "codebase-memory-mcp"
+      ],
+      "enabled": true,
+      "type": "local"
+    },
+    "rust-doc": {
+      "command": [
+        "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server",
+        "serde"
+      ],
+      "enabled": true,
+      "type": "local",
+      "environment": {
+        "OPENAI_API_BASE": "http://127.0.0.1:5273/v1",
+        "OPENAI_API_KEY": "b00t-sk-b28645a21c73471b859ed90ba7cde987"
+      },
+      "timeout": 60000
+    }
+  },
+  "model": "qwen36-local/ch0nky",
+  "provider": {
+    "deepseek": {
+      "api": "https://api.deepseek.com",
+      "name": "DeepSeek",
+      "npm": "@ai-sdk/openai-compatible"
+    },
+    "qwen36-local": {
+      "api": "http://127.0.0.1:5273/v1",
+      "models": {
+        "ch0nky": {
+          "limit": {
+            "context": 262144,
+            "output": 8192
+          },
+          "name": "ch0nky",
+          "reasoning": true,
+          "temperature": true,
+          "tool_call": true
+        }
+      },
+      "name": "Qwen3.6 Local",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "b00t-sk-b28645a21c73471b859ed90ba7cde987"
+      }
+    }
+  },
+  "small_model": "qwen36-local/ch0nky"
+}

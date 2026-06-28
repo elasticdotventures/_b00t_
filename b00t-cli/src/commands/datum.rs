@@ -1,5 +1,5 @@
-use crate::datum_utils::{self, DatumFilter};
 use crate::DatumType;
+use crate::datum_utils::{self, DatumFilter};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
@@ -103,18 +103,15 @@ pub enum DatumCommands {
         limit: usize,
     },
 
-    #[clap(about = "Sync all datums to k8s ConfigMaps in b00t-datums namespace (Part B)")]
-    SyncK8s {
-        #[clap(long, default_value = "b00t-datums", help = "Target k8s namespace")]
-        namespace: String,
-    },
-
     #[clap(about = "Validate a datum TOML file against BootDatum schema")]
     Validate {
         #[clap(help = "Path to .toml file or datum key (e.g., mold.cli)")]
         target: String,
 
-        #[clap(long, help = "check extension/type consistency (e.g. .cli suffix vs type=cli)")]
+        #[clap(
+            long,
+            help = "check extension/type consistency (e.g. .cli suffix vs type=cli)"
+        )]
         strict: bool,
     },
 
@@ -127,7 +124,9 @@ pub enum DatumCommands {
         name: String,
     },
 
-    #[clap(about = "Create a delegated task ticket for datum creation (bypasses future datum-write guard)")]
+    #[clap(
+        about = "Create a delegated task ticket for datum creation (bypasses future datum-write guard)"
+    )]
     Delegate {
         #[clap(help = "Datum type (cli, mcp, ai, docker, hardware, …)")]
         datum_type: String,
@@ -140,6 +139,45 @@ pub enum DatumCommands {
 
         #[clap(long, help = "Install method hint (apt, cargo, pip, curl, …)")]
         install_method: Option<String>,
+    },
+
+    #[clap(about = "Resolve an abstract interface from a datum with token substitution")]
+    Call {
+        #[clap(help = "Datum key (e.g., gh.cli)")]
+        datum: String,
+
+        #[clap(help = "Abstract interface name (e.g., pr_comment, pr_review)")]
+        interface: String,
+
+        #[clap(
+            long,
+            help = "Token substitutions: key=value (repeatable)",
+            value_name = "KEY=VALUE"
+        )]
+        token: Vec<String>,
+
+        #[clap(long, help = "Execute the resolved command instead of printing")]
+        exec: bool,
+    },
+
+    #[clap(about = "Calibrate tier assignments in b00t:map tail-maps via telemetry (E2)")]
+    Calibrate(crate::commands::calibrate::CalibrateArgs),
+
+    #[clap(about = "Generate a datum from an artifact via kreuzberg extraction (E3)")]
+    FromArtifact(crate::commands::from_artifact::FromArtifactArgs),
+
+    #[clap(
+        about = "Generate wrkflw-ci-build.yml for a GithubActionsCompatible repo (CodeRunnerActionProcess local gate)"
+    )]
+    GenWrkflw {
+        #[clap(
+            help = "Path to repo root (defaults to current directory)",
+            default_value = "."
+        )]
+        repo_path: String,
+
+        #[clap(long, help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing")]
+        write: bool,
     },
 }
 
@@ -211,26 +249,33 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
         }
-        DatumCommands::SyncK8s { namespace } => {
-            use crate::datum_k8s::sync_datums_to_configmap;
-            let b00t_datums_path = format!("{}/datums", path);
-            // sync_datums_to_configmap takes the b00t root path, not datums subdir
-            match sync_datums_to_configmap(path, namespace) {
-                Ok(synced) => {
-                    println!("synced {} datums → k8s namespace {}", synced.len(), namespace);
-                    for name in &synced {
-                        println!("  configmap/{name}");
-                    }
-                    let _ = b00t_datums_path; // unused in this path
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
         DatumCommands::Validate { target, strict } => handle_validate(path, target, *strict),
         DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),
-        DatumCommands::Delegate { datum_type, name, description, install_method } => {
-            handle_delegate(datum_type, name, description.as_deref(), install_method.as_deref())
+        DatumCommands::Delegate {
+            datum_type,
+            name,
+            description,
+            install_method,
+        } => handle_delegate(
+            datum_type,
+            name,
+            description.as_deref(),
+            install_method.as_deref(),
+        ),
+        DatumCommands::Call {
+            datum,
+            interface,
+            token,
+            exec,
+        } => handle_call(path, datum, interface, token, *exec),
+        DatumCommands::Calibrate(args) => {
+            crate::commands::calibrate::handle_calibrate(path, args)
+        }
+        DatumCommands::FromArtifact(args) => {
+            crate::commands::from_artifact::handle_from_artifact(args)
+        }
+        DatumCommands::GenWrkflw { repo_path, write } => {
+            handle_gen_wrkflw(repo_path, *write)
         }
     }
 }
@@ -835,25 +880,78 @@ fn parse_datum_type(s: &str) -> Option<crate::DatumType> {
 /// 🤓 single source of truth: update this when BootDatum adds/removes fields.
 ///    `type` maps to BootDatum::datum_type (serde rename).
 const KNOWN_B00T_KEYS: &[&str] = &[
-    "name", "type", "status", "enabled", "status_msg", "replacement",
+    "name",
+    "type",
+    "status",
+    "enabled",
+    "status_msg",
+    "replacement",
     "git_attributes",
-    "desires", "auto_install", "hint", "skills", "compliance",
-    "install", "update", "version", "version_regex", "requires_sudo",
-    "command", "args", "vsix_id", "script",
-    "image", "docker_args", "oci_uri", "resource_path",
-    "chart_path", "namespace", "values_file",
-    "keywords", "package_name", "env", "require", "aliases",
-    "depends_on", "unlocks", "gate", "url", "branch", "clone_path",
-    "entangled_agents", "entangled_cli", "entangled_mcp",
-    "entangled_ai_models", "entangled_apis", "entangled_docker",
-    "entangled_k8s", "channel_prefix",
-    "learn", "lfmf_category",
+    "desires",
+    "auto_install",
+    "hint",
+    "skills",
+    "compliance",
+    "install",
+    "update",
+    "version",
+    "version_regex",
+    "requires_sudo",
+    "command",
+    "args",
+    "vsix_id",
+    "script",
+    "image",
+    "docker_args",
+    "oci_uri",
+    "resource_path",
+    "chart_path",
+    "namespace",
+    "values_file",
+    "keywords",
+    "package_name",
+    "env",
+    "require",
+    "aliases",
+    "depends_on",
+    "unlocks",
+    "gate",
+    "url",
+    "branch",
+    "clone_path",
+    "entangled_agents",
+    "entangled_cli",
+    "entangled_mcp",
+    "entangled_ai_models",
+    "entangled_apis",
+    "entangled_docker",
+    "entangled_k8s",
+    "channel_prefix",
+    "learn",
+    "lfmf_category",
     // nested sections (valid as [b00t.X] tables)
-    "ansible", "k0mmand3r", "knowledge", "mcp",
-    "hook_detect", "hook_install", "hook_learn", "hook_uninstall", "hook_update",
-    "job", "skill", "justfile", "stack", "orchestration",
-    "uninstall", "provides", "implements", "members", "type_tags",
-    "usage", "dsn", "protocol",
+    "ansible",
+    "k0mmand3r",
+    "knowledge",
+    "mcp",
+    "hook_detect",
+    "hook_install",
+    "hook_learn",
+    "hook_uninstall",
+    "hook_update",
+    "job",
+    "skill",
+    "justfile",
+    "stack",
+    "orchestration",
+    "uninstall",
+    "provides",
+    "implements",
+    "members",
+    "type_tags",
+    "usage",
+    "dsn",
+    "protocol",
 ];
 
 /// Validate a datum file against BootDatum schema.
@@ -862,21 +960,27 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let dir = std::path::Path::new(expanded.as_ref());
 
     // Resolve target to a file path
-    let file_path = if target.ends_with(".toml") || target.ends_with(".tomllm") || target.ends_with(".tomllmd") {
-        // Direct file path
-        let p = std::path::Path::new(target);
-        if p.is_absolute() { p.to_path_buf() } else { dir.join(target) }
-    } else if target.contains('.') {
-        // datum key like "mold.cli" — resolve via get_config
-        let config_result = crate::get_config(target, datum_path);
-        let (_config, filename) = match config_result {
-            Ok(c) => c,
-            Err(e) => anyhow::bail!("datum '{}' not found at {}: {}", target, datum_path, e),
+    let file_path =
+        if target.ends_with(".toml") || target.ends_with(".tomllm") || target.ends_with(".tomllmd")
+        {
+            // Direct file path
+            let p = std::path::Path::new(target);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                dir.join(target)
+            }
+        } else if target.contains('.') {
+            // datum key like "mold.cli" — resolve via get_config
+            let config_result = crate::get_config(target, datum_path);
+            let (_config, filename) = match config_result {
+                Ok(c) => c,
+                Err(e) => anyhow::bail!("datum '{}' not found at {}: {}", target, datum_path, e),
+            };
+            dir.join(&filename)
+        } else {
+            anyhow::bail!("specify datum key (e.g. mold.cli), file path, or type.name format");
         };
-        dir.join(&filename)
-    } else {
-        anyhow::bail!("specify datum key (e.g. mold.cli), file path, or type.name format");
-    };
 
     if !file_path.exists() {
         anyhow::bail!("file not found: {}", file_path.display());
@@ -896,8 +1000,14 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     // Check [b00t] section exists
     let b00t_table = match raw.get("b00t") {
         Some(toml::Value::Table(t)) => t,
-        Some(_) => { errors.push("[b00t] must be a TOML table".into()); return print_validation_result(&errors, &warnings); }
-        None => { errors.push("missing [b00t] section".into()); return print_validation_result(&errors, &warnings); }
+        Some(_) => {
+            errors.push("[b00t] must be a TOML table".into());
+            return print_validation_result(&errors, &warnings);
+        }
+        None => {
+            errors.push("missing [b00t] section".into());
+            return print_validation_result(&errors, &warnings);
+        }
     };
 
     // Required fields
@@ -911,7 +1021,10 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     // Check for unknown keys
     for key in b00t_table.keys() {
         if !KNOWN_B00T_KEYS.contains(&key.as_str()) {
-            warnings.push(format!("unknown field: b00t.{} (not in BootDatum schema)", key));
+            warnings.push(format!(
+                "unknown field: b00t.{} (not in BootDatum schema)",
+                key
+            ));
         }
     }
 
@@ -963,7 +1076,10 @@ fn print_validation_result(errors: &[String], warnings: &[String]) -> Result<()>
 fn handle_scaffold(datum_type: &str, name: &str) -> Result<()> {
     let dt = DatumType::from_type_token(datum_type)
         .or_else(|| DatumType::from_type_token(&datum_type.to_lowercase()))
-        .context(format!("unknown datum type: '{}' (use: cli, mcp, ai, model, docker, hardware, …)", datum_type))?;
+        .context(format!(
+            "unknown datum type: '{}' (use: cli, mcp, ai, model, docker, hardware, …)",
+            datum_type
+        ))?;
 
     // Reverse-dot for model sub-type: name.model.ai.tomllmd
     let is_model = datum_type == "model" || datum_type == "ai_model";
@@ -973,10 +1089,20 @@ fn handle_scaffold(datum_type: &str, name: &str) -> Result<()> {
         (format!("{}{}", name, dt.file_extension()), datum_type)
     };
 
-    println!("# {}.{} — {} datum", name, datum_type, dt.base_suffix().trim_start_matches('.'));
+    println!(
+        "# {}.{} — {} datum",
+        name,
+        datum_type,
+        dt.base_suffix().trim_start_matches('.')
+    );
     println!("# Generated: {}", chrono::Utc::now().to_rfc3339());
     println!("# File: {}", filename);
-    println!("# Install with: b00t-cli install {}", filename.trim_end_matches(".tomllmd").trim_end_matches(".toml"));
+    println!(
+        "# Install with: b00t-cli install {}",
+        filename
+            .trim_end_matches(".tomllmd")
+            .trim_end_matches(".toml")
+    );
     println!();
     println!("[b00t]");
     println!("name        = \"{}\"", name);
@@ -1022,6 +1148,17 @@ fn handle_scaffold(datum_type: &str, name: &str) -> Result<()> {
             println!("# soc         = \"SoC-Model\"");
             println!("# driver_pkg  = \"driver-package\"");
         }
+        DatumType::Repo => {
+            println!("# [b00t.source]");
+            println!("# repo        = \"https://github.com/org/{}\"", name);
+            println!("# vendor_path = \"vendor/{}\"", name);
+            println!();
+            println!("# GithubActionsCompatible — declare CodeRunnerActionProcess providers");
+            println!("# (run `b00t datum gen-wrkflw <path>` to generate wrkflw-ci-build.yml)");
+            println!("[b00t.services.action_runner]");
+            println!("local  = \"wrkflw\"");
+            println!("remote = \"github-actions\"");
+        }
         _ => {
             println!("# TODO: add type-specific fields");
         }
@@ -1054,7 +1191,10 @@ fn handle_delegate(
     let (filename, datum_key) = if is_model {
         (format!("{}.model.ai.tomllmd", name), format!("{}.ai", name))
     } else {
-        (format!("{}{}", name, dt.file_extension()), format!("{}.{}", name, datum_type))
+        (
+            format!("{}{}", name, dt.file_extension()),
+            format!("{}.{}", name, datum_type),
+        )
     };
     let type_label = if is_model { "ai" } else { datum_type };
     let scaffold_type = datum_type;
@@ -1082,7 +1222,9 @@ fn handle_delegate(
         scaffold_type = scaffold_type,
     );
 
-    let method_hint = install_method.map(|m| format!(" install_method={}", m)).unwrap_or_default();
+    let method_hint = install_method
+        .map(|m| format!(" install_method={}", m))
+        .unwrap_or_default();
     let title = format!("datum: create {datum_key} ({type_label} datum{method_hint})");
 
     println!("# Datum Delegation Ticket");
@@ -1104,13 +1246,19 @@ fn handle_delegate(
     println!("## Creating b00t task…");
     let output = Command::new("b00t-cli")
         .args([
-            "task", "add",
+            "task",
+            "add",
             &title,
-            "--description", &desc,
-            "--tags", "datum,registration",
-            "--priority", "2",
-            "--criteria", &format!("b00t datum validate {} --strict passes", datum_key),
-            "--criteria", &format!("b00t-cli . {} returns version match", name),
+            "--description",
+            &desc,
+            "--tags",
+            "datum,registration",
+            "--priority",
+            "2",
+            "--criteria",
+            &format!("b00t datum validate {} --strict passes", datum_key),
+            "--criteria",
+            &format!("b00t-cli . {} returns version match", name),
         ])
         .output()
         .context("failed to create b00t task")?;
@@ -1126,4 +1274,267 @@ fn handle_delegate(
     println!("Delegated. Next task: `b00t task next`");
 
     Ok(())
+}
+
+/// Resolve an abstract interface from a datum TOML with token substitution.
+///
+/// Reads `[b00t.abstracts.<interface>]` from the datum file, selects the
+/// appropriate backend (prefers `gh_cli` over `curl_rest`), substitutes
+/// `{token}` placeholders, and either prints or executes the command.
+fn handle_call(
+    b00t_path: &str,
+    datum_key: &str,
+    interface: &str,
+    tokens: &[String],
+    exec: bool,
+) -> Result<()> {
+    // Find the datum file path
+    let all = datum_utils::get_all_datums_with_paths(b00t_path, None)?;
+    let file_path = all
+        .iter()
+        .find(|(name, _)| name.as_str() == datum_key || name.ends_with(&format!(".{}", datum_key)))
+        .map(|(_, (_, path))| path.clone())
+        .or_else(|| {
+            all.iter()
+                .find(|(name, _)| name.contains(datum_key))
+                .map(|(_, (_, path))| path.clone())
+        })
+        .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found in {}", datum_key, b00t_path))?;
+
+    let file_path = std::path::PathBuf::from(&file_path);
+
+    // Parse the raw TOML to access [b00t.abstracts] (not yet in BootDatum struct)
+    let content = std::fs::read_to_string(&file_path)
+        .with_context(|| format!("Failed to read datum file {}", file_path.display()))?;
+
+    let root: toml::Value = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse TOML in {}", file_path.display()))?;
+
+    // Navigate: b00t -> abstracts -> <interface>
+    let abstracts = root
+        .get("b00t")
+        .and_then(|b| b.get("abstracts"))
+        .and_then(|a| a.get(interface))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Abstract interface '{}' not found in datum '{}'. Available: check `b00t datum show {}`",
+                interface, datum_key, datum_key
+            )
+        })?;
+
+    // Select backend: github_mcp (if MCP server running) -> gh_cli -> curl_rest
+    let template = if abstracts.get("github_mcp").is_some() {
+        if github_mcp_running() {
+            abstracts.get("github_mcp")
+        } else {
+            abstracts.get("gh_cli")
+        }
+    } else {
+        abstracts.get("gh_cli")
+    }
+    .or_else(|| abstracts.get("curl_rest"))
+    .and_then(|v| v.as_str())
+    .ok_or_else(|| {
+        anyhow::anyhow!(
+            "No backend template found for '{}' in datum '{}'",
+            interface,
+            datum_key
+        )
+    })?;
+
+    // Parse token substitutions: key=value -> {key} -> value
+    let token_map: HashMap<&str, &str> = tokens.iter().filter_map(|t| t.split_once('=')).collect();
+
+    if exec {
+        let argv = resolve_command_argv(template, &token_map)?;
+        if argv_has_unresolved_placeholders(&argv) {
+            anyhow::bail!(
+                "Unresolved tokens remain: check template for unmatched {{placeholders}}"
+            );
+        }
+        let (program, args) = argv
+            .split_first()
+            .ok_or_else(|| anyhow::anyhow!("Resolved command is empty"))?;
+        eprintln!("▶ {}", argv.join(" "));
+        let status = std::process::Command::new(program)
+            .args(args)
+            .status()
+            .with_context(|| format!("Failed to execute: {}", argv.join(" ")))?;
+        if !status.success() {
+            anyhow::bail!("Command exited with status: {}", status);
+        }
+    } else {
+        let resolved = substitute_tokens(template, &token_map);
+        if resolved.contains('{') && resolved.contains('}') {
+            eprintln!(
+                "⚠️  Unresolved tokens remain: check template for unmatched {{placeholders}}"
+            );
+        }
+        println!("{}", resolved);
+    }
+
+    Ok(())
+}
+
+// ─── gen-wrkflw ──────────────────────────────────────────────────────────────
+
+/// Detect build shape and emit a wrkflw-ci-build.yml (CodeRunnerActionProcess local gate).
+/// Follows the l3dg3rr pattern: workflow_dispatch only, emulation-friendly.
+fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
+    use std::path::Path;
+
+    let root = Path::new(repo_path).canonicalize()
+        .with_context(|| format!("cannot resolve path: {repo_path}"))?;
+
+    let workflows_dir = root.join(".github/workflows");
+    anyhow::ensure!(
+        workflows_dir.exists(),
+        "no .github/workflows/ found at {} — not a GithubActionsCompatible repo",
+        root.display()
+    );
+
+    // Check for existing wrkflw workflow
+    let out_path = workflows_dir.join("wrkflw-ci-build.yml");
+    if out_path.exists() && !write {
+        println!("# wrkflw-ci-build.yml already exists at {}", out_path.display());
+        println!("# Use --write to overwrite.");
+        return Ok(());
+    }
+
+    // Detect build shape
+    let is_rust   = root.join("Cargo.toml").exists();
+    let is_node   = root.join("package.json").exists();
+    let is_python = root.join("pyproject.toml").exists() || root.join("setup.py").exists();
+    let repo_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
+
+    let build_steps = if is_rust {
+        "      - name: Build\n        run: cargo build --workspace\n\n      - name: Test\n        run: cargo test --workspace"
+    } else if is_node {
+        "      - name: Install\n        run: npm ci\n\n      - name: Build\n        run: npm run build\n\n      - name: Test\n        run: npm test"
+    } else if is_python {
+        "      - name: Install\n        run: uv pip install -e .[dev]\n\n      - name: Test\n        run: uv run pytest"
+    } else {
+        "      - name: Build\n        run: echo 'TODO: add build steps'"
+    };
+
+    let header = format!(
+        "# wrkflw-ci-build: local CI gate for {repo_name} (emulation mode, no Docker)\n\
+         # Run with: wrkflw run .github/workflows/wrkflw-ci-build.yml\n\
+         # Or:       just ci-local\n\
+         #\n\
+         # Follows l3dg3rr wrkflw pattern: workflow_dispatch only, emulation-friendly.\n\
+         # GithubActionsCompatible / CodeRunnerActionProcess (see WRKFLW.tomllmd)\n\
+         name: wrkflw-ci-build\n"
+    );
+    let body = concat!(
+        "\non:\n",
+        "  workflow_dispatch:\n",
+        "\nenv:\n",
+        "  CARGO_TERM_COLOR: always\n",
+        "  RUST_BACKTRACE: \"1\"\n",
+        "\ndefaults:\n",
+        "  run:\n",
+        "    shell: bash\n",
+        "\njobs:\n",
+        "  build:\n",
+        "    name: \"Local CI gate\"\n",
+        "    runs-on: ubuntu-latest\n",
+        "    steps:\n",
+        "      - uses: actions/checkout@v4\n\n",
+    );
+    let content = format!("{header}{body}{build_steps}\n");
+
+    if write {
+        std::fs::write(&out_path, &content)
+            .with_context(|| format!("write {}", out_path.display()))?;
+        println!("✓ wrote {}", out_path.display());
+        println!("  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml");
+        println!("  Declare in datum: [b00t.services.action_runner] local = \"wrkflw\"");
+    } else {
+        println!("# Preview — run with --write to create .github/workflows/wrkflw-ci-build.yml");
+        println!("{content}");
+    }
+
+    Ok(())
+}
+
+fn github_mcp_running() -> bool {
+    std::process::Command::new("b00t")
+        .args(["mcp", "list", "--search", "github"])
+        .output()
+        .map(|output| {
+            output.status.success() && String::from_utf8_lossy(&output.stdout).contains("Running")
+        })
+        .unwrap_or(false)
+}
+
+fn resolve_command_argv(template: &str, token_map: &HashMap<&str, &str>) -> Result<Vec<String>> {
+    if template.contains('\n') {
+        anyhow::bail!(
+            "Refusing to execute multi-line backend template without a shell; use a single-command backend such as gh_cli"
+        );
+    }
+
+    let argv = shlex::split(template)
+        .ok_or_else(|| anyhow::anyhow!("Failed to parse backend template as argv"))?;
+    if argv.is_empty() {
+        anyhow::bail!("Backend template resolved to an empty command");
+    }
+
+    Ok(argv
+        .into_iter()
+        .map(|arg| substitute_tokens(&arg, token_map))
+        .collect())
+}
+
+fn substitute_tokens(input: &str, token_map: &HashMap<&str, &str>) -> String {
+    let mut resolved = input.to_string();
+    for (key, value) in token_map {
+        let placeholder = format!("{{{}}}", key);
+        resolved = resolved.replace(&placeholder, value);
+    }
+    resolved
+}
+
+fn argv_has_unresolved_placeholders(argv: &[String]) -> bool {
+    argv.iter()
+        .any(|arg| arg.contains('{') && arg.contains('}'))
+}
+
+#[cfg(test)]
+mod call_tests {
+    use super::*;
+
+    #[test]
+    fn resolve_command_argv_keeps_shell_metacharacters_inside_token_arg() {
+        let mut token_map = HashMap::new();
+        token_map.insert("pr", "523");
+        token_map.insert("body", "x'; touch /tmp/pwn; #");
+
+        let argv = resolve_command_argv("gh pr comment {pr} --body '{body}'", &token_map).unwrap();
+
+        assert_eq!(
+            argv,
+            vec![
+                "gh".to_string(),
+                "pr".to_string(),
+                "comment".to_string(),
+                "523".to_string(),
+                "--body".to_string(),
+                "x'; touch /tmp/pwn; #".to_string(),
+            ]
+        );
+        assert!(!argv.iter().any(|arg| arg == "touch" || arg == "/tmp/pwn"));
+    }
+
+    #[test]
+    fn resolve_command_argv_rejects_multiline_shell_backend() {
+        let token_map = HashMap::new();
+        let err = resolve_command_argv("PR={pr}\necho $PR", &token_map).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Refusing to execute multi-line backend template")
+        );
+    }
 }

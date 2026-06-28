@@ -136,6 +136,40 @@ pub trait DatumCreator {
 }
 
 // Base implementation for common constraint evaluation
+
+/// Typed constraint for datum evaluation — replaces raw string matching.
+///
+/// FOL-correct: constraints are explicit predicates, not implicit string dispatch.
+/// Unknown constraints fail-closed (return false), not fail-open (return true).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DatumConstraint {
+    /// At least one environment variable from the datum's env section is set
+    NeedsAnyEnv,
+    /// All environment variables from the datum's env section must be set
+    NeedsAllEnv,
+    /// Operating system requirement (ubuntu, debian, macos, windows, linux)
+    OsRequirement { os: String },
+    /// A command must be available in PATH
+    CommandAvailable { cmd: String },
+}
+
+impl DatumConstraint {
+    /// Parse from string representation (backward-compatible with existing TOML configs)
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "NEEDS_ANY_ENV" => Some(DatumConstraint::NeedsAnyEnv),
+            "NEEDS_ALL_ENV" => Some(DatumConstraint::NeedsAllEnv),
+            s if s.starts_with("OS:") => Some(DatumConstraint::OsRequirement {
+                os: s[3..].to_string(),
+            }),
+            s if s.starts_with("CMD:") => Some(DatumConstraint::CommandAvailable {
+                cmd: s[4..].to_string(),
+            }),
+            _ => None, // Unknown → fail-closed (cf. VerdictConstraint::evaluate)
+        }
+    }
+}
+
 pub trait ConstraintEvaluator {
     fn datum(&self) -> &BootDatum;
 
@@ -167,24 +201,29 @@ pub trait ConstraintEvaluator {
         }
     }
 
+    /// Evaluate a typed constraint against this datum.
+    /// FOL: constraint(datum) → bool
+    fn evaluate_constraint(&self, constraint: &DatumConstraint) -> bool {
+        match constraint {
+            DatumConstraint::NeedsAnyEnv => self.has_any_env_vars(),
+            DatumConstraint::NeedsAllEnv => self.has_all_env_vars(),
+            DatumConstraint::OsRequirement { os } => self.check_os_requirement(os),
+            DatumConstraint::CommandAvailable { cmd } => crate::check_command_available(cmd),
+        }
+    }
+
+    /// Evaluate all constraints — implicit AllOf (∧).
+    /// Unknown constraints are parsed from strings; unparseable constraints
+    /// fail-closed: they return false (unlike the previous `_ => true`).
     fn evaluate_constraints_default(&self, require: &[String]) -> bool {
         if require.is_empty() {
-            // Default behavior: NEEDS_ALL_ENV for datums with env vars
             return self.has_all_env_vars();
         }
-
-        require.iter().all(|constraint| {
-            match constraint.as_str() {
-                "NEEDS_ANY_ENV" => self.has_any_env_vars(),
-                "NEEDS_ALL_ENV" => self.has_all_env_vars(),
-                constraint if constraint.starts_with("OS:") => {
-                    self.check_os_requirement(&constraint[3..])
-                }
-                constraint if constraint.starts_with("CMD:") => {
-                    crate::check_command_available(&constraint[4..])
-                }
-                _ => true, // Unknown constraints default to true
-            }
+        // AllOf: every constraint must be satisfied
+        require.iter().all(|c| {
+            DatumConstraint::from_str(c)
+                .map(|constraint| self.evaluate_constraint(&constraint))
+                .unwrap_or(false) // Unknown constraints → fail-closed
         })
     }
 }

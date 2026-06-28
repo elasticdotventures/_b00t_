@@ -1,3 +1,120 @@
+[submodule "_b00t_/test/bats"]
+	path = _b00t_/test/bats
+	url = https://github.com/bats-core/bats-core.git
+
+[submodule "_b00t_/test/test_helper/bats-assert"]
+	path = _b00t_/test/test_helper/bats-assert
+	url = https://github.com/bats-core/bats-assert.git
+
+[submodule "_b00t_/test/test_helper/bats-support"]
+	path = _b00t_/test/test_helper/bats-support
+	url = https://github.com/bats-core/bats-support.git
+
+[submodule "b00t-vscode/just-lsp"]
+	path = b00t-vscode/just-lsp
+	url = https://github.com/terror/just-lsp
+
+[submodule "email/himalaya"]
+	path = email/himalaya
+	url = https://github.com/pimalaya/himalaya.git
+
+[submodule "foundry-samples"]
+	path = foundry-samples
+	url = https://github.com/azure-ai-foundry/foundry-samples
+
+[submodule "integrations/nasdanika-mcp"]
+	path = integrations/nasdanika-mcp
+	url = https://github.com/elasticdotventures/mcp-server.git
+
+[submodule "just-mcp"]
+	path = just-mcp
+	url = https://github.com/PromptExecution/just-mcp
+
+[submodule "plantuml-server"]
+	path = plantuml-server
+	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
+
+[submodule "python.🐍/DALLE2-pytorch"]
+	path = python.🐍/DALLE2-pytorch
+	url = https://github.com/lucidrains/DALLE2-pytorch.git
+
+[submodule "rmcp-rust-sdk"]
+	path = rmcp-rust-sdk
+	url = git@github.com:modelcontextprotocol/rust-sdk.git
+
+[submodule "vendor/agent-framework"]
+	path = vendor/agent-framework
+	url = https://github.com/microsoft/agent-framework
+
+[submodule "vendor/agentfm-core"]
+	path = vendor/agentfm-core
+	url = https://github.com/microsoft/agent-framework
+
+[submodule "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"]
+	path = vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr
+	url = https://github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr.git
+
+[submodule "vendor/embed-anything"]
+	path = vendor/embed-anything
+	url = https://github.com/StarlightSearch/EmbedAnything.git
+
+[submodule "vendor/embed-anything-b00t"]
+	path = vendor/embed-anything-b00t
+	url = https://github.com/PromptExecution/embed-anything-b00t.git
+
+[submodule "vendor/hermes-agent-b00t"]
+	path = vendor/hermes-agent-b00t
+	url = git@github.com:PromptExecution/hermes-agent-b00t.git
+
+[submodule "vendor/irontology-mcp"]
+	path = vendor/irontology-mcp
+	url = https://github.com/PromptExecution/irontology-mcp.git
+
+[submodule "vendor/just-mcp"]
+	path = vendor/just-mcp
+	url = https://github.com/PromptExecution/just-mcp
+
+[submodule "vendor/ledgrrr"]
+	path = vendor/ledgrrr
+	url = https://github.com/PromptExecution/ledgrrr.git
+	branch = b00t-patches
+
+[submodule "vendor/llama-patch"]
+	path = vendor/llama-patch
+	url = https://github.com/PromptExecution/llama-patch.git
+
+[submodule "vendor/moltis-b00t"]
+	path = vendor/moltis-b00t
+	url = git@github.com:elasticdotventures/moltis-b00t.git
+
+[submodule "vendor/opencode-b00t"]
+	path = vendor/opencode-b00t
+	url = git@github.com:PromptExecution/opencode-b00t.git
+
+[submodule "vendor/rust-docs-mcp-server"]
+	path = vendor/rust-docs-mcp-server
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+
 [submodule "vendor/rust-docs-mcp-b00t"]
 	path = vendor/rust-docs-mcp-b00t
-	url = https://github.com/PromptExecution/rust-docs-mcp-b00t
+	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
+[submodule "vendor/gemm-common"]
+	path = vendor/gemm-common
+	url = https://github.com/PromptExecution/gemm-common.git
+
+[submodule "vendor/tomllm"]
+	path = vendor/tomllm
+	url = https://github.com/PromptExecution/tomllm.git
+
+[submodule "vscode.🆚/vscode-docs"]
+	path = vscode.🆚/vscode-docs
+	url = https://github.com/microsoft/vscode-docs
+[submodule "vendor/agentsea-skillpacks"]
+	path = vendor/agentsea-skillpacks
+	url = https://github.com/PromptExecution/skillpacks-b00t.git
+[submodule "vendor/android-emulator-container-scripts"]
+	path = vendor/android-emulator-container-scripts
+	url = https://github.com/PromptExecution/android-emulator-container-scripts-b00t.git
+[submodule "vendor/opencode-goal-plugin"]
+	path = vendor/opencode-goal-plugin
+	url = https://github.com/PromptExecution/opencode-goal-plugin-b00t.git

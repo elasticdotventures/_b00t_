@@ -1,0 +1,114 @@
+# b00t:map v1
+# summary: Canonical reviewer capability manifest — parseable by any harness to load reviewer tools, skills, sub-agents, and compliance rules
+# tags: reviewer, capability, manifest, canonical, harness, skill, role
+# tier: frontier
+# cmds: b00t learn reviewer, b00t whoami --role=reviewer, just reviewer system-normal
+# complexity: 5
+
+# ── Canonical Capability Manifest ────────────────────────────────────────────
+# This file is the SINGLE SOURCE OF TRUTH for the reviewer capability.
+# Every harness (Claude Code, opencode, Hermes, b00t-cli) loads from here.
+# Harness-specific supplements (AGENTS/--role=reviewer.md, etc.) are thin wrappers
+# that delegate to this canonical definition.
+
+[capability]
+name = "reviewer"
+version = "1.0.0"
+type = "skill"
+tier = "frontier"
+description = "Adversarial multi-framework code/datum review with MECE+TRIZ+Eureka analysis"
+
+# ── What the reviewer provides ───────────────────────────────────────────────
+
+[provides]
+skills = [
+    "multi-framework-code-review",
+    "github-code-review", 
+    "datum-review",
+    "security-scanner",
+    "pr-risk-scorer",
+    "diff-analyzer",
+    "quality-tracker",
+    "systematic-debugging",
+]
+tools = [
+    "b00t-cli",          # b00t task/agent/script operations
+    "just",              # just recipe execution
+    "gh",                # GitHub CLI for PR operations
+]
+mcp_servers = [
+    "b00t-mcp",          # b00t MCP bridge
+    "context7",          # external library docs
+    "codebase-memory",   # code knowledge graph
+    "github",            # GitHub API
+    "rust-doc",          # Rust crate documentation
+]
+sub_agents = [
+    "mece-analyzer",     # MECE structural decomposition
+    "triz-analyzer",     # TRIZ contradiction analysis
+    "eureka-analyzer",   # Eureka insight search
+    "synthesis-agent",   # Cross-framework triangulation
+]
+scripts = [
+    "system-normal.rhai",  # Precriteria gate
+    "autoexec.rhai",       # Autonomous review loop
+]
+
+# ── What the reviewer requires ───────────────────────────────────────────────
+
+[requires]
+min_tier = "frontier"        # Minimum cognitive tier to run reviewer
+checkpoint_gate = true       # Must pass system-normal() before operations
+governance_gates = [         # Governance safety gates
+    "validate-input-sanitization",
+    "check-credential-exposure",
+    "verify-output-contract",
+    "rate-limit-check",
+]
+depend_on = [                # These files MUST exist for reviewer to function
+    "_b00t_/reviewer.role.toml",
+    "_b00t_/multi-framework-review.datum.toml", 
+    "_b00t_/skills/reviewer/system-normal.rhai",
+]
+
+# ── Output contract ──────────────────────────────────────────────────────────
+
+[output]
+format = "machine-parseable-verdict"
+valid_verdicts = ["APPROVE", "REQUEST_CHANGES"]
+pre_verdict_warnings = ["SCOPE WARNING"]
+post_verdict_prohibited = ["markdown-headers", "additional-commentary"]
+
+# ── Harness bindings ─────────────────────────────────────────────────────────
+# Maps canonical capability to harness-specific load mechanisms
+
+[[harness]]
+name = "b00t-cli"
+load_method = "b00t learn reviewer"
+role_file = "_b00t_/reviewer.role.toml"
+
+[[harness]]
+name = "claude-code"
+load_method = "b00t whoami --role=reviewer"
+role_file = "AGENTS/--role=reviewer.md"
+note = "Thin wrapper — delegates to canonical SKILL.md"
+
+[[harness]]
+name = "opencode"
+load_method = "native skill load"
+role_file = "_b00t_/skills/reviewer/SKILL.md"
+
+[[harness]]
+name = "hermes"
+load_method = "skill bundle"
+role_file = "vendor/hermes-agent-b00t/skills/reviewer/"
+note = "Bundled skill referencing this canonical manifest"
+
+# ── Phygital-twin status schema ──────────────────────────────────────────────
+
+[phygital]
+# Every reviewer session emits this structured status to the hive
+node_id_prefix = "reviewer"
+states = ["idle", "dispatching", "executing-mece", "executing-triz", "executing-eureka", "synthesizing", "posting", "pulsing", "error"]
+required_fields = ["node_id", "state", "last_heartbeat", "gate_result", "review_id"]
+heartbeat_interval_seconds = 30

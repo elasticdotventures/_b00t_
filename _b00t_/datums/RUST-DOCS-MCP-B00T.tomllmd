@@ -39,6 +39,18 @@ command = "docker build -t ghcr.io/promptexecution/rust-docs-mcp-b00t:latest ven
 description = "Deploy to k8s b00t-mcp namespace"
 command = "helm upgrade --install b00t-mcp _b00t_/k8s.🚢/b00t-mcp/ -n b00t-mcp --create-namespace"
 
+# ─── CodeRunnerActionProcess service binding ───────────────────────────────────
+# This repo datum implements GithubActionsCompatible (has .github/workflows/docker.yml).
+# Provider bindings for CodeRunnerActionProcess:
+
+[b00t.services.action_runner]
+local  = "wrkflw"          # WrkflwProvider — ci-validate, ci-local, ci-watch (vendor justfile)
+remote = "github-actions"  # GitHubActionsProvider — local-build (self-hosted sm3lly) + docker-push
+self_hosted = { ns = "b00t-gh-runner", label = "sm3lly", deployment = "gh-runner-rust-docs" }
+# 🤓 local-build job runs on sm3lly runner (native amd64 cargo build, no QEMU)
+#    docker-push fires only after local-build passes — eliminates cloud QEMU waste
+
+
 # b00t:map v1
 # summary: b00tyverse rust docs MCP — ghcr image, native HTTP/SSE, replaces archived rust-crate-docs-docker
 # tags: repo, mcp, rust, docs, govcraft, k8s, b00t-mcp, ghcr, rmcp, b00tyverse

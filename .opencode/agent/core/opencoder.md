@@ -12,14 +12,7 @@ permission:
     "wget *": "ask"
     "docker *": "ask"
     "kubectl *": "ask"
-  edit:
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
-    "node_modules/**": "deny"
-    "**/__pycache__/**": "deny"
-    "**/*.pyc": "deny"
-    ".git/**": "deny"
+  edit: "ask"
 ---
 
 # Development Agent
@@ -497,5 +490,4 @@ Code Standards
   
   If you find yourself violating these rules, STOP and correct course.
 </constraints>
-
 

@@ -15,11 +15,17 @@ path = "src/main.rs"
 name = "b00t"
 path = "src/b00t.rs"
 
+[[bin]]
+name = "b00t-rpa"
+path = "src/bin/rpa.rs"
+required-features = ["rpa"]
+
 [lib]
 name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
+rpassword = "7"
 tiktoken-rs = "0.7.0"
 # Shared workspace dependencies
 serde = { version = "1.0", features = ["derive"] }
@@ -36,6 +42,7 @@ thiserror = "2"
 # b00t-cli specific dependencies
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
+b00t-l3dg3rr-viz = { workspace = true }
 b00t-bouncer = { path = "../b00t-bouncer" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }
@@ -55,6 +62,8 @@ serde_yaml = "0.9"
 tracing = "0.1"
 opentelemetry.workspace = true
 uuid = { version = "1.0", features = ["v4"] }
+mti.workspace = true
+b00t-reflect-types.workspace = true
 fs2 = "0.4"
 confy = "2.0"
 libc = "0.2"
@@ -106,8 +115,20 @@ async-trait = "0.1"
 gix-attributes = "0.33"
 bstr = "1.12"
 
+# RPA: Browser automation via CDP + ratatui TUI (feature-gated)
+chromiumoxide = { version = "0.9", optional = true }
+futures = { version = "0.3", optional = true }
+ratatui = { version = "0.29", optional = true }
+crossterm = { version = "0.28", optional = true }
+nucleo = { version = "0.5", optional = true }
+atty = { version = "0.2", optional = true }
+base64 = { version = "0.22", optional = true }
+
 [features]
 default = []
+# 🤓 rpa: Browser RPA via CDP + ratatui TUI (heavy deps — chromiumoxide, ratatui)
+rpa = ["chromiumoxide", "futures", "ratatui", "crossterm", "nucleo", "atty", "base64"]
+rpa-playwright = []  # Playwright subprocess backend (no extra Rust deps)
 # 🤓 dbus: Enable D-Bus IPC via zbus (restored; required by lib.rs, hive.rs, commands/soul.rs)
 dbus = ["b00t-ipc/dbus", "dep:zbus"]
 # 🤓 candle: Enable Candle-based inference (GPU/CPU with CUDA support)

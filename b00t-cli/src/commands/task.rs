@@ -236,8 +236,8 @@ pub enum TaskCommands {
     },
     #[clap(about = "Mark task done")]
     Done {
-        #[clap(help = "Task ID")]
-        id: u32,
+        #[clap(help = "Task ID(s) — accepts one or more", num_args = 1..)]
+        ids: Vec<u32>,
     },
     #[clap(about = "Update task status or fields")]
     Update {
@@ -304,7 +304,12 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
             criteria,
         } => cmd_add(title, description, priority, tags, criteria),
         TaskCommands::Next { json } => cmd_next(json),
-        TaskCommands::Done { id } => cmd_done(id),
+        TaskCommands::Done { ids } => {
+            for id in ids {
+                cmd_done(id)?;
+            }
+            Ok(())
+        }
         TaskCommands::Update {
             id,
             status,

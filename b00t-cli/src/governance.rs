@@ -472,9 +472,9 @@ mod tests {
         // Now init the runtime with this store path — it should detect the
         // expired hook and push an Expired notification into the ring.
         let ring = Arc::new(HookRing::new());
-        let (event_tx, _): (broadcast::Sender<String>, broadcast::Receiver<String>) =
+        let (_event_tx, _): (broadcast::Sender<String>, broadcast::Receiver<String>) =
             broadcast::channel(256);
-        let scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(
+        let _scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(
             Arc::clone(&ring),
         )));
 

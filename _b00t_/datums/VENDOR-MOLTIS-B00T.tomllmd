@@ -89,6 +89,10 @@ Release preflight:
 just -f vendor/moltis-b00t/justfile release-preflight
 ```
 
+
+[b00t.services.action_runner]
+local  = "wrkflw"
+remote = "github-actions"
 ## Security Considerations
 
 - Sandbox execution via Docker/Apple Containers

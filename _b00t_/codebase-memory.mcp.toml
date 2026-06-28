@@ -2,9 +2,42 @@
 name = "codebase-memory"
 type = "mcp"
 hint = "Codebase memory MCP server - knowledge graph for code indexing, search, and analysis"
-version = "0.8.1"
+# 🤓 upstream package version 0.8.1. Literal `version` removed from here: it
+#    collided with the version-detection command below (duplicate [b00t] key →
+#    TOML parse error: "Failed to parse MCP config TOML"). Keep ONE version key.
 source = "https://github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr"
 upstream = "https://github.com/DeusData/codebase-memory-mcp"
+install = '''
+set -euo pipefail
+
+B00T_ROOT="${B00T_ROOT:-$HOME/.b00t}"
+CBM_DIR="$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+CBM_BIN="$CBM_DIR/build/c/codebase-memory-mcp"
+
+if [ ! -d "$CBM_DIR/.git" ]; then
+  rm -rf "$CBM_DIR"
+  git clone https://github.com/DeusData/codebase-memory-mcp.git "$CBM_DIR"
+fi
+
+cd "$CBM_DIR"
+git fetch --tags --force
+git checkout main
+git pull --ff-only
+scripts/build.sh
+test -x "$CBM_BIN"
+
+echo "✅ codebase-memory-mcp installed: $CBM_BIN"
+'''
+update = '''
+B00T_ROOT="${B00T_ROOT:-$HOME/.b00t}"
+CBM_DIR="$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+if [ -d "$CBM_DIR/.git" ]; then
+  cd "$CBM_DIR"
+  git pull --ff-only
+fi
+b00t install codebase-memory
+'''
+version = "codebase-memory-mcp --version"
 
 [[b00t.mcp.stdio]]
 # 🤓 install via: curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash

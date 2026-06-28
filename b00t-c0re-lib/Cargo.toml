@@ -39,6 +39,7 @@ ipc-fanout = ["dep:b00t-ipc", "data-fabric"]  # route write fanout through b00t-
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+base64 = "0.22"
 # Workspace dependencies
 serde.workspace = true
 serde_json.workspace = true
@@ -64,6 +65,9 @@ rig-core = "0.24.0"
 ts-rs = "11.1.0"
 schemars = "1.1.0"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+scraper = "0.20"
+sha2 = "0.10"
+hex = "0.4"
 tracing.workspace = true
 lazy_static = "1.5.0"
 async-trait = "0.1"
@@ -78,6 +82,18 @@ crepe = "0.2.0"
 ascent = "0.8.0"
 syn = { version = "2.0.118", features = ["full"] }
 quote = "1.0.45"
+
+# Platform-gated dependencies
+# keyring crate is only used on non-Windows (Linux, macOS)
+[target.'cfg(not(windows))'.dependencies]
+keyring = "4"
+
+# Windows uses direct Win32 API instead of keyring
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+] }
 
 [dev-dependencies]
 tempfile = "3.10"

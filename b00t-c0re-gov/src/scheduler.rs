@@ -197,13 +197,10 @@ impl EventScheduler {
 
                 match &hook.token.hook_type {
                     HookType::TimerMs(duration_ms) => {
-                        let elapsed = (now - hook.created_at)
-                            .num_milliseconds();
+                        let elapsed = (now - hook.created_at).num_milliseconds();
                         elapsed >= *duration_ms as i64
                     }
-                    HookType::AtTimestamp(ts) => {
-                        now_ts >= *ts
-                    }
+                    HookType::AtTimestamp(ts) => now_ts >= *ts,
                     HookType::Cron(_) => {
                         // Cron not yet implemented — skip
                         false
@@ -251,15 +248,15 @@ impl EventScheduler {
                 match &hook.token.hook_type {
                     HookType::AnyOf(children) => {
                         // Fire if ANY child has fired
-                        children.iter().any(|child| {
-                            self.hooks.get(&child.id).map_or(false, |c| c.fired)
-                        })
+                        children
+                            .iter()
+                            .any(|child| self.hooks.get(&child.id).map_or(false, |c| c.fired))
                     }
                     HookType::AllOf(children) => {
                         // Fire if ALL children have fired
-                        children.iter().all(|child| {
-                            self.hooks.get(&child.id).map_or(false, |c| c.fired)
-                        })
+                        children
+                            .iter()
+                            .all(|child| self.hooks.get(&child.id).map_or(false, |c| c.fired))
                     }
                     _ => false,
                 }

@@ -1,0 +1,50 @@
+[package]
+name = "b00t-admin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Internal admin dashboard server with pipeline state, type introspection, and twin simulation"
+keywords = ["b00t", "admin", "dashboard", "pipeline"]
+categories = ["development-tools", "web-programming"]
+
+[lib]
+name = "b00t_admin"
+path = "src/lib.rs"
+
+[[bin]]
+name = "b00t-admin"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+b00t-c0re-lib = { workspace = true }
+
+# HTTP server
+axum = { version = "0.8", features = ["macros", "ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+
+# Backend proxy
+reqwest = { version = "0.12", features = ["json"] }
+
+# Templates
+handlebars = "6"
+
+# UUID generation
+uuid = { version = "1", features = ["v4"] }
+
+# Schema generation
+schemars = "1"
+
+# Async utilities
+futures = "0.3"
+tokio-stream = "0.1"
+
+[lints]
+workspace = true

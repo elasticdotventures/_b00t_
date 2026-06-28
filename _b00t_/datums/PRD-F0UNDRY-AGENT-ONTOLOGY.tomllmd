@@ -1,0 +1,614 @@
+# PRD: f0undry — Ontologically-grounded b00tyverse agent catalog
+#
+# f0undry (zero-o, b00t convention) = a forge that smelts raw datums into
+# typed, discoverable, evidence-backed agent identities.
+# Raw ore: _b00t_/*.toml datums (388 at 2026-06-24)
+# Processing: BFO/UFO stereotype assignment + Satisfies<Constraint> evaluation
+# Output: cast catalog of capabilities — searchable, iterable, filterable,
+#         with machine-checkable AuthZ and MECE coverage proof.
+#
+# This document serves as:
+# (a) PRD — what f0undry delivers and why
+# (b) Operational guide — how to discover b00t patterns & operate the soul KV-cache
+# (c) Architecture synthesis — how TRIZ/MECE/SysMLv2/KerML/UFO/BFO fuse into Rust
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "ontology", "bfo", "ufo", "f0undry", "kerml", "sysmlv2",
+             "mece", "triz", "soul-kv-cache", "authz", "agent-identity",
+             "datum-catalog", "discovery", "frontier"]
+
+[prd]
+id     = "PRD-F0UNDRY-AGENT-ONTOLOGY"
+title  = "f0undry — Ontologically-grounded b00tyverse agent catalog"
+status = "proposed"
+tier   = "frontier"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: b00tyverse topology (what exists right now)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[b00tyverse_topology]
+# The b00tyverse is the universe of discoverable b00t entities.
+# Every entity is a datum — a TOML file with a typed extension.
+# Datum count as of 2026-06-24: 388 (task worktree _b00t_/)
+
+# ── DatumType taxonomy (22 non-Unknown variants) ─────────────────────────────
+# This IS the MECE partition of b00t reality:
+#   Each variant is mutually exclusive (one file → one type via extension).
+#   The set is collectively exhaustive (Unknown handles future gaps).
+
+[b00tyverse_topology.mece_partition]
+# Layer 1: COMPUTE SUBSTRATE (where things run)
+hive_profile = { suffix = ".hive",     bfo = "BFO:SpatialRegion",             ufo = "Endurant::Kind",     count_approx = 11, example = "inference-gemma4.hive.toml" }
+hardware     = { suffix = ".hardware", bfo = "BFO:Object",                    ufo = "Endurant::Kind",     count_approx = 2,  example = "rk3588.npu.hardware.tomllmd" }
+docker       = { suffix = ".docker",   bfo = "BFO:SpatialRegion",             ufo = "Endurant::SubKind",  count_approx = 8,  example = "qdrant.docker.toml" }
+k8s          = { suffix = ".k8s",      bfo = "BFO:SpatialRegion",             ufo = "Endurant::SubKind",  count_approx = 12, example = "argo-workflows.k8s.toml" }
+stack        = { suffix = ".stack",    bfo = "BFO:ObjectAggregate",           ufo = "Endurant::Category", count_approx = 17, example = "ai-dev-stack.stack.toml" }
+
+# Layer 2: AGENT IDENTITY (who acts)
+agent        = { suffix = ".agent",    bfo = "BFO:IndependentContinuant",     ufo = "Endurant::Kind",     count_approx = 13, example = "ralph.agent.toml" }
+role         = { suffix = ".role",     bfo = "BFO:RealizableEntity",          ufo = "Endurant::Role",     count_approx = 4,  example = "operator.role.toml" }
+skill        = { suffix = ".skill",    bfo = "BFO:RealizableEntity",          ufo = "Moment::Mode",       count_approx = 40, example = "six-sigma.skill.toml" }
+
+# Layer 3: INTERFACES & COMMUNICATION (how agents talk)
+mcp          = { suffix = ".mcp",      bfo = "BFO:RealizableEntity",          ufo = "Moment::Relator",    count_approx = 52, example = "b00t-mcp.mcp.toml" }
+api          = { suffix = ".api",      bfo = "BFO:RealizableEntity",          ufo = "Moment::Relator",    count_approx = 4,  example = "ollama-embeddings.api.toml" }
+cli          = { suffix = ".cli",      bfo = "BFO:RealizableEntity",          ufo = "Moment::Mode",       count_approx = 60, example = "b00t.cli.toml" }
+
+# Layer 4: DATA & STATE (what persists)
+database     = { suffix = ".database", bfo = "BFO:GenericallyDependentContinuant", ufo = "Endurant::Kind",  count_approx = 2, example = "sqlite.database.toml" }
+repo         = { suffix = ".repo",     bfo = "BFO:GenericallyDependentContinuant", ufo = "Endurant::Kind",  count_approx = 1, example = "l3dg3rr.repo.toml" }
+config       = { suffix = ".config",   bfo = "BFO:GenericallyDependentContinuant", ufo = "Endurant::SubKind", count_approx = 1, example = "claude.config.toml" }
+overlay      = { suffix = ".overlay",  bfo = "BFO:GenericallyDependentContinuant", ufo = "Endurant::Phase", count_approx = 1, note = "per-node state overlay" }
+
+# Layer 5: INTELLIGENCE (which models/policies)
+ai           = { suffix = ".ai",       bfo = "BFO:IndependentContinuant",     ufo = "Endurant::Kind",     count_approx = 12, example = "mistralrs-proxy.ai.toml" }
+
+# Layer 6: AUTOMATION & EXECUTION (how work happens)
+job          = { suffix = ".job",      bfo = "BFO:Process",                   ufo = "Perdurant::Process", count_approx = 13, example = "build-and-test.job.toml" }
+justfile     = { suffix = ".justfile", bfo = "BFO:Plan",                      ufo = "Abstract",           count_approx = 1,  example = "app4dog.justfile.tomllm" }
+bash         = { suffix = ".bash",     bfo = "BFO:Plan",                      ufo = "Abstract",           count_approx = 1,  example = "setup.bash.toml" }
+vscode       = { suffix = ".vscode",   bfo = "BFO:RealizableEntity",          ufo = "Moment::Mode",       count_approx = 1,  example = "vscode.vscode.toml" }
+apt          = { suffix = ".apt",      bfo = "BFO:MaterialEntity",            ufo = "Endurant::Kind",     count_approx = 1,  note = "system package" }
+nix          = { suffix = ".nix",      bfo = "BFO:MaterialEntity",            ufo = "Endurant::Kind",     count_approx = 1,  note = "nix package" }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: TRIZ analysis of the b00tyverse
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[triz_analysis]
+# TRIZ = Theory of Inventive Problem Solving. Applied to agent system design.
+# Three key tools: IFR (Ideal Final Result), Contradictions, 40 Principles.
+
+[triz_analysis.ifr]
+# IFR: the system delivers its function with zero additional cost/harm/complexity.
+# Applied to f0undry: agents discover capabilities without maintaining a separate registry.
+# IFR-achieved-by = DatumType::datum_nodes() + HolonEmit derive macro on VizDomain
+# The type graph IS the registry. Zero maintenance. Compile-time artifact.
+b00tyverse_ifr = "The agent catalog self-describes at compile time — datum types + HolonEmit proc-macro generate the ontology. No hand-maintained registry. No stale entries."
+
+[triz_analysis.contradictions]
+# Physical contradiction: agents need full capability context AND minimal context window
+# Resolved by: separation in time — stable KV-cache prefix loads free; skills load on demand
+kv_cache_resolution = "CLAUDE.md boilerplate prefix stays identical → KV-cached free. Variable session suffix compiled fresh per `b00t whoami`. Skills loaded ONLY when needed (b00t learn)."
+
+# Technical contradiction: type safety AND openness to new types
+# Resolved by TRIZ Principle #35 (Parameter changes): Unknown variant + type_tags
+openness_resolution = "DatumType::Unknown is the escape hatch for future types. type_tags: string[] allow informal ontological tagging without breaking the type enum."
+
+# Technical contradiction: discoverable agents AND agent independence
+# Resolved by TRIZ Principle #15 (Dynamism): agents announce capabilities at runtime
+discovery_resolution = "mcp__b00t-mcp__b00t_agent_capability announces on spawn. mcp__b00t-mcp__b00t_agent_discover queries peers. A2A messaging is ephemeral; ontology is persistent."
+
+[triz_analysis.principles_applied]
+p10_prior_action   = "b00t whoami → blessings loaded before any task"
+p25_self_service   = "datum_nodes() derives from datum_type_table! — self-describing"
+p35_param_changes  = "type_tags extend DatumType without modifying the enum"
+p40_composite_mat  = "HiveProfile composes Agents + Skills + MCPs → composite capability"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: KerML/SysMLv2 type fusion with Rust
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[kerml_sysml_fusion]
+# KerML = kernel of SysMLv2. Provides the semantic backbone for composition.
+# Both are expressed as [[type]] TOML arrays in vendor/ledgrrr/types/domain.kerm.
+
+[kerml_sysml_fusion.mapping_table]
+# KerML concept     → Rust construct              → b00t usage
+# ──────────────────────────────────────────────────────────────
+# Feature (typed)   → trait method                → Satisfies<C>::satisfies()
+# Classifier        → struct / enum               → BootDatum, DatumType
+# Binding           → impl Trait for Type          → impl Satisfies<AuRdConstraint> for AuRdActivity
+# Multiplicity      → Vec<T> / Option<T>           → evidence_nodes: Vec<NodeId>
+# Port              → MCP tool                     → mcp__b00t-mcp__b00t_learn
+# Block (SysMLv2)   → BootDatum struct             → {name, datum_type, tier, tags, ...}
+# Connection        → Satisfies<C> evaluation      → disposition: Satisfied | Violated | Unknown
+# Part (SysMLv2)    → DatumType variant            → DatumType::Skill, DatumType::Agent, ...
+# Interface Block   → trait (Rust)                 → Constraint marker trait
+# Value Property    → field                        → SatisfiesResult.confidence: f64
+# Constraint Block  → impl Constraint for C {}     → AuRdConstraint: Constraint {}
+
+[kerml_sysml_fusion.type_graph_pipeline]
+# How Rust types flow into the visual type graph:
+# Step 1: Domain enum (VizDomain in holon-viz/domain.rs) carries #[derive(HolonEmit)]
+# Step 2: Each variant has #[holon(id="...", label="...", kind="...", z_layer="...")]
+# Step 3: emit_nodes() -> Vec<HolonNode> is auto-derived by the proc-macro
+# Step 4: TypeRelationshipGraph::seed() calls manifest_loader() → nodes + relationships
+# Step 5: TypeRelationshipGraph::to_cytoscape() → Cytoscape JSON → rendered in browser
+# Step 6: DatumType::datum_nodes() contributes b00t datum-type nodes to same graph
+# Extension point: add f0undry::F0undryDomain enum with #[derive(HolonEmit)]
+
+[kerml_sysml_fusion.sysmlv2_block_definitions]
+# SysMLv2 textual notation for key b00t types:
+b00t_agent_block = """
+package b00t {
+  part def Agent {
+    attribute name : String;
+    attribute tier : TierEnum;         // sm0l | ch0nky | frontier
+    port skills : ~SkillPort[0..*];
+    port mcpTools : ~McpPort[0..*];
+    perform roleActions : RoleCapability[1..*];
+  }
+
+  part def BootDatum {
+    attribute datumType : DatumTypeEnum;
+    attribute tier : TierEnum;
+    attribute tags : String[0..*];
+    satisfy Constraint c via SatisfiesResult;  // evidence-backed
+  }
+
+  connection def SatisfiesBinding {
+    end src : BootDatum;
+    end dst : Constraint;
+    attribute result : SatisfiesResult;        // confidence + evidence_nodes
+  }
+}
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: Soul KV-cache — how to operate it
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[soul_kv_cache]
+# The "soul" of the b00t agent is the CLAUDE.md / AGENTS.md content that
+# gets loaded into context at session start. Understanding its structure
+# is essential for efficient agent operation.
+
+[soul_kv_cache.structure]
+# CLAUDE.md has two zones separated by "── SESSION ──":
+stable_prefix = """
+Everything ABOVE ── SESSION ── in CLAUDE.md:
+- Core Laws (DRY, NRtW, TDD-first, Postel's Law)
+- YEI MUST NEVER / YEI MUST ALWAYS
+- Cognitive tier routing table
+- Hive CMDB commands
+- AGENTS/ Role Supplements protocol
+- b00t Type System Navigation
+- .tomllm Format
+These lines are IDENTICAL every session → KV-cached by Anthropic
+→ loads at zero token cost after the first call.
+"""
+variable_suffix = """
+Everything BELOW ── SESSION ──:
+- PID | Timestamp | Branch | Model/Tier | Privacy | Role
+- Role supplement (from AGENTS/--role=<role>.md)
+- Active blessings / skill summaries
+These are compiled fresh by `b00t whoami [--role=X]` on each session.
+Cost = tokens of role supplement + session metadata (cheap).
+"""
+
+[soul_kv_cache.operation]
+# How to update the KV-cache prefix (rare, high-impact):
+update_stable_prefix = "Edit CLAUDE.md lines ABOVE ── SESSION ── | NEVER change without strong reason — breaks KV-cache for ALL sessions until Anthropic re-caches (5 min TTL)"
+update_role_supplement = "Edit AGENTS/--role=<role>.md | Changes take effect next `b00t whoami --role=<role>` | Stay ≤120 lines | End with b00t:map tail-map"
+add_new_role = "Create AGENTS/--role=<new>.md | Add role.toml datum in _b00t_/ | Register in capability-registry.toml"
+
+[soul_kv_cache.skill_loading]
+# Skills loaded with `b00t learn <skill>` add content to context for the session.
+# This is COSTLY — each skill expands the context window.
+# f0undry solves this: query ontology BEFORE loading skills to decide IF loading is needed.
+discovery_first  = "Use mcp__b00t-mcp__b00t_ontology_query to find capabilities without loading"
+load_only_needed = "b00t learn <skill> ONLY when you are about to USE that skill"
+session_amnesia  = "Each new session starts fresh — skills from previous session are NOT cached"
+soul_kv_budget   = "~40K tokens available in stable prefix before hitting context limits"
+
+# ── b00t learn topics currently loadable ─────────────────────────────────────
+[soul_kv_cache.learn_topics]
+# These are known skill/datum topics available via `b00t learn <topic>`:
+core_skills = ["datum-macro", "chalk-interner", "tomllm-format", "b00t-hooks",
+               "b00t-interface-library", "b00t-maintenance", "five-whys",
+               "six-sigma", "bayesian"]
+agent_skills = ["b00t-skill-improve-loop"]
+tax_skills   = ["tax-lawyer", "au-rd-tax-incentive", "au-crypto",
+                "us-r-and-d-credit", "us-crypto", "ufo-types",
+                "evidence-graph", "iso-accounting", "software-interfaces"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: f0undry architecture
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[f0undry]
+# f0undry = the forge layer between raw datums and queryable agent identity.
+# Metaphor: raw datum ore → foundry heat (ontology evaluation) → cast identity.
+# Output: a typed, discoverable, filterable catalog with BFO/UFO grounding.
+
+[f0undry.query_interface]
+# Three ways to query the f0undry (existing → planned):
+
+[f0undry.query_interface.exists_now]
+mcp_ontology  = "mcp__b00t-mcp__b00t_ontology_query -- live capability query (thin, role-filtered)"
+sparql_cli    = "b00t-cli ontology sparql --subject <X> --predicate all -- triple-graph walk"
+datum_search  = "b00t learn <topic> -- DWIW fanout: DatumSearchSource(w=3) + GraphAdjacencySource(w=2)"
+type_graph    = "DatumType::datum_nodes() + VizDomain::emit_nodes() -- compile-time HolonNode catalog"
+
+[f0undry.query_interface.to_build]
+f0undry_query  = "b00t f0undry query --type=<DatumType> --ufo=<stereotype> --tier=<tier> --tag=<tag>"
+f0undry_iter   = "b00t f0undry iter --type=skill | jq .[] | select(.tier == 'frontier')"
+f0undry_filter = "b00t f0undry filter --bfo=BFO:RealizableEntity --limit=10"
+f0undry_export = "b00t f0undry export --format=<json|owl2|cytoscape|sysmlv2>"
+f0undry_auth   = "b00t f0undry auth --agent=<id> --command=<cmd> -- AuthZ check via skill unlock graph"
+
+[f0undry.rust_types]
+# The f0undry Rust implementation fuses existing crates:
+f0undry_node = """
+// Proposed: crates/f0undry/src/lib.rs
+use b00t_reflect_types::HolonNode;
+use ufo_types::satisfies::{Satisfies, Constraint, SatisfiesResult};
+use ufo_types::ufo::{UfoCategory, EndurantStereotype};
+
+/// A f0undry entry: a datum with full ontological grounding.
+pub struct F0undryEntry {
+    pub node: HolonNode,                // id, label, kind, z_layer, semantic_type
+    pub bfo_class: &'static str,        // e.g. "BFO:RealizableEntity"
+    pub ufo_category: UfoCategory,      // Endurant | Perdurant | Moment | Abstract
+    pub ufo_stereotype: Option<&'static str>, // "Kind" | "Role" | "Mode" | "Relator" ...
+    pub tier: &'static str,             // "sm0l" | "ch0nky" | "frontier"
+    pub tags: &'static [&'static str],  // type_tags from TOML
+    pub unlocks: &'static [&'static str], // MCP tools this skill unlocks (AuthZ)
+}
+
+/// The catalog: all f0undry entries, queryable.
+pub struct F0undry {
+    pub entries: Vec<F0undryEntry>,
+}
+
+impl F0undry {
+    pub fn filter_by_type(&self, kind: &str) -> impl Iterator<Item = &F0undryEntry>;
+    pub fn filter_by_ufo(&self, cat: UfoCategory) -> impl Iterator<Item = &F0undryEntry>;
+    pub fn filter_by_tier(&self, tier: &str) -> impl Iterator<Item = &F0undryEntry>;
+    pub fn filter_by_tag(&self, tag: &str) -> impl Iterator<Item = &F0undryEntry>;
+    pub fn authz_check(&self, agent_skills: &[&str], command: &str) -> bool;
+    pub fn to_holon_nodes(&self) -> Vec<HolonNode>;
+    pub fn to_owl2_manchester(&self) -> String;
+    pub fn to_sysmlv2(&self) -> String;
+}
+"""
+
+[f0undry.authz_model]
+# Skills + AuthZ: how agent identity → command access
+# The blessing system encodes AuthZ in datum .toml files via `unlocks: [...]`
+# f0undry enforces this at query time.
+#
+# Flow:
+#   Agent spawns → b00t whoami --role=<R> → loads role supplement
+#   → b00t blessing --manifest --role=<R> → traverses depends_on graph
+#   → collects all unlocks[] fields from reachable skill datums
+#   → agent is authorized to use those MCP tools / CLI commands
+#
+# Example (six-sigma.skill.toml):
+#   unlocks = ["b00t-mcp/b00t_grok_digest", "b00t-mcp/b00t_task_add"]
+#   After: `b00t learn six-sigma`, agent can use grok_digest + task_add
+#
+# f0undry.authz_check() evaluates this without loading the skill into context.
+authz_principle = "NO LEARNING = NO AUTH. Capability is earned by loading, not by role alone."
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: Python + TypeScript transpilation bridges
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[transpilation]
+# How b00t Rust types reach Python and TypeScript consumers.
+# Goal: every language can query the f0undry catalog and implement the
+# Satisfies pattern without reimplementing domain logic.
+
+[transpilation.python]
+strategy  = "schemars JsonSchema → JSON Schema → pydantic BaseModel (via datamodel-codegen)"
+entry_point = "ufo-types crate derives JsonSchema on all public structs (already present)"
+generation  = "cargo schema > schema.json && datamodel-codegen --input schema.json --output models.py"
+satisfies_bridge = """
+# Python side of Satisfies<C>:
+class SatisfiesResult(BaseModel):
+    disposition: Literal['satisfied', 'violated', 'unknown']
+    confidence: float
+    evidence_nodes: list[str]      # NodeId strings
+    ufo_category: str              # 'Mode' | 'Relator'
+
+class Constraint(Protocol):
+    pass  # marker protocol
+
+def satisfies(entity: T, constraint: C) -> SatisfiesResult: ...
+"""
+b00t_integration = "Skills in skills/tax-lawyer/ teach Python agent patterns; b00t learn <skill>"
+
+[transpilation.typescript]
+strategy  = "schemars JsonSchema → JSON Schema → zod / TypeScript types (via json-schema-to-zod)"
+satisfies_bridge = """
+// TypeScript Satisfies<C> pattern:
+interface SatisfiesResult {
+  disposition: 'satisfied' | 'violated' | 'unknown';
+  confidence: number;
+  evidenceNodes: string[];         // NodeId strings
+  ufoCategory: 'Mode' | 'Relator';
+}
+interface Constraint { readonly _brand: unique symbol; }
+function satisfies<C extends Constraint>(entity: unknown, constraint: C): SatisfiesResult;
+"""
+mcp_binding = "MCP TypeScript SDK (rmcp equivalent): mcpTools/f0undry expose query interface"
+
+[transpilation.interface_universality]
+# Skills + AuthZ work across ALL languages via the MCP protocol:
+# Rust CLI (b00t-cli) → MCP server (b00t-mcp) → JSON-RPC → any client language
+# Each MCP tool IS the language-neutral interface to a capability.
+# A Python agent uses mcp_b00t.f0undry_query() same as a TypeScript agent.
+# The Rust types enforce correctness at the origin; the schema propagates downstream.
+principle = "MCP is the Rosetta Stone. Rust is the source of truth. Schemas flow outward."
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: Discovery protocol — how to find b00t patterns
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[discovery_protocol]
+# Step-by-step guide for a fresh agent entering the b00tyverse.
+
+[discovery_protocol.step1_orient]
+cmd  = "b00t whoami"
+what = "Loads role supplement + lists active blessings. Tells you WHO you are."
+output_key = "Role, tier, authorized MCP tools, sub-agents available."
+
+[discovery_protocol.step2_survey]
+cmd  = "just -l"
+what = "Lists all justfile recipes — the PolyConnector substrate. Shows WHAT CAN BE DONE."
+output_key = "Build/test/deploy/viz/ontology recipes."
+
+[discovery_protocol.step3_ontology]
+cmd  = "mcp__b00t-mcp__b00t_ontology_query"
+what = "Live capability query from datum TOMLs. Shows installed vs installable."
+output_key = "Available MCPs, required env vars (OPENAI_API_KEY, etc.)"
+
+[discovery_protocol.step4_type_graph]
+cmd  = "b00t-cli ontology sparql --subject b00t:DatumType --predicate all"
+what = "Triple-graph walk of the datum type system."
+output_key = "All 22 DatumType variants with BFO/UFO grounding."
+
+[discovery_protocol.step5_skill_discovery]
+cmd  = "fdfind '\.skill\.toml' _b00t_/ | xargs grep 'unlocks\\|depends_on'"
+what = "Find skill graph: what each skill unlocks (AuthZ) and what it depends on."
+output_key = "Skill → unlocks → MCP tools chain."
+
+[discovery_protocol.step6_learn_selectively]
+cmd  = "b00t learn <topic>"
+what = "Load skill content into context ONLY if about to use it."
+output_key = "Enriched datum with tribal knowledge, examples, tool authorization."
+
+[discovery_protocol.step7_f0undry_future]
+cmd  = "b00t f0undry query --ufo=Endurant::Kind --tier=frontier"
+what = "Query the f0undry catalog. Returns typed, evidence-backed entries."
+output_key = "Filtered F0undryEntry list with BFO class, UFO stereotype, unlocks."
+
+# ── Anti-patterns to avoid ───────────────────────────────────────────────────
+[discovery_protocol.antipatterns]
+load_all_skills   = "NEVER: b00t learn for every skill at session start — blows context budget"
+raw_read_tomls    = "NEVER: cat _b00t_/*.toml — use b00t learn which enriches and summarizes"
+manual_registry   = "NEVER: maintain a separate capabilities list — use datum_nodes() / f0undry"
+hardcode_agents   = "NEVER: hardcode agent capabilities — they change; query at runtime"
+skip_whoami       = "NEVER: skip b00t whoami — you won't know your authorized tools"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 8: Synergy map — TRIZ × MECE × SysMLv2 × KerML × UFO × Rust
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[synergy_map]
+# Where the frameworks reinforce each other (not overlap — synergy).
+
+[[synergy_map.synergy]]
+name = "TRIZ-IFR × DatumType::datum_nodes()"
+description = "The TRIZ IFR for agent discovery is: the system catalogs itself. Achieved: datum_nodes() returns HolonNode for all 22 DatumType variants from compile-time macro. Zero maintenance cost. Adding a new DatumType variant automatically appears in the catalog."
+fusion_point = "b00t-cli/src/lib.rs:1038 datum_nodes() + datum_type_table! macro"
+
+[[synergy_map.synergy]]
+name = "MECE × DatumType partition"
+description = "The 22 DatumType variants ARE a MECE partition of b00t reality. Mutual exclusion: one file → one type via extension. Collective exhaustion: Unknown handles future gaps without breaking existing logic. PRD-F0UNDRY adds UFO grounding to make MECE machine-checkable via SHACL."
+fusion_point = "BFO/OWL2 disjointness axioms from PRD-ARCH-006 + DatumType enum"
+
+[[synergy_map.synergy]]
+name = "SysMLv2 Ports × MCP tools"
+description = "SysMLv2 Port is the interface boundary of a Block. MCP tools are the interface boundary of a b00t agent. Each *.mcp.toml datum IS a SysMLv2 Port definition. The f0undry catalogs these as MomentStereotype::Relator — they mediate between agents."
+fusion_point = "b00t-mcp.mcp.toml + SysMLv2 port def + UFO Moment::Relator"
+
+[[synergy_map.synergy]]
+name = "KerML Feature Typing × Satisfies<C>"
+description = "KerML Feature typing constrains which entities compose. Satisfies<C> is the Rust implementation of this constraint at runtime. The f0undry bridges compile-time (KerML type system) and runtime (Satisfies evaluation with evidence nodes)."
+fusion_point = "ufo-types/src/satisfies.rs Satisfies<C> + vendor/ledgrrr/types/domain.kerm"
+
+[[synergy_map.synergy]]
+name = "UFO Moment::Relator × SatisfiesBinding"
+description = "In UFO, a Relator mediates a material relation between individuals. SatisfiesBinding (SysMLv2 connection) between BootDatum and Constraint IS a UFO Relator — it inheres in both the datum and the constraint, carrying evidence as its intrinsic property."
+fusion_point = "SatisfiesResult.evidence_nodes + UFO Relator + SysMLv2 connection def"
+
+[[synergy_map.synergy]]
+name = "Soul KV-cache × Context Economy (TRIZ #35)"
+description = "TRIZ Principle 35 (Parameter changes): vary a parameter to resolve a contradiction. Parameter = context tokens. Stable CLAUDE.md prefix = KV-cached (free). Skills loaded on demand (expensive). f0undry resolves the contradiction: query ontology first → decide if learning is needed → load only what's required."
+fusion_point = "CLAUDE.md KV-cache boundary + mcp__b00t-mcp__b00t_learn + f0undry.query_interface"
+
+[[synergy_map.synergy]]
+name = "BFO:RealizableEntity × AuthZ graph"
+description = "BFO RealizableEntity = entity that can be realized through a process. Skills (DatumType::Skill) are BFO:RealizableEntity — they are realized when a process (task) exercises them. AuthZ = realizing a capability requires loading the skill datum (b00t learn) first. BFO makes this a formal ontological constraint, not just convention."
+fusion_point = "PRD-ARCH-006 BFO mapping + skill.unlocks[] + b00t blessing --manifest"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 9: Implementation roadmap
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[roadmap]
+# Ordered by value/effort ratio. Each phase is independently shippable.
+
+[roadmap.phase_1_catalog_now]
+# What works right now (no new code needed)
+status = "DONE"
+items = [
+  "DatumType::datum_nodes() → 22 HolonNode entries (K2 — just shipped)",
+  "VizDomain::emit_nodes() → 53 l3dg3rr domain type nodes",
+  "b00t_ontology_query MCP tool → live capability query",
+  "AGENTS/ role supplements → 7 roles with capability manifests",
+  "PRD-ARCH-006/005 → BFO/OWL2/SysMLv2 architecture (proposed)",
+  "ufo-types crate → UFO stereotypes + Satisfies<C> in Rust",
+]
+
+[roadmap.phase_2_f0undry_crate]
+# New crate: crates/f0undry in l3dg3rr workspace
+status = "NEXT"
+items = [
+  "Define F0undryEntry struct (HolonNode + BFO class + UFO stereotype + tier + unlocks)",
+  "Implement F0undry::from_datum_nodes() consuming DatumType::datum_nodes()",
+  "Implement filter_by_type/ufo/tier/tag iterators",
+  "Implement authz_check() via skill unlock graph traversal",
+  "Add #[derive(HolonEmit)] to a F0undryDomain enum for the meta-level",
+  "Tests: MECE coverage, no duplicate ids, all unlocks resolved",
+]
+
+[roadmap.phase_3_b00t_f0undry_cmd]
+status = "FOLLOW-ON"
+items = [
+  "b00t f0undry query / iter / filter / export CLI subcommand",
+  "b00t f0undry auth --agent=<id> --command=<cmd>",
+  "JSON output pipe-safe (jq-compatible)",
+  "OWL2 Manchester Syntax export (feeds PRD-ARCH-006)",
+  "SysMLv2 textual notation export (feeds PRD-ARCH-005)",
+]
+
+[roadmap.phase_4_mcp_f0undry]
+status = "FUTURE"
+items = [
+  "mcp__b00t-mcp__b00t_f0undry_query MCP tool",
+  "Python/TypeScript SDK via JsonSchema → pydantic/zod codegen",
+  "SHACL validation of f0undry entries at ingest (PRD-ARCH-006 Phase 3.2)",
+  "irontology-mcp backend for persistent indexed queries",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 10: KerML type file for the b00tyverse
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[b00t_kerm_types]
+# Following the format of vendor/ledgrrr/types/domain.kerm.
+# This block declares what should be written to _b00t_/types/b00tyverse.kerm.
+file_to_create = "_b00t_/types/b00tyverse.kerm"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Datum"
+label = "Datum"
+kind  = "kind_node"
+ufo_category = "Endurant"
+bfo_class = "BFO:GenericallyDependentContinuant"
+note = "root of all b00t datum types"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Agent"
+label = "Agent"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+bfo_class = "BFO:IndependentContinuant"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Skill"
+label = "Skill"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = "realized when agent executes it; unlocks MCP tools"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Role"
+label = "Role"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Role"
+bfo_class = "BFO:RealizableEntity"
+note = "role played by an Agent in the hive"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::McpTool"
+label = "McpTool"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Moment"
+ufo_stereotype = "Relator"
+bfo_class = "BFO:RealizableEntity"
+note = "interface boundary — mediates agent-to-service communication"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::HiveProfile"
+label = "HiveProfile"
+kind  = "kind_node"
+supertype = "b00t::Datum"
+ufo_category = "Endurant"
+ufo_stereotype = "Kind"
+bfo_class = "BFO:SpatialRegion"
+note = "declares compute resources + exclusion.group + services + guards"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Job"
+label = "Job"
+kind  = "process_node"
+ufo_category = "Perdurant"
+ufo_stereotype = "Process"
+bfo_class = "BFO:Process"
+note = "temporal process — job unfolds, consumes compute, produces output"
+
+[[b00t_kerm_types.type]]
+id    = "b00t::Capability"
+label = "Capability"
+kind  = "kind_node"
+ufo_category = "Moment"
+ufo_stereotype = "Mode"
+bfo_class = "BFO:RealizableEntity"
+note = "capability inheres in Agent, realized by performing a Skill"
+
+# ── Relationships ─────────────────────────────────────────────────────────────
+[[b00t_kerm_types.relation]]
+source = "b00t::Agent"
+target = "b00t::Capability"
+kind   = "hasInherent"
+note   = "UFO: Mode inheres in Agent"
+
+[[b00t_kerm_types.relation]]
+source = "b00t::Skill"
+target = "b00t::McpTool"
+kind   = "unlocks"
+note   = "AuthZ edge: learning Skill grants access to McpTool"
+
+[[b00t_kerm_types.relation]]
+source = "b00t::Agent"
+target = "b00t::Role"
+kind   = "playsRole"
+note   = "UFO: Agent plays Role in relational context (AGENTS/ role supplement)"
+
+[[b00t_kerm_types.relation]]
+source = "b00t::HiveProfile"
+target = "b00t::Agent"
+kind   = "orchestrates"
+note   = "HiveProfile defines the compute environment that runs Agents"
+
+# b00t:map v1
+# summary: f0undry PRD — ontologically-grounded b00tyverse agent catalog (BFO/UFO/KerML/SysMLv2/TRIZ/MECE synthesis)
+# tags: prd, f0undry, ontology, bfo, ufo, kerml, sysmlv2, mece, triz, authz, soul-kv-cache, discovery, b00tyverse
+# tier: frontier
+# cmds: b00t f0undry query --type=skill --tier=frontier; b00t ontology sparql --subject b00t:Skill --predicate all
+# complexity: 9

@@ -32,3 +32,15 @@ workflow-branches: "Internal projects use vendor/ submodules with convention: fe
 # summary: GGG pattern, TURBO-AGILE 6C, checkpoint often, cocogitto commits, feat/fix/chore branches
 # tier: core
 # cmds: [git stash, b00t checkpoint, gh issue create, cocogitto]
+
+---
+surgical staging: git add -A before auditing what's staged is dangerous. Pattern: git reset HEAD first, then git add ONLY target paths, verify with git diff --cached --stat. 37 unrelated files got staged in one misstep this session.
+
+---
+josh vs submodules: Josh (josh-project/josh) is a Rust git history filter that enables atomic cross-boundary PRs — subproject code lives in the parent repo, served as independent repo via proxy. Rust project uses it for miri/rust-analyzer/stdarch. Submodules fine for <5 deps with infrequent cross-changes; switch to Josh at 10+ subprojects with weekly cross-boundary PRs. joshmodule pattern: toml config with filter path, upstream, bidirectional sync. Avoids the 3-PR dance (parent→vendor→parent).
+
+---
+josh correction: b00t maintains 60+ repos (30 submodules + 30 forks) across PromptExecution/elasticdotventures. Submodules are breaking at this scale — constant upstream sync, dirty state, 3-PR dance. Josh justified NOW not later. Rust project migrated from submodules→subtrees→Josh at similar scale. This node has c0re subset only; b00ty-verse is the full hive network.
+
+---
+submodule-moltis-b00t: origin/main references vendor/moltis-b00t commit 857aaed923c6d783bbf57a8f5537919c800aacaf; the PromptExecution GitHub URLs return repository not found/no access, and the working remote is git@github.com:elasticdotventures/moltis-b00t.git.

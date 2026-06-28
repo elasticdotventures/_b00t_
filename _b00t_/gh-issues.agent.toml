@@ -1,0 +1,112 @@
+# b00t Agent Datum — gh-issues triage & integration review agent
+# 🤓 This agent dogfoods b00t's grok subsystem to research GH issues and post
+#    structured integration reviews back to the issue. It evaluates external
+#    tools/frameworks/libraries against the b00ty-verse (b00t ecosystem).
+#    Invoked via: opencode + b00t-gh-issues skill, or `just gh-issue-review #<N>`
+#    Output: machine-parseable review comment following the 5-section format.
+
+[b00t]
+name = "gh-issues"
+type = "agent"
+desires = "latest"
+hint = "GitHub issue triage agent — grok-powered integration review; analyzes fit into b00ty-verse; posts structured review comments"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "ghi-001"
+model = "frontier"
+skills = ["gh-issue-review", "b00t-gh-issues", "grok-research", "integration-analysis", "codebase-overlap-scan"]
+personality = "curious"
+humor = "low"
+role = "specialist"
+
+[b00t.agent.executor]
+# 🤓 This agent runs within opencode (not standalone). The CLI path is for
+#    direct invocation during backlog sweeps. Prefer opencode + skill route.
+cli_path = "opencode"
+cli_args = ["--skill", "b00t-gh-issues"]
+supports_tools = ["read", "write", "bash", "grep", "glob", "webfetch", "mcp__b00t-mcp__b00t_grok_ask", "mcp__b00t-mcp__b00t_grok_learn", "mcp__b00t-mcp__b00t_grok_digest"]
+max_iterations = 15
+requires = ["b00t-grok-py.service"]
+hive_profile = "grok-guru"
+
+[b00t.agent.ipc]
+# No persistent socket — this agent is invoked transiently per issue
+socket = ""
+pubsub = false
+protocol = "stdio"
+
+[b00t.agent.crew]
+role = "specialist"
+captain = false
+
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+permission_check = { enabled = true, check_role = true }
+rate_limit = { enabled = true, max_concurrent = 5 }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
+quality_check = { enabled = true, min_quality_score = 0.8 }
+
+[b00t.agent.mcp]
+enabled = true
+
+# ── Review contract — output JSON schema for programmatic consumers ───────────
+# 🤓 The 5-section review format defined in SKILL.md is the human-facing output.
+#    This JSON schema is for programmatic consumers (b00t-mcp, hive dispatcher).
+[b00t.agent.review_contract]
+required_fields = ["summary", "datums_created", "integration_level", "overlap_analysis", "capability_gaps", "next_actions", "reviewer"]
+format_version = "1.0.0"
+
+[b00t.agent.review_contract.integration_level]
+valid_values = ["DEPENDENCY", "MINE-AND-DISTILL", "FORK-PATCH-INTEGRATE", "DECLINE"]
+
+[b00t.agent.review_contract.capability_gaps]
+# Each gap entry: { rank: int, description: string, current_state: string, utility: 1-10 }
+
+[b00t.agent.review_contract.tier_routing]
+# 🤓 Cognitive tier routing for the review workflow
+#    sm0l: Step 1 (fetch) + Step 6 (grep scan) — fast, cheap
+#    ch0nky: Steps 2-5 (extract, grok, ingest, learn) — RAG work
+#    frontier: Steps 7-8 (compose, post) — synthesis and judgment
+fetch_tier = "sm0l"
+research_tier = "ch0nky"
+synthesis_tier = "frontier"
+
+[b00t.env]
+AGENT_ID = "gh-issues"
+AGENT_SKILLS = "gh-issue-review,grok-research,integration-analysis,codebase-overlap-scan"
+B00T_ISSUE_REVIEW_FORMAT = "v1.0.0"
+GROK_BACKEND = "auto"
+
+[[b00t.usage]]
+description = "Review a single GitHub issue and post integration analysis"
+command = "just gh-issue-review 424"
+
+[[b00t.usage]]
+description = "Review all open issues without b00t-gh-issues reviews (backlog sweep)"
+command = "just gh-issue-review --backlog"
+
+[[b00t.usage]]
+description = "Review from within opencode using the skill"
+command = "opencode --skill b00t-gh-issues 'review issue #424'"
+
+[[b00t.usage]]
+description = "Run the review workflow directly against an issue URL"
+command = "b00t-gh-issues review https://github.com/elasticdotventures/_b00t_/issues/424"
+
+# b00t:map v1
+# summary: GitHub issue triage agent — grok-powered integration review; evaluates tools/frameworks for b00ty-verse fit; posts structured review comments
+# tags: github, issues, triage, grok, research, integration-review, b00ty-verse, backlog
+# tier: frontier
+# cmds: just gh-issue-review #<N>, opencode --skill b00t-gh-issues
+# complexity: 7

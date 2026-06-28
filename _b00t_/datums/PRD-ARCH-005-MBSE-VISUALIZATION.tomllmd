@@ -13,13 +13,13 @@ tier   = "ch0nky"
 closes_task = 28
 
 # ─── Executive Summary ───────────────────────────────────────────────────────
-# vendor/l3dg3rr contains a KerML/SysMLv2 ontology with typed domains, relations,
+# vendor/ledgrrr contains a KerML/SysMLv2 ontology with typed domains, relations,
 # and classifiers. irontology-mcp can query DatumNodes but has no diagram export.
 # This PRD adds `b00t ontology diagram` to generate Mermaid and SysMLv2 graphs
 # from the live irontology-mcp knowledge graph — enabling MBSE visualization.
 
 [current_state]
-l3dg3rr_types = "vendor/l3dg3rr/types/domain.kerm — KerML [[type]] arrays"
+l3dg3rr_types = "vendor/ledgrrr/types/domain.kerm — KerML [[type]] arrays"
 irontology    = "vendor/irontology-mcp — DatumNode store, query via mcp tool"
 missing       = ["diagram export", "Mermaid codegen", "SysMLv2 part definition export"]
 
@@ -27,7 +27,7 @@ missing       = ["diagram export", "Mermaid codegen", "SysMLv2 part definition e
 # domain.kerm defines [[type]] blocks: id, label, kind, supertype, ufo_category
 # irontology DatumStore indexes by class → can query by supertype chain
 # New: traverse supertype graph → emit Mermaid classDiagram or SysMLv2 block def
-kerm_source   = "vendor/l3dg3rr/types/domain.kerm"
+kerm_source   = "vendor/ledgrrr/types/domain.kerm"
 datum_class   = "b00t:KermTypeNode"
 query_pattern = "b00t ontology query --class <id> --depth=3"
 
@@ -76,6 +76,48 @@ must = [
 [[related]]
 datum = "PRD-ONTOLOGY-OODA-UFO-SYSML"
 note  = "OODA KerML types provide the first diagram target"
+
+# ─── Renderer Evaluation (Three.js vs Bevy) ──────────────────────────────────
+[renderer_evaluation]
+# holon-viz currently emits Cytoscape JSON + HTML. For isometric 3D:
+# Phase 1: Three.js via Tauri WebView (leveraging existing WebView2)
+# Phase 2: Re-evaluate Bevy if GPU compute layout or physics needed
+context = "PRD-9 isometric viz + infinite squishable z-layer stack"
+
+[renderer_evaluation.three_js]
+verdict = "recommended for Phase 1"
+pros = [
+  "Zero new Rust deps — Three.js via WebView CDN",
+  "Isometric camera = OrthographicCamera, trivial to set up",
+  "Existing Tauri WebView2 infrastructure",
+  "Massive ecosystem, WASM-friendly",
+  "SVG <animateTransform> compatible for mdBook",
+]
+cons = ["Browser-only (needs WebView)", "Not pure Rust"]
+
+[renderer_evaluation.bevy]
+verdict = "evaluate for Phase 2"
+trigger_conditions = [
+  "GPU compute layout required (>10K simultaneous nodes)",
+  "Physics simulation (Blender-MCP interaction)",
+  "Standalone native binary needed (no Tauri dependency)",
+]
+pros = ["Pure Rust ECS", "Full 3D", "WASM target", "Hot-reload"]
+cons = ["Heavy dep (~100 crates)", "Steep learning curve"]
+
+[renderer_evaluation.decision]
+phase_1_renderer = "Three.js via Tauri WebView (isometric OrthographicCamera)"
+phase_2_renderer = "Re-evaluate Bevy based on trigger_conditions"
+animation_default = "SVG SMIL <animateTransform> (zero deps, mdBook compatible)"
+video_export = "IsoAnimationPath::to_manim_script() -> manim Python stubs"
+wasm_future = "monty MObject WASM execution (see MONTY-MANIM-WASM datum)"
+
+# ─── Python 3.14 Standard ─────────────────────────────────────────────────────
+[python_314]
+target = "3.14"
+gil = "disabled"
+monty_version = ">=0.0.18"
+migration = "all Python scripts in scripts/ updated to 3.14"
 
 [[related]]
 datum = "PRD-ARCH-006-CLIF-OWL2-BFO"

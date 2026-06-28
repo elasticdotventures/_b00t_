@@ -460,6 +460,25 @@ fn soul_init(target: &std::path::Path) -> Result<()> {
     }
 
     println!("soul: workspace soul active at {}", soul_dir.display());
+
+    // GithubActionsCompatible hint: suggest gen-wrkflw if workflows exist but no local gate
+    let workflows_dir = target.join(".github/workflows");
+    if workflows_dir.exists() {
+        let has_wrkflw = std::fs::read_dir(&workflows_dir)
+            .ok()
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .any(|e| e.file_name().to_string_lossy().starts_with("wrkflw-"))
+            })
+            .unwrap_or(false);
+        if !has_wrkflw {
+            println!(
+                "tip: GithubActionsCompatible repo detected — run `b00t datum gen-wrkflw . --write` to add a local CI gate"
+            );
+        }
+    }
+
     Ok(())
 }
 

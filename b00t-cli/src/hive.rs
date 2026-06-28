@@ -325,6 +325,9 @@ pub struct HiveProfile {
     // command guards
     pub guards: Vec<HiveGuard>,
 
+    // Named Rhai macros used by command guards.
+    pub rhai_macros: HashMap<String, String>,
+
     // MCP tool activation
     pub mcp_activate: Vec<String>,
     pub mcp_deactivate: Vec<String>,
@@ -490,6 +493,8 @@ impl HiveProfile {
             })
             .collect();
 
+        let rhai_macros = hive.rhai_macros.unwrap_or_default();
+
         let (mcp_activate, mcp_deactivate) = if let Some(m) = hive.mcp_tools {
             (
                 m.activate.unwrap_or_default(),
@@ -529,6 +534,7 @@ impl HiveProfile {
             services_start,
             services_stop,
             guards,
+            rhai_macros,
             mcp_activate,
             mcp_deactivate,
             service_spec,
@@ -1542,7 +1548,6 @@ fn query_systemd_user_services() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     // ─── Accelerator probe logic ───────────────────────────────────────────────
 
@@ -2128,7 +2133,7 @@ mod tests {
                     GuardPattern::RhaiExpr(e) => e.rhai.contains("git"),
                     _ => false,
                 };
-                let match_candidates = if has_git {
+                let _match_candidates = if has_git {
                     vec![
                         match_cmd.clone(),
                         "git checkout master".to_string(),
@@ -2208,10 +2213,18 @@ gpu_mb = 8000
 [b00t.hive.resources.gate]
 ram_free_gb = 4.0
 
+[b00t.hive.rhai_macros]
+ledgerr_mcp_guard = "cmd.contains(\"ledgerr-mcp\")"
+
 [[b00t.hive.guards]]
 pattern = "pip install"
 action = "warn"
 message = "use uv"
+
+[[b00t.hive.guards]]
+pattern = { rhai = "ledgerr_mcp_guard" }
+action = "block"
+message = "ledgerr-mcp requires supervised execution"
 "#;
         // write to temp file and parse
         let dir = tempfile::tempdir().unwrap();
@@ -2221,8 +2234,22 @@ message = "use uv"
         assert_eq!(profile.name, "test-profile");
         assert_eq!(profile.resources_ram_gb, Some(10.0));
         assert_eq!(profile.resources_gpu_mb, Some(8000));
-        assert_eq!(profile.guards.len(), 1);
+        assert_eq!(profile.guards.len(), 2);
         assert_eq!(profile.guards[0].pattern, GuardPattern::JsonRegexPattern("pip install".to_string()));
+        assert_eq!(
+            profile.rhai_macros.get("ledgerr_mcp_guard").map(String::as_str),
+            Some("cmd.contains(\"ledgerr-mcp\")")
+        );
+        let ctx = GuardContext {
+            command: "ledgerr-mcp status".to_string(),
+            rhai_macros: profile.rhai_macros.clone(),
+            violation_count: 0,
+            repeat_threshold: None,
+        };
+        assert!(matches!(
+            check_guards("ledgerr-mcp status", &profile.guards, &ctx),
+            GuardResult::Block { .. }
+        ));
     }
 
     #[test]
@@ -2258,6 +2285,7 @@ message = "use uv"
             services_start: vec![],
             services_stop: vec![],
             guards: vec![],
+            rhai_macros: HashMap::new(),
             mcp_activate: vec![],
             mcp_deactivate: vec![],
             service_spec: None,

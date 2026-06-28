@@ -1,16 +1,34 @@
 [b00t]
 name = "ralph"
 type = "mcp"
-hint = "Ralph OODA loop via b00t-mcp — use b00t_up / b00t_status MCP tools to drive the loop"
+hint = "Ralph OODA loop — use `b00t ooda run` via b00t-mcp to drive autonomous execution"
 
 [[b00t.mcp.stdio]]
 command = "b00t-mcp"
-args = ["--transport", "stdio"]
+args = ["--stdio"]
 transport = "stdio"
 priority = 0
 requires = ["b00t-mcp"]
-enabled_tools = ["b00t_up", "b00t_status", "b00t_cli_check"]
+
+[[b00t.usage]]
+description = "Run ralph OODA loop with claude executor"
+command = "b00t ooda run"
+
+[[b00t.usage]]
+description = "Run ralph OODA loop with local ch0nky via pi"
+command = "b00t ooda run --agent=pi --max-iter=10"
+
+[[b00t.usage]]
+description = "Run ralph OODA loop with opencode executor"
+command = "b00t ooda run --agent=opencode"
+
+[[b00t.usage]]
+description = "Run ralph OODA loop targeting specific task"
+command = "b00t ooda run --task=42"
+
+[[b00t.usage]]
+description = "Check ralph OODA status"
+command = "b00t ooda status"
 
 [b00t.install]
 requires = ["b00t-mcp"]
-note = "ralph loop is driven by b00t.sh; MCP exposes b00t_up/b00t_status to external agents"

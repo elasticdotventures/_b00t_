@@ -1,0 +1,170 @@
+# Eureka: AL-1.0 → b00t — Semantic Influence Ratios for Data Provenance
+#
+# 🤓 MECE + TRIZ applied to AL-1.0 insights. Three contradictions resolved,
+#    five b00t subsystems gain per-source influence attribution.
+
+[protocol]
+version = "1.0.0"
+source = "github.com/RayFromBoston/AI-Source-Engine"
+applied_to = "b00t data provenance pipeline"
+
+# ── MECE Breakdown ───────────────────────────────────────────────────────────
+
+[mece]
+
+[mece.training_side]
+al10 = "source_idx aligned with tokens during ingest — provenance stamped at data level"
+b00t_gap = "b00t stamps datum name + checksum at store level, but doesn't carry source identity through the full pipeline"
+b00t_has = "Store manifest (SHA256 + ontology class + consumer). Evidence has subject/predicate/object triples."
+gap = "No per-token-equivalent aligned provenance — b00t's 'token' is a chunk, and chunks lose source identity after digest"
+
+[mece.inference_side]
+al10 = "attention-weight bucketing → per-source ratios at output time"
+b00t_gap = "b00t tracks WHAT ran (spotlight.jsonl) but not WHY each source influenced the output"
+b00t_has = "Spotlight telemetry (request → consumer → model → event). Evidence (subject → predicate → object)."
+gap = "No 'influence ratio' — spotlight records 'rust-doc called embeddings' but not '60% from TrainingCorpus#42, 30% from Skill#7, 10% parametric'"
+
+[mece.receipt]
+al10 = "JSON receipt: model_id + sources[source_id, ratio] + invariants"
+b00t_gap = "b00t has receipts (evidence.jsonl, spotlight.jsonl, store manifest) but they don't carry ratios"
+b00t_has = "Every store entry has SHA256. Every evidence record has subject+predicate+object. Every spotlight event has consumer+event."
+gap = "Receipts exist but don't attribute influence. They record existence, not proportion."
+
+[mece.two_engine]
+al10 = "Both training ingest and inference attribution must hold for trust. Independent validation."
+b00t_gap = "b00t's data fabric (Grafeo + Zvec + NeumannStore + Qdrant) is multi-engine but not cross-validated"
+b00t_has = "Gate validation (Satisfies<Constraint>). Evidence audit trail. Reviewer verdicts."
+gap = "Gate validation validates the GATE, not the DATA. No cross-engine consistency check between store ↔ grok ↔ evidence."
+
+# ── TRIZ Contradictions ──────────────────────────────────────────────────────
+
+[triz]
+
+[[triz.contradictions]]
+id = "C1"
+conflict = "You want per-source influence attribution, but you don't want to add compute overhead"
+al10_resolution = "Reuse existing attention weights (already computed) — TRIZ principle 25 (self-service)"
+b00t_mapping = "Reuse existing evidence scores + similarity scores + spotlight metrics — all already computed"
+b00t_principle = "TRIZ 25: b00t already computes embedding similarity for grok ask(). Already computes evidence pass/fail for gates. Already logs spotlight events. Don't add a new system — bucket what exists."
+
+[[triz.contradictions]]
+id = "C2"
+conflict = "You want per-source granularity, but you don't want to store per-source data for every output"
+al10_resolution = "Bucket by source identity, normalize to ratios, emit compact receipt — TRIZ principle 2 (taking out)"
+b00t_mapping = "b00t's store manifest already groups by ontology_class + consumer. The 'bucket' already exists — add a 'ratio' field."
+b00t_principle = "TRIZ 2: Don't store per-source evidence for every spotlight event. Bucket spotlight events by consumer+class, normalize to ratios per session."
+
+[[triz.contradictions]]
+id = "C3"
+conflict = "You want to validate provenance integrity, but you don't want to re-run the full pipeline"
+al10_resolution = "Hard invariants: len(input_ids)==len(source_idx), ratios sum~1.0 — cheap arithmetic checks"
+b00t_mapping = "b00t's Satisfies<Constraint> already validates invariants. Extend to sum-to-one ratio checks."
+b00t_principle = "TRIZ 35 (parameter change): Add 'ratios sum to 1.0' as a new Constraint variant. O(1) validation, no re-computation."
+
+# ── Eureka: Five b00t Subsystems Gain Influence Attribution ──────────────────
+
+[eureka]
+
+[eureka.subsystem_1]
+name = "store manifest → influence receipt"
+current = "StoreEntry { key, class, consumer, checksum, tags, ... }"
+al10_inspired = "Add influence_ratio: Option<f64> — 'how much did this entry contribute to the current session?'"
+mechanism = "After a grok ask() session, compute cosine scores for each returned chunk, normalize, store as influence receipt"
+output = "store manifest gains a 'session_influence' section: [{key, ratio}]"
+effort = "low"
+impact = "high"
+
+[eureka.subsystem_2]
+name = "evidence → per-source influence"
+current = "evidence/satisfies.jsonl: {subject, predicate, object, timestamp}"
+al10_inspired = "Add influence_weights field: [{source: 'TrainingCorpus#42', ratio: 0.6}, {source: 'Skill#7', ratio: 0.3}, {source: 'parametric', ratio: 0.1}]"
+mechanism = "During reviewer verdicts, compute similarity between evidence item and knowledge base sources, emit ratios"
+output = "Reviewer verdicts carry attribution — 'this APPROVE verdict was 60% influenced by TrainingCorpus, 30% by Skill docs'"
+effort = "medium"
+impact = "high"
+
+[eureka.subsystem_3]
+name = "spotlight → influence audit"
+current = "spotlight.jsonl: {consumer, event, model, timestamp}"
+al10_inspired = "Add attribution_receipt field: [{source, ratio}] per spotlight event"
+mechanism = "Bucket spotlight events by consumer, normalize counts to ratios per session"
+output = "'rust-doc used embeddings: 40% from qwen3.5 model, 35% from training corpus, 25% parametric'"
+effort = "low"
+impact = "medium"
+
+[eureka.subsystem_4]
+name = "fine-tune pipeline → training influence on outputs"
+current = "generate-b00t-training-data.py → unsloth QLoRA → GGUF"
+al10_inspired = "After fine-tune on b00t source, attribution receipt shows WHICH source files most influence outputs"
+mechanism = "Run AL-1.0 receipt generation on fine-tuned model outputs, map source_idx back to b00t source files"
+output = "Receipt: 'Qwen3.5-b00t response 60% influenced by store.rs, 25% by server_llm.rs, 15% by datum_credential.rs'"
+effort = "high — requires AL-1.0 adapter for unsloth/Qwen"
+impact = "high — closes the loop on 'what did fine-tuning actually teach?'"
+
+[eureka.subsystem_5]
+name = "data fabric → cross-engine consistency"
+current = "GrafeoStore + ZvecStore + NeumannStore + Qdrant — independent engines"
+al10_inspired = "Cross-engine validation: do all engines agree on source identity and influence?"
+mechanism = "NeumannStore holds facts. Qdrant holds chunks. Store holds blobs. Cross-validate: does a Qdrant chunk's attribution match its NeumannStore fact? Does a StoreEntry's SHA256 match the Qdrant payload?"
+output = "Cross-engine consistency report — '3 engines agree, 1 drift detected in Grafeo vs Neumann'"
+effort = "medium"
+impact = "high"
+
+# ── Implementation Priority (effort × impact) ────────────────────────────────
+
+[implementation]
+
+[[implementation.steps]]
+order = 1
+name = "store-influence-receipt"
+description = "Add session_influence to store manifest — bucket grok ask() results by source, normalize to ratios"
+effort = "low"
+impact = "high"
+subsystem = "store manifest"
+
+[[implementation.steps]]
+order = 2
+name = "spotlight-attribution"
+description = "Add attribution_receipt field to spotlight events — bucket by consumer, normalize to ratios"
+effort = "low"
+impact = "medium"
+subsystem = "spotlight"
+
+[[implementation.steps]]
+order = 3
+name = "evidence-influence-weights"
+description = "Add influence_weights to evidence records — similarity-based source attribution"
+effort = "medium"
+impact = "high"
+subsystem = "evidence"
+
+[[implementation.steps]]
+order = 4
+name = "cross-engine-validation"
+description = "Cross-validate NeumannStore ↔ Qdrant ↔ Store — consistency report"
+effort = "medium"
+impact = "high"
+subsystem = "data fabric"
+
+[[implementation.steps]]
+order = 5
+name = "fine-tune-attribution"
+description = "AL-1.0 receipt generation for fine-tuned b00t model — which source files influenced outputs"
+effort = "high"
+impact = "high"
+subsystem = "fine-tune pipeline"
+
+# ── Eureka Statement ─────────────────────────────────────────────────────────
+
+[eureka_statement]
+one_liner = "b00t has the data. AL-1.0 has the ratio. The eureka: bucket b00t's existing evidence/similarity/spotlight scores by source identity and normalize to influence ratios. No new data collection needed — just a new output format on existing computation."
+triz_summary = "TRIZ 25 (reuse existing computation) + TRIZ 2 (bucket and normalize) + TRIZ 35 (cheap invariant checks)"
+ponytail_rung = "Rung 3: stdlib pattern (bucket-and-normalize). Rung 6: one line per ratio output."
+verdict = "Implement step 1 (store influence receipt) and step 2 (spotlight attribution) now — trivial additions to existing structs. Steps 3-5 in follow-up PRs."
+
+# b00t:map v1
+# summary: AL-1.0 → b00t eureka — semantic influence ratios via bucketing existing computation
+# tags: eureka, al10, attribution, ratios, triz, mece, provenance, influence
+# tier: ch0nky
+# cmds: b00t evidence attribute --session <id>, b00t store influence --consumer <name>
+# complexity: 7

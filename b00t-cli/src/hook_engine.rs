@@ -31,7 +31,6 @@ use rhai::{Engine, EvalAltResult, ImmutableString};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use toml::{Value, map::Map};
 
 /// Capability info extracted from capability-registry.toml
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -47,15 +46,43 @@ pub struct CapabilityInfo {
 
 /// Registry file parsed into a lookup structure
 #[derive(Debug, Clone, Default, Deserialize)]
+struct RegistryToml {
+    pub registry: RegistrySection,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RegistrySection {
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub capabilities: Vec<CapabilityEntry>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct CapabilityEntry {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(rename = "type", default)]
+    pub entry_type: String,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+    #[serde(default)]
+    pub mcp_tools: Vec<String>,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub tier: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// Capability registry — flat index of id → CapabilityInfo
+#[derive(Debug, Clone, Default)]
 struct CapabilityRegistry {
-    #[serde(default)]
-    pub skills: Map<String, Value>,
-    #[serde(default)]
-    pub roles: Map<String, Value>,
-    #[serde(default)]
-    pub datums: Map<String, Value>,
-    #[serde(default)]
-    pub mcp: Map<String, Value>,
+    map: std::collections::HashMap<String, CapabilityInfo>,
 }
 
 /// Global cache for the parsed capability registry
@@ -89,72 +116,23 @@ fn capability_registry_path() -> Option<PathBuf> {
 fn load_capability_registry() -> Result<CapabilityRegistry, Box<dyn std::error::Error>> {
     let path = capability_registry_path().ok_or("capability-registry.toml not found")?;
     let content = std::fs::read_to_string(path)?;
-    let registry: CapabilityRegistry = toml::from_str(&content)?;
-    Ok(registry)
+    let toml: RegistryToml = toml::from_str(&content)?;
+    let mut map = std::collections::HashMap::new();
+    for entry in toml.registry.capabilities {
+        map.insert(entry.id.clone(), CapabilityInfo {
+            name: if entry.name.is_empty() { entry.id.clone() } else { entry.name },
+            capability_type: entry.entry_type,
+            depends_on: entry.depends_on,
+            tags: entry.skills,
+        });
+    }
+    Ok(CapabilityRegistry { map })
 }
 
-/// Look up a capability by name across all sections (skills, roles, datums, mcp)
+/// Look up a capability by id
 fn lookup_capability(name: &str) -> Option<CapabilityInfo> {
-    let registry = CAPABILITY_REGISTRY.as_ref()?;
-
-    // Search skills section
-    if let Some(val) = registry.skills.get(name) {
-        return parse_capability_entry(name, "skill", val);
-    }
-    // Search roles section
-    if let Some(val) = registry.roles.get(name) {
-        return parse_capability_entry(name, "role", val);
-    }
-    // Search datums section
-    if let Some(val) = registry.datums.get(name) {
-        return parse_capability_entry(name, "datum", val);
-    }
-    // Search mcp section
-    if let Some(val) = registry.mcp.get(name) {
-        return parse_capability_entry(name, "mcp", val);
-    }
-
-    None
+    CAPABILITY_REGISTRY.as_ref()?.map.get(name).cloned()
 }
-
-/// Parse a capability entry from a TOML value
-fn parse_capability_entry(name: &str, section_type: &str, val: &Value) -> Option<CapabilityInfo> {
-    let table = val.as_table()?;
-
-    let capability_type = table
-        .get("type")
-        .and_then(|v| v.as_str())
-        .unwrap_or(section_type)
-        .to_string();
-
-    let depends_on = table
-        .get("depends_on")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let tags = table
-        .get("tags")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    Some(CapabilityInfo {
-        name: name.to_string(),
-        capability_type,
-        depends_on,
-        tags,
-    })
-}
-
 /// Query the capability registry for a capability by name.
 /// Returns Some(CapabilityInfo) if found, None otherwise.
 pub fn query_capability_registry(capability_name: &str) -> Option<CapabilityInfo> {
@@ -353,6 +331,15 @@ fn build_engine() -> Engine {
         b00t_c0re_lib::write_event(event, detail);
     });
 
+    // Reviewer constraint evaluation — exposes VerdictConstraint::evaluate() to Rhai
+    engine.register_fn(
+        "evaluate_constraint",
+        |constraint_json: &str, verdict_str: &str| -> Result<bool, Box<EvalAltResult>> {
+            b00t_c0re_lib::reviewer::evaluate_constraint_json(constraint_json, verdict_str)
+                .map_err(|e| format!("evaluate_constraint: {}", e).into())
+        },
+    );
+
     engine.set_max_expr_depths(128, 64);
 
     engine
@@ -432,11 +419,11 @@ mod tests {
 
     #[test]
     fn test_query_capability_registry_skills() {
-        // Test querying a skill from capability-registry.toml via hook (which loads registry lazily)
+        // Test querying a capability from capability-registry.toml
         let result = run_hook(
             r#"
-            let exists = which_capability("bash");
-            if exists == "yes" { "ok" } else { "warn: bash not found" }
+            let exists = which_capability("mece-analyzer");
+            if exists == "yes" { "ok" } else { "warn: mece-analyzer not found" }
         "#,
         );
         assert_eq!(result, HookResult::Ok);
@@ -444,11 +431,11 @@ mod tests {
 
     #[test]
     fn test_query_capability_registry_roles() {
-        // Test querying a role with depends_on via hook
+        // Test querying a capability with depends_on via hook
         let result = run_hook(
             r#"
-            let exists = which_capability("orchestrator");
-            if exists == "yes" { "ok" } else { "warn: orchestrator not found" }
+            let exists = which_capability("b00t-reviewer");
+            if exists == "yes" { "ok" } else { "warn: b00t-reviewer not found" }
         "#,
         );
         assert_eq!(result, HookResult::Ok);
@@ -465,8 +452,8 @@ mod tests {
         // Test the which_capability Rhai function returns "yes" for existing capability
         let result = run_hook(
             r#"
-            let exists = which_capability("bash");
-            if exists == "yes" { "ok" } else { "warn: bash not found" }
+            let exists = which_capability("synthesis-agent");
+            if exists == "yes" { "ok" } else { "warn: synthesis-agent not found" }
         "#,
         );
         assert_eq!(result, HookResult::Ok);
@@ -486,12 +473,10 @@ mod tests {
 
     #[test]
     fn test_capability_depends_hook_function() {
-        // Test the capability_depends Rhai function - returns depends for capabilities that have them
-        // Note: orchestrator exists in both skills (no deps) and roles (with deps), skills found first
+        // b00t-reviewer has depends_on, mece-analyzer does not
         let result = run_hook(
             r#"
-            let deps = capability_depends("bash");
-            // bash has no depends_on, so should return empty
+            let deps = capability_depends("mece-analyzer");
             if deps == "" { "ok" } else { "warn: expected empty deps, got: " + deps }
         "#,
         );

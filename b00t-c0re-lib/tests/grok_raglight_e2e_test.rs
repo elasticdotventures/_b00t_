@@ -15,6 +15,8 @@
 //! # Run unit-only (always safe):
 //!   cargo test --package b00t-c0re-lib --test grok_raglight_e2e_test
 
+#![allow(dead_code)]
+
 use anyhow::Result;
 use b00t_c0re_lib::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 use serde::Deserialize;

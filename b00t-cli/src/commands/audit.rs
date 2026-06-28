@@ -1,36 +1,109 @@
-//! `b00t audit` — audit trail reader for `.b00t/audit.jsonl`
+//! `b00t audit` — audit trail reader for `~/.b00t/exec-log.jsonl`
 //!
 //! # Usage
 //! ```bash
 //! b00t-cli audit trail                          # last 20 entries
-//! b00t-cli audit trail --stage fitness          # filter by stage
-//! b00t-cli audit trail --limit 5               # fewer entries
+//! b00t-cli audit trail --stage block-rejected   # filter by stage/result/event
+//! b00t-cli audit trail --limit 5                # fewer entries
 //! b00t-cli audit trail --path /tmp/audit.jsonl  # custom path
-//! b00t-cli audit trail --json                  # raw JSON output
+//! b00t-cli audit trail --json                   # raw JSON output
 //! ```
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 #[derive(Parser, Clone)]
 pub enum AuditCommands {
-    #[clap(about = "Read audit trail from .b00t/audit.jsonl")]
+    #[clap(about = "Read audit trail from ~/.b00t/exec-log.jsonl")]
     Trail {
         #[clap(
             long,
             help = "Path to audit JSONL file",
-            default_value = ".b00t/audit.jsonl"
+            default_value = "~/.b00t/exec-log.jsonl"
         )]
         path: PathBuf,
-        #[clap(long, help = "Filter by stage (fitness, merge, etc.)")]
+        #[clap(long, help = "Filter by stage/event/result")]
         stage: Option<String>,
         #[clap(long, help = "Number of recent entries", default_value_t = 20)]
         limit: usize,
         #[clap(long, help = "Emit as JSON")]
         json: bool,
     },
+}
+
+fn expand_audit_path(path: &PathBuf) -> PathBuf {
+    PathBuf::from(shellexpand::tilde(&path.to_string_lossy()).to_string())
+}
+
+fn entry_kind(entry: &serde_json::Value) -> &str {
+    entry
+        .get("stage")
+        .or_else(|| entry.get("event"))
+        .or_else(|| entry.get("result"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+}
+
+fn entry_timestamp(entry: &serde_json::Value) -> &str {
+    entry
+        .get("timestamp")
+        .or_else(|| entry.get("ts"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("?")
+}
+
+fn entry_result(entry: &serde_json::Value) -> &str {
+    entry
+        .get("result")
+        .or_else(|| entry.get("status"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("?")
+}
+
+fn entry_args_summary(entry: &serde_json::Value) -> String {
+    if let Some(args) = entry.get("args").and_then(|v| v.as_array()) {
+        let parts: Vec<&str> = args.iter().filter_map(|v| v.as_str()).collect();
+        if !parts.is_empty() {
+            return format!(" ({})", parts.join(" "));
+        }
+    }
+
+    entry
+        .get("cmd")
+        .and_then(|v| v.as_str())
+        .map(|cmd| format!(" ({cmd})"))
+        .unwrap_or_default()
+}
+
+fn load_audit_entries(path: &PathBuf, stage: &Option<String>) -> Result<Vec<serde_json::Value>> {
+    let path = expand_audit_path(path);
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(err.into()),
+    };
+
+    let mut entries = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if let Some(stage_filter) = stage {
+            if entry_kind(&entry) != stage_filter.as_str() {
+                continue;
+            }
+        }
+        entries.push(entry);
+    }
+
+    Ok(entries)
 }
 
 pub fn handle_audit_command(args: &AuditCommands) -> Result<()> {
@@ -41,64 +114,28 @@ pub fn handle_audit_command(args: &AuditCommands) -> Result<()> {
             limit,
             json,
         } => {
-            let content = fs::read_to_string(path)
-                .with_context(|| format!("failed to read audit file: {}", path.display()))?;
+            let entries = load_audit_entries(path, stage)?;
 
-            // Parse each JSON line, collect valid entries
-            let mut entries: Vec<serde_json::Value> = Vec::new();
-            for line in content.lines() {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(line) {
-                    Ok(entry) => {
-                        // Apply stage filter if specified
-                        if let Some(stage_filter) = stage {
-                            let entry_stage = entry
-                                .get("stage")
-                                .or_else(|| entry.get("event"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
-                            if entry_stage != stage_filter.as_str() {
-                                continue;
-                            }
-                        }
-                        entries.push(entry);
-                    }
-                    Err(_) => {
-                        // Skip malformed lines
-                        continue;
-                    }
-                }
-            }
-
-            // Apply limit (most recent)
             let total = entries.len();
             let start = total.saturating_sub(*limit);
             let shown: Vec<&serde_json::Value> = entries.iter().skip(start).collect();
 
-            // Also collect stage counts for summary
             let mut stage_counts: std::collections::BTreeMap<String, usize> =
                 std::collections::BTreeMap::new();
             for entry in &entries {
-                let s = entry
-                    .get("stage")
-                    .or_else(|| entry.get("event"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                *stage_counts.entry(s).or_insert(0) += 1;
+                *stage_counts
+                    .entry(entry_kind(entry).to_string())
+                    .or_insert(0) += 1;
             }
 
             if *json {
-                // Emit raw JSON array of filtered entries
                 let output: Vec<&serde_json::Value> = shown.iter().copied().collect();
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
+                let display_path = expand_audit_path(path);
                 println!(
                     "🥾 Audit trail: {} ({} total, showing last {})",
-                    path.display(),
+                    display_path.display(),
                     total,
                     shown.len()
                 );
@@ -107,52 +144,58 @@ pub fn handle_audit_command(args: &AuditCommands) -> Result<()> {
                 }
                 println!();
 
-                // Stage summary
                 println!("   Stages:");
-                for (s, count) in &stage_counts {
-                    println!("     {:.<24} {}", s, count);
+                if stage_counts.is_empty() {
+                    println!("     none.................... 0");
+                } else {
+                    for (s, count) in &stage_counts {
+                        println!("     {:.<24} {}", s, count);
+                    }
                 }
                 println!();
 
-                // Entry details
                 for entry in &shown {
-                    let timestamp = entry
-                        .get("timestamp")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("?");
-                    let entry_stage = entry
-                        .get("stage")
-                        .or_else(|| entry.get("event"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("?");
-                    let result = entry
-                        .get("result")
-                        .or_else(|| entry.get("status"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("?");
+                    let timestamp = entry_timestamp(entry);
+                    let kind = entry_kind(entry);
+                    let result = entry_result(entry);
+                    let args_summary = entry_args_summary(entry);
 
-                    // Show brief args summary if present
-                    let args_summary = entry
-                        .get("args")
-                        .and_then(|v| v.as_array())
-                        .map(|a| {
-                            let s: Vec<&str> = a.iter().filter_map(|v| v.as_str()).collect();
-                            if s.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" ({})", s.join(" "))
-                            }
-                        })
-                        .unwrap_or_default();
-
-                    println!(
-                        "  [{}] {} | {} | {}{}",
-                        timestamp, entry_stage, result, entry_stage, args_summary
-                    );
+                    println!("  [{}] {} | {}{}", timestamp, kind, result, args_summary);
                 }
             }
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_audit_file_loads_as_empty_entries() {
+        let path = PathBuf::from("/tmp/definitely-missing-b00t-audit.jsonl");
+        let entries = load_audit_entries(&path, &None).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn exec_log_entries_filter_by_result_alias() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("exec-log.jsonl");
+        fs::write(
+            &path,
+            r#"{"ts":"2026-06-21T00:00:00Z","cmd":"git status","result":"allow:direct","guard_msg":null,"pid":123}
+{"ts":"2026-06-21T00:00:01Z","cmd":"pip install flask","result":"block-rejected","guard_msg":"use uv","pid":null}
+"#,
+        )
+        .unwrap();
+
+        let entries = load_audit_entries(&path, &Some("block-rejected".to_string())).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entry_kind(&entries[0]), "block-rejected");
+        assert_eq!(entry_timestamp(&entries[0]), "2026-06-21T00:00:01Z");
+        assert_eq!(entry_args_summary(&entries[0]), " (pip install flask)");
     }
 }

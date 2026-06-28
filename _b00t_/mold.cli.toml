@@ -1,7 +1,8 @@
 [b00t]
 name = "mold"
+type = "cli"
 desires = "2.30.0"
-install = "sudo apt install -y mold"
+install = { package = "mold" }
 version = "mold --version"
 version_regex = 'mold (\d+\.\d+\.\d+)'
 hint = "mold linker - low-memory ld replacement; core required for b00t aarch64 builds"

@@ -6,12 +6,7 @@ temperature: 0.2
 permission:
   bash:
     "*": "deny"
-  edit:
-    "plan/**/*.md": "allow"
-    "**/*.md": "allow"
-    "**/*.env*": "deny"
-    "**/*.key": "deny"
-    "**/*.secret": "deny"
+  edit: "ask"
   task:
     contextscout: "allow"
     "*": "deny"

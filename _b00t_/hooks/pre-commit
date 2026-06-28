@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# pre-commit hook for b00t repo — guards against common merge artifacts.
+# Install: cp _b00t_/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or: just install-pre-commit-hook
+set -euo pipefail
+
+# Gate 1: .gitmodules must exist (destroyed by merge artifacts like PR #490)
+if ! git ls-files --error-unmatch .gitmodules >/dev/null 2>&1; then
+  echo "🚫 pre-commit: .gitmodules is missing — check for merge artifact" >&2
+  echo "   Restore with: git show <known-good-sha>:.gitmodules > .gitmodules" >&2
+  exit 1
+fi
+
+# Gate 2: .gitmodules must be well-formed (at least one submodule entry)
+if ! grep -q '^\[submodule' .gitmodules 2>/dev/null; then
+  echo "🚫 pre-commit: .gitmodules has no submodule entries" >&2
+  exit 1
+fi
+
+# Gate 3: Warn if gitlinks lack .gitmodules entries (non-fatal)
+# 🤓 git stores emoji paths as raw bytes (octal-escaped in ls-files output)
+#    while .gitmodules stores them as UTF-8. Normalize both for comparison.
+python3 -c "
+import re, subprocess
+
+# Read .gitmodules paths (may contain UTF-8 emoji)
+with open('.gitmodules', 'rb') as f:
+    raw = f.read()
+# paths in .gitmodules: extract byte sequences after 'path = '
+submod_paths = set()
+for m in re.finditer(rb'^\tpath = (.+)', raw, re.MULTILINE):
+    submod_paths.add(m.group(1))
+
+# Get gitlink paths from staged files (emits raw bytes with octal escapes)
+out = subprocess.run(['git', 'ls-files', '--stage'], capture_output=True)
+for line in out.stdout.split(b'\n'):
+    parts = line.split(b'\t')
+    if len(parts) >= 2 and parts[0].startswith(b'160000'):
+        path = parts[1]
+        # Strip surrounding quotes that git adds for paths with special chars
+        if path.startswith(b'\"') and path.endswith(b'\"'):
+            path = path[1:-1]
+        # Decode octal escapes → raw bytes → compare
+        try:
+            decoded = path.decode('unicode_escape').encode('latin-1')
+        except:
+            decoded = path
+        if decoded not in submod_paths and path not in submod_paths:
+            print(f'⚠️  pre-commit: gitlink missing .gitmodules entry: {path.decode(\"utf-8\", errors=\"replace\")}', flush=True)
+"
+
+echo "✅ pre-commit: .gitmodules OK"

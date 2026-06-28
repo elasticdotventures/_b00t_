@@ -1,3 +1,8 @@
+[b00t]
+name = "mcp-protocol"
+type = "datum"
+hint = "MCP protocol specification — stdio/HTTP transport, tool discovery"
+
 [datum]
 topic     = "mcp-protocol"
 class     = "core-infrastructure"

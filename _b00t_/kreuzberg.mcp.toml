@@ -1,0 +1,62 @@
+[b00t]
+name = "kreuzberg"
+type = "mcp"
+hint = "Kreuzberg document intelligence — PDF parsing, OCR, text extraction, document processing"
+lfmf_category = "kreuzberg-mcp"
+hook_detect = "gates"
+
+[b00t.learn]
+topic = "kreuzberg-mcp"
+auto_digest = true
+
+# 🥾: PRIMARY — wrapper script (kreuzberg must be installed via pip install --user)
+[[b00t.mcp.stdio]]
+priority = 0
+command = "python3"
+requires = ["python", "kreuzberg"]
+transport = "stdio"
+args = ["/home/brianh/.dotfiles/_b00t_/scripts/kreuzberg-mcp-wrapper.py"]
+
+# 🥾: FALLBACK — direct python path
+[[b00t.mcp.stdio]]
+priority = 10
+command = "python3"
+requires = ["python", "kreuzberg"]
+transport = "stdio"
+args = ["_b00t_/scripts/kreuzberg-mcp-wrapper.py"]
+
+# 🥾: UPSTREAM — uvx kreuzberg-mcp (when upstream MCP server ships)
+[[b00t.mcp.stdio]]
+priority = 20
+command = "uvx"
+requires = ["python"]
+transport = "stdio"
+args = ["kreuzberg-mcp"]
+unstable = true
+
+[[b00t.gate]]
+rhai = "command_exists(\"uv\") || command_exists(\"python3\")"
+hint = "uv or python3 required for kreuzberg MCP server"
+
+[[b00t.gate]]
+rhai = "command_exists(\"uv\")"
+hint = "uv required for tool-managed kreuzberg"
+
+[[b00t.usage]]
+description = "Run kreuzberg MCP server via uvx (auto-install)"
+command = "uvx kreuzberg-mcp"
+
+[[b00t.usage]]
+description = "Run kreuzberg MCP server via python module"
+command = "python3 -m kreuzberg.mcp"
+
+[[b00t.references]]
+name = "Kreuzberg — Document Intelligence"
+url = "https://github.com/Goldziher/kreuzberg"
+
+# b00t:map v1
+# summary: kreuzberg — document intelligence MCP server for PDF parsing, OCR, and text extraction
+# tags: mcp, document-intelligence, pdf, ocr, text-extraction, kreuzberg
+# tier: ch0nky
+# cmds: uvx kreuzberg-mcp, python3 -m kreuzberg.mcp
+# complexity: 3

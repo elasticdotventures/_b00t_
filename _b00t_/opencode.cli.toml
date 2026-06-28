@@ -6,12 +6,8 @@ name = "opencode"
 type = "cli"
 desires = "latest"
 hint = "opencode terminal AI coding agent - use with local vLLM or cloud via mistralrs proxy"
-install = """
-pnpm add -g opencode-ai
-"""
-update = """
-pnpm update -g opencode-ai
-"""
+install = "bash ~/.dotfiles/_b00t_/install-opencode.sh"
+update = "bash ~/.dotfiles/_b00t_/update-opencode.sh"
 version = "opencode --version"
 version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
 lfmf_category = "opencode"

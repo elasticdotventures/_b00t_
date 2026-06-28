@@ -11,7 +11,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// A single telemetry event written to events.jsonl.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+///
+/// FOL-correct equality: `ts` and `pid` are runtime metadata.
+/// Two events with the same `event` type and `detail` payload are
+/// the same logical event, regardless of when or by which process
+/// they were recorded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct B00tEvent {
     /// RFC3339 timestamp
     pub ts: String,
@@ -21,6 +26,13 @@ pub struct B00tEvent {
     pub detail: String,
     /// Process ID that emitted the event
     pub pid: u32,
+}
+
+// 🤓 Custom equality: ts/pid are metadata, not identity.
+impl PartialEq for B00tEvent {
+    fn eq(&self, other: &Self) -> bool {
+        self.event == other.event && self.detail == other.detail
+    }
 }
 
 impl B00tEvent {
@@ -222,5 +234,28 @@ mod tests {
         let _temp_home = TempHome::new();
         let path = events_path();
         assert!(path.to_string_lossy().ends_with(".b00t/events.jsonl"));
+    }
+
+    // ── FOL-correct equality tests ────────────────────────────────────────
+
+    #[test]
+    fn test_event_eq_ignores_metadata() {
+        let a = B00tEvent { ts: "t1".to_string(), event: "mcp_install".to_string(), detail: "done".to_string(), pid: 100 };
+        let b = B00tEvent { ts: "t2".to_string(), event: "mcp_install".to_string(), detail: "done".to_string(), pid: 200 };
+        assert_eq!(a, b, "ts/pid are metadata, not identity");
+    }
+
+    #[test]
+    fn test_event_eq_different_event() {
+        let a = B00tEvent { ts: "t".to_string(), event: "mcp_install".to_string(), detail: "x".to_string(), pid: 1 };
+        let b = B00tEvent { ts: "t".to_string(), event: "guard".to_string(), detail: "x".to_string(), pid: 1 };
+        assert_ne!(a, b, "different event = different identity");
+    }
+
+    #[test]
+    fn test_event_eq_different_detail() {
+        let a = B00tEvent { ts: "t".to_string(), event: "e".to_string(), detail: "a".to_string(), pid: 1 };
+        let b = B00tEvent { ts: "t".to_string(), event: "e".to_string(), detail: "b".to_string(), pid: 1 };
+        assert_ne!(a, b, "different detail = different identity");
     }
 }

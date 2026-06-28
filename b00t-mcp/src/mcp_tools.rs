@@ -385,6 +385,193 @@ impl_mcp_tool!(
     ["agent", "vote", "submit"]
 );
 
+/// MCP tool for datum delegation authorization gate — bridges b00t → ledgrrr cost gate.
+///
+/// Sends a `ledgerr_b00t_delegate_datum` MCP call to the running `ledgerr-mcp` server
+/// (spawned from vendor/l3dg3rr via `LEDGERR_MCP_CMD` or detected path).
+/// Returns `DelegateAuthority`-shaped JSON: `{authorized, budget_remaining_cake, resume_token}`.
+///
+/// Resume token format: `<datum_id>:<task_id>:<epoch_secs>` — opaque to b00t, used
+/// by ledgrrr to reconstruct the delegation context on proceed.
+///
+/// Cost gate: ledgrrr enforces $10.00 per-request limit; denial_reason is set if exceeded.
+#[derive(Parser, Clone)]
+pub struct DelegateDatumCommand {
+    #[arg(help = "Datum ID to authorize")]
+    pub datum_id: String,
+
+    #[arg(long, help = "Agent requesting authorization")]
+    pub agent_id: String,
+
+    #[arg(long, help = "Task ID this delegation belongs to")]
+    pub task_id: String,
+
+    #[arg(long, help = "Estimated cost in 🍰 cake")]
+    pub estimated_cost_cake: f64,
+
+    #[arg(long, help = "Human-readable justification for this delegation")]
+    pub justification: Option<String>,
+}
+
+impl crate::clap_reflection::McpReflection for DelegateDatumCommand {
+    fn mcp_tool_name() -> String { "b00t_delegate_datum".to_string() }
+    fn command_path() -> Vec<String> { vec![] }
+}
+
+impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let datum_id = params.get("datum_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires datum_id: string"))?;
+        let agent_id = params.get("agent_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires agent_id: string"))?;
+        let task_id = params.get("task_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires task_id: string"))?;
+        let estimated_cost_cake = params.get("estimated_cost_cake")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires estimated_cost_cake: number"))?;
+
+        // Bridge: call ledgerr-mcp via MCP stdio subprocess.
+        // Discover binary: LEDGERR_MCP_CMD env > vendor/l3dg3rr build path.
+        let ledgerr_cmd = std::env::var("LEDGERR_MCP_CMD").ok()
+            .or_else(|| {
+                // Walk up from b00t home to find vendored binary
+                let b00t_home = std::env::var("B00T_HOME").ok()
+                    .or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.b00t")))
+                    .unwrap_or_else(|| "~/.b00t".to_string());
+                let path = std::path::PathBuf::from(&b00t_home)
+                    .join("vendor/l3dg3rr/target/release/ledgerr-mcp-server");
+                if path.exists() { Some(path.to_string_lossy().into_owned()) } else { None }
+            });
+
+        let Some(cmd_path) = ledgerr_cmd else {
+            // ⚠️ BRIDGE PENDING: ledgerr-mcp binary not found.
+            // Set LEDGERR_MCP_CMD or build vendor/l3dg3rr with:
+            //   cd vendor/l3dg3rr && cargo build -p ledgerr-mcp --features b00t --release
+            // Until then, fall back to synthetic authorized=true with local resume token.
+            let epoch_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            eprintln!("[b00t_delegate] LEDGERR_MCP_CMD unset — using local gate fallback");
+            eprintln!("[b00t_delegate] datum={datum_id} agent={agent_id} task={task_id} cost={estimated_cost_cake:.4} 🍰 → local-authorized");
+            return Ok(serde_json::to_string_pretty(&json!({
+                "authorized": true,
+                "datum_id": datum_id,
+                "agent_id": agent_id,
+                "task_id": task_id,
+                "budget_remaining_cake": (100.0 - estimated_cost_cake).max(0.0),
+                "resume_token": format!("{datum_id}:{task_id}:{epoch_secs}"),
+                "denial_reason": null,
+                "_bridge": "⚠️ BRIDGE PENDING: LEDGERR_MCP_CMD not set — local fallback gate"
+            }))?);
+        };
+
+        // Send initialize + tools/call via MCP stdio
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 1,
+            "params": {
+                "name": "ledgerr_b00t_delegate_datum",
+                "arguments": {
+                    "datum_id": datum_id,
+                    "agent_id": agent_id,
+                    "task_id": task_id,
+                    "estimated_cost_cake": estimated_cost_cake
+                }
+            }
+        });
+
+        let result = call_ledgerr_mcp_stdio(&cmd_path, &payload)
+            .unwrap_or_else(|e| {
+                eprintln!("[b00t_delegate] ledgerr-mcp subprocess error: {e}");
+                json!({
+                    "authorized": false,
+                    "denial_reason": format!("ledgerr-mcp subprocess error: {e}"),
+                    "_bridge": "subprocess-error"
+                })
+            });
+
+        Ok(serde_json::to_string_pretty(&result)?)
+    }
+}
+
+/// Spawn ledgerr-mcp as stdio MCP subprocess, send initialize + one tools/call, return result.
+fn call_ledgerr_mcp_stdio(cmd_path: &str, payload: &Value) -> Result<Value> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let mut child = Command::new(cmd_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("spawn ledgerr-mcp-server failed: {e}"))?;
+
+    let mut stdin = child.stdin.take()
+        .ok_or_else(|| anyhow::anyhow!("no stdin on ledgerr-mcp child"))?;
+    let stdout = child.stdout.take()
+        .ok_or_else(|| anyhow::anyhow!("no stdout on ledgerr-mcp child"))?;
+
+    // Step 1: initialize handshake
+    let init = json!({
+        "jsonrpc": "2.0", "id": 0, "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "b00t-mcp", "version": "0.1.0" }
+        }
+    });
+    writeln!(stdin, "{}", serde_json::to_string(&init)?)?;
+    stdin.flush()?;
+
+    let mut reader = BufReader::new(stdout);
+    let deadline = Instant::now() + Duration::from_secs(8);
+
+    // Read initialize response
+    let mut _init_resp = String::new();
+    loop {
+        if Instant::now() > deadline {
+            let _ = child.kill();
+            return Err(anyhow::anyhow!("timeout waiting for ledgerr-mcp initialize"));
+        }
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 { break; }
+        if !line.trim().is_empty() { _init_resp = line; break; }
+    }
+
+    // Step 2: send tools/call
+    writeln!(stdin, "{}", serde_json::to_string(payload)?)?;
+    stdin.flush()?;
+
+    // Read tools/call response
+    let mut response_line = String::new();
+    let deadline2 = Instant::now() + Duration::from_secs(10);
+    loop {
+        if Instant::now() > deadline2 {
+            let _ = child.kill();
+            return Err(anyhow::anyhow!("timeout waiting for ledgerr-mcp delegate response"));
+        }
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 { break; }
+        if !line.trim().is_empty() { response_line = line; break; }
+    }
+
+    let _ = child.kill();
+
+    if response_line.is_empty() {
+        return Err(anyhow::anyhow!("empty response from ledgerr-mcp"));
+    }
+
+    let resp: Value = serde_json::from_str(response_line.trim())?;
+    // Extract the result field from JSON-RPC envelope
+    Ok(resp.get("result").cloned().unwrap_or(resp))
+}
+
 /// MCP command for waiting for messages (blocking)
 #[derive(Parser, Clone)]
 pub struct AgentWaitCommand {
@@ -986,6 +1173,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "b00t_agent_complete",    description: "Mark agent task complete",               subcommand: "agent complete" },
     ToolCatalogEntry { name: "b00t_agent_vote_create", description: "Create a hive vote",                     subcommand: "agent vote create" },
     ToolCatalogEntry { name: "b00t_agent_vote_submit", description: "Submit a vote",                          subcommand: "agent vote submit" },
+    ToolCatalogEntry { name: "b00t_delegate_datum",    description: "Request ledgrrr authorization for datum execution cost gate", subcommand: "delegate datum" },
     ToolCatalogEntry { name: "b00t_session_init",      description: "Initialize a b00t session",              subcommand: "session init" },
     ToolCatalogEntry { name: "b00t_session_status",    description: "Show session status",                    subcommand: "session status" },
     ToolCatalogEntry { name: "b00t_session_end",       description: "End current session",                    subcommand: "session end" },
@@ -1039,7 +1227,8 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
         let argv = params.get("argv")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
-        let parts: Vec<&str> = argv.split_whitespace().collect();
+        let parts: Vec<String> = shlex::split(argv)
+            .ok_or_else(|| anyhow::anyhow!("Invalid shell quoting in argv: {argv}"))?;
         let output = std::process::Command::new("b00t-cli")
             .args(&parts)
             .output()
@@ -1156,6 +1345,7 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<AgentProgressCommand>()
         .register::<AgentVoteCreateCommand>()
         .register::<AgentVoteSubmitCommand>()
+        .register::<DelegateDatumCommand>()
         .register::<AgentWaitCommand>()
         .register::<AgentNotifyCommand>()
         .register::<AgentCapabilityCommand>()

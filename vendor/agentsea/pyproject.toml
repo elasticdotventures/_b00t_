@@ -1,0 +1,28 @@
+[project]
+name = "agentsea"
+version = "0.1.0"
+description = "AI agent for local agent"
+authors = [{ name = "elasticdotventures", email = "brianh@elastic.ventures" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "surfkit>=0.1.282",
+    "sqlalchemy>=2.0.27",
+    "pydantic>=2.6.3",
+    "requests>=2.31.0",
+    "fastapi[all]>=0.109",
+]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.0.0",
+    "black>=24.2.0",
+    "pytest>=8.0.2",
+    "ipykernel>=6.29.3",
+    "pytest-env>=1.1.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

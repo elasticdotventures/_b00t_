@@ -300,3 +300,125 @@ fn current_branch() -> Result<String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .context("failed to get current git branch")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use b00t_c0re_gov::store::ContextStore;
+    use tempfile::TempDir;
+
+    fn test_store() -> (ContextStore, TempDir) {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("hooks");
+        std::fs::create_dir_all(&path).unwrap();
+        (ContextStore::with_path(path), tmp)
+    }
+
+    fn test_token(id: Uuid, description: &str, ttl: Option<u64>) -> HookToken {
+        HookToken {
+            id,
+            hook_type: HookType::TimerMs(0),
+            created_at: Utc::now(),
+            ttl_ms: ttl.map(|s| s * 1000),
+            description: description.to_string(),
+        }
+    }
+
+    fn test_context(token: &HookToken, agent: &str, task: &str, message: &str, continuation: &str) -> AgentContext {
+        AgentContext {
+            agent_id: agent.to_string(),
+            task: task.to_string(),
+            gate: "context:manual".to_string(),
+            result_so_far: serde_json::json!({"message": message}),
+            reasoning: message.to_string(),
+            created_at: Utc::now(),
+            hook_token: token.clone(),
+            continuation: continuation.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_save_and_load_context() {
+        let (store, _tmp) = test_store();
+        let id = Uuid::new_v4();
+        let token = test_token(id, "test context", None);
+        let ctx = test_context(&token, "test-agent", "test task", "hello world", "resume_here");
+
+        store.save(&token, &ctx).expect("save");
+        let loaded = store.load_by_id(&id).expect("load").expect("found");
+        assert_eq!(loaded.agent_id, "test-agent");
+        assert_eq!(loaded.task, "test task");
+        assert_eq!(loaded.reasoning, "hello world");
+        assert_eq!(loaded.continuation, "resume_here");
+    }
+
+    #[test]
+    fn test_list_contexts() {
+        let (store, _tmp) = test_store();
+
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let token1 = test_token(id1, "context alpha", None);
+        let token2 = test_token(id2, "context beta", Some(3600));
+        let ctx1 = test_context(&token1, "agent-1", "task-1", "msg-1", "resume-1");
+        let ctx2 = test_context(&token2, "agent-2", "task-2", "msg-2", "resume-2");
+
+        store.save(&token1, &ctx1).expect("save 1");
+        store.save(&token2, &ctx2).expect("save 2");
+
+        let pending = store.list_pending().expect("list");
+        let manuals: Vec<_> = pending
+            .iter()
+            .filter(|t| matches!(t.hook_type, HookType::TimerMs(0)))
+            .collect();
+        assert_eq!(manuals.len(), 2);
+    }
+
+    #[test]
+    fn test_delete_context() {
+        let (store, _tmp) = test_store();
+        let id = Uuid::new_v4();
+        let token = test_token(id, "to-delete", None);
+        let ctx = test_context(&token, "agent", "task", "msg", "resume");
+        store.save(&token, &ctx).expect("save");
+
+        assert!(store.load_by_id(&id).expect("load").is_some());
+        store.delete(&id).expect("delete");
+        assert!(store.load_by_id(&id).expect("load").is_none());
+    }
+
+    #[test]
+    fn test_context_with_ttl() {
+        let (store, _tmp) = test_store();
+        let id = Uuid::new_v4();
+        let token = test_token(id, "expiring context", Some(60));
+        assert_eq!(token.ttl_ms, Some(60_000));
+
+        let ctx = test_context(&token, "agent", "task", "msg", "resume");
+        store.save(&token, &ctx).expect("save");
+
+        let loaded = store.load_by_id(&id).expect("load").expect("found");
+        assert_eq!(loaded.hook_token.ttl_ms, Some(60_000));
+    }
+
+    #[test]
+    fn test_atomic_save_no_partial_file() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("hooks");
+        std::fs::create_dir_all(&path).unwrap();
+
+        // Simulate crash: write partial tmp file
+        let id = Uuid::new_v4();
+        std::fs::write(path.join(format!("{}.json.tmp", id)), b"garbage").unwrap();
+
+        let store = ContextStore::with_path(path);
+        // Store should still work — overwrites tmp
+        let token = test_token(id, "crash recovery", None);
+        let ctx = test_context(&token, "agent", "task", "msg", "resume");
+        store.save(&token, &ctx).expect("save after crash");
+
+        // tmp should be gone, json exists
+        assert!(!tmp.path().join("hooks").join(format!("{}.json.tmp", id)).exists());
+        assert!(tmp.path().join("hooks").join(format!("{}.json", id)).exists());
+    }
+}

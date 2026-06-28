@@ -14,6 +14,14 @@ pub enum ContentType {
     Markdown,
     Text,
     Json,
+    /// Image formats (PNG, JPEG, GIF, WebP, SVG)
+    Image(String),      // MIME subtype e.g. "png"
+    /// Audio formats (MP3, WAV, OGG, FLAC)
+    Audio(String),      // MIME subtype e.g. "mpeg"
+    /// Video formats (MP4, WebM, AVI)
+    Video(String),      // MIME subtype e.g. "mp4"
+    /// Generic binary (unknown or unclassified)
+    Binary(String),     // file extension e.g. "bin"
     Unknown,
 }
 
@@ -140,6 +148,15 @@ impl ContentRouter {
             Some(ContentType::Json)
         } else if lower.contains("text/plain") {
             Some(ContentType::Text)
+        } else if lower.starts_with("image/") {
+            let subtype = lower.strip_prefix("image/").unwrap_or("unknown");
+            Some(ContentType::Image(subtype.to_string()))
+        } else if lower.starts_with("audio/") {
+            let subtype = lower.strip_prefix("audio/").unwrap_or("unknown");
+            Some(ContentType::Audio(subtype.to_string()))
+        } else if lower.starts_with("video/") {
+            let subtype = lower.strip_prefix("video/").unwrap_or("unknown");
+            Some(ContentType::Video(subtype.to_string()))
         } else {
             None
         }
@@ -158,6 +175,28 @@ impl ContentRouter {
             Some(ContentType::Json)
         } else if lower.ends_with(".txt") || lower.ends_with(".text") {
             Some(ContentType::Text)
+        } else if lower.ends_with(".png") {
+            Some(ContentType::Image("png".into()))
+        } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+            Some(ContentType::Image("jpeg".into()))
+        } else if lower.ends_with(".gif") {
+            Some(ContentType::Image("gif".into()))
+        } else if lower.ends_with(".webp") {
+            Some(ContentType::Image("webp".into()))
+        } else if lower.ends_with(".svg") {
+            Some(ContentType::Image("svg".into()))
+        } else if lower.ends_with(".mp3") {
+            Some(ContentType::Audio("mpeg".into()))
+        } else if lower.ends_with(".wav") {
+            Some(ContentType::Audio("wav".into()))
+        } else if lower.ends_with(".ogg") {
+            Some(ContentType::Audio("ogg".into()))
+        } else if lower.ends_with(".mp4") {
+            Some(ContentType::Video("mp4".into()))
+        } else if lower.ends_with(".webm") {
+            Some(ContentType::Video("webm".into()))
+        } else if lower.ends_with(".bin") || lower.ends_with(".dat") {
+            Some(ContentType::Binary(lower.rsplit('.').next().unwrap_or("bin").into()))
         } else {
             None
         }

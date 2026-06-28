@@ -114,13 +114,13 @@ repo        = "https://github.com/elasticdotventures/_b00t_"
 #      → Always include a regex with a capture group
 #   ❌ wrong _B00T_Path: datum created in workspace, not active path
 #      → Check `echo $_B00T_Path`; copy to active path if needed
-#   ❌ nested [b00t.install.*] tables: InstallSpec is Command(String)
-#      → Use `install = "string command"`, not `[b00t.install.apt]`
+#   ❌ repeating package-manager boilerplate in every CLI datum
+#      → Use `install = { package = "<pkg>" }` for apt/dnf/pacman/brew tools
 
 # ─── REFERENCE DATUMS (in this repo) ───────────────────────────────────────
 #
 #   _b00t_/b00t.cli.toml       – minimal CLI datum (8 lines)
-#   _b00t_/mold.cli.toml       – apt-installed CLI datum
+#   _b00t_/mold.cli.toml       – package-install functor datum
 #   _b00t_/gh.cli.toml         – CLI datum with GitHub install
 #   _b00t_/rustc.cli.toml      – CLI datum with regex detection
 #   _b00t_/rk3588.npu.hardware.tomllmd – hardware datum (full format)

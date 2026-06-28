@@ -1,0 +1,59 @@
+[b00t]
+name = "metaflow"
+type = "cli"
+hint = "Netflix open-source ML pipeline framework — define, run, and version ML workflows locally or on AWS/Kubernetes"
+source = "https://github.com/Netflix/metaflow"
+desires = "latest"
+install = "uv pip install metaflow"
+update = "uv pip install --upgrade metaflow"
+version = "python -c 'import metaflow; print(metaflow.__version__)'"
+version_regex = '(\d+\.\d+\.\d+)'
+depends_on = ["python.cli", "uv.cli"]
+
+[b00t.skill]
+type_tags = ["cli", "ml", "pipeline", "data-science", "aws", "kubernetes", "training", "orchestration", "python"]
+description = """
+metaflow — Netflix ML pipeline framework for data scientists.
+
+KEY CONCEPTS
+  Flow      — class subclassing FlowSpec; each method = a step
+  @step     — decorator marking a pipeline step
+  @resources — request CPU/GPU/memory per step
+  @conda    — pin Python dependencies per step
+  @kubernetes / @batch — run steps on K8s/AWS Batch
+
+KEY COMMANDS
+  python flow.py show          # visualize DAG
+  python flow.py run           # run locally
+  python flow.py run --with kubernetes  # run on K8s
+  python flow.py resume <run>  # resume from failed step
+  python flow.py status        # list recent runs
+  python -c 'import metaflow; print(metaflow.__version__)'  # version
+
+MINIMAL EXAMPLE
+  from metaflow import FlowSpec, step
+  class HelloFlow(FlowSpec):
+      @step
+      def start(self):
+          self.message = "hello"
+          self.next(self.end)
+      @step
+      def end(self):
+          print(self.message)
+  if __name__ == "__main__":
+      HelloFlow()
+
+b00t USE CASE
+  Declare ML training pipelines that can run locally (dev) or scale to
+  AWS Batch/Kubernetes (prod) without code changes. Integrates with
+  b00t hive tiers: sm0l/ch0nky steps locally, frontier steps on cloud.
+"""
+tier = "ch0nky"
+complexity = 5
+
+# b00t:map v1
+# summary: metaflow — Netflix ML pipeline framework; local→cloud scaling; @step DAG execution
+# tags: cli, ml, pipeline, data-science, aws, kubernetes, training, python
+# tier: ch0nky
+# cmds: python flow.py run, python flow.py show, python flow.py resume
+# complexity: 5

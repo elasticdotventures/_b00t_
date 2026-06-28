@@ -1,8 +1,16 @@
 [b00t]
 name = "crw"
 type = "mcp"
-hint = "MCP server"
+hint = "CRW — 6MB Rust web scraper. Self-hosted, no Docker, 85ms cold start."
+
+# 🤓 crw = "crawl". Single binary, embeds HTTP client — no Chrome/headless browser.
+#    Two modes: embedded (local, no API key) and cloud (fastcrw.com, adds web search).
+#    Comparison: Firecrawl self-hosted (4GB, 5 containers, 30s cold) vs CRW (6MB, 0, 85ms).
+#    Sharp corner: no JavaScript rendering — use Playwright/browser-use for SPAs.
 requires_sudo = false
+
+# 🤓 CRW provides 6 MCP tools: scrape, batch_scrape, map, search, crawl, extract.
+#    Search requires cloud mode (CRW_API_KEY). Web search auto-disabled in embedded mode.
 
 [[b00t.mcp.stdio]]
 transport = "stdio"
@@ -10,3 +18,26 @@ command = "npx"
 priority = 0
 args = ["crw-mcp"]
 requires = ["node"]
+
+[b00t.mcp.stdio.env]
+CRW_API_URL = "https://fastcrw.com/api"
+CRW_API_KEY = "${CRW_API_KEY}"
+
+# 🤓 SkillExecutor lifecycle — b00t-mcp will lazily spawn/reap this server.
+#    npx first-run downloads crw-mcp from npm (~5-10s). Subsequent: 85ms cold start.
+#    Without this block, crw-mcp must be started externally.
+[b00t.mcp.lifecycle]
+idle_timeout_secs = 300
+[[b00t.mcp.lifecycle.servers]]
+name = "crw-stdio"
+command = "npx"
+args = ["crw-mcp"]
+env = { CRW_API_URL = "https://fastcrw.com/api" }
+health_check = { type = "process_alive" }
+
+# b00t:map v1
+# summary: CRW — 6MB Rust web crawler MCP server (embedded + cloud, 85ms cold start)
+# tags: crw, firecrawl, web, scraping, crawling, mcp, search
+# tier: sm0l
+# cmds: npx crw-mcp, b00t cli check crw
+# complexity: 3

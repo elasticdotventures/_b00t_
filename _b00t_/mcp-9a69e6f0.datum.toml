@@ -3,6 +3,11 @@
 #    Retrieve: git -C ~/.b00t cat-file blob dc641b5c75e7aa34df08575f093258d197bd09ea | gunzip
 #    Validate: git -C ~/.b00t cat-file -e dc641b5c75e7aa34df08575f093258d197bd09ea
 
+[b00t]
+name = "agentgateway"
+type = "datum"
+hint = "AgentGateway — MCP-based AI gateway and agentic proxy (Rust)"
+
 [datum]
 topic      = "mcp"
 class      = "mcp-patterns"

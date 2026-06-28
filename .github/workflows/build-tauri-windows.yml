@@ -1,0 +1,41 @@
+name: Build b00t Windows Tray
+
+on:
+  push:
+    branches: [main, feat/*]
+    paths:
+      - 'vendor/ledgrrr/crates/ledgerr-tauri/**'
+      - 'vendor/ledgrrr/crates/ledgerr-host/src/tray/**'
+      - '.github/workflows/build-tauri-windows.yml'
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Init required submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr
+
+      - name: Setup Rust
+        run: |
+          rustup set profile minimal
+          rustup target add x86_64-pc-windows-msvc
+          rustup show
+
+      - name: Build ledgerr-tauri (release)
+        run: |
+          cd vendor/ledgrrr
+          cargo build --release -p ledgerr-tauri
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledgerr-tauri-windows
+          path: vendor/ledgrrr/target/release/ledgerr-tauri.exe
+          retention-days: 7

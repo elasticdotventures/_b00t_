@@ -1,0 +1,254 @@
+# _b00t_/skills/reviewer/justfile — canonical just harness for reviewer skill
+# 🤓 Called by: b00t learn reviewer → executes `learn` recipe
+#    Also loadable as: just reviewer::<recipe> from root justfile
+#    Or standalone: just -f _b00t_/skills/reviewer/justfile <recipe>
+#
+# Architecture: Every RHAI script in this dir has a corresponding just recipe.
+# b00t learn reviewer → runs `learn` recipe → system-normal → optimize context → display
+
+set shell := ["bash", "-cu"]
+set unstable
+
+# ── Hook: b00t learn reviewer ────────────────────────────────────────────────
+# This recipe is triggered when an agent runs `b00t learn reviewer`
+# Flow: system-normal → validate context → display SKILL.md → load relevant datums
+
+learn:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📚 Loading reviewer skill..."
+    echo ""
+    # 1. Run system-normal precriteria gate
+    echo "=== System Normal ==="
+    b00t script run {{justfile_directory()}}/system-normal.rhai 2>/dev/null || {
+        echo "⚠️  system-normal has warnings — proceeding with caution"
+    }
+    echo ""
+    # 2. Display capability overview (optimized context — relevant facts only)
+    echo "=== Reviewer Capability ==="
+    if command -v toml &>/dev/null; then
+        toml get {{justfile_directory()}}/capability.toml capability.description 2>/dev/null | tr -d '"' || true
+    fi
+    echo ""
+    echo "Tier: frontier | Harnesses: claude-code, opencode, hermes, b00t-cli"
+    echo "Frameworks: MECE + TRIZ + Eureka → cross-framework synthesis"
+    echo "Scripts: system-normal.rhai, autoexec.rhai"
+    echo ""
+    # 3. Show available recipes
+    echo "=== Available Commands ==="
+    echo "  just reviewer system-normal   — precriteria gate check"
+    echo "  just reviewer autoexec         — autonomous review loop"
+    echo "  just reviewer review-multi PR=<n> — full multi-framework review"
+    echo "  just reviewer review-from-queue   — pick next review from task queue"
+    echo "  just reviewer status             — show reviewer state"
+    echo "  just reviewer metrics            — show quality metrics"
+    echo ""
+    echo "🍀 reviewer skill loaded"
+
+# ── Precriteria Gate ─────────────────────────────────────────────────────────
+
+# Run system-normal precriteria checks (RHAI)
+system-normal:
+    #!/usr/bin/env bash
+    b00t script run {{justfile_directory()}}/system-normal.rhai
+
+# ── Autonomous Loop ──────────────────────────────────────────────────────────
+
+# Run the autonomous reviewer execution loop
+# Usage: just reviewer autoexec [MAX_ITER=10]
+autoexec MAX_ITER="10":
+    #!/usr/bin/env bash
+    echo "🔄 Starting reviewer autoexec loop (max {{MAX_ITER}} iterations)..."
+    b00t script run {{justfile_directory()}}/autoexec.rhai
+
+# ── Multi-Framework Review ───────────────────────────────────────────────────
+# Delegates to the full multi-framework review harness
+
+# Run full multi-framework review on a PR (sequential)
+review-multi PR:
+    just -f {{justfile_directory()}}/../../multi-framework-review.just review-multi {{PR}}
+
+# Run parallel multi-framework review (for large PRs)
+review-parallel PR:
+    just -f {{justfile_directory()}}/../../multi-framework-review.just review-parallel {{PR}}
+
+# Dogfood: review all pending review tasks
+review-dogfood:
+    just -f {{justfile_directory()}}/../../multi-framework-review.just review-dogfood
+
+# Promote critical findings from last review to task queue
+review-promote PR:
+    just -f {{justfile_directory()}}/../../multi-framework-review.just review-promote {{PR}}
+
+# ── Task Queue Integration ───────────────────────────────────────────────────
+
+# Pick next review task from b00t task queue
+review-from-queue:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    task=$(b00t task list 2>/dev/null | grep -i 'review' | head -1 | awk '{print $1}' || echo "")
+    if [ -n "$task" ]; then
+        echo "→ Next review task: $task"
+        b00t task show "$task" 2>/dev/null || true
+    else
+        echo "No review tasks in queue"
+    fi
+
+# ── Status & Metrics ─────────────────────────────────────────────────────────
+
+# Show reviewer state (last review, current phase, metrics)
+status:
+    #!/usr/bin/env bash
+    echo "📊 Reviewer Status"
+    echo "═══════════════════"
+    # Phygital-twin status
+    echo "capability: reviewer v1.0.0 (frontier tier)"
+    echo "canonical:  _b00t_/skills/reviewer/"
+    echo ""
+    # Multi-framework review state
+    if [ -f .b00t/multi-framework-review-state.json ]; then
+        echo "--- review state ---"
+        cat .b00t/multi-framework-review-state.json | python3 -m json.tool 2>/dev/null || cat .b00t/multi-framework-review-state.json
+    else
+        echo "review state: none (run: just reviewer review-multi PR=<n>)"
+    fi
+    echo ""
+    # Datum review state
+    if [ -f .b00t/datum-review-state.json ]; then
+        echo "--- datum-review state ---"
+        cat .b00t/datum-review-state.json | python3 -m json.tool 2>/dev/null || cat .b00t/datum-review-state.json
+    else
+        echo "datum-review state: none"
+    fi
+
+# Show quality metrics from last N reviews
+metrics N="5":
+    #!/usr/bin/env bash
+    echo "📈 Reviewer Quality Metrics (last {{N}} reviews)"
+    echo "═══════════════════════════════════════════════"
+    if [ -f .b00t/reviewer-metrics.jsonl ]; then
+        tail -{{N}} .b00t/reviewer-metrics.jsonl | while read -r line; do
+            echo "$line" | python3 -m json.tool 2>/dev/null || echo "$line"
+            echo "---"
+        done
+    else
+        echo "No metrics yet. Run a review to populate."
+    fi
+
+# Show quality baseline comparison
+quality:
+    #!/usr/bin/env bash
+    echo "📈 Review Quality Targets"
+    echo "════════════════════════"
+    echo "  Baseline (standard checklist):  1.2 findings/100 lines"
+    echo "  Target  (multi-framework):      >1.5 findings/100 lines"
+    echo "  Critical threshold:              ≥1 cross-validated finding"
+    echo "  Min framework efficiency:        ≥30% per framework"
+    echo "  Max false contradictions:        0"
+    echo ""
+    echo "  Risk tiers: LOW(<30) MED(30-55) HIGH(56-75) CRIT(>75)"
+
+# ── Utility ──────────────────────────────────────────────────────────────────
+
+# Reset all reviewer state (fresh start)
+reset:
+    rm -f .b00t/multi-framework-review-state.json
+    rm -f .b00t/datum-review-state.json
+    rm -f .b00t/reviewer-metrics.jsonl
+    echo "✅ Reviewer state reset"
+
+# List all RHAI scripts in this skill directory
+scripts:
+    #!/usr/bin/env bash
+    echo "📜 Reviewer RHAI Scripts"
+    echo "════════════════════════"
+    for f in {{justfile_directory()}}/*.rhai; do
+        echo "  $(basename $f)"
+        head -3 "$f" | grep '//' | head -1 | sed 's|// ||' || true
+        echo ""
+    done
+
+# ── Hook Testing ────────────────────────────────────────────────────────────
+# 🤓 Verifies the verdict hook pipeline without raw bash.
+#    Uses just recipes + RHAI scripts for auditable, composable verification.
+
+# Test APPROVE verdict → expect exit 0 (allow)
+test-hook-approve:
+    #!/usr/bin/env bash
+    echo '{"verdict":"APPROVE","findings":[]}' | {{justfile_directory()}}/../../agent-hooks/events/review.verdict.sh > /dev/null 2>&1
+    echo "✅ APPROVE verdict → exit 0 (allow)"
+
+# Test REQUEST_CHANGES verdict → expect exit 2 (block)
+test-hook-reject:
+    #!/usr/bin/env bash
+    if echo '{"verdict":"REQUEST_CHANGES","findings":["missing guard"]}' | {{justfile_directory()}}/../../agent-hooks/events/review.verdict.sh > /dev/null 2>&1; then
+        echo "❌ REQUEST_CHANGES should exit 2 (block)"
+        false
+    else
+        echo "✅ REQUEST_CHANGES verdict → exit 2 (block)"
+    fi
+
+# Test no verdict → expect exit 0 (neutral pass)
+test-hook-none:
+    #!/usr/bin/env bash
+    echo '{"output":"no verdict here"}' | {{justfile_directory()}}/../../agent-hooks/events/review.verdict.sh > /dev/null 2>&1
+    echo "✅ No verdict → exit 0 (neutral pass)"
+
+# Install reviewer agent hooks (make executable + register in dispatch.sh)
+install-hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    HOOKS_DIR="{{justfile_directory()}}/../../agent-hooks"
+    chmod +x "$HOOKS_DIR/events/review.verdict.sh"
+    chmod +x "$HOOKS_DIR/roles/reviewer/agent.stop.sh"
+    echo "✅ Reviewer hooks installed"
+    echo "  events/review.verdict.sh"
+    echo "  roles/reviewer/agent.stop.sh"
+
+# Register b00t reviewer sub-agents in opencode-b00t capability registry.
+# Idempotent — safe to re-run, survives submodule updates.
+install-opencode:
+    python3 install-opencode.py
+
+# Full install: hooks + opencode registration
+install: install-hooks install-opencode
+    @echo "✅ Reviewer fully installed"
+
+# Test all hook scenarios (requires install-hooks first)
+test-hooks: install-hooks test-hook-approve test-hook-reject test-hook-none
+    @echo "✅ All verdict hook tests passed"
+
+# ── PR Review (gate for commit hooks) ────────────────────────────────────────
+
+# Validate staged changes against a goal (pre-commit gate)
+# Usage: just reviewer pr-validate goal="implement OAuth2"
+pr-validate goal="staged changes":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    GOAL="{{goal}}"
+    echo "🛡️  Reviewer gate: validating staged changes..."
+    echo "  Goal: $GOAL"
+    echo ""
+    # Get staged diff
+    DIFF=$(git diff --cached 2>/dev/null || echo "")
+    if [ -z "$DIFF" ]; then
+        echo "  No staged changes — APPROVED (empty diff)"
+        echo "VERDICT: APPROVE"
+        exit 0
+    fi
+    # Check guard violations
+    if echo "$DIFF" | grep -qE 'pip install|docker run|rm -rf'; then
+        echo "  ❌ Guard violation detected"
+        echo "VERDICT: REQUEST_CHANGES"
+        exit 1
+    fi
+    # Check for credential exposure
+    if echo "$DIFF" | grep -qE '(api_key|password|secret|token)\s*=\s*["'"'"'][^$]'; then
+        echo "  ❌ Credential exposure detected"
+        echo "VERDICT: REQUEST_CHANGES"
+        exit 1
+    fi
+    # All checks passed
+    echo "  ✅ No guard violations"
+    echo "  ✅ No credential exposure"
+    echo "VERDICT: APPROVE"

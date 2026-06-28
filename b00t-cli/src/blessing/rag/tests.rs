@@ -2,8 +2,6 @@
 mod knowledge_base_tests {
     use super::super::*;
     use std::path::PathBuf;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     #[test]
     fn test_blessing_metadata_creation() {

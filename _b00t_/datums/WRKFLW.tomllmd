@@ -1,0 +1,147 @@
+# wrkflw — CodeRunnerActionProcess / GithubActionsCompatible provider
+# 🤓 wrkflw is the LOCAL implementation of the GithubActionsCompatible trait.
+#    Repo datums implement GithubActionsCompatible (has .github/workflows/).
+#    wrkflw + github-actions are both CodeRunnerActionProcess providers.
+#    GitHub Actions (remote) is the sibling implementation.
+#    Parent pattern: PolyConnector<T> (JUST-POLY-CONNECTOR.tomllmd).
+#    Satisfies<CodeRunnerActionProcess> pattern from Tax-Lawyer/arc-kit-au.
+
+[b00t.schema]
+version   = "1"
+type      = "cli"
+type_tags = ["cli", "ci", "action-runner", "poly-connector", "github-actions-compatible",
+             "code-runner-action-process", "local-runner", "wrkflw"]
+
+# BFO/UFO from PRD-F0UNDRY-AGENT-ONTOLOGY (cli layer)
+bfo = "BFO:RealizableEntity"
+ufo = "Moment::Mode"
+
+[resource]
+name     = "wrkflw"
+tool     = "wrkflw"
+upstream = "https://github.com/bahdotsh/wrkflw"
+learn_content = "_b00t_/learn/wrkflw.md"
+desires  = "0.8.0"
+install  = "cargo install wrkflw"
+version  = "wrkflw --version"
+version_regex = '(\d+\.\d+\.\d+)'
+binary   = "~/.local/bin/wrkflw"
+
+# ─── ABSTRACT SERVICE CONTRACT ─────────────────────────────────────────────────
+# CodeRunnerActionProcess — abstract process that runs CI actions for a CodeRepo.
+# GithubActionsCompatible — capability trait a Repo acquires when it has
+#   .github/workflows/*.yml files. Providers: wrkflw (local), github (remote).
+#
+# Repo datum (BFO:GenericallyDependentContinuant) satisfies:
+#   GithubActionsCompatible IF exists(.github/workflows/*.yml)
+#
+# This cli datum (wrkflw) satisfies:
+#   CodeRunnerActionProcess<GithubActionsCompatible> WHERE locality = "local"
+
+[service]
+role       = "CodeRunnerActionProcess"
+capability = "GithubActionsCompatible"
+locality   = "local"
+sibling    = "github-actions"      # remote implementation of same trait
+alternative = "act"                # nektos/act — local Docker alternative
+workflow_format = "github-actions"
+runtime_modes = ["docker", "podman", "emulation", "secure-emulation"]
+default_runtime = "secure-emulation"
+
+# ─── SATISFIES<CONSTRAINT> PATTERN ─────────────────────────────────────────────
+# From Tax-Lawyer/arc-kit-au architecture (PRD-TAX-LAWYER-UFO-SDD.tomllmd).
+# Satisfies<T> produces evidence nodes for audit trail.
+#
+# wrkflw Satisfies<CodeRunnerActionProcess>:
+#   evidence.workflow_valid   = wrkflw validate → "✔ Valid"
+#   evidence.local_build_pass = wrkflw run --job local-build → exit 0
+#   evidence.artifact_uploaded = binary uploaded to GH artifact store
+#
+# A Repo that Satisfies<GithubActionsCompatible> + declares wrkflw as local provider
+# can produce these evidence nodes BEFORE cloud CI fires (zero electricity waste).
+
+[satisfies]
+constraint     = "CodeRunnerActionProcess"
+capability_of  = "Repo"
+evidence_nodes = ["workflow_valid", "local_build_pass", "artifact_uploaded"]
+
+# ─── TRAIT SKETCH (Rust — harmonization target) ────────────────────────────────
+[ontology.rust_traits]
+# Parent: PolyConnector<T> (JUST-POLY-CONNECTOR.tomllmd)
+# Repo: GithubActionsCompatible (capability acquired from .github/workflows/)
+# wrkflw: CodeRunnerActionProcess<local> provider
+
+GithubActionsCompatible = """
+/// Capability marker — Repo acquires this when .github/workflows/*.yml exists.
+/// Any CodeRunnerActionProcess provider can operate on a GithubActionsCompatible repo.
+pub trait GithubActionsCompatible {
+    fn workflows_path(&self) -> &Path;
+    fn list_workflows(&self) -> Result<Vec<PathBuf>>;
+}
+"""
+
+CodeRunnerActionProcess = """
+/// Abstract CI action executor for GithubActionsCompatible repos.
+/// Extends PolyConnector. Implementations: WrkflwProvider (local),
+/// GitHubActionsProvider (remote), ActProvider (local-docker).
+pub trait CodeRunnerActionProcess: PolyConnector {
+    type Repo: GithubActionsCompatible;
+
+    fn validate(&self, repo: &Self::Repo, workflow: &Path) -> Result<ValidationReport>;
+    fn run_job(&self, repo: &Self::Repo, workflow: &Path, job_id: &str, runtime: RunnerRuntime) -> Result<ConnectorOutput>;
+    fn watch(&self, repo: &Self::Repo, workflow: &Path, job_id: Option<&str>) -> Result<()>;
+    fn locality(&self) -> RunnerLocality;
+}
+
+pub enum RunnerLocality { Local, Remote, Hybrid }
+pub enum RunnerRuntime  { Docker, Podman, Emulation, SecureEmulation }
+"""
+
+WrkflwProvider = """
+pub struct WrkflwProvider { binary: PathBuf, runtime: RunnerRuntime }
+impl CodeRunnerActionProcess for WrkflwProvider { ... }
+impl PolyConnector for WrkflwProvider { ... }
+"""
+
+# ─── REPO DATUM INTEGRATION ────────────────────────────────────────────────────
+# Repos declare CodeRunnerActionProcess providers in their datum:
+#
+#   [repo.services.action_runner]
+#   local  = "wrkflw"           # → WrkflwProvider (this datum)
+#   remote = "github-actions"   # → GitHubActionsProvider
+#   self_hosted = { ns = "b00t-gh-runner", label = "sm3lly" }
+#
+# Future b00t-cli: `b00t repo ci run --locality local`
+# → repo datum → wrkflw provider → WrkflwProvider::run_job
+
+[integrations]
+repo_datum     = "Repo implements GithubActionsCompatible; declares providers in [repo.services.action_runner]"
+github_datum   = "github-actions: remote CodeRunnerActionProcess sibling"
+just_poly      = "JUST-POLY-CONNECTOR: parent PolyConnector<T>"
+gh_runner_k8s  = "_b00t_/k8s.🚢/gh-runner/ bridges local runner into GH cloud (sm3lly)"
+satisfies      = "arc-kit-au evidence: workflow_valid + local_build_pass before cloud fires"
+rust_docs_repo = "RUST-DOCS-MCP-B00T: first repo datum using this pattern"
+
+[rules]
+# 🤓 recorded via lfmf
+justfile_placement = "wrkflw targets (ci-validate, ci-local, ci-watch) in target repo's justfile only"
+b00t_root_justfile = "b00t root justfile = b00t commands only; never vendor-repo recipes"
+
+[[resource.usages]]
+description = "Validate workflow YAML (instant)"
+command     = "wrkflw validate .github/workflows/<name>.yml"
+
+[[resource.usages]]
+description = "Run job locally without containers"
+command     = "wrkflw run --job <job-id> --runtime emulation .github/workflows/<name>.yml"
+
+[[resource.usages]]
+description = "Watch + auto-rerun on change"
+command     = "wrkflw watch --job <job-id> .github/workflows/<name>.yml"
+
+# b00t:map v1
+# summary: wrkflw — local GithubActionsCompatible CodeRunnerActionProcess; Satisfies<CodeRunnerActionProcess>
+# tags: wrkflw, cli, ci, code-runner-action-process, github-actions-compatible, poly-connector, local
+# tier: ch0nky
+# cmds: wrkflw validate, wrkflw run --job <id> --runtime emulation, wrkflw watch
+# complexity: 5

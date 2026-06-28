@@ -1,0 +1,112 @@
+# Microsoft windows-rs — Rust for Windows
+#
+# 🤓 Official Microsoft crate family projecting the entire Windows API into Rust.
+#    469k dependents, 12.5k stars, Microsoft-maintained.
+#    b00t uses this for native Windows tray, toasts, credentials, and registry.
+#    Replaces: tray-icon crate, PowerShell BurntToast, keyring crate, JSON settings.
+
+[meta]
+source = "github.com/microsoft/windows-rs"
+license = "MIT / Apache-2.0"
+version = "0.62.2"
+status = "active"
+b00t_integration = "phase1"
+
+# ── b00t Integration Map ────────────────────────────────────────────────────
+
+[integration]
+
+[integration.tray]
+replaces = "tray-icon crate"
+windows_rs_crate = "windows"
+features = ["Windows_UI_Shell_NotifyIcon", "Win32_UI_Shell"]
+description = "Native system tray with animated icons and taskbar progress"
+status = "phase1"
+
+[integration.toast]
+replaces = "PowerShell BurntToast script"
+windows_rs_crate = "windows"
+features = ["Windows_UI_Notifications_ToastNotification"]
+description = "Native Windows toast notifications, no PowerShell dependency"
+status = "phase1"
+
+[integration.credentials]
+replaces = "keyring crate (cross-platform)"
+windows_rs_crate = "windows"
+features = ["Win32_Security_Credentials", "Windows_Security_Credentials_CredentialManager"]
+description = "Windows Credential Manager — CredWrite/CredRead"
+status = "phase1"
+
+[integration.settings]
+replaces = "JSON files in ~/.b00t/"
+windows_rs_crate = "windows-registry"
+description = "Native registry storage with encryption at rest"
+status = "phase1"
+
+[integration.webview]
+replaces = "Tauri webkit2gtk (Linux dep)"
+windows_rs_crate = "windows-webview"
+description = "Edge WebView2 control — replace Tauri on Windows, ~8MB lighter"
+status = "phase2"
+
+[integration.window]
+replaces = "Tauri window management"
+windows_rs_crate = "windows-window"
+description = "Native Win32 window creation and message loop"
+status = "phase2"
+
+[integration.graphics]
+replaces = "Custom SVG rendering"
+windows_rs_crate = "windows-canvas"
+description = "Direct2D 2D graphics for hardware visualization"
+status = "phase2"
+
+[integration.hardware]
+windows_rs_crate = "windows"
+features = [
+    "Win32_Devices_SerialCommunication",
+    "Win32_Devices_Bluetooth",
+    "Win32_System_Setup",
+]
+description = "Serial, Bluetooth, device enumeration for hardware development"
+status = "phase3"
+
+# ── Feature Map (windows crate) ──────────────────────────────────────────────
+
+[features.phase1]
+core = ["Win32_Foundation", "Win32_System_Com"]
+tray = ["Windows_UI_Shell_NotifyIcon", "Win32_UI_Shell"]
+toast = ["Windows_UI_Notifications_ToastNotification"]
+credentials = ["Win32_Security_Credentials", "Windows_Security_Credentials"]
+settings = ["windows-registry"]
+
+[features.phase2]
+webview = ["windows-webview"]
+window = ["windows-window"]
+graphics = ["windows-canvas", "Windows_Graphics_Direct2D"]
+
+[features.phase3]
+serial = ["Win32_Devices_SerialCommunication"]
+bluetooth = ["Win32_Devices_Bluetooth", "Win32_Devices_Bluetooth_BluetoothLE"]
+device_setup = ["Win32_System_Setup", "Win32_DeviceInstall"]
+
+# ── Sharp Corners ───────────────────────────────────────────────────────────
+
+[[sharp_corners]]
+issue = "Compile time increases with more features"
+impact = "Add features lazily — only what's needed behind #[cfg(windows)]"
+
+[[sharp_corners]]
+issue = "Cross-platform code becomes Windows-specific"
+impact = "Keep non-Windows fallbacks (tray-icon crate, JSON settings). Gate with #[cfg(windows)]"
+
+[[sharp_corners]]
+issue = "windows-rs versioning can break between releases"
+impact = "Pin to known-good version. Test on version bumps."
+
+# b00t:map v1
+# summary: Microsoft windows-rs — native Windows API crate family for b00t tray/toast/credentials/webview
+# tags: windows, native, tray, toast, credentials, webview2, direct2d, hardware
+# tier: frontier
+# cmds: cargo add windows --features "Win32_UI_Shell Windows_UI_Notifications"
+# complexity: 6

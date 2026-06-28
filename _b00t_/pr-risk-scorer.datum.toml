@@ -1,0 +1,186 @@
+# b00t:map v1
+# summary: PR risk scorer — scores PRs across 6 dimensions to route to appropriate review depth tier (LOW/MEDIUM/HIGH/CRITICAL)
+# tags: pr, risk, scoring, review, governance, tiered-review, triage
+# tier: frontier
+# cmds: just risk-score PR=<n>
+# complexity: 4
+
+[b00t]
+name = "pr-risk-scorer"
+type = "datum"
+hint = "Multi-dimensional PR risk scoring engine. Evaluates PRs across author experience, file hotness, change size, test coverage delta, security surface area, and dependency impact. Routes to appropriate review depth tier: LOW (standard checklist), MEDIUM (multi-framework sequential), HIGH (parallel dispatch), CRITICAL (adversarial A/B/R bounce with operator oversight)."
+
+# ── Scoring Dimensions ──────────────────────────────────────────────────────
+# Six dimensions, each scored 0-10 by a sm0l-tier evaluation agent.
+# Total risk score = Σ(dimension_score × weight)
+# Dimension weights are tuned so max possible score = 100 (all dimensions at 10 with their weights).
+
+[b00t.scoring]
+formula = "weighted_sum"
+max_score = 100
+
+# ── Dimension Weights ───────────────────────────────────────────────────────
+[b00t.scoring.weights]
+author_experience = 1.0       # max contribution: 10
+file_hotness = 1.5            # max contribution: 15
+change_size = 2.0             # max contribution: 20
+test_coverage_delta = 1.5     # max contribution: 15
+security_surface_area = 2.0   # max contribution: 20
+dependency_impact = 2.0       # max contribution: 20
+
+# ── Dimension Definitions ───────────────────────────────────────────────────
+[[b00t.scoring.dimensions]]
+id = "author_experience"
+label = "Author Experience"
+description = "Contribution history in this repository. First-time contributor = 10 (high risk, unfamiliar with codebase conventions). Core maintainer with 100+ merged PRs = 0 (low risk)."
+range = [0, 10]
+weight = 1.0
+data_source = "git log --author=<email> --oneline | wc -l"
+scoring_model_tier = "sm0l"
+
+[[b00t.scoring.dimensions]]
+id = "file_hotness"
+label = "File Hotness"
+description = "Churn rate of files being modified. Frequently changed files with high bug-fix-to-feature ratio indicate unstable code areas. Uses git log --stat churn analysis over trailing 90-day window."
+range = [0, 10]
+weight = 1.5
+data_source = "git log --since='90 days ago' --stat | churn analysis"
+scoring_model_tier = "sm0l"
+
+[[b00t.scoring.dimensions]]
+id = "change_size"
+label = "Change Size"
+description = "Lines changed plus files touched. <50 lines in 1 file = 0. 500+ lines across 20+ files = 10. Large diffs have exponentially higher probability of containing bugs (research-backed: bug density ~lines^0.7)."
+range = [0, 10]
+weight = 2.0
+data_source = "gh pr diff --stat | wc -l; gh pr view --json files | jq '.files | length'"
+scoring_model_tier = "sm0l"
+
+[[b00t.scoring.dimensions]]
+id = "test_coverage_delta"
+label = "Test Coverage Delta"
+description = "Net change in test coverage percentage. Coverage increase = negative risk contribution (score 0). Large coverage drop (>10%) = high risk (score 10). No test changes in a code-change PR = moderate risk (score 5)."
+range = [0, 10]
+weight = 1.5
+data_source = "CI coverage report | coverage diff (base vs head)"
+scoring_model_tier = "sm0l"
+
+[[b00t.scoring.dimensions]]
+id = "security_surface_area"
+label = "Security Surface Area"
+description = "Presence of security-sensitive files in the diff: auth middleware, cryptographic operations, input validation/parsing, secrets handling, session management, access control. Touching auth or crypto paths = 10."
+range = [0, 10]
+weight = 2.0
+data_source = "file path pattern matching against security-sensitive globs"
+scoring_model_tier = "sm0l"
+
+[[b00t.scoring.dimensions]]
+id = "dependency_impact"
+label = "Dependency Impact"
+description = "New dependencies added, existing dependency version changes, or dependency removal. Major version bump or addition of an untrusted/unvetted package = 10. Patch bump to well-known dep = 2."
+range = [0, 10]
+weight = 2.0
+data_source = "gh pr diff | dependency manifest diff parsing (Cargo.toml, package.json, pyproject.toml, etc.)"
+scoring_model_tier = "sm0l"
+
+# ── Risk Tiers ──────────────────────────────────────────────────────────────
+# Each tier maps to a specific review depth strategy with different agent counts,
+# parallelism, verdict authority, and operator involvement.
+
+[b00t.tiers]
+description = "Review depth tiers determined by total weighted risk score"
+routing_strategy = "score_threshold"
+
+[b00t.tiers.LOW]
+label = "Low Risk"
+description = "Routine change: typo fixes, comment updates, minor config tweaks. Single-pass automated checklist review suffices."
+review_type = "standard-checklist"
+skill = "github-code-review"
+agent_count = 1
+parallel = false
+verdict_mode = "advisory"
+
+[b00t.tiers.MEDIUM]
+label = "Medium Risk"
+description = "Moderate change: feature additions, refactors under 200 lines. Sequential multi-framework review applying MECE → TRIZ → Eureka lenses in series."
+review_type = "multi-framework-sequential"
+skill = "multi-framework-code-review"
+agent_count = 1
+parallel = false
+verdict_mode = "advisory"
+
+[b00t.tiers.HIGH]
+label = "High Risk"
+description = "Significant change: large refactors, auth modifications, new API surfaces. Parallel dispatch of 3 sub-agents (MECE, TRIZ, Eureka) with a 4th synthesis agent after all complete. Verdict is blocking."
+review_type = "multi-framework-parallel"
+skill = "multi-framework-code-review"
+agent_count = 4
+parallel = true
+max_concurrent = 3
+verdict_mode = "blocking"
+
+[b00t.tiers.CRITICAL]
+label = "Critical Risk"
+description = "Extreme change: core auth refactor, cryptographic primitive swap, database schema migration with data transform. Full adversarial A/B/R bounce loop — 3 review rounds with operator oversight at each gate. Human-in-the-loop required before merge."
+review_type = "adversarial-abr"
+skill = "multi-framework-code-review"
+agent_count = "unlimited"
+parallel = true
+max_concurrent = 3
+verdict_mode = "blocking"
+operator_oversight = true
+bounce_rounds = 3
+
+# ── Score Thresholds ────────────────────────────────────────────────────────
+# Maps total weighted score to risk tier.
+# Formula: score = Σ(dimension_raw × dimension_weight) for all 6 dimensions
+
+[b00t.thresholds]
+LOW_max = 29            # score < 30
+MEDIUM_min = 30         # 30 ≤ score ≤ 55
+MEDIUM_max = 55
+HIGH_min = 56           # 56 ≤ score ≤ 75
+HIGH_max = 75
+CRITICAL_min = 76       # score > 75
+
+# ── Output Contract ─────────────────────────────────────────────────────────
+# Machine-parseable single-line output for downstream routing.
+# Format must match delegation-language.datum.toml score_patterns.
+
+[b00t.output_contract]
+format = "SCORE: <tier>:<total_score>:<dimension_breakdown>"
+example = "SCORE: HIGH:68:auth=2,hot=8,size=14,cov=12,sec=18,dep=14"
+delimiter = "colon-separated"
+
+# ── Just Harness Recipe ─────────────────────────────────────────────────────
+# Usage: just risk-score PR=<n>
+# Workflow:
+#   1. Fetch PR context via gh CLI (diff, files, author, CI status)
+#   2. Score each of the 6 dimensions via sm0l-tier evaluation agent
+#   3. Compute weighted total = Σ(dimension_score × weight)
+#   4. Map total to risk tier via threshold lookup
+#   5. Emit SCORE output contract line to stdout
+#   6. Route to appropriate review workflow based on tier
+
+[b00t.harness]
+risk_score_recipe = "risk-score"
+
+# ── Governance Integration ──────────────────────────────────────────────────
+
+[b00t.governance]
+auto_route = true                      # Automatically route to review after scoring
+eisenhower_enabled = true              # Score feeds into Eisenhower priority matrix
+audit_log = ".b00t/risk-score-audit.jsonl"
+gate_on_deploy = "risk-tier-max"       # Block deploy if CRITICAL PRs are un-reviewed
+
+# ── Security-Sensitive File Patterns ────────────────────────────────────────
+# Used by security_surface_area dimension scoring.
+# Files matching these globs trigger elevated security concern scores.
+# @tribal: patterns are evaluated as OR — matching any pattern flags the file.
+
+[b00t.security_sensitive_patterns]
+auth = ["**/auth/**", "**/authenticate*", "**/login*", "**/session*", "**/token*"]
+crypto = ["**/crypto/**", "**/encrypt*", "**/decrypt*", "**/hash*", "**/sign*", "**/key*"]
+input_validation = ["**/validate*", "**/sanitize*", "**/parser*", "**/deserialize*"]
+secrets = ["**/.env*", "**/secret*", "**/credential*", "**/vault*"]
+access_control = ["**/permission*", "**/rbac*", "**/acl*", "**/authorize*", "**/guard*"]

@@ -1,6 +1,11 @@
 # b00t Bootstrap Configuration
 # This file defines how b00t self-configures on first run
 
+[b00t]
+name = "bootstrap"
+type = "config"
+hint = "b00t first-run bootstrap configuration and dependency resolution"
+
 [meta]
 version = "0.1.0"
 schema = "https://b00t.promptexecution.com/schemas/bootstrap/v0.1.0"

@@ -1,0 +1,30 @@
+[b00t]
+name = "rust-doc"
+type = "mcp"
+hint = "Rust crate documentation via semantic search — b00t vendor submodule. Per-crate MCP server with OpenAI embeddings + cosine similarity RAG"
+
+[b00t.learn]
+topic = "rust-docs"
+
+[[b00t.mcp.stdio]]
+priority = 0
+command = "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
+args = ["serde"]
+requires = ["rustdocs_mcp_server"]
+transport = "stdio"
+
+[[b00t.gate]]
+env = "OPENAI_API_BASE"
+hint = "OPENAI_API_BASE required for embeddings API (e.g. http://127.0.0.1:8001/v1)"
+
+[[b00t.gate]]
+env = "OPENAI_API_KEY"
+hint = "OPENAI_API_KEY required for embeddings endpoint"
+
+[[b00t.usage]]
+description = "Build rust-doc MCP server"
+command = "just rust-doc build"
+
+[[b00t.usage]]
+description = "Test rust-doc with local inference"
+command = "OPENAI_API_BASE=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server serde"

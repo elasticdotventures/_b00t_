@@ -50,6 +50,14 @@ pub struct UpArgs {
     /// Self-upgrade: update b00t binary + run maintenance checks for core datums
     #[clap(long, help = "Upgrade b00t & core tools using datum-driven version checks")]
     pub self_: bool,
+
+    /// Validate system readiness — checks tools, git, _b00t_/, env
+    #[clap(long, help = "Run system readiness check and exit (no agent loop)")]
+    pub check: bool,
+
+    /// Skip pre-flight system validation (use when running in CI/degraded env)
+    #[clap(long, help = "Skip system readiness check before launching agent")]
+    pub no_check: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,10 +117,24 @@ impl UpArgs {
             return self_upgrade();
         }
 
+        // System check mode: `b00t up --check`
+        if self.check {
+            return self_up_check();
+        }
+
         // Repo onboarding mode: `b00t up --repo [path]`
         if let Some(repo_path) = &self.repo {
             let path = repo_path.as_deref().unwrap_or(".");
             return up_repo(path, self.dry_run);
+        }
+
+        // Pre-flight system validation (skip with --no-check)
+        if !self.no_check {
+            if let Err(e) = self_up_check() {
+                eprintln!("⚠️  System check failed: {e}");
+                eprintln!("   Run 'b00t up --check' for details, or 'b00t up --no-check' to skip.");
+                anyhow::bail!("pre-flight system validation failed");
+            }
         }
 
         let target = self.resolved_target();
@@ -554,9 +576,49 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
 /// Self-upgrade mode: `b00t up --self`
 /// Upgrades b00t binary and runs maintenance checks for core datums.
 fn self_upgrade() -> Result<()> {
-    println!("🔄 Self-upgrade: updating b00t binary...");
+    println!("🔄 Self-upgrade: checking b00t version...");
+
+    // 🤓 Dogfood: check store for last-installed version.
+    let installed = crate::commands::install::last_installed_version("b00t-cli");
+    let source_ver = b00t_c0re_lib::version::VERSION;
+    if let Some(ref iv) = installed {
+        println!("  📦 store: last installed = v{}", iv);
+        println!("  📦 source: current build  = v{}", source_ver);
+        if iv == source_ver {
+            println!("  ✅ already at latest installed version — skipping rebuild");
+            return Ok(());
+        }
+    }
+
+    // 🤓 Dogfood: check for GitHub credentials to query latest release.
+    if let Ok(gh_token) = std::env::var("GITHUB_TOKEN") {
+        println!("  🔑 GitHub token found — checking latest release...");
+        let release = std::process::Command::new("gh")
+            .args([
+                "release", "view",
+                "--repo", "elasticdotventures/_b00t_",
+                "--json", "tagName",
+                "--jq", ".tagName",
+            ])
+            .env("GITHUB_TOKEN", &gh_token)
+            .output();
+        match release {
+            Ok(out) if out.status.success() => {
+                let latest = String::from_utf8_lossy(&out.stdout).trim().trim_start_matches('v').to_string();
+                if latest == source_ver {
+                    println!("  ✅ source {} matches latest release", source_ver);
+                } else {
+                    println!("  ⚠️  latest release is v{} (source is v{})", latest, source_ver);
+                }
+            }
+            _ => println!("  ⚠️  could not query GitHub release (offline?)"),
+        }
+    } else {
+        println!("  ℹ️  no GITHUB_TOKEN — set credential with: b00t server key set --provider github");
+    }
 
     // 1. Update b00t via cargo (from local source)
+    println!("🔨 Building b00t-cli from source...");
     let workspace_root = crate::utils::get_workspace_root();
     let status = std::process::Command::new("cargo")
         .args(["install", "--path", &format!("{}/b00t-cli", workspace_root), "--force"])
@@ -595,8 +657,115 @@ fn self_upgrade() -> Result<()> {
         println!("  {}", stdout.trim());
     }
 
+    // 3. 🤓 Dogfood: checkpoint install state after upgrade.
+    let _ = crate::commands::install::checkpoint_installed(&workspace_root);
+
     println!("✅ Self-upgrade complete");
     Ok(())
+}
+
+/// System readiness check: validates tools, git, _b00t_/, env
+fn self_up_check() -> Result<()> {
+    let cwd = std::env::current_dir().context("current dir")?;
+
+    println!("🥾 b00t up --check\n");
+
+    // ── Git ──────────────────────────────────────────────────────────
+    print!("  git .................... ");
+    if cwd.join(".git").exists() {
+        if let Ok(output) = std::process::Command::new("git")
+            .args(["rev-parse", "--git-dir"])
+            .output()
+        {
+            if output.status.success() {
+                println!("✅ {}", String::from_utf8_lossy(&output.stdout).trim());
+            } else {
+                println!("⚠️  found .git but git command failed");
+            }
+        } else {
+            println!("⚠️  git binary not found");
+        }
+    } else {
+        println!("❌ not a git repository");
+        anyhow::bail!("not in a git repository — run 'git init' or 'b00t init project'");
+    }
+
+    // ── _b00t_/ ──────────────────────────────────────────────────────
+    print!("  _b00t_/ ............... ");
+    let b00t_dirs: &[&str] = &["_b00t_", "._b00t_", ".b00t/_b00t_"];
+    let found = b00t_dirs.iter().find(|d| cwd.join(d).exists());
+    match found {
+        Some(dir) => println!("✅ {}", cwd.join(dir).display()),
+        None => {
+            println!("⚠️  not found");
+            println!("     Run 'b00t init project' to create one.");
+        }
+    }
+
+    // ── Tools ────────────────────────────────────────────────────────
+    let checks: &[(&str, &str, bool)] = &[
+        ("b00t-cli", "b00t-cli", true),
+        ("git", "git", false),
+        ("cargo", "cargo", false),
+        ("rustc", "rustc", false),
+        ("python3", "python3", false),
+        ("node", "node", false),
+    ];
+    for (label, bin, use_which) in checks {
+        print!("  {:<20} ", format!("{} ...", label));
+        if *use_which {
+            match which::which(bin) {
+                Ok(p) => println!("✅ {}", p.display()),
+                Err(_) => println!("⚠️  not found"),
+            }
+        } else {
+            match which_version(bin) {
+                Some(v) => println!("✅ v{}", v),
+                None => println!("⚠️  not found"),
+            }
+        }
+    }
+
+    // ── Container runtime ────────────────────────────────────────────
+    print!("  container runtime ..... ");
+    let runtime = if which::which("podman").is_ok() {
+        "podman"
+    } else if which::which("docker").is_ok() {
+        "docker"
+    } else {
+        "none"
+    };
+    if runtime == "none" {
+        println!("⚠️  not found (podman/docker)");
+    } else {
+        println!("✅ {}", runtime);
+    }
+
+    // ── b00t.sh ──────────────────────────────────────────────────────
+    print!("  b00t.sh ............... ");
+    let workspace = crate::utils::get_workspace_root();
+    let b00t_sh = Path::new(&workspace).join("b00t.sh");
+    if b00t_sh.exists() {
+        println!("✅ {}", b00t_sh.display());
+    } else {
+        println!("⚠️  not found");
+        println!("     Run 'b00t up --repo .' to onboard this repo.");
+    }
+
+    println!("\n✅ System check complete");
+    Ok(())
+}
+
+fn which_version(bin: &str) -> Option<String> {
+    let output = std::process::Command::new(bin)
+        .args(["--version"])
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let re = Regex::new(r"(\d+\.\d+\.\d+)").ok()?;
+    re.captures(&stdout)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
 }
 
 /// Emit b00t up state change event to IPC channel (best-effort, non-fatal)
@@ -677,6 +846,8 @@ mod tests {
             repo: None,
             dry_run: false,
             self_: false,
+            check: false,
+            no_check: false,
         };
         assert_eq!(args.tool, "claude");
         assert_eq!(args.max_iter, 10);
@@ -803,10 +974,11 @@ mod tests {
 
     #[test]
     fn test_find_git_root_finds_ancestor() {
-        // Any path inside this cargo workspace should resolve to a git root
-        let cwd = std::env::current_dir().unwrap();
-        let root = find_git_root(&cwd);
-        assert!(root.is_some(), "should find git root from cwd");
+        // Use CARGO_MANIFEST_DIR for deterministic test behavior
+        // (independent of cargo's test runner working directory)
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = find_git_root(&manifest_dir);
+        assert!(root.is_some(), "should find git root from manifest dir");
         assert!(root.unwrap().join(".git").exists());
     }
 

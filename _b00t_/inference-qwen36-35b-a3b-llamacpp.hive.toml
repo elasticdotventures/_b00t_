@@ -1,22 +1,23 @@
-# b00t Hive Profile — Qwen3.6-35B-A3B-UD llamacpp podman inference (ch0nky tier)
-# RTX 3090 community-validated: 23GB VRAM, 120 tok/s (source: HF discussion #37)
-# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-Q3_K_M.gguf"
+# b00t Hive Profile — Qwen3.6-35B-A3B-UD-IQ4_XS llamacpp podman inference (ch0nky tier)
+# IQ4_XS = 17.7GB — leaves ~6GB for KV cache on RTX 3090 (24GB); context up to 64k
+# ⚠️  MXFP4_MOE was tried and failed (unsupported tensor type in server-cuda image)
+# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf"
 # Activate: b00t hive activate inference-qwen36-35b-a3b-llamacpp
 
 [b00t]
 name = "inference-qwen36-35b-a3b-llamacpp"
 type = "hive_profile"
-hint = "Qwen3.6-35B-A3B UD-Q3_K_M via llamacpp podman — 23GB VRAM, 120tok/s RTX3090 validated"
+hint = "Qwen3.6-35B-A3B UD-IQ4_XS via llamacpp podman — 17.7GB VRAM + 6GB KV, 64k ctx, RTX3090"
 
 [b00t.hive.resources]
-# 🤓 UD-Q3_K_M: 23GB VRAM on RTX 3090 (community validated); MoE so routing is CPU-side
+# 🤓 UD-IQ4_XS: 17.7GB VRAM; ~6GB headroom for KV cache at 64k context on RTX 3090 24GB
 ram_gb    = 6
-gpu_mb    = 23500
+gpu_mb    = 19000
 cpu_cores = 2
 
 [b00t.hive.resources.gate]
 ram_free_gb = 4
-gpu_free_mb = 4000  # CPU offload OK; only need enough GPU for active MoE layers
+gpu_free_mb = 19000  # need full model headroom; no CPU offload for IQ4 (fast GPU inference)
 
 [b00t.hive.exclusion]
 group    = "primary-workload"
@@ -27,11 +28,12 @@ start = []
 stop  = []
 
 [b00t.hive.service]
-description       = "llamacpp server Qwen3.6-35B-A3B UD-Q3_K_M via podman (port 8001) — ch0nky tier"
+description       = "llamacpp server Qwen3.6-35B-A3B UD-IQ4_XS via podman (port 8001) — ch0nky tier"
 service_type      = "simple"
 limit_nofile      = 65536
 restart           = "on-failure"
 restart_sec       = "30s"
+restart_max_times = 5
 timeout_start_sec = "600"
 after             = ["network.target"]
 environment       = [
@@ -43,13 +45,12 @@ exec_start = """/usr/bin/podman run --rm \
     -v /home/brianh/.cache/huggingface/hub:/hf:z \
     -p 8001:8001 \
     ghcr.io/ggml-org/llama.cpp:server-cuda \
-    --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-MXFP4_MOE.gguf \
+    --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf \
     --host 0.0.0.0 \
     --port 8001 \
     -ngl 999 \
-    -nkvo \
     -fa on \
-    -c 262144 \
+    -c 65536 \
     -n 4096 \
     --jinja \
     --reasoning-format deepseek \
@@ -61,11 +62,12 @@ exec_start = """/usr/bin/podman run --rm \
     --presence-penalty 0.0 \
     --alias ch0nky \
     --api-key local-b00t"""
-# 🤓 MXFP4_MOE: Unsloth FP4 MoE — tests whether server-cuda supports this quant type
-# 🤓 -ngl 999: try full GPU; llamacpp auto-spills to CPU RAM (31GB avail) if VRAM exceeded
-# 🤓 -fa: flash attention — needed for ctx efficiency on MoE with limited active params
+# 🤓 IQ4_XS: 17.7GB VRAM; -c 65536 context uses ~5-6GB KV → total ~23-24GB (tight but fits)
+# 🤓 -ngl 999: all layers on GPU; IQ4_XS inference is fast (no CPU spill needed)
+# 🤓 -fa: flash attention reduces KV memory footprint — REQUIRED at 64k context
 # 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
-# ⚠️  If MXFP4 unsupported by image, error will say "unknown tensor type" — download Q3_K_M instead
+# 🤓 restart_max_times=5: prevents runaway restart loop (was 73+ restarts with MXFP4 crash)
+# ⚠️  Snapshot hash a483e9e6... may change if unsloth updates repo — verify with: ls ~/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/
 
 [b00t.hive.env]
 B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
@@ -80,8 +82,8 @@ action  = "warn"
 message = "🦨 use uv pip install"
 
 [[b00t.usage]]
-description = "Download required quant (Q3_K_M, ~15GB)"
-command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-Q3_K_M.gguf'"
+description = "Download required quant (IQ4_XS, ~18GB) — Q4 quality, fits RTX3090 with 64k ctx"
+command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-IQ4_XS.gguf'"
 
 [[b00t.usage]]
 description = "Activate this profile"
@@ -100,8 +102,8 @@ description = "Check logs"
 command     = "journalctl --user -u b00t-hive-inference-qwen36-35b-a3b-llamacpp -f --no-pager"
 
 # b00t:map v1
-# summary: Qwen3.6-35B-A3B UD-Q3_K_M llamacpp hive — 23GB VRAM 120tok/s RTX3090-validated ch0nky
-# tags: qwen3.6, moe, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, ud-q3km, thinking
+# summary: Qwen3.6-35B-A3B UD-IQ4_XS llamacpp hive — 17.7GB VRAM, 64k ctx, RTX3090 ch0nky
+# tags: qwen3.6, moe, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, iq4xs, thinking
 # tier: ch0nky
 # cmds: b00t hive activate inference-qwen36-35b-a3b-llamacpp
 # complexity: 4

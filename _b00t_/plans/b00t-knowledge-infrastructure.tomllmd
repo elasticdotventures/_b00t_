@@ -1,0 +1,273 @@
+# b00t Knowledge Infrastructure — Ontologically Grounded Storage + Authority
+# 🤓 Unified model: store = knowledge graph, objects = typed entities, keys = authority edges.
+# Builds on: DatumType (24 variants), irontology StoragePlan, UFO stereotypes, SPARQL query.
+
+[b00t]
+name = "b00t-knowledge-infrastructure"
+type = "plan"
+hint = "Unified storage, security, and access — ontologically grounded, not ad-hoc"
+
+# ──────────── Critique of V1 Cloud Store ────────────
+
+[[soul.critique]]
+what = "Path convention: /{consumer}/{datatype}/{date}/{uuid}.{ext}"
+why_wrong = """
+- 'consumer' is an agent name, not an ontology class. No type safety.
+- 'datatype' is a flat string enum. Doesn't compose — what about
+  'training-corpus' + 'qwen3.5' + 'evaluation-results'?
+- Date-based partitioning ignores provenance. A model fine-tuned on a corpus
+  should carry the corpus's lineage, not just a timestamp.
+- UUIDs are opaque. No semantic lookup possible without a metadata index.
+- No relationship to the 24 DatumType variants already in b00t's ontology.
+"""
+
+[[soul.critique]]
+what = "Tag-based query: b00t store query --tag pairs=4474"
+why_wrong = """
+- Tags are flat key-value. No hierarchy, no inference, no composition.
+- Can't express: 'give me all models trained on any corpus after 2026-06-01'
+- Can't express: 'give me all evaluation results for finetuned models on b00t'
+- Each query requires a bespoke tag convention. No machine-readable semantics.
+- b00t already has SPARQL via DualGrokClient/IrontologyBridgeClient. Use it.
+"""
+
+[[soul.critique]]
+what = "Secret vault as standalone feature"
+why_wrong = """
+- Keys are just one type of secret. What about model weights, training data,
+  soul configs? All need access control.
+- scopes=['embeddings','chat'] maps to HTTP endpoints, not to ontology classes.
+  What about: 'rust-doc can access b00t:EmbeddingModel but not b00t:ChatModel'?
+- Token creation is disconnected from the object store. A token should grant
+  access to a set of ontology-typed objects, not just HTTP paths.
+"""
+
+# ──────────── Ontological Grounding ────────────
+
+[soul.ontology]
+basis = "UFO stereotypes (kind, role, relator, moment, situation) + DatumType taxonomy"
+naming = "vendor/irontology-mcp/crates/naming/src/lib.rs — StoragePlan { bucket, prefix, filename, tags, ontology_class, shape }"
+query = "b00t grok digest -t <concept> --rag=irontology → SPARQL"
+
+# Object identity = UFO stereotype + DatumType
+[[soul.ontology_classes]]
+class = "b00t:TrainingCorpus"
+stereotype = "kind"
+datum_type = "Ai"
+shape = "ChatML"
+description = "Instruction-response pairs extracted from source code"
+
+[[soul.ontology_classes]]
+class = "b00t:FineTunedModel"
+stereotype = "kind"
+datum_type = "Ai"
+shape = "GGUF"
+description = "Quantized model weights (base + LoRA adapters)"
+relations = ["b00t:derivedFrom → b00t:TrainingCorpus", "b00t:derivedFrom → b00t:BaseModel"]
+
+[[soul.ontology_classes]]
+class = "b00t:BaseModel"
+stereotype = "kind"
+datum_type = "Ai"
+shape = "GGUF"
+description = "Pre-trained model from HuggingFace, unmodified"
+relations = ["b00t:providedBy → b00t:ModelProvider"]
+
+[[soul.ontology_classes]]
+class = "b00t:InferenceResult"
+stereotype = "moment"
+datum_type = "Job"
+shape = "JSONL"
+description = "Per-token inference output with provenance (model, prompt, timestamp)"
+relations = ["b00t:generatedBy → b00t:FineTunedModel", "b00t:evaluates → b00t:Evaluation"]
+
+[[soul.ontology_classes]]
+class = "b00t:Evaluation"
+stereotype = "relator"
+datum_type = "Job"
+shape = "JSONL"
+description = "Quality metrics (loss, accuracy, perplexity) linking model to benchmark"
+relations = ["b00t:measures → b00t:FineTunedModel", "b00t:measuredAgainst → b00t:Benchmark"]
+
+[[soul.ontology_classes]]
+class = "b00t:SoulSnapshot"
+stereotype = "kind"
+datum_type = "Overlay"
+shape = "TOML"
+description = "Canonical state capture — environment, services, sharp corners"
+relations = ["b00t:describes → b00t:Agent"]
+
+[[soul.ontology_classes]]
+class = "b00t:SpotlightRecord"
+stereotype = "moment"
+datum_type = "Overlay"
+shape = "JSONL"
+description = "Per-request telemetry — consumer, endpoint, model, latency"
+relations = ["b00t:generatedBy → b00t:ServerProxy", "b00t:references → b00t:FineTunedModel"]
+
+[[soul.ontology_classes]]
+class = "b00t:ApiKey"
+stereotype = "relator"
+datum_type = "Overlay"
+shape = "JSON"
+description = "Opaque token linking a consumer to scoped access rights"
+relations = ["b00t:issuedTo → b00t:Agent", "b00t:grantsAccess → {b00t:TrainingCorpus, b00t:FineTunedModel, ...}"]
+
+# ──────────── Storage Plan (extends irontology StoragePlan) ────────────
+
+[soul.storage]
+convention = "irontology NamingPolicy trait — DSL rules derive prefix from ontology_class + shape + extraction metadata"
+example = '''
+StoragePlan {
+  bucket: "b00t-knowledge",
+  prefix: "training-corpus/rust-doc/qwen3.5-0.8b/2026-06-24",
+  filename: "corpus-4474pairs-abc123.jsonl",
+  tags: {
+    "b00t:ontologyClass": "b00t:TrainingCorpus",
+    "b00t:shape": "ChatML",
+    "b00t:datumType": "Ai",
+    "b00t:sourceAgent": "rust-doc",
+    "b00t:generatedBy": "scripts/generate-b00t-training-data.py",
+    "b00t:pairs": "4474",
+    "b00t:baseModel": "unsloth/Qwen3.5-0.8B",
+  },
+  ontology_class: "b00t:TrainingCorpus",
+  shape: "ChatML",
+}
+'''
+
+# Object key = hash of (ontology_class, shape, content_checksum)
+# Immutable. A new version = new object with b00t:supersedes edge.
+
+# ──────────── Knowledge Graph Queries ────────────
+
+[[soul.queries]]
+name = "All models trained on b00t corpus"
+sparql = '''
+SELECT ?model WHERE {
+  ?model a b00t:FineTunedModel .
+  ?model b00t:derivedFrom ?corpus .
+  ?corpus a b00t:TrainingCorpus .
+  ?corpus b00t:sourceAgent "b00t-codebase" .
+}
+'''
+
+[[soul.queries]]
+name = "Latest model for Qwen3.5 lineage"
+sparql = '''
+SELECT ?model ?loss WHERE {
+  ?model a b00t:FineTunedModel .
+  ?model b00t:derivedFrom/b00t:hasBaseModel ?base .
+  ?base b00t:modelFamily "qwen3.5" .
+  ?eval a b00t:Evaluation .
+  ?eval b00t:measures ?model .
+  ?eval b00t:metric "loss" .
+  ?eval b00t:value ?loss .
+} ORDER BY DESC(?model.b00t:createdAt) LIMIT 1
+'''
+
+[[soul.queries]]
+name = "All Spotlight records for rust-doc's model usage today"
+sparql = '''
+SELECT ?endpoint ?model ?latency WHERE {
+  ?spot a b00t:SpotlightRecord .
+  ?spot b00t:generatedBy ?consumer .
+  ?consumer b00t:consumerId "rust-doc" .
+  ?spot b00t:endpoint ?endpoint .
+  ?spot b00t:model ?model .
+  ?spot b00t:latencyMs ?latency .
+  ?spot b00t:createdAt ?ts .
+  FILTER(?ts >= "2026-06-24T00:00:00Z")
+}
+'''
+
+# ──────────── Unified Authority Model ────────────
+
+[soul.authority]
+principle = "Access control is ontology-scoped, not endpoint-scoped"
+
+# Key creation maps to ontology classes, not HTTP paths
+key_create = '''
+b00t server key create \
+  --consumer rust-doc \
+  --access b00t:TrainingCorpus:read \
+  --access b00t:FineTunedModel:read \
+  --access b00t:EmbeddingModel:execute \
+  --access b00t:SpotlightRecord:write
+'''
+
+# Proxy middleware checks: "does this token grant execute on b00t:EmbeddingModel?"
+# Not: "does this token have scope 'embeddings'?"
+# The mapping /v1/embeddings → b00t:EmbeddingModel:execute is in server config, not in the token.
+
+# ──────────── Provenance Chains ────────────
+
+[soul.provenance]
+chain_example = """
+b00t:SourceCode
+  → b00t:generatedBy (scripts/generate-b00t-training-data.py)
+    → b00t:TrainingCorpus (corpus-4474pairs)
+      → b00t:derivedFrom
+        → b00t:BaseModel (Qwen3.5-0.8B)
+          → b00t:fineTunedBy (scripts/finetune-b00t.py, sm3lly agent)
+            → b00t:FineTunedModel (b00t-finetuned-Q4_K_M.gguf)
+              → b00t:evaluatedBy
+                → b00t:Evaluation (loss=2.09)
+              → b00t:servedBy
+                → b00t:InferenceResult (per-request traces)
+                  → b00t:recordedAs
+                    → b00t:SpotlightRecord (telemetry)
+"""
+
+# Every object in this chain has:
+# - An ontology class (b00t:TrainingCorpus, b00t:FineTunedModel, etc.)
+# - A shape (ChatML, GGUF, JSONL)
+# - A checksum (content-addressable)
+# - A creation timestamp
+# - Edges to predecessor objects (derivedFrom, generatedBy, evaluatedBy)
+# - An authority (who created it, who can access it)
+
+# ──────────── Integration with existing infrastructure ────────────
+
+[soul.integration]
+store_backend = "irontology storage-neumann crate (Neumann storage architecture)"
+naming = "irontology NamingPolicy trait → StoragePlan rule engine"
+query = "b00t grok digest -t <concept> --rag=irontology → SPARQL"
+index = "b00t-embed EmbedBackend + Qdrant for vector search on metadata + content"
+authority = "b00t-server proxy with ontology-scoped ACL"
+telemetry = "b00t:SpotlightRecord edges feed the knowledge graph"
+secrets = "OS keyring → b00t:ApiKey relator → scoped access"
+
+# ──────────── Implementation Order ────────────
+
+[[soul.phases]]
+name = "Phase 1: Ontology class registry"
+work = "Define b00t:TrainingCorpus, b00t:FineTunedModel, etc. as SPARQL triples in the irontology graph"
+depends = "vendor/irontology-mcp — already vendored"
+
+[[soul.phases]]
+name = "Phase 2: StoragePlan integration"
+work = "Implement NamingPolicy for b00t classes. Wire into cloud store CLI."
+depends = "Phase 1"
+
+[[soul.phases]]
+name = "Phase 3: Object store with provenance"
+work = "S3/R2 backend stores objects. Metadata indexed via Qdrant + SPARQL. Every PUT creates triples."
+depends = "Phase 2"
+
+[[soul.phases]]
+name = "Phase 4: Authority model"
+work = "Replace endpoint-scoped tokens with ontology-class-scoped access control."
+depends = "Phase 1"
+
+[[soul.phases]]
+name = "Phase 5: Query interface"
+work = "b00t store query sparql '...' — SPARQL against the knowledge graph. b00t grok integration."
+depends = "Phase 3"
+
+# b00t:map v1
+# summary: Ontologically grounded knowledge infrastructure — UFO stereo types, provenance chains, SPARQL query
+# tags: ontology, ufo, storage, knowledge-graph, provenance, security, sparql, irontology
+# tier: frontier
+# cmds: b00t store put --class b00t:TrainingCorpus, b00t store query sparql "..."
+# complexity: 10

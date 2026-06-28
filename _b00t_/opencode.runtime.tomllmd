@@ -1,0 +1,59 @@
+[b00t]
+name = "opencode"
+type = "runtime"
+hint = "OpenCode CLI — sandboxed launch via b00t wrapper"
+
+[b00t.runtime]
+binary = "opencode"
+args = ["--continue"]
+
+[b00t.runtime.isolation]
+share_net = true
+new_session = true
+
+[[b00t.runtime.isolation.mounts]]
+src = "/usr"
+dest = "/usr"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib"
+dest = "/lib"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib64"
+dest = "/lib64"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/bin"
+dest = "/bin"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/etc"
+dest = "/etc"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/home/brianh/.config/opencode"
+dest = "/home/brianh/.config/opencode"
+type = "bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = ""
+dest = "/tmp"
+type = "tmpfs"
+
+[[b00t.runtime.isolation.mounts]]
+src = ""
+dest = "/proc"
+type = "proc"
+
+# b00t:map v1
+# summary: sandboxed opencode runtime — declarative isolation
+# tags: opencode, runtime, sandbox
+# tier: ch0nky
+# cmds: b00t opencode
+# complexity: 3

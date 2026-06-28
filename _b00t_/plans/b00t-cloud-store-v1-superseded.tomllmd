@@ -1,0 +1,177 @@
+# ⚠️ SUPERSEDED by _b00t_/plans/b00t-knowledge-infrastructure.tomllmd
+# That plan replaces this one with ontologically grounded naming (irontology StoragePlan),
+# provenance chains (UFO relators), SPARQL queries, and class-scoped access control.
+# This V1 design remains as a record of the initial approach.
+
+[b00t]
+name = "b00t-cloud-store"
+type = "plan"
+hint = "S3/R2-compatible durable object storage — agents persist and query serialized data"
+
+# ──────────── Motivation ────────────
+
+[soul.motivation]
+problem = "Agents generate training data, model outputs, soul configs, Spotlight logs. Currently all local files. Need cloud persistence so future agents (and other agents like sm3lly) can recycle and query data."
+examples = [
+  "b00t-corpus.jsonl (4,474 training pairs) — should be queryable by any agent",
+  "b00t-finetuned.Q4_K_M.gguf (505MB) — should be fetchable by inference agents",
+  "spotlight.jsonl — cross-agent telemetry merge",
+  "server-soul.tomllm — state snapshot recycling",
+]
+
+# ──────────── Architecture ────────────
+
+[soul.architecture]
+backend = "S3-compatible (AWS S3, Cloudflare R2, MinIO, rustfs-mcp)"
+api_style = "b00t CLI subcommand: b00t store <action>"
+existing_infra = "rustfs-mcp (S3-compat MCP server — already registered)"
+durability = "Cloudflare R2 recommended (no egress fees, global, $0.015/GB-month)"
+
+# ──────────── Path Convention ────────────
+
+[soul.paths]
+pattern = "/{consumer}/{datatype}/{yyyy-mm-dd}/{uuid}.{ext}"
+examples = [
+  "rust-doc/training-corpus/2026-06-24/b00t-corpus-4447pairs.jsonl",
+  "lappyx23/gguf/2026-06-24/b00t-finetuned-Q4_K_M.gguf",
+  "sm3lly/spotlight/2026-06-24/merged-telemetry.jsonl",
+  "hive/soul-config/2026-06-24/server-soul-snapshot.tomllm",
+]
+
+# ──────────── CLI Design ────────────
+
+[[soul.cli]]
+command = "b00t store put <file> --consumer <name> --type <type> [--tags k=v,k=v]"
+description = "Upload serialized data with metadata"
+example = "b00t store put b00t-corpus.jsonl --consumer rust-doc --type training-corpus --tags pairs=4474,model=qwen3.5"
+
+[[soul.cli]]
+command = "b00t store get <key>"
+description = "Fetch a stored object by key"
+example = "b00t store get rust-doc/training-corpus/2026-06-24/latest.jsonl"
+
+[[soul.cli]]
+command = "b00t store list --consumer <name> [--type <type>] [--since <date>]"
+description = "List stored objects with metadata"
+example = "b00t store list --consumer rust-doc --type training-corpus"
+
+[[soul.cli]]
+command = "b00t store query --tag pairs=4474"
+description = "Query objects by metadata tags"
+example = "b00t store query --tag model=qwen3.5 --consumer rust-doc"
+
+[[soul.cli]]
+command = "b00t store sync --from <consumer> --to <consumer>"
+description = "Sync data between agents (cross-agent replication)"
+example = "b00t store sync --from lappyx23 --to sm3lly"
+
+# ──────────── Metadata Sidecar ────────────
+
+[soul.metadata]
+format = "Stored alongside each object as <key>.meta.json"
+fields = [
+  "consumer: str — agent/mcp-server name",
+  "datatype: str — training-corpus, gguf, spotlight, soul-config, model-output",
+  "created_at: ISO-8601",
+  "size_bytes: int",
+  "checksum: sha256",
+  "tags: {str: str} — arbitrary key-value",
+  "source_session: str — b00t session PID/timestamp",
+]
+
+# ──────────── Type Taxonomy ────────────
+
+[[soul.datatypes]]
+name = "training-corpus"
+description = "JSONL instruction-response pairs for finetuning"
+extensions = [".jsonl"]
+recycle = "merge with existing corpus, deduplicate"
+
+[[soul.datatypes]]
+name = "gguf"
+description = "Quantized model files"
+extensions = [".gguf"]
+recycle = "replace if same model + quant, append if different"
+
+[[soul.datatypes]]
+name = "spotlight"
+description = "Usage telemetry JSONL"
+extensions = [".jsonl"]
+recycle = "append, deduplicate by ts+consumer"
+
+[[soul.datatypes]]
+name = "soul-config"
+description = "Canonical state snapshots (.tomllm)"
+extensions = [".tomllm", ".toml"]
+recycle = "versioned — keep all, latest is HEAD"
+
+[[soul.datatypes]]
+name = "model-output"
+description = "Inference responses for evaluation/replay"
+extensions = [".jsonl"]
+recycle = "append with session tag"
+
+# ──────────── Datum Config ────────────
+
+[soul.datum]
+name = "cloud-store-r2"
+type = "store"
+hint = "Cloudflare R2 durable object storage for b00t agents"
+example_config = '''
+[b00t]
+name = "cloud-store-r2"
+type = "store"
+
+[b00t.store]
+provider = "cloudflare-r2"
+endpoint = "https://<account>.r2.cloudflarestorage.com"
+bucket = "b00t-store"
+access_key_env = "R2_ACCESS_KEY_ID"
+secret_key_env = "R2_SECRET_ACCESS_KEY"
+region = "auto"
+public_url = "https://b00t-store.<account>.r2.cloudflarestorage.com"
+'''
+
+# ──────────── Integration with Existing Infra ────────────
+
+[soul.integration]
+kv_store = "b00t-c0re-lib KvStore already has multi-backend (File, InMemory). Add S3Backend."
+rustfs_mcp = "Already registered MCP server. Can use as the transport layer."
+session_bootstrap = "scripts/bootstrap-session.sh — add 'b00t store sync' to pull latest training data on session start."
+justfile = "Add just store-put, just store-sync, just store-query recipes."
+finetune = "Auto-pull latest training-corpus from store before finetuning."
+spotlight = "b00t store put spotlight.jsonl --consumer <name> --type spotlight on session close."
+
+# ──────────── Implementation Plan ────────────
+
+[[soul.phases]]
+name = "Phase 1: KvStore S3 backend"
+work = "Add S3Backend variant to b00t-c0re-lib/src/kv_store.rs using aws-sdk-s3 or rusoto"
+loc_est = 150
+
+[[soul.phases]]
+name = "Phase 2: b00t store CLI"
+work = "b00t-cli/src/commands/store.rs — put, get, list, query, sync subcommands"
+loc_est = 200
+
+[[soul.phases]]
+name = "Phase 3: Metadata indexing"
+work = "Local SQLite index of stored objects (consumer, type, tags, timestamp) for fast query"
+loc_est = 100
+
+[[soul.phases]]
+name = "Phase 4: Session integration"
+work = "bootstrap-session.sh auto-sync; finetune script pulls corpus from store; Spotlight auto-upload on session close"
+loc_est = 50
+
+[[soul.phases]]
+name = "Phase 5: R2 datum"
+work = "Register cloudflare-r2 as a b00t store datum with credentials from env"
+loc_est = 30
+
+# b00t:map v1
+# summary: S3/R2 durable object storage API for b00t agents — persist, query, recycle serialized data
+# tags: cloud, storage, s3, r2, durable, agent, persistence, query
+# tier: frontier
+# cmds: b00t store put/get/list/query/sync, just store-sync
+# complexity: 8
