@@ -5,13 +5,13 @@ use crate::whoami;
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 pub enum InitCommands {
     #[clap(
         about = "Initialize a b00t project in the current directory",
-        long_about = "Create _b00t_/ with project.toml + overrides.toml.\nRuns agent onboarding automatically unless _b00t_/ already exists.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding even if _b00t_/ exists)\n  b00t init project --no-setup (skip onboarding)"
+        long_about = "Create _b00t_/ with project.toml + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
     )]
     Project {
         #[clap(long, help = "Project name (default: directory name)")]
@@ -35,6 +35,14 @@ fn handle_project_init(
     path: &str,
 ) -> Result<()> {
     let cwd = std::env::current_dir().context("current dir")?;
+
+    // Must be at the root of a git repo
+    if !cwd.join(".git").exists() {
+        anyhow::bail!(
+            "not a git repository root ({}). Run 'git init' first.",
+            cwd.display()
+        );
+    }
     let project_name = name.unwrap_or_else(|| {
         cwd.file_name()
             .and_then(|n| n.to_str())
@@ -53,6 +61,8 @@ fn handle_project_init(
     }
 
     let primary_stack = stack.unwrap_or_else(|| detect_project_stack(&cwd));
+
+    // ── Write project config files ──────────────────────────────────
 
     let project_toml = b00t_dir.join("project.toml");
     if !project_toml.exists() {
@@ -99,9 +109,18 @@ b00t_version = "{b00t_version}"
         println!("  📝 wrote {}", overrides_toml.display());
     }
 
+    // ── System validation + .env / .envrc setup ───────────────────────
+
+    println!("\n🔍 System validation");
+    let env = collect_environment(&cwd, &project_name, &primary_stack);
+
+    write_env_files(&cwd, &env)?;
+    print_validation_report(&env);
+
     println!("\n✅ Project '{}' initialized ({})", project_name, primary_stack);
 
-    // Auto-run onboarding unless explicitly skipped or _b00t_/ already existed (and no --setup)
+    // ── Agent onboarding ─────────────────────────────────────────────
+
     if !no_setup && (!existed || force_setup) {
         if existed && force_setup {
             println!("\n🔧 Forcing agent setup...");
@@ -111,13 +130,201 @@ b00t_version = "{b00t_version}"
         run_setup(path)?;
     } else if existed {
         println!("   Run 'b00t init project --setup' to re-run agent setup");
-    } else {
-        println!("   Run 'b00t init project' for agent setup");
     }
 
     println!("   Run 'b00t cli up' to check tool versions");
     Ok(())
 }
+
+// ── Environment detection + .env / .envrc generation ──────────────────────
+
+struct ProjectEnv {
+    project_name: String,
+    primary_stack: String,
+    b00t_version: String,
+    has_direnv: bool,
+    container_runtime: String,
+    rust_version: Option<String>,
+    node_version: Option<String>,
+    python_version: Option<String>,
+    go_version: Option<String>,
+    missing_critical: Vec<String>,
+}
+
+fn collect_environment(cwd: &Path, project_name: &str, primary_stack: &str) -> ProjectEnv {
+    let mut env = ProjectEnv {
+        project_name: project_name.to_string(),
+        primary_stack: primary_stack.to_string(),
+        b00t_version: env!("CARGO_PKG_VERSION").to_string(),
+        has_direnv: which::which("direnv").is_ok(),
+        container_runtime: detect_container_runtime(),
+        rust_version: None,
+        node_version: None,
+        python_version: None,
+        go_version: None,
+        missing_critical: Vec::new(),
+    };
+
+    // Detect tool versions
+    env.rust_version = detect_version("rustc", &["--version"], r"(\d+\.\d+\.\d+)");
+    env.node_version = detect_version("node", &["--version"], r"v?(\d+\.\d+\.\d+)");
+    env.python_version = detect_version("python3", &["--version"], r"(\d+\.\d+\.\d+)");
+    env.go_version = detect_version("go", &["version"], r"go(\d+\.\d+\.\d+)");
+
+    // Critical tools for the detected stack
+    match primary_stack {
+        "rust" => {
+            if env.rust_version.is_none() { env.missing_critical.push("rustc".into()); }
+            if !which::which("cargo").is_ok() { env.missing_critical.push("cargo".into()); }
+        }
+        "nodejs" => {
+            if env.node_version.is_none() { env.missing_critical.push("node".into()); }
+            if !which::which("npm").is_ok() { env.missing_critical.push("npm".into()); }
+        }
+        "python" => {
+            if env.python_version.is_none() { env.missing_critical.push("python3".into()); }
+        }
+        "go" => {
+            if env.go_version.is_none() { env.missing_critical.push("go".into()); }
+        }
+        _ => {}
+    }
+    if !which::which("git").is_ok() { env.missing_critical.push("git".into()); }
+
+    if env.container_runtime == "none" {
+        env.missing_critical.push("podman/docker".into());
+    }
+
+    env
+}
+
+fn detect_version(bin: &str, args: &[&str], regex: &str) -> Option<String> {
+    let output = std::process::Command::new(bin).args(args).output().ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let re = regex::Regex::new(regex).ok()?;
+    re.captures(&stdout)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+fn detect_container_runtime() -> String {
+    if which::which("podman").is_ok() { return "podman".into(); }
+    if which::which("docker").is_ok() { return "docker".into(); }
+    "none".into()
+}
+
+fn write_env_files(cwd: &Path, env: &ProjectEnv) -> Result<()> {
+    // .envrc (direnv)
+    let envrc_path = cwd.join(".envrc");
+    let envrc_new = !envrc_path.exists();
+    if envrc_new {
+        let container_block = if env.container_runtime == "podman" {
+            "export DOCKER_HOST=\"unix:///run/user/1000/podman/podman.sock\"\n"
+        } else {
+            ""
+        };
+        let content = format!(
+            r#"# b00t-managed .envrc — {project}
+# Auto-generated by 'b00t init project'
+
+export _B00T_Project="{project}"
+export _B00T_Stack="{stack}"
+export _B00T_Path="$PWD/_b00t_"
+
+# Container runtime ({runtime})
+{container_block}
+
+# Tool overrides (detected versions)
+{rust_line}{node_line}{python_line}{go_line}
+# end b00t
+"#,
+            project = env.project_name,
+            stack = env.primary_stack,
+            runtime = env.container_runtime,
+            container_block = container_block,
+            rust_line = env.rust_version.as_ref()
+                .map(|v| format!("export RUST_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            node_line = env.node_version.as_ref()
+                .map(|v| format!("export NODE_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            python_line = env.python_version.as_ref()
+                .map(|v| format!("export PYTHON_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+            go_line = env.go_version.as_ref()
+                .map(|v| format!("export GO_VERSION=\"{}\"\n", v))
+                .unwrap_or_default(),
+        );
+        std::fs::write(&envrc_path, &content)?;
+        println!("  📝 wrote {}", envrc_path.display());
+    }
+
+    // .env (standard)
+    let dotenv_path = cwd.join(".env");
+    let dotenv_new = !dotenv_path.exists();
+    if dotenv_new {
+        let content = format!(
+            r#"# b00t-managed .env — {project}
+# Auto-generated by 'b00t init project'
+_B00T_Project={project}
+_B00T_Stack={stack}
+_B00T_Path=./_b00t_
+"#,
+            project = env.project_name,
+            stack = env.primary_stack,
+        );
+        std::fs::write(&dotenv_path, &content)?;
+        println!("  📝 wrote {}", dotenv_path.display());
+    }
+
+    if envrc_new || dotenv_new {
+        if env.has_direnv {
+            println!("  💡 Run 'direnv allow' to activate the environment");
+        } else {
+            println!("  💡 Run 'source .envrc' or 'direnv allow' to load settings");
+        }
+    }
+
+    Ok(())
+}
+
+fn print_validation_report(env: &ProjectEnv) {
+    let mut ok = 0;
+    let mut warn = 0;
+
+    let checks: Vec<(&str, Option<&str>, bool)> = vec![
+        ("rustc", env.rust_version.as_deref(), env.primary_stack == "rust"),
+        ("node", env.node_version.as_deref(), env.primary_stack == "nodejs"),
+        ("python3", env.python_version.as_deref(), env.primary_stack == "python"),
+        ("go", env.go_version.as_deref(), env.primary_stack == "go"),
+        ("git", Some(if which::which("git").is_ok() { "✓" } else { "" }), true),
+        (&env.container_runtime, Some("✓"), true),
+    ];
+
+    for (tool, version, important) in checks {
+        match version {
+            Some(v) if !v.is_empty() => {
+                let tag = if important { "required" } else { "available" };
+                println!("  ✅ {:<20} {:>12}  ({})", tool, if v == "✓" { v.into() } else { format!("v{}", v) }, tag);
+                ok += 1;
+            }
+            _ => {
+                let tag = if important { "❌ missing" } else { "optional" };
+                println!("  ❌ {:<20} {:>12}  ({})", tool, "—", tag);
+                if important { warn += 1; }
+            }
+        }
+    }
+
+    if warn > 0 {
+        println!("\n  ⚠️  {} critical tool(s) missing. Install them and re-run 'b00t init project --setup'.", warn);
+    }
+    if ok > 0 && warn == 0 {
+        println!("\n  ✅ All critical tools available.");
+    }
+}
+
+// ── Project stack detection ───────────────────────────────────────────────
 
 fn detect_project_stack(cwd: &Path) -> String {
     if cwd.join("Cargo.toml").exists() { return "rust".into(); }
@@ -250,14 +457,8 @@ fn is_tool_important_for_stack(tool_name: &str, stack: &str) -> bool {
 fn setup_infrastructure(memory: &mut SessionMemory) -> Result<()> {
     verify_and_start_redis(memory)?;
 
-    let container_runtime = if cmd!("podman", "--version").read().is_ok() {
-        "podman"
-    } else if cmd!("docker", "--version").read().is_ok() {
-        "docker"
-    } else {
-        "none"
-    };
-    memory.set("preferred_container_runtime", container_runtime)?;
+    let container_runtime = detect_container_runtime();
+    memory.set("preferred_container_runtime", &container_runtime)?;
     memory.set("last_setup", &chrono::Utc::now().to_rfc3339())?;
     Ok(())
 }
@@ -363,25 +564,14 @@ pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
     let mut passing = 0;
     let total = 4;
 
-    if std::process::Command::new("git").arg("--version").output().is_ok() {
-        println!("  ✅ git: available");
-        passing += 1;
-    } else { println!("  ❌ git: not available"); }
-
-    if std::process::Command::new("cargo").arg("--version").output().is_ok() {
-        println!("  ✅ cargo: available");
-        passing += 1;
-    } else { println!("  ❌ cargo: not available"); }
-
-    if std::process::Command::new("node").arg("--version").output().is_ok() {
-        println!("  ✅ node: available");
-        passing += 1;
-    } else { println!("  ❌ node: not available"); }
-
-    if std::process::Command::new("docker").arg("--version").output().is_ok() {
-        println!("  ✅ docker: available");
-        passing += 1;
-    } else { println!("  ❌ docker: not available"); }
+    for (label, bin) in &[("git", "git"), ("cargo", "cargo"), ("node", "node"), ("docker", "docker")] {
+        if std::process::Command::new(bin).arg("--version").output().is_ok() {
+            println!("  ✅ {}: available", label);
+            passing += 1;
+        } else {
+            println!("  ❌ {}: not available", label);
+        }
+    }
 
     memory.set_num("diagnostic_passing", passing as i64)?;
     memory.set_num("diagnostic_total", total as i64)?;
@@ -414,6 +604,7 @@ mod tests {
     #[test]
     fn project_init_creates_directory_and_files() {
         let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
         handle_project_init(Some("test-proj".into()), Some("rust".into()), false, true, "test").unwrap();
 
@@ -421,10 +612,12 @@ mod tests {
         assert!(b00t.exists());
         assert!(b00t.join("project.toml").exists());
         assert!(b00t.join("overrides.toml").exists());
+        assert!(dir.path().join(".envrc").exists());
+        assert!(dir.path().join(".env").exists());
 
-        let content = std::fs::read_to_string(b00t.join("project.toml")).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".env")).unwrap();
         assert!(content.contains("test-proj"));
-        assert!(content.contains("rust"));
+        assert!(content.contains("_B00T_Path=./_b00t_"));
     }
 
     #[test]
@@ -448,11 +641,24 @@ mod tests {
     }
 
     #[test]
-    fn first_time_init_creates_directory() {
+    fn env_file_contains_project_vars() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        handle_project_init(Some("demo".into()), Some("nodejs".into()), false, true, "test").unwrap();
+
+        let envrc = std::fs::read_to_string(dir.path().join(".envrc")).unwrap();
+        assert!(envrc.contains("_B00T_Project=\"demo\""));
+        assert!(envrc.contains("_B00T_Stack=\"nodejs\""));
+        assert!(envrc.contains("_B00T_Path=\"$PWD/_b00t_\""));
+    }
+
+    #[test]
+    fn rejects_non_git_directory() {
         let dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-        // no_setup=true: skip agent onboarding (requires real session config)
-        handle_project_init(Some("auto".into()), Some("rust".into()), false, true, "test").unwrap();
-        assert!(dir.path().join("_b00t_").exists());
+        let result = handle_project_init(None, None, false, true, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a git repository"));
     }
 }
