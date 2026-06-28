@@ -693,7 +693,9 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
@@ -1172,7 +1174,14 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
       <div class="sidebar-header" id="status-dot" style="width:8px;height:8px;border-radius:50%%;background:#34d399;animation:pulse 2s infinite;display:inline-block;"></div>
       <h1 style="font-size:16px;color:#38bdf8;margin:0;">b00t</h1>
     </div>
-    <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;">Pipeline v{{}} · Loading...</div>
+    <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;display:flex;align-items:center;gap:6px;">
+      <span id="heartbeat" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#34d399;flex-shrink:0;"></span>
+      <span id="header-version">v0 ·</span>
+      <span id="header-status">Loading...</span>
+    </div>
+    <div style="margin-top:8px;font-size:9px;color:#475569;border-top:1px solid #1e293b;padding-top:6px;">
+      <span id="sidebar-version">🥾 v0.9.1</span>
+    </div>
   </div>
   <div class="accordion-section">
     <div class="accordion-header active" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
@@ -1334,9 +1343,56 @@ function updatePipeline() {{
       ? '<strong style="color:#22d3ee;">' + (p.source_id || 'N/A') + '</strong> — ' + (p.source_title || 'Untitled')
       : '<strong style="color:#22d3ee;">No pipeline</strong>';
   }}
-  var info = document.getElementById('header-info');
-  if (info) info.textContent = 'Pipeline v' + (p.pipeline_version || '—') + ' · ' + (p.executed_at ? new Date(p.executed_at).toLocaleString() : 'Not executed');
 }}
+
+// ════════ Heartbeat + Version ════════
+function beat() {{
+  var hb = document.getElementById('heartbeat');
+  var vs = document.getElementById('header-version');
+  var st = document.getElementById('header-status');
+  var sv = document.getElementById('sidebar-version');
+  if (!hb) return;
+  // Fetch health API for server version
+  fetch('/api/admin/health').then(function(r){{return r.json();}}).then(function(d) {{
+    var ver = d.version || '?';
+    if (vs) vs.textContent = 'v' + ver + ' ·';
+    if (sv) sv.textContent = '🥾 v' + ver;
+    if (st) st.textContent = d.service || 'Healthy';
+    hb.style.background = '#34d399';
+    hb.style.animation = 'none';
+    void hb.offsetHeight;
+    hb.style.animation = 'pulse 2s infinite';
+  }}).catch(function() {{
+    hb.style.background = '#ef4444';
+    hb.style.animation = 'none';
+    if (st) st.textContent = 'Offline';
+  }});
+}}
+// Beat on load and every 30s
+beat();
+setInterval(beat, 30000);
+
+function beat() {{
+  var hb = document.getElementById('heartbeat');
+  var vs = document.getElementById('header-version');
+  var st = document.getElementById('header-status');
+  if (!hb) return;
+  // Flash heartbeat green on successful API response
+  hb.style.background = '#34d399';
+  hb.style.animation = 'none';
+  void hb.offsetHeight; // reflow
+  hb.style.animation = 'pulse 2s infinite';
+  var info = document.getElementById('header-info');
+  if (info) {{
+    var p = PIPELINE;
+    var ver = p.pipeline_version || SERVER_VERSION;
+    if (vs) vs.textContent = 'v' + ver + ' ·';
+    if (st) st.textContent = p.executed_at ? new Date(p.executed_at).toLocaleString() : (p.has_pipeline ? 'Active' : 'Ready');
+  }}
+}}
+
+// Initial beat
+setTimeout(beat, 100);
 
 // ════════ Viz Panel ════════
 var currentVizTab = 'mermaid';
