@@ -1948,6 +1948,28 @@ pub fn resolve_datum_dispatch(candidate: &str, path: &str) -> Option<DatumDispat
     all.into_iter().next()
 }
 
+/// Interactive polyseme selection prompt (#580).
+/// Returns the selected ref name, or None if non-interactive / cancelled.
+pub fn prompt_polyseme_selection(name: &str, refs: &[crate::PolysemeRef]) -> Option<String> {
+    use std::io::{self, BufRead, IsTerminal, Write};
+
+    if !io::stdin().is_terminal() {
+        return None; // non-interactive — caller handles display + exit
+    }
+
+    eprintln!("\n🔀 '{name}' has multiple resolutions:");
+    for (i, r) in refs.iter().enumerate() {
+        eprintln!("  {}) {} — {}", i + 1, r.name, r.description);
+    }
+    eprint!("  Select [1-{}]: ", refs.len());
+    io::stdout().flush().ok();
+
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input).ok()?;
+    let choice: usize = input.trim().parse().ok()?;
+    refs.get(choice.wrapping_sub(1)).map(|r| r.name.clone())
+}
+
 /// Load a CLI datum and return its BootDatum.
 fn load_cli_datum(name: &str, path: &str) -> Result<BootDatum> {
     use anyhow::Context;

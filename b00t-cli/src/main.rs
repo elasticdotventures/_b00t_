@@ -1917,6 +1917,38 @@ async fn main() {
 
                     if matches.len() > 1 {
                         // Multiple datum types — prompt for disambiguation
+                        // 🤓 Interactive polyseme selection (#580): if terminal, prompt user.
+                        //    Non-interactive (pipe/script): print options and exit (existing behavior).
+                        let mut polyseme_choice: Option<String> = None;
+                        for m in &matches {
+                            if let b00t_cli::DatumDispatch::Polyseme { name, refs } = m {
+                                if let Some(choice) = b00t_cli::prompt_polyseme_selection(name, refs) {
+                                    polyseme_choice = Some(choice);
+                                }
+                            }
+                        }
+                        if let Some(choice) = polyseme_choice {
+                            // User selected a polyseme ref — dispatch the concrete name
+                            let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                            if let Some(dispatch) = resolved.into_iter().next() {
+                                match dispatch {
+                                    b00t_cli::DatumDispatch::Runtime(cfg) => {
+                                        match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                            Ok(code) => std::process::exit(code),
+                                            Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                        }
+                                    }
+                                    DatumDispatch::CliPassthrough { command, args } => {
+                                        let mut cmd_args = args;
+                                        cmd_args.extend(passthrough);
+                                        let status = std::process::Command::new(&command).args(&cmd_args).status();
+                                        std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                    }
+                                    _ => {} // fall through to print options
+                                }
+                            }
+                        }
+
                         eprintln!("\n\x1b[1m{candidate}\x1b[0m — multiple datum matches:");
                         for (i, m) in matches.iter().enumerate() {
                             match m {
@@ -1968,6 +2000,27 @@ async fn main() {
                             std::process::exit(status.code().unwrap_or(1));
                         }
                         Some(b00t_cli::DatumDispatch::Polyseme { name, refs }) => {
+                            // Interactive selection (#580)
+                            if let Some(choice) = b00t_cli::prompt_polyseme_selection(&name, &refs) {
+                                let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                                if let Some(dispatch) = resolved.into_iter().next() {
+                                    match dispatch {
+                                        b00t_cli::DatumDispatch::Runtime(cfg) => {
+                                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                                Ok(code) => std::process::exit(code),
+                                                Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                            }
+                                        }
+                                        b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
+                                            let mut cmd_args = args;
+                                            cmd_args.extend(passthrough);
+                                            let status = std::process::Command::new(&command).args(&cmd_args).status();
+                                            std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
                             println!(
                                 "\n\x1b[1m{}\x1b[0m — polyseme datum (multiple resolutions)",
                                 name
