@@ -25,6 +25,8 @@ unlocks = [
     "ai-finetune::hf-job-status",
     "ai-finetune::hf-job-logs",
     "ai-finetune::hf-job-cancel",
+    "ai-finetune::monitor-run",     # sm0l evidentiary handler: PASS/FAIL step timing
+    "ai-finetune::watch-run",       # human handoff: open live stream in zellij; agent stops
     # adapter retrieval — generic + model-specific
     "ai-finetune::hf-adapter-pull",         # generic: hf-adapter-pull model_id local_dir
     "ai-finetune::hf-adapter-pull-coder",   # alias: coder-30b to canonical path
@@ -82,6 +84,45 @@ HEADLESS PIPELINE EXAMPLE:
   b00t blessing --manifest --role=ai-worker \\
     | xargs -I{} just ai-finetune::{}
 """
+
+# ── Service contracts: capability claims are only valid with a handler that proves them ──
+# Blessing = series of deterministic events; command syntax IS the evidentiary record.
+# sm0l output contract: PASS or FAIL:<5-line excerpt>
+# 🤓 AGENT PROTOCOL — cloud training handoff (encode this, don't re-derive):
+# 1. just ai-finetune::hf-sync              → push dataset + scripts to HF
+# 2. just ai-finetune::cloud-train <flavor> <config>  → submit; prints job_id
+# 3. just ai-finetune::watch-run <job_id>   → open log stream; AGENT STOPS HERE
+# 4. Human monitors via zellij/terminal; cancels if step_time > threshold
+# 5. Human re-invokes agent when done → agent runs monitor-run (PASS/FAIL) + test
+# DO NOT poll via ScheduleWakeup — human wetware is free; agent tokens are not.
+
+[[service_contract]]
+capability  = "cloud-training-viable"
+handler     = "just ai-finetune::monitor-run <job_id>"
+evidence    = "PASS: RUNNING step=N rate=Xs/it ETA=HH:MM"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "adapter-smoke-test"
+handler     = "just ai-finetune::test"
+evidence    = "PASS: score=5/5"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "dataset-freshness"
+handler     = "just ai-finetune::hf-sync"
+evidence    = "PASS: N rows pushed to hf://datasets/elasticdotventures/b00t-training"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "corpus-visualization"
+handler     = "just ai-finetune::dataset-viz"
+evidence    = "PASS: fine-tune/dataset-viz.svg written"
+tier        = "sm0l"
+verifiable  = true
 
 [b00t.skill.metadata]
 just_module    = "_b00t_/ai-finetune.just"

@@ -49,3 +49,26 @@ vllm_model_arg = "/models/qwen3-coder/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gg
 # 🤓 vllm GGUF: requires --max-model-len to avoid OOM on 24GB; chunked-prefill improves throughput
 vllm_extra_args = "--max-model-len 32768 --enable-chunked-prefill --override-generation-config '{\"temperature\": 0.25, \"min_p\": 0, \"top_p\": 0.8}'"
 gpu = "rtx3090"
+
+# ── Service contracts — verifiable capability handlers ────────────────────────
+# capabilities[] are words; service_contract handlers are evidence.
+[[service_contract]]
+capability  = "b00t-aware-code-generation"
+handler     = "just ai-finetune::test"
+evidence    = "PASS: score=5/5 b00t-awareness probes"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "b00t-datum-authoring"
+handler     = "b00t-cli --path _b00t_ viz entangle --datum qwen3-coder-local --format json"
+evidence    = "PASS: valid JSON graph with qwen3-coder-local node + edges"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "local-inference-liveness"
+handler     = "curl -sf http://localhost:8000/v1/models"
+evidence    = "PASS: JSON with model id qwen3-coder"
+tier        = "sm0l"
+verifiable  = true
