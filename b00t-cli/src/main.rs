@@ -10,6 +10,40 @@ fn die(code: i32, msg: impl std::fmt::Display) -> ! {
     std::process::exit(code);
 }
 
+struct ProjectContext {
+    name: String,
+    stack: String,
+}
+
+fn find_project_context() -> Option<ProjectContext> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut current = cwd.as_path();
+    loop {
+        let candidates = &[
+            current.join("_b00t_").join("🥾.tomllmd"),
+            current.join(".git").join("🥾.tomllmd"),
+        ];
+        for project_toml in candidates {
+            if project_toml.exists() {
+                if let Ok(content) = std::fs::read_to_string(project_toml) {
+                    let name = content.lines()
+                        .find(|l| l.starts_with("name = "))
+                        .and_then(|l| l.split('"').nth(1))
+                        .unwrap_or("unknown");
+                    let stack = content.lines()
+                        .find(|l| l.starts_with("primary_stack = "))
+                        .and_then(|l| l.split('"').nth(1))
+                        .unwrap_or("unknown");
+                    return Some(ProjectContext { name: name.to_string(), stack: stack.to_string() });
+                }
+            }
+        }
+        if current.join(".git").exists() { break; }
+        current = current.parent()?;
+    }
+    None
+}
+
 fn target_str_to_install_target(s: &str) -> b00t_cli::commands::mcp::McpInstallTarget {
     match s {
         "opencode" => b00t_cli::commands::mcp::McpInstallTarget::Opencode,
@@ -960,6 +994,18 @@ fn show_status(
     only_installed: bool,
     only_available: bool,
 ) -> Result<()> {
+    // Project context header
+    let expanded = b00t_cli::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    if let Some(project) = find_project_context() {
+        println!("📂 project: {}  |  stack: {}  |  path: {}",
+            project.name, project.stack, expanded.display());
+        let overrides = b00t_cli::load_project_overrides();
+        if !overrides.is_empty() {
+            println!("📌 overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+        }
+        println!();
+    }
+
     let mut all_tools = Vec::new();
 
     // Collect tools from all subsystems using new generic trait-based architecture
@@ -1863,7 +1909,9 @@ async fn main() {
                 if !candidate.starts_with('-') && !candidate.starts_with('/') {
                     let path = std::env::var("_B00T_Path")
                         .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
-                    let expanded = shellexpand::tilde(&path).to_string();
+                    let expanded = b00t_cli::get_expanded_path(&path)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| shellexpand::tilde(&path).to_string());
                     let passthrough: Vec<String> = raw_args.iter().skip(2).cloned().collect();
                     let matches = b00t_cli::resolve_all_datum_dispatches(candidate, &expanded);
 

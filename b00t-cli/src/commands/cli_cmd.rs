@@ -288,15 +288,23 @@ fn cli_check(command: &str, path: &str) -> Result<()> {
     let current = cli_datum
         .current_version()
         .unwrap_or_else(|| "not found".to_string());
+    let desired = cli_datum
+        .desired_version()
+        .unwrap_or_else(|| "auto".to_string());
+
+    // Check project overrides
+    let overrides = crate::load_project_overrides();
+    let override_ver = overrides.get(command);
+    let pinned = override_ver.map(|v| format!(" (project pinned: {})", v)).unwrap_or_default();
 
     let status_text = match version_status {
-        VersionStatus::Match => format!("🥾👍🏻 {} {} (matches desired)", command, current),
-        VersionStatus::Newer => format!("🥾🐣 {} {} (newer than desired)", command, current),
-        VersionStatus::Older => format!("🥾😭 {} {} (older than desired)", command, current),
-        VersionStatus::Missing => format!("🥾😱 {} (not installed)", command),
+        VersionStatus::Match => format!("🥾👍🏻 {} {} {} (desired: {})", command, current, pinned, desired),
+        VersionStatus::Newer => format!("🥾🐣 {} {} {} (newer than desired: {})", command, current, pinned, desired),
+        VersionStatus::Older => format!("🥾😭 {} {} {} (older than desired: {})", command, current, pinned, desired),
+        VersionStatus::Missing => format!("🥾😱 {} (not installed){}", command, pinned),
         VersionStatus::Unknown => format!(
-            "🥾⏹️ {} {} (version comparison unavailable)",
-            command, current
+            "🥾⏹️ {} {} {} (version comparison unavailable)",
+            command, current, pinned
         ),
     };
 
@@ -324,6 +332,11 @@ fn cli_up(path: &str, yes: bool, maintenance: bool) -> Result<()> {
     // Load all CLI datum providers
     let cli_tools: Vec<Box<dyn DatumProvider>> =
         load_datum_providers::<CliDatum>(path, ".cli.toml")?;
+
+    let overrides = crate::load_project_overrides();
+    if !overrides.is_empty() {
+        println!("📌 Project overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+    }
 
     let mut updated_count = 0;
     let mut needs_update_count = 0;

@@ -846,6 +846,8 @@ mod tests {
             repo: None,
             dry_run: false,
             self_: false,
+            check: false,
+            no_check: false,
         };
         assert_eq!(args.tool, "claude");
         assert_eq!(args.max_iter, 10);

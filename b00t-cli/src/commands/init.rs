@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 pub enum InitCommands {
     #[clap(
         about = "Initialize a b00t project in the current directory",
-        long_about = "Create _b00t_/ with project.toml + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
+        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
     )]
     Project {
         #[clap(long, help = "Project name (default: directory name)")]
@@ -62,17 +62,22 @@ fn handle_project_init(
 
     let primary_stack = stack.unwrap_or_else(|| detect_project_stack(&cwd));
 
-    // ── Write project config files ──────────────────────────────────
+    // ── Write project soul: 🥾.tomllmd in _b00t_/ ──────────────────
+    // Symlinked from .git/🥾.tomllmd for deterministic access
 
-    let project_toml = b00t_dir.join("project.toml");
-    if !project_toml.exists() {
+    let boot_toml = b00t_dir.join("🥾.tomllmd");
+    if !boot_toml.exists() {
         let content = format!(
-            r#"# b00t project config — {project_name}
+            r#"# 🥾 {project_name} — b00t project soul
 
 [project]
 name = "{project_name}"
 primary_stack = "{primary_stack}"
-b00t_version = "{b00t_version}"
+
+[overrides]
+# Pin tool versions for this project:
+# rustc = "1.85.0"
+# node = "22.0.0"
 
 # b00t:map v1
 # summary: {project_name} b00t project configuration
@@ -81,10 +86,17 @@ b00t_version = "{b00t_version}"
 # cmds: b00t init project
 # complexity: 1
 "#,
-            b00t_version = env!("CARGO_PKG_VERSION"),
         );
-        std::fs::write(&project_toml, content)?;
-        println!("  📝 wrote {}", project_toml.display());
+        std::fs::write(&boot_toml, &content)?;
+        println!("  📝 wrote {}", boot_toml.display());
+
+        // Symlink into .git/ for deterministic access (git never tracks .git/ contents)
+        let git_dir = cwd.join(".git");
+        if git_dir.is_dir() {
+            let git_boot = git_dir.join("🥾.tomllmd");
+            std::os::unix::fs::symlink(&boot_toml, &git_boot).ok();
+            println!("  🔗 linked {}", git_boot.display());
+        }
     }
 
     let overrides_toml = b00t_dir.join("overrides.toml");
@@ -151,7 +163,7 @@ struct ProjectEnv {
     missing_critical: Vec<String>,
 }
 
-fn collect_environment(cwd: &Path, project_name: &str, primary_stack: &str) -> ProjectEnv {
+fn collect_environment(_cwd: &Path, project_name: &str, primary_stack: &str) -> ProjectEnv {
     let mut env = ProjectEnv {
         project_name: project_name.to_string(),
         primary_stack: primary_stack.to_string(),
@@ -610,7 +622,7 @@ mod tests {
 
         let b00t = dir.path().join("_b00t_");
         assert!(b00t.exists());
-        assert!(b00t.join("project.toml").exists());
+        assert!(b00t.join("🥾.tomllmd").exists());
         assert!(b00t.join("overrides.toml").exists());
         assert!(dir.path().join(".envrc").exists());
         assert!(dir.path().join(".env").exists());
