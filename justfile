@@ -1131,7 +1131,7 @@ index-codebase:
     @echo "🔍 Indexing into codebase-memory..."
     @echo "ℹ️  Use MCP: codebase-memory index_repository(repo_path=\".\", mode=\"fast\")"
 
-# ── Android emulator sandbox ────────────────────────────────────────────────
+# ── Android emulator sandbox (for Oreo 🐶) ──────────────────────────────────
 # 🤓 Uses RHAI script to sandbox ALL android operations deterministically.
 #    The RHAI script memoizes the full pipeline so agents don't hallucinate
 #    adb/emulator commands. One b00t call replaces 50+ lines of fragile bash.
@@ -1173,6 +1173,25 @@ opencode-run workspace=".":
         -w /workspace \
         ghcr.io/anomalyco/opencode
 
+# Run OpenCode for app4dog with full game development environment
+opencode-app4dog:
+    @echo "🐶 Launching OpenCode for app4dog..."
+    @mkdir -p ~/promptexecution/app4dog/.opencode/skills
+    podman run -it --rm \
+        --security-opt label=disable \
+        --network host \
+        -v ~/promptexecution/app4dog:/workspace \
+        -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
+        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
 # ── MCP Service Mesh (podman pod) ──────────────────────────────────────────
 
 # Start b00t MCP servers as sidecar containers in a pod
@@ -1182,12 +1201,12 @@ opencode-mesh-start:
     @echo "🔧 Starting b00t MCP mesh..."
     @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
         (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
-    @podman ps --filter name=b00t-mcp-http --format '{{{{.Names}}}}' | grep -q . || \
+    @podman ps --filter name=b00t-mcp-http --format '{{.Names}}' | grep -q . || \
         podman run -d --pod b00t-mesh --name b00t-mcp-http \
             -v $(realpath $(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
             -v $(pwd):/workspace:ro -w /workspace \
             docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1
-    @podman ps --filter name=cb-mcp-socat --format '{{{{.Names}}}}' | grep -q . || \
+    @podman ps --filter name=cb-mcp-socat --format '{{.Names}}' | grep -q . || \
         podman run -d --pod b00t-mesh --name cb-mcp-socat \
             -v $(realpath $(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
             docker.io/ubuntu:24.04 \
