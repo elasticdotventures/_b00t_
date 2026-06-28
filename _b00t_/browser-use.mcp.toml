@@ -5,11 +5,15 @@ hint = "Browser automation MCP server for web interactions"
 
 [[b00t.gate]]
 env = "OPENAI_API_KEY"
-hint = "OPENAI_API_KEY required for browser-use MCP server"
+hint = "Set to real key for OpenAI, or any non-empty string (e.g. 'local') when using vLLM via OPENAI_BASE_URL"
+
+[[b00t.gate]]
+env = "OPENAI_BASE_URL"
+hint = "OpenAI-compatible endpoint — vLLM: http://localhost:8000/v1  OpenAI direct: https://api.openai.com/v1"
 
 [[b00t.mcp.stdio]]
 command = "uvx"
 args = ["browser-use[cli]", "--mcp"]
-requires = ["OPENAI_API_KEY"]
+requires = ["OPENAI_API_KEY", "OPENAI_BASE_URL"]
 transport = "stdio"
 priority = 0
