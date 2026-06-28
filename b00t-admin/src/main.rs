@@ -1143,7 +1143,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   <div class="accordion-section">
     <div class="accordion-header active" onclick="toggleSection('viz')">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
-      <select id="viz-select" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;">
+      <select id="viz-select" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
         <option value="task">📋 Tasks</option>
@@ -1151,10 +1151,9 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <option value="ato">🏛️ ATO</option>
         <option value="kg">🕸️ Knowledge Graph</option>
       </select>
-      <button class="sim-btn" onclick="loadSelectedViz()" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">Load</button>
-      <div style="display:flex;gap:2px;margin-bottom:4px;">
-        <div class="code-tab active" onclick="switchVizTab('mermaid')" style="flex:1;text-align:center;font-size:9px;padding:4px;">Mermaid</div>
-        <div class="code-tab" onclick="switchVizTab('cytoscape')" style="flex:1;text-align:center;font-size:9px;padding:4px;">Cytoscape</div>
+      <div id="viz-mode" style="display:flex;gap:2px;margin-bottom:4px;">
+        <div class="code-tab active" data-viz="mermaid">Mermaid</div>
+        <div class="code-tab" data-viz="cytoscape">Cytoscape</div>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
     </div>
@@ -1215,6 +1214,14 @@ function toggleSection(name) {{
 mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
 
 // ════════ Pipeline Update ════════
+var PIPELINE = {{}};
+var TYPES = [];
+
+// Load initial data from API
+fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
+fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
+setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+
 function updatePipeline() {{
   var p = PIPELINE;
   ['chunks','evidence','reqs','fol'].forEach(function(k) {{
@@ -1238,27 +1245,38 @@ function updatePipeline() {{
 var currentVizTab = 'mermaid';
 var currentVizData = null;
 
-function switchVizTab(tab) {{
-  currentVizTab = tab;
-  document.querySelectorAll('#section-viz .code-tab').forEach(function(el) {{
-    el.classList.toggle('active', el.textContent.trim().toLowerCase().indexOf(tab) >= 0);
+function onVizSelect() {{
+  var sel = document.getElementById('viz-select').value;
+  if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+  // Pick render engine per type
+  if (sel === 'kg') {{
+    // Knowledge Graph → Cytoscape
+    showVizTab('cytoscape');
+    loadKnowledgeGraph();
+  }} else {{
+    // Everything else → Mermaid
+    showVizTab('mermaid');
+    loadGraph(sel);
+  }}
+}}
+
+function showVizTab(tab) {{
+  document.querySelectorAll('#viz-mode .code-tab').forEach(function(el) {{
+    el.classList.toggle('active', el.getAttribute('data-viz') === tab);
   }});
   document.getElementById('viz-mermaid-container').style.display = tab === 'mermaid' ? 'block' : 'none';
   document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
 }}
 
-function loadSelectedViz() {{
-  var sel = document.getElementById('viz-select').value;
-  if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+function loadGraph(sel) {{
   var status = document.getElementById('viz-status');
   var title = document.getElementById('viz-title');
   status.textContent = 'Loading...';
-
   if (sel === 'pipeline') {{
     fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
       currentVizData = {{ mermaid: d.mermaid }};
       title.textContent = 'Pipeline Flow';
-      status.textContent = 'Pipeline loaded (' + (d.mermaid||'').length + ' chars)';
+      status.textContent = 'Pipeline (' + (d.mermaid||'').length + ' chars)';
       renderMermaid();
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
     return;
@@ -1267,168 +1285,19 @@ function loadSelectedViz() {{
     fetch('/api/admin/processes').then(function(r){{return r.json();}}).then(function(d) {{
       var m = d.pipelines && d.pipelines['ato-legislation'] ? d.pipelines['ato-legislation'].mermaid : '';
       currentVizData = {{ mermaid: m }};
-      title.textContent = 'ATO Legislation Pipeline';
-      status.textContent = m ? 'ATO loaded (' + m.length + ' chars)' : 'No ATO data';
+      title.textContent = 'ATO Pipeline';
+      status.textContent = m ? 'ATO (' + m.length + ' chars)' : 'No ATO data';
       renderMermaid();
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
     return;
   }}
-  if (sel === 'kg') {{ loadKnowledgeGraph(); return; }}
-
   fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
     currentVizData = d;
     title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
-    status.textContent = 'Loaded: ' + (d.mermaid||'').length + ' chars mermaid';
+    status.textContent = (d.mermaid||'').length + ' chars';
     renderMermaid();
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
-
-function renderMermaid() {{
-  if (!currentVizData || !currentVizData.mermaid) {{ document.getElementById('viz-status').textContent += ' — no mermaid data'; return; }}
-  var target = document.getElementById('mermaid-target');
-  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-  var raw = currentVizData.mermaid;
-  // Split multi-graph pipeline output
-  var graphs = [];
-  var parts = raw.split(/\`\`\`(?:mermaid)?\s*/);
-  for (var i = 0; i < parts.length; i++) {{
-    var p = parts[i].trim();
-    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{
-      graphs.push(p);
-    }}
-  }}
-  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
-  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
-  document.getElementById('viz-status').textContent += ' — rendering ' + graphs.length + ' graph(s)...';
-  var html = '';
-  var pending = graphs.length;
-  var errors = 0;
-  graphs.forEach(function(g, idx) {{
-    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
-    try {{
-      mermaid.render(graphId, g).then(function(result) {{
-        html += '<div style="margin-bottom:16px;">' + result.svg + '</div>';
-        pending--;
-        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — rendered' + (errors ? ' (' + errors + ' errors)' : ''); }}
-      }}).catch(function(e) {{
-        errors++; pending--;
-        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
-        if (pending === 0) {{ target.innerHTML = html; document.getElementById('viz-status').textContent += ' — ' + errors + ' error(s)'; }}
-      }});
-    }} catch(e) {{ errors++; pending--; html += '<div style="color:#ef4444;">Exception: ' + e.message + '</div>'; if (pending === 0) {{ target.innerHTML = html; }} }}
-  }});
-}}
-
-// ════════ Knowledge Graph (Cytoscape) ════════
-function loadKnowledgeGraph() {{
-  document.getElementById('viz-select').value = 'kg';
-  switchVizTab('cytoscape');
-  var status = document.getElementById('viz-status');
-  var title = document.getElementById('viz-title');
-  title.textContent = 'Knowledge Graph';
-  status.textContent = 'Loading...';
-  Promise.all([
-    fetch('/api/admin/viz/entangle').then(function(r){{return r.json();}}),
-    fetch('/api/admin/viz/task').then(function(r){{return r.json();}}),
-  ]).then(function(results) {{
-    var elements = [];
-    var seen = {{}};
-    function addNode(id, label) {{
-      if (!id || seen[id]) return;
-      seen[id] = true;
-      var color = id.startsWith('datum:') ? '#6366f1' : '#f59e0b';
-      elements.push({{ data: {{ id: id, label: (label||id).slice(0,25), color: color }} }});
-    }}
-    function addEdge(src, dst, label) {{
-      if (!src || !dst) return;
-      addNode(src, src.split(':').pop());
-      addNode(dst, dst.split(':').pop());
-      elements.push({{ data: {{ source: src, target: dst, label: label||'' }} }});
-    }}
-    function parseMermaidLines(mmd, prefix) {{
-      if (!mmd) return;
-      mmd.split('\n').forEach(function(line) {{
-        line = line.trim();
-        if (!line || line.startsWith('graph ') || line.startsWith('flowchart ')) return;
-        // Match: Nodename["Label"]
-        var nm = line.match(/^(\S+)\["([^"]*)"\]/);
-        if (nm) {{ addNode(prefix + ':' + nm[1], nm[2].replace(/\\n/g, ' ')); return; }}
-        // Match: Nsrc -->|label| Ndst
-        var em = line.match(/^(\S+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\S+)/);
-        if (em) {{ addEdge(prefix + ':' + em[1], prefix + ':' + em[3], em[2]||''); }}
-      }});
-    }}
-    parseMermaidLines(results[0].mermaid, 'datum');
-    parseMermaidLines(results[1].mermaid, 'task');
-    status.textContent = elements.length + ' elements parsed';
-    if (elements.length === 0) {{ status.textContent = 'No elements found in Mermaid output'; return; }}
-    setTimeout(function() {{
-      var container = document.getElementById('cytoscape-target');
-      if (!container) {{ status.textContent = 'Error: container not found'; return; }}
-      if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
-      try {{
-        var cy = cytoscape({{
-          container: container,
-          elements: elements,
-          style: [
-            {{ selector: 'node', style: {{ label: 'data(label)', 'background-color': 'data(color)', color: '#e2e8f0', 'font-size': '10px', 'text-valign': 'bottom', 'text-halign': 'center', width: 30, height: 30 }} }},
-            {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
-            {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
-          ],
-          layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
-          wheelSensitivity: 0.3,
-        }});
-        status.textContent = elements.length + ' elements — Cytoscape ready (drag to explore)';
-      }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
-    }}, 300);
-  }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
-}}
-
-// ════════ Type Explorer (simplified) ════════
-function initTypeExplorer() {{
-  var list = document.getElementById('type-list');
-  TYPES.forEach(function(name) {{
-    var el = document.createElement('div');
-    el.className = 'type-list-item';
-    el.textContent = name;
-    el.onclick = function() {{
-      document.querySelectorAll('.type-list-item').forEach(function(x){{x.classList.remove('active');}});
-      el.classList.add('active');
-      loadTypeDetail(name);
-    }};
-    list.appendChild(el);
-  }});
-}}
-function loadTypeDetail(name) {{
-  document.getElementById('type-detail').textContent = 'Loading ' + name + '...';
-  fetch('/api/admin/types/' + name).then(function(r){{return r.json();}}).then(function(d) {{
-    var html = '<div style="margin-bottom:8px;"><strong>' + name + '</strong></div>';
-    html += '<pre style="background:#1e293b;padding:8px;border-radius:4px;font-size:10px;max-height:300px;overflow:auto;">' + JSON.stringify(d, null, 2).slice(0,2000) + '</pre>';
-    document.getElementById('type-detail').innerHTML = html;
-  }}).catch(function(e){{ document.getElementById('type-detail').textContent = 'Error: ' + e.message; }});
-}}
-
-// ════════ Simulation Controls ════════
-function simTick() {{
-  fetch('/api/admin/simulate/tick').then(function(r){{return r.json();}}).then(function(d) {{
-    var el = document.getElementById('sim-tick');
-    var el2 = document.getElementById('sim-tick-2');
-    if (el) el.textContent = d.tick;
-    if (el2) el2.textContent = d.tick;
-    document.getElementById('sim-history').textContent = d.history_len || 0;
-    document.getElementById('sim-history-2').textContent = d.history_len || 0;
-  }});
-}}
-function simRollback() {{
-  fetch('/api/admin/simulate/state').then(function(r){{return r.json();}}).then(function(d) {{ simTick(); }});
-}}
-
-// ════════ Init ════════
-const PIPELINE = {pipeline_json};
-const TYPES = {types_json};
-initTypeExplorer();
-updatePipeline();
-setInterval(updatePipeline, 5000);
 </script>
 
 </body></html>"#,
