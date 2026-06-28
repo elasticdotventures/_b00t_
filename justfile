@@ -188,6 +188,24 @@ dev-link:
       "${CARGO_HOME:-$HOME/.cargo}/bin/b00t"
     @echo "🔗 ${CARGO_HOME:-$HOME/.cargo}/bin/b00t → {{justfile_directory()}}/target/debug/b00t"
 
+# 🖥️  Build the Tauri desktop host (ledgerr-tauri) from the vendor submodule.
+#    Requires: libwebkit2gtk-4.1-dev + 9 other packages (run check-tauri-deps.sh).
+desktop-build:
+    cargo build -p ledgerr-tauri --manifest-path vendor/ledgrrr/Cargo.toml
+    ln -sf "{{justfile_directory()}}/vendor/ledgrrr/target/debug/ledgerr-tauri" \
+      "${CARGO_HOME:-$HOME/.cargo}/bin/ledgerr-tauri"
+    @echo "🖥️  Built ledgerr-tauri → ~/.cargo/bin/ledgerr-tauri"
+
+# 🖥️  Launch the Tauri desktop host on the current display.
+#    Use `just desktop-launch &` to background it.
+desktop-launch display=":0":
+    @echo "🖥️  Launching ledgerr-tauri on DISPLAY={{display}}..."
+    ledgerr-tauri
+
+# 🖥️  Check Tauri v2 build dependencies (read-only).
+desktop-deps:
+    bash {{justfile_directory()}}/scripts/check-tauri-deps.sh
+
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
 # ⚠️ Warning: `cargo install --force` overwrites the dev symlink in ~/.cargo/bin.
