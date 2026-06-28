@@ -389,7 +389,7 @@ impl_mcp_tool!(
 ///
 /// Sends a `ledgerr_b00t_delegate_datum` MCP call to the running `ledgerr-mcp` server
 /// (spawned from vendor/l3dg3rr via `LEDGERR_MCP_CMD` or detected path).
-/// Returns `DelegateAuthority`-shaped JSON: `{authorized, budget_remaining_usd, resume_token}`.
+/// Returns `DelegateAuthority`-shaped JSON: `{authorized, budget_remaining_cake, resume_token}`.
 ///
 /// Resume token format: `<datum_id>:<task_id>:<epoch_secs>` — opaque to b00t, used
 /// by ledgrrr to reconstruct the delegation context on proceed.
@@ -406,8 +406,8 @@ pub struct DelegateDatumCommand {
     #[arg(long, help = "Task ID this delegation belongs to")]
     pub task_id: String,
 
-    #[arg(long, help = "Estimated cost in USD")]
-    pub estimated_cost_usd: f64,
+    #[arg(long, help = "Estimated cost in 🍰 cake")]
+    pub estimated_cost_cake: f64,
 
     #[arg(long, help = "Human-readable justification for this delegation")]
     pub justification: Option<String>,
@@ -429,9 +429,9 @@ impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
         let task_id = params.get("task_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires task_id: string"))?;
-        let estimated_cost_usd = params.get("estimated_cost_usd")
+        let estimated_cost_cake = params.get("estimated_cost_cake")
             .and_then(|v| v.as_f64())
-            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires estimated_cost_usd: number"))?;
+            .ok_or_else(|| anyhow::anyhow!("b00t_delegate_datum requires estimated_cost_cake: number"))?;
 
         // Bridge: call ledgerr-mcp via MCP stdio subprocess.
         // Discover binary: LEDGERR_MCP_CMD env > vendor/l3dg3rr build path.
@@ -456,13 +456,13 @@ impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
                 .unwrap_or_default()
                 .as_secs();
             eprintln!("[b00t_delegate] LEDGERR_MCP_CMD unset — using local gate fallback");
-            eprintln!("[b00t_delegate] datum={datum_id} agent={agent_id} task={task_id} cost={estimated_cost_usd:.4} → local-authorized");
+            eprintln!("[b00t_delegate] datum={datum_id} agent={agent_id} task={task_id} cost={estimated_cost_cake:.4} 🍰 → local-authorized");
             return Ok(serde_json::to_string_pretty(&json!({
                 "authorized": true,
                 "datum_id": datum_id,
                 "agent_id": agent_id,
                 "task_id": task_id,
-                "budget_remaining_usd": (100.0 - estimated_cost_usd).max(0.0),
+                "budget_remaining_cake": (100.0 - estimated_cost_cake).max(0.0),
                 "resume_token": format!("{datum_id}:{task_id}:{epoch_secs}"),
                 "denial_reason": null,
                 "_bridge": "⚠️ BRIDGE PENDING: LEDGERR_MCP_CMD not set — local fallback gate"
@@ -480,7 +480,7 @@ impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
                     "datum_id": datum_id,
                     "agent_id": agent_id,
                     "task_id": task_id,
-                    "estimated_cost_usd": estimated_cost_usd
+                    "estimated_cost_cake": estimated_cost_cake
                 }
             }
         });

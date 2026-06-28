@@ -50,7 +50,7 @@ if [ "${B00T_NO_LEDGERR:-0}" != "1" ] && [ -n "${PROJECT_ROOT}" ]; then
     fi
   done
   if [ -n "${LEDGERR_BIN}" ]; then
-    printf '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"ledgerr_b00t_delegate_datum","arguments":{"datum_id":"%s","agent_id":"%s","task_id":"%s","estimated_cost_usd":0.0}}}\n' \
+    printf '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"ledgerr_b00t_delegate_datum","arguments":{"datum_id":"%s","agent_id":"%s","task_id":"%s","estimated_cost_cake":0.0}}}\n' \
       "${AGENT_TYPE}" "${AGENT_ID}" "${TASK_ID}" \
       | "${LEDGERR_BIN}" 2>/dev/null || true
     echo "b00t agent.start: ledgerr registered yei=${AGENT_ID} task=${TASK_ID}" >&2
