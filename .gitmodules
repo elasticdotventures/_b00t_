@@ -77,6 +77,7 @@
 [submodule "vendor/ledgrrr"]
 	path = vendor/ledgrrr
 	url = https://github.com/PromptExecution/ledgrrr.git
+	branch = b00t-patches
 
 [submodule "vendor/llama-patch"]
 	path = vendor/llama-patch
@@ -89,10 +90,6 @@
 [submodule "vendor/opencode-b00t"]
 	path = vendor/opencode-b00t
 	url = git@github.com:PromptExecution/opencode-b00t.git
-
-[submodule "vendor/pi-mono"]
-	path = vendor/pi-mono
-	url = https://github.com/PromptExecution/pi-mono.git
 
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server

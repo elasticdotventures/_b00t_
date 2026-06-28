@@ -62,6 +62,17 @@ _start() {
     fi
     echo "▶ Starting $svc on ${port}..."
     cd "$B00T_HOME"
+
+    # Windows-specific: register as Start Menu app if running on Windows
+    if uname -a | grep -qi microsoft 2>/dev/null; then
+        # We're in WSL — the target is Windows
+        if [ "$svc" = "tauri" ]; then
+            echo "  ℹ️  Tauri desktop host runs on Windows, not in WSL."
+            echo "  To install on Windows:"
+            echo "    just install-tauri"
+            return 0
+        fi
+    fi
     # Use PM2 if available, fallback to batch
     if command -v pm2 &>/dev/null; then
         pm2 start $cmd --name "b00t-${svc}" --cwd "$B00T_HOME" 2>/dev/null || {

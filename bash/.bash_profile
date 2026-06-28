@@ -15,6 +15,70 @@ b00t_quiet_echo() {
     fi
 }
 
+b00t_shell_session_marker() {
+    local key="${1:-context}"
+    local sid
+    sid="$(ps -o sid= -p "$$" 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$sid" ] || sid="$$"
+    key="${key//[^A-Za-z0-9_.-]/_}"
+    printf '/tmp/b00t-shell-%s-%s-%s' "$key" "${UID:-$(id -u)}" "$sid"
+}
+
+b00t_log_once_per_session() {
+    local key="$1"
+    shift || return 0
+    local marker
+    marker="$(b00t_shell_session_marker "$key")"
+    [ ! -e "$marker" ] || return 0
+    log_📢_记录 "$@"
+    : > "$marker" 2>/dev/null || true
+}
+
+b00t_shell_transport_context() {
+    if [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CLIENT:-}" ]; then
+        printf 'ssh'
+    else
+        printf 'local'
+    fi
+}
+
+b00t_shell_display_context() {
+    local has_wslg=0
+    local has_x11=0
+    local runtime_dir="${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}"
+    local display_num="${DISPLAY:-}"
+
+    if [ -d /mnt/wslg ]; then
+        if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$runtime_dir/${WAYLAND_DISPLAY:-}" ]; then
+            has_wslg=1
+        elif [ -n "${DISPLAY:-}" ] && [ -S /mnt/wslg/.X11-unix/X0 ]; then
+            has_wslg=1
+        fi
+    fi
+
+    if [ -n "${DISPLAY:-}" ]; then
+        display_num="${display_num#localhost:}"
+        display_num="${display_num#127.0.0.1:}"
+        display_num="${display_num#*:}"
+        display_num="${display_num%%.*}"
+        if [ -S "/tmp/.X11-unix/X${display_num:-0}" ] || [ -S "/mnt/wslg/.X11-unix/X${display_num:-0}" ]; then
+            has_x11=1
+        elif [[ "${DISPLAY:-}" == localhost:* || "${DISPLAY:-}" == 127.0.0.1:* ]]; then
+            has_x11=1
+        fi
+    fi
+
+    if [ "$has_wslg" = 1 ] && [ "$has_x11" = 1 ]; then
+        printf 'wslg+x11'
+    elif [ "$has_wslg" = 1 ]; then
+        printf 'wslg'
+    elif [ "$has_x11" = 1 ]; then
+        printf 'x11'
+    else
+        printf 'headless'
+    fi
+}
+
 
 # b00t is a collection of environment detection
 if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
@@ -36,9 +100,9 @@ if [ -f ~/.dotfiles/_b00t_/_b00t_.bashrc ] ; then
     if ! type is_vscode_shell &>/dev/null; then
         echo "🙈🥾 is_vscode_shell not defined"
     elif is_vscode_shell; then
-        log_📢_记录 "🥾💻 hi VS Code! running b00t-cli"
+        b00t_log_once_per_session vscode-context "🥾💻 hi VS Code! running b00t-cli"
     else
-        log_📢_记录 "Not inside VSCODE"
+        b00t_log_once_per_session vscode-context "Not inside VSCODE ($(b00t_shell_transport_context); display: $(b00t_shell_display_context))"
     fi
      ## Agent detection handled at top of .bash_profile (single source of truth)
 

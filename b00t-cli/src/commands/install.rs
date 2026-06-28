@@ -6,7 +6,7 @@ use clap::Parser;
 use duct::cmd;
 use serde_json;
 use shellexpand;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use toml;
 
@@ -147,7 +147,7 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
 
         if let Some((key, _)) = matches
             .iter()
-            .find(|(_, datum)| datum.install_command().is_some())
+            .find(|(_, datum)| datum.install_command_string().is_some())
         {
             (*key).clone()
         } else {
@@ -237,9 +237,9 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
             }
         }
 
-        if let Some(install_cmd) = datum.install_command() {
+        if let Some(install_cmd) = datum.install_command_string() {
             println!("🚀 Installing {}...", key);
-            cmd!("bash", "-c", install_cmd)
+            cmd!("bash", "-c", &install_cmd)
                 .run()
                 .with_context(|| format!("Failed to install {}", key))?;
             println!("✅ Installed {}", key);

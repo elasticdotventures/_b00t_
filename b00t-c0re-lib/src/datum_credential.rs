@@ -7,6 +7,7 @@
 //!
 //! 🤓 DatumType::Credential — first-class in the 24-variant taxonomy.
 
+use crate::credential_backend::{CredentialBackend, PlatformCred as Cred};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
@@ -65,19 +66,14 @@ fn xor_crypt(data: &[u8], key: &str) -> Vec<u8> {
 
 /// Get or create the master key from OS keyring.
 pub fn master_key() -> Result<String> {
-    let entry = keyring::Entry::new("b00t/master-key", &username())?;
-    match entry.get_secret() {
-        Ok(bytes) if !bytes.is_empty() => {
-            String::from_utf8(bytes).context("master key is not valid UTF-8")
-        }
-        Ok(_) | Err(keyring::Error::NoEntry) => {
+    match Cred::get_password("b00t/master-key", &username())? {
+        Some(key) if !key.is_empty() => Ok(key),
+        _ => {
             let new_key = uuid::Uuid::new_v4().to_string();
-            entry
-                .set_secret(new_key.as_bytes())
+            Cred::set_password("b00t/master-key", &username(), &new_key)
                 .context("failed to store master key in OS keyring")?;
             Ok(new_key)
         }
-        Err(e) => Err(e).context("failed to read master key from OS keyring"),
     }
 }
 
