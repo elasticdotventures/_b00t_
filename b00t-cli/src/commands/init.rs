@@ -108,8 +108,16 @@ primary_stack = "{primary_stack}"
 
     println!("\n✅ Project '{}' initialized ({})", project_name, primary_stack);
 
-    // ── Agent onboarding ─────────────────────────────────────────────
+    // ── Auto-check tool versions (#585) ─────────────────────────────────
+    println!("\n🔍 Checking installed tools...");
+    let b00t_bin = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("b00t-cli"));
+    match std::process::Command::new(&b00t_bin).args(["cli", "up"]).arg("--path").arg(path).status() {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("  ⚠️  Some tools need updating — run 'b00t cli up'"),
+        Err(e) => eprintln!("  ⚠️  Tool check skipped: {e}"),
+    }
 
+    // ── Agent onboarding ─────────────────────────────────────────────
     if !no_setup && (!existed || force_setup) {
         if existed && force_setup {
             println!("\n🔧 Forcing agent setup...");
@@ -121,7 +129,6 @@ primary_stack = "{primary_stack}"
         println!("   Run 'b00t init project --setup' to re-run agent setup");
     }
 
-    println!("   Run 'b00t cli up' to check tool versions");
     Ok(())
 }
 
