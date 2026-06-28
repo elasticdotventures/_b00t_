@@ -628,6 +628,43 @@ async fn processes_handler() -> impl IntoResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ── Viz endpoints ──────────────────────────────────────────────────────────
+
+/// GET `/api/admin/viz/entangle` — Datum entanglement graph (Mermaid + SVG)
+async fn viz_entangle_handler() -> impl IntoResponse {
+    viz_output("entangle")
+}
+
+/// GET `/api/admin/viz/task` — Task dependency graph (Mermaid + SVG)
+async fn viz_task_handler() -> impl IntoResponse {
+    viz_output("task")
+}
+
+fn viz_output(subcommand: &str) -> impl IntoResponse {
+    let mermaid = std::process::Command::new("b00t")
+        .args(["viz", subcommand, "--format", "mermaid"])
+        .output()
+        .ok()
+        .and_then(|o| o.status.success().then(|| {
+            let raw = String::from_utf8_lossy(&o.stdout).to_string();
+            raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string()
+        }))
+        .unwrap_or_default();
+
+    let svg = std::process::Command::new("b00t")
+        .args(["viz", subcommand, "--format", "svg"])
+        .output()
+        .ok()
+        .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).to_string()))
+        .unwrap_or_default();
+
+    axum::Json(serde_json::json!({
+        "viz_type": subcommand,
+        "mermaid": mermaid,
+        "svg": svg,
+    }))
+}
+
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -639,6 +676,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>b00t Admin Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -1115,6 +1154,173 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
 </div>
 
+<!-- Visualizations Panel -->
+<div class="panel" id="viz-panel" style="grid-column:1/-1;">
+  <h2><span class="icon">🎨</span> Visualizations</h2>
+  <div class="viz-controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <select id="viz-select" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:6px 12px;border-radius:4px;font-family:inherit;">
+      <option value="">— Choose a graph —</option>
+      <option value="entangle">🔗 Datum Entanglement</option>
+      <option value="task">📋 Task Dependencies</option>
+      <option value="pipeline">📊 Pipeline (generic)</option>
+      <option value="ato">🏛️ ATO Legislation</option>
+      <option value="kg">🕸️ Knowledge Graph</option>
+    </select>
+    <button class="sim-btn" onclick="loadSelectedViz()">Load</button>
+    <span style="margin-left:8px;font-size:12px;color:#64748b;" id="viz-status">Select a graph type</span>
+    <div style="margin-left:auto;display:flex;gap:4px;">
+      <div class="code-tab active" data-tab="viz-mermaid" onclick="switchVizTab('mermaid')">Mermaid</div>
+      <div class="code-tab" data-tab="viz-cytoscape" onclick="switchVizTab('cytoscape')">Cytoscape</div>
+    </div>
+  </div>
+  <div id="viz-mermaid-container" style="margin-top:12px;background:#0f172a;border-radius:6px;padding:12px;min-height:200px;overflow:auto;">
+    <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization to render</div>
+  </div>
+  <div id="viz-cytoscape-container" style="margin-top:12px;background:#0f172a;border-radius:6px;min-height:400px;display:none;">
+    <div id="cytoscape-target" style="width:100%;height:400px;"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════ Mermaid Setup ═══════════
+mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
+
+// ═══════════ Viz Panel ═══════════
+let currentVizTab = 'mermaid';
+let currentVizData = null;
+let kgData = null;
+
+function switchVizTab(tab) {{
+  currentVizTab = tab;
+  document.querySelectorAll('[data-tab^="viz-"]').forEach(function(el) {{
+    el.classList.toggle('active', el.dataset.tab === 'viz-' + tab);
+  }});
+  document.getElementById('viz-mermaid-container').style.display = tab === 'mermaid' ? 'block' : 'none';
+  document.getElementById('viz-cytoscape-container').style.display = tab === 'cytoscape' ? 'block' : 'none';
+}}
+
+function loadSelectedViz() {{
+  var sel = document.getElementById('viz-select').value;
+  if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+  if (sel === 'pipeline') {{ showPipelineMermaid(); return; }}
+  if (sel === 'ato') {{ showAtoMermaid(); return; }}
+  if (sel === 'kg') {{ loadKnowledgeGraph(); return; }}
+  document.getElementById('viz-status').textContent = 'Loading ' + sel + '...';
+  fetch('/api/admin/viz/' + sel)
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+      currentVizData = data;
+      document.getElementById('viz-status').textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' loaded (' + (data.mermaid ? data.mermaid.length + ' chars' : 'no mermaid') + ')';
+      renderViz();
+    }})
+    .catch(function(err) {{
+      document.getElementById('viz-status').textContent = 'Error: ' + err.message;
+    }});
+}}
+
+function showPipelineMermaid() {{
+  document.getElementById('viz-status').textContent = 'Loading pipeline...';
+  fetch('/api/admin/processes')
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+      currentVizData = {{ mermaid: data.mermaid, svg: '', viz_type: 'pipeline' }};
+      document.getElementById('viz-status').textContent = 'Pipeline graph loaded';
+      renderViz();
+    }});
+}}
+
+function showAtoMermaid() {{
+  document.getElementById('viz-status').textContent = 'Loading ATO pipeline...';
+  fetch('/api/admin/processes')
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+      var m = data.pipelines && data.pipelines['ato-legislation'] ? data.pipelines['ato-legislation'].mermaid : '(no ATO pipeline)';
+      currentVizData = {{ mermaid: m, svg: '', viz_type: 'ato' }};
+      document.getElementById('viz-status').textContent = 'ATO pipeline graph loaded';
+      renderViz();
+    }});
+}}
+
+function renderViz() {{
+  if (!currentVizData) return;
+  var target = document.getElementById('mermaid-target');
+  if (currentVizTab === 'mermaid' && currentVizData.mermaid) {{
+    target.textContent = 'Rendering...';
+    try {{
+      mermaid.run({{ nodes: [{{ id: 'mermaid-target', text: currentVizData.mermaid }}], suppressErrors: true }});
+    }} catch(e) {{
+      target.innerHTML = '<pre style="color:#ef4444;">Mermaid render error: ' + e.message + '</pre>';
+    }}
+  }}
+}}
+
+// ═══════════ Knowledge Graph (Cytoscape) ═══════════
+function loadKnowledgeGraph() {{
+  document.getElementById('viz-status').textContent = 'Loading knowledge graph...';
+  document.getElementById('viz-select').value = 'kg';
+  switchVizTab('cytoscape');
+  Promise.all([
+    fetch('/api/admin/viz/entangle').then(function(r) {{ return r.json(); }}),
+    fetch('/api/admin/viz/task').then(function(r) {{ return r.json(); }}),
+  ]).then(function(results) {{
+    buildCytoscapeGraph(results[0], results[1]);
+    document.getElementById('viz-status').textContent = 'Knowledge graph rendered';
+  }}).catch(function(err) {{
+    document.getElementById('viz-status').textContent = 'KG Error: ' + err.message;
+  }});
+}}
+
+function buildCytoscapeGraph(entangleData, taskData) {{
+  var cyEl = [];
+  var seen = {{}};
+
+  function addNode(id, label, color) {{
+    if (seen[id]) return;
+    seen[id] = true;
+    cyEl.push({{ data: {{ id: id, label: label, color: color || '#6366f1' }} }});
+  }}
+
+  function addEdge(src, dst, label) {{
+    cyEl.push({{ data: {{ source: src, target: dst, label: label || '' }} }});
+  }}
+
+  function parseMermaidGraph(mmd, prefix) {{
+    if (!mmd) return;
+    var lines = mmd.split('\n');
+    lines.forEach(function(line) {{
+      line = line.trim();
+      var nodeMatch = line.match(/^(\w+)\[["]([^"]*)["]/);
+      if (nodeMatch) {{
+        addNode(prefix + ':' + nodeMatch[1], nodeMatch[2].replace('\\n', ' '));
+      }}
+      var edgeMatch = line.match(/^(\w+)\s*-->\s*(?:\|([^|]*)\|)?\s*(\w+)/);
+      if (edgeMatch) {{
+        addNode(prefix + ':' + edgeMatch[1], edgeMatch[1]);
+        addNode(prefix + ':' + edgeMatch[3], edgeMatch[3]);
+        addEdge(prefix + ':' + edgeMatch[1], prefix + ':' + edgeMatch[3], edgeMatch[2] || '');
+      }}
+    }});
+  }}
+
+  parseMermaidGraph(entangleData.mermaid, 'datum');
+  parseMermaidGraph(taskData.mermaid, 'task');
+
+  kgData = {{ elements: cyEl }};
+
+  var cy = cytoscape({{
+    container: document.getElementById('cytoscape-target'),
+    elements: cyEl,
+    style: [
+      {{ selector: 'node', style: {{ label: 'data(label)', 'background-color': 'data(color)', color: '#e2e8f0', 'font-size': '10px', 'text-valign': 'bottom', 'text-halign': 'center', width: 40, height: 40 }} }},
+      {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
+      {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
+    ],
+    layout: {{ name: 'cose', padding: 30, nodeRepulsion: 8000, idealEdgeLength: 120 }},
+    wheelSensitivity: 0.3,
+  }});
+}}
+</script>
+
 <script>
 // ═══════════ Pipeline Data ═══════════
 const PIPELINE = {pipeline_json};
@@ -1362,6 +1568,9 @@ async fn main() {
         // API — health and processes
         .route("/api/admin/health", get(health_metrics_handler))
         .route("/api/admin/processes", get(processes_handler))
+        // API — visualizations
+        .route("/api/admin/viz/entangle", get(viz_entangle_handler))
+        .route("/api/admin/viz/task", get(viz_task_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
