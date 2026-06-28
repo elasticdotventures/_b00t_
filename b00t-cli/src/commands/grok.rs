@@ -685,7 +685,45 @@ struct ParsedRepo {
     repo: String,
 }
 
-/// Detect if a URL is a GitHub repo root (not a blob/issue/pull/etc).
+/// Detect install command and version check from repo language (#581).
+fn detect_cli_defaults(owner: &str, repo: &str) -> (String, String) {
+    let default_install = "TODO: install command".to_string();
+    let default_version = "TODO: version check command".to_string();
+
+    let output = std::process::Command::new("gh")
+        .args(["api", &format!("repos/{owner}/{repo}"), "--jq", ".language"])
+        .output();
+    let lang = output
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+
+    match lang.as_str() {
+        "rust" => (
+            format!("cargo install {repo}"),
+            format!("{repo} --version"),
+        ),
+        "python" => (
+            format!("pip install {repo}"),
+            format!("{repo} --version"),
+        ),
+        "javascript" | "typescript" => (
+            format!("npm install -g {repo}"),
+            format!("{repo} --version"),
+        ),
+        "go" => (
+            format!("go install github.com/{owner}/{repo}@latest"),
+            format!("{repo} version"),
+        ),
+        _ if lang.is_empty() => (default_install, default_version),
+        _ => (
+            format!("# install = \"TODO: install {repo} ({lang})\""),
+            format!("# version = \"TODO: version check for {repo}\""),
+        ),
+    }
+}
 fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
     let stripped = url
         .trim_end_matches('/')
@@ -741,6 +779,8 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
             .map(|s| !s.contains(&canonical) && !s.contains(&format!("{}/{}", parsed.owner, parsed.repo)))
             .unwrap_or(false);
 
+    let (detected_install, detected_version) = detect_cli_defaults(&parsed.owner, &parsed.repo);
+
     if is_ambiguous {
         // ── Polyseme path (name collision) ──
         let concrete_name = format!("{}-{}", topic, parsed.owner);
@@ -793,8 +833,8 @@ name        = "{concrete_name}"
 type        = "cli"
 hint        = "{description} — {owner}/{repo}"
 
-# install     = "TODO: install command"
-# version     = "TODO: version check command"
+{detected_install}
+{detected_version}
 # version_regex = '(\\d+\\.\\d+\\.\\d+)'
 
 # b00t:map v1
@@ -822,8 +862,8 @@ name        = "{topic}"
 type        = "cli"
 hint        = "{description} — {owner}/{repo}"
 
-# install     = "TODO: install command"
-# version     = "TODO: version check command"
+{detected_install}
+{detected_version}
 # version_regex = '(\\d+\\.\\d+\\.\\d+)'
 
 # b00t:map v1
