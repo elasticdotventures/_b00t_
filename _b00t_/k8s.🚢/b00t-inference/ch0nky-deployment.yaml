@@ -1,0 +1,101 @@
+---
+# Qwen3.6-27B Q4_K_M — ch0nky inference endpoint
+# 🤓 No nvidia.com/gpu resource request — training job holds the only GPU allocation.
+#    NVIDIA_VISIBLE_DEVICES=all + runtimeClassName=nvidia injects CUDA via runtime env
+#    without going through k8s device plugin scheduling. Physical VRAM: ~17GB needed,
+#    ~20GB free alongside training (which only uses 3.4GB with gradient checkpointing).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ch0nky
+  namespace: b00t-inference
+  labels:
+    app: ch0nky
+    b00t.tier: ch0nky
+    b00t.io/model: qwen3.6-27b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ch0nky
+  template:
+    metadata:
+      labels:
+        app: ch0nky
+        b00t.tier: ch0nky
+    spec:
+      runtimeClassName: nvidia
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: ch0nky
+          image: ghcr.io/ggml-org/llama.cpp:server-cuda
+          args:
+            - --model
+            - /hf/hub/models--unsloth--Qwen3.6-27B-GGUF/blobs/5ed60d0af4650a854b1755bd392f9aef4872643dc25a254bc68043fa638392a0
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8001"
+            - -ngl
+            - "999"
+            - -fa
+            - "on"
+            - -c
+            - "4096"
+            - -n
+            - "1024"
+            - --jinja
+            - --temp
+            - "0.7"
+            - --top-p
+            - "0.95"
+            - --min-p
+            - "0.00"
+            - --alias
+            - ch0nky
+            - --api-key
+            - local-b00t
+          env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "compute,utility"
+          ports:
+            - containerPort: 8001
+              name: http
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2"
+            limits:
+              memory: "20Gi"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch0nky
+  namespace: b00t-inference
+  labels:
+    app: ch0nky
+    b00t.tier: ch0nky
+spec:
+  selector:
+    app: ch0nky
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+      # nodePort fixed so the address is stable; reachable at <host-ip>:31001 network-wide
+      nodePort: 31001
+  type: NodePort

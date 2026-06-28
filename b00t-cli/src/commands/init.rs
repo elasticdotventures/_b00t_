@@ -1,3 +1,4 @@
+use crate::commands::cli_cmd::CliCommands;
 use crate::load_datum_providers;
 use crate::session_memory::SessionMemory;
 use crate::traits::*;
@@ -22,6 +23,14 @@ pub enum InitCommands {
         setup: bool,
         #[clap(long, help = "Skip agent onboarding")]
         no_setup: bool,
+    },
+    #[clap(
+        about = "Initialize project — detect type, install missing CLI tools via b00t cli up",
+        long_about = "Detect the project type (Rust/Node/Python/…) then run `b00t cli up --yes`\nto install any missing CLI tools declared in .cli.toml datums.\n\nExamples:\n  b00t-cli init project\n  b00t-cli init project --dry-run"
+    )]
+    Project {
+        #[clap(long, help = "Check what would be installed without installing")]
+        dry_run: bool,
     },
 }
 
@@ -588,6 +597,17 @@ impl InitCommands {
         match self {
             InitCommands::Project { name, stack, setup, no_setup } => {
                 handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
+            }
+            InitCommands::Project { dry_run } => {
+                let mut memory = SessionMemory::load()?;
+                detect_project_context(&mut memory)?;
+                let stack = memory.get("primary_stack").cloned().unwrap_or_default();
+                println!("\n🥾 Running b00t cli up for {} project…", stack);
+                CliCommands::Up {
+                    yes: !dry_run,
+                    maintenance: false,
+                }
+                .execute(path)
             }
         }
     }

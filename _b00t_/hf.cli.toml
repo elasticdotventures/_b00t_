@@ -27,7 +27,7 @@ hint = "uv required for python package install"
 [[b00t.requirements]]
 name = "hf-auth"
 kind = "shell"
-pattern = "hf auth status 2>/dev/null | grep -q 'Logged in'"
+pattern = "hf auth whoami 2>/dev/null | grep -q 'user='"
 hint = "Run: hf auth login --token $HF_TOKEN"
 solve = "hf auth login --token $HF_TOKEN"
 

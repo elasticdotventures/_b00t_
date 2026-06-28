@@ -1,0 +1,67 @@
+---
+# TensorBoard — reads events from the same hostPath as fine-tune jobs
+# Uses the unsloth training image (Python 3.11, tensorboard already installed)
+# Accessible via Gateway: http://tensorboard.b00t.local:30080
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tensorboard
+  namespace: b00t-inference
+  labels:
+    app: tensorboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tensorboard
+  template:
+    metadata:
+      labels:
+        app: tensorboard
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: tensorboard
+          image: docker.io/unsloth/unsloth:latest
+          command:
+            - tensorboard
+            - --logdir=/workspace/fine-tune
+            - --host=0.0.0.0
+            - --port=6006
+            - --reload_interval=10
+          ports:
+            - containerPort: 6006
+              name: http
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+          volumeMounts:
+            - name: finetune-dir
+              mountPath: /workspace/fine-tune
+              readOnly: true
+      volumes:
+        - name: finetune-dir
+          hostPath:
+            path: /home/brianh/.b00t/fine-tune
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tensorboard
+  namespace: b00t-inference
+  labels:
+    app: tensorboard
+spec:
+  selector:
+    app: tensorboard
+  ports:
+    - name: http
+      port: 6006
+      targetPort: 6006
