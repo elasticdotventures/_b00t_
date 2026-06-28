@@ -16,6 +16,9 @@
 
 set working-directory := ".."
 
+# Paths are relative to repo root (justfile_directory())
+set working-directory := ".."
+
 # ── Dataset ────────────────────────────────────────────────────────────────────
 
 # Generate fine-tune dataset from b00t corpus

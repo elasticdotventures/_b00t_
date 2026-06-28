@@ -8407,7 +8407,6 @@
 {"instruction": "What are the ontology facts for the langchain-agent-pm2.cli datum?", "input": "", "response": "type: cli"}
 {"instruction": "What are the ontology facts for the first-principles.skill datum?", "input": "", "response": "type: skill | tier: ch0nky | tags: transferable, reasoning, decompose, assumptions, base-truth"}
 {"instruction": "What are the ontology facts for the plantuml.mcp datum?", "input": "", "response": "type: mcp"}
-{"instruction": "What are the ontology facts for the curl.apt datum?", "input": "", "response": "type: apt"}
 {"instruction": "What does b00t-lite-install.sh do?", "input": "", "response": "b00t-lite-install.sh — Self-installing, self-detecting b00t bootstrap"}
 {"instruction": "What options does b00t-lite-install.sh accept?", "input": "", "response": "  --version: \""}
 {"instruction": "What does b00t-mcp-sync.sh do?", "input": "", "response": "🤓: b00t MCP sync - bidirectional sync between agent MCP configs"}
