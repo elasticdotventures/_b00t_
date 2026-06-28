@@ -161,9 +161,10 @@ def train(config: dict):
 
     if config.get("push_to_hub") and config.get("hub_model_id"):
         hub_id = config["hub_model_id"]
-        print(f"\nPushing adapter to HF Hub: {hub_id}...")
-        model.push_to_hub(hub_id)
-        tokenizer.push_to_hub(hub_id)
+        private = config.get("private", True)  # default private; set private: false in config to publish
+        print(f"\nPushing adapter to HF Hub: {hub_id} (private={private})...")
+        model.push_to_hub(hub_id, private=private)
+        tokenizer.push_to_hub(hub_id, private=private)
         print(f"✓ https://huggingface.co/{hub_id}")
 
     print(f"\n✅ Fine-tuning complete!")

@@ -14,6 +14,7 @@ base_model: "org/model-name"
 adapter_name: "b00t-<slug>"
 hub_model_id: "elasticdotventures/b00t-<slug>"
 push_to_hub: true
+private: true        # false = publish publicly on HF Hub; true (default) = private to org
 
 # ── Storage ──────────────────────────────────────────────────────────────────
 # dataset_path: for cloud jobs use /data/train.jsonl (mounted from HF dataset repo)
@@ -27,7 +28,7 @@ load_in_4bit: false   # false = BF16 (A100/H200); true = 4-bit (A10g, <24GB)
 # ── LoRA ─────────────────────────────────────────────────────────────────────
 lora_r: 16
 lora_alpha: 32
-lora_dropout: 0.05
+lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel disabled for any dropout > 0 (penalty: ~20-30x slower)
 target_modules: [q_proj, v_proj, k_proj, o_proj, gate_proj, up_proj, down_proj]
 
 # ── Training ─────────────────────────────────────────────────────────────────

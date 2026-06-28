@@ -10,6 +10,7 @@ dataset_path: "/data/train.jsonl"
 output_dir: "/tmp/output"   # bucket FUSE mount doesn't support makedirs; push_to_hub handles persistence
 hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
+private: true        # flip to false to publish publicly on HF Hub
 
 # A100 80GB: load BF16 directly, no quantization compromise
 load_in_4bit: false
@@ -17,7 +18,7 @@ load_in_4bit: false
 # MoE 30B-A3B: r=16 sufficient (3B active params per forward pass)
 lora_r: 16
 lora_alpha: 32
-lora_dropout: 0.05
+lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel disabled for any dropout > 0 (140s/step → ~5s/step)
 target_modules:
   - "q_proj"
   - "v_proj"
