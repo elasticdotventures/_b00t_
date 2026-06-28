@@ -299,12 +299,13 @@ install:
     fi
 
 # Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+# Install skill/agent runtimes interactively (kept for backwards compat — prefer `just install`)
 install-runtimes: build-hooks
     b00t-cli install --interactive
 
-# 💡 Recommended: sudo just installx
-#    sudo path → apt installs system packages; user path → user-local cargo/uv tools only
-installx:
+# System deps: apt packages + cargo/uv tools (sudo for apt; user-local otherwise)
+# 🤓 Separate from `just install` — install-deps handles OS packages, install handles b00t service
+install-deps:
     #!/bin/bash
     set -euo pipefail
 
@@ -2488,6 +2489,45 @@ gen-flowchart-mermaid root="":
 gen-flowchart-cytoscape root="" output="topology.json":
     cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
 
+# Generate rustdoc JSON for key workspace crates (requires nightly)
+finetune-rustdoc:
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-cli --lib -- --output-format json -Z unstable-options
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-c0re-lib --lib -- --output-format json -Z unstable-options
+    ~/.cargo/bin/cargo +nightly rustdoc -p b00t-datum-core --lib -- --output-format json -Z unstable-options
+    @echo "Rustdoc JSON written to target/doc/. Re-run finetune-dataset to include."
+
+# Export trained LoRA adapter to GGUF
+finetune-export:
+    uv run python3 fine-tune/export_gguf.py
+
+# Watch training logs (any active job)
+# Stream live training logs — uses pod name directly to avoid label mismatch
+finetune-logs:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l --field-selector=status.phase=Running -o name 2>/dev/null | head -1)
+    if [[ -z "$POD" ]]; then
+        POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l -o name 2>/dev/null | head -1)
+    fi
+    if [[ -z "$POD" ]]; then
+        echo "No sm0l training pod found. Run: kubectl get pods -n b00t-finetune"
+        exit 1
+    fi
+    echo "📋 streaming logs from $POD"
+    kubectl logs -n b00t-finetune "$POD" -c trainer -f --tail=40
+
+# Compact training summary: step/loss/epoch/ETA
+finetune-watch:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-finetune -l b00t.io/model=sm0l -o name 2>/dev/null | head -1)
+    [[ -z "$POD" ]] && { echo "no training pod"; exit 1; }
+    echo "watching $POD  (ctrl-c to stop)"
+    while true; do
+        LAST=$(kubectl logs -n b00t-finetune "$POD" -c trainer --tail=200 2>/dev/null \
+               | grep "'loss'" | tail -1)
+        [[ -n "$LAST" ]] && printf "\r  %s  " "$LAST"
+        sleep 10
+    done
+
 # Generate docs chapter with auto-updating flow charts
 gen-flowchart-docs:
     cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
@@ -2545,3 +2585,144 @@ mirror-soul sm3lly_host="sm3lly":
     scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
     scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
     @echo "✅ Soul configs mirrored"
+
+# Run b00t-awareness probes against the LoRA adapter
+# 🤓 GPU deadlock: pre-scale sm0l to 0 BEFORE applying job (init-container can't free GPU it can't schedule)
+finetune-test:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧪 adapter smoke-test: pre-scaling sm0l→0"
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    kubectl wait --for=delete pod -n b00t-inference -l app=sm0l --timeout=60s 2>/dev/null || true
+    kubectl delete job b00t-adapter-test -n b00t-finetune 2>/dev/null || true
+    kubectl apply -f _b00t_/k8s.🚢/fine-tune/job-test-adapter.yaml
+    echo "⏳ waiting for test pod (up to 5m)..."
+    kubectl wait --for=condition=complete job/b00t-adapter-test -n b00t-finetune --timeout=300s || {
+        echo "  ❌ timed out — logs: kubectl logs -n b00t-finetune -l b00t.io/job=adapter-test"
+        kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+        exit 1
+    }
+    echo "📋 results:"
+    kubectl logs -n b00t-finetune -l b00t.io/job=adapter-test 2>/dev/null | tail -20
+    echo "🔄 restoring sm0l (replicas=1)"
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+
+# MLflow experiment tracking — replaces TensorBoard
+# Web UI: http://mlflow.b00t.local:30080 (via Gateway)
+# SDK:    MLFLOW_TRACKING_URI=http://mlflow.b00t-inference.svc.cluster.local:5000
+mlflow-status:
+    kubectl get pods -n b00t-inference -l app=mlflow
+
+mlflow-logs:
+    kubectl logs -n b00t-inference -l app=mlflow -f --tail=40
+
+mlflow-open:
+    @echo "http://mlflow.b00t.local:30080  (add to /etc/hosts: 192.168.1.137 mlflow.b00t.local)"
+
+mlflow-remove:
+    kubectl delete -f _b00t_/k8s.🚢/b00t-inference/mlflow-deployment.yaml || true
+
+# Loss sparkline from live training logs
+finetune-sparkline n="60":
+    scripts/finetune-sparkline.sh {{ n }}
+
+# Launch ch0nky-tier (Qwen3-8B) b00t fine-tune
+# Prereq: kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+# (sm0l training can continue concurrently — only needs ~3.4GB extra)
+finetune-ch0nky:
+    #!/bin/bash
+    VRAM_FREE=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
+    if (( VRAM_FREE < 12000 )); then
+        echo "⚠️  only ${VRAM_FREE}MB VRAM free — need ~14GB"
+        echo "   run: kubectl scale deployment ch0nky --replicas=0 -n b00t-inference"
+        exit 1
+    fi
+    echo "✅ ${VRAM_FREE}MB free — launching Qwen3-8B fine-tune"
+    # patch the finetune job to use ch0nky config, then apply
+    CONFIG_B64=$(base64 -w0 fine-tune/config-ch0nky.yaml)
+    # TODO: add job-finetune-ch0nky.yaml to _b00t_/k8s.🚢/fine-tune/
+    echo "⚠️  job-finetune-ch0nky.yaml not yet created — run: just finetune-ch0nky-job"
+
+# Deploy Qwen3.6-27B Q4_K_M ch0nky endpoint in k8s (b00t-inference namespace)
+# ── Gateway API (Envoy Gateway v1.3) ──────────────────────────────────────────
+# Install Envoy Gateway + GatewayClass + b00t-gateway; pin NodePort to 30080
+gateway-install:
+    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+      --version v1.3.0 --namespace envoy-gateway-system --create-namespace
+    kubectl create namespace b00t-gateway --dry-run=client -o yaml | kubectl apply -f -
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/gateway.yaml
+    kubectl wait --for=condition=Ready pod \
+      -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway \
+      -n envoy-gateway-system --timeout=120s
+    kubectl patch svc \
+      $(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway -o name | head -1 | sed 's|service/||') \
+      -n envoy-gateway-system \
+      --type=json -p='[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080}]'
+    @echo "Gateway ready: http://192.168.1.137:30080 (Host: <route>.b00t.local)"
+
+# Apply all HTTPRoutes
+gateway-routes:
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/routes.yaml
+
+# Show gateway + route status
+gateway-status:
+    kubectl get gateway -n b00t-gateway
+    kubectl get httproute -A
+
+# Envoy Gateway controller logs
+gateway-logs:
+    kubectl logs -n envoy-gateway-system deployment/envoy-gateway -f --tail=40
+
+# Remove Envoy Gateway entirely (destructive)
+gateway-remove:
+    helm uninstall eg -n envoy-gateway-system || true
+    kubectl delete namespace b00t-gateway envoy-gateway-system --wait=false || true
+    kubectl delete gatewayclass eg || true
+
+# ── ch0nky (Qwen3.6-27B Q4_K_M) ──────────────────────────────────────────────
+# 🤓 No nvidia.com/gpu resource — training holds the allocation; NVIDIA_VISIBLE_DEVICES=all
+#    injects CUDA via runtimeClassName=nvidia without going through device plugin scheduling
+# Access: http://192.168.1.137:30080/v1/ via Gateway (Host: ch0nky.b00t.local)
+#         http://192.168.1.137:31001/v1/ via NodePort direct
+ch0nky-deploy:
+    kubectl apply -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
+    kubectl rollout status deployment/ch0nky -n b00t-inference --timeout=120s
+
+# Tail ch0nky inference logs
+ch0nky-logs:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-inference -l app=ch0nky -o name | head -1)
+    [[ -z "$POD" ]] && { echo "no ch0nky pod"; exit 1; }
+    kubectl logs -n b00t-inference "$POD" -f --tail=40
+
+# Scale ch0nky to 0 (leaves Deployment in place for easy restart)
+ch0nky-stop:
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+
+# Remove ch0nky Deployment + Service entirely
+ch0nky-remove:
+    kubectl delete -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
+
+# Quick b00t-awareness probe against running ch0nky (or pass host:port arg)
+ch0nky-probe endpoint="":
+    #!/bin/bash
+    if [[ -n "{{ endpoint }}" ]]; then
+        scripts/probe-ch0nky.sh "{{ endpoint }}"
+    else
+        scripts/probe-ch0nky.sh
+    fi
+
+
+# ── Git object recovery (EXPERIMENTAL) ────────────────────────────────────────
+# 🤓 LFMF: never rm .git/objects/* without proving BOTH corrupt AND unreachable.
+#    `git log --find-object` misses dangling commits — use fsck --unreachable only.
+#    Safe deletion = intersection of {corrupt} ∩ {unreachable}.
+#
+# Usage: just git-prune-corrupt [--dry-run]
+#   Default: dry-run (prints what would be deleted, does not delete)
+#   Pass delete=true to actually remove: just git-prune-corrupt delete=true
+
+# [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
+git-prune-corrupt delete="false":
+    uv run scripts/git-prune-corrupt.py {{delete}}
+
