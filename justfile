@@ -1201,16 +1201,16 @@ opencode-mesh-start:
     @echo "🔧 Starting b00t MCP mesh..."
     @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
         (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
-    @podman ps --filter name=b00t-mcp-http --format '{{.Names}}' | grep -q . || \
-        podman run -d --pod b00t-mesh --name b00t-mcp-http \
-            -v $(realpath $(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
-            -v $(pwd):/workspace:ro -w /workspace \
-            docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1
-    @podman ps --filter name=cb-mcp-socat --format '{{.Names}}' | grep -q . || \
-        podman run -d --pod b00t-mesh --name cb-mcp-socat \
-            -v $(realpath $(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
+    @podman ps --filter name=b00t-mcp-http | grep -q b00t-mcp-http || \
+        (podman run -d --pod b00t-mesh --name b00t-mcp-http \
+            -v $$(realpath $$(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
+            -v $$(pwd):/workspace:ro -w /workspace \
+            docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1)
+    @podman ps --filter name=cb-mcp-socat | grep -q cb-mcp-socat || \
+        (podman run -d --pod b00t-mesh --name cb-mcp-socat \
+            -v $$(realpath $$(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
             docker.io/ubuntu:24.04 \
-            bash -c "apt-get update -qq && apt-get install -y -qq socat && socat TCP-LISTEN:9101,fork,reuseaddr EXEC:/usr/local/bin/codebase-memory-mcp" 2>&1
+            bash -c "apt-get update -qq && apt-get install -y -qq socat && socat TCP-LISTEN:9101,fork,reuseaddr EXEC:/usr/local/bin/codebase-memory-mcp" 2>&1)
     @echo "✅ MCP mesh running: b00t-mcp :3000, cb-mcp :9101"
 
 # Stop the MCP service mesh
@@ -2217,6 +2217,30 @@ pr-validate goal="staged changes" scope="":
         SCOPE_ARG="--scope {{ scope }}"
     fi
     bash _b00t_/scripts/pr-validate.sh --goal "{{ goal }}" $SCOPE_ARG
+
+# Survey open PRs across workspace + all submodules
+pr-review:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔍 PR Review — workspace + submodules"
+    for repo in . middleware website game-play puppyplay-godot-droid critter-keeper; do
+        echo "── $repo ──"
+        (cd "$repo" 2>/dev/null && gh pr list --state open --limit 10 2>/dev/null) || true
+        echo ""
+    done
+
+# Quick-merge safe PRs (no conflicts, clean diffs)
+pr-quick-merge:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔀 Quick-merging..."
+    for repo in . middleware website game-play puppyplay-godot-droid critter-keeper; do
+        (cd "$repo" 2>/dev/null && for pr in $(gh pr list --state open --json number --jq '.[].number' 2>/dev/null); do
+            echo "  merging $repo#$pr..."
+            gh pr merge "$pr" --squash --admin 2>/dev/null || echo "  ⚠️  conflict on $repo#$pr"
+        done) || true
+    done
+    echo "✅ Quick-merge complete"
 
 # ═══════════════════════════════════════════════════════════════════
 # 🛡️ Gate-Protected Actions (mandatory Zellij interaction gate)
