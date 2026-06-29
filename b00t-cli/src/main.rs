@@ -1937,7 +1937,7 @@ async fn main() {
                                             Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
                                         }
                                     }
-                                    DatumDispatch::CliPassthrough { command, args } => {
+                                    b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
                                         let mut cmd_args = args;
                                         cmd_args.extend(passthrough);
                                         let status = std::process::Command::new(&command).args(&cmd_args).status();

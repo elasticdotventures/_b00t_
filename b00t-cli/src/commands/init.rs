@@ -5,8 +5,7 @@ use crate::traits::*;
 use crate::whoami;
 use anyhow::{Context, Result};
 use clap::Parser;
-use duct::cmd;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Parser)]
 pub enum InitCommands {
@@ -23,12 +22,6 @@ pub enum InitCommands {
         setup: bool,
         #[clap(long, help = "Skip agent onboarding")]
         no_setup: bool,
-    },
-    #[clap(
-        about = "Initialize project — detect type, install missing CLI tools via b00t cli up",
-        long_about = "Detect the project type (Rust/Node/Python/…) then run `b00t cli up --yes`\nto install any missing CLI tools declared in .cli.toml datums.\n\nExamples:\n  b00t-cli init project\n  b00t-cli init project --dry-run"
-    )]
-    Project {
         #[clap(long, help = "Check what would be installed without installing")]
         dry_run: bool,
     },
@@ -595,19 +588,19 @@ fn format_duration(seconds: i64) -> String {
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Project { name, stack, setup, no_setup } => {
-                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
-            }
-            InitCommands::Project { dry_run } => {
-                let mut memory = SessionMemory::load()?;
-                detect_project_context(&mut memory)?;
-                let stack = memory.get("primary_stack").cloned().unwrap_or_default();
-                println!("\n🥾 Running b00t cli up for {} project…", stack);
-                CliCommands::Up {
-                    yes: !dry_run,
-                    maintenance: false,
+            InitCommands::Project { name, stack, setup, no_setup, dry_run } => {
+                if *dry_run {
+                    let mut memory = SessionMemory::load()?;
+                    detect_project_context(&mut memory)?;
+                    let stack = memory.get("primary_stack").cloned().unwrap_or_default();
+                    println!("\n🥾 Running b00t cli up for {} project…", stack);
+                    return CliCommands::Up {
+                        yes: false,
+                        maintenance: false,
+                    }
+                    .execute(path);
                 }
-                .execute(path)
+                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
             }
         }
     }
