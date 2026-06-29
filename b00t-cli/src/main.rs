@@ -2979,21 +2979,9 @@ async fn main() {
                     }
                 }
             };
-            // Parse target string into McpInstallTarget
-            use b00t_cli::commands::mcp::McpInstallTarget;
-            let install_target = match tgt.as_str() {
-                "vscode" => McpInstallTarget::Vscode,
-                "codex" => McpInstallTarget::Codex,
-                "gemini" | "geminicli" => McpInstallTarget::Geminicli,
-                "dotmcpjson" | "mcpjson" => McpInstallTarget::Dotmcpjson,
-                "roocode" => McpInstallTarget::RooCode,
-                "claude" | "claudecode" => McpInstallTarget::Claudecode,
-                "stdout" => McpInstallTarget::Stdout,
-                _ => McpInstallTarget::Opencode,
-            };
             let install_cmd = McpCommands::Install {
                 name: name.clone(),
-                target: install_target,
+                target: tgt,
                 repo: false,
                 user: false,
                 stdio_command: None,
