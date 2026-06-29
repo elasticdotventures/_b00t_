@@ -6,7 +6,8 @@ use crate::datum_utils::{DatumGraph, build_datum_graph, graph_neighbors};
 use crate::viz::{
     SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_rhai_dsl,
     blessing_to_scene, datum_graph_to_mermaid, datum_graph_to_rhai_dsl,
-    datum_graph_to_scene, scene_to_ascii, scene_to_svg, tasks_to_mermaid,
+    datum_graph_to_scene, scene_to_ascii, scene_to_cytoscape, scene_to_owl2,
+    scene_to_svg, scene_to_sysmlv2, tasks_to_mermaid,
     tasks_to_rhai_dsl, tasks_to_scene,
 };
 use anyhow::{Context, Result};
@@ -71,6 +72,9 @@ pub enum VizFormat {
     Json,
     Ascii,
     Svg,
+    Cytoscape,
+    SysMLv2,
+    Owl2,
 }
 
 pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
@@ -136,6 +140,9 @@ fn render(
         VizFormat::Rhai => Ok(format!("```rhai\n{}```\n", rhai)),
         VizFormat::Json => serde_json::to_string_pretty(&scene).context("serialize scene graph"),
         VizFormat::Ascii => Ok(scene_to_ascii(&scene)),
+        VizFormat::Cytoscape => Ok(scene_to_cytoscape(&scene)),
+        VizFormat::SysMLv2 => Ok(scene_to_sysmlv2(&scene)),
+        VizFormat::Owl2 => Ok(scene_to_owl2(&scene)),
     }
 }
 
