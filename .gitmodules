@@ -118,3 +118,6 @@
 [submodule "vendor/opencode-goal-plugin"]
 	path = vendor/opencode-goal-plugin
 	url = https://github.com/PromptExecution/opencode-goal-plugin-b00t.git
+[submodule "vendor/aohp"]
+	path = vendor/aohp
+	url = https://github.com/PromptExecution/aohp-b00t.git
