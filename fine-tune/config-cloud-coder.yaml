@@ -7,7 +7,7 @@
 base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 adapter_name: "b00t-qwen3-coder-30b"
 dataset_path: "/data/train.jsonl"
-output_dir: "/adapters/qwen3-coder-30b"   # writable HF bucket — survives job death; resume from last checkpoint
+output_dir: "/tmp/output"   # 🤓 bucket FUSE mount rejects mkdir on subdirs; use /tmp + hub_strategy:checkpoint for persistence
 hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
 private: true        # flip to false to publish publicly on HF Hub

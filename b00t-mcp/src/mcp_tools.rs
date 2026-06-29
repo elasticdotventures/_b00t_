@@ -1360,10 +1360,76 @@ impl crate::clap_reflection::McpExecutor for BLogCommand {
     }
 }
 
+/// Invoke the active verifier datum (default: z3-verify) with an SMT2/FOL assertion.
+/// Returns structured JSON: { result, verified, solver, elapsed_ms, counterexample? }
+/// This is the hallucination-reduction runtime surface — LLM proposes, Z3 evaluates.
+#[derive(Parser, Clone)]
+pub struct BVerifyCommand {
+    #[arg(help = "SMT2 assertion to verify (e.g. '(declare-const x Int)(assert (= x 42))(check-sat)')")]
+    pub assertion: String,
+    #[arg(long, default_value = "smt2", help = "Input format: smt2 | prolog")]
+    pub format: String,
+    #[arg(long, default_value = "5000", help = "Solver timeout in milliseconds")]
+    pub timeout_ms: u64,
+    #[arg(long, default_value = "z3-verify", help = "Verifier datum name")]
+    pub solver: String,
+}
+impl crate::clap_reflection::McpReflection for BVerifyCommand {
+    fn mcp_tool_name() -> String { "verify".to_string() }
+    fn command_path() -> Vec<String> { vec!["verify".into()] }
+}
+impl crate::clap_reflection::McpExecutor for BVerifyCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let assertion = params.get("assertion").and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("verify requires assertion: string"))?;
+        let timeout_ms = params.get("timeout_ms").and_then(|v| v.as_u64()).unwrap_or(5000);
+        let solver = params.get("solver").and_then(|v| v.as_str()).unwrap_or("z3-verify");
+
+        let start = std::time::Instant::now();
+        // Route through z3 binary directly (datum binary = "z3", args = ["-smt2", "-in"])
+        let mut cmd = std::process::Command::new("z3");
+        cmd.args(["-smt2", "-in"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("z3 not found: {e}; install with: uv pip install z3-solver"))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(assertion.as_bytes())?;
+        }
+        let output = child.wait_with_output()?;
+        let elapsed = start.elapsed().as_millis() as u64;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let verified = stdout.starts_with("sat");
+        let result = if stdout.starts_with("unsat") { "unsat" }
+                     else if stdout.starts_with("sat") { "sat" }
+                     else { "unknown" };
+        let counterexample = if !verified && stdout.contains("\n") {
+            Some(stdout.lines().skip(1).collect::<Vec<_>>().join(" | "))
+        } else { None };
+
+        // Write proof receipt to soul log
+        let log_msg = format!("verify {result} solver={solver} elapsed={elapsed}ms");
+        let _ = std::process::Command::new("b00t-cli")
+            .args(["soul", "log", &log_msg, "--result", if verified { "ok" } else { "info" }])
+            .output();
+
+        let resp = serde_json::json!({
+            "result": result,
+            "verified": verified,
+            "solver": solver,
+            "elapsed_ms": elapsed,
+            "stdout": stdout,
+            "counterexample": counterexample,
+        });
+        Ok(serde_json::to_string_pretty(&resp).unwrap_or_default())
+    }
+}
+
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover + viz + log
+    // Surface: learn + whoami + status + exec + discover + viz + log + verify (8 tools)
     builder
         .register::<LearnCommand>()
         .register::<WhoamiCommand>()
@@ -1371,7 +1437,8 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<BExecCommand>()
         .register::<BDiscoverCommand>()
         .register::<BVizGenerateCommand>()
-        .register::<BLogCommand>();
+        .register::<BLogCommand>()
+        .register::<BVerifyCommand>();
     builder.build()
 }
 
