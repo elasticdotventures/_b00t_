@@ -376,9 +376,47 @@ cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="
         command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }}"
 
-# Convenience alias: Qwen3-Coder-30B on A100-large
+# Convenience alias: Qwen3-Coder-30B on A100-large — budget-gated
+# 🤓 Gate runs first: calls ledgrrr_b00t_delegate_datum via b00t-mcp; exits non-zero if over cap.
+#    resume_token is stored in .b00t/last-delegate-token and passed as HF job label for billing reconciliation.
 cloud-coder:
-    just ai-finetune::cloud-train a100-large config-cloud-coder.yaml
+    #!/usr/bin/env python3
+    import subprocess, sys, json, os, pathlib, datetime
+    # 1. Budget gate
+    gate = subprocess.run(
+        ["just", "ai-finetune::budget-gate", "a100-large", "fine-tune/config-cloud-coder.yaml"],
+        capture_output=True, text=True
+    )
+    if gate.returncode != 0:
+        print(gate.stdout + gate.stderr, end="", flush=True)
+        print("❌ cloud-coder blocked: cake budget gate denied", file=sys.stderr)
+        sys.exit(gate.returncode)
+    # 2. Mint resume token (ledgrrr side handles real one; local shim for label round-trip)
+    ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+    resume_token = f"b00t-hf-coder-{ts:016x}"
+    pathlib.Path(".b00t/last-delegate-token").write_text(resume_token)
+    # 3. Submit job with resume token as label for billing reconciliation
+    result = subprocess.run([
+        "hf", "jobs", "run", "docker.io/unsloth/unsloth:latest",
+        "--flavor", "a100-large",
+        "--timeout", "19.0h",
+        "-e", "HF_HOME=/tmp/hf-cache",
+        "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
+        "-e", "TORCHDYNAMO_DISABLE=1",
+        "-e", "UNSLOTH_CACHE_DIR=/tmp/unsloth_cache",
+        "--secrets", "HF_TOKEN",
+        "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
+        "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
+        "--label", f"ledgrrr_resume_token={resume_token}",
+        "--detach",
+        "/bin/sh", "-c",
+        "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && "
+        "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
+        "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
+        "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
+        "$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/config-cloud-coder.yaml"
+    ])
+    sys.exit(result.returncode)
 
 # Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
 
