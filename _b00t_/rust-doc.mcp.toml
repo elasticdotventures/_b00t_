@@ -8,7 +8,7 @@ topic = "rust-docs"
 
 [[b00t.mcp.stdio]]
 priority = 0
-command = "vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server"
+command = "/home/brianh/.local/bin/rustdocs_mcp_server"
 args = ["serde"]
 requires = ["rustdocs_mcp_server"]
 transport = "stdio"
@@ -27,4 +27,4 @@ command = "just rust-doc build"
 
 [[b00t.usage]]
 description = "Test rust-doc with local inference"
-command = "OPENAI_API_BASE=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t vendor/rust-docs-mcp-server/target/release/rustdocs_mcp_server serde"
+command = "OPENAI_API_BASE=http://127.0.0.1:8001/v1 OPENAI_API_KEY=local-b00t /home/brianh/.local/bin/rustdocs_mcp_server serde"
