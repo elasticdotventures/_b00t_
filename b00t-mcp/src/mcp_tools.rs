@@ -1322,17 +1322,56 @@ impl crate::clap_reflection::McpExecutor for BVizGenerateCommand {
     }
 }
 
+/// Write/read the shared ops log (OPS.jsonl in active soul dir).
+#[derive(Parser, Clone)]
+pub struct BLogCommand {
+    #[arg(help = "Message to append (omit with --list to read)")]
+    pub message: Option<String>,
+    #[arg(long, default_value = "active", help = "Scope: active|global|project")]
+    pub scope: String,
+    #[arg(long, default_value = "info", help = "Result: ok|fail|info|warn")]
+    pub result: String,
+    #[arg(long, help = "List recent entries instead of appending")]
+    pub list: bool,
+    #[arg(long, default_value = "20")]
+    pub tail: Option<usize>,
+}
+impl crate::clap_reflection::McpReflection for BLogCommand {
+    fn mcp_tool_name() -> String { "log".to_string() }
+    fn command_path() -> Vec<String> { vec!["soul".into(), "log".into()] }
+}
+impl crate::clap_reflection::McpExecutor for BLogCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let list = params.get("list").and_then(|v| v.as_bool()).unwrap_or(false);
+        let scope = params.get("scope").and_then(|v| v.as_str()).unwrap_or("active").to_string();
+        let result_tag = params.get("result").and_then(|v| v.as_str()).unwrap_or("info").to_string();
+        let mut cmd = std::process::Command::new("b00t-cli");
+        cmd.args(["soul", "log"]);
+        if list {
+            let tail = params.get("tail").and_then(|v| v.as_u64()).unwrap_or(20);
+            cmd.args(["--list", "--tail", &tail.to_string()]);
+        } else {
+            let msg = params.get("message").and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("log requires message or list:true"))?;
+            cmd.arg(msg).args(["--result", &result_tag, "--scope", &scope]);
+        }
+        let out = cmd.output().map_err(|e| anyhow::anyhow!("b00t-cli soul log: {e}"))?;
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    }
+}
+
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover (everything else via proxy)
+    // Surface: learn + whoami + status + exec + discover + viz + log
     builder
         .register::<LearnCommand>()
         .register::<WhoamiCommand>()
         .register::<StatusCommand>()
         .register::<BExecCommand>()
         .register::<BDiscoverCommand>()
-        .register::<BVizGenerateCommand>();
+        .register::<BVizGenerateCommand>()
+        .register::<BLogCommand>();
     builder.build()
 }
 

@@ -1091,17 +1091,14 @@ def main():
                     print(f"  ✓ [{key}] {path.name}: {len(r)} rows")
             except Exception as e:
                 print(f"  ✗ {path.name}: {e}", file=sys.stderr)
+                content = ""
 
             before = len(rows)
+            source_name = key
             if source_name == "datums":
-                rows.extend(parse_datum_instruction(path, content))
                 rows.extend(parse_mermaid_viz(path, content))
-            elif source_name == "learn":
-                rows.extend(parse_learn_instruction(path, content))
             elif source_name == "justfile":
                 rows.extend(parse_justfile(content))
-            elif source_name == "agents":
-                rows.extend(parse_agent_instruction(path, content))
             after = len(rows)
             if after > before:
                 print(f"  ✓ {path.name}: {after - before} rows", file=sys.stderr)

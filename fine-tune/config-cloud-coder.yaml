@@ -42,5 +42,7 @@ warmup_ratio: 0.05
 save_steps: 25   # checkpoint every ~2min at 5s/step; bucket persists across job death
 
 use_gradient_checkpointing: true
-report_to: "none"
+report_to: "mlflow"
+mlflow_tracking_uri: "http://192.168.1.137:30803"   # sm3lly NodePort — reachable from HF Jobs
+mlflow_experiment: "b00t-qwen3-coder-30b"
 logging_steps: 10

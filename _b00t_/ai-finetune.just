@@ -192,6 +192,11 @@ train config="/data/config-cloud-coder.yaml" resume="":
     except Exception as e:
         print(f"❌ config load failed: {e}"); sys.exit(1)
 
+    if cfg.get("mlflow_tracking_uri"):
+        os.environ["MLFLOW_TRACKING_URI"] = cfg["mlflow_tracking_uri"]
+    if cfg.get("mlflow_experiment"):
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = cfg["mlflow_experiment"]
+
     model_name   = cfg.get("base_model", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
     dataset_path = cfg.get("dataset_path", cfg.get("dataset", "/data/train.jsonl"))
     output_dir   = cfg.get("output_dir", "/tmp/output")
@@ -526,6 +531,24 @@ hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
 # Pull the coder-30b adapter to its canonical path
 hf-adapter-pull-coder:
     just ai-finetune::hf-adapter-pull elasticdotventures/b00t-qwen3-coder-30b fine-tune/output-cloud-coder/lora-adapter
+
+# Pull adapter from Hub + patch ch0nky k8s deployment → b00t-aligned model live in hive
+# 🤓 ch0nky reads adapter from pod /adapters/current; rollout is zero-downtime
+chonky-rollout:
+    #!/bin/bash
+    set -euo pipefail
+    ADAPTER_DIR="fine-tune/output-cloud-coder/lora-adapter"
+    echo "1/4 pulling adapter from HF Hub..."
+    just ai-finetune::hf-adapter-pull-coder
+    echo "2/4 syncing adapter to ch0nky pod..."
+    CHONKY_POD=$(kubectl get pod -n b00t-inference -l app=ch0nky -o jsonpath='{.items[0].metadata.name}')
+    kubectl cp "${ADAPTER_DIR}/." "b00t-inference/${CHONKY_POD}:/adapters/current/"
+    echo "3/4 rolling restart..."
+    kubectl rollout restart deployment/ch0nky -n b00t-inference
+    kubectl rollout status deployment/ch0nky -n b00t-inference --timeout=120s
+    echo "4/4 logging to soul ops register..."
+    b00t soul log "ch0nky rollout complete — adapter elasticdotventures/b00t-qwen3-coder-30b" --scope global --result ok
+    echo "✅ ch0nky serving b00t-aligned adapter"
 
 # ── Budget + Cost Forecasting ────────────────────────────────────────────────
 # Config + commands embedded in _b00t_/cloud-budget.tomllmd (datum IS the object).
