@@ -13,12 +13,20 @@ FROM docker.io/unsloth/unsloth:latest
 # Install uv — the only Python package manager b00t uses
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Layer training dependencies that unsloth:latest omits
-# uv pip install into the existing venv (VIRTUAL_ENV already set by base image)
-RUN uv pip install --system mlflow==2.21.3 pyyaml
+# Layer training dependencies into the venv that unsloth:latest ships
+# 🤓 unsloth:latest ships /opt/venv; uv respects VIRTUAL_ENV when --system is absent
+ENV VIRTUAL_ENV=/opt/venv
+RUN uv pip install mlflow==2.21.3 pyyaml
 
-# Smoke-test: mlflow importable
-RUN python3 -c "import mlflow; print('mlflow', mlflow.__version__)"
+# Smoke-test: mlflow importable inside venv
+RUN /opt/venv/bin/python3 -c "import mlflow; print('mlflow', mlflow.__version__)"
+
+# Pre-warm unsloth compiled cache so training jobs start at 5s/step not 309s/step
+# 🤓 Without this, unsloth_compiled_cache permission denied → JIT recompile every forward pass
+#    Cache lives in /opt/unsloth_compiled_cache (writable, baked into image layer)
+ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache
+RUN mkdir -p /opt/unsloth_compiled_cache && \
+    /opt/venv/bin/python3 -c "from unsloth import FastLanguageModel; print('unsloth cache warm')" || true
 
 LABEL org.opencontainers.image.source="https://github.com/elasticdotventures/_b00t_"
 LABEL org.opencontainers.image.description="b00t fine-tuning image: unsloth + mlflow + uv"

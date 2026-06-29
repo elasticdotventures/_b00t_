@@ -366,13 +366,13 @@ hf-push-config config:
 
 # 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
 cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="19.0":
-    hf jobs run docker.io/unsloth/unsloth:latest \
+    hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/tmp/unsloth_cache \
+      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
@@ -402,13 +402,13 @@ cloud-coder:
     pathlib.Path(".b00t/last-delegate-token").write_text(resume_token)
     # 3. Submit job with resume token as label for billing reconciliation
     result = subprocess.run([
-        "hf", "jobs", "run", "docker.io/unsloth/unsloth:latest",
+        "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
         "--flavor", "a100-large",
         "--timeout", "19.0h",
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
-        "-e", "UNSLOTH_CACHE_DIR=/tmp/unsloth_cache",
+        "-e", "UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
@@ -429,13 +429,13 @@ cloud-coder:
 cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" timeout_hours="13.0":
     #!/bin/bash
     [[ -z "{{ checkpoint }}" ]] && { echo "ERROR: checkpoint= required"; exit 1; }
-    hf jobs run docker.io/unsloth/unsloth:latest \
+    hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/tmp/unsloth_cache \
+      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
@@ -554,11 +554,11 @@ chonky-rollout:
 # 🤓 b00t uses uv not pip; image layers mlflow+uv on unsloth:latest via GHCR
 # Build locally (requires podman):
 training-image-build:
-    podman build -t docker.io/unsloth/unsloth:latest containers/training/
+    podman build -t ghcr.io/elasticdotventures/b00t-training-image:latest containers/training/
 
 # Push to GHCR (requires: podman login ghcr.io)
 training-image-push:
-    podman push docker.io/unsloth/unsloth:latest
+    podman push ghcr.io/elasticdotventures/b00t-training-image:latest
 
 # Build + push in one step
 training-image-release: training-image-build training-image-push
