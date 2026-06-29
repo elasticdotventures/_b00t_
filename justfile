@@ -241,6 +241,7 @@ marketplace-check:
 bump-install:
     #!/usr/bin/env bash
     set -euo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
     current=$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')
     IFS='.' read -r maj min pat <<< "$current"
     next="$maj.$min.$((pat+1))"
@@ -248,6 +249,7 @@ bump-install:
     echo "⬆️  $current → $next"
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
+    cp ~/.cargo/bin/b00t-mcp ~/.local/bin/b00t-mcp
     echo "✅ installed v$next"
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
