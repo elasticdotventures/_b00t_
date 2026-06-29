@@ -1526,7 +1526,7 @@ function renderMermaid() {{
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
   var raw = currentVizData.mermaid;
   var graphs = [];
-  var parts = raw.split(/\`\`\`(?:mermaid)?\\s*/);
+  var parts = raw.split(/\`\`\`(?:mermaid)?\s*/);
   for (var i = 0; i < parts.length; i++) {{
     var p = parts[i].trim();
     if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{ graphs.push(p); }}
