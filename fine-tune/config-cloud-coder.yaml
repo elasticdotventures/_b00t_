@@ -7,7 +7,7 @@
 base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 adapter_name: "b00t-qwen3-coder-30b"
 dataset_path: "/data/train.jsonl"
-output_dir: "/tmp/output"   # bucket FUSE mount doesn't support makedirs; push_to_hub handles persistence
+output_dir: "/adapters/qwen3-coder-30b"   # writable HF bucket — survives job death; resume from last checkpoint
 hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
 private: true        # flip to false to publish publicly on HF Hub
@@ -39,7 +39,7 @@ optim: "adamw_8bit"
 weight_decay: 0.01
 lr_scheduler: "cosine"
 warmup_ratio: 0.05
-save_steps: 100
+save_steps: 25   # checkpoint every ~2min at 5s/step; bucket persists across job death
 
 use_gradient_checkpointing: true
 report_to: "none"

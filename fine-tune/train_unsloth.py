@@ -34,6 +34,10 @@ def train(config: dict, args=None):
     adapter_name = config.get("adapter_name", "b00t-aligned-qwen36-27b")
     dataset_path = config.get("dataset_path", config.get("dataset", "fine-tune/train.jsonl"))
     output_dir = config.get("output_dir", "./fine-tune/output")
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except OSError:
+        pass  # bucket FUSE may not need explicit mkdir; trainer will create on first write
     lora_r = config.get("lora_r", 16)
     lora_alpha = config.get("lora_alpha", 32)
     lora_dropout = config.get("lora_dropout", 0.05)
