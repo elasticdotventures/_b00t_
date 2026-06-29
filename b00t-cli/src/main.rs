@@ -1937,7 +1937,7 @@ async fn main() {
                                             Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
                                         }
                                     }
-                                    DatumDispatch::CliPassthrough { command, args } => {
+                                    b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
                                         let mut cmd_args = args;
                                         cmd_args.extend(passthrough);
                                         let status = std::process::Command::new(&command).args(&cmd_args).status();
@@ -2979,18 +2979,7 @@ async fn main() {
                     }
                 }
             };
-            // Parse target string into McpInstallTarget
-            use b00t_cli::commands::mcp::McpInstallTarget;
-            let install_target = match tgt.as_str() {
-                "vscode" => McpInstallTarget::Vscode,
-                "codex" => McpInstallTarget::Codex,
-                "gemini" | "geminicli" => McpInstallTarget::Geminicli,
-                "dotmcpjson" | "mcpjson" => McpInstallTarget::Dotmcpjson,
-                "roocode" => McpInstallTarget::RooCode,
-                "claude" | "claudecode" => McpInstallTarget::Claudecode,
-                "stdout" => McpInstallTarget::Stdout,
-                _ => McpInstallTarget::Opencode,
-            };
+            let install_target = tgt;
             let install_cmd = McpCommands::Install {
                 name: name.clone(),
                 target: install_target,
