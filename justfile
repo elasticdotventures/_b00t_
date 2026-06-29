@@ -2540,3 +2540,7 @@ mirror-soul sm3lly_host="sm3lly":
     scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
     scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
     @echo "✅ Soul configs mirrored"
+
+# 📚 Sync blessed crate manifest from blessed.rs upstream
+blessed-sync:
+    curl -s https://raw.githubusercontent.com/nicoburns/blessed-rs/main/data/crates.json | python3 {{ justfile_directory() }}/scripts/convert_blessed.py
