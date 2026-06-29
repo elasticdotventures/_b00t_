@@ -1106,6 +1106,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t"
+version = "0.1.0"
+
+[[package]]
 name = "b00t-admin"
 version = "0.9.1"
 dependencies = [
