@@ -52,16 +52,50 @@ pub struct CredentialFields {
 
 // ── Encryption helpers ────────────────────────────────────────────────────
 
-/// Simple XOR cipher with the master key. AES-GCM would be better but requires aes-gcm + rand deps.
-/// XOR is adequate when: (a) the master key is in OS keyring, (b) the file is 0600, (c) the ciphertext
-/// is only on local disk. The real protection is the OS keyring + file permissions; XOR prevents
-/// accidental exposure (e.g., `cat .credential.toml` doesn't show the secret).
-fn xor_crypt(data: &[u8], key: &str) -> Vec<u8> {
-    let key_bytes = key.as_bytes();
-    data.iter()
-        .enumerate()
-        .map(|(i, b)| b ^ key_bytes[i % key_bytes.len()])
-        .collect()
+/// Derive a 256-bit AES key from the master key string using SHA-256.
+fn derive_key(master_key: &str) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(master_key.as_bytes());
+    let result = hasher.finalize();
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&result);
+    key
+}
+
+/// Encrypt data with AES-256-GCM. Returns nonce (12 bytes) + ciphertext + tag (16 bytes).
+fn aes_encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+    use rand::Rng;
+
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| anyhow::anyhow!("AES key init: {e}"))?;
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher.encrypt(nonce, data)
+        .map_err(|e| anyhow::anyhow!("AES encrypt: {e}"))?;
+    // Prepend nonce to ciphertext for storage
+    let mut result = nonce_bytes.to_vec();
+    result.extend(ciphertext);
+    Ok(result)
+}
+
+/// Decrypt data with AES-256-GCM. Expects nonce (12 bytes) prefix.
+fn aes_decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::aead::Aead;
+
+    if data.len() < 12 {
+        anyhow::bail!("ciphertext too short for AES-GCM nonce");
+    }
+    let (nonce_bytes, ciphertext) = data.split_at(12);
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| anyhow::anyhow!("AES key init: {e}"))?;
+    let nonce = Nonce::from_slice(nonce_bytes);
+    cipher.decrypt(nonce, ciphertext)
+        .map_err(|e| anyhow::anyhow!("AES decrypt: {e}"))
 }
 
 /// Get or create the master key from OS keyring.
@@ -77,22 +111,24 @@ pub fn master_key() -> Result<String> {
     }
 }
 
-/// Encrypt a secret string with the master key, returning base64.
+/// Encrypt a secret string with AES-256-GCM, returning base64.
 pub fn encrypt_secret(secret: &str) -> Result<String> {
-    let key = master_key()?;
-    let encrypted = xor_crypt(secret.as_bytes(), &key);
+    let key_str = master_key()?;
+    let key = derive_key(&key_str);
+    let encrypted = aes_encrypt(secret.as_bytes(), &key)?;
     Ok(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &encrypted))
 }
 
-/// Decrypt a base64-encoded ciphertext with the master key.
+/// Decrypt a base64-encoded AES-256-GCM ciphertext.
 pub fn decrypt_secret(encrypted_b64: &str) -> Result<String> {
-    let key = master_key()?;
+    let key_str = master_key()?;
+    let key = derive_key(&key_str);
     let encrypted = base64::Engine::decode(
         &base64::engine::general_purpose::STANDARD,
         encrypted_b64,
     )
     .context("invalid base64 in credential datum")?;
-    let decrypted = xor_crypt(&encrypted, &key);
+    let decrypted = aes_decrypt(&encrypted, &key)?;
     String::from_utf8(decrypted).context("decrypted credential is not valid UTF-8 (wrong key?)")
 }
 
