@@ -550,6 +550,19 @@ chonky-rollout:
     b00t soul log "ch0nky rollout complete — adapter elasticdotventures/b00t-qwen3-coder-30b" --scope global --result ok
     echo "✅ ch0nky serving b00t-aligned adapter"
 
+# ── Training Image (Option B: baked deps, no runtime pip) ───────────────────
+# 🤓 b00t uses uv not pip; image layers mlflow+uv on unsloth:latest via GHCR
+# Build locally (requires podman):
+training-image-build:
+    podman build -t docker.io/unsloth/unsloth:latest containers/training/
+
+# Push to GHCR (requires: podman login ghcr.io)
+training-image-push:
+    podman push docker.io/unsloth/unsloth:latest
+
+# Build + push in one step
+training-image-release: training-image-build training-image-push
+
 # ── Budget + Cost Forecasting ────────────────────────────────────────────────
 # Config + commands embedded in _b00t_/cloud-budget.tomllmd (datum IS the object).
 # These shims extract and run the embedded scripts; b00t run cloud-budget::<name> will replace them.
