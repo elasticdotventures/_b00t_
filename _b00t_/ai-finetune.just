@@ -377,7 +377,7 @@ cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
+      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
         command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }}"
 
@@ -415,7 +415,7 @@ cloud-coder:
         "--label", f"ledgrrr_resume_token={resume_token}",
         "--detach",
         "/bin/sh", "-c",
-        "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && "
+        "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && "
         "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
         "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
         "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
@@ -440,7 +440,7 @@ cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" 
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
+      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
         command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }} {{ checkpoint }}"
 
