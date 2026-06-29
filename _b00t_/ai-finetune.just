@@ -15,10 +15,6 @@
 # Paths are relative to repo root (justfile_directory())
 
 set working-directory := ".."
-
-# ── Dataset ────────────────────────────────────────────────────────────────────
-
-# Generate fine-tune dataset from b00t corpus
 dataset:
     uv run python3 fine-tune/generate_dataset.py
 
@@ -196,6 +192,11 @@ train config="/data/config-cloud-coder.yaml" resume="":
     except Exception as e:
         print(f"❌ config load failed: {e}"); sys.exit(1)
 
+    if cfg.get("mlflow_tracking_uri"):
+        os.environ["MLFLOW_TRACKING_URI"] = cfg["mlflow_tracking_uri"]
+    if cfg.get("mlflow_experiment"):
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = cfg["mlflow_experiment"]
+
     model_name   = cfg.get("base_model", "Qwen/Qwen3-Coder-30B-A3B-Instruct")
     dataset_path = cfg.get("dataset_path", cfg.get("dataset", "/data/train.jsonl"))
     output_dir   = cfg.get("output_dir", "/tmp/output")
@@ -337,10 +338,6 @@ smoke-test adapter="fine-tune/output-smol/lora-adapter" base="unsloth/Qwen2.5-0.
 
     print(f"\n{passed}/{len(PROBES)} probes b00t-aware")
     sys.exit(0 if passed >= 3 else 1)
-
-# Upload dataset + trainer + all fine-tune/config-*.yaml to HF repo
-
-# Run after: just ai-finetune::dataset
 hf-push:
     #!/bin/bash
     set -euo pipefail
@@ -369,21 +366,62 @@ hf-push-config config:
 
 # 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
 cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="19.0":
-    hf jobs run docker.io/unsloth/unsloth:latest \
+    hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
+      -e PYTORCH_ALLOC_CONF=expandable_segments:True \
+      -e TORCHDYNAMO_DISABLE=1 \
+      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
+      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
         command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }}"
 
-# Convenience alias: Qwen3-Coder-30B on A100-large
+# Convenience alias: Qwen3-Coder-30B on A100-large — budget-gated
+# 🤓 Gate runs first: calls ledgrrr_b00t_delegate_datum via b00t-mcp; exits non-zero if over cap.
+#    resume_token is stored in .b00t/last-delegate-token and passed as HF job label for billing reconciliation.
 cloud-coder:
-    just ai-finetune::cloud-train a100-large config-cloud-coder.yaml
+    #!/usr/bin/env python3
+    import subprocess, sys, json, os, pathlib, datetime
+    # 1. Budget gate
+    gate = subprocess.run(
+        ["just", "ai-finetune::budget-gate", "a100-large", "fine-tune/config-cloud-coder.yaml"],
+        capture_output=True, text=True
+    )
+    if gate.returncode != 0:
+        print(gate.stdout + gate.stderr, end="", flush=True)
+        print("❌ cloud-coder blocked: cake budget gate denied", file=sys.stderr)
+        sys.exit(gate.returncode)
+    # 2. Mint resume token (ledgrrr side handles real one; local shim for label round-trip)
+    ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+    resume_token = f"b00t-hf-coder-{ts:016x}"
+    pathlib.Path(".b00t/last-delegate-token").write_text(resume_token)
+    # 3. Submit job with resume token as label for billing reconciliation
+    result = subprocess.run([
+        "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
+        "--flavor", "a100-large",
+        "--timeout", "19.0h",
+        "-e", "HF_HOME=/tmp/hf-cache",
+        "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
+        "-e", "TORCHDYNAMO_DISABLE=1",
+        "-e", "UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache",
+        "--secrets", "HF_TOKEN",
+        "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
+        "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
+        "--label", f"ledgrrr_resume_token={resume_token}",
+        "--detach",
+        "/bin/sh", "-c",
+        "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && "
+        "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
+        "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
+        "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
+        "$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/config-cloud-coder.yaml"
+    ])
+    sys.exit(result.returncode)
 
 # Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
 
@@ -391,15 +429,18 @@ cloud-coder:
 cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" timeout_hours="13.0":
     #!/bin/bash
     [[ -z "{{ checkpoint }}" ]] && { echo "ERROR: checkpoint= required"; exit 1; }
-    hf jobs run docker.io/unsloth/unsloth:latest \
+    hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
       -e HF_HOME=/tmp/hf-cache \
+      -e PYTORCH_ALLOC_CONF=expandable_segments:True \
+      -e TORCHDYNAMO_DISABLE=1 \
+      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth 'huggingface_hub[hf_xet]>=0.26' && \
+      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
         command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }} {{ checkpoint }}"
 
@@ -483,11 +524,6 @@ monitor-run job_id threshold_s="90":
         print(f"FAIL: step_time={rate}s/it > threshold={threshold}s — step={step}/{total} ETA={eta} (cancel+resubmit faster flavor)")
         sys.exit(1)
     print(f"PASS: {stage} step={step}/{total} rate={rate}s/it ETA={eta}")
-
-# Generic: pull any adapter from HF Hub to local path
-# model_id: e.g. elasticdotventures/b00t-qwen3-coder-30b
-
-# local_dir: destination (default: fine-tune/output-adapter)
 hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
     hf download {{ model_id }} --repo-type model --local-dir {{ local_dir }}
     @echo "✓ adapter at {{ local_dir }}"
@@ -495,6 +531,37 @@ hf-adapter-pull model_id local_dir="fine-tune/output-adapter":
 # Pull the coder-30b adapter to its canonical path
 hf-adapter-pull-coder:
     just ai-finetune::hf-adapter-pull elasticdotventures/b00t-qwen3-coder-30b fine-tune/output-cloud-coder/lora-adapter
+
+# Pull adapter from Hub + patch ch0nky k8s deployment → b00t-aligned model live in hive
+# 🤓 ch0nky reads adapter from pod /adapters/current; rollout is zero-downtime
+chonky-rollout:
+    #!/bin/bash
+    set -euo pipefail
+    ADAPTER_DIR="fine-tune/output-cloud-coder/lora-adapter"
+    echo "1/4 pulling adapter from HF Hub..."
+    just ai-finetune::hf-adapter-pull-coder
+    echo "2/4 syncing adapter to ch0nky pod..."
+    CHONKY_POD=$(kubectl get pod -n b00t-inference -l app=ch0nky -o jsonpath='{.items[0].metadata.name}')
+    kubectl cp "${ADAPTER_DIR}/." "b00t-inference/${CHONKY_POD}:/adapters/current/"
+    echo "3/4 rolling restart..."
+    kubectl rollout restart deployment/ch0nky -n b00t-inference
+    kubectl rollout status deployment/ch0nky -n b00t-inference --timeout=120s
+    echo "4/4 logging to soul ops register..."
+    b00t soul log "ch0nky rollout complete — adapter elasticdotventures/b00t-qwen3-coder-30b" --scope global --result ok
+    echo "✅ ch0nky serving b00t-aligned adapter"
+
+# ── Training Image (Option B: baked deps, no runtime pip) ───────────────────
+# 🤓 b00t uses uv not pip; image layers mlflow+uv on unsloth:latest via GHCR
+# Build locally (requires podman):
+training-image-build:
+    podman build -t ghcr.io/elasticdotventures/b00t-training-image:latest containers/training/
+
+# Push to GHCR (requires: podman login ghcr.io)
+training-image-push:
+    podman push ghcr.io/elasticdotventures/b00t-training-image:latest
+
+# Build + push in one step
+training-image-release: training-image-build training-image-push
 
 # ── Budget + Cost Forecasting ────────────────────────────────────────────────
 # Config + commands embedded in _b00t_/cloud-budget.tomllmd (datum IS the object).

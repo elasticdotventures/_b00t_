@@ -83,7 +83,6 @@ pub use doc_pipeline::{
     FOLFormula, FOLStereotype, FullPipelineResult, PipelineStage, Predicate, ProvenancePointer,
     Quantifier, ReqIFMetadata, Requirement, RequirementStatus, RequirementType,
     SemanticChunk, SerializableFOLFormula, StageResult, SysMLv2Stereotype,
-    // UFO traits — concept-as-code
     Category, Endurant, Perdurant, Quality, Relator, RelatorType, Role,
 };
 pub use dual_grok::{

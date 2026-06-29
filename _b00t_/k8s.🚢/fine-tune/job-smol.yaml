@@ -20,6 +20,7 @@ spec:
         b00t.io/model: sm0l
     spec:
       restartPolicy: Never
+      runtimeClassName: nvidia
       tolerations:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists

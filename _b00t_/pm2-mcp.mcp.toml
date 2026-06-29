@@ -2,6 +2,15 @@
 name = "pm2-mcp"
 type = "mcp"
 hint = "PM2 process manager MCP — start/stop/restart/status/logs for b00t background services"
+icon = "⚡"
+tier = "dev"
+status = "active"
+enabled = true
+# 🤓 dev-only: use when kubectl is unavailable; k8s Deployments are the prod scheduler
+
+[[b00t.gate]]
+cmd = "! kubectl cluster-info"
+hint = "PM2 is dev-only — use k8s Deployments in production (kubectl cluster-info succeeded)"
 
 [[b00t.mcp.stdio]]
 command = "node"
@@ -9,3 +18,7 @@ args = ["{{ script_dir }}/pm2-mcp-server.mjs"]
 transport = "stdio"
 priority = 0
 requires = ["node"]
+
+[b00t.lifecycle]
+restart = "always"
+health_check_cmd = "pm2 ping"

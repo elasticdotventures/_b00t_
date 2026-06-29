@@ -150,6 +150,73 @@ priority_3 = "Replace Python TCP relay with embedded Rust forwarder or socat. El
 priority_4 = "Add session management: `b00t-rpa session save/load` for cookie + localStorage serialization. Required for banking login persistence."
 priority_5 = "Add data extraction pipeline: table/CSV export from scraped content. Wire into ledgerr ingestion."
 
+
+# ─── MACHINE-READABLE DECISION TREE ─────────────────────────────────────────
+# Agents traverse this to select the right RPA path for a given task.
+# Each node: id, question, yes→ node_id | action, no→ node_id | action
+
+[[decision_tree]]
+id = "root"
+question = "Is the target browser Chrome/Chromium?"
+yes = "node_cdp"
+no  = "action_playwright_std"
+
+[[decision_tree]]
+id = "node_cdp"
+question = "Is throughput > 10 pages/min OR stealth required?"
+yes = "action_b00t_rpa_chromiumoxide"
+no  = "node_llm"
+
+[[decision_tree]]
+id = "node_llm"
+question = "Is natural-language task specification needed?"
+yes = "node_llm_tier"
+no  = "action_playwright_std"
+
+[[decision_tree]]
+id = "node_llm_tier"
+question = "Is the task simple element selection (< 2 reasoning steps)?"
+yes = "action_sm0l_qwen25_3b"
+no  = "node_chonky"
+
+[[decision_tree]]
+id = "node_chonky"
+question = "Is the task multi-step or requires error recovery?"
+yes = "action_ch0nky_qwen36_27b"
+no  = "action_frontier_fallback"
+
+# ── Terminal actions ─────────────────────────────────────────────────────────
+
+[[decision_tree_action]]
+id   = "action_playwright_std"
+tool = "playwright-python"
+cmd  = "uvx playwright"
+hint = "Standard Playwright Python: navigate/click/type/screenshot. 90% of RPA tasks."
+
+[[decision_tree_action]]
+id   = "action_b00t_rpa_chromiumoxide"
+tool = "b00t-rpa"
+cmd  = "b00t rpa"
+hint = "Rust CDP via chromiumoxide: high-throughput scraping + data-b00t-* DOM enrichment injection."
+
+[[decision_tree_action]]
+id   = "action_sm0l_qwen25_3b"
+tool = "b00t-llm-sm0l"
+cmd  = "b00t ai chat --tier=sm0l"
+hint = "Qwen2.5-3B local: parse DOM, select element from __b00t.find() results. ~0 cost."
+
+[[decision_tree_action]]
+id   = "action_ch0nky_qwen36_27b"
+tool = "b00t-llm-chonky"
+cmd  = "b00t ai chat --tier=ch0nky"
+hint = "Qwen3.6-27B local: multi-step reasoning, form fill, 2FA handling, error recovery."
+
+[[decision_tree_action]]
+id   = "action_frontier_fallback"
+tool = "claude-sonnet"
+cmd  = "b00t ai chat --tier=frontier"
+hint = "Claude/GPT-4: CAPTCHA, ambiguous pages, new site discovery. Cost-aware — check cake budget first."
+
 # b00t:map v1
 # summary: MECE/TRIZ architecture review of browser RPA stack — good smells, stinks, wheel reinvention, and correct path forward
 # tags: architecture, review, mece, triz, rpa, browser, llm, banking, scraping

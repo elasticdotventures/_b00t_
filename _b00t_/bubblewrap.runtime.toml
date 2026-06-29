@@ -1,0 +1,20 @@
+# bubblewrap.runtime.toml — minimal working runtime datum (no privilege needed)
+# Usage: b00t run-datum bubblewrap [-- <args>]
+# 🤓 spawn_sandboxed's namespace isolation (CLONE_NEWNS) requires CAP_SYS_ADMIN.
+#    Without isolation block, datum runs binary directly — end-to-end dispatch test.
+#    Full sandbox: use `bwrap` (setuid) as the binary and pass bwrap flags as args.
+
+[b00t]
+name = "bubblewrap"
+type = "runtime"
+hint = "Reference runtime datum — direct exec of /bin/sh, no privilege required"
+
+[b00t.runtime]
+binary = "/bin/sh"
+
+# b00t:map v1
+# summary: bubblewrap reference runtime datum — direct exec, end-to-end dispatch test
+# tags: runtime, sandbox, bubblewrap, reference
+# tier: sm0l
+# cmds: b00t run-datum bubblewrap
+# complexity: 1

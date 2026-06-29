@@ -1,0 +1,50 @@
+[b00t]
+name = "zellij"
+type = "cli"
+hint = "Terminal multiplexer. Tabs, panes, layouts, plugins. Replaces tmux in b00t hive."
+desires = "0.44.3"
+auto_install = true   # 🤓 hive requires zellij for MCP named-pipe sessions + zellij-menu-system
+
+install = '''
+# 🤓 Prefer prebuilt musl binary — cargo install fails when cargo registry has root-owned fnv-1.0.7
+ZELLIJ_VER="0.44.3"
+ARCH="x86_64-unknown-linux-musl"
+URL="https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VER}/zellij-${ARCH}.tar.gz"
+mkdir -p ~/.local/bin
+curl -fsSL "$URL" -o /tmp/zellij.tar.gz \
+  && tar -xzf /tmp/zellij.tar.gz -C /tmp \
+  && install -m755 /tmp/zellij ~/.local/bin/zellij \
+  && rm -f /tmp/zellij.tar.gz /tmp/zellij
+'''
+
+update = '''
+ZELLIJ_VER="0.44.3"
+ARCH="x86_64-unknown-linux-musl"
+URL="https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VER}/zellij-${ARCH}.tar.gz"
+curl -fsSL "$URL" -o /tmp/zellij.tar.gz \
+  && tar -xzf /tmp/zellij.tar.gz -C /tmp \
+  && install -m755 /tmp/zellij ~/.local/bin/zellij \
+  && rm -f /tmp/zellij.tar.gz /tmp/zellij
+'''
+
+version = "zellij --version"
+version_regex = 'zellij (\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "Start new zellij session named 'main'"
+command = "zellij attach main --create"
+
+[[b00t.usage]]
+description = "List running sessions"
+command = "zellij list-sessions"
+
+[[b00t.usage]]
+description = "Run command in new floating pane"
+command = "zellij action new-pane --floating -- htop"
+
+# b00t:map v1
+# summary: zellij terminal multiplexer — required for b00t hive MCP named-pipe sessions
+# tags: zellij, terminal, multiplexer, panes, tabs, layout
+# tier: sm0l
+# cmds: zellij attach main --create
+# complexity: 2

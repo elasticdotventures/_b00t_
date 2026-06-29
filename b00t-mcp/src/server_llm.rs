@@ -537,6 +537,25 @@ async fn list_models(
     }
 }
 
+fn check_cake_budget() -> anyhow::Result<()> {
+    use b00t_c0re_lib::kv_store::KvStore;
+    let kv = KvStore::with_auto_detect();
+    let cap: f64 = kv.get("economy.cake.monthly_cap_cake")
+        .ok().flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(200.0);
+    let spent: f64 = kv.get("economy.cake.monthly_spent_cake")
+        .ok().flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+    if spent >= cap {
+        anyhow::bail!(
+            "🎂 cake budget exhausted: {spent:.1}/{cap:.0}🎂 — AI dispatch blocked. Operator action required."
+        );
+    }
+    Ok(())
+}
+
 async fn proxy_chat(
     State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
@@ -546,6 +565,16 @@ async fn proxy_chat(
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
     if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
+
+    // ── 🎂 Cake budget hard gate ──────────────────────────────────────────────
+    // Reads soul KV: economy.cake.monthly_cap_cake / economy.cake.monthly_spent_cake
+    // Block at cap — advisory logging is NOT sufficient for autonomous spend control.
+    if !dev_mode {
+        if let Err(e) = check_cake_budget() {
+            return (StatusCode::PAYMENT_REQUIRED,
+                Json(json!({"error": e.to_string(), "hint": "run: b00t soul set economy.cake.monthly_spent_cake 0"}))).into_response();
+        }
     }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))

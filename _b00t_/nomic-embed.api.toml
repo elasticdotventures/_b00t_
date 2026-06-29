@@ -1,0 +1,39 @@
+[b00t]
+name = "nomic-embed"
+type = "api"
+hint = "nomic-embed-text-v1.5 via llama-server (CPU, port 30802) — OpenAI-compat /v1/embeddings"
+desires = "latest"
+
+protocol = "openai-embeddings-v1"
+implements = ["openai-compat-base"]
+
+depends_on = ["llama-server"]
+
+[b00t.provides]
+capability = "embeddings"
+endpoints = ["/v1/embeddings", "/health"]
+operations = ["create_embedding"]
+
+[b00t.provides.models]
+preferred = ["nomic-embed-text"]
+supported = ["nomic-embed-text"]
+dims = 768
+
+[b00t.env]
+EMBED_API_URL = "http://localhost:30802"
+EMBED_MODEL = "nomic-embed-text"
+EMBED_API_KEY = "local-b00t"
+
+[b00t.setup]
+# 🤓 ollama sunset — llama-server is the canonical embedding host
+download = "just k8s::nomic-embed-download"
+apply    = "just k8s::nomic-embed-apply"
+test     = "just k8s::nomic-embed-test"
+manifest = "_b00t_/k8s.🚢/b00t-inference/nomic-embed-deployment.yaml"
+
+# b00t:map v1
+# summary: nomic-embed-text-v1.5 F16 on llama-server CPU, k8s NodePort 30802
+# tags: embed, nomic, llama-server, embeddings, openai-compat
+# tier: sm0l
+# cmds: just k8s::nomic-embed-setup
+# complexity: 2
