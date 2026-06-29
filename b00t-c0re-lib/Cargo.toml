@@ -42,7 +42,6 @@ pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
 base64 = "0.22"
 aes-gcm = "0.10"
 rand = "0.8"
-sha2 = "0.10"
 # Workspace dependencies
 serde.workspace = true
 serde_json.workspace = true
