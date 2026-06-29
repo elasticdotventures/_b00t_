@@ -771,3 +771,96 @@ translate query:
 
     print(f"# no match for: {query}")
     sys.exit(1)
+
+## ── Inference (provider-agnostic) ────────────────────────────────────────────
+## Usage:
+##   just ai-finetune::inference-deploy                        # default: k8s
+##   INFERENCE_PROVIDER=runpod just ai-finetune::inference-deploy
+##
+## Providers: k8s (local ch0nky), runpod (serverless endpoint)
+## Config: PROVIDER-RUNPOD.provider.tomllmd / PROVIDER-HF.provider.tomllmd
+
+INFERENCE_PROVIDER := env_var_or_default("INFERENCE_PROVIDER", "k8s")
+FRAMEWORK          := env_var_or_default("FRAMEWORK", "unsloth")
+ORCHESTRATOR       := env_var_or_default("ORCHESTRATOR", "hf")
+
+# Deploy inference endpoint — routes to provider impl below
+inference-deploy:
+    @echo "→ deploying inference via provider={{ INFERENCE_PROVIDER }}"
+    @just ai-finetune::inference-deploy-{{ INFERENCE_PROVIDER }}
+
+# Alias: get endpoint/pod status for active inference provider
+inference-status:
+    @just ai-finetune::inference-status-{{ INFERENCE_PROVIDER }}
+
+# Alias: tear down inference endpoint for active provider
+inference-teardown:
+    @just ai-finetune::inference-teardown-{{ INFERENCE_PROVIDER }}
+
+# ── k8s (local sm3lly ch0nky) ─────────────────────────────────────────────────
+
+# Deploy ch0nky inference on local k8s (existing Qwen3 pod)
+inference-deploy-k8s:
+    kubectl rollout status deployment/ch0nky -n b00t-inference
+    @echo "✓ k8s ch0nky running"
+
+# k8s ch0nky status
+inference-status-k8s:
+    kubectl get pods -n b00t-inference -l app=ch0nky -o wide
+
+# k8s: rolling restart to pick up new adapter (calls chonky-rollout)
+inference-teardown-k8s:
+    @echo "⚠️  k8s: teardown not supported — use: kubectl scale deployment/ch0nky --replicas=0 -n b00t-inference"
+
+# ── RunPod Serverless ─────────────────────────────────────────────────────────
+
+# Deploy ch0nky as RunPod serverless endpoint (scale-to-zero; requires RUNPOD_API_KEY)
+# Endpoint config defaults from PROVIDER-RUNPOD.provider.tomllmd
+# Pass RUNPOD_TEMPLATE_ID=<id> for the inference worker template
+inference-deploy-runpod:
+    @echo "→ deploying RunPod serverless endpoint"
+    b00t-cli provider endpoint deploy \
+      --provider runpod \
+      --name b00t-ch0nky \
+      --gpu-types "NVIDIA A40,NVIDIA RTX A6000"
+
+# RunPod endpoint status by ID (set RUNPOD_ENDPOINT_ID after deploy)
+inference-status-runpod endpoint_id="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    id="{{ endpoint_id }}"
+    if [[ -z "$id" ]]; then
+        b00t-cli provider endpoint list --provider runpod
+    else
+        b00t-cli provider endpoint status --provider runpod "$id"
+    fi
+
+# Tear down RunPod endpoint (stops billing)
+inference-teardown-runpod endpoint_id:
+    b00t-cli provider endpoint teardown --provider runpod {{ endpoint_id }}
+
+# List all RunPod endpoints
+inference-list-runpod:
+    b00t-cli provider endpoint list --provider runpod
+
+# ── Training provider dispatch (future: ORCHESTRATOR=dstack) ──────────────────
+
+# Submit training job via configured ORCHESTRATOR (hf|runpod; dstack in sprint 2)
+provider-train config="config-cloud-coder.yaml" flavor="a100-large" timeout_hours="10.0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "→ training: FRAMEWORK={{ FRAMEWORK }} ORCHESTRATOR={{ ORCHESTRATOR }}"
+    b00t-cli provider job submit \
+      --provider {{ ORCHESTRATOR }} \
+      --config fine-tune/{{ config }} \
+      --image ghcr.io/elasticdotventures/b00t-training-image:latest \
+      --flavor {{ flavor }} \
+      --timeout-hours {{ timeout_hours }}
+
+# List training jobs for active ORCHESTRATOR
+provider-train-list:
+    b00t-cli provider job list --provider {{ ORCHESTRATOR }}
+
+# Cancel a training job
+provider-train-cancel job_id:
+    b00t-cli provider job cancel --provider {{ ORCHESTRATOR }} {{ job_id }}

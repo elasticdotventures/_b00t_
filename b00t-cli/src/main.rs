@@ -92,6 +92,7 @@ use b00t_cli::commands::{
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
+    provider::ProviderCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
@@ -427,6 +428,11 @@ The system will:
     Agent {
         #[clap(subcommand)]
         agent_command: AgentCommands,
+    },
+    #[clap(about = "Multi-provider compute — inference endpoints + training jobs (runpod, hf)")]
+    Provider {
+        #[clap(subcommand)]
+        provider_command: ProviderCommands,
     },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
@@ -2309,6 +2315,12 @@ async fn main() {
         }
         Some(Commands::Job { job_command }) => {
             if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Provider { provider_command }) => {
+            if let Err(e) = b00t_cli::commands::provider::handle_provider_command(provider_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
