@@ -23,3 +23,51 @@ install:
         exit 1
     fi
     echo "✅ kubectl installed"
+
+# ── nomic-embed-text-v1.5 embedding server ────────────────────────────────────
+
+# Download nomic-embed-text-v1.5 F16 GGUF into HF cache
+nomic-embed-download:
+    #!/bin/bash
+    set -euo pipefail
+    DEST="$HOME/.cache/huggingface/hub/models--nomic-ai--nomic-embed-text-v1.5-GGUF"
+    if [[ -n "$(ls "$DEST/blobs/" 2>/dev/null | grep -v lock)" ]]; then
+        echo "✅ already cached: $DEST/blobs/"
+        exit 0
+    fi
+    echo "📥 downloading nomic-embed-text-v1.5.f16.gguf (~274MB)..."
+    hf download nomic-ai/nomic-embed-text-v1.5-GGUF \
+        --include "nomic-embed-text-v1.5.f16.gguf"
+    echo "✅ cached at $DEST/blobs/"
+
+# Stamp blob SHA into manifest and apply to cluster
+nomic-embed-apply:
+    #!/bin/bash
+    set -euo pipefail
+    BLOBS="$HOME/.cache/huggingface/hub/models--nomic-ai--nomic-embed-text-v1.5-GGUF/blobs"
+    SHA=$(ls "$BLOBS/" 2>/dev/null | grep -v lock | head -1)
+    if [[ -z "$SHA" ]]; then
+        echo "❌ blob not found — run: just k8s::nomic-embed-download first"
+        exit 1
+    fi
+    echo "📌 blob: $SHA"
+    MANIFEST="b00t-inference/nomic-embed-deployment.yaml"
+    sed "s/BLOB_SHA_PLACEHOLDER/$SHA/" "$MANIFEST" | kubectl apply -f -
+    echo "✅ nomic-embed deployed — NodePort 30802"
+
+# Download + apply in one shot
+nomic-embed-setup: nomic-embed-download nomic-embed-apply
+
+# Stream nomic-embed pod logs
+nomic-embed-logs:
+    kubectl logs -n b00t-inference -l app=nomic-embed -f
+
+# Test embedding endpoint
+nomic-embed-test:
+    #!/bin/bash
+    NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+    curl -s http://${NODE_IP}:30802/v1/embeddings \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer local-b00t" \
+        -d '{"model":"nomic-embed-text","input":"b00t hive agent test"}' \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'dims={len(d[\"data\"][0][\"embedding\"])} PASS')"

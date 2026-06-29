@@ -1,7 +1,7 @@
 [b00t]
 name = "ollama-embeddings"
 type = "api"
-hint = "Ollama embeddings API via local Docker container"
+hint = "⚠️ SUNSET — replaced by nomic-embed.api.toml (llama-server, port 30802)"
 desires = "latest"
 
 # Protocol specification
