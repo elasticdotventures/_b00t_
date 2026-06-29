@@ -10,6 +10,7 @@ members = [
     "b00t-py",
     "b00t-ipc",
     "b00t-azure-cp",
+    "blessed",
     "b00t-l3dg3rr-viz",
     "b00t-ast",
     "b00t-bouncer",

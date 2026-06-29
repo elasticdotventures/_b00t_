@@ -21,8 +21,9 @@ for group in data['crate_groups']:
             lines.append(f'use_case = "{name}"')
             crates = [r['name'] for r in recs]
             lines.append(f'recommended = {json.dumps(crates)}')
-            notes = {r['name']: r.get('notes', '') for r in recs}
-            lines.append(f'notes = {json.dumps(notes)}')
+            notes = {r['name']: r.get('notes', '').replace('"', "'") for r in recs}
+            note_parts = [f'"{k}" = "{v}"' for k, v in notes.items()]
+            lines.append(f'notes = {{{", ".join(note_parts)}}}')
             lines.append('')
 
 out = os.path.expanduser('~/.dotfiles/_b00t_/blessed/rust.toml')
