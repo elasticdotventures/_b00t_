@@ -19,6 +19,7 @@
 
 use anyhow::{Context as _, Result, bail};
 use clap::Parser;
+use b00t_c0re_lib::events::write_event;
 use b00t_c0re_lib::soul_dataframerr::{
     AlarmAggregate, FrameCursor, SoulAlarm, SoulColumn, SoulDataFramerr,
     SoulDataFramerrRegistry, SoulValue,
@@ -1278,7 +1279,9 @@ fn df_alarm_check(table: &str) -> Result<()> {
         println!("no alarms fired for '{table}'");
     } else {
         for a in &fired {
-            println!("ALARM: {} → {}", a.name, a.emit);
+            let detail = format!("table={table} column={} condition={}", a.column, a.condition);
+            write_event(&a.emit, &detail);
+            println!("ALARM: {} → {} (event written to events.jsonl)", a.name, a.emit);
         }
     }
     Ok(())
