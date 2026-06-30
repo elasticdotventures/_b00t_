@@ -1396,6 +1396,24 @@ impl DatumType {
         }
     }
 
+    /// Stereotype hierarchy: which types does this type imply?
+    /// e.g. McpServer implies Mcp (server → protocol), Runtime implies Cli (can run → can check)
+    pub const fn implies(&self) -> &'static [DatumType] {
+        match self {
+            Self::McpServer => &[Self::Mcp],
+            Self::Runtime   => &[Self::Cli],
+            Self::Agent     => &[Self::Runtime],
+            Self::Ai        => &[Self::Agent],
+            Self::Role      => &[Self::Agent],
+            _ => &[],
+        }
+    }
+
+    /// Is this type implied by (i.e., less specific than) another?
+    pub fn is_implied_by(&self, other: &DatumType) -> bool {
+        other.implies().contains(self)
+    }
+
     // 🎨 display() defined below with DatumDisplay struct
 }
 
@@ -2319,7 +2337,34 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
         }
     }
 
+    // ── Stereotype hierarchy: eliminate less-specific matches ──────────────
+    if results.len() > 1 {
+        let mut filtered: Vec<DatumDispatch> = Vec::new();
+        for result in &results {
+            let is_implied = results.iter().any(|other| {
+                std::mem::discriminant(result) != std::mem::discriminant(other)
+                    && result_is_implied_by(result, other)
+            });
+            if !is_implied {
+                filtered.push(result.clone());
+            }
+        }
+        if !filtered.is_empty() {
+            results = filtered;
+        }
+    }
+
     results
+}
+
+/// Returns true if `a` is implied by `b` (a is less specific than b).
+fn result_is_implied_by(a: &DatumDispatch, b: &DatumDispatch) -> bool {
+    use DatumDispatch::*;
+    match (a, b) {
+        (CliPassthrough { .. }, Runtime(_)) => true,
+        (Info(_), _) | (_, Info(_)) => false,
+        _ => false,
+    }
 }
 
 /// Single-match convenience — returns the first runtime or CLI dispatch, or the polyseme if present.
