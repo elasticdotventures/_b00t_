@@ -2242,31 +2242,37 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
         Err(_) => return results,
     };
 
-    // Runtime
+    // Runtime — if a runtime datum exists, it's the primary dispatch.
+    // CLI datum is NOT added when runtime exists (avoids disambiguation prompt).
+    let mut has_runtime = false;
     let runtime_suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
     for suffix in &runtime_suffixes {
         let p = expanded.join(format!("{candidate}{suffix}"));
         if p.exists() {
             if let Ok(cfg) = load_runtime_datum(candidate, path) {
                 results.push(DatumDispatch::Runtime(cfg));
+                has_runtime = true;
                 break;
             }
         }
     }
 
-    // CLI
-    let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
-    for suffix in &cli_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            if let Ok(datum) = load_cli_datum(candidate, path) {
-                let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
-                let args: Vec<String> = datum.args.unwrap_or_default();
-                results.push(DatumDispatch::CliPassthrough {
-                    command: cmd,
-                    args,
-                });
-                break;
+    // CLI — only auto-dispatched when NO runtime datum exists.
+    // CLI operations (check/install) always go through explicit `b00t cli <cmd>`.
+    if !has_runtime {
+        let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+        for suffix in &cli_suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                if let Ok(datum) = load_cli_datum(candidate, path) {
+                    let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
+                    let args: Vec<String> = datum.args.unwrap_or_default();
+                    results.push(DatumDispatch::CliPassthrough {
+                        command: cmd,
+                        args,
+                    });
+                    break;
+                }
             }
         }
     }
