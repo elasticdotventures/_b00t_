@@ -17,11 +17,11 @@ ENV VIRTUAL_ENV=/opt/venv
 # 🤓 HF Jobs container startup may reset PATH; put /opt/venv/bin first so just train
 #    uses the venv python3 (with numpy 2.5.0), not system python3 (with numpy 2.2.6)
 ENV PATH="/opt/venv/bin:$PATH"
-RUN uv pip install "numpy>=2.4" pyyaml
+RUN uv pip install "numpy~=2.4.1" pyyaml
 
-# Smoke-tests: yaml importable; numpy >=2.4 and self-consistent (no mid-session-upgrade risk)
+# Smoke-tests: yaml importable; numpy is exactly 2.4.x and self-consistent
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
-RUN /opt/venv/bin/python3 -c "import importlib.metadata as m, numpy as np; v=m.version('numpy'); assert v==np.__version__, f'mismatch: {np.__version__} vs {v}'; major,minor=int(v.split('.')[0]),int(v.split('.')[1]); assert (major,minor)>=(2,4), f'{v}<2.4'; print('numpy >=2.4 OK', v)"
+RUN /opt/venv/bin/python3 -c "import importlib.metadata as m, numpy as np; v=m.version('numpy'); assert v==np.__version__, f'mismatch: {np.__version__} vs {v}'; assert v.startswith('2.4'), f'{v} not 2.4.x'; print('numpy 2.4.x OK', v)"
 
 # UNSLOTH_CACHE_DIR: /tmp always writable at HF Jobs runtime (base image may run non-root)
 ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
