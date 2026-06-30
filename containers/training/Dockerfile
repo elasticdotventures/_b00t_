@@ -17,8 +17,9 @@ ENV VIRTUAL_ENV=/opt/venv
 # 🤓 HF Jobs container startup may reset PATH; put /opt/venv/bin first so just train
 #    uses the venv python3 (with numpy 2.4.x), not system python3 (with numpy 2.2.6)
 ENV PATH="/opt/venv/bin:$PATH"
-# hf_xet: accelerates Hub checkpoint uploads (multi-part, dedup); mlflow omitted — use report_to:none
-RUN uv pip install "numpy~=2.4.1" pyyaml "huggingface_hub[hf_xet]>=0.26"
+# triton-kernels PyPI provides add_vectors/rotary_embedding — NOT triton_kernels.routing (Meta-internal)
+# mlflow omitted — use report_to:none; hf_xet for fast Hub checkpoint uploads
+RUN uv pip install "numpy~=2.4.1" pyyaml "huggingface_hub[hf_xet]>=0.26" triton-kernels
 
 # Smoke-tests: yaml importable; numpy is exactly 2.4.x and self-consistent
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
