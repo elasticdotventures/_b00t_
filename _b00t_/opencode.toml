@@ -17,36 +17,4 @@ binary = "opencode"
 args = ["--continue"]
 hook_pre = "bash ~/.dotfiles/_b00t_/scripts/opencode-preflight.sh"
 
-[b00t.runtime.isolation]
-share_net = true
-new_session = true
-
-[[b00t.runtime.isolation.mounts]]
-src = "/usr"
-dest = "/usr"
-type = "ro-bind"
-
-[[b00t.runtime.isolation.mounts]]
-src = "/lib"
-dest = "/lib"
-type = "ro-bind"
-
-[[b00t.runtime.isolation.mounts]]
-src = "/lib64"
-dest = "/lib64"
-type = "ro-bind"
-
-[[b00t.runtime.isolation.mounts]]
-src = "/bin"
-dest = "/bin"
-type = "ro-bind"
-
-[[b00t.runtime.isolation.mounts]]
-src = "/etc"
-dest = "/etc"
-type = "ro-bind"
-
-[[b00t.runtime.isolation.mounts]]
-src = "/home/brianh/.config/opencode"
-dest = "/home/brianh/.config/opencode"
-type = "rw-bind"
+# No isolation in WSL — unshare fails because we're already containerized
