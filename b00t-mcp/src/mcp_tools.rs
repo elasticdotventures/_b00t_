@@ -1193,6 +1193,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "b00t_skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
     ToolCatalogEntry { name: "b00t_app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
     ToolCatalogEntry { name: "b00t_app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
+    ToolCatalogEntry { name: "b00t_blessed_query",     description: "Query blessed.rs ecosystem crate recommendations", subcommand: "blessed" },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)

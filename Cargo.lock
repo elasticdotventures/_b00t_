@@ -1362,6 +1362,7 @@ dependencies = [
  "b00t-l3dg3rr-viz",
  "b00t-reflect-types",
  "base64 0.22.1",
+ "blessed",
  "bstr",
  "candle-core 0.10.2",
  "candle-nn 0.10.2",

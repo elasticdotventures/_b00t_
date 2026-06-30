@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use blessed;
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
 use b00t_cli::UnifiedConfig;
@@ -699,6 +700,16 @@ The system will:
     Sh {
         #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 1..)]
         command: Vec<String>,
+    },
+    /// 📚 blessed — query the blessed.rs crate directory for ecosystem recommendations
+    #[clap(about = "📚 Query blessed crate directory for ecosystem recommendations")]
+    Blessed {
+        #[clap(help = "Search query (e.g., 'http client', 'serialization')")]
+        query: String,
+        #[clap(long, default_value = "5", help = "Maximum results")]
+        limit: usize,
+        #[clap(long, default_value = "false", help = "Output as JSON")]
+        json: bool,
     },
 }
 
@@ -2087,6 +2098,7 @@ async fn main() {
         eprintln!("  \x1b[2mb00t die\x1b[0m                → quit (process-icide)");
         eprintln!("  \x1b[2mb00t sweep\x1b[0m              → tidy-sweep *~ files");
         eprintln!("  \x1b[2mb00t sh <cmd...>\x1b[0m         → sandboxed exec (guard-enforced, audit-logged)");
+        eprintln!("  \x1b[2mb00t blessed <query>\x1b[0m     → query blessed.rs crate directory");
         eprintln!("  \x1b[2mb00t <name>\x1b[0m             → auto-detect datum type");
         eprintln!();
     }
@@ -3094,6 +3106,23 @@ async fn main() {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(&exec_args, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+        }
+
+        Some(Commands::Blessed { query, limit, json }) => {
+            let results = blessed::query(&query, *limit);
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&results).unwrap_or_default());
+            } else {
+                for r in &results {
+                    println!("\n## {} ({})", r.use_case, r.category);
+                    for c in &r.crates {
+                        println!("- **{}**: {}", c.name, c.note);
+                    }
+                }
+                if results.is_empty() {
+                    println!("No blessed crates found matching '{}'", query);
+                }
             }
         }
 

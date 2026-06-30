@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Query the blessed crate manifest with semantic search."""
-import json, sys, os, tomllib
+import json, sys, os
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 BLESSED_DIR = os.path.expanduser("~/.dotfiles/_b00t_/blessed")
 
