@@ -15,9 +15,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 #    When unsloth runs its internal check, it finds 2.4.x already installed → no mismatch.
 ENV VIRTUAL_ENV=/opt/venv
 # 🤓 HF Jobs container startup may reset PATH; put /opt/venv/bin first so just train
-#    uses the venv python3 (with numpy 2.5.0), not system python3 (with numpy 2.2.6)
+#    uses the venv python3 (with numpy 2.4.x), not system python3 (with numpy 2.2.6)
 ENV PATH="/opt/venv/bin:$PATH"
-RUN uv pip install "numpy~=2.4.1" pyyaml
+# hf_xet: accelerates Hub checkpoint uploads (multi-part, dedup); mlflow omitted — use report_to:none
+RUN uv pip install "numpy~=2.4.1" pyyaml "huggingface_hub[hf_xet]>=0.26"
 
 # Smoke-tests: yaml importable; numpy is exactly 2.4.x and self-consistent
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
