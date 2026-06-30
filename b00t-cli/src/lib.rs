@@ -620,6 +620,12 @@ pub struct BootDatum {
     #[serde(default)]
     pub requires_sudo: bool,
 
+    // ── Display override: datum declares its own visual identity ──────────
+    // 🤓 Any field in [b00t.display] overrides the SemanticClass default.
+    //    Datums describe themselves rather than a central file describing them.
+    #[serde(default)]
+    pub display: Option<DisplayOverride>,
+
     // MCP server fields
     pub command: Option<String>,
     pub args: Option<Vec<String>>,
@@ -1206,6 +1212,10 @@ pub struct JustfileConfig {
 // 🤓 single source of truth: add new variants ONLY here. The macro below derives:
 //    from_type_token, base_suffix, all_base_suffixes, from_filename, extension_for_type.
 //    DO NOT add manual match arms elsewhere — use the generated methods.
+//
+// 🎨 Display classification: each variant belongs to one SemanticClass.
+//    Shape, color, icon are derived from the class — NO per-variant hardcoding.
+//    New variants: just pick a class.  Runtime registration: toggle tracing per class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatumType {
@@ -1229,24 +1239,10 @@ pub enum DatumType {
     Job,
     Ai,
     Justfile,
-    /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
-    /// Encodes a node's accelerator identity (vendor/class/VRAM) + hive gates.
     Hardware,
-    /// Node-local overlay datum — `.overlay.toml`.
-    /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
     Overlay,
-    /// Runtime wrapper datum — `.runtime.tomllmd`.
-    /// Declares a sandboxed application launch profile with env, mounts, seccomp, and capabilities.
     Runtime,
-    /// Polyseme datum — `.polyseme.tomllmd`.
-    /// Canonical container of artifact references resolving name ambiguity.
-    /// Critical branch point for knowledge graph tree traversal (choice path selection).
-    /// Treated as a blackhole/box: holds multiple [PolysemeRef] entries, each pointing to a concrete datum.
     Polyseme,
-    /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
-    /// 🤓 Stores cloud provider access keys (R2, S3, OpenAI, etc.). Queryable via datum system.
-    ///    Agents discover available credentials with: b00t datum list --type credential
-    ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
     Gate,
     Hook,
@@ -1256,6 +1252,162 @@ pub enum DatumType {
     Training,
     Vendor,
     Unknown,
+}
+
+// ── Semantic classification — the display derives from what a type IS ─────
+// 🤓 Single reasonable default per class.  New variants: just pick a class.
+//    Runtime registration: SemanticClass::tracing_enabled() per class.
+
+/// Semantic taxonomy for datum types.  Shape/color/icon are derived from class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum SemanticClass {
+    /// Infrastructure — nodes that provision, host, or configure systems
+    Infra,
+    /// Agent — autonomous actors, roles, models, learning
+    Agent,
+    /// Protocol — MCP servers, APIs, schemas, wire formats
+    Protocol,
+    /// Skill — executable capabilities, jobs, hooks, gates
+    Skill,
+    /// Tool — CLI tools, configs, build scripts, plans, vendored deps
+    Tool,
+    /// Repo — source trees, workspaces, editor configs, packages
+    Repo,
+    /// Data — databases, store profiles
+    Data,
+    /// Secret — encrypted credentials, polyseme black boxes
+    Secret,
+    /// Fallback for unclassified or incubating types
+    Unknown,
+}
+
+impl SemanticClass {
+    /// Shape for graph/chart rendering.
+    pub const fn shape(&self) -> &'static str {
+        match self {
+            Self::Infra => "hexagon",
+            Self::Agent => "circle",
+            Self::Protocol => "diamond",
+            Self::Skill => "triangle",
+            Self::Tool => "rectangle",
+            Self::Repo => "vee",
+            Self::Data => "rectangle",
+            Self::Secret => "circle",
+            Self::Unknown => "rectangle",
+        }
+    }
+
+    /// Fill color (hex).
+    pub const fn color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#326ce5",
+            Self::Agent => "#059669",
+            Self::Protocol => "#7c3aed",
+            Self::Skill => "#d97706",
+            Self::Tool => "#0d9488",
+            Self::Repo => "#be123c",
+            Self::Data => "#475569",
+            Self::Secret => "#1e293b",
+            Self::Unknown => "#1e293b",
+        }
+    }
+
+    /// Border/stroke color.
+    pub const fn border_color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#5b9cf5",
+            Self::Agent => "#34d399",
+            Self::Protocol => "#a78bfa",
+            Self::Skill => "#fbbf24",
+            Self::Tool => "#2dd4bf",
+            Self::Repo => "#fb7185",
+            Self::Data => "#94a3b8",
+            Self::Secret => "#475569",
+            Self::Unknown => "#475569",
+        }
+    }
+
+    /// Emoji or unicode icon for compact rendering.
+    pub const fn icon(&self) -> &'static str {
+        match self {
+            Self::Infra => "☸",
+            Self::Agent => "🤖",
+            Self::Protocol => "🔌",
+            Self::Skill => "🛠️",
+            Self::Tool => "⌨️",
+            Self::Repo => "📁",
+            Self::Data => "🗄️",
+            Self::Secret => "🔐",
+            Self::Unknown => "❓",
+        }
+    }
+
+    /// SVG shape template fragment.
+    pub const fn svg_template(&self) -> &'static str {
+        match self {
+            Self::Infra => SVG_HEXAGON,
+            Self::Agent => SVG_CIRCLE,
+            Self::Protocol => SVG_DIAMOND,
+            Self::Skill => SVG_TRIANGLE,
+            Self::Tool => SVG_RECTANGLE,
+            Self::Repo => SVG_VEE,
+            Self::Data => SVG_RECTANGLE,
+            Self::Secret => SVG_CIRCLE,
+            Self::Unknown => SVG_RECTANGLE,
+        }
+    }
+
+    /// CSS class for styling hooks.
+    pub const fn css_class(&self) -> &'static str {
+        match self {
+            Self::Infra => "sc-infra",
+            Self::Agent => "sc-agent",
+            Self::Protocol => "sc-protocol",
+            Self::Skill => "sc-skill",
+            Self::Tool => "sc-tool",
+            Self::Repo => "sc-repo",
+            Self::Data => "sc-data",
+            Self::Secret => "sc-secret",
+            Self::Unknown => "sc-unknown",
+        }
+    }
+}
+
+impl DatumType {
+    /// Classify this datum type into its semantic class.
+    /// 🎨 This is the ONLY place variant→class mapping lives.
+    ///    New variants: add one line here. No other code changes needed.
+    pub const fn semantic_class(&self) -> SemanticClass {
+        match self {
+            Self::K8s | Self::Docker | Self::Hardware | Self::Overlay
+            | Self::Runtime | Self::Nix => SemanticClass::Infra,
+            Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
+            Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate => SemanticClass::Skill,
+            Self::Config | Self::Bash | Self::Cli | Self::Justfile
+            | Self::Plan | Self::Vendor => SemanticClass::Tool,
+            Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
+            Self::Database | Self::HiveProfile => SemanticClass::Data,
+            Self::Polyseme | Self::Credential => SemanticClass::Secret,
+            Self::Unknown => SemanticClass::Unknown,
+        }
+    }
+
+    /// Display descriptor — derived entirely from semantic_class().
+    pub fn display(&self) -> DatumDisplay {
+        let sc = self.semantic_class();
+        DatumDisplay {
+            datum_type: *self,
+            semantic_class: sc,
+            shape: sc.shape(),
+            color: sc.color(),
+            border_color: sc.border_color(),
+            icon: sc.icon(),
+            svg_template: sc.svg_template(),
+            css_class: sc.css_class(),
+            label: format!("{}", self.base_suffix().trim_start_matches('.')),
+        }
+    }
 }
 
 macro_rules! datum_type_table {
@@ -1400,128 +1552,44 @@ impl std::fmt::Display for DatumType {
     }
 }
 
-/// Visual display descriptor for a DatumType — shape, color, SVG template.
-/// Used by cytoscape, mermaid, and all future visualization backends.
+/// Visual display descriptor — resolved at runtime from datum TOML + semantic defaults.
+/// 🤓 The datum's own .toml file is authoritative.  This struct is the fallback.
 #[derive(Serialize, Debug, Clone)]
 pub struct DatumDisplay {
-    pub datum_type: DatumType,
-    pub label: String,
-    pub shape: &'static str,       // "circle", "diamond", "hexagon", "rectangle", "triangle", "vee"
-    pub color: &'static str,       // hex color for fill
-    pub border_color: &'static str,
-    pub icon: &'static str,        // unicode or short text
-    pub svg_template: &'static str, // SVG fragment for rendering
-    pub css_class: &'static str,
+    pub shape: String,
+    pub color: String,
+    pub border_color: String,
+    pub icon: String,
+    pub css_class: String,
+    /// SVG fragment (optional, overrides semantic default)
+    pub svg: Option<String>,
+}
+
+/// Optional `[b00t.display]` section in datum TOML files.
+/// Any field present overrides the semantic-class default.
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct DisplayOverride {
+    pub icon: Option<String>,
+    pub shape: Option<String>,
+    pub color: Option<String>,
+    pub border_color: Option<String>,
+    pub svg: Option<String>,
 }
 
 impl DatumType {
-    /// Return the visual display descriptor for this datum type.
-    /// 🎨 Single source of truth for all chart/graph rendering.
-    pub fn display(&self) -> DatumDisplay {
-        match self {
-            // ── Infrastructure (blue tones) ──
-            Self::K8s       => DatumDisplay { datum_type: Self::K8s,       shape: "hexagon",   color: "#326ce5", border_color: "#5b9cf5", icon: "☸",   css_class: "dt-k8s",       label: "K8s".into(),       svg_template: SVG_HEXAGON },
-            Self::Docker    => DatumDisplay { datum_type: Self::Docker,    shape: "hexagon",   color: "#1d63ed", border_color: "#4d8bf7", icon: "🐳", css_class: "dt-docker",    label: "Docker".into(),    svg_template: SVG_HEXAGON },
-            Self::Hardware  => DatumDisplay { datum_type: Self::Hardware,  shape: "hexagon",   color: "#1a56db", border_color: "#3f83f8", icon: "💻", css_class: "dt-hardware",  label: "Hardware".into(),  svg_template: SVG_HEXAGON },
-            Self::Overlay   => DatumDisplay { datum_type: Self::Overlay,   shape: "hexagon",   color: "#1e429f", border_color: "#4789fa", icon: "📋", css_class: "dt-overlay",   label: "Overlay".into(),   svg_template: SVG_HEXAGON },
-            Self::Runtime   => DatumDisplay { datum_type: Self::Runtime,   shape: "hexagon",   color: "#233876", border_color: "#6094f7", icon: "⚡",  css_class: "dt-runtime",   label: "Runtime".into(),   svg_template: SVG_HEXAGON },
-            Self::Nix       => DatumDisplay { datum_type: Self::Nix,       shape: "hexagon",   color: "#5271ff", border_color: "#7b93ff", icon: "❄️",  css_class: "dt-nix",       label: "Nix".into(),       svg_template: SVG_HEXAGON },
+    /// Resolve display: datum's own TOML overrides > semantic class defaults.
 
-            // ── Agents & Roles (green tones) ──
-            Self::Agent     => DatumDisplay { datum_type: Self::Agent,     shape: "circle",    color: "#059669", border_color: "#34d399", icon: "🤖", css_class: "dt-agent",     label: "Agent".into(),     svg_template: SVG_CIRCLE },
-            Self::Role      => DatumDisplay { datum_type: Self::Role,      shape: "circle",    color: "#047857", border_color: "#2dd4bf", icon: "🎭", css_class: "dt-role",      label: "Role".into(),      svg_template: SVG_CIRCLE },
-            Self::Ai        => DatumDisplay { datum_type: Self::Ai,        shape: "circle",    color: "#065f46", border_color: "#22c55e", icon: "🧠", css_class: "dt-ai",        label: "AI".into(),        svg_template: SVG_CIRCLE },
-            Self::Training  => DatumDisplay { datum_type: Self::Training,  shape: "circle",    color: "#064e3b", border_color: "#10b981", icon: "🎓", css_class: "dt-training",  label: "Training".into(),  svg_template: SVG_CIRCLE },
-
-            // ── MCP & Protocols (purple tones) ──
-            Self::Mcp       => DatumDisplay { datum_type: Self::Mcp,       shape: "diamond",   color: "#7c3aed", border_color: "#a78bfa", icon: "🔌", css_class: "dt-mcp",       label: "MCP".into(),       svg_template: SVG_DIAMOND },
-            Self::McpServer => DatumDisplay { datum_type: Self::McpServer, shape: "diamond",   color: "#6d28d9", border_color: "#8b5cf6", icon: "🖥️",  css_class: "dt-mcp-server", label: "MCP Server".into(), svg_template: SVG_DIAMOND },
-            Self::Api       => DatumDisplay { datum_type: Self::Api,       shape: "diamond",   color: "#5b21b6", border_color: "#7c3aed", icon: "🔗", css_class: "dt-api",       label: "API".into(),       svg_template: SVG_DIAMOND },
-            Self::Schema    => DatumDisplay { datum_type: Self::Schema,    shape: "diamond",   color: "#4c1d95", border_color: "#6d28d9", icon: "📐", css_class: "dt-schema",    label: "Schema".into(),    svg_template: SVG_DIAMOND },
-
-            // ── Skills & Jobs (amber/orange tones) ──
-            Self::Skill     => DatumDisplay { datum_type: Self::Skill,     shape: "triangle",  color: "#d97706", border_color: "#fbbf24", icon: "🛠️",  css_class: "dt-skill",     label: "Skill".into(),     svg_template: SVG_TRIANGLE },
-            Self::Job       => DatumDisplay { datum_type: Self::Job,       shape: "triangle",  color: "#b45309", border_color: "#f59e0b", icon: "⏱️",  css_class: "dt-job",       label: "Job".into(),       svg_template: SVG_TRIANGLE },
-            Self::Hook      => DatumDisplay { datum_type: Self::Hook,      shape: "triangle",  color: "#92400e", border_color: "#d97706", icon: "🪝",  css_class: "dt-hook",      label: "Hook".into(),      svg_template: SVG_TRIANGLE },
-            Self::Gate      => DatumDisplay { datum_type: Self::Gate,      shape: "triangle",  color: "#78350f", border_color: "#c27803", icon: "🚧", css_class: "dt-gate",      label: "Gate".into(),      svg_template: SVG_TRIANGLE },
-
-            // ── Config & Bash & CLI (teal tones) ──
-            Self::Config    => DatumDisplay { datum_type: Self::Config,    shape: "rectangle", color: "#0d9488", border_color: "#2dd4bf", icon: "⚙️",  css_class: "dt-config",    label: "Config".into(),    svg_template: SVG_RECTANGLE },
-            Self::Bash      => DatumDisplay { datum_type: Self::Bash,      shape: "rectangle", color: "#0f766e", border_color: "#14b8a6", icon: "💻", css_class: "dt-bash",      label: "Bash".into(),      svg_template: SVG_RECTANGLE },
-            Self::Cli       => DatumDisplay { datum_type: Self::Cli,       shape: "rectangle", color: "#115e59", border_color: "#0d9488", icon: "⌨️",  css_class: "dt-cli",       label: "CLI".into(),       svg_template: SVG_RECTANGLE },
-            Self::Justfile  => DatumDisplay { datum_type: Self::Justfile,  shape: "rectangle", color: "#134e4a", border_color: "#0f766e", icon: "📜", css_class: "dt-justfile",  label: "Justfile".into(),  svg_template: SVG_RECTANGLE },
-            Self::Plan      => DatumDisplay { datum_type: Self::Plan,      shape: "rectangle", color: "#0f766e", border_color: "#14b8a6", icon: "📋", css_class: "dt-plan",      label: "Plan".into(),      svg_template: SVG_RECTANGLE },
-            Self::Vendor    => DatumDisplay { datum_type: Self::Vendor,    shape: "rectangle", color: "#115e59", border_color: "#0d9488", icon: "📦", css_class: "dt-vendor",    label: "Vendor".into(),    svg_template: SVG_RECTANGLE },
-
-            // ── Repo & Stack (rose tones) ──
-            Self::Stack     => DatumDisplay { datum_type: Self::Stack,     shape: "vee",       color: "#be123c", border_color: "#fb7185", icon: "📚", css_class: "dt-stack",     label: "Stack".into(),     svg_template: SVG_VEE },
-            Self::Repo      => DatumDisplay { datum_type: Self::Repo,      shape: "vee",       color: "#9f1239", border_color: "#f43f5e", icon: "📁", css_class: "dt-repo",      label: "Repo".into(),      svg_template: SVG_VEE },
-            Self::Vscode    => DatumDisplay { datum_type: Self::Vscode,    shape: "vee",       color: "#881337", border_color: "#e11d48", icon: "🆚", css_class: "dt-vscode",    label: "VSCode".into(),    svg_template: SVG_VEE },
-            Self::Apt       => DatumDisplay { datum_type: Self::Apt,       shape: "vee",       color: "#4c0519", border_color: "#9f1239", icon: "📦", css_class: "dt-apt",       label: "Apt".into(),       svg_template: SVG_VEE },
-
-            // ── Data (gray tones) ──
-            Self::Database   => DatumDisplay { datum_type: Self::Database,  shape: "rectangle", color: "#475569", border_color: "#94a3b8", icon: "🗄️",  css_class: "dt-database",  label: "Database".into(),  svg_template: SVG_RECTANGLE },
-            Self::HiveProfile=> DatumDisplay { datum_type: Self::HiveProfile, shape: "rectangle", color: "#334155", border_color: "#64748b", icon: "🏗️",  css_class: "dt-hive",      label: "Hive".into(),      svg_template: SVG_RECTANGLE },
-            Self::Polyseme   => DatumDisplay { datum_type: Self::Polyseme,   shape: "circle",    color: "#1e293b", border_color: "#475569", icon: "🔮", css_class: "dt-polyseme",  label: "Polyseme".into(),  svg_template: SVG_CIRCLE },
-            Self::Credential => DatumDisplay { datum_type: Self::Credential, shape: "circle",    color: "#0f172a", border_color: "#334155", icon: "🔐", css_class: "dt-credential",label: "Credential".into(),svg_template: SVG_CIRCLE },
-
-            Self::Unknown   => DatumDisplay { datum_type: Self::Unknown,   shape: "rectangle", color: "#1e293b", border_color: "#475569", icon: "❓", css_class: "dt-unknown",   label: "Unknown".into(),   svg_template: SVG_RECTANGLE },
+    pub fn resolve_display(&self, overrides: Option<&DisplayOverride>) -> DatumDisplay {
+        let sc = self.semantic_class();
+        let o = overrides.unwrap_or(&DisplayOverride::default());
+        DatumDisplay {
+            shape: o.shape.clone().unwrap_or_else(|| sc.shape().to_string()),
+            color: o.color.clone().unwrap_or_else(|| sc.color().to_string()),
+            border_color: o.border_color.clone().unwrap_or_else(|| sc.border_color().to_string()),
+            icon: o.icon.clone().unwrap_or_else(|| sc.icon().to_string()),
+            css_class: sc.css_class().to_string(),
+            svg: o.svg.clone(),
         }
-    }
-}
-
-// ── SVG shape templates (reusable across all visualization backends) ──────
-const SVG_CIRCLE: &str    = "<circle r='24' cx='28' cy='28' />";
-const SVG_RECTANGLE: &str = "<rect x='4' y='4' width='48' height='48' rx='8' />";
-const SVG_DIAMOND: &str   = "<polygon points='28,4 52,28 28,52 4,28' />";
-const SVG_HEXAGON: &str   = "<polygon points='28,4 48,16 48,40 28,52 8,40 8,16' />";
-const SVG_TRIANGLE: &str  = "<polygon points='28,6 50,48 6,48' />";
-const SVG_VEE: &str       = "<polygon points='4,4 28,52 52,4' />";
-
-impl DatumDisplay {
-    /// JSON-serializable cytoscape.js node style.
-    pub fn to_cytoscape_style(&self) -> serde_json::Value {
-        serde_json::json!({
-            "shape": self.shape,
-            "background-color": self.color,
-            "border-color": self.border_color,
-            "border-width": 2,
-            "label": self.label,
-            "icon": self.icon,
-            "css_class": self.css_class,
-        })
-    }
-
-    /// Full SVG node rendering with color, shape, and icon.
-    pub fn to_svg(&self) -> String {
-        let tmpl = self.svg_template;
-        format!(
-            concat!(
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 56 56\" width=\"56\" height=\"56\">\n",
-                "  <g fill=\"{}\" stroke=\"{}\" stroke-width=\"2\">\n",
-                "    {}\n",
-                "  </g>\n",
-                "  <text x=\"28\" y=\"32\" text-anchor=\"middle\" font-size=\"18\" fill=\"#fff\">{}</text>\n",
-                "</svg>"
-            ),
-            self.color, self.border_color, tmpl, self.icon
-        )
-    }
-
-    /// All display descriptors as a JSON array (for API responses).
-    pub fn all_displays() -> Vec<Self> {
-        use DatumType::*;
-        vec![K8s, Docker, Hardware, Overlay, Runtime, Nix,
-             Agent, Role, Ai, Training,
-             Mcp, McpServer, Api, Schema,
-             Skill, Job, Hook, Gate,
-             Config, Bash, Cli, Justfile, Plan, Vendor,
-             Stack, Repo, Vscode, Apt,
-             Database, HiveProfile, Polyseme, Credential,
-             Unknown]
-            .iter()
-            .map(|dt| dt.display())
-            .collect()
     }
 }
 
