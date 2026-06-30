@@ -365,7 +365,7 @@ hf-push-config config:
 # 🤓 just download: versioned URL avoids GitHub /latest/ redirect → 404 on renamed assets
 
 # 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
-cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="19.0":
+cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
     hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \

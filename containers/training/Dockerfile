@@ -16,7 +16,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # Layer training dependencies into the venv that unsloth:latest ships
 # 🤓 unsloth:latest ships /opt/venv; uv respects VIRTUAL_ENV when --system is absent
 ENV VIRTUAL_ENV=/opt/venv
-RUN uv pip install mlflow==2.21.3 pyyaml "huggingface_hub[hf_xet]>=0.26"
+RUN uv pip install mlflow==2.21.3 pyyaml "huggingface_hub[hf_xet]>=0.26" triton-kernels
 
 # Smoke-test: mlflow importable inside venv
 RUN /opt/venv/bin/python3 -c "import mlflow; print('mlflow', mlflow.__version__)"
