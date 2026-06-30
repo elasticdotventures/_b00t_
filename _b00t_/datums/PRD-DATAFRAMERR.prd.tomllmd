@@ -1,4 +1,4 @@
-# PRD: SoulTable — agent-extensible typed dataframe registry in SOUL.tomllmd
+# PRD: DataFramerr — agent-extensible typed dataframe registry in SOUL.tomllmd
 #
 # Purpose: agents extend their soul by encoding OLAP-style typed tables into
 # SOUL.tomllmd. Tables have dynamic schemas (concrete sub-types per column),
@@ -9,19 +9,19 @@
 # Cross-refs:
 #   b00t-cli/src/soul_writer.rs          — FileSoulWriter (write path, EXISTS)
 #   b00t-cli/src/cake_ledger.rs          — Decimal cake unit, CakeTicket (EXISTS)
-#   b00t-c0re-lib/src/soul_table.rs      — NEW: SoulRegistry/Table/Frame/Cursor/Alarm
-#   b00t-cli/src/commands/soul_table.rs  — NEW: CLI surface (b00t soul ...)
+#   b00t-c0re-lib/src/soul_dataframerr.rs      — NEW: SoulDataFramerrRegistry/Table/Frame/Cursor/Alarm
+#   b00t-cli/src/commands/soul_dataframerr.rs  — NEW: CLI surface (b00t soul ...)
 #   vendor/irontology-mcp / b00t-mcp     — NEW: MCP tool bindings
 
 [b00t.schema]
 version   = "1"
 type      = "prd"
-type_tags = ["prd", "soul", "table", "dataframe", "olap", "cursor",
+type_tags = ["dataframerr", "prd", "soul", "table", "dataframe", "olap", "cursor",
              "alarm", "obfuscated", "cake", "agent-extensible", "tomllmd"]
 
 [prd]
-id     = "PRD-SOUL-TABLE"
-title  = "SoulTable — typed dataframe registry with durable cursors and alarms"
+id     = "PRD-DATAFRAMERR"
+title  = "SoulDataFramerr — typed dataframe registry with durable cursors and alarms"
 status = "proposed"
 tier   = "frontier"
 
@@ -30,7 +30,7 @@ tier   = "frontier"
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [encoding]
-# The [soul] namespace in any SOUL.tomllmd encodes the full SoulRegistry.
+# The [soul] namespace in any SOUL.tomllmd encodes the full SoulDataFramerrRegistry.
 # Columns declared as "name:type" shorthand (see SoulColType variants below).
 
 example = """
@@ -68,7 +68,7 @@ emit      = "soul.budget.exceeded" # event name passed to hook_engine
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 2: Rust type system (b00t-c0re-lib/src/soul_table.rs — NEW FILE)
+# SECTION 2: Rust type system (b00t-c0re-lib/src/soul_dataframerr.rs — NEW FILE)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [rust_types]
@@ -83,10 +83,10 @@ SoulColType: column type tag (drives validation + serialisation strategy)
 SoulColumn { name: String, col_type: SoulColType, nullable: bool }
   — parsed from "name:type" shorthand; nullable suffix "?" e.g. "note:text?"
 
-SoulFrame { id: u64, created_at: DateTime<Utc>, fields: BTreeMap<String, SoulValue> }
+SoulRow { id: u64, created_at: DateTime<Utc>, fields: BTreeMap<String, SoulValue> }
   — a row; id is monotonic u64 assigned at insert; fields are column-keyed
 
-SoulTable { name: String, columns: Vec<SoulColumn>, frames: Vec<SoulFrame> }
+SoulDataFramerr { name: String, columns: Vec<SoulColumn>, frames: Vec<SoulRow> }
   — append-only by default; rows never mutated (immutable log, CRDT-safe)
 
 FrameCursor { table: String, frame_id: u64, tag: Option<String> }
@@ -98,7 +98,7 @@ SoulAlarm { name, table, column, condition: String, aggregate, emit: String }
   — condition is evaluated by a tiny expression parser (no proc macro, no regex)
   — emit value is passed to hook_engine::fire_event(name, payload)
 
-SoulRegistry { tables: BTreeMap<String,SoulTable>, cursors: BTreeMap<String,FrameCursor>, alarms: Vec<SoulAlarm> }
+SoulDataFramerrRegistry { tables: BTreeMap<String,SoulDataFramerr>, cursors: BTreeMap<String,FrameCursor>, alarms: Vec<SoulAlarm> }
   — top-level [soul] in SOUL.tomllmd; serde round-trips cleanly
 
 ObfuscatedStr(String)  — newtype; stored as "b64xor:<base64(plaintext XOR key)>"
@@ -144,9 +144,9 @@ b00t soul token decode <b64xor:...>             # decode ObfuscatedStr to plaint
 
 [mcp_tools]
 tools = """
-soul_table_create(name: str, columns: list[str])        → { table: str, ok: bool }
-soul_frame_insert(table: str, fields: dict)             → { frame_id: int }
-soul_frame_query(table: str, filter?: str)              → { frames: list[dict] }
+soul_dataframerr_create(name: str, columns: list[str])        → { table: str, ok: bool }
+soul_row_insert(table: str, fields: dict)             → { frame_id: int }
+soul_row_query(table: str, filter?: str)              → { frames: list[dict] }
 soul_cursor_create(name: str, table: str)               → { cursor: str, frame_id: int }
 soul_cursor_next(name: str)                             → { frame: dict | null, at_eof: bool }
 soul_cursor_reset(name: str)                            → { ok: bool }
@@ -186,10 +186,10 @@ Cursor lease / locking (v2):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [kaizen]
-k1 = "b00t-c0re-lib/src/soul_table.rs — SoulRegistry + all types + serde round-trip tests"
-k2 = "b00t-c0re-lib/src/soul_table.rs — ObfuscatedStr XOR+base64 encode/decode"
-k3 = "b00t-cli/src/commands/soul_table.rs — CLI commands (table/frame/cursor/alarm/token)"
-k4 = "b00t-mcp: soul_table_* MCP tool bindings via b00t_exec dispatch"
+k1 = "b00t-c0re-lib/src/soul_dataframerr.rs — SoulDataFramerrRegistry + all types + serde round-trip tests"
+k2 = "b00t-c0re-lib/src/soul_dataframerr.rs — ObfuscatedStr XOR+base64 encode/decode"
+k3 = "b00t-cli/src/commands/soul_dataframerr.rs — CLI commands (table/frame/cursor/alarm/token)"
+k4 = "b00t-mcp: soul_dataframerr_* MCP tool bindings via b00t_exec dispatch"
 k5 = "alarm evaluation + hook_engine::fire_event integration"
 k6 = "SoulColType::Mime for multipart/binary frame fields (STRETCH)"
 
@@ -200,7 +200,7 @@ k3_blocks = []                   # CLI independent of MCP
 k5_requires = "hook_engine::fire_event signature stable"
 
 # b00t:map v1
-# summary: SoulTable — agent-extensible typed dataframe in SOUL.tomllmd with cursors + alarms
+# summary: SoulDataFramerr — agent-extensible typed dataframe in SOUL.tomllmd with cursors + alarms
 # tags: soul, table, dataframe, olap, cursor, alarm, obfuscated, cake, tomllmd
 # tier: frontier
 # cmds: b00t soul table create budget_tracker cost_cake:cake model:text hf_token:token
