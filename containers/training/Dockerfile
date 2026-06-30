@@ -25,12 +25,10 @@ RUN uv pip install pyyaml
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
 RUN /opt/venv/bin/python3 -c "import importlib.metadata, numpy as np; v=importlib.metadata.version('numpy'); assert v == np.__version__, f'numpy mismatch: {np.__version__} vs {v}'; print('numpy OK', v)"
 
-# Set UNSLOTH_CACHE_DIR — directory must exist or unsloth falls back to cwd (breaks at EPERM)
-# 🤓 Pre-warming removed: `from unsloth import FastLanguageModel` triggers internal pip calls
-#    that can upgrade numpy and create dist-info/binary mismatch (loaded 2.2.6 ≠ installed 2.4.1)
-#    Model-specific kernels always JIT on first step regardless of pre-warm.
-ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache
-RUN mkdir -p /opt/unsloth_compiled_cache
+# Set UNSLOTH_CACHE_DIR to /tmp to avoid /opt/ permission issues (base image may run non-root)
+# 🤓 /tmp is always writable at HF Jobs runtime; unsloth creates the dir on first use.
+#    Pre-warming removed: internal pip calls in unsloth import can mutate numpy dist-info.
+ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 
 LABEL org.opencontainers.image.source="https://github.com/elasticdotventures/_b00t_"
 LABEL org.opencontainers.image.description="b00t fine-tuning image: unsloth + mlflow + uv"
