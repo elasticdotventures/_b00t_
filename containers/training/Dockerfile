@@ -18,13 +18,7 @@ RUN uv pip install "numpy>=2.4" pyyaml
 
 # Smoke-tests: yaml importable; numpy >=2.4 and self-consistent (no mid-session-upgrade risk)
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
-RUN /opt/venv/bin/python3 -c "
-import importlib.metadata, numpy as np
-v = importlib.metadata.version('numpy')
-assert v == np.__version__, f'numpy mismatch: {np.__version__} vs {v}'
-assert tuple(int(x) for x in v.split('.')[:2]) >= (2,4), f'numpy {v} < 2.4 required'
-print('numpy >=2.4 OK', v)
-"
+RUN /opt/venv/bin/python3 -c "import importlib.metadata as m, numpy as np; v=m.version('numpy'); assert v==np.__version__, f'mismatch: {np.__version__} vs {v}'; major,minor=int(v.split('.')[0]),int(v.split('.')[1]); assert (major,minor)>=(2,4), f'{v}<2.4'; print('numpy >=2.4 OK', v)"
 
 # UNSLOTH_CACHE_DIR: /tmp always writable at HF Jobs runtime (base image may run non-root)
 ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
