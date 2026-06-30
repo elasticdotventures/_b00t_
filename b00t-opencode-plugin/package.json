@@ -1,0 +1,7 @@
+{
+  "name": "b00t-opencode-plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./plugin.js",
+  "description": "/b00t slash command — skill registry, session-scoped enable/disable"
+}

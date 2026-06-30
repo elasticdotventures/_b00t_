@@ -2551,3 +2551,10 @@ chrome-b00t:
     @mkdir -p /mnt/c/b00t/browser-ext
     @cp -r b00t-browser-ext/build/chrome-mv3-prod/* /mnt/c/b00t/browser-ext/
     powershell.exe -ExecutionPolicy Bypass -File "C:\\b00t\\install-b00t-ext.ps1"
+
+# 🔌 Install opencode plugins (/goal, /b00t)
+opencode-plugins:
+    @echo "🥾 Installing opencode plugins..."
+    cd {{ justfile_directory() }} && npm install opencode-goal-plugin
+    cd {{ justfile_directory() }} && opencode plugin ./node_modules/opencode-goal-plugin
+    @echo "✅ /goal + /b00t available after restart"
