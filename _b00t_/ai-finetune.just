@@ -365,7 +365,7 @@ hf-push-config config:
 # 🤓 just download: versioned URL avoids GitHub /latest/ redirect → 404 on renamed assets
 
 # 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
-cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="19.0":
+cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
     hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
       --timeout {{ timeout_hours }}h \
@@ -377,8 +377,7 @@ cloud-train flavor="a100-large" config="config-cloud-coder.yaml" timeout_hours="
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
-        command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
+      /bin/sh -c "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }}"
 
 # Convenience alias: Qwen3-Coder-30B on A100-large — budget-gated
@@ -389,7 +388,7 @@ cloud-coder:
     import subprocess, sys, json, os, pathlib, datetime
     # 1. Budget gate
     gate = subprocess.run(
-        ["just", "ai-finetune::budget-gate", "a100-large", "fine-tune/config-cloud-coder.yaml"],
+        ["just", "ai-finetune::budget-gate", "h200", "fine-tune/config-cloud-coder.yaml"],
         capture_output=True, text=True
     )
     if gate.returncode != 0:
@@ -403,8 +402,8 @@ cloud-coder:
     # 3. Submit job with resume token as label for billing reconciliation
     result = subprocess.run([
         "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
-        "--flavor", "a100-large",
-        "--timeout", "19.0h",
+        "--flavor", "h200",
+        "--timeout", "10.0h",
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
@@ -415,11 +414,49 @@ cloud-coder:
         "--label", f"ledgrrr_resume_token={resume_token}",
         "--detach",
         "/bin/sh", "-c",
-        "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && "
         "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
         "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
         "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
         "$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/config-cloud-coder.yaml"
+    ])
+    sys.exit(result.returncode)
+
+
+# Dense 14B Coder — no MoE, avoids triton_kernels.routing requirement
+# 🤓 Qwen3-Coder-30B-A3B (MoE) requires triton_kernels.routing which is NOT on PyPI.
+#    Use this recipe for reliable training: Qwen3-Coder-14B-Instruct (dense) on A10g-large.
+#    14B 4-bit: ~7GB weights, ~20GB total → fits A10g-large 24GB. ~15-25s/step = ~3h = ~.50.
+cloud-coder-14b:
+    #!/usr/bin/env python3
+    import subprocess, sys, pathlib, datetime
+    gate = subprocess.run(
+        ["just", "ai-finetune::budget-gate", "a10g-large", "fine-tune/config-cloud-coder-14b.yaml"],
+        capture_output=True, text=True
+    )
+    if gate.returncode != 0:
+        print(gate.stdout + gate.stderr, end="", flush=True)
+        print("❌ cloud-coder-14b blocked: cake budget gate denied", file=sys.stderr)
+        sys.exit(gate.returncode)
+    ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+    resume_token = f"b00t-hf-coder14-{ts:016x}"
+    pathlib.Path(".b00t/last-delegate-token").write_text(resume_token)
+    result = subprocess.run([
+        "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
+        "--flavor", "a10g-large",
+        "--timeout", "5.0h",
+        "-e", "HF_HOME=/tmp/hf-cache",
+        "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
+        "-e", "TORCHDYNAMO_DISABLE=1",
+        "-e", "UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache",
+        "--secrets", "HF_TOKEN",
+        "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
+        "--label", f"ledgrrr_resume_token={resume_token}",
+        "--detach",
+        "/bin/sh", "-c",
+        "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
+        "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
+        "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
+        "$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/config-cloud-coder-14b.yaml"
     ])
     sys.exit(result.returncode)
 
@@ -440,8 +477,7 @@ cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" 
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
       --detach \
-      /bin/sh -c "pip install -q unsloth mlflow 'huggingface_hub[hf_xet]>=0.26' && \
-        command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
+      /bin/sh -c "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; } && \
         \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{ config }} {{ checkpoint }}"
 
 # List all HF Jobs (active + recent)
@@ -771,3 +807,96 @@ translate query:
 
     print(f"# no match for: {query}")
     sys.exit(1)
+
+## ── Inference (provider-agnostic) ────────────────────────────────────────────
+## Usage:
+##   just ai-finetune::inference-deploy                        # default: k8s
+##   INFERENCE_PROVIDER=runpod just ai-finetune::inference-deploy
+##
+## Providers: k8s (local ch0nky), runpod (serverless endpoint)
+## Config: PROVIDER-RUNPOD.provider.tomllmd / PROVIDER-HF.provider.tomllmd
+
+INFERENCE_PROVIDER := env_var_or_default("INFERENCE_PROVIDER", "k8s")
+FRAMEWORK          := env_var_or_default("FRAMEWORK", "unsloth")
+ORCHESTRATOR       := env_var_or_default("ORCHESTRATOR", "hf")
+
+# Deploy inference endpoint — routes to provider impl below
+inference-deploy:
+    @echo "→ deploying inference via provider={{ INFERENCE_PROVIDER }}"
+    @just ai-finetune::inference-deploy-{{ INFERENCE_PROVIDER }}
+
+# Alias: get endpoint/pod status for active inference provider
+inference-status:
+    @just ai-finetune::inference-status-{{ INFERENCE_PROVIDER }}
+
+# Alias: tear down inference endpoint for active provider
+inference-teardown:
+    @just ai-finetune::inference-teardown-{{ INFERENCE_PROVIDER }}
+
+# ── k8s (local sm3lly ch0nky) ─────────────────────────────────────────────────
+
+# Deploy ch0nky inference on local k8s (existing Qwen3 pod)
+inference-deploy-k8s:
+    kubectl rollout status deployment/ch0nky -n b00t-inference
+    @echo "✓ k8s ch0nky running"
+
+# k8s ch0nky status
+inference-status-k8s:
+    kubectl get pods -n b00t-inference -l app=ch0nky -o wide
+
+# k8s: rolling restart to pick up new adapter (calls chonky-rollout)
+inference-teardown-k8s:
+    @echo "⚠️  k8s: teardown not supported — use: kubectl scale deployment/ch0nky --replicas=0 -n b00t-inference"
+
+# ── RunPod Serverless ─────────────────────────────────────────────────────────
+
+# Deploy ch0nky as RunPod serverless endpoint (scale-to-zero; requires RUNPOD_API_KEY)
+# Endpoint config defaults from PROVIDER-RUNPOD.provider.tomllmd
+# Pass RUNPOD_TEMPLATE_ID=<id> for the inference worker template
+inference-deploy-runpod:
+    @echo "→ deploying RunPod serverless endpoint"
+    b00t-cli provider endpoint deploy \
+      --provider runpod \
+      --name b00t-ch0nky \
+      --gpu-types "NVIDIA A40,NVIDIA RTX A6000"
+
+# RunPod endpoint status by ID (set RUNPOD_ENDPOINT_ID after deploy)
+inference-status-runpod endpoint_id="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    id="{{ endpoint_id }}"
+    if [[ -z "$id" ]]; then
+        b00t-cli provider endpoint list --provider runpod
+    else
+        b00t-cli provider endpoint status --provider runpod "$id"
+    fi
+
+# Tear down RunPod endpoint (stops billing)
+inference-teardown-runpod endpoint_id:
+    b00t-cli provider endpoint teardown --provider runpod {{ endpoint_id }}
+
+# List all RunPod endpoints
+inference-list-runpod:
+    b00t-cli provider endpoint list --provider runpod
+
+# ── Training provider dispatch (future: ORCHESTRATOR=dstack) ──────────────────
+
+# Submit training job via configured ORCHESTRATOR (hf|runpod; dstack in sprint 2)
+provider-train config="config-cloud-coder.yaml" flavor="a100-large" timeout_hours="10.0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "→ training: FRAMEWORK={{ FRAMEWORK }} ORCHESTRATOR={{ ORCHESTRATOR }}"
+    b00t-cli provider job submit \
+      --provider {{ ORCHESTRATOR }} \
+      --config fine-tune/{{ config }} \
+      --image ghcr.io/elasticdotventures/b00t-training-image:latest \
+      --flavor {{ flavor }} \
+      --timeout-hours {{ timeout_hours }}
+
+# List training jobs for active ORCHESTRATOR
+provider-train-list:
+    b00t-cli provider job list --provider {{ ORCHESTRATOR }}
+
+# Cancel a training job
+provider-train-cancel job_id:
+    b00t-cli provider job cancel --provider {{ ORCHESTRATOR }} {{ job_id }}

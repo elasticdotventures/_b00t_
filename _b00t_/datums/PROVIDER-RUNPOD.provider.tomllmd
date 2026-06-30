@@ -1,0 +1,83 @@
+# RunPod — GPU Cloud Provider
+#
+# RunPod provides two compute primitives:
+#   Endpoint (Serverless) — scale-to-zero inference; workers_min=0; billed per request
+#   Pod (On-Demand/Spot)  — persistent GPU container; billed per hour
+#
+# For b00t:
+#   inference → Endpoint (serverless, RunPod Serverless API)
+#   training  → Pod (on-demand, or via dstack backend in sprint 2)
+#
+# Auth: set RUNPOD_API_KEY in environment (from console.runpod.io → Settings → API Keys)
+#
+# Rust client: runpod = "0.1.30" (reqwest-based, async)
+#   RunpodClient::new(api_key)
+#   .create_endpoint(EndpointCreateInput { gpu_type_ids, workers_max, template_id, ... })
+#   .list_endpoints() / .get_endpoint(id) / .delete_endpoint(id)
+#
+# b00t CLI: b00t provider endpoint deploy|status|teardown|list --provider runpod
+
+[b00t.schema]
+version   = "1"
+type      = "api"
+type_tags = ["provider", "inference", "training", "gpu", "cloud"]
+
+[resource]
+name          = "RunPod GPU Cloud"
+api_key_env   = "RUNPOD_API_KEY"
+console_url   = "https://console.runpod.io"
+rust_crate    = "runpod"
+rust_version  = "0.1.30"
+
+# GPU flavors available for inference endpoints
+# 🤓 IDs are RunPod's canonical gpu_type_id strings — used in EndpointCreateInput.gpu_type_ids
+[resource.gpu_types]
+"NVIDIA A100 80GB PCIe"    = { vram_gb = 80,  price_per_hr = 1.64, tier = "frontier" }
+"NVIDIA A100-SXM4-80GB"    = { vram_gb = 80,  price_per_hr = 1.89, tier = "frontier" }
+"NVIDIA H100 PCIe"         = { vram_gb = 80,  price_per_hr = 2.39, tier = "frontier" }
+"NVIDIA A40"               = { vram_gb = 48,  price_per_hr = 0.79, tier = "ch0nky"   }
+"NVIDIA RTX A6000"         = { vram_gb = 48,  price_per_hr = 0.79, tier = "ch0nky"   }
+"NVIDIA RTX 4090"          = { vram_gb = 24,  price_per_hr = 0.74, tier = "ch0nky"   }
+"NVIDIA RTX 3090"          = { vram_gb = 24,  price_per_hr = 0.44, tier = "sm0l"     }
+
+# Inference endpoint defaults
+[resource.endpoint_defaults]
+workers_min         = 0      # scale-to-zero; no idle cost
+workers_max         = 3
+idle_timeout_s      = 5
+execution_timeout_ms = 30000
+scaler_type         = "QUEUE_DELAY"
+scaler_value        = 4      # scale up when queue wait > 4s
+gpu_type_ids        = ["NVIDIA A40", "NVIDIA RTX A6000"]  # ch0nky default
+
+# b00t ch0nky inference endpoint template
+# axolotlai/axolotl ships vLLM-ready; or use vllm/vllm-openai directly
+[resource.inference_template]
+# template_id is set after first `b00t provider endpoint deploy`
+# image: vllm/vllm-openai:latest or custom b00t-inference-image
+image             = "vllm/vllm-openai:latest"
+network_volume_id = ""   # set to RunPod network volume ID holding the adapter
+env = { HUGGING_FACE_HUB_TOKEN = "$HF_TOKEN", MODEL_NAME = "Qwen/Qwen3-Coder-30B-A3B-Instruct" }
+
+[[resource.usages]]
+description = "Deploy ch0nky inference endpoint on RunPod serverless"
+command     = "b00t-cli provider endpoint deploy --provider runpod"
+
+[[resource.usages]]
+description = "Check endpoint status"
+command     = "b00t-cli provider endpoint status --provider runpod"
+
+[[resource.usages]]
+description = "Tear down endpoint (stops billing)"
+command     = "b00t-cli provider endpoint teardown --provider runpod"
+
+[[resource.usages]]
+description = "List all RunPod endpoints"
+command     = "b00t-cli provider endpoint list --provider runpod"
+
+# b00t:map v1
+# summary: RunPod GPU cloud provider — serverless inference endpoints + on-demand training pods
+# tags: provider, runpod, inference, gpu, serverless, endpoint, training
+# tier: ch0nky
+# cmds: b00t-cli provider endpoint deploy --provider runpod
+# complexity: 4

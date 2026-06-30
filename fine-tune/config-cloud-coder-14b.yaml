@@ -1,0 +1,44 @@
+# b00t cloud fine-tune: Qwen3-Coder-14B-Instruct on HF Jobs A10g
+# Dense model (no MoE) — avoids triton_kernels.routing dependency
+# Submit with: just ai-finetune::cloud-coder-14b
+# Monitor with: just ai-finetune::hf-job-ps && just ai-finetune::hf-job-logs <id>
+# Adapter lands at: elasticdotventures/b00t-qwen3-coder-14b
+
+base_model: "Qwen/Qwen3-Coder-14B-Instruct"
+adapter_name: "b00t-qwen3-coder-14b"
+dataset_path: "/data/train.jsonl"
+output_dir: "/tmp/output"
+hub_model_id: "elasticdotventures/b00t-qwen3-coder-14b"
+push_to_hub: true
+private: true
+
+# Dense 14B in 4-bit: ~7GB weights; A10g-large 24GB fits cleanly
+load_in_4bit: true
+
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel requires 0 dropout
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 1
+batch_size: 2
+grad_accum: 8
+learning_rate: 1e-4
+max_seq_length: 2048
+packing: true
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+save_steps: 50
+
+use_gradient_checkpointing: true
+report_to: "none"
+logging_steps: 10
