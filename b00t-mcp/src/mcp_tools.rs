@@ -1429,7 +1429,7 @@ impl crate::clap_reflection::McpExecutor for BVerifyCommand {
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover + viz + log + verify (8 tools)
+    // Surface: learn + whoami + status + exec + discover + viz + log + verify + DataFramerr (19 tools)
     builder
         .register::<LearnCommand>()
         .register::<WhoamiCommand>()
@@ -1439,6 +1439,7 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<BVizGenerateCommand>()
         .register::<BLogCommand>()
         .register::<BVerifyCommand>();
+    crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
     builder.build()
 }
 
@@ -1516,6 +1517,7 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
     // .register::<AcpHiveReadyCommand>()
     // .register::<AcpHiveShowCommand>()
     // .register::<AcpHiveLeaveCommand>();
+    crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
 
     builder.build()
 }
