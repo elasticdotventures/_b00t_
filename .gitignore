@@ -312,3 +312,4 @@ ooda-state.json
 evidence/satisfies.jsonl
 test/bats/
 test/test_helper/
+buildd/
