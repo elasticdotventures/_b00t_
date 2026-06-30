@@ -1381,6 +1381,7 @@ transport = "stdio"
     }
 
     #[test]
+    #[ignore = "calls real `claude mcp add-json` which triggers HF OAuth — integration test only"]
     fn test_sync_legacy_codex_fallback() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_str().unwrap();
