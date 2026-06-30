@@ -16,7 +16,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # Layer training dependencies into the venv that unsloth:latest ships
 # 🤓 unsloth:latest ships /opt/venv; uv respects VIRTUAL_ENV when --system is absent
 ENV VIRTUAL_ENV=/opt/venv
-RUN uv pip install mlflow==2.21.3 pyyaml "huggingface_hub[hf_xet]>=0.26" triton-kernels
+# 🤓 pin numpy first — mlflow/hf_xet transitive deps would otherwise upgrade numpy 2.2→2.4
+#    which causes RuntimeError in unsloth_zoo at import time ("numpy was upgraded mid-session")
+# 🤓 triton-kernels==0.1.0 does NOT provide triton_kernels.routing — removed (wrong package)
+RUN uv pip install "numpy==2.2.6" mlflow==2.21.3 pyyaml "huggingface_hub[hf_xet]>=0.26"
 
 # Smoke-test: mlflow importable inside venv
 RUN /opt/venv/bin/python3 -c "import mlflow; print('mlflow', mlflow.__version__)"

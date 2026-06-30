@@ -1,37 +1,42 @@
 ---
-unsloth-cache: UNSLOTH_CACHE_DIR must exist + Triton MoE kernels control step time; pre-warm is model-specific; H200 needed for 30B MoE
-# summary: Unsloth compiled cache and Triton MoE kernel gotchas for HF Jobs training
+unsloth-cache: UNSLOTH_CACHE_DIR + triton_kernels.routing (NOT on PyPI) control MoE step time; dense models avoid the issue
+# summary: Unsloth cache, triton MoE routing unavailability, and dense model fallback
 # tags: unsloth, training, triton, moe, hf-jobs, performance
 # tier: frontier
-# cmds: ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache; uv pip install triton-kernels
-# complexity: 7
+# cmds: ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache
+# complexity: 8
 
-## LFMF: Unsloth Cache + MoE Step Time on HF Jobs
+## LFMF: Unsloth Cache + MoE Triton Routing on HF Jobs
 
 ### Issue 1: UNSLOTH_CACHE_DIR must exist and be writable
 - **Root cause of $85 bill**: `permission denied: 'unsloth_compiled_cache'` (relative path)
   → JIT recompile every forward pass → 309s/step vs 5s/step on A100 (60x cost)
 - **Fix**: In Dockerfile: `ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache` + `RUN mkdir -p`
-- **Note**: Pre-warming with `from unsloth import FastLanguageModel` bakes generic kernels,
-  NOT model-specific ones. Model-specific kernels still JIT on first step.
 
-### Issue 2: triton-kernels package required for MoE routing
-- **Symptom**: `No module named 'triton_kernels.routing'` → fallback → 325s/step
-- **Fix**: `uv pip install triton-kernels` in Dockerfile
-- `triton-kernels` (PyPI) is SEPARATE from `triton` — both are needed for MoE
-- `triton_kernels.routing` = fast MoE scatter/gather; without it step time 2.5x worse
+### Issue 2: triton_kernels.routing is NOT available on PyPI
+- **Symptom**: `No module named 'triton_kernels.routing'` → 184s/step on H200, 325s/step on A100
+- **Wrong fix**: `uv pip install triton-kernels` ← triton-kernels==0.1.0 provides ONLY
+  add_vectors.py + rotary_embedding.py — does NOT provide routing submodule
+- **Root cause**: `triton_kernels.routing` is internal Meta/OpenAI tooling (gpt_oss_triton_kernels_moe.py)
+  This module is NOT available on any public PyPI index
+- **Workaround**: Use DENSE models (Qwen3-Coder-14B) instead of MoE models (Qwen3-30B-A3B)
 
 ### Issue 3: pip install unsloth in job command invalidates pre-warmed cache
-- Upgrading unsloth at job start changes the JIT cache format/path
-- **Fix**: Do NOT `pip install unsloth` in cloud-train command when using custom GHCR image
-- Deps belong in Dockerfile (built once), not re-installed at every job start
+- Upgrading unsloth at job start changes cache format/path
+- **Fix**: Do NOT `pip install unsloth` in cloud-train command; deps pre-baked in GHCR image
 
-### Step time expectations on HF Jobs
-- A100 80GB (a100-large): ~130s/step for Qwen3-30B-MoE-128E (MoE routing scatter bound)
-- A100 without triton-kernels: ~325s/step (PyTorch fallback)
-- H200 141GB (h200): ~50s/step (faster HBM + better MoE routing)
+### Step time without triton_kernels.routing
+| Hardware | Model | triton routing | step time |
+|---|---|---|---|
+| A100 80GB | Qwen3-30B-A3B (MoE) | ✓ | ~130s |
+| A100 80GB | Qwen3-30B-A3B (MoE) | ✗ | ~325s |
+| H200 141GB | Qwen3-30B-A3B (MoE) | ✗ | ~184s |
+| A10g 24GB | Qwen3-Coder-14B (dense) | N/A | ~15-25s |
 
-### Budget implication
-- 573 steps × 130s = 20.7h > 19h timeout → A100 can't finish Qwen3-30B in 1 epoch
-- 573 steps × 50s = 7.9h → H200 finishes in budget (~$68 at $8.50/hr)
-- Use `h200` flavor for Qwen3-30B-MoE; A100 only for smaller models
+### Budget comparison
+- 573 steps × 184s = 29h → H200 MoE (no triton) CANNOT finish in 10h timeout
+- 573 steps × 20s = 3.2h → A10g-large dense 14B → ~$4.50 ← USE THIS
+
+### Correct recipe
+- `just ai-finetune::cloud-coder-14b` → A10g-large, 5h timeout, ~$4.50/epoch
+- `just ai-finetune::cloud-coder` → H200 10h, use ONLY if triton_kernels.routing is fixed
