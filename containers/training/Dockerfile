@@ -25,8 +25,9 @@ RUN uv pip install "numpy~=2.4.1" pyyaml "huggingface_hub[hf_xet]>=0.26" triton-
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
 RUN /opt/venv/bin/python3 -c "import importlib.metadata as m, numpy as np; v=m.version('numpy'); assert v==np.__version__, f'mismatch: {np.__version__} vs {v}'; assert v.startswith('2.4'), f'{v} not 2.4.x'; print('numpy 2.4.x OK', v)"
 
-# UNSLOTH_CACHE_DIR: /tmp always writable at HF Jobs runtime (base image may run non-root)
-ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
+# 🤓 unsloth_zoo/compiler.py reads UNSLOTH_COMPILE_LOCATION (not UNSLOTH_CACHE_DIR)
+#    default is relative 'unsloth_compiled_cache' which fails on read-only CWD
+ENV UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache
 
 LABEL org.opencontainers.image.source="https://github.com/elasticdotventures/_b00t_"
 LABEL org.opencontainers.image.description="b00t fine-tuning image: unsloth + uv + numpy>=2.4"
