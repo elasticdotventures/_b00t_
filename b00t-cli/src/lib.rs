@@ -1386,9 +1386,9 @@ impl DatumType {
             | Self::Runtime | Self::Nix => SemanticClass::Infra,
             Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
             Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
-            Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Ooda => SemanticClass::Skill,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate => SemanticClass::Skill,
             Self::Config | Self::Bash | Self::Cli | Self::Justfile
-            | Self::Plan | Self::Vendor => SemanticClass::Tool,
+            | Self::Plan | Self::Vendor | Self::Ooda => SemanticClass::Tool,
             Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
             Self::Database | Self::HiveProfile => SemanticClass::Data,
             Self::Polyseme | Self::Credential => SemanticClass::Secret,
