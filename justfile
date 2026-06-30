@@ -666,6 +666,55 @@ cliff:
 inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
 
+# ── HF Cloud — dataset sync + job lifecycle ────────────────────────────────────
+
+# Upload train.jsonl + ai-finetune.just + active config to HF dataset repo (source of truth for cloud jobs)
+hf-dataset-push config="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --repo-type dataset
+    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --repo-type dataset
+    hf upload elasticdotventures/b00t-training _b00t_/ai-finetune.just ai-finetune.just --repo-type dataset
+    if [[ -n "{{config}}" ]]; then
+        hf upload elasticdotventures/b00t-training "fine-tune/{{config}}" "{{config}}" --repo-type dataset
+        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just + {{config}}"
+    else
+        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just (no config — pass config=<file> to include)"
+    fi
+
+# Submit a training job to HF Jobs; pass config=<filename> and flavor=a10g-large|a100-large
+# 🤓 job loads ai-finetune.just + config from hf://datasets/elasticdotventures/b00t-training
+hf-job-submit config flavor="a10g-large":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -z "{{config}}" ]] && { echo "⚠️  pass config=<filename>  e.g. just hf-job-submit config=config-phi4-mini.yaml" >&2; exit 1; }
+    hf jobs run \
+      --image ghcr.io/elasticdotventures/b00t-training-image:latest \
+      --flavor "{{flavor}}" \
+      --timeout 10h \
+      --env HF_HOME=/tmp/hf-cache \
+      --env UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
+      --env UNSLOTH_VLLM_STANDBY=0 \
+      --secret HF_TOKEN \
+      --volume "hf://datasets/elasticdotventures/b00t-training:/data:ro" \
+      -- /bin/sh -c "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; }; \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{config}}"
+
+# Poll status of a HF job
+hf-job-status job_id:
+    hf jobs status {{job_id}}
+
+# Stream logs from a running or completed HF job
+hf-job-logs job_id:
+    hf jobs logs {{job_id}}
+
+# Cancel a running HF job
+hf-job-cancel job_id:
+    hf jobs cancel {{job_id}}
+
+# Pull completed adapter from HF Hub to local sm3lly
+hf-adapter-pull repo dest="fine-tune/output-cloud/lora-adapter":
+    hf download "{{repo}}" --repo-type model --local-dir "{{dest}}"
+
 # Hugging Face model caching helper
 hf-download model dest="" revision="":
 	#!/usr/bin/env bash
