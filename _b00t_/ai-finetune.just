@@ -422,10 +422,8 @@ cloud-coder:
     sys.exit(result.returncode)
 
 
-# Dense 14B Coder — no MoE, avoids triton_kernels.routing requirement
-# 🤓 Qwen3-Coder-30B-A3B (MoE) requires triton_kernels.routing which is NOT on PyPI.
-#    Use this recipe for reliable training: Qwen3-Coder-14B-Instruct (dense) on A10g-large.
-#    14B 4-bit: ~7GB weights, ~20GB total → fits A10g-large 24GB. ~15-25s/step = ~3h = ~.50.
+# ⚠️ DEPRECATED — Qwen2.5-Coder-14B-Instruct not desired; config archived for reference
+# Do not run. Create a new recipe + config for the target model instead.
 cloud-coder-14b:
     #!/usr/bin/env python3
     import subprocess, sys, pathlib, datetime
