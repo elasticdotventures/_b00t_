@@ -29,8 +29,8 @@ target_modules:
   - "down_proj"
 
 num_epochs: 1
-batch_size: 2
-grad_accum: 8
+batch_size: 1
+grad_accum: 16
 learning_rate: 1e-4
 max_seq_length: 2048
 packing: true
