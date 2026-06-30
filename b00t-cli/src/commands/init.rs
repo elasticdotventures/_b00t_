@@ -5,8 +5,7 @@ use crate::traits::*;
 use crate::whoami;
 use anyhow::{Context, Result};
 use clap::Parser;
-use duct::cmd;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Parser)]
 pub enum InitCommands {
