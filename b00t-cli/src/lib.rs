@@ -1245,6 +1245,7 @@ pub enum DatumType {
     Schema,
     Training,
     Vendor,
+    Ooda,
     Unknown,
 }
 
@@ -1385,7 +1386,7 @@ impl DatumType {
             | Self::Runtime | Self::Nix => SemanticClass::Infra,
             Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
             Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
-            Self::Skill | Self::Job | Self::Hook | Self::Gate => SemanticClass::Skill,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Ooda => SemanticClass::Skill,
             Self::Config | Self::Bash | Self::Cli | Self::Justfile
             | Self::Plan | Self::Vendor => SemanticClass::Tool,
             Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
@@ -1495,6 +1496,7 @@ impl DatumType {
         Schema      => ["schema"]                    => ".schema",
         Training    => ["training"]                  => ".training",
         Vendor      => ["vendor"]                    => ".vendor",
+        Ooda        => ["ooda"]                      => ".ooda",
     }
 
     /// Preferred file extension for writing new datum files.
@@ -2289,6 +2291,18 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
                 });
                 break;
             }
+        }
+    }
+
+    // OODA — execute the observe/orient/decide/act loop
+    let ooda_suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
+    for suffix in &ooda_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            results.push(DatumDispatch::Info(format!(
+                "ooda loop '{}' — run with: b00t ooda run {}", candidate, candidate
+            )));
+            break;
         }
     }
 
