@@ -620,12 +620,6 @@ pub struct BootDatum {
     #[serde(default)]
     pub requires_sudo: bool,
 
-    // ── Display override: datum declares its own visual identity ──────────
-    // 🤓 Any field in [b00t.display] overrides the SemanticClass default.
-    //    Datums describe themselves rather than a central file describing them.
-    #[serde(default)]
-    pub display: Option<DisplayOverride>,
-
     // MCP server fields
     pub command: Option<String>,
     pub args: Option<Vec<String>>,
@@ -1552,8 +1546,9 @@ impl std::fmt::Display for DatumType {
     }
 }
 
-/// Visual display descriptor — resolved at runtime from datum TOML + semantic defaults.
-/// 🤓 The datum's own .toml file is authoritative.  This struct is the fallback.
+/// Visual display descriptor — derived from [SemanticClass] at compile time.
+/// 🤓 Rust types own their display.  Subsystems with code provide CSS animations
+///    via css_class.  No TOML overrides — code is the single source of truth.
 #[derive(Serialize, Debug, Clone)]
 pub struct DatumDisplay {
     pub shape: String,
@@ -1561,35 +1556,33 @@ pub struct DatumDisplay {
     pub border_color: String,
     pub icon: String,
     pub css_class: String,
-    /// SVG fragment (optional, overrides semantic default)
-    pub svg: Option<String>,
-}
-
-/// Optional `[b00t.display]` section in datum TOML files.
-/// Any field present overrides the semantic-class default.
-#[derive(Deserialize, Debug, Default, Clone)]
-pub struct DisplayOverride {
-    pub icon: Option<String>,
-    pub shape: Option<String>,
-    pub color: Option<String>,
-    pub border_color: Option<String>,
-    pub svg: Option<String>,
+    pub svg: String,
 }
 
 impl DatumType {
-    /// Resolve display: datum's own TOML overrides > semantic class defaults.
-
-    pub fn resolve_display(&self, overrides: Option<&DisplayOverride>) -> DatumDisplay {
+    /// Display descriptor derived from semantic class.
+    pub fn display(&self) -> DatumDisplay {
         let sc = self.semantic_class();
-        let o = overrides.unwrap_or(&DisplayOverride::default());
         DatumDisplay {
-            shape: o.shape.clone().unwrap_or_else(|| sc.shape().to_string()),
-            color: o.color.clone().unwrap_or_else(|| sc.color().to_string()),
-            border_color: o.border_color.clone().unwrap_or_else(|| sc.border_color().to_string()),
-            icon: o.icon.clone().unwrap_or_else(|| sc.icon().to_string()),
-            css_class: sc.css_class().to_string(),
-            svg: o.svg.clone(),
+            shape: sc.shape().into(),
+            color: sc.color().into(),
+            border_color: sc.border_color().into(),
+            icon: sc.icon().into(),
+            css_class: sc.css_class().into(),
+            svg: sc.svg_template().into(),
         }
+    }
+}
+
+impl DatumDisplay {
+    pub fn to_cytoscape_style(&self) -> serde_json::Value {
+        serde_json::json!({
+            "shape": self.shape,
+            "background-color": self.color,
+            "border-color": self.border_color,
+            "icon": self.icon,
+            "css_class": self.css_class,
+        })
     }
 }
 
