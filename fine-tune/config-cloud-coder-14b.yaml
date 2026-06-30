@@ -1,7 +1,15 @@
 # ⚠️ DEPRECATED / ARCHIVAL — do not submit new jobs with this config
 # Qwen2.5-Coder-14B-Instruct is prev-gen; operator prefers a different model.
 # Kept for reference: env var fixes, batch/grad_accum tuning, LoRA config.
-# 🤓 Qwen3-Coder-14B does NOT exist; Qwen3-Coder family is MoE-only (30B-A3B/480B-A35B)
+#
+# 🤓 Qwen3+ Coder series notes (2026-06-30):
+#   - Qwen3-Coder-14B-Instruct: does NOT exist on HF Hub
+#   - Qwen3-Coder family models: 30B-A3B-Instruct, 480B-A35B-Instruct, Next(~79B) — ALL MoE
+#   - MoE training requires triton_kernels.routing — NOT on PyPI (internal Meta/OpenAI tooling)
+#     triton-kernels==0.1.0 only provides add_vectors.py + rotary_embedding.py (wrong package)
+#   - Without routing kernel: ~184s/step on H200 (29h for 573 steps > 10h timeout)
+#   - Qwen3-Coder-Next: 79B params BF16, too large for A10g-large (24GB)
+#   - Status as of 2026-06-30: no usable Qwen3-Coder dense model exists for fine-tuning
 
 base_model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 adapter_name: "b00t-qwen2.5-coder-14b"
