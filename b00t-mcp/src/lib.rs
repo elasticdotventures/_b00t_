@@ -9,6 +9,7 @@ pub mod derive_mcp;
 pub mod github_auth;
 pub mod mcp_registry_tools;
 pub mod mcp_tools;
+pub mod soul_dataframerr_tools;
 pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
