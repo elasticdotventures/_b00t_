@@ -205,3 +205,69 @@ k5_requires = "hook_engine::fire_event signature stable"
 # tier: frontier
 # cmds: b00t soul table create budget_tracker cost_cake:cake model:text hf_token:token
 # complexity: 7
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: Pluggable backend — DataFramerrBackend trait
+# Soul/alarm/cursor capabilities are an OVERLAY on any backend.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[backend]
+description = """
+DataFramerrBackend trait (mirrors KnowledgeStoreBackend in irontology_bridge.rs):
+
+  trait DataFramerrBackend: Send + Sync + 'static {
+    fn create_table(&self, name: &str, columns: &[SoulColumn]) -> Result<()>;
+    fn insert_row(&self, table: &str, row: &SoulRow) -> Result<u64>;
+    fn query_rows(&self, table: &str, after_id: Option<u64>) -> Result<Vec<SoulRow>>;
+    fn get_cursor(&self, name: &str) -> Result<Option<FrameCursor>>;
+    fn set_cursor(&self, name: &str, cursor: &FrameCursor) -> Result<()>;
+    fn get_schema(&self, table: &str) -> Result<Vec<SoulColumn>>;
+    fn list_tables(&self) -> Result<Vec<String>>;
+    fn get_alarms(&self) -> Result<Vec<SoulAlarm>>;
+    fn set_alarm(&self, alarm: &SoulAlarm) -> Result<()>;
+  }
+
+  The soul overlay (schema validation, ObfuscatedStr decode, alarm evaluation)
+  always runs in DataFramerr regardless of which backend is selected.
+  Backends only handle raw CRUD on rows + cursor bookmarks.
+
+Implementations:
+
+  TomllmdBackend { soul_dir: PathBuf }
+    — reads/writes [soul.tables.*] in SOUL.tomllmd via soul_writer.rs
+    — default; works with no external deps; Git-diffable
+
+  NeumannBackend { store: NeumannStore }   [feature = "store-neumann"]
+    — rows encoded as FactRecords: subject=dataframerr:<table>:<frame_id>
+      predicate=<column>, object=<value as string>
+    — cursors stored as special facts: subject=cursor:<name>, predicate=frame_id
+    — no TOML file dependency; survives across machines that share NeumannStore namespace
+    — proxy via irontology_bridge.rs NeumannStore; reuse existing storage_neumann dep
+
+  SqliteBackend { db_path: PathBuf }      [feature = "store-sqlite"]
+    — uses soul.db (already at ~/.b00t/soul.db); CREATE TABLE soul_frames_<name>
+    — fast seeks, full SQL; cursor + alarm rows in soul_meta table
+    — reuses rusqlite already pulled in by cake_ledger.rs
+
+  Future: LanceDbBackend (vector + tabular; for ML-facing frames with embeddings)
+
+Selection:
+  DataFramerr::with_backend(B: DataFramerrBackend) — explicit
+  DataFramerr::default() — TomllmdBackend (zero config)
+  b00t soul --backend=neumann table create ...
+  MCP: soul_dataframerr_create(..., backend?: "tomllmd"|"neumann"|"sqlite")
+"""
+
+[backend.neumann_encoding]
+# NeumannStore fact encoding for DataFramerr rows
+# subject format: "dataframerr:<table>:<frame_id>"
+# Mirrors how irontology_bridge.rs DatumNode.subject_uri works
+example = """
+# Row 1 of training_budget table:
+{ subject: "dataframerr:training_budget:1",  predicate: "model",      object: "Qwen2.5" }
+{ subject: "dataframerr:training_budget:1",  predicate: "cost_cake",  object: "0.47"     }
+{ subject: "dataframerr:training_budget:1",  predicate: "__created",  object: "2026-06-30T11:27:00Z" }
+# Cursor:
+{ subject: "cursor:budget_read",             predicate: "frame_id",   object: "1"        }
+{ subject: "cursor:budget_read",             predicate: "table",      object: "training_budget" }
+"""
