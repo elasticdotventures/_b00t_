@@ -2544,3 +2544,10 @@ mirror-soul sm3lly_host="sm3lly":
 # 📚 Sync blessed crate manifest from blessed.rs upstream
 blessed-sync:
     curl -s https://raw.githubusercontent.com/nicoburns/blessed-rs/main/data/crates.json | python3 {{ justfile_directory() }}/scripts/convert_blessed.py
+
+# 🌐 Launch Chrome with b00t extension loaded (from WSL to Windows host)
+chrome-b00t:
+    @echo "🥾 Installing b00t extension + launching Chrome..."
+    @mkdir -p /mnt/c/b00t/browser-ext
+    @cp -r b00t-browser-ext/build/chrome-mv3-prod/* /mnt/c/b00t/browser-ext/
+    powershell.exe -ExecutionPolicy Bypass -File "C:\\b00t\\install-b00t-ext.ps1"
