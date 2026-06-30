@@ -1950,6 +1950,12 @@ async fn main() {
                             if let Some(dispatch) = resolved.into_iter().next() {
                                 match dispatch {
                                     b00t_cli::DatumDispatch::Runtime(cfg) => {
+                                        // Run hook_pre before sandbox (preflight checks, plugin installs)
+                                        if let Some(ref hook) = cfg.hook_pre {
+                                            let _ = std::process::Command::new("bash")
+                                                .args(["-c", hook])
+                                                .status();
+                                        }
                                         match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
                                             Ok(code) => std::process::exit(code),
                                             Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
