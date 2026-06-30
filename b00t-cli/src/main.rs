@@ -693,6 +693,13 @@ The system will:
         #[clap(long, help = "Root directory", default_value_t = String::new())]
         root: String,
     },
+    /// 🐚 sh — shortcut: guard-enforced, audit-logged shell execution
+    // 🤓 b00t shortcuts favor idiomatic tokens over terse flags like -v; short codes are ambiguous.
+    #[clap(hide = true, about = "🐚 Sandboxed shell → exec with guard enforcement + audit log")]
+    Sh {
+        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 1..)]
+        command: Vec<String>,
+    },
 }
 
 #[derive(clap::Parser, Clone)]
@@ -2079,6 +2086,7 @@ async fn main() {
         );
         eprintln!("  \x1b[2mb00t die\x1b[0m                → quit (process-icide)");
         eprintln!("  \x1b[2mb00t sweep\x1b[0m              → tidy-sweep *~ files");
+        eprintln!("  \x1b[2mb00t sh <cmd...>\x1b[0m         → sandboxed exec (guard-enforced, audit-logged)");
         eprintln!("  \x1b[2mb00t <name>\x1b[0m             → auto-detect datum type");
         eprintln!();
     }
@@ -3073,6 +3081,19 @@ async fn main() {
             } else {
                 let count = b00t_cli::sweep_backup_files(&sweep_root);
                 eprintln!("🧹 swept {} *~ file(s)", count);
+            }
+        }
+
+        Some(Commands::Sh { command }) => {
+            let exec_args = b00t_cli::commands::exec::ExecArgs {
+                command: command.clone(),
+                sleep: None,
+                dry_run: false,
+                sandbox: "direct".to_string(),
+            };
+            if let Err(e) = b00t_cli::commands::exec::handle_exec(&exec_args, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
 
