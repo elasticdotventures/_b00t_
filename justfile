@@ -2558,3 +2558,16 @@ opencode-plugins:
     cd {{ justfile_directory() }} && npm install opencode-goal-plugin
     cd {{ justfile_directory() }} && opencode plugin ./node_modules/opencode-goal-plugin
     @echo "✅ /goal + /b00t available after restart"
+
+# 🔄 Build daemon — watches git, pre-builds changed crates
+buildd-start:
+    bash scripts/b00t-buildd.sh start
+
+buildd-stop:
+    bash scripts/b00t-buildd.sh stop
+
+buildd-status:
+    bash scripts/b00t-buildd.sh status
+
+buildd-log:
+    bash scripts/b00t-buildd.sh log
