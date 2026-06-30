@@ -657,11 +657,12 @@ async fn processes_handler() -> impl IntoResponse {
             req_graph,
         ],
         "mermaid": format!(
-            "{}\n{}\n{}\n{}",
-            fetch_graph.to_mermaid(),
-            chunk_graph.to_mermaid(),
-            evidence_graph.to_mermaid(),
-            req_graph.to_mermaid(),
+            "```mermaid\n{}\n```",
+            [fetch_graph.to_mermaid(), chunk_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]
+                .iter()
+                .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim())
+                .collect::<Vec<_>>()
+                .join("\n\n")
         ),
         "pipelines": {
             "ato-legislation": {
@@ -670,10 +671,12 @@ async fn processes_handler() -> impl IntoResponse {
                 "acts": ["ITAA 1997", "ITAA 1936", "GST Act 1999", "FBT Act 1986"],
                 "nodes": [legis_graph, evidence_graph, req_graph],
                 "mermaid": format!(
-                    "{}\n{}\n{}",
-                    legis_graph.to_mermaid(),
-                    evidence_graph.to_mermaid(),
-                    req_graph.to_mermaid(),
+                    "```mermaid\n{}\n```",
+                    [legis_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]
+                        .iter()
+                        .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim())
+                        .collect::<Vec<_>>()
+                        .join("\n\n")
                 ),
                 "health": {
                     "source": "https://www.legislation.gov.au",
