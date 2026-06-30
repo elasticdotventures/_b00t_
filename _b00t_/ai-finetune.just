@@ -421,6 +421,46 @@ cloud-coder:
     ])
     sys.exit(result.returncode)
 
+
+# Dense 14B Coder — no MoE, avoids triton_kernels.routing requirement
+# 🤓 Qwen3-Coder-30B-A3B (MoE) requires triton_kernels.routing which is NOT on PyPI.
+#    Use this recipe for reliable training: Qwen3-Coder-14B-Instruct (dense) on A10g-large.
+#    14B 4-bit: ~7GB weights, ~20GB total → fits A10g-large 24GB. ~15-25s/step = ~3h = ~.50.
+cloud-coder-14b:
+    #!/usr/bin/env python3
+    import subprocess, sys, pathlib, datetime
+    gate = subprocess.run(
+        ["just", "ai-finetune::budget-gate", "a10g-large", "fine-tune/config-cloud-coder-14b.yaml"],
+        capture_output=True, text=True
+    )
+    if gate.returncode != 0:
+        print(gate.stdout + gate.stderr, end="", flush=True)
+        print("❌ cloud-coder-14b blocked: cake budget gate denied", file=sys.stderr)
+        sys.exit(gate.returncode)
+    ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+    resume_token = f"b00t-hf-coder14-{ts:016x}"
+    pathlib.Path(".b00t/last-delegate-token").write_text(resume_token)
+    result = subprocess.run([
+        "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
+        "--flavor", "a10g-large",
+        "--timeout", "5.0h",
+        "-e", "HF_HOME=/tmp/hf-cache",
+        "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
+        "-e", "TORCHDYNAMO_DISABLE=1",
+        "-e", "UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache",
+        "--secrets", "HF_TOKEN",
+        "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
+        "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
+        "--label", f"ledgrrr_resume_token={resume_token}",
+        "--detach",
+        "/bin/sh", "-c",
+        "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz "
+        "https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz "
+        "&& tar -xzf /tmp/just.tar.gz -C /tmp just; } && "
+        "$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/config-cloud-coder-14b.yaml"
+    ])
+    sys.exit(result.returncode)
+
 # Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
 
 # checkpoint: HF Hub path e.g. elasticdotventures/b00t-qwen3-coder-30b/checkpoint-500
