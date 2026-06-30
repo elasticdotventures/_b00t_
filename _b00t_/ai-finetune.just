@@ -388,7 +388,7 @@ cloud-coder:
     import subprocess, sys, json, os, pathlib, datetime
     # 1. Budget gate
     gate = subprocess.run(
-        ["just", "ai-finetune::budget-gate", "a100-large", "fine-tune/config-cloud-coder.yaml"],
+        ["just", "ai-finetune::budget-gate", "h200", "fine-tune/config-cloud-coder.yaml"],
         capture_output=True, text=True
     )
     if gate.returncode != 0:
@@ -402,8 +402,8 @@ cloud-coder:
     # 3. Submit job with resume token as label for billing reconciliation
     result = subprocess.run([
         "hf", "jobs", "run", "ghcr.io/elasticdotventures/b00t-training-image:latest",
-        "--flavor", "a100-large",
-        "--timeout", "19.0h",
+        "--flavor", "h200",
+        "--timeout", "10.0h",
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
