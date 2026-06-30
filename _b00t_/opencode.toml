@@ -1,0 +1,51 @@
+[b00t]
+name = "opencode"
+provides = ["cli", "runtime"]
+
+# ── CLI facet ──────────────────────────────────────────────────────────────
+[b00t.cli]
+desires = "latest"
+hint = "opencode terminal AI coding agent - use with local vLLM or cloud via mistralrs proxy"
+install = "bash ~/.dotfiles/_b00t_/install-opencode.sh"
+update = "bash ~/.dotfiles/_b00t_/update-opencode.sh"
+version = "opencode --version"
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+# ── Runtime facet ──────────────────────────────────────────────────────────
+[b00t.runtime]
+binary = "opencode"
+args = ["--continue"]
+
+[b00t.runtime.isolation]
+share_net = true
+new_session = true
+
+[[b00t.runtime.isolation.mounts]]
+src = "/usr"
+dest = "/usr"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib"
+dest = "/lib"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib64"
+dest = "/lib64"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/bin"
+dest = "/bin"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/etc"
+dest = "/etc"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/home/brianh/.config/opencode"
+dest = "/home/brianh/.config/opencode"
+type = "rw-bind"
