@@ -372,7 +372,7 @@ cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
+      -e UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
@@ -407,7 +407,7 @@ cloud-coder:
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
-        "-e", "UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache",
+        "-e", "UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
@@ -447,7 +447,7 @@ cloud-coder-14b:
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
-        "-e", "UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache",
+        "-e", "UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "--label", f"ledgrrr_resume_token={resume_token}",
@@ -472,7 +472,7 @@ cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" 
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
+      -e UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
