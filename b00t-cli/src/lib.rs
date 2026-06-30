@@ -1275,6 +1275,14 @@ pub enum SemanticClass {
     Unknown,
 }
 
+// ── SVG shape templates ────────────────────────────────────────────────────
+const SVG_CIRCLE: &str    = "<circle r='24' cx='28' cy='28' />";
+const SVG_RECTANGLE: &str = "<rect x='4' y='4' width='48' height='48' rx='8' />";
+const SVG_DIAMOND: &str   = "<polygon points='28,4 52,28 28,52 4,28' />";
+const SVG_HEXAGON: &str   = "<polygon points='28,4 48,16 48,40 28,52 8,40 8,16' />";
+const SVG_TRIANGLE: &str  = "<polygon points='28,6 50,48 6,48' />";
+const SVG_VEE: &str       = "<polygon points='4,4 28,52 52,4' />";
+
 impl SemanticClass {
     /// Shape for graph/chart rendering.
     pub const fn shape(&self) -> &'static str {
@@ -1387,21 +1395,7 @@ impl DatumType {
         }
     }
 
-    /// Display descriptor — derived entirely from semantic_class().
-    pub fn display(&self) -> DatumDisplay {
-        let sc = self.semantic_class();
-        DatumDisplay {
-            datum_type: *self,
-            semantic_class: sc,
-            shape: sc.shape(),
-            color: sc.color(),
-            border_color: sc.border_color(),
-            icon: sc.icon(),
-            svg_template: sc.svg_template(),
-            css_class: sc.css_class(),
-            label: format!("{}", self.base_suffix().trim_start_matches('.')),
-        }
-    }
+    // 🎨 display() defined below with DatumDisplay struct
 }
 
 macro_rules! datum_type_table {
