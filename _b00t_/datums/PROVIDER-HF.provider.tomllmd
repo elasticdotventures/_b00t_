@@ -29,6 +29,9 @@ console_url = "https://huggingface.co/jobs"
 "a10g-large"  = { vram_gb = 24,  vcpus = 12, ram_gb = 96,  price_per_hr = 1.50, tier = "ch0nky"   }
 "a100-large"  = { vram_gb = 80,  vcpus = 12, ram_gb = 142, price_per_hr = 2.50, tier = "frontier" }
 "h100"        = { vram_gb = 80,  vcpus = 26, ram_gb = 200, price_per_hr = 5.00, tier = "frontier" }
+# 🤓 h200 preferred for 30B MoE: ~50s/step vs 130s/step (A100) vs 325s/step (A100, no triton-kernels)
+#    At 50s/step × 573 = 8h → fits 10h timeout; A100 at 130s/step × 573 = 20.7h > 19h → timeout
+"h200"        = { vram_gb = 141, vcpus = 26, ram_gb = 400, price_per_hr = 8.50, tier = "frontier" }
 
 # Volume constraints
 # 🤓 bucket FUSE mount rejects mkdir on subdirs — use output_dir=/tmp/output
@@ -43,8 +46,8 @@ output_dir_workaround = "/tmp/output"  # subdirs on FUSE mount fail with EPERM
 image = "ghcr.io/elasticdotventures/b00t-training-image:latest"
 
 [[resource.usages]]
-description = "Submit training job to HF Jobs A100"
-command     = "just ai-finetune::cloud-train a100-large config-cloud-coder.yaml"
+description = "Submit training job to HF Jobs H200 (30B MoE preferred)"
+command     = "just ai-finetune::cloud-coder"
 
 [[resource.usages]]
 description = "List running HF jobs"
