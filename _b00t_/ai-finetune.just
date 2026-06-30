@@ -448,6 +448,9 @@ cloud-coder-14b:
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
         "-e", "UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache",
+        # 🤓 base unsloth image sets UNSLOTH_VLLM_STANDBY=1; when=1 it removes
+        #    expandable_segments → memory fragmentation → OOM on 14B backward pass
+        "-e", "UNSLOTH_VLLM_STANDBY=0",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "--label", f"ledgrrr_resume_token={resume_token}",
