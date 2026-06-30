@@ -1400,6 +1400,131 @@ impl std::fmt::Display for DatumType {
     }
 }
 
+/// Visual display descriptor for a DatumType — shape, color, SVG template.
+/// Used by cytoscape, mermaid, and all future visualization backends.
+#[derive(Serialize, Debug, Clone)]
+pub struct DatumDisplay {
+    pub datum_type: DatumType,
+    pub label: String,
+    pub shape: &'static str,       // "circle", "diamond", "hexagon", "rectangle", "triangle", "vee"
+    pub color: &'static str,       // hex color for fill
+    pub border_color: &'static str,
+    pub icon: &'static str,        // unicode or short text
+    pub svg_template: &'static str, // SVG fragment for rendering
+    pub css_class: &'static str,
+}
+
+impl DatumType {
+    /// Return the visual display descriptor for this datum type.
+    /// 🎨 Single source of truth for all chart/graph rendering.
+    pub fn display(&self) -> DatumDisplay {
+        match self {
+            // ── Infrastructure (blue tones) ──
+            Self::K8s       => DatumDisplay { datum_type: Self::K8s,       shape: "hexagon",   color: "#326ce5", border_color: "#5b9cf5", icon: "☸",   css_class: "dt-k8s",       label: "K8s".into(),       svg_template: SVG_HEXAGON },
+            Self::Docker    => DatumDisplay { datum_type: Self::Docker,    shape: "hexagon",   color: "#1d63ed", border_color: "#4d8bf7", icon: "🐳", css_class: "dt-docker",    label: "Docker".into(),    svg_template: SVG_HEXAGON },
+            Self::Hardware  => DatumDisplay { datum_type: Self::Hardware,  shape: "hexagon",   color: "#1a56db", border_color: "#3f83f8", icon: "💻", css_class: "dt-hardware",  label: "Hardware".into(),  svg_template: SVG_HEXAGON },
+            Self::Overlay   => DatumDisplay { datum_type: Self::Overlay,   shape: "hexagon",   color: "#1e429f", border_color: "#4789fa", icon: "📋", css_class: "dt-overlay",   label: "Overlay".into(),   svg_template: SVG_HEXAGON },
+            Self::Runtime   => DatumDisplay { datum_type: Self::Runtime,   shape: "hexagon",   color: "#233876", border_color: "#6094f7", icon: "⚡",  css_class: "dt-runtime",   label: "Runtime".into(),   svg_template: SVG_HEXAGON },
+            Self::Nix       => DatumDisplay { datum_type: Self::Nix,       shape: "hexagon",   color: "#5271ff", border_color: "#7b93ff", icon: "❄️",  css_class: "dt-nix",       label: "Nix".into(),       svg_template: SVG_HEXAGON },
+
+            // ── Agents & Roles (green tones) ──
+            Self::Agent     => DatumDisplay { datum_type: Self::Agent,     shape: "circle",    color: "#059669", border_color: "#34d399", icon: "🤖", css_class: "dt-agent",     label: "Agent".into(),     svg_template: SVG_CIRCLE },
+            Self::Role      => DatumDisplay { datum_type: Self::Role,      shape: "circle",    color: "#047857", border_color: "#2dd4bf", icon: "🎭", css_class: "dt-role",      label: "Role".into(),      svg_template: SVG_CIRCLE },
+            Self::Ai        => DatumDisplay { datum_type: Self::Ai,        shape: "circle",    color: "#065f46", border_color: "#22c55e", icon: "🧠", css_class: "dt-ai",        label: "AI".into(),        svg_template: SVG_CIRCLE },
+            Self::Training  => DatumDisplay { datum_type: Self::Training,  shape: "circle",    color: "#064e3b", border_color: "#10b981", icon: "🎓", css_class: "dt-training",  label: "Training".into(),  svg_template: SVG_CIRCLE },
+
+            // ── MCP & Protocols (purple tones) ──
+            Self::Mcp       => DatumDisplay { datum_type: Self::Mcp,       shape: "diamond",   color: "#7c3aed", border_color: "#a78bfa", icon: "🔌", css_class: "dt-mcp",       label: "MCP".into(),       svg_template: SVG_DIAMOND },
+            Self::McpServer => DatumDisplay { datum_type: Self::McpServer, shape: "diamond",   color: "#6d28d9", border_color: "#8b5cf6", icon: "🖥️",  css_class: "dt-mcp-server", label: "MCP Server".into(), svg_template: SVG_DIAMOND },
+            Self::Api       => DatumDisplay { datum_type: Self::Api,       shape: "diamond",   color: "#5b21b6", border_color: "#7c3aed", icon: "🔗", css_class: "dt-api",       label: "API".into(),       svg_template: SVG_DIAMOND },
+            Self::Schema    => DatumDisplay { datum_type: Self::Schema,    shape: "diamond",   color: "#4c1d95", border_color: "#6d28d9", icon: "📐", css_class: "dt-schema",    label: "Schema".into(),    svg_template: SVG_DIAMOND },
+
+            // ── Skills & Jobs (amber/orange tones) ──
+            Self::Skill     => DatumDisplay { datum_type: Self::Skill,     shape: "triangle",  color: "#d97706", border_color: "#fbbf24", icon: "🛠️",  css_class: "dt-skill",     label: "Skill".into(),     svg_template: SVG_TRIANGLE },
+            Self::Job       => DatumDisplay { datum_type: Self::Job,       shape: "triangle",  color: "#b45309", border_color: "#f59e0b", icon: "⏱️",  css_class: "dt-job",       label: "Job".into(),       svg_template: SVG_TRIANGLE },
+            Self::Hook      => DatumDisplay { datum_type: Self::Hook,      shape: "triangle",  color: "#92400e", border_color: "#d97706", icon: "🪝",  css_class: "dt-hook",      label: "Hook".into(),      svg_template: SVG_TRIANGLE },
+            Self::Gate      => DatumDisplay { datum_type: Self::Gate,      shape: "triangle",  color: "#78350f", border_color: "#c27803", icon: "🚧", css_class: "dt-gate",      label: "Gate".into(),      svg_template: SVG_TRIANGLE },
+
+            // ── Config & Bash & CLI (teal tones) ──
+            Self::Config    => DatumDisplay { datum_type: Self::Config,    shape: "rectangle", color: "#0d9488", border_color: "#2dd4bf", icon: "⚙️",  css_class: "dt-config",    label: "Config".into(),    svg_template: SVG_RECTANGLE },
+            Self::Bash      => DatumDisplay { datum_type: Self::Bash,      shape: "rectangle", color: "#0f766e", border_color: "#14b8a6", icon: "💻", css_class: "dt-bash",      label: "Bash".into(),      svg_template: SVG_RECTANGLE },
+            Self::Cli       => DatumDisplay { datum_type: Self::Cli,       shape: "rectangle", color: "#115e59", border_color: "#0d9488", icon: "⌨️",  css_class: "dt-cli",       label: "CLI".into(),       svg_template: SVG_RECTANGLE },
+            Self::Justfile  => DatumDisplay { datum_type: Self::Justfile,  shape: "rectangle", color: "#134e4a", border_color: "#0f766e", icon: "📜", css_class: "dt-justfile",  label: "Justfile".into(),  svg_template: SVG_RECTANGLE },
+            Self::Plan      => DatumDisplay { datum_type: Self::Plan,      shape: "rectangle", color: "#0f766e", border_color: "#14b8a6", icon: "📋", css_class: "dt-plan",      label: "Plan".into(),      svg_template: SVG_RECTANGLE },
+            Self::Vendor    => DatumDisplay { datum_type: Self::Vendor,    shape: "rectangle", color: "#115e59", border_color: "#0d9488", icon: "📦", css_class: "dt-vendor",    label: "Vendor".into(),    svg_template: SVG_RECTANGLE },
+
+            // ── Repo & Stack (rose tones) ──
+            Self::Stack     => DatumDisplay { datum_type: Self::Stack,     shape: "vee",       color: "#be123c", border_color: "#fb7185", icon: "📚", css_class: "dt-stack",     label: "Stack".into(),     svg_template: SVG_VEE },
+            Self::Repo      => DatumDisplay { datum_type: Self::Repo,      shape: "vee",       color: "#9f1239", border_color: "#f43f5e", icon: "📁", css_class: "dt-repo",      label: "Repo".into(),      svg_template: SVG_VEE },
+            Self::Vscode    => DatumDisplay { datum_type: Self::Vscode,    shape: "vee",       color: "#881337", border_color: "#e11d48", icon: "🆚", css_class: "dt-vscode",    label: "VSCode".into(),    svg_template: SVG_VEE },
+            Self::Apt       => DatumDisplay { datum_type: Self::Apt,       shape: "vee",       color: "#4c0519", border_color: "#9f1239", icon: "📦", css_class: "dt-apt",       label: "Apt".into(),       svg_template: SVG_VEE },
+
+            // ── Data (gray tones) ──
+            Self::Database   => DatumDisplay { datum_type: Self::Database,  shape: "rectangle", color: "#475569", border_color: "#94a3b8", icon: "🗄️",  css_class: "dt-database",  label: "Database".into(),  svg_template: SVG_RECTANGLE },
+            Self::HiveProfile=> DatumDisplay { datum_type: Self::HiveProfile, shape: "rectangle", color: "#334155", border_color: "#64748b", icon: "🏗️",  css_class: "dt-hive",      label: "Hive".into(),      svg_template: SVG_RECTANGLE },
+            Self::Polyseme   => DatumDisplay { datum_type: Self::Polyseme,   shape: "circle",    color: "#1e293b", border_color: "#475569", icon: "🔮", css_class: "dt-polyseme",  label: "Polyseme".into(),  svg_template: SVG_CIRCLE },
+            Self::Credential => DatumDisplay { datum_type: Self::Credential, shape: "circle",    color: "#0f172a", border_color: "#334155", icon: "🔐", css_class: "dt-credential",label: "Credential".into(),svg_template: SVG_CIRCLE },
+
+            Self::Unknown   => DatumDisplay { datum_type: Self::Unknown,   shape: "rectangle", color: "#1e293b", border_color: "#475569", icon: "❓", css_class: "dt-unknown",   label: "Unknown".into(),   svg_template: SVG_RECTANGLE },
+        }
+    }
+}
+
+// ── SVG shape templates (reusable across all visualization backends) ──────
+const SVG_CIRCLE: &str    = "<circle r='24' cx='28' cy='28' />";
+const SVG_RECTANGLE: &str = "<rect x='4' y='4' width='48' height='48' rx='8' />";
+const SVG_DIAMOND: &str   = "<polygon points='28,4 52,28 28,52 4,28' />";
+const SVG_HEXAGON: &str   = "<polygon points='28,4 48,16 48,40 28,52 8,40 8,16' />";
+const SVG_TRIANGLE: &str  = "<polygon points='28,6 50,48 6,48' />";
+const SVG_VEE: &str       = "<polygon points='4,4 28,52 52,4' />";
+
+impl DatumDisplay {
+    /// JSON-serializable cytoscape.js node style.
+    pub fn to_cytoscape_style(&self) -> serde_json::Value {
+        serde_json::json!({
+            "shape": self.shape,
+            "background-color": self.color,
+            "border-color": self.border_color,
+            "border-width": 2,
+            "label": self.label,
+            "icon": self.icon,
+            "css_class": self.css_class,
+        })
+    }
+
+    /// Full SVG node rendering with color, shape, and icon.
+    pub fn to_svg(&self) -> String {
+        let tmpl = self.svg_template;
+        format!(
+            concat!(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 56 56\" width=\"56\" height=\"56\">\n",
+                "  <g fill=\"{}\" stroke=\"{}\" stroke-width=\"2\">\n",
+                "    {}\n",
+                "  </g>\n",
+                "  <text x=\"28\" y=\"32\" text-anchor=\"middle\" font-size=\"18\" fill=\"#fff\">{}</text>\n",
+                "</svg>"
+            ),
+            self.color, self.border_color, tmpl, self.icon
+        )
+    }
+
+    /// All display descriptors as a JSON array (for API responses).
+    pub fn all_displays() -> Vec<Self> {
+        use DatumType::*;
+        vec![K8s, Docker, Hardware, Overlay, Runtime, Nix,
+             Agent, Role, Ai, Training,
+             Mcp, McpServer, Api, Schema,
+             Skill, Job, Hook, Gate,
+             Config, Bash, Cli, Justfile, Plan, Vendor,
+             Stack, Repo, Vscode, Apt,
+             Database, HiveProfile, Polyseme, Credential,
+             Unknown]
+            .iter()
+            .map(|dt| dt.display())
+            .collect()
+    }
+}
+
 #[derive(Serialize, Debug)]
 pub struct McpListOutput {
     pub servers: Vec<McpListItem>,

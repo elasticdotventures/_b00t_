@@ -320,6 +320,47 @@ async fn pipeline_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl Int
     axum::Json(app.pipeline.clone())
 }
 
+/// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
+async fn datum_display_handler() -> impl IntoResponse {
+    axum::Json(serde_json::json!({
+        "displays": [
+            {"datum_type":"K8s","label":"K8s","shape":"hexagon","color":"#326ce5","border_color":"#5b9cf5","icon":"☸","css_class":"dt-k8s"},
+            {"datum_type":"Docker","label":"Docker","shape":"hexagon","color":"#1d63ed","border_color":"#4d8bf7","icon":"🐳","css_class":"dt-docker"},
+            {"datum_type":"Hardware","label":"Hardware","shape":"hexagon","color":"#1a56db","border_color":"#3f83f8","icon":"💻","css_class":"dt-hardware"},
+            {"datum_type":"Overlay","label":"Overlay","shape":"hexagon","color":"#1e429f","border_color":"#4789fa","icon":"📋","css_class":"dt-overlay"},
+            {"datum_type":"Runtime","label":"Runtime","shape":"hexagon","color":"#233876","border_color":"#6094f7","icon":"⚡","css_class":"dt-runtime"},
+            {"datum_type":"Nix","label":"Nix","shape":"hexagon","color":"#5271ff","border_color":"#7b93ff","icon":"❄️","css_class":"dt-nix"},
+            {"datum_type":"Agent","label":"Agent","shape":"circle","color":"#059669","border_color":"#34d399","icon":"🤖","css_class":"dt-agent"},
+            {"datum_type":"Role","label":"Role","shape":"circle","color":"#047857","border_color":"#2dd4bf","icon":"🎭","css_class":"dt-role"},
+            {"datum_type":"Ai","label":"AI","shape":"circle","color":"#065f46","border_color":"#22c55e","icon":"🧠","css_class":"dt-ai"},
+            {"datum_type":"Training","label":"Training","shape":"circle","color":"#064e3b","border_color":"#10b981","icon":"🎓","css_class":"dt-training"},
+            {"datum_type":"Mcp","label":"MCP","shape":"diamond","color":"#7c3aed","border_color":"#a78bfa","icon":"🔌","css_class":"dt-mcp"},
+            {"datum_type":"McpServer","label":"MCP Server","shape":"diamond","color":"#6d28d9","border_color":"#8b5cf6","icon":"🖥️","css_class":"dt-mcp-server"},
+            {"datum_type":"Api","label":"API","shape":"diamond","color":"#5b21b6","border_color":"#7c3aed","icon":"🔗","css_class":"dt-api"},
+            {"datum_type":"Schema","label":"Schema","shape":"diamond","color":"#4c1d95","border_color":"#6d28d9","icon":"📐","css_class":"dt-schema"},
+            {"datum_type":"Skill","label":"Skill","shape":"triangle","color":"#d97706","border_color":"#fbbf24","icon":"🛠️","css_class":"dt-skill"},
+            {"datum_type":"Job","label":"Job","shape":"triangle","color":"#b45309","border_color":"#f59e0b","icon":"⏱️","css_class":"dt-job"},
+            {"datum_type":"Hook","label":"Hook","shape":"triangle","color":"#92400e","border_color":"#d97706","icon":"🪝","css_class":"dt-hook"},
+            {"datum_type":"Gate","label":"Gate","shape":"triangle","color":"#78350f","border_color":"#c27803","icon":"🚧","css_class":"dt-gate"},
+            {"datum_type":"Config","label":"Config","shape":"rectangle","color":"#0d9488","border_color":"#2dd4bf","icon":"⚙️","css_class":"dt-config"},
+            {"datum_type":"Bash","label":"Bash","shape":"rectangle","color":"#0f766e","border_color":"#14b8a6","icon":"💻","css_class":"dt-bash"},
+            {"datum_type":"Cli","label":"CLI","shape":"rectangle","color":"#115e59","border_color":"#0d9488","icon":"⌨️","css_class":"dt-cli"},
+            {"datum_type":"Justfile","label":"Justfile","shape":"rectangle","color":"#134e4a","border_color":"#0f766e","icon":"📜","css_class":"dt-justfile"},
+            {"datum_type":"Plan","label":"Plan","shape":"rectangle","color":"#0f766e","border_color":"#14b8a6","icon":"📋","css_class":"dt-plan"},
+            {"datum_type":"Vendor","label":"Vendor","shape":"rectangle","color":"#115e59","border_color":"#0d9488","icon":"📦","css_class":"dt-vendor"},
+            {"datum_type":"Stack","label":"Stack","shape":"vee","color":"#be123c","border_color":"#fb7185","icon":"📚","css_class":"dt-stack"},
+            {"datum_type":"Repo","label":"Repo","shape":"vee","color":"#9f1239","border_color":"#f43f5e","icon":"📁","css_class":"dt-repo"},
+            {"datum_type":"Vscode","label":"VSCode","shape":"vee","color":"#881337","border_color":"#e11d48","icon":"🆚","css_class":"dt-vscode"},
+            {"datum_type":"Apt","label":"Apt","shape":"vee","color":"#4c0519","border_color":"#9f1239","icon":"📦","css_class":"dt-apt"},
+            {"datum_type":"Database","label":"Database","shape":"rectangle","color":"#475569","border_color":"#94a3b8","icon":"🗄️","css_class":"dt-database"},
+            {"datum_type":"HiveProfile","label":"Hive","shape":"rectangle","color":"#334155","border_color":"#64748b","icon":"🏗️","css_class":"dt-hive"},
+            {"datum_type":"Polyseme","label":"Polyseme","shape":"circle","color":"#1e293b","border_color":"#475569","icon":"🔮","css_class":"dt-polyseme"},
+            {"datum_type":"Credential","label":"Credential","shape":"circle","color":"#0f172a","border_color":"#334155","icon":"🔐","css_class":"dt-credential"},
+            {"datum_type":"Unknown","label":"Unknown","shape":"rectangle","color":"#1e293b","border_color":"#475569","icon":"❓","css_class":"dt-unknown"}
+        ]
+    }))
+}
+
 /// GET `/api/admin/types` — List all reflected types
 async fn types_list_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl IntoResponse {
     let app = state.lock().await;
@@ -1630,6 +1671,7 @@ async fn main() {
         // API — pipeline state
         .route("/api/admin/pipeline", get(pipeline_handler))
         // API — type introspection
+        .route("/api/admin/display", get(datum_display_handler))
         .route("/api/admin/types", get(types_list_handler))
         .route("/api/admin/types/{name}", get(type_detail_handler))
         // API — simulation
