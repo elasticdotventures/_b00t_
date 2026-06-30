@@ -90,6 +90,85 @@ def format_output(results, lang="rust"):
         lines.append("")
     return "\n".join(lines)
 
+# ── Project scanner ───────────────────────────────────────────────────────
+
+def scan_project(project_path="."):
+    """Read Cargo.toml, package.json, go.mod etc. and extract dependencies."""
+    deps = []
+    cargo_toml = os.path.join(project_path, "Cargo.toml")
+    package_json = os.path.join(project_path, "package.json")
+    go_mod = os.path.join(project_path, "go.mod")
+    
+    if os.path.exists(cargo_toml):
+        with open(cargo_toml, "rb") as f:
+            data = tomllib.load(f)
+        for section in ["dependencies", "dev-dependencies", "build-dependencies"]:
+            for name, spec in data.get(section, {}).items():
+                if isinstance(spec, dict):
+                    deps.append(name)
+                elif isinstance(spec, str):
+                    deps.append(name)
+        # Scan workspace members
+        for member in data.get("workspace", {}).get("members", []):
+            if "*" in member:
+                continue  # skip globs
+            member_toml = os.path.join(project_path, member, "Cargo.toml")
+            if os.path.exists(member_toml):
+                try:
+                    with open(member_toml, "rb") as f:
+                        md = tomllib.load(f)
+                    for section in ["dependencies", "dev-dependencies", "build-dependencies"]:
+                        for name, spec in md.get(section, {}).items():
+                            if isinstance(spec, dict) and "path" not in spec:
+                                deps.append(name)
+                            elif isinstance(spec, str):
+                                deps.append(name)
+                except Exception:
+                    pass
+    
+    if os.path.exists(package_json):
+        with open(package_json) as f:
+            data = json.load(f)
+        for section in ["dependencies", "devDependencies"]:
+            for name in data.get(section, {}):
+                deps.append(name)
+    
+    if os.path.exists(go_mod):
+        with open(go_mod) as f:
+            for line in f:
+                m = re.match(r'^\s*([\w.-]+)\s+v', line)
+                if m:
+                    deps.append(m.group(1))
+    
+    return sorted(set(deps))
+
+
+def cross_reference(deps, lang="rust"):
+    """Match project deps against blessed/awesome manifests."""
+    all_entries = load_manifest(lang, "blessed") + load_manifest(lang, "awesome")
+    matches = []
+    unmatched = []
+    
+    for dep in deps:
+        found = None
+        for entry in all_entries:
+            if dep in entry.get("recommended", []):
+                found = entry
+                break
+        if found:
+            matches.append({
+                "dep": dep,
+                "use_case": found["use_case"],
+                "category": found["category"],
+                "trust": found.get("_trust", "unknown"),
+                "note": found.get("notes", {}).get(dep, ""),
+            })
+        else:
+            unmatched.append(dep)
+    
+    return matches, unmatched
+
+
 # ── Awesome-list scraper ──────────────────────────────────────────────────
 
 def ingest_awesome_list(url, lang="rust", category_prefix=""):
@@ -148,6 +227,7 @@ if __name__ == "__main__":
     p.add_argument("--list-categories", action="store_true")
     p.add_argument("--ingest", help="URL of awesome-list to scrape (prints TOML)")
     p.add_argument("--ingest-category", default="", help="Category prefix for ingestion")
+    p.add_argument("--scan-project", metavar="PATH", help="Scan Cargo.toml/package.json for deps and cross-reference")
     args = p.parse_args()
 
     if args.ingest:
@@ -178,6 +258,24 @@ if __name__ == "__main__":
             for cat in cats:
                 entries = [e for e in manifests if e["category"] == cat]
                 print(f"  {cat}: {len(entries)} use-cases")
+    elif args.scan_project:
+        deps = scan_project(args.scan_project)
+        matches, unmatched = cross_reference(deps, args.lang)
+        if args.json:
+            print(json.dumps({"matches": matches, "unmatched": unmatched, "total": len(deps)}, indent=2))
+        else:
+            print(f"## Project Scan: {args.scan_project}\n")
+            print(f"**{len(deps)}** dependencies, **{len(matches)}** known, **{len(unmatched)}** unmatched\n")
+            if matches:
+                print("### Known (in blessed/awesome)")
+                for m in matches:
+                    print(f"- **{m['dep']}** [{m['trust']}] — {m['use_case']} ({m['category']})")
+                    if m['note']:
+                        print(f"  {m['note'][:120]}")
+            if unmatched:
+                print(f"\n### Unmatched ({len(unmatched)})")
+                for u in unmatched:
+                    print(f"- `{u}`")
     elif args.query:
         if args.source == "all":
             sources = ["blessed", "awesome"]
