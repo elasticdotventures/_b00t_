@@ -36,6 +36,7 @@ ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 - `triton-kernels==0.1.0` provides only add_vectors.py + rotary_embedding.py
 - `triton_kernels.routing` = internal Meta/OpenAI tooling, not public
 - Without it: Qwen3-30B-A3B (MoE) trains at 184s/step on H200 (29h > 10h timeout)
+- Note: including `triton-kernels` in Dockerfile is harmless but doesn't fix MoE routing
 
 ### Dense 14B avoids all MoE issues
 | Hardware | Model | triton routing | numpy fix | step time |
@@ -43,6 +44,11 @@ ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 | A100-large | Qwen3-30B-A3B (MoE) | ✓ | needed | ~130s |
 | H200 | Qwen3-30B-A3B (MoE) | ✗ | needed | ~184s |
 | A10g-large | Qwen3-Coder-14B (dense) | N/A | needed | ~15-25s |
+
+### Step time expectations on HF Jobs
+- A100 80GB (a100-large): ~130s/step for Qwen3-30B-MoE-128E (MoE routing scatter bound)
+- A100 without triton-kernels: ~325s/step (PyTorch fallback)
+- H200 141GB (h200): ~50s/step (faster HBM + better MoE routing)
 
 ### Budget
 - 14B dense: 573 steps × 20s × $1.50/hr = ~$4.77 ← USE THIS
