@@ -1,9 +1,7 @@
-# b00t cloud fine-tune: Qwen2.5-Coder-14B-Instruct on HF Jobs A10g
+# ⚠️ DEPRECATED / ARCHIVAL — do not submit new jobs with this config
+# Qwen2.5-Coder-14B-Instruct is prev-gen; operator prefers a different model.
+# Kept for reference: env var fixes, batch/grad_accum tuning, LoRA config.
 # 🤓 Qwen3-Coder-14B does NOT exist; Qwen3-Coder family is MoE-only (30B-A3B/480B-A35B)
-# Dense 14B coder: use Qwen2.5-Coder-14B-Instruct (prev gen, well-supported by unsloth)
-# Submit with: just ai-finetune::cloud-coder-14b
-# Monitor with: just ai-finetune::hf-job-ps && just ai-finetune::hf-job-logs <id>
-# Adapter lands at: elasticdotventures/b00t-qwen2.5-coder-14b
 
 base_model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 adapter_name: "b00t-qwen2.5-coder-14b"
