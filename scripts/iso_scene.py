@@ -62,10 +62,11 @@ h = int(max_sy - min_sy + 2 * padding)
 ox = -min_sx + padding
 oy = -min_sy + padding
 
-# SVG
-svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">']
+# SVG — responsive, no fixed dimensions
+svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" style="width:100%;height:100%;max-height:70vh;">']
+svg.append('<defs><style>.node-rect {{ cursor:pointer; transition:opacity 0.2s; }} .node-rect:hover {{ opacity:1 !important; }}</style></defs>')
 svg.append(f'<rect width="100%" height="100%" fill="#0f172a"/>')
-svg.append(f'<g font-family="monospace" font-size="11">')
+svg.append(f'<g font-family="monospace" font-size="11" class="iso-scene">')
 
 # Grid
 for i in range(cols + 1):
@@ -86,7 +87,7 @@ for i, (frm, to) in enumerate(edges):
     sx1, sy1 = iso_project(fx, fz, fy, scale, ox, oy)
     sx2, sy2 = iso_project(tx, tz, ty, scale, ox, oy)
     c = colors[i % len(colors)]
-    svg.append(f'<line x1="{sx1:.1f}" y1="{sy1:.1f}" x2="{sx2:.1f}" y2="{sy2:.1f}" stroke="{c}" stroke-width="1" opacity="0.5"/>')
+    svg.append(f'<line x1="{sx1:.1f}" y1="{sy1:.1f}" x2="{sx2:.1f}" y2="{sy2:.1f}" stroke="{c}" stroke-width="1" opacity="0.4"/>')
 
 # Nodes
 for i, (nid, label) in enumerate(nodes):
@@ -94,10 +95,11 @@ for i, (nid, label) in enumerate(nodes):
     sx, sy = iso_project(x, z, y, scale, ox, oy)
     c = colors[i % len(colors)]
     short = label[:18]
-    svg.append(f'<g transform="translate({sx:.1f},{sy:.1f})">')
-    svg.append(f'<rect x="-50" y="-16" width="100" height="32" rx="4" fill="{c}" opacity="0.85" stroke="#e2e8f0" stroke-width="1"/>')
-    svg.append(f'<text x="0" y="-2" text-anchor="middle" fill="#fff" font-size="8">{short}</text>')
-    svg.append(f'<text x="0" y="10" text-anchor="middle" fill="#94a3b8" font-size="7">{nid}</text>')
+    svg.append(f'<g transform="translate({sx:.1f},{sy:.1f})" class="iso-node">')
+    svg.append(f'<rect x="-50" y="-16" width="100" height="32" rx="4" fill="{c}" opacity="0.85" stroke="#e2e8f0" stroke-width="1" class="node-rect"/>')
+    svg.append(f'<text x="0" y="-3" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">{short}</text>')
+    svg.append(f'<text x="0" y="8" text-anchor="middle" fill="#94a3b8" font-size="6">{nid}</text>')
+    svg.append(f'<title>{label}</title>')
     svg.append(f'</g>')
 
 svg.append('</g>')
