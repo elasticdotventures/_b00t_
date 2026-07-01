@@ -1628,11 +1628,11 @@ function loadKnowledgeGraph() {{
             {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
             {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
           ],
-           // Cassowary-inspired: hubs get more space via degree-scaled repulsion
-           elements.nodes.forEach(function(n) {{
-             var deg = (elements.edges || []).filter(function(e) {{ return e.data.source === n.data.id || e.data.target === n.data.id; }}).length;
-             n.data.weight = 1 + Math.min(deg, 50) * 0.5;
-           }});
+         }});
+         // Cassowary-inspired: hubs get more space via degree-scaled repulsion
+         elements.nodes.forEach(function(n) {{
+           var deg = (elements.edges || []).filter(function(e) {{ return e.data.source === n.data.id || e.data.target === n.data.id; }}).length;
+           n.data.weight = 1 + Math.min(deg, 50) * 0.5;
          }});
          // Shift+scroll: 10x zoom
          container.addEventListener('wheel', function(e) {{

@@ -2603,10 +2603,7 @@ deploy:
     cargo test -p b00t-admin -- html_sanity
     cargo build -p b00t-admin
     @echo "  Restarting server..."
-    @kill $(pgrep -x b00t-admin 2>/dev/null || true) 2>/dev/null || true
-    @sleep 1
-    @nohup ./target/debug/b00t-admin > /tmp/b00t-admin.log 2>&1 &
-    @sleep 2
+    bash scripts/b00t-admin-restart.sh
     @echo "  Verifying..."
     @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
     @bash scripts/b00t-js-check.sh
