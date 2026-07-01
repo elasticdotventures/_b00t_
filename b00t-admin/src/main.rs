@@ -1279,7 +1279,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
       <span id="header-status">Loading...</span>
     </div>
     <div style="margin-top:8px;font-size:9px;color:#475569;border-top:1px solid #1e293b;padding-top:6px;">
-      <span id="sidebar-version">🥾 v0.9.1</span>
+      <span id="sidebar-version">🥾</span>
     </div>
   </div>
   <div class="accordion-section">
@@ -1471,25 +1471,6 @@ function beat() {{
 // Beat on load and every 30s
 beat();
 setInterval(beat, 30000);
-
-function beat() {{
-  var hb = document.getElementById('heartbeat');
-  var vs = document.getElementById('header-version');
-  var st = document.getElementById('header-status');
-  if (!hb) return;
-  // Flash heartbeat green on successful API response
-  hb.style.background = '#34d399';
-  hb.style.animation = 'none';
-  void hb.offsetHeight; // reflow
-  hb.style.animation = 'pulse 2s infinite';
-  var info = document.getElementById('header-info');
-  if (info) {{
-    var p = PIPELINE;
-    var ver = p.pipeline_version || SERVER_VERSION;
-    if (vs) vs.textContent = 'v' + ver + ' ·';
-    if (st) st.textContent = p.executed_at ? new Date(p.executed_at).toLocaleString() : (p.has_pipeline ? 'Active' : 'Ready');
-  }}
-}}
 
 // Initial beat
 setTimeout(beat, 100);
