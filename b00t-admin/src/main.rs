@@ -808,7 +808,7 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
+pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -1501,13 +1501,13 @@ function updatePipeline() {{
 }}
 
 // ════════ Heartbeat + Version ════════
+var beatFails = 0;
 function beat() {{
   var hb = document.getElementById('heartbeat');
   var vs = document.getElementById('header-version');
   var st = document.getElementById('header-status');
   var sv = document.getElementById('sidebar-version');
   if (!hb) return;
-  // Fetch health API for server version
   fetch('/api/admin/health').then(function(r){{return r.json();}}).then(function(d) {{
     var ver = d.version || '?';
     var built = d.built_at || '';
@@ -1518,10 +1518,25 @@ function beat() {{
     hb.style.animation = 'none';
     void hb.offsetHeight;
     hb.style.animation = 'pulse 2s infinite';
+    beatFails = 0;
+    // Remove crash banner if present
+    var banner = document.getElementById('crash-banner');
+    if (banner) banner.remove();
   }}).catch(function() {{
+    beatFails++;
     hb.style.background = '#ef4444';
     hb.style.animation = 'none';
-    if (st) st.textContent = 'Offline';
+    if (st) st.textContent = beatFails > 2 ? 'Server crashed' : 'Offline';
+    // Show crash banner after 3 consecutive failures
+    if (beatFails >= 3 && !document.getElementById('crash-banner')) {{
+      var banner = document.createElement('div');
+      banner.id = 'crash-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:#fff;padding:12px 20px;text-align:center;font-size:13px;z-index:9999;animation:pulse 1s infinite;';
+      banner.innerHTML = '🥾 Server crashed — <a href="javascript:location.reload()" style="color:#fff;text-decoration:underline;">reload</a> when back (auto-retry every 5s)';
+      document.body.prepend(banner);
+    }} else if (beatFails >= 3) {{
+      document.getElementById('crash-banner').textContent = '🥾 Server down (' + beatFails + ' retries) — reload when back';
+    }}
   }});
 }}
 // Beat on load and every 30s
@@ -1842,4 +1857,42 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod html_sanity_tests {
+    use super::*;
+
+    fn test_html() -> String {
+        dashboard_html(r#"{"has_pipeline":false}"#, r#"[]"#)
+    }
+
+    #[test]
+    fn no_merge_conflicts() {
+        let h = test_html();
+        assert!(!h.contains("<<<<<<<"));
+        assert!(!h.contains(">>>>>>>"));
+    }
+
+    #[test]
+    fn no_unconverted_braces() {
+        let h = test_html();
+        assert!(!h.contains("{{"));
+        assert!(!h.contains("}}"));
+    }
+
+    #[test]
+    fn has_required_cdns() {
+        let h = test_html();
+        assert!(h.contains("mermaid.min.js"));
+        assert!(h.contains("cytoscape.min.js"));
+    }
+
+    #[test]
+    fn valid_html_structure() {
+        let h = test_html();
+        assert!(h.contains("<!DOCTYPE html>"));
+        assert!(h.contains("</html>"));
+        assert!(h.contains("</body>"));
+    }
 }
