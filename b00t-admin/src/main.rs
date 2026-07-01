@@ -1629,24 +1629,11 @@ function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-<<<<<<< HEAD
    var raw = currentVizData.mermaid;
    if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-   // Render as single graph — mermaid handles multi-diagram with --- separator
    var graphs = [stripped];
-=======
-  var raw = currentVizData.mermaid;
-  var graphs = [];
-  var parts = raw.split(/\`\`\`(?:mermaid)?\s*/);
-  for (var i = 0; i < parts.length; i++) {{
-    var p = parts[i].trim();
-    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{ graphs.push(p); }}
-  }}
-  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
-  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
->>>>>>> origin/main
-  document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
+   document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
   startProgress(graphs.length);
   var html = '';
   var pending = graphs.length;
