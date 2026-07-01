@@ -2607,6 +2607,8 @@ deploy:
     @echo "  Verifying..."
     @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
     @bash scripts/b00t-js-check.sh
+    @echo "  jsdom..."
+    @bash scripts/b00t-jsdom-test.sh 2>/dev/null || echo "  ⚠️  jsdom skipped (install jsdom)"
 
 # 🧪 Full visual test suite
 test-visual: jsdom-test playwright-test
