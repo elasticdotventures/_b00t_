@@ -2588,3 +2588,11 @@ ch0nky-probe endpoint="":
 # [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
 git-prune-corrupt delete="false":
     uv run scripts/git-prune-corrupt.py {{delete}}
+
+# 🧪 Validate served JS syntax (catches merge conflicts, syntax errors)
+js-check:
+    bash scripts/b00t-js-check.sh
+
+# 🌐 CDP console check — launch Chrome, monitor JS errors via DevTools Protocol
+cdp-check url="http://localhost:31337/":
+    bash scripts/b00t-cdp-check.sh {{url}}
