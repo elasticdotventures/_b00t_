@@ -144,11 +144,11 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
-        let secret = "sk-test-secret-12345";
-        let test_key = uuid::Uuid::new_v4().to_string();
-        let encrypted = xor_crypt(secret.as_bytes(), &test_key);
-        let decrypted = xor_crypt(&encrypted, &test_key);
-        assert_eq!(String::from_utf8(decrypted).unwrap(), secret);
+        let secret = b"sk-test-secret-12345";
+        let key: [u8; 32] = *b"test-key-32bytes-for-aes256-gcm!";
+        let ciphertext = aes_encrypt(secret, &key).expect("encrypt");
+        let plaintext = aes_decrypt(&ciphertext, &key).expect("decrypt");
+        assert_eq!(plaintext, secret);
     }
 }
 
