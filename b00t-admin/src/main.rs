@@ -1306,8 +1306,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body open" id="section-pipeline" style="padding:8px 16px;">
+    <div class="accordion-header" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-pipeline" style="padding:8px 16px;display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-evidence">0</div><div style="font-size:8px;color:#64748b;">Evidence</div></div>
@@ -1333,8 +1333,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
+    <div class="accordion-header" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-viz" style="padding:8px 16px;display:none;">
       <select id="viz-select" data-b00t="control:viz-select" data-b00t-action="select" data-b00t-label="Graph Type Selector" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
@@ -1447,13 +1447,24 @@ mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ back
 var PIPELINE = {{}};
 var TYPES = [];
 
-// Restore persisted UI state
+// Restore persisted UI state — only opens, never closes
 (function() {{
   try {{
     var section = localStorage.getItem('b00t-section');
-    var wasOpen = localStorage.getItem('b00t-section-open') === 'true';
+    var wasOpen = localStorage.getItem('b00t-section-open');
     var viz = localStorage.getItem('b00t-viz');
-    if (section) toggleSection(section);
+    // Only open if it was previously open; default is all closed
+    if (section && wasOpen === 'true') {{
+      var body = document.getElementById('section-' + section);
+      if (body) {{
+        body.classList.add('open');
+        body.style.display = '';
+        body.previousElementSibling.classList.add('active');
+        var panelMap = {{ pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' }};
+        var panel = document.getElementById(panelMap[section]);
+        if (panel) panel.style.display = 'block';
+      }}
+    }}
     if (viz && document.getElementById('viz-select')) {{
       document.getElementById('viz-select').value = viz;
       onVizSelect();
