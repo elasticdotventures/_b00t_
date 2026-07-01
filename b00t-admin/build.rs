@@ -14,9 +14,6 @@ pub const GIT_HASH: &str = "{git_hash}";
 pub const VERSION: &str = "{version}";
 "#,
     )).unwrap();
-    
-    println!("cargo:rerun-if-changed=src/main.rs");
-    println!("cargo:rerun-if-changed=Cargo.toml");
 }
 
 fn chrono() -> String {
