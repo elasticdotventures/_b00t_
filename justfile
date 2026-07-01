@@ -2597,17 +2597,16 @@ js-check:
 cdp-check url="http://localhost:31337/":
     bash scripts/b00t-cdp-check.sh {{url}}
 
-# 🚀 Full deploy check: build, test, restart, validate JS, check health
-deploy-check:
-    @echo "🥾 Deploy check..."
+# 🚀 Full deploy: test → build → restart → verify
+deploy:
+    @echo "🥾 Deploying..."
     cargo test -p b00t-admin -- html_sanity
     cargo build -p b00t-admin
-    kill $(pgrep -f "target/debug/b00t-admin" 2>/dev/null || true) 2>/dev/null || true
-    sleep 1
-    nohup ./target/debug/b00t-admin > /tmp/b00t-admin.log 2>&1 &
-    sleep 2
-    @echo "  Checking health..."
-    @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  v{d[\"version\"]} built={d[\"built_at\"]} git={d[\"git\"]}')" 2>/dev/null
-    @echo "  Checking JS..."
+    @echo "  Restarting server..."
+    @kill $(pgrep -x b00t-admin 2>/dev/null || true) 2>/dev/null || true
+    @sleep 1
+    @nohup ./target/debug/b00t-admin > /tmp/b00t-admin.log 2>&1 &
+    @sleep 2
+    @echo "  Verifying..."
+    @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
     @bash scripts/b00t-js-check.sh
-    @echo "✅ Deploy validated"
