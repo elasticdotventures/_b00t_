@@ -51,11 +51,17 @@ confidence = 0.7
 # ── ACT ────────────────────────────────────────────────────────────────────
 [[b00t.ooda.act]]
 on_classification = "trace_calls"
-command = "codebase-memory-mcp cli trace_path --project home-brianh-.dotfiles --function {node_name} --mode calls --depth 2"
+command = """
+PROJECT=$(git rev-parse --show-toplevel 2>/dev/null | tr '/' '-');
+codebase-memory-mcp cli trace_path --project "$PROJECT" --function {node_name} --mode calls --depth 2
+"""
 
 [[b00t.ooda.act]]
 on_classification = "trace_routes"
-command = "codebase-memory-mcp cli trace_path --project home-brianh-.dotfiles --function {node_name} --mode cross_service --depth 2"
+command = """
+PROJECT=$(git rev-parse --show-toplevel 2>/dev/null | tr '/' '-');
+codebase-memory-mcp cli trace_path --project "$PROJECT" --function {node_name} --mode cross_service --depth 2
+"""
 
 [[b00t.ooda.act]]
 on_default = "log"

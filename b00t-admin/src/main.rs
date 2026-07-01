@@ -356,9 +356,13 @@ async fn datum_health_handler() -> impl IntoResponse {
 }
 
 /// GET `/api/admin/graph` — Knowledge graph health (connectivity, isolates, hubs)
+#[allow(dead_code)]
 async fn graph_health_handler() -> impl IntoResponse {
+    let project_name = std::env::current_dir()
+        .map(|p| p.to_string_lossy().replace('/', "-").to_string())
+        .unwrap_or_default();
     let output = std::process::Command::new("codebase-memory-mcp")
-        .args(["cli", "get_graph_schema", "{\"project\":\"home-brianh-.dotfiles\"}"])
+        .args(["cli", "get_graph_schema", &format!("{{\"project\":\"{project_name}\"}}")])
         .output();
     let kg = match output {
         Ok(out) if out.status.success() => {
@@ -808,6 +812,7 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
+#[allow(unused_variables)]
 pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
@@ -1447,7 +1452,9 @@ document.addEventListener('keydown', function(e) {{
 }});
 
 // ════════ Mermaid Init ════════
-mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
+if (typeof mermaid !== 'undefined') {{
+    mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
+}}
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
@@ -1478,10 +1485,12 @@ var TYPES = [];
   }} catch(e) {{}}
 }})();
 
-// Load initial data from API
-fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
-fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
-setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+// Load initial data from API (skip in test environments without fetch)
+if (typeof fetch !== 'undefined') {{
+    fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
+    fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
+    setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+}}
 
 function updatePipeline() {{
   var p = PIPELINE;
@@ -1507,7 +1516,7 @@ function beat() {{
   var vs = document.getElementById('header-version');
   var st = document.getElementById('header-status');
   var sv = document.getElementById('sidebar-version');
-  if (!hb) return;
+  if (!hb || typeof fetch === 'undefined') return;
   fetch('/api/admin/health').then(function(r){{return r.json();}}).then(function(d) {{
     var ver = d.version || '?';
     var built = d.built_at || '';

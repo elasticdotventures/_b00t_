@@ -4,20 +4,22 @@
 # Output: _b00t_/ooda/kg-stats.json
 
 set -euo pipefail
-OUT="${HOME}/.dotfiles/_b00t_/ooda/kg-stats.json"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.dotfiles")"
+PROJECT="$(echo "$ROOT" | tr '/' '-')"
+OUT="${ROOT}/_b00t_/ooda/kg-stats.json"
 mkdir -p "$(dirname "$OUT")"
 
-codebase-memory-mcp query_graph --project home-brianh-.dotfiles --max-rows 50 --json \
+codebase-memory-mcp query_graph --project "$PROJECT" --max-rows 50 --json \
   "MATCH (n) OPTIONAL MATCH (n)-[r]-() WITH n, count(r) AS degree WHERE degree = 0 RETURN labels(n) AS labels, n.qualified_name AS node LIMIT 50" \
   > /tmp/isolated.json 2>/dev/null
 
-codebase-memory-mcp query_graph --project home-brianh-.dotfiles --max-rows 20 --json \
+codebase-memory-mcp query_graph --project "$PROJECT" --max-rows 20 --json \
   "MATCH (n)-[r]-() WITH n, count(r) AS degree WHERE degree > 10 RETURN n.qualified_name AS hub, labels(n) AS labels, degree ORDER BY degree DESC LIMIT 20" \
   > /tmp/hubs.json 2>/dev/null
 
 python3 -c "
 import json, os
-result = {'project': 'home-brianh-.dotfiles', 'timestamp': '$(date -Iseconds)'}
+result = {'project': '$PROJECT', 'timestamp': '$(date -Iseconds)'}
 
 for fn, key in [('/tmp/isolated.json', 'isolated'), ('/tmp/hubs.json', 'hubs')]:
     try:

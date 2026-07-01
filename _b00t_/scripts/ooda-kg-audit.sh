@@ -3,7 +3,8 @@
 # Run: b00t sh _b00t_/scripts/ooda-kg-audit.sh
 set -euo pipefail
 
-PROJECT="home-brianh-.dotfiles"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.dotfiles")"
+PROJECT="$(echo "$ROOT" | tr '/' '-')"
 CBM="codebase-memory-mcp cli"
 
 # ── PHASE 1: OBSERVE ──────────────────────────────────────────────────────

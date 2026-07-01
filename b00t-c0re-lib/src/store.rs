@@ -446,7 +446,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
         }
 
         // Orphan facts: Neumann facts without matching store entries
-        let mut manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
+        let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
         for (checksum, subjects) in &neumann_checksums {
