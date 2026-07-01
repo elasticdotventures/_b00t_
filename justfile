@@ -191,6 +191,7 @@ marketplace-check:
 
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
+# Verifies new version is live via health API before returning
 bump-install:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -201,7 +202,25 @@ bump-install:
     echo "⬆️  $current → $next"
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
-    echo "✅ installed v$next"
+
+    # Build + restart admin server
+    cargo build -p b00t-admin
+    pkill -f "target/debug/b00t-admin" 2>/dev/null || true
+    sleep 1
+    nohup ./target/debug/b00t-admin > /tmp/b00t-admin.log 2>&1 &
+    sleep 2
+
+    # Poll health API until version matches
+    echo "🔍 Verifying v$next is live..."
+    for i in {1..20}; do
+        actual=$(curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('version',''))" 2>/dev/null || echo "")
+        if [ "$actual" = "$next" ]; then
+            echo "✅ v$next confirmed live at http://localhost:31337/"
+            exit 0
+        fi
+        sleep 1
+    done
+    echo "⚠️  Server still reporting old version after 20s — check manually"
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
 # 💡例 curl the script and pipe to bash, or run directly:
