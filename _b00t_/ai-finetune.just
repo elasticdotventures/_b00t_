@@ -372,7 +372,7 @@ cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
+      -e UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \
@@ -407,7 +407,7 @@ cloud-coder:
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
-        "-e", "UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache",
+        "-e", "UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "-v", "hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw",
@@ -422,10 +422,8 @@ cloud-coder:
     sys.exit(result.returncode)
 
 
-# Dense 14B Coder — no MoE, avoids triton_kernels.routing requirement
-# 🤓 Qwen3-Coder-30B-A3B (MoE) requires triton_kernels.routing which is NOT on PyPI.
-#    Use this recipe for reliable training: Qwen3-Coder-14B-Instruct (dense) on A10g-large.
-#    14B 4-bit: ~7GB weights, ~20GB total → fits A10g-large 24GB. ~15-25s/step = ~3h = ~.50.
+# ⚠️ DEPRECATED — Qwen2.5-Coder-14B-Instruct not desired; config archived for reference
+# Do not run. Create a new recipe + config for the target model instead.
 cloud-coder-14b:
     #!/usr/bin/env python3
     import subprocess, sys, pathlib, datetime
@@ -447,7 +445,10 @@ cloud-coder-14b:
         "-e", "HF_HOME=/tmp/hf-cache",
         "-e", "PYTORCH_ALLOC_CONF=expandable_segments:True",
         "-e", "TORCHDYNAMO_DISABLE=1",
-        "-e", "UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache",
+        "-e", "UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache",
+        # 🤓 base unsloth image sets UNSLOTH_VLLM_STANDBY=1; when=1 it removes
+        #    expandable_segments → memory fragmentation → OOM on 14B backward pass
+        "-e", "UNSLOTH_VLLM_STANDBY=0",
         "--secrets", "HF_TOKEN",
         "-v", "hf://datasets/elasticdotventures/b00t-training:/data:ro",
         "--label", f"ledgrrr_resume_token={resume_token}",
@@ -472,7 +473,7 @@ cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" 
       -e HF_HOME=/tmp/hf-cache \
       -e PYTORCH_ALLOC_CONF=expandable_segments:True \
       -e TORCHDYNAMO_DISABLE=1 \
-      -e UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache \
+      -e UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
       --secrets HF_TOKEN \
       -v hf://datasets/elasticdotventures/b00t-training:/data:ro \
       -v hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw \

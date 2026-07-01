@@ -1,14 +1,21 @@
-# b00t cloud fine-tune: Qwen3-Coder-14B-Instruct on HF Jobs A10g
-# Dense model (no MoE) — avoids triton_kernels.routing dependency
-# Submit with: just ai-finetune::cloud-coder-14b
-# Monitor with: just ai-finetune::hf-job-ps && just ai-finetune::hf-job-logs <id>
-# Adapter lands at: elasticdotventures/b00t-qwen3-coder-14b
+# ⚠️ DEPRECATED / ARCHIVAL — do not submit new jobs with this config
+# Qwen2.5-Coder-14B-Instruct is prev-gen; operator prefers a different model.
+# Kept for reference: env var fixes, batch/grad_accum tuning, LoRA config.
+#
+# 🤓 Qwen3+ Coder series notes (2026-06-30):
+#   - Qwen3-Coder-14B-Instruct: does NOT exist on HF Hub
+#   - Qwen3-Coder family models: 30B-A3B-Instruct, 480B-A35B-Instruct, Next(~79B) — ALL MoE
+#   - MoE training requires triton_kernels.routing — NOT on PyPI (internal Meta/OpenAI tooling)
+#     triton-kernels==0.1.0 only provides add_vectors.py + rotary_embedding.py (wrong package)
+#   - Without routing kernel: ~184s/step on H200 (29h for 573 steps > 10h timeout)
+#   - Qwen3-Coder-Next: 79B params BF16, too large for A10g-large (24GB)
+#   - Status as of 2026-06-30: no usable Qwen3-Coder dense model exists for fine-tuning
 
-base_model: "Qwen/Qwen3-Coder-14B-Instruct"
-adapter_name: "b00t-qwen3-coder-14b"
+base_model: "Qwen/Qwen2.5-Coder-14B-Instruct"
+adapter_name: "b00t-qwen2.5-coder-14b"
 dataset_path: "/data/train.jsonl"
 output_dir: "/tmp/output"
-hub_model_id: "elasticdotventures/b00t-qwen3-coder-14b"
+hub_model_id: "elasticdotventures/b00t-qwen2.5-coder-14b"
 push_to_hub: true
 private: true
 
@@ -28,8 +35,8 @@ target_modules:
   - "down_proj"
 
 num_epochs: 1
-batch_size: 2
-grad_accum: 8
+batch_size: 1
+grad_accum: 16
 learning_rate: 1e-4
 max_seq_length: 2048
 packing: true

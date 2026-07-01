@@ -1,8 +1,11 @@
-# b00t cloud fine-tune: Qwen3-Coder-30B-A3B-Instruct on HF Jobs A100
-# Submit with: just hf-job-submit-coder
-# Monitor with: just hf-job-logs <job-id>
-# Adapter lands at: hf://buckets/elasticdotventures/b00t-adapters/qwen3-coder-30b/
-#                   and pushed to: elasticdotventures/b00t-qwen3-coder-30b
+# ⚠️ OBSOLETE / PAST CUTOFF (2026-06-30) — do not submit jobs with this config
+# Qwen3-Coder-30B-A3B-Instruct is MoE; requires triton_kernels.routing NOT on PyPI.
+# Without routing kernel: ~184s/step on H200 → 29h for 573 steps (10h job limit).
+# All HF Jobs using this config (06-28 – 06-30) were CANCELED or timed out.
+# Kept for LoRA tuning refs (r/alpha, grad_accum, bucket FUSE notes).
+#
+# Original intent: cloud fine-tune Qwen3-Coder-30B-A3B-Instruct on HF Jobs A100
+# Adapter target: elasticdotventures/b00t-qwen3-coder-30b
 
 base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 adapter_name: "b00t-qwen3-coder-30b"

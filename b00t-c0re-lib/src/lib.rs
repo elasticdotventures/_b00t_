@@ -66,6 +66,7 @@ pub mod rhai_engine;
 pub mod runtime_env;
 pub mod secret_validation;
 pub mod sm0l_dispatch;
+pub mod soul_dataframerr;
 pub mod template;
 pub mod utils;
 

@@ -1,6 +1,6 @@
 ---
 unsloth-cache: unsloth/__init__.py internally upgrades numpy 2.2→2.4; pre-install numpy>=2.4 to prevent mid-session mismatch
-# summary: Unsloth numpy mid-session upgrade root cause + fix; triton_kernels.routing unavailable; 14B dense recommended
+# summary: Unsloth numpy mid-session upgrade root cause + fix; triton_kernels.routing unavailable; 14B dense recommended; UNSLOTH_CACHE_DIR permission
 # tags: unsloth, training, numpy, triton, moe, hf-jobs, performance
 # tier: frontier
 # cmds: uv pip install "numpy>=2.4" pyyaml  # in Dockerfile, BEFORE anything else
@@ -36,6 +36,7 @@ ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 - `triton-kernels==0.1.0` provides only add_vectors.py + rotary_embedding.py
 - `triton_kernels.routing` = internal Meta/OpenAI tooling, not public
 - Without it: Qwen3-30B-A3B (MoE) trains at 184s/step on H200 (29h > 10h timeout)
+- Note: including `triton-kernels` in Dockerfile is harmless but doesn't fix MoE routing
 
 ### Dense 14B avoids all MoE issues
 | Hardware | Model | triton routing | numpy fix | step time |
@@ -43,6 +44,11 @@ ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 | A100-large | Qwen3-30B-A3B (MoE) | ✓ | needed | ~130s |
 | H200 | Qwen3-30B-A3B (MoE) | ✗ | needed | ~184s |
 | A10g-large | Qwen3-Coder-14B (dense) | N/A | needed | ~15-25s |
+
+### Step time expectations on HF Jobs
+- A100 80GB (a100-large): ~130s/step for Qwen3-30B-MoE-128E (MoE routing scatter bound)
+- A100 without triton-kernels: ~325s/step (PyTorch fallback)
+- H200 141GB (h200): ~50s/step (faster HBM + better MoE routing)
 
 ### Budget
 - 14B dense: 573 steps × 20s × $1.50/hr = ~$4.77 ← USE THIS
@@ -53,3 +59,6 @@ ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
 - `hf://buckets/...` FUSE mount fails intermittently → "Volume mount failed" error
 - Fix: remove bucket mount; use `push_to_hub: true` in config for checkpoint persistence
 - `hub_model_id: elasticdotventures/b00t-qwen3-coder-14b` saves to HF Hub directly
+
+---
+Unsloth compiled cache missing or permission-denied causes JIT recompile every forward pass: 309s/step vs 5s/step on A100 (60x cost). Pre-create in Dockerfile: ENV UNSLOTH_CACHE_DIR=/opt/unsloth_compiled_cache and RUN mkdir -p. Root cause of $85 HF bill for a 47-minute job.

@@ -1,7 +1,7 @@
 # HF Jobs + MLflow Tracking
 
 ## b00t:map v1
-# summary: MLflow on LAN IP is NOT reachable from HF Jobs cloud workers
+# summary: MLflow on LAN IP is NOT reachable from HF Jobs cloud workers; mlflow not in default unsloth image
 # tags: hf-jobs, mlflow, networking, cloud
 # tier: frontier
 # cmds: report_to: "none"   # for cloud runs
@@ -20,3 +20,6 @@
 **Pattern**:
 - cloud config: `report_to: "none"`
 - local config: `report_to: "mlflow"`, `mlflow_tracking_uri: "http://192.168.1.137:30803"`
+
+---
+MLflow not installed in docker.io/unsloth/unsloth:latest (ships vLLM variant). Setting report_to:mlflow without mlflow package causes RuntimeError at SFTTrainer.__init__ before any training step. Fix: bake mlflow into custom training image via uv pip install, or set report_to:none.

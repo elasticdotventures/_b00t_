@@ -15,16 +15,19 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 #    When unsloth runs its internal check, it finds 2.4.x already installed → no mismatch.
 ENV VIRTUAL_ENV=/opt/venv
 # 🤓 HF Jobs container startup may reset PATH; put /opt/venv/bin first so just train
-#    uses the venv python3 (with numpy 2.5.0), not system python3 (with numpy 2.2.6)
+#    uses the venv python3 (with numpy 2.4.x), not system python3 (with numpy 2.2.6)
 ENV PATH="/opt/venv/bin:$PATH"
-RUN uv pip install "numpy~=2.4.1" pyyaml
+# triton-kernels PyPI provides add_vectors/rotary_embedding — NOT triton_kernels.routing (Meta-internal)
+# mlflow omitted — use report_to:none; hf_xet for fast Hub checkpoint uploads
+RUN uv pip install "numpy~=2.4.1" pyyaml "huggingface_hub[hf_xet]>=0.26" triton-kernels
 
 # Smoke-tests: yaml importable; numpy is exactly 2.4.x and self-consistent
 RUN /opt/venv/bin/python3 -c "import yaml; print('yaml', yaml.__version__)"
 RUN /opt/venv/bin/python3 -c "import importlib.metadata as m, numpy as np; v=m.version('numpy'); assert v==np.__version__, f'mismatch: {np.__version__} vs {v}'; assert v.startswith('2.4'), f'{v} not 2.4.x'; print('numpy 2.4.x OK', v)"
 
-# UNSLOTH_CACHE_DIR: /tmp always writable at HF Jobs runtime (base image may run non-root)
-ENV UNSLOTH_CACHE_DIR=/tmp/unsloth_compiled_cache
+# 🤓 unsloth_zoo/compiler.py reads UNSLOTH_COMPILE_LOCATION (not UNSLOTH_CACHE_DIR)
+#    default is relative 'unsloth_compiled_cache' which fails on read-only CWD
+ENV UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache
 
 LABEL org.opencontainers.image.source="https://github.com/elasticdotventures/_b00t_"
 LABEL org.opencontainers.image.description="b00t fine-tuning image: unsloth + uv + numpy>=2.4"

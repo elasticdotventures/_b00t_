@@ -189,3 +189,25 @@ The Tax-Lawyer Platform combines two architectural currents:
 - **UFO-up**: ufo-types crate grounds all domain concepts in UFO stereotypes with ISO standard types
 The Satisfies<T> trait is the bridge — produces arc-kit-au evidence nodes for audit trail.
 See _b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd and issues #510-#517.
+
+## DoggoLingo Playable-First Pattern (recorded 2026-06-30)
+
+DoggoLingo is the active App4.Dog acceleration vector.
+Agents MUST prioritize a working local game loop over backend, cloud, or ML architecture.
+
+P0 is `tap-the-sheep`:
+- one skill: touch target acquisition
+- no backend dependency
+- no treat-dispenser dependency
+- no cloud dependency
+- static or hardcoded sheep asset is acceptable
+- reward is happy audio plus visual motion
+- telemetry is local and JSON-shaped
+
+Before adding ML workflow code, agents MUST check:
+- `._b00t_/doggolingo.stack.tomllm`
+- `docs/DOGGOLINGO_CLEANUP_PLAN.md`
+- `SOUL.tomllm` `[doggolingo]`
+
+ComfyUI work is legacy exploration. Extract stage ideas into typed b00t business logic;
+do not make ComfyUI, workflow JSON, or a persistent ComfyUI server part of the game runtime.
