@@ -1450,7 +1450,8 @@ function beat() {{
   // Fetch health API for server version
   fetch('/api/admin/health').then(function(r){{return r.json();}}).then(function(d) {{
     var ver = d.version || '?';
-    if (vs) vs.textContent = 'v' + ver + ' ·';
+    var built = d.built_at || '';
+    if (vs) vs.textContent = 'v' + ver + (built ? ' · built ' + built : '') + ' ·';
     if (sv) sv.textContent = '🥾 v' + ver;
     if (st) st.textContent = d.service || 'Healthy';
     hb.style.background = '#34d399';
@@ -1621,8 +1622,9 @@ function renderMermaid() {{
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
    var raw = currentVizData.mermaid;
    if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '');
-    var graphs = stripped.split(/\n{{2,}}/).filter(function(p) {{ return p.trim().length > 0; }});
+   var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+   // Render as single graph — mermaid handles multi-diagram with --- separator
+   var graphs = [stripped];
   document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
   startProgress(graphs.length);
   var html = '';
