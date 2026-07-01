@@ -388,124 +388,24 @@ async fn viz_isometric_handler() -> impl IntoResponse {
         .output();
     let raw = output.ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .replace("```mermaid\n", "").replace("\n```", "")
+        .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
-    // Build isometric scene from mermaid graph data
-    let svg = iso_scene_svg(&raw);
+    // Generate isometric SVG via Python (faster iteration than Rust SVG builder)
+    let svg = std::process::Command::new("python3")
+        .arg("-c")
+        .arg(include_str!("../../scripts/iso_scene.py"))
+        .arg(&raw)
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_else(|| "<svg><text fill='red'>Generation failed</text></svg>".into());
+
     axum::Json(serde_json::json!({
         "svg": svg,
         "format": "isometric"
     }))
-}
-
-/// Convert mermaid graph text to an isometric SVG scene.
-fn iso_scene_svg(mermaid: &str) -> String {
-    let lines: Vec<&str> = mermaid.lines().collect();
-    let mut nodes: Vec<(String, String)> = Vec::new();
-    let mut edges: Vec<(String, String)> = Vec::new();
-    let mut node_index = 0u32;
-
-    for line in &lines {
-        let trimmed = line.trim();
-        // Node: N_id["label"] or id["label"]
-        if let Some(rest) = trimmed.strip_prefix("N_") {
-            if let Some((id, label)) = rest.split_once("[\"") {
-                let id = format!("N_{}", id.trim());
-                let label = label.trim_end_matches("\"]").to_string();
-                nodes.push((id, label));
-            }
-        }
-        // Edge: from -->|label| to or from --> to
-        if trimmed.contains("-->") {
-            let parts: Vec<&str> = trimmed.split("-->").collect();
-            if parts.len() == 2 {
-                let from = parts[0].trim().to_string();
-                let to = parts[1].trim()
-                    .trim_start_matches("|\"").trim_end_matches("\"|")
-                    .to_string();
-                edges.push((from, to));
-            }
-        }
-    }
-
-    // Isometric projection constants
-    let iso_x = |x: f32, z: f32, s: f32, ox: f32| ox + (x - z) * s * 0.866;
-    let iso_y = |x: f32, z: f32, y: f32, s: f32, oy: f32| oy + (x + z) * s * 0.5 - y * s;
-
-    let scale = 120.0;
-    let origin = (400.0, 300.0);
-    let spacing = 1.5;
-
-    // Position nodes in isometric grid
-    let mut positions: Vec<(f32, f32, f32)> = Vec::new();
-    let cols = (nodes.len() as f32).sqrt().ceil() as u32;
-    for (i, _) in nodes.iter().enumerate() {
-        let col = (i as u32 % cols) as f32;
-        let row = (i as u32 / cols) as f32;
-        let x = col * spacing;
-        let z = row * spacing;
-        let y = 0.0;
-        positions.push((x, z, y));
-    }
-
-    // Build SVG
-    let padding = 60.0;
-    let mut max_sx = 0.0f32;
-    let mut max_sy = 0.0f32;
-    for (x, z, y) in &positions {
-        let sx = iso_x(*x, *z, scale, origin.0);
-        let sy = iso_y(*x, *z, *y, scale, origin.1);
-        max_sx = max_sx.max(sx);
-        max_sy = max_sy.max(sy);
-    }
-    let w = (max_sx + padding) as u32;
-    let h = (max_sy + padding) as u32;
-
-    let mut svg = String::from("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ");
-    svg.push_str(&format!("{w} {h}\" width=\"{w}\" height=\"{h}\">"));
-    svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#0f172a\"/>");
-    svg.push_str("<g font-family=\"monospace\" font-size=\"11\">");
-
-    // Draw edges
-    for (from, to) in &edges {
-        if let (Some(fi), Some(ti)) = (node_index_of(&nodes, from), node_index_of(&nodes, to)) {
-            let (fx, fz, fy) = positions[fi];
-            let (tx, tz, ty) = positions[ti];
-            let sx1 = iso_x(fx, fz, scale, origin.0);
-            let sy1 = iso_y(fx, fz, fy, scale, origin.1);
-            let sx2 = iso_x(tx, tz, scale, origin.0);
-            let sy2 = iso_y(tx, tz, ty, scale, origin.1);
-            svg.push_str(&format!(
-                r##"  <line x1="{sx1}" y1="{sy1}" x2="{sx2}" y2="{sy2}" stroke="#475569" stroke-width="1.5" stroke-dasharray="4,3"/>"##
-            ));
-            svg.push('\n');
-        }
-    }
-
-    // Draw nodes
-    let colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
-    for (i, (id, label)) in nodes.iter().enumerate() {
-        let (x, z, y) = positions[i];
-        let sx = iso_x(x, z, scale, origin.0);
-        let sy = iso_y(x, z, y, scale, origin.1);
-        let color = colors[i % colors.len()];
-        let short_label: String = label.chars().take(22).collect();
-        svg.push_str(&format!(
-            r##"  <g transform="translate({sx},{sy})">
-    <rect x="-55" y="-18" width="110" height="36" rx="6" fill="{color}" opacity="0.9" stroke="#e2e8f0" stroke-width="1"/>
-    <text x="0" y="-2" text-anchor="middle" fill="#fff">{short_label}</text>
-    <text x="0" y="12" text-anchor="middle" fill="#94a3b8" font-size="8">{id}</text>
-  </g>"##
-        ));
-        svg.push('\n');
-    }
-
-    svg.push_str("  </g>\n</svg>");
-    svg
-}
-
-fn node_index_of(nodes: &[(String, String)], id: &str) -> Option<usize> {
-    nodes.iter().position(|(nid, _)| nid == id || nid.contains(id) || id.contains(nid.as_str()))
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
@@ -885,7 +785,9 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
         .ok()
         .and_then(|o| o.status.success().then(|| {
             let raw = String::from_utf8_lossy(&o.stdout).to_string();
-            raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string()
+            let cleaned = raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string();
+            // Mermaid v11 dropped `graph` syntax — must use `flowchart`
+            cleaned.replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD").replace("graph RL", "flowchart RL")
         }))
         .unwrap_or_default();
 
