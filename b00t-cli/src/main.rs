@@ -2991,10 +2991,9 @@ async fn main() {
                     }
                 }
             };
-            let install_target = tgt;
             let install_cmd = McpCommands::Install {
                 name: name.clone(),
-                target: install_target,
+                target: tgt,
                 repo: false,
                 user: false,
                 stdio_command: None,

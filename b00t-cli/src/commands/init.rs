@@ -589,7 +589,6 @@ impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
             InitCommands::Project { name, stack, setup, no_setup, dry_run } => {
-<<<<<<< HEAD
                 if *dry_run {
                     let mut memory = SessionMemory::load()?;
                     detect_project_context(&mut memory)?;
@@ -600,16 +599,6 @@ impl InitCommands {
                         maintenance: false,
                     }
                     .execute(path);
-=======
-                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)?;
-                let mut memory = SessionMemory::load()?;
-                detect_project_context(&mut memory)?;
-                let detected_stack = memory.get("primary_stack").cloned().unwrap_or_default();
-                println!("\n🥾 Running b00t cli up for {} project…", detected_stack);
-                CliCommands::Up {
-                    yes: !dry_run,
-                    maintenance: false,
->>>>>>> origin/main
                 }
                 handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
             }

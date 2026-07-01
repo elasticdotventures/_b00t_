@@ -2669,3 +2669,37 @@ jsdom-test:
 # 🎭 Playwright test — headless browser check
 playwright-test:
     bash scripts/b00t-playwright-test.sh
+
+# Discover sm3lly (RTX 3090 inference agent) on the hive
+connect-sm3lly:
+    @echo "🔍 Discovering sm3lly..."
+    b00t agent discover --role inference || echo "Not found — start sm3lly agent first"
+    @echo "Add sm3lly to ~/.b00t/server-soul.tomllm for auto-proxy"
+
+# Share training data with sm3lly for finetuning
+share-training sm3lly_host="sm3lly":
+    @echo "📤 Sharing training data with {{sm3lly_host}}..."
+    rsync -avz ~/.b00t/training/b00t-corpus.jsonl {{sm3lly_host}}:~/.b00t/training/
+
+# Delegate full finetune pipeline to sm3lly
+delegate-finetune sm3lly_host="sm3lly":
+    just share-training {{sm3lly_host}}
+    @echo "🔧 Executing finetune on {{sm3lly_host}} (RTX 3090 24GB)..."
+    ssh {{sm3lly_host}} "cd .b00t && uv run python3 fine-tune/train_unsloth.py && uv run python3 fine-tune/export_gguf.py"
+
+# Sync Spotlight telemetry logs bidirectionally
+sync-spotlight sm3lly_host="sm3lly":
+    scp {{sm3lly_host}}:~/.b00t/spotlight.jsonl /tmp/sm3lly-spotlight.jsonl 2>/dev/null || true
+    cat /tmp/sm3lly-spotlight.jsonl >> ~/.b00t/spotlight.jsonl 2>/dev/null || true
+    scp ~/.b00t/spotlight.jsonl {{sm3lly_host}}:~/.b00t/spotlight.jsonl 2>/dev/null || true
+    @echo "✅ Spotlight logs synced"
+
+# Mirror soul configs between agents
+mirror-soul sm3lly_host="sm3lly":
+    scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
+    scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
+    @echo "✅ Soul configs mirrored"
+
+# 📚 Sync blessed crate manifest from blessed.rs upstream
+blessed-sync:
+    curl -s https://raw.githubusercontent.com/nicoburns/blessed-rs/main/data/crates.json | python3 {{ justfile_directory() }}/scripts/convert_blessed.py
