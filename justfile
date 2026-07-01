@@ -2602,7 +2602,7 @@ deploy-check:
     @echo "🥾 Deploy check..."
     cargo test -p b00t-admin -- html_sanity
     cargo build -p b00t-admin
-    pkill -f "target/debug/b00t-admin " 2>/dev/null || true
+    kill $(pgrep -f "target/debug/b00t-admin" 2>/dev/null || true) 2>/dev/null || true
     sleep 1
     nohup ./target/debug/b00t-admin > /tmp/b00t-admin.log 2>&1 &
     sleep 2
