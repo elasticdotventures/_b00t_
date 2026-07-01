@@ -37,6 +37,16 @@
       "headers": {
         "Authorization": "Bearer ${HF_TOKEN}"
       }
+    },
+    "chrome-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://localhost:3000/sse"
+      ],
+      "env": {}
     }
   }
 }

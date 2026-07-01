@@ -1,0 +1,51 @@
+# Containerfile.servo — Servo browser engine in a rootless Podman container
+#
+# Usage (b00t standard: podman, not docker):
+#   just servo::build           # build the image
+#   just servo::browse URL      # open URL headlessly
+#   just servo::webdriver       # start WebDriver server on :4444
+#
+# 🤓 resources/ dir MUST be co-located with the servoshell binary (SERVO_RESOURCE_FILES env)
+# 🤓 Vello CPU renderer is default in v0.3.0 — no GPU required for rendering
+# 🤓 WebDriver is W3C standard, NOT CDP — use Selenium/Playwright (Firefox mode) for RPA
+# 🤓 For CDP-based RPA today, use qutebrowser or chrome-headless instead
+
+ARG SERVO_VERSION=0.3.0
+
+FROM ubuntu:24.04 AS downloader
+ARG SERVO_VERSION
+RUN apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates
+RUN curl -fsSL \
+    "https://github.com/servo/servo/releases/download/v${SERVO_VERSION}/servo-x86_64-linux-gnu.tar.gz" \
+    | tar -xz -C /opt --strip-components=1
+
+# ── Runtime image ─────────────────────────────────────────────────────────────
+FROM ubuntu:24.04
+
+# GStreamer + X11 runtime deps declared in servo.cli.toml
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    libgstreamer1.0-0 \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    libxcursor1 libxrandr2 libxi6 \
+    libxkbcommon0 \
+    libvulkan1 \
+    xvfb \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=downloader /opt/servoshell /usr/local/bin/servo
+COPY --from=downloader /opt/resources   /usr/local/share/servo/resources
+
+ENV SERVO_RESOURCE_FILES=/usr/local/share/servo/resources
+
+# WebDriver port (W3C) — connect via Selenium/Playwright Firefox mode
+EXPOSE 4444
+# Firefox DevTools Protocol (NOT CDP)
+EXPOSE 6080
+
+# Default: headless WebDriver server — override CMD for one-shot URL rendering
+CMD ["xvfb-run", "--server-args=-screen 0 1280x1024x24", \
+     "servo", "--webdriver=4444", "about:blank"]

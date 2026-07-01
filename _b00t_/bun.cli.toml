@@ -1,0 +1,34 @@
+[b00t]
+name = "bun"
+type = "cli"
+desires = "latest"
+hint = "bun — fast JavaScript runtime, package manager, and bundler"
+depends_on = []
+
+install = "curl -fsSL https://bun.sh/install | bash"
+update = "bun upgrade"
+version = "bun --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+
+[[b00t.usage]]
+description = "Install a package globally"
+command = "bun add -g <package>"
+
+[[b00t.usage]]
+description = "Run a script"
+command = "bun run <script>"
+
+[validate]
+command = "bun --version"
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer"]
+optional_for = []
+
+# b00t:map v1
+# summary: bun — fast JS runtime + package manager (preferred for opencode)
+# tags: bun, javascript, runtime, package-manager, opencode
+# tier: ch0nky
+# cmds: bun add -g <pkg>, bun run <script>
+# complexity: 2

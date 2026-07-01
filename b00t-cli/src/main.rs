@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use blessed;
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
 use b00t_cli::UnifiedConfig;
@@ -93,6 +92,7 @@ use b00t_cli::commands::{
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
+    provider::ProviderCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
@@ -429,6 +429,11 @@ The system will:
         #[clap(subcommand)]
         agent_command: AgentCommands,
     },
+    #[clap(about = "Multi-provider compute — inference endpoints + training jobs (runpod, hf)")]
+    Provider {
+        #[clap(subcommand)]
+        provider_command: ProviderCommands,
+    },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
         #[clap(subcommand)]
@@ -693,23 +698,6 @@ The system will:
         dry_run: bool,
         #[clap(long, help = "Root directory", default_value_t = String::new())]
         root: String,
-    },
-    /// 🐚 sh — shortcut: guard-enforced, audit-logged shell execution
-    // 🤓 b00t shortcuts favor idiomatic tokens over terse flags like -v; short codes are ambiguous.
-    #[clap(hide = true, about = "🐚 Sandboxed shell → exec with guard enforcement + audit log")]
-    Sh {
-        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 1..)]
-        command: Vec<String>,
-    },
-    /// 📚 blessed — query the blessed.rs crate directory for ecosystem recommendations
-    #[clap(about = "📚 Query blessed crate directory for ecosystem recommendations")]
-    Blessed {
-        #[clap(help = "Search query (e.g., 'http client', 'serialization')")]
-        query: String,
-        #[clap(long, default_value = "5", help = "Maximum results")]
-        limit: usize,
-        #[clap(long, default_value = "false", help = "Output as JSON")]
-        json: bool,
     },
 }
 
@@ -1950,12 +1938,6 @@ async fn main() {
                             if let Some(dispatch) = resolved.into_iter().next() {
                                 match dispatch {
                                     b00t_cli::DatumDispatch::Runtime(cfg) => {
-                                        // Run hook_pre before sandbox (preflight checks, plugin installs)
-                                        if let Some(ref hook) = cfg.hook_pre {
-                                            let _ = std::process::Command::new("bash")
-                                                .args(["-c", hook])
-                                                .status();
-                                        }
                                         match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
                                             Ok(code) => std::process::exit(code),
                                             Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
@@ -2103,8 +2085,6 @@ async fn main() {
         );
         eprintln!("  \x1b[2mb00t die\x1b[0m                → quit (process-icide)");
         eprintln!("  \x1b[2mb00t sweep\x1b[0m              → tidy-sweep *~ files");
-        eprintln!("  \x1b[2mb00t sh <cmd...>\x1b[0m         → sandboxed exec (guard-enforced, audit-logged)");
-        eprintln!("  \x1b[2mb00t blessed <query>\x1b[0m     → query blessed.rs crate directory");
         eprintln!("  \x1b[2mb00t <name>\x1b[0m             → auto-detect datum type");
         eprintln!();
     }
@@ -2335,6 +2315,12 @@ async fn main() {
         }
         Some(Commands::Job { job_command }) => {
             if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Provider { provider_command }) => {
+            if let Err(e) = b00t_cli::commands::provider::handle_provider_command(provider_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -3005,9 +2991,10 @@ async fn main() {
                     }
                 }
             };
+            let install_target = tgt;
             let install_cmd = McpCommands::Install {
                 name: name.clone(),
-                target: tgt,
+                target: install_target,
                 repo: false,
                 user: false,
                 stdio_command: None,
@@ -3099,36 +3086,6 @@ async fn main() {
             } else {
                 let count = b00t_cli::sweep_backup_files(&sweep_root);
                 eprintln!("🧹 swept {} *~ file(s)", count);
-            }
-        }
-
-        Some(Commands::Sh { command }) => {
-            let exec_args = b00t_cli::commands::exec::ExecArgs {
-                command: command.clone(),
-                sleep: None,
-                dry_run: false,
-                sandbox: "direct".to_string(),
-            };
-            if let Err(e) = b00t_cli::commands::exec::handle_exec(&exec_args, &cli.path) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        }
-
-        Some(Commands::Blessed { query, limit, json }) => {
-            let results = blessed::query(&query, *limit);
-            if *json {
-                println!("{}", serde_json::to_string_pretty(&results).unwrap_or_default());
-            } else {
-                for r in &results {
-                    println!("\n## {} ({})", r.use_case, r.category);
-                    for c in &r.crates {
-                        println!("- **{}**: {}", c.name, c.note);
-                    }
-                }
-                if results.is_empty() {
-                    println!("No blessed crates found matching '{}'", query);
-                }
             }
         }
 

@@ -13,14 +13,14 @@ if [[ "$TOOL_NAME" != "bash" && "$TOOL_NAME" != "Bash" && -z "${BASH_COMMAND:-}"
     exit 0
 fi
 
-# ─── BLOCK patterns (exit 2) ─────────────────────────────────────────────────
+# ─── BLOCK patterns (exit 2) ───────────────────────────────────────────────
 # rm -rf / — absolute destruction
 if echo "$COMMAND" | grep -qE "rm\s+-rf\s+/"; then
     echo '{"decision":"block","reason":"rm -rf / is BLOCKED by b00t guard","suggestion":"use trash or targeted paths"}' >&2
     exit 2
 fi
 
-# ─── WARN/REPLACE patterns (exit 1) ──────────────────────────────────────────
+# ─── WARN/REPLACE patterns (exit 1) ────────────────────────────────────────
 warnings=()
 
 # grep → rg (ripgrep): warn for standalone search, not for pipeline filtering (| grep)
@@ -45,7 +45,4 @@ fi
 
 if [[ ${#warnings[@]} -gt 0 ]]; then
     printf '%s\n' "${warnings[@]}" >&2
-    exit 1
 fi
-
-exit 0

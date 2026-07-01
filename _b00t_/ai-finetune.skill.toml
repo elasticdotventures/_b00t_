@@ -4,7 +4,7 @@ type = "skill"
 hint = "QLoRA fine-tuning pipeline: dataset gen, local k8s (sm0l/ch0nky), HF Jobs cloud (30B+), MLflow, adapter test"
 
 [b00t.skill]
-depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS"]
+depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS", "ledgrrr"]
 unlocks = [
     # dataset
     "ai-finetune::dataset",

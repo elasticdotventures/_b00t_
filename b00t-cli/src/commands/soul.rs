@@ -101,6 +101,34 @@ pub enum SoulCommands {
     /// Show which soul directories are active (local + global).
     #[clap(about = "Show active soul directories (local + global)")]
     Where,
+
+    /// Append an entry to the ops log (OPS.jsonl in the active soul dir).
+    ///
+    /// Scope hierarchy mirrors soul: global (~/._b00t_/) > project (._b00t_/) > task.
+    /// Agents write here to leave a shared activity trail readable by other agents.
+    ///
+    /// Examples:
+    ///   b00t soul log "submitted HF training job 6a4258f"
+    ///   b00t soul log --scope project --result ok "pushed dataset to HF"
+    ///   b00t soul log --list
+    ///   b00t soul log --list --scope global --tail 20
+    #[clap(about = "Append/read ops log (OPS.jsonl) — shared agent activity register")]
+    Log {
+        #[clap(help = "Message to log (omit to read)")]
+        message: Option<String>,
+        #[clap(long, default_value = "active", help = "Scope: active|global|project")]
+        scope: String,
+        #[clap(long, default_value = "info", help = "Result: ok|fail|info|warn")]
+        result: String,
+        #[clap(long, help = "Agent/actor label (default: $USER)")]
+        agent: Option<String>,
+        #[clap(long, help = "List log entries instead of appending")]
+        list: bool,
+        #[clap(long, default_value = "40", help = "Number of entries to show with --list")]
+        tail: usize,
+        #[clap(long, help = "Filter by scope with --list")]
+        filter_scope: Option<String>,
+    },
 }
 
 pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
@@ -219,6 +247,10 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         }
 
         SoulCommands::Where => soul_where(),
+
+        SoulCommands::Log { message, scope, result, agent, list, tail, filter_scope } => {
+            soul_log(message.as_deref(), scope, result, agent.as_deref(), *list, *tail, filter_scope.as_deref())
+        }
     }
 }
 
@@ -485,6 +517,82 @@ fn soul_init(target: &std::path::Path) -> Result<()> {
 // ─── soul where ───────────────────────────────────────────────────────────────
 
 /// Show active soul directories (local + global).
+// ─── ops log ─────────────────────────────────────────────────────────────────
+
+/// Append-only ops log: shared activity register across agents.
+///
+/// File: `<soul_dir>/OPS.jsonl` — one JSON object per line, newest at end.
+/// Scope hierarchy: global (~/._b00t_/) > project (._b00t_/) > task (in-memory only).
+fn soul_log(
+    message: Option<&str>,
+    scope: &str,
+    result: &str,
+    agent: Option<&str>,
+    list: bool,
+    tail: usize,
+    filter_scope: Option<&str>,
+) -> Result<()> {
+    let soul_dir = match scope {
+        "global" => global_soul_dir(),
+        "project" => local_soul_dir().unwrap_or_else(global_soul_dir),
+        _ => active_soul_dir(),
+    };
+
+    let log_path = soul_dir.join("OPS.jsonl");
+
+    if list {
+        if !log_path.exists() {
+            println!("ops log empty: {}", log_path.display());
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(&log_path)?;
+        let lines: Vec<&str> = content.lines().collect();
+        let start = lines.len().saturating_sub(tail);
+        for line in &lines[start..] {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if let Some(fs) = filter_scope {
+                    if entry.get("scope").and_then(|v| v.as_str()) != Some(fs) {
+                        continue;
+                    }
+                }
+                let ts = entry.get("ts").and_then(|v| v.as_str()).unwrap_or("?");
+                let sc = entry.get("scope").and_then(|v| v.as_str()).unwrap_or("?");
+                let ag = entry.get("agent").and_then(|v| v.as_str()).unwrap_or("?");
+                let re = entry.get("result").and_then(|v| v.as_str()).unwrap_or("info");
+                let msg = entry.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                let icon = match re { "ok" => "✅", "fail" => "❌", "warn" => "⚠️ ", _ => "ℹ️ " };
+                println!("{icon} [{ts}] ({sc}/{ag}) {msg}");
+            }
+        }
+        return Ok(());
+    }
+
+    let msg = message.ok_or_else(|| anyhow::anyhow!("message required (or use --list to read)"))?;
+
+    let agent_str = agent
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "agent".to_string());
+
+    let entry = serde_json::json!({
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "scope": scope,
+        "agent": agent_str,
+        "result": result,
+        "message": msg,
+    });
+
+    std::fs::create_dir_all(&soul_dir)
+        .with_context(|| format!("create soul dir {}", soul_dir.display()))?;
+
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?;
+    writeln!(f, "{}", serde_json::to_string(&entry)?)?;
+
+    println!("ops: [{scope}] {msg}");
+    Ok(())
+}
+
 fn soul_where() -> Result<()> {
     let global = global_soul_dir();
     let local = local_soul_dir();

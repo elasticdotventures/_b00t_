@@ -414,3 +414,6 @@ module invocation from subdirectories: Justfile modules (e.g., 'mod b00t') must 
 
 ---
 template vars in bash bodies: just {{ }} template interpolation only works in recipe parameters/headers, NOT inside bash script bodies ([[ ]]). Use env vars or string replacement instead — {{ B00T_ROOT }} renders literally inside bash blocks.
+
+---
+justfile scope: b00t root justfile is for b00t commands only; repo-specific CI/wrkflw targets belong in that repo's own justfile; always run b00t-cli learn just before editing any justfile

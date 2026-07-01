@@ -1422,6 +1422,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rhai",
  "rpassword",
+ "runpod",
  "rusqlite",
  "semver",
  "serde",
@@ -9799,6 +9800,19 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+]
+
+[[package]]
+name = "runpod"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f253fc6c409c7a9ed1c471593aca4adf94cfa5ce98ea48254eef1f20851d2c1"
+dependencies = [
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

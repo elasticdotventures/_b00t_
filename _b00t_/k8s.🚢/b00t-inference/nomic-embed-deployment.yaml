@@ -1,0 +1,100 @@
+---
+# nomic-embed-text-v1.5 F16 — llama-server embedding endpoint
+# 🤓 CPU-only: model is 274MB; GPU stays free for sm0l/ch0nky inference.
+#    runtimeClassName: nvidia NOT set — pure CPU, no CUDA required.
+# Port: 8002 (container), 30802 (NodePort)
+# Endpoint: /v1/embeddings (OpenAI-compat), /health
+# Download first: just k8s::nomic-embed-download && just k8s::nomic-embed-apply
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nomic-embed
+  namespace: b00t-inference
+  labels:
+    app: nomic-embed
+    b00t.tier: embed
+    b00t.io/model: nomic-embed-text-v1.5
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nomic-embed
+  template:
+    metadata:
+      labels:
+        app: nomic-embed
+        b00t.tier: embed
+    spec:
+      containers:
+        - name: llamacpp
+          image: ghcr.io/ggml-org/llama.cpp:server-cuda
+          args:
+            - --model
+            - /hf/hub/models--nomic-ai--nomic-embed-text-v1.5-GGUF/blobs/BLOB_SHA_PLACEHOLDER
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8002"
+            - --embedding
+            - -ngl
+            - "0"
+            - -c
+            - "8192"
+            - --alias
+            - nomic-embed-text
+            - --api-key
+            - local-b00t
+          ports:
+            - containerPort: 8002
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: Directory
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nomic-embed
+  namespace: b00t-inference
+  labels:
+    app: nomic-embed
+    b00t.tier: embed
+spec:
+  type: NodePort
+  selector:
+    app: nomic-embed
+  ports:
+    - port: 8002
+      targetPort: 8002
+      nodePort: 30802
+      name: http

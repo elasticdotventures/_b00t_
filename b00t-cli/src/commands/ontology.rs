@@ -481,8 +481,18 @@ optional_for = ["analyst"]
         assert_eq!(triples.len(), 0);
     }
 
+    // Serialize CWD-mutating tests within this module — set_current_dir is process-global.
+    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+    struct RestoreCwd(std::path::PathBuf);
+    impl Drop for RestoreCwd {
+        fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); }
+    }
+
     #[test]
     fn test_export_mermaid_produces_valid_output() {
+        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         // Create a few test datums with relationships
         let datums = [

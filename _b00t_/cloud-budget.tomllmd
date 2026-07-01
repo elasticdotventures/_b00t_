@@ -83,6 +83,12 @@ source  = "estimated"
 default = 5
 source  = "measured-k8s"
 
+# 🤓 Qwen3-Coder-14B-Instruct (dense, 4-bit QLoRA) on A10g-large
+#    Estimated ~15-25s/step; conservative 20s; actuals will update this
+[budget.step_time."a10g_large_14b"]
+default = 20
+source  = "estimated-2026-06-30"
+
 # ── FOCUS v1.3 ───────────────────────────────────────────────────────────────
 [focus]
 spec_version    = "1.3"
@@ -173,7 +179,17 @@ gate_frac = bgt["budget"].get("gate_threshold", 0.90)
 
 flavor_key = flavor.replace("-", "_")
 rate      = resolve(bgt["budget"]["hf_jobs"], flavor_key, 2.50)
-step_time = resolve(bgt["budget"]["step_time"], f"{flavor_key}_30b_moe", 130)
+# try model-specific key from config (e.g. Qwen3-14B → 14b), fallback to 30b_moe
+base_model = cfg.get("base_model", "").lower()
+if "14b" in base_model or "13b" in base_model:
+    model_tag = "14b"
+elif "7b" in base_model or "8b" in base_model:
+    model_tag = "7b"
+elif "0.5b" in base_model or "1b" in base_model:
+    model_tag = "0_5b"
+else:
+    model_tag = "30b_moe"
+step_time = resolve(bgt["budget"]["step_time"], f"{flavor_key}_{model_tag}", 130)
 
 dataset_path = cfg.get("dataset_path", "fine-tune/train.jsonl")
 if dataset_path.startswith("/data/"): dataset_path = "fine-tune/" + dataset_path[6:]
