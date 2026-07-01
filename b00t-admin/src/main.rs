@@ -1349,6 +1349,11 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <div class="code-tab active" data-viz="mermaid" data-b00t="tab:mermaid" data-b00t-label="Mermaid View">Mermaid</div>
         <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
       </div>
+      <div style="margin:4px 0;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
+        <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
+        <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphans</label>
+        <span style="margin-left:auto;color:#64748b;">Shift+scroll: 10× zoom</span>
+      </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
       <div class="progress-bar" id="progress-bar" style="display:none;"><div class="progress-fill" id="progress-fill"></div></div>
       <div class="status-log" id="status-log"></div>
@@ -1598,8 +1603,9 @@ function loadKnowledgeGraph() {{
       var container = document.getElementById('cytoscape-target');
       if (!container) {{ status.textContent = 'Container not found'; return; }}
       if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
-      try {{
-        cytoscape({{
+       var cy;
+       try {{
+         cy = cytoscape({{
           container: container,
           elements: elements,
           style: [
@@ -1614,12 +1620,45 @@ function loadKnowledgeGraph() {{
            }});
            layout: {{ name: 'cose', padding: 20, nodeRepulsion: function(n) {{ return 3000 * (n.data('weight') || 1); }}, idealEdgeLength: 80, gravity: 0.3 }},
            wheelSensitivity: 1.0,
-        }});
-        status.textContent = elements.length + ' elements — Cytoscape ready';
+         }});
+         // Shift+scroll: 10x zoom
+         container.addEventListener('wheel', function(e) {{
+           if (e.shiftKey) {{ e.preventDefault(); var d = e.deltaY > 0 ? -0.5 : 0.5; cy.zoom(cy.zoom() * (1 + d * 10)); }}
+         }}, {{ passive: false }});
+         // Restore viewport from localStorage
+         try {{
+           var vp = JSON.parse(localStorage.getItem('b00t-cy-vp'));
+           if (vp) cy.viewport({{ zoom: vp.zoom, pan: vp.pan }});
+         }} catch(e) {{}}
+         cy.on('viewport', function() {{
+           try {{ localStorage.setItem('b00t-cy-vp', JSON.stringify({{ zoom: cy.zoom(), pan: cy.pan() }})); }} catch(e) {{}}
+         }});
+         // Orphan filter
+         window._cy = cy;
+         window._cyElements = elements;
+         status.textContent = elements.length + ' elements — Cytoscape ready';
       }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
     }}, 300);
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
+
+function toggleOrphans() {{
+  var hide = document.getElementById('hide-orphans').checked;
+  var cy = window._cy;
+  if (!cy) return;
+  if (hide) {{
+    var orphans = cy.nodes().filter(function(n) {{ return n.degree() === 0; }});
+    orphans.style('display', 'none');
+  }} else {{
+    cy.nodes().style('display', 'element');
+  }}
+  try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
+}}
+
+// Restore orphan filter on load
+(function() {{
+  try {{ if (localStorage.getItem('b00t-hide-orphans') === 'true') document.getElementById('hide-orphans').checked = true; }} catch(e) {{}}
+}})();
 
 
 function startProgress(total) {{
