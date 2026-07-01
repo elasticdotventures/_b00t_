@@ -373,6 +373,14 @@ async fn graph_health_handler() -> impl IntoResponse {
     }))
 }
 
+/// Join multiple mermaid diagram strings into a single fenced block with --- separators.
+fn join_mermaid(diagrams: &[String]) -> String {
+    let blocks: Vec<_> = diagrams.iter()
+        .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim().to_string())
+        .collect();
+    format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
+}
+
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
 async fn datum_display_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
@@ -711,28 +719,14 @@ async fn processes_handler() -> impl IntoResponse {
             evidence_graph,
             req_graph,
         ],
-        "mermaid": format!(
-            "```mermaid\n{}\n```",
-            [fetch_graph.to_mermaid(), chunk_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]
-                .iter()
-                .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim())
-                .collect::<Vec<_>>()
-                .join("\n\n")
-        ),
+        "mermaid": join_mermaid(&[fetch_graph.to_mermaid(), chunk_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]),
         "pipelines": {
             "ato-legislation": {
                 "description": "ATO Legislation ingestion: AtoClient → LegislationChunker → EvidenceNode → RequirementsNode",
                 "jurisdiction": "AU",
                 "acts": ["ITAA 1997", "ITAA 1936", "GST Act 1999", "FBT Act 1986"],
-                "nodes": [legis_graph, evidence_graph, req_graph],
-                "mermaid": format!(
-                    "```mermaid\n{}\n```",
-                    [legis_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]
-                        .iter()
-                        .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim())
-                        .collect::<Vec<_>>()
-                        .join("\n\n")
-                ),
+                "nodes": [&legis_graph, &evidence_graph, &req_graph],
+                "mermaid": join_mermaid(&[legis_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]),
                 "health": {
                     "source": "https://www.legislation.gov.au",
                     "rate_limit_secs": 3,
