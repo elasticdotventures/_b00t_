@@ -1,0 +1,69 @@
+[b00t]
+name = "local-gpu-batch"
+type = "hive_profile"
+hint = "Free the local GPU for a one-off batch job (e.g. LocalProvider SAM runs) by stopping LLM inference — treats the GPU as a time-shared resource"
+
+[b00t.hive.resources]
+# 🤓 headroom for a single local batch container (see LOCAL_GPU_FREE_MB_GATE
+#    in b00t-cli/src/commands/provider.rs — keep these in sync)
+ram_gb = 2
+gpu_mb = 4000
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 4000
+
+[b00t.hive.exclusion]
+group = "primary-workload"
+priority = 8  # lower priority than interactive inference; inference resumes when the batch job exits
+
+[b00t.hive.services]
+# 🤓 these are the systemd units actually observed running LLM inference on
+#    this host (`systemctl --user list-units | grep b00t@`) — unlike
+#    finetune.hive.toml's original k8s-only assumption, this host runs
+#    inference via systemd directly, so we stop it here for real.
+stop = [
+  "b00t@inference-qwen36-27b-llamacpp.service",
+  "b00t@inference-qwen36-35b-a3b-llamacpp.service",
+]
+
+# 🤓 the embedding model (nomic-embed-text, used for docs/codebase search)
+#    is intentionally NOT in the stop list above. It runs as a k8s pod
+#    (containerd-shim-runc-v2, not a b00t@ systemd unit) with `-ngl 0`
+#    (zero GPU layers — CPU-only), so it never competes for VRAM and is
+#    structurally unaffected by this profile regardless.
+
+[b00t.hive.mcp_tools]
+deactivate = ["vllm-local"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action = "warn"
+message = "🦨 use uv pip install"
+redirect = "uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action = "warn"
+message = "🦨 use podman --device nvidia.com/gpu=all"
+redirect = "podman run --device nvidia.com/gpu=all --security-opt=label=disable"
+
+[[b00t.usage]]
+description = "Free the GPU and run a local batch job (e.g. app4dog SAM runner)"
+command = "b00t hive activate local-gpu-batch && b00t provider job submit-batch --provider local --image app4dog/sam1-runner:local --config ./request.json"
+
+[[b00t.usage]]
+description = "Preview what would stop/start without doing it"
+command = "b00t hive plan local-gpu-batch"
+
+[[b00t.usage]]
+description = "Return to normal inference after the batch job finishes"
+command = "b00t hive activate inference-qwen36-35b-a3b-llamacpp"
+
+# b00t:map v1
+# summary: GPU time-share profile — stops local LLM inference so a one-off local-gpu batch job can run; embedding model is CPU-only and unaffected
+# tags: hive, gpu, local, batch, timeshare
+# tier: sm0l
+# cmds: b00t hive activate local-gpu-batch
+# complexity: 3
