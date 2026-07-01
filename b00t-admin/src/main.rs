@@ -1893,4 +1893,26 @@ mod html_sanity_tests {
         assert!(h.contains("</html>"));
         assert!(h.contains("</body>"));
     }
+
+    #[test]
+    fn required_elements_exist() {
+        let h = test_html();
+        // Sidebar sections
+        for id in &["section-pipeline", "section-types", "section-sim", "section-viz"] {
+            assert!(h.contains(id), "Missing sidebar section: {id}");
+        }
+        // Viz dropdown
+        assert!(h.contains("viz-select"), "Missing viz dropdown");
+        for opt in &["entangle", "task", "pipeline", "ato", "isometric", "kg"] {
+            assert!(h.contains(&format!("\"{opt}\"")), "Missing viz option: {opt}");
+        }
+        // JS functions
+        for fn_name in &["toggleSection", "renderMermaid", "loadKnowledgeGraph", "beat", "onVizSelect"] {
+            assert!(h.contains(&format!("function {fn_name}")), "Missing JS function: {fn_name}");
+        }
+        // Panels
+        for panel in &["pipeline-panel", "type-panel", "sim-panel", "viz-panel"] {
+            assert!(h.contains(panel), "Missing panel: {panel}");
+        }
+    }
 }

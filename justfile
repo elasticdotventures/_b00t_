@@ -2607,3 +2607,14 @@ deploy:
     @echo "  Verifying..."
     @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
     @bash scripts/b00t-js-check.sh
+
+# 🧪 Full visual test suite
+test-visual: jsdom-test playwright-test
+
+# 🏠 jsdom test — execute JS in simulated DOM
+jsdom-test:
+    bash scripts/b00t-jsdom-test.sh
+
+# 🎭 Playwright test — headless browser check
+playwright-test:
+    bash scripts/b00t-playwright-test.sh
