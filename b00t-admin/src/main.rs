@@ -1308,7 +1308,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-pipeline" style="padding:8px 16px;display:none;">
+    <div class="accordion-body" id="section-pipeline" style="padding:8px 16px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-evidence">0</div><div style="font-size:8px;color:#64748b;">Evidence</div></div>
@@ -1320,13 +1320,13 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('types')" data-b00t="section:types" data-b00t-action="toggle" data-b00t-label="Type Explorer">🔬 Types <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-types" style="padding:8px 16px;display:none;">
+    <div class="accordion-body" id="section-types" style="padding:8px 16px;">
       <div class="type-list" id="type-list" style="max-height:150px;overflow-y:auto;"></div>
     </div>
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('sim')" data-b00t="section:sim" data-b00t-action="toggle" data-b00t-label="Twin Simulation">👥 Simulation <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-sim" style="padding:8px 16px;display:none;">
+    <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
       <button class="sim-btn" onclick="simTick()" data-b00t="action:sim-tick" data-b00t-label="Simulation Tick" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
       <button class="sim-btn rollback" onclick="simRollback()" data-b00t="action:sim-rollback" data-b00t-label="Simulation Rollback" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
       <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
@@ -1335,7 +1335,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-viz" style="padding:8px 16px;display:none;">
+    <div class="accordion-body" id="section-viz" style="padding:8px 16px;">
       <select id="viz-select" data-b00t="control:viz-select" data-b00t-action="select" data-b00t-label="Graph Type Selector" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
