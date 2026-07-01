@@ -26,6 +26,8 @@ use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use reqwest::Client as ReqwestClient;
+
+include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -671,7 +673,9 @@ async fn health_metrics_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
         "status": "operational",
         "service": "b00t-admin",
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": VERSION,
+        "built_at": BUILD_TIMESTAMP,
+        "git": GIT_HASH,
         "uptime": uptime,
         "cpu": {
             "logical_cores": cpu_count,
