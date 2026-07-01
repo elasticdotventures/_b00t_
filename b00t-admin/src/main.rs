@@ -353,6 +353,24 @@ async fn datum_health_handler() -> impl IntoResponse {
     }
 }
 
+/// GET `/api/admin/graph` — Knowledge graph health (connectivity, isolates, hubs)
+async fn graph_health_handler() -> impl IntoResponse {
+    let output = std::process::Command::new("codebase-memory-mcp")
+        .args(["cli", "get_graph_schema", "{\"project\":\"home-brianh-.dotfiles\"}"])
+        .output();
+    let kg = match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            serde_json::from_str::<serde_json::Value>(&body).unwrap_or_default()
+        }
+        _ => serde_json::json!({"status": "offline"})
+    };
+    axum::Json(serde_json::json!({
+        "knowledge_graph": kg,
+        "mcp_health": "GET /api/admin/datums for MCP status",
+    }))
+}
+
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
 async fn datum_display_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
@@ -1601,15 +1619,10 @@ function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
   target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-  var raw = currentVizData.mermaid;
-  var graphs = [];
-  var parts = raw.split(/\`\`\`(?:mermaid)?\\s*/);
-  for (var i = 0; i < parts.length; i++) {{
-    var p = parts[i].trim();
-    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{ graphs.push(p); }}
-  }}
-  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
-  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
+   var raw = currentVizData.mermaid;
+   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
+    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '');
+    var graphs = stripped.split(/\n{{2,}}/).filter(function(p) {{ return p.trim().length > 0; }});
   document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
   startProgress(graphs.length);
   var html = '';
