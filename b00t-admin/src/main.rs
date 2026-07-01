@@ -1403,10 +1403,11 @@ function toggleSection(name) {{
   var isOpen = body.classList.contains('open');
   body.classList.toggle('open', !isOpen);
   body.previousElementSibling.classList.toggle('active', !isOpen);
-  // Hide/show corresponding main panel
   var panelMap = {{ pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' }};
   var panel = document.getElementById(panelMap[name]);
   if (panel) panel.style.display = isOpen ? 'none' : 'block';
+  // Persist section state
+  try {{ localStorage.setItem('b00t-section', name); localStorage.setItem('b00t-section-open', !isOpen); }} catch(e) {{}}
 }}
 
 // ════════ Keyboard Navigation ════════
@@ -1445,6 +1446,20 @@ mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ back
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
 var TYPES = [];
+
+// Restore persisted UI state
+(function() {{
+  try {{
+    var section = localStorage.getItem('b00t-section');
+    var wasOpen = localStorage.getItem('b00t-section-open') === 'true';
+    var viz = localStorage.getItem('b00t-viz');
+    if (section) toggleSection(section);
+    if (viz && document.getElementById('viz-select')) {{
+      document.getElementById('viz-select').value = viz;
+      onVizSelect();
+    }}
+  }} catch(e) {{}}
+}})();
 
 // Load initial data from API
 fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
@@ -1506,6 +1521,7 @@ var currentVizData = null;
 function onVizSelect() {{
   var sel = document.getElementById('viz-select').value;
   if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+  try {{ localStorage.setItem('b00t-viz', sel); }} catch(e) {{}}
   // Pick render engine per type
   if (sel === 'kg') {{
     // Knowledge Graph → Cytoscape
