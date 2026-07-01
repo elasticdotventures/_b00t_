@@ -929,13 +929,14 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   }}
 
   /* Four panels grid */
-  .panel {{
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    padding: 20px;
-    overflow: auto;
-  }}
+   .panel {{
+     display: none; /* hidden by default — shown when section opens */
+     background: #0f172a;
+     border: 1px solid #1e293b;
+     border-radius: 12px;
+     padding: 20px;
+     overflow: auto;
+   }}
 
   .panel h2 {{
     font-size: 14px;
@@ -1319,13 +1320,13 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('types')" data-b00t="section:types" data-b00t-action="toggle" data-b00t-label="Type Explorer">🔬 Types <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-types" style="padding:8px 16px;">
+    <div class="accordion-body" id="section-types" style="padding:8px 16px;display:none;">
       <div class="type-list" id="type-list" style="max-height:150px;overflow-y:auto;"></div>
     </div>
   </div>
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('sim')" data-b00t="section:sim" data-b00t-action="toggle" data-b00t-label="Twin Simulation">👥 Simulation <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
+    <div class="accordion-body" id="section-sim" style="padding:8px 16px;display:none;">
       <button class="sim-btn" onclick="simTick()" data-b00t="action:sim-tick" data-b00t-label="Simulation Tick" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
       <button class="sim-btn rollback" onclick="simRollback()" data-b00t="action:sim-rollback" data-b00t-label="Simulation Rollback" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
       <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
