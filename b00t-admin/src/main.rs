@@ -320,6 +320,39 @@ async fn pipeline_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl Int
     axum::Json(app.pipeline.clone())
 }
 
+/// GET `/api/admin/datums` — Datum health dashboard (parse errors, install status, stale binaries)
+async fn datum_health_handler() -> impl IntoResponse {
+    let output = std::process::Command::new("b00t-cli")
+        .args(["mcp", "list", "--json", "--all"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            match serde_json::from_str::<serde_json::Value>(&body) {
+                Ok(json) => {
+                    let servers = json.get("servers").cloned().unwrap_or_default();
+                    let total = servers.as_array().map(|a| a.len()).unwrap_or(0);
+                    let errors: Vec<_> = servers.as_array().map(|a| {
+                        a.iter().filter(|s| s.get("error").and_then(|e| e.as_str()).is_some()).cloned().collect::<Vec<_>>()
+                    }).unwrap_or_default();
+                    let not_installed: Vec<_> = servers.as_array().map(|a| {
+                        a.iter().filter(|s| !s.get("is_installed").unwrap_or(&serde_json::Value::Bool(false)).as_bool().unwrap_or(false)).cloned().collect::<Vec<_>>()
+                    }).unwrap_or_default();
+                    axum::Json(serde_json::json!({
+                        "total": total,
+                        "healthy": total.saturating_sub(errors.len()).saturating_sub(not_installed.len()),
+                        "parse_errors": errors.len(),
+                        "not_installed": not_installed.len(),
+                        "servers": servers,
+                    }))
+                }
+                Err(_) => axum::Json(serde_json::json!({"error": "parse failed"})),
+            }
+        }
+        _ => axum::Json(serde_json::json!({"error": "b00t-cli unavailable"})),
+    }
+}
+
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
 async fn datum_display_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
@@ -1675,6 +1708,7 @@ async fn main() {
         .route("/api/admin/pipeline", get(pipeline_handler))
         // API — type introspection
         .route("/api/admin/display", get(datum_display_handler))
+        .route("/api/admin/datums", get(datum_health_handler))
         .route("/api/admin/types", get(types_list_handler))
         .route("/api/admin/types/{name}", get(type_detail_handler))
         // API — simulation
