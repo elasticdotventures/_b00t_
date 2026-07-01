@@ -1607,8 +1607,13 @@ function loadKnowledgeGraph() {{
             {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
             {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
           ],
-          layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
-          wheelSensitivity: 0.3,
+           // Cassowary-inspired: hubs get more space via degree-scaled repulsion
+           elements.nodes.forEach(function(n) {{
+             var deg = (elements.edges || []).filter(function(e) {{ return e.data.source === n.data.id || e.data.target === n.data.id; }}).length;
+             n.data.weight = 1 + Math.min(deg, 50) * 0.5;
+           }});
+           layout: {{ name: 'cose', padding: 20, nodeRepulsion: function(n) {{ return 3000 * (n.data('weight') || 1); }}, idealEdgeLength: 80, gravity: 0.3 }},
+           wheelSensitivity: 1.0,
         }});
         status.textContent = elements.length + ' elements — Cytoscape ready';
       }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
