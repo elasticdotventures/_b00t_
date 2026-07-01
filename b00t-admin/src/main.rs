@@ -1633,8 +1633,6 @@ function loadKnowledgeGraph() {{
              var deg = (elements.edges || []).filter(function(e) {{ return e.data.source === n.data.id || e.data.target === n.data.id; }}).length;
              n.data.weight = 1 + Math.min(deg, 50) * 0.5;
            }});
-           layout: {{ name: 'cose', padding: 20, nodeRepulsion: function(n) {{ return 3000 * (n.data('weight') || 1); }}, idealEdgeLength: 80, gravity: 0.3 }},
-           wheelSensitivity: 1.0,
          }});
          // Shift+scroll: 10x zoom
          container.addEventListener('wheel', function(e) {{
