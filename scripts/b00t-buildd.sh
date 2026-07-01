@@ -113,6 +113,17 @@ with open('$STATUS_FILE', 'w') as f:
                 echo "[$crate] $line" >> "$LOG_FILE"
             done
 
+            # Auto-restart b00t-admin after build
+            if [ "$crate" = "b00t-admin" ]; then
+                local old_pid=$(pgrep -f "target/debug/b00t-admin" 2>/dev/null || true)
+                if [ -n "$old_pid" ]; then
+                    kill "$old_pid" 2>/dev/null
+                    sleep 1
+                fi
+                nohup "$B00T_ROOT/target/debug/b00t-admin" >> "$LOG_FILE" 2>&1 &
+                echo "[$(date -Iseconds)] b00t-admin restarted (new PID $!)" >> "$LOG_FILE"
+            fi
+
             # Update status to done
             python3 -c "
 import json, time, os
