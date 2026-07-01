@@ -1206,6 +1206,10 @@ pub struct JustfileConfig {
 // 🤓 single source of truth: add new variants ONLY here. The macro below derives:
 //    from_type_token, base_suffix, all_base_suffixes, from_filename, extension_for_type.
 //    DO NOT add manual match arms elsewhere — use the generated methods.
+//
+// 🎨 Display classification: each variant belongs to one SemanticClass.
+//    Shape, color, icon are derived from the class — NO per-variant hardcoding.
+//    New variants: just pick a class.  Runtime registration: toggle tracing per class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatumType {
@@ -1229,24 +1233,10 @@ pub enum DatumType {
     Job,
     Ai,
     Justfile,
-    /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
-    /// Encodes a node's accelerator identity (vendor/class/VRAM) + hive gates.
     Hardware,
-    /// Node-local overlay datum — `.overlay.toml`.
-    /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
     Overlay,
-    /// Runtime wrapper datum — `.runtime.tomllmd`.
-    /// Declares a sandboxed application launch profile with env, mounts, seccomp, and capabilities.
     Runtime,
-    /// Polyseme datum — `.polyseme.tomllmd`.
-    /// Canonical container of artifact references resolving name ambiguity.
-    /// Critical branch point for knowledge graph tree traversal (choice path selection).
-    /// Treated as a blackhole/box: holds multiple [PolysemeRef] entries, each pointing to a concrete datum.
     Polyseme,
-    /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
-    /// 🤓 Stores cloud provider access keys (R2, S3, OpenAI, etc.). Queryable via datum system.
-    ///    Agents discover available credentials with: b00t datum list --type credential
-    ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
     Gate,
     Hook,
@@ -1255,7 +1245,176 @@ pub enum DatumType {
     Schema,
     Training,
     Vendor,
+    Ooda,
     Unknown,
+}
+
+// ── Semantic classification — the display derives from what a type IS ─────
+// 🤓 Single reasonable default per class.  New variants: just pick a class.
+//    Runtime registration: SemanticClass::tracing_enabled() per class.
+
+/// Semantic taxonomy for datum types.  Shape/color/icon are derived from class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum SemanticClass {
+    /// Infrastructure — nodes that provision, host, or configure systems
+    Infra,
+    /// Agent — autonomous actors, roles, models, learning
+    Agent,
+    /// Protocol — MCP servers, APIs, schemas, wire formats
+    Protocol,
+    /// Skill — executable capabilities, jobs, hooks, gates
+    Skill,
+    /// Tool — CLI tools, configs, build scripts, plans, vendored deps
+    Tool,
+    /// Repo — source trees, workspaces, editor configs, packages
+    Repo,
+    /// Data — databases, store profiles
+    Data,
+    /// Secret — encrypted credentials, polyseme black boxes
+    Secret,
+    /// Fallback for unclassified or incubating types
+    Unknown,
+}
+
+// ── SVG shape templates ────────────────────────────────────────────────────
+const SVG_CIRCLE: &str    = "<circle r='24' cx='28' cy='28' />";
+const SVG_RECTANGLE: &str = "<rect x='4' y='4' width='48' height='48' rx='8' />";
+const SVG_DIAMOND: &str   = "<polygon points='28,4 52,28 28,52 4,28' />";
+const SVG_HEXAGON: &str   = "<polygon points='28,4 48,16 48,40 28,52 8,40 8,16' />";
+const SVG_TRIANGLE: &str  = "<polygon points='28,6 50,48 6,48' />";
+const SVG_VEE: &str       = "<polygon points='4,4 28,52 52,4' />";
+
+impl SemanticClass {
+    /// Shape for graph/chart rendering.
+    pub const fn shape(&self) -> &'static str {
+        match self {
+            Self::Infra => "hexagon",
+            Self::Agent => "circle",
+            Self::Protocol => "diamond",
+            Self::Skill => "triangle",
+            Self::Tool => "rectangle",
+            Self::Repo => "vee",
+            Self::Data => "rectangle",
+            Self::Secret => "circle",
+            Self::Unknown => "rectangle",
+        }
+    }
+
+    /// Fill color (hex).
+    pub const fn color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#326ce5",
+            Self::Agent => "#059669",
+            Self::Protocol => "#7c3aed",
+            Self::Skill => "#d97706",
+            Self::Tool => "#0d9488",
+            Self::Repo => "#be123c",
+            Self::Data => "#475569",
+            Self::Secret => "#1e293b",
+            Self::Unknown => "#1e293b",
+        }
+    }
+
+    /// Border/stroke color.
+    pub const fn border_color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#5b9cf5",
+            Self::Agent => "#34d399",
+            Self::Protocol => "#a78bfa",
+            Self::Skill => "#fbbf24",
+            Self::Tool => "#2dd4bf",
+            Self::Repo => "#fb7185",
+            Self::Data => "#94a3b8",
+            Self::Secret => "#475569",
+            Self::Unknown => "#475569",
+        }
+    }
+
+    /// Emoji or unicode icon for compact rendering.
+    pub const fn icon(&self) -> &'static str {
+        match self {
+            Self::Infra => "☸",
+            Self::Agent => "🤖",
+            Self::Protocol => "🔌",
+            Self::Skill => "🛠️",
+            Self::Tool => "⌨️",
+            Self::Repo => "📁",
+            Self::Data => "🗄️",
+            Self::Secret => "🔐",
+            Self::Unknown => "❓",
+        }
+    }
+
+    /// SVG shape template fragment.
+    pub const fn svg_template(&self) -> &'static str {
+        match self {
+            Self::Infra => SVG_HEXAGON,
+            Self::Agent => SVG_CIRCLE,
+            Self::Protocol => SVG_DIAMOND,
+            Self::Skill => SVG_TRIANGLE,
+            Self::Tool => SVG_RECTANGLE,
+            Self::Repo => SVG_VEE,
+            Self::Data => SVG_RECTANGLE,
+            Self::Secret => SVG_CIRCLE,
+            Self::Unknown => SVG_RECTANGLE,
+        }
+    }
+
+    /// CSS class for styling hooks.
+    pub const fn css_class(&self) -> &'static str {
+        match self {
+            Self::Infra => "sc-infra",
+            Self::Agent => "sc-agent",
+            Self::Protocol => "sc-protocol",
+            Self::Skill => "sc-skill",
+            Self::Tool => "sc-tool",
+            Self::Repo => "sc-repo",
+            Self::Data => "sc-data",
+            Self::Secret => "sc-secret",
+            Self::Unknown => "sc-unknown",
+        }
+    }
+}
+
+impl DatumType {
+    /// Classify this datum type into its semantic class.
+    /// 🎨 This is the ONLY place variant→class mapping lives.
+    ///    New variants: add one line here. No other code changes needed.
+    pub const fn semantic_class(&self) -> SemanticClass {
+        match self {
+            Self::K8s | Self::Docker | Self::Hardware | Self::Overlay
+            | Self::Runtime | Self::Nix => SemanticClass::Infra,
+            Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
+            Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate => SemanticClass::Skill,
+            Self::Config | Self::Bash | Self::Cli | Self::Justfile
+            | Self::Plan | Self::Vendor | Self::Ooda => SemanticClass::Tool,
+            Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
+            Self::Database | Self::HiveProfile => SemanticClass::Data,
+            Self::Polyseme | Self::Credential => SemanticClass::Secret,
+            Self::Unknown => SemanticClass::Unknown,
+        }
+    }
+
+    /// Stereotype hierarchy: which types does this type imply?
+    /// e.g. McpServer implies Mcp (server → protocol), Runtime implies Cli (can run → can check)
+    pub const fn implies(&self) -> &'static [DatumType] {
+        match self {
+            Self::McpServer => &[Self::Mcp],
+            Self::Runtime   => &[Self::Cli],
+            Self::Agent     => &[Self::Runtime],
+            Self::Ai        => &[Self::Agent],
+            Self::Role      => &[Self::Agent],
+            _ => &[],
+        }
+    }
+
+    /// Is this type implied by (i.e., less specific than) another?
+    pub fn is_implied_by(&self, other: &DatumType) -> bool {
+        other.implies().contains(self)
+    }
+
+    // 🎨 display() defined below with DatumDisplay struct
 }
 
 macro_rules! datum_type_table {
@@ -1355,6 +1514,7 @@ impl DatumType {
         Schema      => ["schema"]                    => ".schema",
         Training    => ["training"]                  => ".training",
         Vendor      => ["vendor"]                    => ".vendor",
+        Ooda        => ["ooda"]                      => ".ooda",
     }
 
     /// Preferred file extension for writing new datum files.
@@ -1397,6 +1557,46 @@ impl DatumType {
 impl std::fmt::Display for DatumType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.base_suffix())
+    }
+}
+
+/// Visual display descriptor — derived from [SemanticClass] at compile time.
+/// 🤓 Rust types own their display.  Subsystems with code provide CSS animations
+///    via css_class.  No TOML overrides — code is the single source of truth.
+#[derive(Serialize, Debug, Clone)]
+pub struct DatumDisplay {
+    pub shape: String,
+    pub color: String,
+    pub border_color: String,
+    pub icon: String,
+    pub css_class: String,
+    pub svg: String,
+}
+
+impl DatumType {
+    /// Display descriptor derived from semantic class.
+    pub fn display(&self) -> DatumDisplay {
+        let sc = self.semantic_class();
+        DatumDisplay {
+            shape: sc.shape().into(),
+            color: sc.color().into(),
+            border_color: sc.border_color().into(),
+            icon: sc.icon().into(),
+            css_class: sc.css_class().into(),
+            svg: sc.svg_template().into(),
+        }
+    }
+}
+
+impl DatumDisplay {
+    pub fn to_cytoscape_style(&self) -> serde_json::Value {
+        serde_json::json!({
+            "shape": self.shape,
+            "background-color": self.color,
+            "border-color": self.border_color,
+            "icon": self.icon,
+            "css_class": self.css_class,
+        })
     }
 }
 
@@ -2062,31 +2262,37 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
         Err(_) => return results,
     };
 
-    // Runtime
+    // Runtime — if a runtime datum exists, it's the primary dispatch.
+    // CLI datum is NOT added when runtime exists (avoids disambiguation prompt).
+    let mut has_runtime = false;
     let runtime_suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
     for suffix in &runtime_suffixes {
         let p = expanded.join(format!("{candidate}{suffix}"));
         if p.exists() {
             if let Ok(cfg) = load_runtime_datum(candidate, path) {
                 results.push(DatumDispatch::Runtime(cfg));
+                has_runtime = true;
                 break;
             }
         }
     }
 
-    // CLI
-    let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
-    for suffix in &cli_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            if let Ok(datum) = load_cli_datum(candidate, path) {
-                let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
-                let args: Vec<String> = datum.args.unwrap_or_default();
-                results.push(DatumDispatch::CliPassthrough {
-                    command: cmd,
-                    args,
-                });
-                break;
+    // CLI — only auto-dispatched when NO runtime datum exists.
+    // CLI operations (check/install) always go through explicit `b00t cli <cmd>`.
+    if !has_runtime {
+        let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+        for suffix in &cli_suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                if let Ok(datum) = load_cli_datum(candidate, path) {
+                    let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
+                    let args: Vec<String> = datum.args.unwrap_or_default();
+                    results.push(DatumDispatch::CliPassthrough {
+                        command: cmd,
+                        args,
+                    });
+                    break;
+                }
             }
         }
     }
@@ -2106,6 +2312,18 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
         }
     }
 
+    // OODA — execute the observe/orient/decide/act loop
+    let ooda_suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
+    for suffix in &ooda_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            results.push(DatumDispatch::Info(format!(
+                "ooda loop '{}' — run with: b00t ooda run {}", candidate, candidate
+            )));
+            break;
+        }
+    }
+
     // MCP
     let mcp_suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
     for suffix in &mcp_suffixes {
@@ -2119,7 +2337,34 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
         }
     }
 
+    // ── Stereotype hierarchy: eliminate less-specific matches ──────────────
+    if results.len() > 1 {
+        let mut filtered: Vec<DatumDispatch> = Vec::new();
+        for result in &results {
+            let is_implied = results.iter().any(|other| {
+                std::mem::discriminant(result) != std::mem::discriminant(other)
+                    && result_is_implied_by(result, other)
+            });
+            if !is_implied {
+                filtered.push(result.clone());
+            }
+        }
+        if !filtered.is_empty() {
+            results = filtered;
+        }
+    }
+
     results
+}
+
+/// Returns true if `a` is implied by `b` (a is less specific than b).
+fn result_is_implied_by(a: &DatumDispatch, b: &DatumDispatch) -> bool {
+    use DatumDispatch::*;
+    match (a, b) {
+        (CliPassthrough { .. }, Runtime(_)) => true,
+        (Info(_), _) | (_, Info(_)) => false,
+        _ => false,
+    }
 }
 
 /// Single-match convenience — returns the first runtime or CLI dispatch, or the polyseme if present.

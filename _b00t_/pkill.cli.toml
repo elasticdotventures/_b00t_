@@ -1,0 +1,16 @@
+[b00t]
+name = "pkill"
+type = "cli"
+desires = "latest"
+hint = "Signal processes by name — part of procps (already installed via apt)"
+version = "pkill -V 2>&1 | head -1"
+version_regex = '([0-9]+\.[0-9]+\.[0-9]+)'
+
+[b00t.learn]
+topic = "pkill"
+auto_digest = true
+content = """
+pkill — signal processes by name. Part of procps/procps-ng.
+Usage: pkill -f pattern, pkill -9 name, pgrep -l pattern.
+Installed via apt-get install procps (already present on most Linux systems).
+"""

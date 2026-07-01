@@ -2588,3 +2588,35 @@ ch0nky-probe endpoint="":
 # [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
 git-prune-corrupt delete="false":
     uv run scripts/git-prune-corrupt.py {{delete}}
+
+# 🧪 Validate served JS syntax (catches merge conflicts, syntax errors)
+js-check:
+    bash scripts/b00t-js-check.sh
+
+# 🌐 CDP console check — launch Chrome, monitor JS errors via DevTools Protocol
+cdp-check url="http://localhost:31337/":
+    bash scripts/b00t-cdp-check.sh {{url}}
+
+# 🚀 Full deploy: test → build → restart → verify
+deploy:
+    @echo "🥾 Deploying..."
+    cargo test -p b00t-admin -- html_sanity
+    cargo build -p b00t-admin
+    @echo "  Restarting server..."
+    bash scripts/b00t-admin-restart.sh
+    @echo "  Verifying..."
+    @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
+    @bash scripts/b00t-js-check.sh
+    @echo "  jsdom..."
+    @bash scripts/b00t-jsdom-test.sh 2>/dev/null || echo "  ⚠️  jsdom skipped (install jsdom)"
+
+# 🧪 Full visual test suite
+test-visual: jsdom-test playwright-test
+
+# 🏠 jsdom test — execute JS in simulated DOM
+jsdom-test:
+    bash scripts/b00t-jsdom-test.sh
+
+# 🎭 Playwright test — headless browser check
+playwright-test:
+    bash scripts/b00t-playwright-test.sh

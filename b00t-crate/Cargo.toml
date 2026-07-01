@@ -1,0 +1,9 @@
+[package]
+name = "b00t"
+version = "0.1.0"
+edition = "2021"
+description = "🍰 b00t — hive agent operating protocol. Name reservation. Real crate: b00t-cli."
+license = "MIT"
+repository = "https://github.com/elasticdotventures/_b00t_"
+keywords = ["b00t", "agent", "hive"]
+categories = ["command-line-utilities"]
