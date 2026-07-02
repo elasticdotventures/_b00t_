@@ -2624,6 +2624,13 @@ ch0nky-probe endpoint="":
         scripts/probe-ch0nky.sh
     fi
 
+# Show sm0l's current gpu/cpu/failed state (see _b00t_/k8s.🚢/sm0l/entrypoint-configmap.yaml)
+sm0l-status:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-inference -l app=sm0l -o name | head -1)
+    [[ -z "$POD" ]] && { echo "no sm0l pod"; exit 1; }
+    kubectl exec -n b00t-inference "$POD" -- cat /tmp/b00t-sm0l-state.json 2>&1 | python3 -m json.tool
+
 
 # ── Git object recovery (EXPERIMENTAL) ────────────────────────────────────────
 # 🤓 LFMF: never rm .git/objects/* without proving BOTH corrupt AND unreachable.

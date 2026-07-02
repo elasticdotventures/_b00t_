@@ -1,0 +1,34 @@
+---
+# GPU time-slicing config for the nvidia-device-plugin daemonset (kube-system).
+# 🤓 Single RTX 3090, no MIG support — time-slicing is the only native k8s-scheduler
+#    mechanism to let multiple pods concurrently hold an nvidia.com/gpu slot on one
+#    physical card. It gives real admission control (a 4th GPU pod queues instead of
+#    silently piling on) but NO VRAM isolation — replica count is a manually-chosen
+#    budget, not a guarantee. Sized for sm0l (~4GB) + ch0nky (~19GB) coexisting today,
+#    +1 spare slot for a batch/fine-tune job. Don't raise replicas without checking
+#    actual VRAM headroom first (see `nvidia-smi`).
+#
+# Apply: kubectl apply -f _b00t_/k8s.🚢/cluster/nvidia-device-plugin-config.yaml
+# Then patch the daemonset to consume it (one-time, not yet in a repo manifest —
+# the daemonset itself was installed ad-hoc, not from a tracked source file):
+#   kubectl patch daemonset nvidia-device-plugin-daemonset -n kube-system --type=strategic -p '
+#   {"spec":{"template":{"spec":{
+#     "containers":[{"name":"nvidia-device-plugin-ctr","args":["--config-file=/etc/nvidia-device-plugin/config.yaml"],
+#       "volumeMounts":[{"name":"config","mountPath":"/etc/nvidia-device-plugin"}]}],
+#     "volumes":[{"name":"config","configMap":{"name":"nvidia-device-plugin-config"}}]
+#   }}}}'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    version: v1
+    sharing:
+      timeSlicing:
+        renameByDefault: false
+        failRequestsGreaterThanOne: false
+        resources:
+        - name: nvidia.com/gpu
+          replicas: 3

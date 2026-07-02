@@ -1,9 +1,10 @@
 ---
-# Qwen3.6-27B Q4_K_M — ch0nky inference endpoint
-# 🤓 No nvidia.com/gpu resource request — training job holds the only GPU allocation.
-#    NVIDIA_VISIBLE_DEVICES=all + runtimeClassName=nvidia injects CUDA via runtime env
-#    without going through k8s device plugin scheduling. Physical VRAM: ~17GB needed,
-#    ~20GB free alongside training (which only uses 3.4GB with gradient checkpointing).
+# Qwen3.6-35B-A3B UD-IQ4_XS — ch0nky inference endpoint (highest-priority tier)
+# 🤓 Holds an accounted nvidia.com/gpu:1 claim — k8s device-plugin scheduling now
+#    enforces exclusivity against any other GPU-requesting pod on this single-GPU
+#    node, replacing the old runtimeClassName+NVIDIA_VISIBLE_DEVICES bypass (which
+#    gave k8s zero visibility into VRAM usage and allowed silent double-booking).
+#    17.7GB VRAM + ~6GB KV cache headroom at 64k context on RTX 3090 (24GB).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,9 +13,11 @@ metadata:
   labels:
     app: ch0nky
     b00t.tier: ch0nky
-    b00t.io/model: qwen3.6-27b
+    b00t.io/model: qwen3.6-35b-a3b
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: ch0nky
@@ -24,6 +27,7 @@ spec:
         app: ch0nky
         b00t.tier: ch0nky
     spec:
+      priorityClassName: b00t-gpu-primary
       runtimeClassName: nvidia
       tolerations:
         - key: node-role.kubernetes.io/control-plane
@@ -34,7 +38,7 @@ spec:
           image: ghcr.io/ggml-org/llama.cpp:server-cuda
           args:
             - --model
-            - /hf/hub/models--unsloth--Qwen3.6-27B-GGUF/blobs/5ed60d0af4650a854b1755bd392f9aef4872643dc25a254bc68043fa638392a0
+            - /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf
             - --host
             - "0.0.0.0"
             - --port
@@ -44,41 +48,59 @@ spec:
             - -fa
             - "on"
             - -c
-            - "4096"
+            - "65536"
             - -n
-            - "1024"
+            - "4096"
             - --jinja
+            - --reasoning-format
+            - deepseek
+            - --reasoning-budget
+            - "4096"
             - --temp
-            - "0.7"
+            - "0.6"
             - --top-p
             - "0.95"
+            - --top-k
+            - "20"
             - --min-p
             - "0.00"
+            - --presence-penalty
+            - "0.0"
             - --alias
             - ch0nky
             - --api-key
             - local-b00t
-          env:
-            - name: NVIDIA_VISIBLE_DEVICES
-              value: "all"
-            - name: NVIDIA_DRIVER_CAPABILITIES
-              value: "compute,utility"
           ports:
             - containerPort: 8001
               name: http
           resources:
             requests:
-              memory: "4Gi"
+              memory: "6Gi"
               cpu: "2"
+              nvidia.com/gpu: "1"
             limits:
               memory: "20Gi"
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 60
+            periodSeconds: 30
           volumeMounts:
             - name: hf-cache
               mountPath: /hf
       volumes:
         - name: hf-cache
           hostPath:
-            path: /home/brianh/.cache/huggingface
+            path: /home/brianh/.cache/huggingface/hub
             type: Directory
 ---
 apiVersion: v1
