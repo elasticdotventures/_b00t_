@@ -359,7 +359,7 @@ impl LlmState {
         }))
     }
 
-    pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
+    pub async fn check_access(&self, token: &str, class: &str, _action: Action) -> bool {
         if let Some(entry) = self.validate_key(token).await {
             if entry.access.is_empty() {
                 return true; // empty access = full access (backwards compat)
@@ -489,6 +489,7 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
 
 // ── Endpoint → ontology class mapping ─────────────────────────────────────
 
+#[allow(dead_code)]
 fn class_for_path(path: &str) -> (&str, Action) {
     if path.contains("chat/completions") {
         ("b00t:ChatModel", Action::Execute)
@@ -655,7 +656,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_create_and_validate() {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
-        let key = state.create_key("test-consumer").await;
+        let key = state.create_key("test-consumer", &[]).await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());

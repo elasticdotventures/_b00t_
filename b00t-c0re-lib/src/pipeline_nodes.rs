@@ -1119,12 +1119,12 @@ mod tests {
         type Stage1 = Compose<FetchNode, ChunkNode>;
         // Stage1::Output = Vec<SemanticChunk>
         // EvidenceNode::Input = Vec<SemanticChunk> ✓
-        let stage1 = Compose { first: FetchNode, second: ChunkNode };
+        let stage1: Stage1 = Compose { first: FetchNode, second: ChunkNode };
 
         type Stage2 = Compose<Stage1, EvidenceNode>;
         // Stage2::Output = Vec<Evidence>
         // RequirementsNode::Input = Vec<Evidence> ✓
-        let _stage2 = Compose { first: stage1, second: EvidenceNode };
+        let _stage2: Stage2 = Compose { first: stage1, second: EvidenceNode };
 
         // If you uncomment the line below, it WON'T COMPILE:
         // let _bad = Compose { first: FetchNode, second: RequirementsNode };

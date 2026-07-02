@@ -686,7 +686,7 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
+fn dashboard_html(_pipeline_json: &str, _types_json: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">

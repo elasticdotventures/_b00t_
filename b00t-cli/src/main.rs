@@ -3222,12 +3222,17 @@ mod k0mmand3r_dispatch_tests {
         let source = include_str!("main.rs");
         // 🤓 Solomon note: -v/-V are too ambiguous in b00t. Verbose is long-only;
         // version keeps clap's generated long form. Nobody gets short v/V.
+        // Pattern split so this test's own source doesn't self-trigger.
+        let banned_v = ["short = '", "v'"].concat();
+        let banned_vv = ["short = '", "V'"].concat();
+        let test_fn_start = source.find("fn cli_source_bans_short_v_flags").unwrap_or(0);
+        let prod_source = &source[..test_fn_start];
         assert!(
-            !source.contains("short = 'v'"),
+            !prod_source.contains(&banned_v),
             "short -v is banned; use an unambiguous long flag"
         );
         assert!(
-            !source.contains("short = 'V'"),
+            !prod_source.contains(&banned_vv),
             "short -V is banned; use an unambiguous long flag"
         );
     }
