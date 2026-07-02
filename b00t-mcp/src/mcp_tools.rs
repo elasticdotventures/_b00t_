@@ -1382,7 +1382,7 @@ impl crate::clap_reflection::McpExecutor for BVerifyCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
         let assertion = params.get("assertion").and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("verify requires assertion: string"))?;
-        let timeout_ms = params.get("timeout_ms").and_then(|v| v.as_u64()).unwrap_or(5000);
+        let _timeout_ms = params.get("timeout_ms").and_then(|v| v.as_u64()).unwrap_or(5000);
         let solver = params.get("solver").and_then(|v| v.as_str()).unwrap_or("z3-verify");
 
         let start = std::time::Instant::now();
