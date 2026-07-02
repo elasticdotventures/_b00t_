@@ -61,6 +61,7 @@ pub mod query_bus;
 pub mod rag;
 pub mod reasoning;
 pub mod reviewer;
+pub mod sudo_operator;
 pub mod redis;
 pub mod rhai_engine;
 pub mod runtime_env;

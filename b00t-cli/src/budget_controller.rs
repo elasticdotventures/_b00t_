@@ -219,6 +219,53 @@ impl BudgetController {
     }
 }
 
+/// n8n webhook payload for a sudo-grant escalation (PRD-SUDO-OPERATOR-GOVERNANCE).
+/// Fired when the adversarial review model can't confidently Grant or Deny.
+/// n8n fans this out to whatever downstream channels (Slack/email/SMS) are
+/// configured in the workflow — b00t itself only needs to know about n8n.
+#[derive(Debug, Serialize)]
+pub struct SudoEscalationAlert {
+    pub event: String,
+    pub command: String,
+    pub justification: String,
+    pub cited_commits: Vec<String>,
+    pub reason: String,
+    pub timestamp: String,
+}
+
+/// Fire a sudo-grant escalation to the configured n8n webhook.
+///
+/// Sync (uses `reqwest::blocking`) because the call site (`b00t exec`'s
+/// `handle_exec`) is a synchronous function — same HTTP-POST-JSON pattern
+/// as `BudgetController::send_alert`, just not tied to the async k8s
+/// reconciliation path that struct lives on. Best-effort: a webhook
+/// failure is logged but never blocks the (already-denied) command path.
+///
+/// Webhook URL comes from `B00T_N8N_WEBHOOK_URL`; if unset, this is a no-op
+/// (same "skip silently" policy as `BudgetController::send_alert` when its
+/// `webhook_url` is `None`).
+pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &[String], reason: &str) {
+    let Ok(webhook_url) = std::env::var("B00T_N8N_WEBHOOK_URL") else {
+        return;
+    };
+
+    let alert = SudoEscalationAlert {
+        event: "sudo_grant_escalation".to_string(),
+        command: command.to_string(),
+        justification: justification.to_string(),
+        cited_commits: cited_commits.to_vec(),
+        reason: reason.to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    };
+
+    let client = reqwest::blocking::Client::new();
+    match client.post(&webhook_url).json(&alert).send() {
+        Ok(resp) if resp.status().is_success() => {}
+        Ok(resp) => eprintln!("⚠️  sudo-escalation webhook returned {}", resp.status()),
+        Err(e) => eprintln!("⚠️  sudo-escalation webhook failed: {e}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
