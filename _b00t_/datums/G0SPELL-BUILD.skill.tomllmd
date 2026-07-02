@@ -1,0 +1,54 @@
+# g0spell — DRY local build pattern for b00t (mirrors GitHub Actions CI)
+#
+# g0spell is the canonical b00t build methodology: a single Dockerfile or
+# justfile recipe that runs locally AND in CI without divergence.
+# "g0spell" = "gospel" — the one source of truth for how to build/test.
+#
+# Pattern:
+#   _b00t_/docker.🐳/b00t/build-from-g0spell.sh  — local runner
+#   .github/workflows/*.yml                        — CI mirrors same steps
+#   justfile                                       — preferred surface for agents
+#
+# 🤓 The name is intentional: if the local build differs from CI, agents
+#    chase phantom failures. g0spell enforces DRY across environments by
+#    making the Dockerfile/justfile the single authoritative script both
+#    local and CI invoke — never two separate step lists.
+#
+# Agents MUST use g0spell-compatible recipes (i.e. `just build`, `just test`)
+# rather than raw `cargo build`/`cargo test` invocations so that any CI
+# step changes propagate automatically to local runs.
+
+[b00t.schema]
+version   = "1"
+type      = "skill"
+type_tags = ["build", "ci", "dry", "docker", "justfile", "devops"]
+
+[resource]
+name        = "g0spell"
+description = "DRY local↔CI build pattern — one script, zero drift"
+script      = "_b00t_/docker.🐳/b00t/build-from-g0spell.sh"
+docs        = ".b00t.g0spell.md"
+
+[resource.commands]
+local_build = "just build"
+local_test  = "just test-check"
+ci_check    = "cargo check --workspace"
+lint        = "just check-warnings"
+
+[resource.rules]
+# 🤓 never write a raw `cargo build` in justfile without mirroring in CI first
+mirror_ci  = true
+# agents must call just recipes, not raw cargo, so CI step changes propagate
+use_just   = true
+
+# @example: local build mirroring CI
+# just build          # same steps as .github/workflows/build.yml
+# just test-check     # cargo test with failure extraction
+# just check-warnings # zero-warnings gate
+
+# b00t:map v1
+# summary: g0spell — DRY local↔CI build; justfile is the canonical script surface
+# tags: build, ci, dry, docker, justfile, devops
+# tier: sm0l
+# cmds: just build, just test-check, just check-warnings
+# complexity: 2
