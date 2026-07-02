@@ -325,6 +325,7 @@ impl<'i> KmdLine<'i> {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
 

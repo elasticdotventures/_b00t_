@@ -82,6 +82,7 @@ pub enum ServerStatus {
 
 pub struct SkillExecutor {
     servers: HashMap<String, ManagedServer>,
+    #[allow(dead_code)]
     reap_interval: Duration,
 }
 

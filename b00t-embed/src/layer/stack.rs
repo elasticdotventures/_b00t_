@@ -475,7 +475,6 @@ impl LayerStack {
 mod tests {
     use super::*;
     use crate::layer::source::SafetensorsSource;
-    use crate::layer::trait_def::TensorSource;
     use crate::layer::TensorSpec;
 
     fn make_test_registry() -> TensorRegistry {

@@ -2705,3 +2705,25 @@ mirror-soul sm3lly_host="sm3lly":
 # 📚 Sync blessed crate manifest from blessed.rs upstream
 blessed-sync:
     curl -s https://raw.githubusercontent.com/nicoburns/blessed-rs/main/data/crates.json | python3 {{ justfile_directory() }}/scripts/convert_blessed.py
+# ── CI Utility Recipes ────────────────────────────────────────────────────────
+# 🤓 These replace inline awk/grep pipelines — standardized output, reusable.
+
+# Summarize cargo test results: "N passed, M failed, K ignored"
+test-summary:
+    @cargo test 2>&1 | awk '/^test result/ {p+=$4; f+=$6; i+=$8} END {printf "%d passed, %d failed, %d ignored\n", p, f, i}'
+
+# Show only failing test names and their output
+test-failures:
+    @cargo test 2>&1 | awk '/^failures:/{found=1} found{print}'
+
+# Run tests and show failures only (exit 1 on failure)
+test-check:
+    @cargo test 2>&1 | tee /tmp/cargo-test-out.txt | awk '/^test result.*FAILED/{exit 1}' || { awk '/^failures:/{found=1} found{print}' /tmp/cargo-test-out.txt; exit 1; }
+
+# Show cargo warnings (exclude "unused manifest key")
+check-warnings:
+    @cargo check 2>&1 | grep "^warning:" | grep -v "unused manifest key" || echo "no warnings"
+
+# Show all diagnostic file locations
+check-warnings-locs:
+    @cargo check 2>&1 | grep "^\s*-->" | sort -u
