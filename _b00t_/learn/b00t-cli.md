@@ -7,3 +7,6 @@ rustc version upgrades: When dependencies require newer rustc (e.g., rig-core ne
 
 just module invocation: Justfile modules (e.g., 'mod b00t') must be invoked from the justfile root where module is declared. Use 'just b00t::recipe' not 'just recipe' when in subdirectory. cd to project root or use -f flag.
 
+
+---
+datum validation paths: Use absolute paths when validating project-local datum files from recipes; relative paths may resolve as global datum keys.
