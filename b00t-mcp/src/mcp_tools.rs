@@ -1510,6 +1510,16 @@ impl crate::clap_reflection::McpExecutor for BStackUnloadCommand {
 
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
+    create_mcp_registry_with_notify(std::sync::Arc::new(|| {}))
+}
+
+/// Same as create_mcp_registry but fires  after stack load/unload.
+///
+/// The notify closure is injected by B00tMcpServerRusty::new() with the peer handle
+/// captured at connection time — this completes the dynamic tool-list-changed loop.
+pub fn create_mcp_registry_with_notify(
+    notify_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+) -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
     // Surface: learn + whoami + status + exec + discover + viz + log + verify + stack_load + stack_unload + DataFramerr (21 tools)
     builder
@@ -1522,7 +1532,9 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<BLogCommand>()
         .register::<BVerifyCommand>()
         .register::<BStackLoadCommand>()
-        .register::<BStackUnloadCommand>();
+        .register::<BStackUnloadCommand>()
+        .add_post_hook("b00t_mcp_stack_load", std::sync::Arc::clone(&notify_fn))
+        .add_post_hook("b00t_mcp_stack_unload", notify_fn);
     crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
     builder.build()
 }
