@@ -22,7 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response};
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
@@ -439,6 +439,23 @@ async fn viz_isometric_demo_handler() -> impl IntoResponse {
         "format": "isometric",
         "error": e
     })))
+}
+
+/// GET `/api/admin/viz/mermaid/render?text=...` — Server-side Mermaid SVG rendering
+async fn viz_mermaid_render_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let text = params.get("text").cloned().unwrap_or_default();
+    if text.is_empty() {
+        return axum::Json(serde_json::json!({"svg": "", "error": "missing text parameter"}));
+    }
+    match render_mermaid_native(&text) {
+        Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+            "error": e,
+        })),
+    }
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
@@ -864,42 +881,6 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
-<script>
-window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mermaid-rs-renderer...</text></svg>'; }};
-window._wasmLoadStart = Date.now();
-(async function() {{
-  var wasmUrl = '/wasm/wasm/mermaid_bg.wasm';
-  var meter = document.getElementById('mermaid-target');
-  try {{
-    var resp = await fetch(wasmUrl);
-    var total = parseInt(resp.headers.get('Content-Length') || '5000000');
-    var reader = resp.body.getReader();
-    var received = 0;
-    var chunks = [];
-    while (true) {{
-      var r = await reader.read();
-      if (r.done) break;
-      chunks.push(r.value);
-      received += r.value.length;
-      var pct = Math.min(99, Math.round(received / total * 100));
-      var mb = (received / 1048576).toFixed(1);
-      var tmb = (total / 1048576).toFixed(1);
-      if (meter) meter.innerHTML = '<div style=\"display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;\">' +
-        '<div style=\"font-size:13px;margin-bottom:10px;\">Loading Mermaid renderer</div>' +
-        '<div style=\"width:220px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;\"><div style=\"width:'+pct+'%;height:100%;background:#38bdf8;border-radius:3px;transition:width 0.2s;\"></div></div>' +
-        '<div style=\"font-size:10px;margin-top:6px;\">'+mb+' / '+tmb+' MB ('+pct+'%)</div></div>';
-    }}
-    window._wasmBytes = new Blob(chunks);
-  }} catch(e) {{ console.warn('wasm prefetch:', e.message); }}
-  try {{
-    var m = await import('/wasm/wasm/mermaid.js');
-    await m.default();
-    window._mermaidReady = true;
-    window._mermaidRender = m.render_mermaid;
-    console.log('mermaid-rs-renderer ready (' + ((Date.now()-window._wasmLoadStart)/1000).toFixed(1) + 's)');
-  }} catch(e) {{ console.warn('mermaid-rs-renderer:', e.message); }}
-}})();
-</script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -1791,33 +1772,20 @@ function addStatus(type, msg) {{
 }}
 
 function renderMermaid() {{
-  console.log('renderMermaid called, ready=' + !!window._mermaidReady + ' dataLen=' + (currentVizData?.mermaid?.length||0));
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
   var raw = currentVizData.mermaid;
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-  if (typeof window._mermaidRender !== 'function' || !window._mermaidReady) {{
-    var elapsed = (Date.now() - (window._wasmLoadStart || Date.now())) / 1000;
-    target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;color:#64748b;">' +
-      '<div class="wasm-spinner" style="width:32px;height:32px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:12px;"></div>' +
-      '<div style="font-size:12px;">Loading mermaid-rs-renderer...</div>' +
-      '<div style="font-size:10px;margin-top:4px;">' + elapsed.toFixed(1) + 's elapsed</div>' +
-      '<button onclick="renderMermaid()" style="margin-top:10px;background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">Retry</button>' +
-      '</div>';
-    return;
-  }}
-  try {{
-    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-    console.log('calling _mermaidRender with ' + stripped.length + ' chars, starts: ' + stripped.substring(0,60));
-    var svg = window._mermaidRender(stripped);
-    console.log('_mermaidRender returned ' + svg.length + ' chars, hasSvg=' + svg.includes('<svg'));
-    target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
+  var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering...</span></div>';
+  var url = '/api/admin/viz/mermaid/render?text=' + encodeURIComponent(stripped);
+  fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
+    target.innerHTML = '<div class=\"fade-in\">' + (d.svg || d.error) + '</div>';
     document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
-  }} catch(e) {{
-    console.error('renderMermaid error:', e);
+  }}).catch(function(e) {{
     target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
     addStatus('error', 'Mermaid render failed: ' + e.message);
-  }}
+  }});
 }}
 
 function loadGraph(sel) {{
@@ -2108,6 +2076,7 @@ async fn main() {
         .route("/api/admin/viz/task", get(viz_task_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
         .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
+        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
@@ -2152,7 +2121,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("mermaid.js"));
+        assert!(h.contains("cytoscape"));
         assert!(h.contains("cytoscape.min.js"));
     }
 
