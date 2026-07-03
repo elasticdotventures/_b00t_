@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rmcp::{
+    Peer,
     handler::server::ServerHandler,
     model::{
         Annotated,
@@ -18,6 +19,10 @@ use rmcp::{
         ResourceContents,
         ServerCapabilities,
         ServerInfo,
+        ServerNotification,
+        ToolListChangedNotification,
+        ToolListChangedNotificationMethod,
+        Extensions,
     },
     service::{RequestContext, RoleServer},
 };
@@ -41,6 +46,9 @@ pub struct B00tMcpServerRusty {
     /// Captured from MCP initialize request — identifies the host client
     /// (e.g., "hermes", "claude-code", "opencode") for response customization.
     client_info: std::sync::Arc<std::sync::Mutex<Option<rmcp::model::Implementation>>>,
+    /// Peer handle stored on_initialized; used to send tools/list_changed notifications
+    /// when b00t_mcp_stack_load/unload dynamically changes the active tool set.
+    notification_peer: std::sync::Arc<tokio::sync::Mutex<Option<Peer<RoleServer>>>>,
 }
 
 impl B00tMcpServerRusty {
@@ -58,6 +66,7 @@ impl B00tMcpServerRusty {
             registry,
             chat_runtime: ChatRuntime::global(),
             client_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            notification_peer: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         })
     }
 
@@ -74,6 +83,27 @@ impl B00tMcpServerRusty {
     /// Get the number of available tools
     pub fn tool_count(&self) -> usize {
         self.registry.get_tools().len()
+    }
+
+    /// Send `notifications/tools/list_changed` to the connected client.
+    ///
+    /// Call after dynamically loading/unloading an MCP stack so the host (Claude,
+    /// opencode, hermes) re-fetches the tool list without requiring reconnect.
+    pub fn notify_tools_changed(&self) {
+        let peer_arc = std::sync::Arc::clone(&self.notification_peer);
+        tokio::spawn(async move {
+            let guard = peer_arc.lock().await;
+            if let Some(peer) = guard.as_ref() {
+                let notification = ToolListChangedNotification {
+                    method: ToolListChangedNotificationMethod,
+                    extensions: Extensions::new(),
+                };
+                let msg = ServerNotification::ToolListChangedNotification(notification);
+                if let Err(e) = peer.send_notification(msg).await {
+                    tracing::warn!("tools/list_changed notification failed: {e}");
+                }
+            }
+        });
     }
 }
 
@@ -317,6 +347,9 @@ impl ServerHandler for B00tMcpServerRusty {
         &self,
         context: rmcp::service::NotificationContext<rmcp::service::RoleServer>,
     ) {
+        // Store peer handle for tools/list_changed notifications (dynamic stack load/unload)
+        *self.notification_peer.lock().await = Some(context.peer.clone());
+
         // Capture client info from peer metadata (hermes, claude-code, opencode, etc.)
         if let Some(peer_info) = context.peer.peer_info() {
             let client_name = peer_info.client_info.name.clone();
