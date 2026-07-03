@@ -1769,17 +1769,8 @@ function loadKnowledgeGraph() {{
 function toggleOrphans() {{
   var hide = document.getElementById('hide-orphans').checked;
   try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
-  var cy = window._cy;
-  if (cy) {{
-    if (hide) {{
-      cy.nodes().filter(function(n) {{ return n.degree() === 0; }}).style('display', 'none');
-    }} else {{
-      cy.nodes().style('display', 'element');
-    }}
-  }}
   var sel = document.getElementById('viz-select').value;
-  if (sel === 'isometric') return loadGraph('isometric');
-  renderMermaid();
+  if (sel) {{ loadGraph(sel); }}
 }}
 
 // Restore orphan filter on load
