@@ -65,12 +65,17 @@ impl std::fmt::Display for MermaidParseError {
 impl std::error::Error for MermaidParseError {}
 
 fn role_from_label(label: &str) -> VisualizationRole {
-    let lower = label.to_lowercase();
-    if lower.contains("ingest") || lower.contains("document") {
+    let lower = label.to_lowercase().replace('_', " ");
+    // Process-specific roles first (more precise matches)
+    if lower.contains("ingest") || lower.contains("load") || lower.contains("parse")
+        || lower.contains("extract") || lower.contains("docling")
+    {
         VisualizationRole::Ingest
     } else if lower.contains("valid") || lower.contains("verify") || lower.contains("check") {
         VisualizationRole::Validate
-    } else if lower.contains("classif") || lower.contains("categor") || lower.contains("tag") {
+    } else if lower.contains("classif") || lower.contains("categor") || lower.contains("tag")
+        || lower.contains("label")
+    {
         VisualizationRole::Classify
     } else if lower.contains("review") || lower.contains("inspect") || lower.contains("audit") {
         VisualizationRole::Review
@@ -80,6 +85,38 @@ fn role_from_label(label: &str) -> VisualizationRole {
         VisualizationRole::Commit
     } else if lower.contains("decis") || lower.contains("if") || lower.contains("branch") {
         VisualizationRole::Decision
+    // Generic semantic categories (fallback after process roles)
+    } else if lower.contains("source") || lower.contains("statement") || lower.contains("blake3")
+        || lower.contains("document") || lower.contains("file")
+    {
+        VisualizationRole::Data
+    } else if lower.contains("llm") || lower.contains("ai") || lower.contains("gpt")
+        || lower.contains("phi") || lower.contains("reasoning") || lower.contains("model")
+    {
+        VisualizationRole::Intelligence
+    } else if lower.contains("legal") || lower.contains("rule") || lower.contains("constraint")
+        || lower.contains("law") || lower.contains("solver") || lower.contains("registry")
+    {
+        VisualizationRole::Rule
+    } else if lower.contains("security") || lower.contains("auth") || lower.contains("credential")
+        || lower.contains("guard") || lower.contains("safety")
+    {
+        VisualizationRole::Security
+    } else if lower.contains("human") || lower.contains("operator") || lower.contains("reviewer")
+        || lower.contains("accountant")
+    {
+        VisualizationRole::Human
+    } else if lower.contains("storage") || lower.contains("database") || lower.contains("store") {
+        VisualizationRole::Storage
+    } else if lower.contains("report") || lower.contains("export") || lower.contains("summary")
+        || lower.contains("chart")
+    {
+        VisualizationRole::Report
+    } else if lower.contains("event") || lower.contains("notify") || lower.contains("alert")
+        || lower.contains("hook")
+    {
+        VisualizationRole::Event
+    // Remove "input" from Data — it was too broad and caught "validate input"
     } else {
         VisualizationRole::Step
     }
@@ -345,8 +382,8 @@ pub fn scene_to_gltf_data_uri(
         .iter()
         .filter_map(|n| {
             positions.get(&n.id).map(|&(x, y, z)| {
-                let color = role_to_hex(n.role);
-                let mesh_idx = mesh_index_for_role(n.role);
+                let color = n.role.color();
+                let mesh_idx = n.role as usize;
                 serde_json::json!({
                     "name": n.label,
                     "translation": [x, z, y],
@@ -361,19 +398,7 @@ pub fn scene_to_gltf_data_uri(
         })
         .collect();
 
-    let roles: Vec<VisualizationRole> = [
-        VisualizationRole::Ingest,
-        VisualizationRole::Validate,
-        VisualizationRole::Classify,
-        VisualizationRole::Review,
-        VisualizationRole::Reconcile,
-        VisualizationRole::Commit,
-        VisualizationRole::Decision,
-        VisualizationRole::Step,
-    ]
-    .to_vec();
-
-    let meshes: Vec<serde_json::Value> = roles
+    let meshes: Vec<serde_json::Value> = VisualizationRole::all()
         .iter()
         .map(|role| {
             let material_idx = *role as usize;
@@ -390,10 +415,10 @@ pub fn scene_to_gltf_data_uri(
         })
         .collect();
 
-    let materials: Vec<serde_json::Value> = roles
+    let materials: Vec<serde_json::Value> = VisualizationRole::all()
         .iter()
-        .map(|role| {
-            let hex = role_to_hex(*role).trim_start_matches('#');
+        .map(|&role| {
+            let hex = role.color().trim_start_matches('#');
             let r = u32::from_str_radix(&hex[0..2], 16).unwrap_or(120) as f64 / 255.0;
             let g = u32::from_str_radix(&hex[2..4], 16).unwrap_or(120) as f64 / 255.0;
             let b = u32::from_str_radix(&hex[4..6], 16).unwrap_or(120) as f64 / 255.0;
@@ -467,32 +492,6 @@ pub fn graph_to_isometric_response(
         "nodes": graph.nodes.len(),
         "edges": graph.edges.len(),
     }))
-}
-
-fn role_to_hex(role: VisualizationRole) -> &'static str {
-    match role {
-        VisualizationRole::Ingest => "#4fc3f7",
-        VisualizationRole::Validate => "#66bb6a",
-        VisualizationRole::Classify => "#ffa726",
-        VisualizationRole::Review => "#ab47bc",
-        VisualizationRole::Reconcile => "#26c6da",
-        VisualizationRole::Commit => "#42a5f5",
-        VisualizationRole::Decision => "#ef5350",
-        VisualizationRole::Step => "#78909c",
-    }
-}
-
-fn mesh_index_for_role(role: VisualizationRole) -> usize {
-    match role {
-        VisualizationRole::Ingest => 0,
-        VisualizationRole::Validate => 1,
-        VisualizationRole::Classify => 2,
-        VisualizationRole::Review => 3,
-        VisualizationRole::Reconcile => 4,
-        VisualizationRole::Commit => 5,
-        VisualizationRole::Decision => 6,
-        VisualizationRole::Step => 7,
-    }
 }
 
 fn base64_encode(input: &str) -> String {
@@ -768,19 +767,6 @@ fn render_svg(
     let offset_x = -min_sx + padding;
     let offset_y = -min_sy + padding;
 
-    let role_colors: HashMap<VisualizationRole, &str> = [
-        (VisualizationRole::Ingest, "#4fc3f7"),
-        (VisualizationRole::Validate, "#66bb6a"),
-        (VisualizationRole::Classify, "#ffa726"),
-        (VisualizationRole::Review, "#ab47bc"),
-        (VisualizationRole::Reconcile, "#26c6da"),
-        (VisualizationRole::Commit, "#42a5f5"),
-        (VisualizationRole::Decision, "#ef5350"),
-        (VisualizationRole::Step, "#78909c"),
-    ]
-    .into_iter()
-    .collect();
-
     let mut svg = String::new();
     svg.push_str(&format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" style="width:100%;height:100%;max-height:70vh;">"##,
@@ -800,10 +786,7 @@ fn render_svg(
             let color = if let Some(from_node) =
                 graph.nodes.iter().find(|n| n.id == edge.from)
             {
-                role_colors
-                    .get(&from_node.role)
-                    .copied()
-                    .unwrap_or("#90a4ae")
+                from_node.role.color()
             } else {
                 "#90a4ae"
             };
@@ -829,10 +812,7 @@ fn render_svg(
     for node in &graph.nodes {
         if let Some(&(x, z, y)) = positions.get(&node.id) {
             let (sx, sy) = iso_project(x, z, y, scale, offset_x, offset_y);
-            let color = role_colors
-                .get(&node.role)
-                .copied()
-                .unwrap_or("#78909c");
+            let color = node.role.color();
             let hw = 60.0;
             let hh = 18.0;
             let depth = 6.0;
@@ -882,11 +862,17 @@ fn render_svg(
                 hd = hd,
                 d = depth,
             ));
-            // Front face: the visible card surface with role-colored fill
+            // Front face: role-specific polygon shape
+            let poly = node.role.polygon();
+            let mut points = String::new();
+            for (i, &(px, py)) in poly.iter().enumerate() {
+                if i > 0 { points.push(' '); }
+                let sx = hw + px as f64 * hw;
+                let sy = hh + py as f64 * hh;
+                points.push_str(&format!("{sx:.1},{sy:.1}"));
+            }
             svg.push_str(&format!(
-                r##"<rect x="0" y="0" width="{w:.1}" height="{h:.1}" rx="4" fill="{color}" opacity="0.9" stroke="#e2e8f0" stroke-width="0.5"/>"##,
-                w = w,
-                h = h,
+                r##"<polygon points="{points}" fill="{color}" opacity="0.9" stroke="#e2e8f0" stroke-width="0.5"/>"##,
                 color = color,
             ));
             svg.push_str(&format!(

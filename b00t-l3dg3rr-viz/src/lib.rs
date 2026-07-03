@@ -12,8 +12,21 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Stable visual category shared by l3dg3rr docs and b00t capability graphs.
+///
+/// Ported from `rhai-live-core.js` SEMANTIC_CATEGORIES + SPECIALIZED_ROLES.
+/// Each role has a unique emoji, color, and polygon shape definition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum VisualizationRole {
+    Data,
+    Intelligence,
+    Rule,
+    Security,
+    Human,
+    Logic,
+    Storage,
+    Report,
+    Task,
+    Event,
     Ingest,
     Validate,
     Classify,
@@ -28,6 +41,16 @@ impl VisualizationRole {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Data => "data",
+            Self::Intelligence => "intelligence",
+            Self::Rule => "rule",
+            Self::Security => "security",
+            Self::Human => "human",
+            Self::Logic => "logic",
+            Self::Storage => "storage",
+            Self::Report => "report",
+            Self::Task => "task",
+            Self::Event => "event",
             Self::Ingest => "ingest",
             Self::Validate => "validate",
             Self::Classify => "classify",
@@ -40,19 +63,167 @@ impl VisualizationRole {
     }
 
     #[must_use]
-    pub const fn color(self) -> &'static str {
+    pub const fn emoji(self) -> &'static str {
         match self {
-            Self::Ingest => "#4fc3f7",
-            Self::Validate => "#66bb6a",
-            Self::Classify => "#ffa726",
-            Self::Review => "#ab47bc",
-            Self::Reconcile => "#26c6da",
-            Self::Commit => "#42a5f5",
-            Self::Decision => "#ef5350",
-            Self::Step => "#78909c",
+            Self::Data => "📄",
+            Self::Intelligence => "🧠",
+            Self::Rule => "⚖️",
+            Self::Security => "🛡️",
+            Self::Human => "👤",
+            Self::Logic => "❓",
+            Self::Storage => "💾",
+            Self::Report => "📊",
+            Self::Task => "⚙️",
+            Self::Event => "📅",
+            Self::Ingest => "📥",
+            Self::Validate => "✅",
+            Self::Classify => "🏷️",
+            Self::Review => "👁️",
+            Self::Reconcile => "🔄",
+            Self::Commit => "💾",
+            Self::Decision => "❓",
+            Self::Step => "⚙️",
         }
     }
+
+    #[must_use]
+    pub const fn color(self) -> &'static str {
+        match self {
+            Self::Data => "#334155",
+            Self::Intelligence => "#0284c7",
+            Self::Rule => "#b91c1c",
+            Self::Security => "#0f766e",
+            Self::Human => "#b45309",
+            Self::Logic => "#b91c1c",
+            Self::Storage => "#15803d",
+            Self::Report => "#166534",
+            Self::Task => "#475569",
+            Self::Event => "#7e22ce",
+            Self::Ingest => "#1d4ed8",
+            Self::Validate => "#16a34a",
+            Self::Classify => "#7c3aed",
+            Self::Review => "#c026d3",
+            Self::Reconcile => "#2563eb",
+            Self::Commit => "#0891b2",
+            Self::Decision => "#dc2626",
+            Self::Step => "#52525b",
+        }
+    }
+
+    /// Returns a polygon shape as normalized (-1..1, -1..1) vertex pairs.
+    /// Each point is (x, y) relative to the node center. These are
+    /// raster-optimal: convex shapes with rotational symmetry where
+    /// possible, avoiding small-angle diagonals that alias on low-DPI
+    /// displays.
+    #[must_use]
+    pub fn polygon(self) -> &'static [(f32, f32)] {
+        match self {
+            Self::Data => &DATA_POLYGON,
+            Self::Intelligence => &OCTAGON_POLYGON,
+            Self::Rule => &HEXAGON_POLYGON_30,
+            Self::Security => &SHIELD_POLYGON,
+            Self::Human => &CIRCLE16_POLYGON,
+            Self::Logic => &DIAMOND_POLYGON,
+            Self::Storage => &CIRCLE24_POLYGON,
+            Self::Report => &TRAPEZOID_POLYGON,
+            Self::Task => &RECTANGLE_POLYGON,
+            Self::Event => &CALENDAR_POLYGON,
+            Self::Ingest => &ARROW_RIGHT_POLYGON,
+            Self::Validate => &HEXAGON_POLYGON,
+            Self::Classify => &PENTAGON_POLYGON,
+            Self::Review => &OCTAGON_POLYGON,
+            Self::Reconcile => &HOURGLASS_POLYGON,
+            Self::Commit => &DIAMOND_POLYGON,
+            Self::Decision => &DIAMOND_POLYGON,
+            Self::Step => &RECTANGLE_POLYGON,
+        }
+    }
+
+    pub const fn all() -> &'static [Self] {
+        &[
+            Self::Data, Self::Intelligence, Self::Rule, Self::Security,
+            Self::Human, Self::Logic, Self::Storage, Self::Report,
+            Self::Task, Self::Event, Self::Ingest, Self::Validate,
+            Self::Classify, Self::Review, Self::Reconcile, Self::Commit,
+            Self::Decision, Self::Step,
+        ]
+    }
 }
+
+const DATA_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.800), (0.415, -0.692), (0.692, -0.415), (0.800, 0.000),
+    (0.692, 0.415), (0.415, 0.692), (0.000, 0.800), (-0.415, 0.692),
+    (-0.692, 0.415), (-0.800, 0.000), (-0.692, -0.415), (-0.415, -0.692),
+];
+
+const OCTAGON_POLYGON: &[(f32, f32)] = &[
+    (0.383, -0.900), (0.900, -0.383), (0.900, 0.383), (0.383, 0.900),
+    (-0.383, 0.900), (-0.900, 0.383), (-0.900, -0.383), (-0.383, -0.900),
+];
+
+const HEXAGON_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.900), (0.779, -0.450), (0.779, 0.450),
+    (0.000, 0.900), (-0.779, 0.450), (-0.779, -0.450),
+];
+
+const HEXAGON_POLYGON_30: &[(f32, f32)] = &[
+    (0.450, -0.779), (0.900, 0.000), (0.450, 0.779),
+    (-0.450, 0.779), (-0.900, 0.000), (-0.450, -0.779),
+];
+
+const SHIELD_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.900), (0.800, -0.500), (0.800, 0.300),
+    (0.000, 0.900), (-0.800, 0.300), (-0.800, -0.500),
+];
+
+const CIRCLE16_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.850), (0.325, -0.789), (0.601, -0.601), (0.789, -0.325),
+    (0.850, 0.000), (0.789, 0.325), (0.601, 0.601), (0.325, 0.789),
+    (0.000, 0.850), (-0.325, 0.789), (-0.601, 0.601), (-0.789, 0.325),
+    (-0.850, 0.000), (-0.789, -0.325), (-0.601, -0.601), (-0.325, -0.789),
+];
+
+const DIAMOND_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.950), (0.950, 0.000), (0.000, 0.950), (-0.950, 0.000),
+];
+
+const CIRCLE24_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.800), (0.207, -0.774), (0.400, -0.693), (0.566, -0.566),
+    (0.693, -0.400), (0.774, -0.207), (0.800, 0.000), (0.774, 0.207),
+    (0.693, 0.400), (0.566, 0.566), (0.400, 0.693), (0.207, 0.774),
+    (0.000, 0.800), (-0.207, 0.774), (-0.400, 0.693), (-0.566, 0.566),
+    (-0.693, 0.400), (-0.774, 0.207), (-0.800, 0.000), (-0.774, -0.207),
+    (-0.693, -0.400), (-0.566, -0.566), (-0.400, -0.693), (-0.207, -0.774),
+];
+
+const TRAPEZOID_POLYGON: &[(f32, f32)] = &[
+    (-0.900, -0.600), (0.900, -0.600), (0.700, 0.800), (-0.700, 0.800),
+];
+
+const RECTANGLE_POLYGON: &[(f32, f32)] = &[
+    (-0.900, -0.600), (0.900, -0.600), (0.900, 0.600), (-0.900, 0.600),
+];
+
+const CALENDAR_POLYGON: &[(f32, f32)] = &[
+    (-0.800, -0.600), (-0.500, -0.600), (-0.500, -0.900), (-0.300, -0.900),
+    (-0.300, -0.600), (0.300, -0.600), (0.300, -0.900), (0.500, -0.900),
+    (0.500, -0.600), (0.800, -0.600), (0.800, 0.800), (-0.800, 0.800),
+];
+
+const ARROW_RIGHT_POLYGON: &[(f32, f32)] = &[
+    (-0.800, -0.400), (0.400, -0.400), (0.400, -0.700), (0.900, 0.000),
+    (0.400, 0.700), (0.400, 0.400), (-0.800, 0.400),
+];
+
+const PENTAGON_POLYGON: &[(f32, f32)] = &[
+    (0.000, -0.850), (0.809, -0.263), (0.500, 0.688),
+    (-0.500, 0.688), (-0.809, -0.263),
+];
+
+const HOURGLASS_POLYGON: &[(f32, f32)] = &[
+    (-0.800, -0.800), (0.800, -0.800), (0.000, 0.000),
+    (0.800, 0.800), (-0.800, 0.800), (0.000, 0.000),
+];
 
 impl std::fmt::Display for VisualizationRole {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -208,16 +379,7 @@ impl InvariantGraph {
                 mermaid_id(&edge.to)
             ));
         }
-        for role in [
-            VisualizationRole::Ingest,
-            VisualizationRole::Validate,
-            VisualizationRole::Classify,
-            VisualizationRole::Review,
-            VisualizationRole::Reconcile,
-            VisualizationRole::Commit,
-            VisualizationRole::Decision,
-            VisualizationRole::Step,
-        ] {
+        for role in VisualizationRole::all() {
             out.push_str(&format!(
                 "  classDef {} fill:{},stroke:#263238,color:#111;\n",
                 role,
