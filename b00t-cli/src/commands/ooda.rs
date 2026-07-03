@@ -233,8 +233,8 @@ fn ooda_review(task_id: Option<&str>, as_json: bool, auto: bool) -> Result<()> {
                 .unwrap_or_else(|| "no pending tasks".into())
         }
     } else {
-        // Fall back to b00t task list stdout
-        let out = Command::new("b00t")
+        // Fall back to b00t-cli task next stdout
+        let out = Command::new("b00t-cli")
             .args(["task", "next"])
             .output()
             .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
