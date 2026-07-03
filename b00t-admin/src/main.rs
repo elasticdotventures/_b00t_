@@ -1799,6 +1799,9 @@ function renderMermaid() {{
     body: JSON.stringify({{text: stripped, hide_orphans: hideOrphans}})
   }}).then(function(r){{return r.json();}}).then(function(d) {{
     var svg = d.svg || '';
+    svg = svg.replace(/fill=\"\u0023FFFFFF\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/fill=\"white\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/background:\s*\u0023FFFFFF/g, 'background:\u00230f172a');
     svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
     target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
     document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
@@ -1989,7 +1992,7 @@ function buildIsoLegend(container) {{
   var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
   ISO_ROLES.forEach(function(r) {{
     if (!used.has(r.r)) return;
-    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="var c=this.parentElement.parentElement;c.querySelectorAll(\'.iso-node\').forEach(function(n){{n.style.opacity=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'1\':\'0.15\';n.style.filter=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'none\':\'grayscale(1)\';}});c.querySelectorAll(\'[data-edge-from]\').forEach(function(e){{e.setAttribute(\'opacity\',\'0.1\');}});">'+r.e+' '+r.r+'</span>';
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
   }});
   html += '</div>';
   var leg = document.createElement('div'); leg.innerHTML = html;
