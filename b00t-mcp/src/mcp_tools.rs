@@ -1766,7 +1766,7 @@ mod tests {
         assert!(surface_names.contains(&"learn"),   "learn must be in surface");
         assert!(surface_names.contains(&"exec"),    "exec must be in surface");
         assert!(surface_names.contains(&"discover"),"discover must be in surface");
-        assert_eq!(surface_tools.len(), 6, "surface registry must expose exactly 6 tools");
+        assert_eq!(surface_tools.len(), 19, "surface registry must expose exactly 19 tools (learn+whoami+status+exec+discover+viz+log+verify+DataFramerr)");
 
         // Full registry: all tools for debug/migration
         let full = create_full_mcp_registry();

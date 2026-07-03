@@ -97,7 +97,7 @@ gremlin-graalvm-build:
     docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
 
 gremlin-graalvm-run:
-    docker run --rm -p 8182:8182 \
+    podman run --rm -p 8182:8182 \
       -v $PWD/docker/graalvm-gremlin/gremlin-server.yaml:/opt/gremlin-server/conf/gremlin-server.yaml \
       docker.io/tinkerpop/gremlin-server:latest
 
@@ -780,9 +780,9 @@ vllm-up model="" dtype="" port="8000" image="vllm/vllm-openai:latest":
 		# shellcheck disable=SC2206
 		EXTRA_ARGS+=(${VLLM_EXTRA_ARGS})
 	fi
-	docker run --rm -d \
+	podman run --rm -d \
 		--name "$CONTAINER" \
-		--gpus all \
+		--device nvidia.com/gpu=all \
 		-p "${PORT}:8000" \
 		-v "${VLLM_MODEL_DIR}:${VLLM_MODEL_PATH}:ro" \
 		${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
@@ -1057,8 +1057,8 @@ worker-viz format="mermaid":
 
 # Show recent experiment scores
 worker-experiment-scores:
-    @find .b00t -name "experiment-*.json" 2>/dev/null \
-      -exec echo "--- {} ---" \; -exec cat {} \; || echo "no experiment data yet"
+    @fdfind --base-directory .b00t -g "experiment-*.json" 2>/dev/null \
+      | xargs -I{} sh -c 'echo "--- .b00t/{} ---"; cat ".b00t/{}"' || echo "no experiment data yet"
 
 # Show worker audit log (governance gates)
 worker-audit-log:
@@ -1186,8 +1186,7 @@ tidy-stashes:
 # Remove all *~ backup files (Emacs/vim tilde files)
 tidy-tilde:
     @echo "🗑️  Removing backup files..."
-    @find . -maxdepth 5 -name '*~' -not -path './.git/*' -not -path './node_modules/*' -not -path './target/*' -not -path './vendor/*' -delete -print
-    @echo "✅ Tilde files removed"
+    @fdfind --max-depth 5 -g '*~' --exclude .git --exclude node_modules --exclude target --exclude vendor -x rm {} \; 2>/dev/null && echo "✅ Tilde files removed"
 
 # Full workspace tidy: branches + stashes + tilde files
 tidy: tidy-branches tidy-stashes tidy-tilde
@@ -2530,7 +2529,7 @@ kreuzberg-install:
         export PATH="$HOME/.local/bin:$PATH"
     fi
     echo "📦 Installing kreuzberg via pip install --user..."
-    pip3 install --user kreuzberg
+    uv pip install kreuzberg
     echo ""
     echo "🔍 Verifying installation..."
     python3 -c "import kreuzberg; print('kreuzberg OK')"
@@ -2716,6 +2715,10 @@ blessed-sync:
 # Summarize cargo test results: "N passed, M failed, K ignored"
 test-summary:
     @cargo test 2>&1 | awk '/^test result/ {p+=$4; f+=$6; i+=$8} END {printf "%d passed, %d failed, %d ignored\n", p, f, i}'
+
+# Run tests and pipe through sm0l-filter for compressed agent-safe output
+test-sm0l *ARGS='':
+    @cargo test {{ARGS}} 2>&1 | python3 _b00t_/scripts/sm0l-filter.py 2>/dev/null || cargo test {{ARGS}} 2>&1 | awk '/^test result/ {p+=$4; f+=$6; i+=$8} END {printf "%d passed, %d failed, %d ignored\n", p, f, i}'
 
 # Show only failing test names and their output
 test-failures:

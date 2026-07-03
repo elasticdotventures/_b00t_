@@ -235,11 +235,15 @@ pub struct SudoEscalationAlert {
 
 /// Fire a sudo-grant escalation to the configured n8n webhook.
 ///
-/// Sync (uses `reqwest::blocking`) because the call site (`b00t exec`'s
-/// `handle_exec`) is a synchronous function — same HTTP-POST-JSON pattern
-/// as `BudgetController::send_alert`, just not tied to the async k8s
-/// reconciliation path that struct lives on. Best-effort: a webhook
-/// failure is logged but never blocks the (already-denied) command path.
+/// Call site (`b00t exec`'s `handle_exec`) is a synchronous function that
+/// runs on a thread owned by b00t-cli's `#[tokio::main]` runtime, so a
+/// plain `reqwest::blocking::Client` panics ("Cannot drop a runtime in a
+/// context where blocking is not allowed"). Uses `block_in_place` +
+/// `block_on` to do the async HTTP call from nested sync code instead —
+/// same HTTP-POST-JSON shape as `BudgetController::send_alert`, just not
+/// tied to the async k8s reconciliation path that struct lives on.
+/// Best-effort: a webhook failure is logged but never blocks the
+/// (already-denied) command path.
 ///
 /// Webhook URL comes from `B00T_N8N_WEBHOOK_URL`; if unset, this is a no-op
 /// (same "skip silently" policy as `BudgetController::send_alert` when its
@@ -258,11 +262,25 @@ pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
 
-    let client = reqwest::blocking::Client::new();
-    match client.post(&webhook_url).json(&alert).send() {
-        Ok(resp) if resp.status().is_success() => {}
-        Ok(resp) => eprintln!("⚠️  sudo-escalation webhook returned {}", resp.status()),
-        Err(e) => eprintln!("⚠️  sudo-escalation webhook failed: {e}"),
+    let result: std::result::Result<(), String> = tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            let client = reqwest::Client::new();
+            let resp = client
+                .post(&webhook_url)
+                .json(&alert)
+                .send()
+                .await
+                .map_err(|e| format!("sudo-escalation webhook failed: {e}"))?;
+            if resp.status().is_success() {
+                Ok(())
+            } else {
+                Err(format!("sudo-escalation webhook returned {}", resp.status()))
+            }
+        })
+    });
+
+    if let Err(e) = result {
+        eprintln!("⚠️  {e}");
     }
 }
 
