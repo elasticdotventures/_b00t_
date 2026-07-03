@@ -22,7 +22,8 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response};
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response};
+use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
@@ -407,13 +408,20 @@ async fn viz_isometric_handler() -> impl IntoResponse {
                     "error": e.to_string()
                 }));
             }
-            graph_to_isometric_response(&graph)
-                .unwrap_or_else(|e| serde_json::json!({
-                    "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-                    "format": "isometric",
-                    "error": e
-                }))
-                .into()
+            let response = graph_to_isometric_response(&graph);
+            match response {
+                Ok(r) => r.into(),
+                Err(_) => {
+                    // Direct layout failed (>40 nodes). Try container grouping.
+                    graph_to_container_response(&graph)
+                        .unwrap_or_else(|e| serde_json::json!({
+                            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                            "format": "isometric",
+                            "error": e
+                        }))
+                        .into()
+                }
+            }
         }
         Err(e) => axum::Json(serde_json::json!({
             "svg": format!("<svg><text fill='red'>parse: {}</text></svg>", e),
@@ -421,6 +429,16 @@ async fn viz_isometric_handler() -> impl IntoResponse {
             "error": e.to_string()
         })),
     }
+}
+
+/// GET `/api/admin/viz/isometric/demo` — Tax-Lawyer demonstration graph
+async fn viz_isometric_demo_handler() -> impl IntoResponse {
+    let graph = tax_lawyer_demo();
+    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| serde_json::json!({
+        "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+        "format": "isometric",
+        "error": e
+    })))
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
@@ -1794,11 +1812,21 @@ function loadGraph(sel) {{
     target.style.position = 'relative';
     target.style.overflow = 'hidden';
     target.style.cursor = 'grab';
+    target.style.minHeight = '400px';
+    target.innerHTML = '<div style="color:#64748b;padding:40px;text-align:center;">Loading isometric view...</div>';
+    window._isoViewStack = [];
+    window._isoCurrentData = null;
     fetch('/api/admin/viz/isometric').then(function(r){{return r.json();}}).then(function(d) {{
-      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No isometric data</div>';
-      title.textContent = 'Isometric View';
-      status.textContent = d.nodes + ' nodes, ' + d.edges + ' edges · ' + (d.solver||'kasuari');
-      setTimeout(function(){{ attachIsoViewer(target); buildIsoLegend(target); }}, 50);
+      window._isoCurrentData = d;
+      d._roleLegend = ISO_ROLES;
+      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
+      title.textContent = d.grouped ? 'Container View' : 'Isometric View';
+      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari');
+      setTimeout(function(){{
+        attachIsoViewer(target);
+        buildIsoLegend(target);
+        if (d.grouped) buildContainerDrilldown(target, d);
+      }}, 50);
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
     return;
   }}
@@ -1939,6 +1967,54 @@ function buildIsoLegend(container) {{
   var leg = document.createElement('div'); leg.innerHTML = html;
   container.appendChild(leg);
 }}
+
+// ════════ Container drill-down (branch-and-bound sub-graphs) ════════
+
+function buildContainerDrilldown(container, data) {{
+  if (!data.components || !data.components.length) return;
+  var subMap = {{}};
+  data.components.forEach(function(c) {{ subMap[c.id] = c; }});
+
+  container.querySelectorAll('.iso-node').forEach(function(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    if (!nid || !nid.startsWith('__container_')) return;
+    nodeEl.style.cursor = 'pointer';
+    nodeEl.title = 'Double-click to drill down';
+    nodeEl.addEventListener('dblclick', function(e) {{
+      e.stopPropagation();
+      var sub = subMap[nid];
+      if (!sub || !sub.svg) return;
+      window._isoViewStack.push({{
+        svg: container.querySelector('svg').outerHTML,
+        svgEl: container.querySelector('svg'),
+        legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
+      }});
+      container.innerHTML = sub.svg;
+      container.querySelector('svg').style.width = '100%';
+      container.querySelector('svg').style.height = '100%';
+      var back = document.createElement('div');
+      back.innerHTML = '← Back';
+      back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
+      back.title = 'Back to container view';
+      back.onclick = function() {{
+        var prev = window._isoViewStack.pop();
+        if (prev) {{
+          container.innerHTML = '';
+          var wrapper = document.createElement('div');
+          wrapper.innerHTML = prev.svg;
+          container.appendChild(wrapper.firstChild);
+          if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
+        }}
+        attachIsoViewer(container);
+        buildIsoLegend(container);
+      }};
+      container.appendChild(back);
+      buildIsoLegend(container);
+      attachIsoViewer(container);
+    }});
+  }});
+}}
+
 </script>
 
 <div id="autopilot-badge">
@@ -1992,6 +2068,7 @@ async fn main() {
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
         .route("/api/admin/viz/task", get(viz_task_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
+        .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
