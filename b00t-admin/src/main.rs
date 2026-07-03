@@ -1409,8 +1409,6 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
       </div>
       <div style="margin:4px 0;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
-        <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
-        <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphans</label>
         <span style="margin-left:auto;color:#64748b;">Shift+scroll: 10× zoom</span>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
@@ -1435,6 +1433,10 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
 <div class="panel" id="type-panel" data-b00t="panel:types" data-b00t-label="Type Explorer">
   <h2>🔬 Type Explorer</h2>
+  <div style="margin:0 0 8px;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
+    <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
+    <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphan nodes (no connections)</label>
+  </div>
   <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
 </div>
 
