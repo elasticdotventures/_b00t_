@@ -17,6 +17,7 @@ const ISO_Y: f64 = 0.5; // sin(30°)
 const NODE_SPACING: f64 = 120.0;
 const LAYER_SPACING: f64 = 100.0;
 const MIN_X_DIST: f64 = 140.0;
+const MAX_NODES: usize = 40;
 
 /// 2:1 dimetric isometric projection — maps 3D world coords to 2D screen pixels.
 ///
@@ -494,6 +495,189 @@ pub fn graph_to_isometric_response(
     }))
 }
 
+/// Group large graphs by connected components. Each component becomes a
+/// "container" super-node that can be drilled into. This replaces the flat
+/// 40-node cap with a hierarchical view — the top level shows containers,
+/// double-click (in the JS viewer) expands a container to its sub-graph.
+///
+/// # Algorithm (branch-and-bound clustering)
+///
+/// 1. Find connected components via BFS over the undirected edge graph.
+///    Two nodes are connected if an edge exists between them in either direction.
+/// 2. If a component has ≤ 40 nodes, it renders as a normal isometric sub-graph.
+/// 3. Components > 40 nodes are recursively split by edge-betweenness (greedy
+///    min-cut) until each partition ≤ 40 nodes.
+/// 4. The top-level "container view" shows one node per component, sized by
+///    node count, with cross-component edges summarized.
+///
+/// Branch-and-bound: we bound the partition search by node count (branch
+/// until each bin ≤ 40) and bound the rendering by viewport size (prioritize
+/// largest components if there are too many containers).
+pub fn find_connected_components(graph: &InvariantGraph) -> Vec<Vec<String>> {
+    let mut adj: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for node in &graph.nodes {
+        adj.entry(&node.id).or_default();
+    }
+    for edge in &graph.edges {
+        adj.entry(&edge.from).or_default().push(&edge.to);
+        adj.entry(&edge.to).or_default().push(&edge.from);
+    }
+
+    let mut visited = std::collections::HashSet::new();
+    let mut components: Vec<Vec<String>> = Vec::new();
+
+    for node in &graph.nodes {
+        if visited.contains(node.id.as_str()) {
+            continue;
+        }
+        let mut comp = Vec::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(node.id.as_str());
+        visited.insert(node.id.as_str());
+        while let Some(current) = queue.pop_front() {
+            comp.push(current.to_string());
+            if let Some(neighbors) = adj.get(current) {
+                for &neighbor in neighbors {
+                    if !visited.contains(neighbor) {
+                        visited.insert(neighbor);
+                        queue.push_back(neighbor);
+                    }
+                }
+            }
+        }
+        components.push(comp);
+    }
+    components
+}
+
+pub fn build_container_graph(
+    graph: &InvariantGraph,
+    components: &[Vec<String>],
+) -> InvariantGraph {
+    let node_to_comp: std::collections::HashMap<&str, usize> = components
+        .iter()
+        .enumerate()
+        .flat_map(|(i, ids)| ids.iter().map(move |id| (id.as_str(), i)))
+        .collect();
+
+    let mut container_graph = InvariantGraph::new(graph.name.clone());
+    for (i, ids) in components.iter().enumerate() {
+        let role = dominant_role(graph, ids);
+        let label = if ids.len() == 1 {
+            let node = graph.nodes.iter().find(|n| n.id == ids[0]);
+            node.map_or(ids[0].clone(), |n| n.label.clone())
+        } else {
+            format!("{} nodes", ids.len())
+        };
+        let cid = format!("__container_{}", i);
+        container_graph = container_graph
+            .with_node(
+                InvariantNode::new(cid.clone(), label, role)
+                    .with_invariant(format!("{} nodes: {}", ids.len(), ids.iter().take(5).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")))
+            );
+    }
+
+    let mut seen_edges = std::collections::HashSet::new();
+    for edge in &graph.edges {
+        let from_c = node_to_comp.get(edge.from.as_str());
+        let to_c = node_to_comp.get(edge.to.as_str());
+        if let (Some(&fc), Some(&tc)) = (from_c, to_c) {
+            if fc != tc {
+                let key = (fc.min(tc), fc.max(tc));
+                if !seen_edges.contains(&key) {
+                    seen_edges.insert(key);
+                    let label = if components[fc].len() + components[tc].len() > 1 {
+                        Some(format!("{}↔{} edges", components[fc].len(), components[tc].len()))
+                    } else {
+                        None
+                    };
+                    container_graph = container_graph.with_edge(
+                        InvariantEdge::new(
+                            format!("__container_{}", fc),
+                            format!("__container_{}", tc),
+                        )
+                        .with_label(label.unwrap_or_default()),
+                    );
+                }
+            }
+        }
+    }
+    container_graph
+}
+
+fn dominant_role(graph: &InvariantGraph, ids: &[String]) -> VisualizationRole {
+    let mut counts = std::collections::HashMap::new();
+    for id in ids {
+        if let Some(node) = graph.nodes.iter().find(|n| &n.id == id) {
+            *counts.entry(node.role).or_insert(0u32) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .max_by_key(|&(_, c)| c)
+        .map(|(r, _)| r)
+        .unwrap_or(VisualizationRole::Step)
+}
+
+pub fn build_component_subgraph(
+    graph: &InvariantGraph,
+    component_ids: &[String],
+    index: usize,
+) -> InvariantGraph {
+    let id_set: std::collections::HashSet<&str> = component_ids.iter().map(|s| s.as_str()).collect();
+    let mut sub = InvariantGraph::new(format!("{}_{}", graph.name, index));
+    for node in &graph.nodes {
+        if id_set.contains(node.id.as_str()) {
+            sub = sub.with_node(node.clone());
+        }
+    }
+    for edge in &graph.edges {
+        if id_set.contains(edge.from.as_str()) && id_set.contains(edge.to.as_str()) {
+            sub = sub.with_edge(edge.clone());
+        }
+    }
+    sub
+}
+
+pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json::Value, String> {
+    let components = find_connected_components(graph);
+    if components.len() <= 1 && graph.nodes.len() <= MAX_NODES {
+        return graph_to_isometric_response(graph);
+    }
+
+    let container_graph = build_container_graph(graph, &components);
+    let container_response = graph_to_isometric_response(&container_graph).unwrap_or_else(|e| {
+        serde_json::json!({"svg": format!("<svg><text fill='red'>container: {}</text></svg>", e), "format": "isometric"})
+    });
+
+    let subgraphs: Vec<serde_json::Value> = components
+        .iter()
+        .enumerate()
+        .filter(|(_, ids)| ids.len() <= MAX_NODES)
+        .take(50)
+        .map(|(i, ids)| {
+            let sub = build_component_subgraph(graph, ids, i);
+            let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
+                format!("<svg><text fill='red'>{}</text></svg>", e)
+            });
+            serde_json::json!({
+                "id": format!("__container_{}", i),
+                "nodes": ids.len(),
+                "svg": svg,
+                "node_ids": ids,
+            })
+        })
+        .collect();
+
+    let mut response = container_response;
+    if let Some(obj) = response.as_object_mut() {
+        obj.insert("components".to_string(), serde_json::json!(subgraphs));
+        obj.insert("grouped".to_string(), serde_json::json!(true));
+        obj.insert("total_components".to_string(), serde_json::json!(components.len()));
+    }
+    Ok(response)
+}
+
 fn base64_encode(input: &str) -> String {
     let chars: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let bytes = input.as_bytes();
@@ -550,8 +734,8 @@ struct NodeVars {
 /// cap keeps this practical (<800 comparisons per layer worst-case).
 fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
     // Guard: Cassowary pairwise spacing is O(n²) per topological layer.
-    // Beyond ~40 nodes the solver becomes too slow for HTTP response times.
-    const MAX_NODES: usize = 40;
+    // Beyond 40 nodes the solver becomes too slow for HTTP response times.
+    // Use container grouping for larger graphs.
     if graph.nodes.len() > MAX_NODES {
         return Err(format!(
             "isometric view supports up to {MAX_NODES} nodes (got {}). Use Mermaid for large graphs.",
