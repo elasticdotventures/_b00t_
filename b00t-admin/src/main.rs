@@ -855,13 +855,14 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <script>
 window._mermaidInit = function() {{ return Promise.resolve(); }};
 window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
+window._wasmLoadStart = Date.now();
 (async function() {{
   try {{
     var m = await import('/wasm/wasm/b00t_mermaid.js');
     await m.default();
     window._mermaidReady = true;
     window._mermaidRender = m.render_mermaid;
-    console.log('mmdr WASM ready');
+    console.log('mmdr WASM ready (' + ((Date.now()-window._wasmLoadStart)/1000).toFixed(1) + 's)');
   }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
 }})();
 </script>
@@ -1328,6 +1329,8 @@ window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Load
 /* ── Fade transitions ── */
 .fade-in {{ animation: fadeIn 0.3s ease-in; }}
 @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+@keyframes wasm-spin {{ to {{ transform: rotate(360deg); }} }}
+.wasm-spinner {{ animation: wasm-spin 1s linear infinite; }}
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {{ width: 6px; }}
@@ -1764,7 +1767,13 @@ function renderMermaid() {{
   var raw = currentVizData.mermaid;
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
   if (typeof window._mermaidRender !== 'function' || !window._mermaidReady) {{
-    target.innerHTML = '<div style="color:#eab308;padding:20px;">Loading WASM renderer... <button onclick=\"renderMermaid()\" style=\"margin-left:8px;background:#334155;color:#e2e8f0;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;\">Retry</button></div>';
+    var elapsed = (Date.now() - (window._wasmLoadStart || Date.now())) / 1000;
+    target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;color:#64748b;">' +
+      '<div class="wasm-spinner" style="width:32px;height:32px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:12px;"></div>' +
+      '<div style="font-size:12px;">Loading native Mermaid renderer...</div>' +
+      '<div style="font-size:10px;margin-top:4px;">' + elapsed.toFixed(1) + 's elapsed</div>' +
+      '<button onclick="renderMermaid()" style="margin-top:10px;background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">Retry</button>' +
+      '</div>';
     return;
   }}
   try {{
