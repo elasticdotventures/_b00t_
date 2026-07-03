@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Stable visual category shared by l3dg3rr docs and b00t capability graphs.
+///
+/// Ported from `rhai-live-core.js` SEMANTIC_CATEGORIES + SPECIALIZED_ROLES.
+/// Each role has a unique emoji, color, and polygon shape definition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum VisualizationRole {
     Data,
