@@ -1790,30 +1790,11 @@ function loadGraph(sel) {{
     target.style.position = 'relative';
     target.style.overflow = 'hidden';
     target.style.cursor = 'grab';
-    target.style.minHeight = '400px';
-    target.innerHTML = '<div style="color:#64748b;padding:40px;text-align:center;">Loading isometric view...</div>';
-    window._isoViewStack = [];
-    window._isoCurrentData = null;
-    var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
-    var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
-    fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
-      window._isoCurrentData = d;
-      d._roleLegend = ISO_ROLES;
-      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
-      title.textContent = d.grouped ? 'Container View' : 'Isometric View';
-      var depthInfo = '';
-      if (d.depth) {{
-        depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
-      if (d.depth.extended + d.depth.historical > 0) {{
-        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
-      }}
-      }}
-      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
-      setTimeout(function(){{
-        attachIsoViewer(target);
-        buildIsoLegend(target);
-        if (d.grouped) buildContainerDrilldown(target, d);
-      }}, 50);
+    fetch('/api/admin/viz/isometric').then(function(r){{return r.json();}}).then(function(d) {{
+      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No isometric data</div>';
+      title.textContent = 'Isometric View';
+      status.textContent = d.nodes + ' nodes, ' + d.edges + ' edges · ' + (d.solver||'kasuari');
+      setTimeout(function(){{ attachIsoViewer(target); buildIsoLegend(target); }}, 50);
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
     return;
   }}
@@ -1950,84 +1931,12 @@ function buildIsoLegend(container) {{
   var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
   ISO_ROLES.forEach(function(r) {{
     if (!used.has(r.r)) return;
-    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="var c=this.parentElement.parentElement;c.querySelectorAll(\'.iso-node\').forEach(function(n){{n.style.opacity=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'1\':\'0.15\';n.style.filter=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'none\':\'grayscale(1)\';}});c.querySelectorAll(\'[data-edge-from]\').forEach(function(e){{e.setAttribute(\'opacity\',\'0.1\');}});">'+r.e+' '+r.r+'</span>';
   }});
   html += '</div>';
   var leg = document.createElement('div'); leg.innerHTML = html;
   container.appendChild(leg);
 }}
-
-// ════════ Depth toggle — show/hide extended+historical nodes ════════
-
-var _showAllDepth = false;
-function toggleDepth(link, e) {{
-  e.preventDefault();
-  _showAllDepth = !_showAllDepth;
-  link.textContent = _showAllDepth ? 'hide extended' : 'show all';
-  var svg = document.querySelector('#mermaid-target svg');
-  if (!svg) return;
-  var connected = new Set();
-  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
-    connected.add(el.getAttribute('data-edge-from'));
-    connected.add(el.getAttribute('data-edge-to'));
-  }});
-  svg.querySelectorAll('.iso-node').forEach(function(n) {{
-    var nid = n.getAttribute('data-node-id');
-    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
-  }});
-  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
-    var f = el.getAttribute('data-edge-from');
-    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
-  }});
-}}
-
-// ════════ Container drill-down (branch-and-bound sub-graphs) ════════
-
-function buildContainerDrilldown(container, data) {{
-  if (!data.components || !data.components.length) return;
-  var subMap = {{}};
-  data.components.forEach(function(c) {{ subMap[c.id] = c; }});
-
-  container.querySelectorAll('.iso-node').forEach(function(nodeEl) {{
-    var nid = nodeEl.getAttribute('data-node-id');
-    if (!nid || !nid.startsWith('__container_')) return;
-    nodeEl.style.cursor = 'pointer';
-    nodeEl.title = 'Double-click to drill down';
-    nodeEl.addEventListener('dblclick', function(e) {{
-      e.stopPropagation();
-      var sub = subMap[nid];
-      if (!sub || !sub.svg) return;
-      window._isoViewStack.push({{
-        svg: container.querySelector('svg').outerHTML,
-        svgEl: container.querySelector('svg'),
-        legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
-      }});
-      container.innerHTML = sub.svg;
-      container.querySelector('svg').style.width = '100%';
-      container.querySelector('svg').style.height = '100%';
-      var back = document.createElement('div');
-      back.innerHTML = '← Back';
-      back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
-      back.title = 'Back to container view';
-      back.onclick = function() {{
-        var prev = window._isoViewStack.pop();
-        if (prev) {{
-          container.innerHTML = '';
-          var wrapper = document.createElement('div');
-          wrapper.innerHTML = prev.svg;
-          container.appendChild(wrapper.firstChild);
-          if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
-        }}
-        attachIsoViewer(container);
-        buildIsoLegend(container);
-      }};
-      container.appendChild(back);
-      buildIsoLegend(container);
-      attachIsoViewer(container);
-    }});
-  }});
-}}
-
 </script>
 
 <div id="autopilot-badge">
