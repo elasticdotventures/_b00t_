@@ -1791,6 +1791,7 @@ function addStatus(type, msg) {{
 }}
 
 function renderMermaid() {{
+  console.log('renderMermaid called, ready=' + !!window._mermaidReady + ' dataLen=' + (currentVizData?.mermaid?.length||0));
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
   var raw = currentVizData.mermaid;
@@ -1799,7 +1800,7 @@ function renderMermaid() {{
     var elapsed = (Date.now() - (window._wasmLoadStart || Date.now())) / 1000;
     target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;color:#64748b;">' +
       '<div class="wasm-spinner" style="width:32px;height:32px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:12px;"></div>' +
-      '<div style="font-size:12px;">Loading native Mermaid renderer...</div>' +
+      '<div style="font-size:12px;">Loading mermaid-rs-renderer...</div>' +
       '<div style="font-size:10px;margin-top:4px;">' + elapsed.toFixed(1) + 's elapsed</div>' +
       '<button onclick="renderMermaid()" style="margin-top:10px;background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;">Retry</button>' +
       '</div>';
@@ -1807,10 +1808,13 @@ function renderMermaid() {{
   }}
   try {{
     var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+    console.log('calling _mermaidRender with ' + stripped.length + ' chars, starts: ' + stripped.substring(0,60));
     var svg = window._mermaidRender(stripped);
+    console.log('_mermaidRender returned ' + svg.length + ' chars, hasSvg=' + svg.includes('<svg'));
     target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
-    document.getElementById('viz-status').textContent = 'WASM rendered · ' + (raw||'').length + ' chars';
+    document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
   }} catch(e) {{
+    console.error('renderMermaid error:', e);
     target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
     addStatus('error', 'Mermaid render failed: ' + e.message);
   }}
