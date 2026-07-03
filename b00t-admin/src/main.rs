@@ -22,7 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native};
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
@@ -389,7 +389,11 @@ fn join_mermaid(diagrams: &[String]) -> String {
 
 /// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG + glTF)
 /// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
-async fn viz_isometric_handler() -> impl IntoResponse {
+/// Query params: `hide_orphans=true` — strip nodes with zero edges.
+async fn viz_isometric_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
@@ -400,7 +404,10 @@ async fn viz_isometric_handler() -> impl IntoResponse {
         .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
     match parse_mermaid(&raw) {
-        Ok(graph) => {
+        Ok(mut graph) => {
+            if hide_orphans {
+                graph = filter_orphans(&graph);
+            }
             if let Err(e) = graph.validate() {
                 return axum::Json(serde_json::json!({
                     "svg": format!("<svg><text fill='red'>validation: {}</text></svg>", e),
@@ -441,15 +448,15 @@ async fn viz_isometric_demo_handler() -> impl IntoResponse {
     })))
 }
 
-/// GET `/api/admin/viz/mermaid/render?text=...` — Server-side Mermaid SVG rendering
+/// POST `/api/admin/viz/mermaid/render` — Server-side Mermaid SVG rendering
 async fn viz_mermaid_render_handler(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    axum::extract::Json(body): axum::extract::Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let text = params.get("text").cloned().unwrap_or_default();
+    let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
     if text.is_empty() {
-        return axum::Json(serde_json::json!({"svg": "", "error": "missing text parameter"}));
+        return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
     }
-    match render_mermaid_native(&text) {
+    match render_mermaid_native(text) {
         Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
         Err(e) => axum::Json(serde_json::json!({
             "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
@@ -1725,8 +1732,17 @@ function loadKnowledgeGraph() {{
 function toggleOrphans() {{
   var hide = document.getElementById('hide-orphans').checked;
   try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
+  var cy = window._cy;
+  if (cy) {{
+    if (hide) {{
+      cy.nodes().filter(function(n) {{ return n.degree() === 0; }}).style('display', 'none');
+    }} else {{
+      cy.nodes().style('display', 'element');
+    }}
+  }}
   var sel = document.getElementById('viz-select').value;
-  if (sel) {{ loadGraph(sel); }}
+  if (sel === 'isometric') return loadGraph('isometric');
+  renderMermaid();
 }}
 
 // Restore orphan filter on load
@@ -1777,10 +1793,15 @@ function renderMermaid() {{
   var raw = currentVizData.mermaid;
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
   var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering...</span></div>';
-  var url = '/api/admin/viz/mermaid/render?text=' + encodeURIComponent(stripped);
-  fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
-    target.innerHTML = '<div class=\"fade-in\">' + (d.svg || d.error) + '</div>';
+  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering ' + stripped.length + ' chars...</span></div>';
+  fetch('/api/admin/viz/mermaid/render', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{text: stripped}})
+  }}).then(function(r){{return r.json();}}).then(function(d) {{
+    var svg = d.svg || '';
+    svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
+    target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
     document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
   }}).catch(function(e) {{
     target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
@@ -1820,7 +1841,9 @@ function loadGraph(sel) {{
     target.innerHTML = '<div style="color:#64748b;padding:40px;text-align:center;">Loading isometric view...</div>';
     window._isoViewStack = [];
     window._isoCurrentData = null;
-    fetch('/api/admin/viz/isometric').then(function(r){{return r.json();}}).then(function(d) {{
+    var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+    var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
+    fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
       window._isoCurrentData = d;
       d._roleLegend = ISO_ROLES;
       target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
@@ -2076,7 +2099,7 @@ async fn main() {
         .route("/api/admin/viz/task", get(viz_task_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
         .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
-        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler))
+        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler).post(viz_mermaid_render_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*

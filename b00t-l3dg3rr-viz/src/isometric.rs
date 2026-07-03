@@ -336,6 +336,27 @@ pub fn graph_to_isometric_svg(graph: &InvariantGraph) -> Result<String, String> 
     Ok(svg)
 }
 
+/// Strip orphan nodes (nodes with zero edges) from a graph.
+/// Orphan nodes have no trait connections and clutter the visualization.
+/// Returns a new graph containing only connected nodes and their edges.
+pub fn filter_orphans(graph: &InvariantGraph) -> InvariantGraph {
+    let connected: std::collections::HashSet<&str> = graph
+        .edges
+        .iter()
+        .flat_map(|e| [e.from.as_str(), e.to.as_str()])
+        .collect();
+    let mut filtered = InvariantGraph::new(graph.name.clone());
+    for node in &graph.nodes {
+        if connected.contains(node.id.as_str()) {
+            filtered = filtered.with_node(node.clone());
+        }
+    }
+    for edge in &graph.edges {
+        filtered = filtered.with_edge(edge.clone());
+    }
+    filtered
+}
+
 pub fn mermaid_to_isometric_svg(mermaid_text: &str) -> Result<String, String> {
     let graph = parse_mermaid(mermaid_text).map_err(|e| e.to_string())?;
     if let Err(e) = graph.validate() {
