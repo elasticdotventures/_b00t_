@@ -29,7 +29,6 @@ mod e2e {
     }
 
     #[test]
-    #[ignore = "e2e: requires live b00t-admin server on localhost:31337 — run with --ignored in deploy gate"]
     fn all_default_graphs_render() {
         check("/api/admin/processes", "pipeline", "mermaid", 200);
         check("/api/admin/viz/task", "task", "mermaid", 50);

@@ -871,7 +871,7 @@ window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Load
   try {{
     var m = await import('/wasm/wasm/b00t_mermaid.js');
     await m.default();
-    window._mermaidInit = function() {{ return Promise.resolve(); }};
+    window._mermaidReady = true;
     window._mermaidRender = m.render_mermaid;
     console.log('mmdr WASM ready');
   }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
@@ -1773,14 +1773,17 @@ function renderMermaid() {{
   var target = document.getElementById('mermaid-target');
   var raw = currentVizData.mermaid;
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-  if (!window._mermaidRender) {{ target.innerHTML = '<div style="color:#eab308;padding:20px;">WASM module loading...</div>'; return; }}
+  if (typeof window._mermaidRender !== 'function' || !window._mermaidReady) {{
+    target.innerHTML = '<div style="color:#eab308;padding:20px;">Loading WASM renderer... <button onclick=\"renderMermaid()\" style=\"margin-left:8px;background:#334155;color:#e2e8f0;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;\">Retry</button></div>';
+    return;
+  }}
   try {{
     var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
     var svg = window._mermaidRender(stripped);
     target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
     document.getElementById('viz-status').textContent = 'WASM rendered · ' + (raw||'').length + ' chars';
   }} catch(e) {{
-    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">' + e.message + '</div>';
+    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
     addStatus('error', 'Mermaid render failed: ' + e.message);
   }}
 }}
