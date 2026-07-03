@@ -864,6 +864,18 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
+<script>
+window._mermaidInit = function() {{ return Promise.resolve(); }};
+window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
+(async function() {{
+  try {{
+    var m = await import('/wasm/wasm/b00t_mermaid.js');
+    window._mermaidInit = m.default;
+    window._mermaidRender = m.render_mermaid;
+    console.log('mmdr WASM ready');
+  }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
+}})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -1496,6 +1508,7 @@ document.addEventListener('keydown', function(e) {{
 }});
 
 // ════════ Mermaid Init (WASM) ════════
+(async function(){{ try {{ await window._mermaidInit(); console.log('mmdr WASM ready'); }} catch(e){{ console.warn('mmdr WASM:', e); }} }})();
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
@@ -1759,25 +1772,16 @@ function renderMermaid() {{
   var target = document.getElementById('mermaid-target');
   var raw = currentVizData.mermaid;
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-  var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering ' + stripped.length + ' chars...</span></div>';
-  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
-  fetch('/api/admin/viz/mermaid/render', {{
-    method: 'POST',
-    headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{text: stripped, hide_orphans: hideOrphans}})
-  }}).then(function(r){{return r.json();}}).then(function(d) {{
-    var svg = d.svg || '';
-    svg = svg.replace(/fill=\"\u0023FFFFFF\"/g, 'fill=\"\u00230f172a\"');
-    svg = svg.replace(/fill=\"white\"/g, 'fill=\"\u00230f172a\"');
-    svg = svg.replace(/background:\s*\u0023FFFFFF/g, 'background:\u00230f172a');
-    svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
-    target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
-    document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
-  }}).catch(function(e) {{
-    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
+  if (!window._mermaidRender) {{ target.innerHTML = '<div style="color:#eab308;padding:20px;">WASM module loading...</div>'; return; }}
+  try {{
+    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+    var svg = window._mermaidRender(stripped);
+    target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
+    document.getElementById('viz-status').textContent = 'WASM rendered · ' + (raw||'').length + ' chars';
+  }} catch(e) {{
+    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">' + e.message + '</div>';
     addStatus('error', 'Mermaid render failed: ' + e.message);
-  }});
+  }}
 }}
 
 function loadGraph(sel) {{
@@ -2112,7 +2116,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("cytoscape"));
+        assert!(h.contains("b00t_mermaid.js"));
         assert!(h.contains("cytoscape.min.js"));
     }
 
