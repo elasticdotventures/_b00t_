@@ -113,6 +113,7 @@ pub mod task;
 pub use task::TaskCommands;
 
 pub mod ooda;
+pub mod runpod;
 pub use ooda::OodaCommands;
 pub mod patch;
 pub use patch::PatchCommands;

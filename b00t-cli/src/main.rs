@@ -97,6 +97,7 @@ use b00t_cli::commands::{
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
+    runpod::RunpodCommands,
     TaskCommands,
     PatchCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands, ZellijCommand
@@ -602,6 +603,11 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
+    },
+    #[clap(about = "RunPod GPU cloud — pods, endpoints, training")]
+    Runpod {
+        #[clap(subcommand)]
+        runpod_command: RunpodCommands,
     },
     #[clap(
         about = "List [[b00t.gate]] declarations across MCP datums",
@@ -2881,6 +2887,12 @@ async fn main() {
                 b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path)
             {
                 eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Runpod { runpod_command }) => {
+            if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await {
+                eprintln!("error: {e:?}");
                 std::process::exit(1);
             }
         }
