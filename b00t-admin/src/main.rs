@@ -22,9 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-mod graph_json;
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
-use b00t_l3dg3rr_viz::tax_lawyer_demo;
+use b00t_l3dg3rr_viz::isometric::mermaid_to_isometric_svg;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
@@ -388,13 +386,9 @@ fn join_mermaid(diagrams: &[String]) -> String {
     format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
 }
 
-/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG + glTF)
+/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG)
 /// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
-/// Query params: `hide_orphans=true` — strip nodes with zero edges.
-async fn viz_isometric_handler(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> impl IntoResponse {
-    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+async fn viz_isometric_handler() -> impl IntoResponse {
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
@@ -404,73 +398,15 @@ async fn viz_isometric_handler(
         .replace("```mermaid\n", "").replace("\n```", "")
         .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
-    match parse_mermaid(&raw) {
-        Ok(mut graph) => {
-            if hide_orphans {
-                graph = filter_orphans(&graph);
-            }
-            if let Err(e) = graph.validate() {
-                return axum::Json(serde_json::json!({
-                    "svg": format!("<svg><text fill='red'>validation: {}</text></svg>", e),
-                    "format": "isometric",
-                    "error": e.to_string()
-                }));
-            }
-            let response = graph_to_isometric_response(&graph);
-            match response {
-                Ok(r) => r.into(),
-                Err(_) => {
-                    // Direct layout failed (>40 nodes). Try container grouping.
-                    graph_to_container_response(&graph)
-                        .unwrap_or_else(|e| serde_json::json!({
-                            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-                            "format": "isometric",
-                            "error": e
-                        }))
-                        .into()
-                }
-            }
-        }
-        Err(e) => axum::Json(serde_json::json!({
-            "svg": format!("<svg><text fill='red'>parse: {}</text></svg>", e),
-            "format": "isometric",
-            "error": e.to_string()
-        })),
-    }
-}
+    let svg = mermaid_to_isometric_svg(&raw).unwrap_or_else(|e| {
+        format!("<svg><text fill='red'>{}</text></svg>", e.replace('"', "&quot;"))
+    });
 
-/// GET `/api/admin/viz/isometric/demo` — Tax-Lawyer demonstration graph
-async fn viz_isometric_demo_handler() -> impl IntoResponse {
-    let graph = tax_lawyer_demo();
-    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| serde_json::json!({
-        "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+    axum::Json(serde_json::json!({
+        "svg": svg,
         "format": "isometric",
-        "error": e
-    })))
-}
-
-/// POST `/api/admin/viz/mermaid/render` — Server-side Mermaid SVG rendering
-async fn viz_mermaid_render_handler(
-    axum::extract::Json(body): axum::extract::Json<serde_json::Value>,
-) -> impl IntoResponse {
-    let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
-    let hide_orphans = body.get("hide_orphans").and_then(|v| v.as_bool()).unwrap_or(false);
-    if text.is_empty() {
-        return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
-    }
-    let to_render = if hide_orphans {
-        let graph = filter_orphans_from_mermaid(text);
-        graph.to_mermaid()
-    } else {
-        text.to_string()
-    };
-    match render_mermaid_native(&to_render) {
-        Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
-        Err(e) => axum::Json(serde_json::json!({
-            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-            "error": e,
-        })),
-    }
+        "solver": "kasuari/0.4/cassowary"
+    }))
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
