@@ -20,5 +20,8 @@ mermaid-rs-renderer = { version = "0.3", default-features = false, optional = tr
 default = []
 mermaid-native = ["dep:mermaid-rs-renderer"]
 
+[dev-dependencies]
+blake3 = "1.8"
+
 [lints]
 workspace = true
