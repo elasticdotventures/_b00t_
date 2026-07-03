@@ -469,6 +469,76 @@ pub enum GraphValidationError {
     UnlabelledSelfEdge(String),
 }
 
+/// Build a sample AU R&D tax law constraint graph.
+///
+/// Demonstrates Tax-Lawyer platform visualization: domain objects (Xero invoices,
+/// R&D activities, tax rules) form DAGs checked by `Satisfies<Constraint>` trait.
+/// This graph shows the complete chain from source document through classification,
+/// eligibility validation, and reporting — annotated with real ATO legislative references.
+#[must_use]
+pub fn tax_lawyer_demo() -> InvariantGraph {
+    InvariantGraph::new("AU R&D Claim Constraint Graph")
+        // Data sources
+        .with_node(InvariantNode::new(
+            "xero-invoice",
+            "Xero Invoice",
+            VisualizationRole::Data,
+        ).with_invariant("source: Xero API"))
+        // Classification
+        .with_node(InvariantNode::new(
+            "classify-rd",
+            "Classify R&D Expenditure",
+            VisualizationRole::Classify,
+        ).with_invariant("s.355-305, contractor"))
+        // Core task
+        .with_node(InvariantNode::new(
+            "rd-activity",
+            "Registered R&D Activity",
+            VisualizationRole::Task,
+        ).with_invariant("Core: AI/ML experiments"))
+        // Validation gateway
+        .with_node(InvariantNode::new(
+            "eligibility",
+            "Eligibility Check",
+            VisualizationRole::Validate,
+        ).with_invariant("s.355-100: PASS"))
+        // Reporting
+        .with_node(InvariantNode::new(
+            "rd-offset",
+            "R&D Offset 43.5%",
+            VisualizationRole::Report,
+        ).with_invariant("refundable tax offset"))
+        // Tax rule
+        .with_node(InvariantNode::new(
+            "gst-check",
+            "AU GST Check",
+            VisualizationRole::Rule,
+        ).with_invariant("s38-190: overseas SaaS"))
+        // Evidence storage
+        .with_node(InvariantNode::new(
+            "evidence-chain",
+            "Evidence Chain",
+            VisualizationRole::Storage,
+        ).with_invariant("ledgerr: blake3 audit"))
+        // Human review
+        .with_node(InvariantNode::new(
+            "cpa-review",
+            "CPA Review",
+            VisualizationRole::Human,
+        ).with_invariant("CPA sign-off"))
+        // Edges: data flow through the DAG
+        .with_edge(InvariantEdge::new("xero-invoice", "classify-rd").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("classify-rd", "rd-activity").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("rd-activity", "eligibility").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("eligibility", "rd-offset").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("eligibility", "gst-check").with_label("satisfies|FAIL|"))
+        .with_edge(InvariantEdge::new("gst-check", "evidence-chain").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("evidence-chain", "cpa-review").with_label("awaiting review"))
+        .with_edge(InvariantEdge::new("rd-offset", "evidence-chain").with_label("satisfies"))
+        .with_edge(InvariantEdge::new("xero-invoice", "gst-check").with_label("satisfies: PASS"))
+        .with_edge(InvariantEdge::new("classify-rd", "evidence-chain").with_label("satisfies: ?"))
+}
+
 impl std::fmt::Display for GraphValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
