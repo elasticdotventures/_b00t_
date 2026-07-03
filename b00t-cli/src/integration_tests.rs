@@ -182,6 +182,7 @@ baz = "learn/baz.md"
         assert!(topics.contains(&"baz".to_string()));
     }
 
+    #[test]
     fn test_mcp_add_with_dwiw() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();

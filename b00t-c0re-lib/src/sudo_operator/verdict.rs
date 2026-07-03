@@ -169,31 +169,47 @@ pub fn adversarial_review(
         "messages": [{"role": "user", "content": prompt}],
     });
 
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .post(&url)
-        .bearer_auth(SM0L_API_KEY)
-        .json(&body)
-        .send();
+    // `handle_exec` (the only caller today) is a sync fn but runs on a
+    // thread owned by b00t-cli's #[tokio::main] runtime, so a plain
+    // `reqwest::blocking::Client` panics ("Cannot drop a runtime in a
+    // context where blocking is not allowed"). block_in_place + block_on
+    // is the correct way to do blocking-style work from sync code that's
+    // nested inside an already-running multi-threaded tokio runtime.
+    // The whole send+parse round-trip happens in one async block so we
+    // only pay the block_in_place cost once.
+    let outcome: std::result::Result<ChatCompletionResponse, String> =
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let client = reqwest::Client::new();
+                let resp = client
+                    .post(&url)
+                    .bearer_auth(SM0L_API_KEY)
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(|e| format!("failed to reach adversarial model endpoint: {e}"))?;
 
-    let disposition = match response {
-        Ok(resp) if resp.status().is_success() => match resp.json::<ChatCompletionResponse>() {
-            Ok(parsed) => match parsed.choices.first() {
-                Some(choice) => parse_verdict(&choice.message.content),
-                None => SudoDisposition::Escalate {
-                    reason: "adversarial model returned no choices".into(),
-                },
+                if !resp.status().is_success() {
+                    return Err(format!(
+                        "adversarial model endpoint returned {}",
+                        resp.status()
+                    ));
+                }
+
+                resp.json::<ChatCompletionResponse>()
+                    .await
+                    .map_err(|e| format!("failed to parse adversarial model response: {e}"))
+            })
+        });
+
+    let disposition = match outcome {
+        Ok(parsed) => match parsed.choices.first() {
+            Some(choice) => parse_verdict(&choice.message.content),
+            None => SudoDisposition::Escalate {
+                reason: "adversarial model returned no choices".into(),
             },
-            Err(e) => SudoDisposition::Escalate {
-                reason: format!("failed to parse adversarial model response: {e}"),
-            },
         },
-        Ok(resp) => SudoDisposition::Escalate {
-            reason: format!("adversarial model endpoint returned {}", resp.status()),
-        },
-        Err(e) => SudoDisposition::Escalate {
-            reason: format!("failed to reach adversarial model endpoint: {e}"),
-        },
+        Err(reason) => SudoDisposition::Escalate { reason },
     };
 
     Ok((event, disposition))

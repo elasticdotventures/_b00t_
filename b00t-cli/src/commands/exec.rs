@@ -71,8 +71,8 @@ pub struct ExecArgs {
 
     #[clap(
         long,
-        num_args = 0..,
-        help = "Commit hash(es) supporting --justification; their `git show --stat` grounds the adversarial review"
+        action = clap::ArgAction::Append,
+        help = "Commit hash supporting --justification (repeat for multiple); their `git show --stat` grounds the adversarial review"
     )]
     pub cites: Vec<String>,
 }
