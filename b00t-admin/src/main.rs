@@ -1790,11 +1790,15 @@ function loadGraph(sel) {{
     return;
   }}
   if (sel === 'isometric') {{
+    var target = document.getElementById('mermaid-target');
+    target.style.position = 'relative';
+    target.style.overflow = 'hidden';
+    target.style.cursor = 'grab';
     fetch('/api/admin/viz/isometric').then(function(r){{return r.json();}}).then(function(d) {{
-      var target = document.getElementById('mermaid-target');
       target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No isometric data</div>';
       title.textContent = 'Isometric View';
-      status.textContent = '3D Projection';
+      status.textContent = d.nodes + ' nodes, ' + d.edges + ' edges · ' + (d.solver||'kasuari');
+      setTimeout(function(){{ attachIsoViewer(target); buildIsoLegend(target); }}, 50);
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
     return;
   }}
@@ -1804,6 +1808,136 @@ function loadGraph(sel) {{
     status.textContent = (d.mermaid||'').length + ' chars';
     renderMermaid();
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
+}}
+
+
+// ════════ Interactive Isometric Viewer ════════
+
+function attachIsoViewer(container) {{
+  var svg = container.querySelector('svg');
+  if (!svg) return;
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  var viewBox = svg.getAttribute('viewBox') || '0 0 800 600';
+  var vb = viewBox.split(' ').map(Number);
+  var state = {{ x: 0, y: 0, scale: 1, minScale: 0.2, maxScale: 4 }};
+
+  function updateView() {{
+    var w = vb[2], h = vb[3];
+    var ox = vb[0] + w/2, oy = vb[1] + h/2;
+    var tx = ox + state.x/state.scale - ox/state.scale;
+    var ty = oy + state.y/state.scale - oy/state.scale;
+    svg.setAttribute('viewBox', [tx,ty,w/state.scale,h/state.scale].join(' '));
+  }}
+
+  // Pan drag
+  var dragging = false, lx = 0, ly = 0;
+  function pos(e) {{ return e.touches ? {{x:e.touches[0].clientX,y:e.touches[0].clientY}} : {{x:e.clientX,y:e.clientY}}; }}
+  function onStart(e) {{ dragging=true; var p=pos(e); lx=p.x-state.x; ly=p.y-state.y; container.style.cursor='grabbing'; e.preventDefault(); }}
+  function onMove(e) {{ if(!dragging)return; var p=pos(e); state.x=p.x-lx; state.y=p.y-ly; updateView(); }}
+  function onEnd() {{ dragging=false; container.style.cursor='grab'; }}
+  container.addEventListener('mousedown',onStart);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onEnd);
+  container.addEventListener('touchstart',onStart,{{passive:false}});
+  window.addEventListener('touchmove',onMove,{{passive:false}});
+  window.addEventListener('touchend',onEnd);
+
+  // Zoom
+  container.addEventListener('wheel',function(e) {{
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? -0.15 : 0.15;
+    if (e.shiftKey) delta *= 3;
+    state.scale = Math.min(state.maxScale, Math.max(state.minScale, state.scale * (1 + delta)));
+    updateView();
+  }},{{passive:false}});
+
+  // Node click → highlight connected
+  var allEdges = Array.from(svg.querySelectorAll('[data-edge-from]'));
+  function highlightNode(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='0.25';n.style.filter='grayscale(1)'; }});
+    allEdges.forEach(function(e){{ e.setAttribute('opacity','0.1'); }});
+    if (nodeEl) {{
+      nodeEl.style.opacity = '1'; nodeEl.style.filter = 'none';
+      allEdges.forEach(function(e) {{
+        if (e.getAttribute('data-edge-from')===nid || e.getAttribute('data-edge-to')===nid) {{
+          e.setAttribute('opacity','0.9'); e.setAttribute('stroke-width','3');
+        }}
+      }});
+    }}
+  }}
+  svg.addEventListener('click',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    highlightNode(nodeEl);
+    if (!nodeEl) {{
+      svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='1';n.style.filter='none'; }});
+      allEdges.forEach(function(e){{ e.setAttribute('opacity','0.5');e.setAttribute('stroke-width','1.5'); }});
+    }}
+  }});
+
+  // Double-click → center on node
+  svg.addEventListener('dblclick',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    if (!nodeEl) {{ state.x=0;state.y=0;state.scale=1;updateView();return; }}
+    var c = nodeEl.querySelector('text');
+    if (!c) return;
+    var bbox = c.getBBox();
+    var cx = bbox.x + bbox.width/2, cy = bbox.y + bbox.height/2;
+    state.x = -cx * state.scale + vb[2]/2;
+    state.y = -cy * state.scale + vb[3]/2;
+    state.scale = Math.min(state.maxScale, state.scale * 1.5);
+    updateView();
+  }});
+
+  // Keyboard
+  document.addEventListener('keydown',function(e) {{
+    if (!container.closest('[data-b00t="panel:viz"]')) return;
+    var step = 40 / state.scale;
+    switch(e.key) {{
+      case 'ArrowLeft': state.x+=step;break;
+      case 'ArrowRight': state.x-=step;break;
+      case 'ArrowUp': state.y+=step;break;
+      case 'ArrowDown': state.y-=step;break;
+      case '+':case'=': state.scale=Math.min(state.maxScale,state.scale*1.2);break;
+      case '-': state.scale=Math.max(state.minScale,state.scale/1.2);break;
+      case '0':case'Home': state.x=0;state.y=0;state.scale=1;break;
+      case 'Escape': highlightNode(null);break;
+      default: return;
+    }}
+    updateView();e.preventDefault();
+  }});
+
+  // Reset button
+  var resetBtn = document.createElement('div');
+  resetBtn.innerHTML = '↺';
+  resetBtn.style.cssText = 'position:absolute;top:4px;right:4px;width:28px;height:28px;background:#334155;color:#e2e8f0;border-radius:4px;text-align:center;line-height:28px;cursor:pointer;font-size:16px;z-index:10;user-select:none;';
+  resetBtn.title = 'Reset view (Home key)';
+  resetBtn.onclick = function(){{ state.x=0;state.y=0;state.scale=1;updateView(); }};
+  container.appendChild(resetBtn);
+}}
+
+// ════════ Role Legend ════════
+var ISO_ROLES = [
+  {{r:'data',e:'📄',c:'#334155'}},{{r:'intelligence',e:'🧠',c:'#0284c7'}},{{r:'rule',e:'⚖️',c:'#b91c1c'}},
+  {{r:'security',e:'🛡️',c:'#0f766e'}},{{r:'human',e:'👤',c:'#b45309'}},{{r:'logic',e:'❓',c:'#b91c1c'}},
+  {{r:'storage',e:'💾',c:'#15803d'}},{{r:'report',e:'📊',c:'#166534'}},{{r:'task',e:'⚙️',c:'#475569'}},
+  {{r:'event',e:'📅',c:'#7e22ce'}},{{r:'ingest',e:'📥',c:'#1d4ed8'}},{{r:'validate',e:'✅',c:'#16a34a'}},
+  {{r:'classify',e:'🏷️',c:'#7c3aed'}},{{r:'review',e:'👁️',c:'#c026d3'}},{{r:'reconcile',e:'🔄',c:'#2563eb'}},
+  {{r:'commit',e:'💾',c:'#0891b2'}},{{r:'decision',e:'❓',c:'#dc2626'}},{{r:'step',e:'⚙️',c:'#52525b'}}
+];
+
+function buildIsoLegend(container) {{
+  var used = new Set();
+  container.querySelectorAll('[data-node-role]').forEach(function(n){{ used.add(n.getAttribute('data-node-role')); }});
+  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
+  ISO_ROLES.forEach(function(r) {{
+    if (!used.has(r.r)) return;
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="var c=this.parentElement.parentElement;c.querySelectorAll(\'.iso-node\').forEach(function(n){{n.style.opacity=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'1\':\'0.15\';n.style.filter=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'none\':\'grayscale(1)\';}});c.querySelectorAll(\'[data-edge-from]\').forEach(function(e){{e.setAttribute(\'opacity\',\'0.1\');}});">'+r.e+' '+r.r+'</span>';
+  }});
+  html += '</div>';
+  var leg = document.createElement('div'); leg.innerHTML = html;
+  container.appendChild(leg);
 }}
 </script>
 

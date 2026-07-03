@@ -846,7 +846,7 @@ fn render_svg(
                 }
             } else {
                 // Regular edge — existing behaviour unchanged
-                let color = if let Some(from_node) =
+                let _color = if let Some(from_node) =
                     graph.nodes.iter().find(|n| n.id == edge.from)
                 {
                     from_node.role.color()
@@ -857,9 +857,11 @@ fn render_svg(
                     "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
                     sx1, sy1, mid, midy - 15.0, sx2, sy2
                 );
+                let edge_label = edge.label.as_ref().map(|l| l.as_str()).unwrap_or("");
+                let status = satisfies_status_color(edge_label);
                 svg.push_str(&format!(
-                    r##"<path d="{}" stroke="{}" stroke-width="1" fill="none" opacity="0.4"/>"##,
-                    d, color
+                    r##"<path d="{}" stroke="{}" stroke-width="1.5" stroke-dasharray="{}" fill="none" opacity="0.5" data-edge-from="{}" data-edge-to="{}" data-edge-status="{}"/>"##,
+                    d, status, if is_satisfies_edge(edge_label) { "5,4" } else { "none" }, escape_xml(&edge.from), escape_xml(&edge.to), edge_label
                 ));
                 if let Some(label) = &edge.label {
                     if !label.trim().is_empty() {
@@ -886,10 +888,11 @@ fn render_svg(
                 node.label.clone()
             };
 
+            let layer = positions.get(&node.id).map(|&(_, _, z)| z as i32).unwrap_or(0);
             svg.push_str(&format!(
-                r##"<g transform="translate({:.1},{:.1})" class="iso-node">"##,
-                sx - hw,
-                sy - hh
+                r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}">"##,
+                sx - hw, sy - hh,
+                escape_xml(&node.id), node.role.as_str(), layer
             ));
 
             let w = hw * 2.0;
