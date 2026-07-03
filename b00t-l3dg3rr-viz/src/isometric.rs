@@ -728,6 +728,41 @@ fn assign_layers(graph: &InvariantGraph) -> HashMap<String, usize> {
     layers
 }
 
+/// Detect edges that carry a `Satisfies<Constraint>` relationship.
+///
+/// A satisfies edge is one whose label matches any of these patterns
+/// (case-insensitive prefix match):
+///   - `"satisfies"` — exact
+///   - `"satisfies: PASS"` — with colon-delimited status
+///   - `"satisfies|FAIL|..."` — with pipe-delimited status
+fn is_satisfies_edge(label: &str) -> bool {
+    let lower = label.to_lowercase();
+    lower == "satisfies"
+        || lower.starts_with("satisfies:")
+        || lower.starts_with("satisfies|")
+}
+
+/// Determine the stroke colour for a satisfies edge based on its status payload.
+///
+/// | Label pattern              | Colour   | Hex       |
+/// |----------------------------|----------|-----------|
+/// | `satisfies: PASS`          | green    | `#16a34a` |
+/// | `satisfies|FAIL|...`       | red      | `#dc2626` |
+/// | `satisfies: ?` / `UNKNOWN` | yellow   | `#eab308` |
+/// | `satisfies` (bare)         | blue     | `#3b82f6` |
+fn satisfies_status_color(label: &str) -> &'static str {
+    let lower = label.to_lowercase();
+    if lower.contains("pass") {
+        "#16a34a"
+    } else if lower.contains("fail") {
+        "#dc2626"
+    } else if lower.contains('?') || lower.contains("unknown") {
+        "#eab308"
+    } else {
+        "#3b82f6"
+    }
+}
+
 fn group_by_layer(
     graph: &InvariantGraph,
     layers: &HashMap<String, usize>,
@@ -783,27 +818,56 @@ fn render_svg(
             let (sx2, sy2) = iso_project(tx, tz, ty, scale, offset_x, offset_y);
             let mid = (sx1 + sx2) / 2.0;
             let midy = (sy1 + sy2) / 2.0;
-            let color = if let Some(from_node) =
-                graph.nodes.iter().find(|n| n.id == edge.from)
-            {
-                from_node.role.color()
-            } else {
-                "#90a4ae"
-            };
-            let d = format!(
-                "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
-                sx1, sy1, mid, midy - 15.0, sx2, sy2
-            );
-            svg.push_str(&format!(
-                r##"<path d="{}" stroke="{}" stroke-width="1" fill="none" opacity="0.4"/>"##,
-                d, color
-            ));
-            if let Some(label) = &edge.label {
+
+            let label = edge.label.as_deref().unwrap_or("");
+
+            // satisfies edges get status-coloured dashed stroked
+            if is_satisfies_edge(label) {
+                let status_color = satisfies_status_color(label);
+                let d = format!(
+                    "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
+                    sx1, sy1, mid, midy - 15.0, sx2, sy2
+                );
+                svg.push_str(&format!(
+                    r##"<path d="{}" stroke="{}" stroke-width="1.5" stroke-dasharray="6,4" fill="none" opacity="0.7"/>"##,
+                    d, status_color
+                ));
+                // Show truncated status label on satisfies edges
                 if !label.trim().is_empty() {
+                    let display_label = if label.len() > 12 {
+                        format!("{}…", &label[..11])
+                    } else {
+                        label.to_string()
+                    };
                     svg.push_str(&format!(
-                        r##"<text x="{mid:.1}" y="{midy:.1}" text-anchor="middle" font-size="8" fill="#64748b">{}</text>"##,
-                        escape_xml(label)
+                        r##"<text x="{mid:.1}" y="{midy:.1}" text-anchor="middle" font-size="8" fill="{}">{}</text>"##,
+                        status_color, escape_xml(&display_label)
                     ));
+                }
+            } else {
+                // Regular edge — existing behaviour unchanged
+                let color = if let Some(from_node) =
+                    graph.nodes.iter().find(|n| n.id == edge.from)
+                {
+                    from_node.role.color()
+                } else {
+                    "#90a4ae"
+                };
+                let d = format!(
+                    "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
+                    sx1, sy1, mid, midy - 15.0, sx2, sy2
+                );
+                svg.push_str(&format!(
+                    r##"<path d="{}" stroke="{}" stroke-width="1" fill="none" opacity="0.4"/>"##,
+                    d, color
+                ));
+                if let Some(label) = &edge.label {
+                    if !label.trim().is_empty() {
+                        svg.push_str(&format!(
+                            r##"<text x="{mid:.1}" y="{midy:.1}" text-anchor="middle" font-size="8" fill="#64748b">{}</text>"##,
+                            escape_xml(label)
+                        ));
+                    }
                 }
             }
         }
@@ -881,6 +945,20 @@ fn render_svg(
                 y = hh + 3.0,
                 label = escape_xml(&short_label),
             ));
+            // Render invariant subtitle below the main label if present
+            if let Some(invariant) = &node.invariant {
+                let inv_short = if invariant.len() > 28 {
+                    format!("{}…", &invariant[..27])
+                } else {
+                    invariant.clone()
+                };
+                svg.push_str(&format!(
+                    r##"<text x="{x:.1}" y="{y:.1}" text-anchor="middle" fill="#cbd5e1" font-size="7" opacity="0.8">{inv}</text>"##,
+                    x = hw,
+                    y = hh + 12.0,
+                    inv = escape_xml(&inv_short),
+                ));
+            }
             svg.push_str(&format!(
                 r##"<title>{full}</title>"##,
                 full = escape_xml(&node.label),
@@ -1043,6 +1121,92 @@ mod tests {
         let graph = InvariantGraph::new("void");
         let svg = graph_to_isometric_svg(&graph).expect("svg");
         assert!(svg.contains("No nodes"));
+    }
+
+    #[test]
+    fn tax_lawyer_demo_isometric() {
+        let graph = crate::tax_lawyer_demo();
+        assert!(graph.validate().is_ok());
+        assert_eq!(graph.nodes.len(), 8);
+        assert_eq!(graph.edges.len(), 10);
+
+        let svg = graph_to_isometric_svg(&graph).expect("svg");
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("Xero Invoice"));
+        assert!(svg.contains("Classify R&amp;D Expenditure"));
+        assert!(svg.contains("Registered R&amp;D Activity"));
+        assert!(svg.contains("Eligibility Check"));
+        assert!(svg.contains("R&amp;D Offset 43.5%"));
+        assert!(svg.contains("AU GST Check"));
+        assert!(svg.contains("Evidence Chain"));
+        assert!(svg.contains("CPA Review"));
+
+        // Verify invariant subtitles rendered
+        assert!(svg.contains("s.355-305, contractor"));
+
+        // Verify at least one satisfies edge is present
+        let satisfies_count = graph
+            .edges
+            .iter()
+            .filter(|e| {
+                e.label
+                    .as_deref()
+                    .is_some_and(|l| is_satisfies_edge(l))
+            })
+            .count();
+        assert!(
+            satisfies_count >= 1,
+            "expected at least one satisfies edge, got {satisfies_count}"
+        );
+
+        // Verify dashed stroke appears for satisfies edges in SVG
+        assert!(svg.contains("stroke-dasharray"));
+    }
+
+    #[test]
+    fn satisfies_edge_coloring() {
+        // Test PASS → green
+        {
+            let graph = InvariantGraph::new("pass-test")
+                .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Step))
+                .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
+                .with_edge(InvariantEdge::new("a", "b").with_label("satisfies: PASS"));
+            let svg = graph_to_isometric_svg(&graph).expect("svg pass");
+            assert!(svg.contains("#16a34a"), "PASS edge should be green");
+            assert!(svg.contains("satisfies: …"), "PASS label should be truncated");
+            assert!(svg.contains("stroke-dasharray"), "satisfies edge should be dashed");
+        }
+
+        // Test FAIL → red
+        {
+            let graph = InvariantGraph::new("fail-test")
+                .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Step))
+                .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
+                .with_edge(InvariantEdge::new("a", "b").with_label("satisfies|FAIL|s.355-305"));
+            let svg = graph_to_isometric_svg(&graph).expect("svg fail");
+            assert!(svg.contains("#dc2626"), "FAIL edge should be red");
+            assert!(svg.contains("stroke-dasharray"), "satisfies edge should be dashed");
+        }
+
+        // Test bare satisfies → blue
+        {
+            let graph = InvariantGraph::new("bare-test")
+                .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Step))
+                .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
+                .with_edge(InvariantEdge::new("a", "b").with_label("satisfies"));
+            let svg = graph_to_isometric_svg(&graph).expect("svg bare");
+            assert!(svg.contains("#3b82f6"), "unqualified satisfies edge should be blue");
+        }
+
+        // Test unknown → yellow
+        {
+            let graph = InvariantGraph::new("unknown-test")
+                .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Step))
+                .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
+                .with_edge(InvariantEdge::new("a", "b").with_label("satisfies: ?"));
+            let svg = graph_to_isometric_svg(&graph).expect("svg unknown");
+            assert!(svg.contains("#eab308"), "UNKNOWN satisfies edge should be yellow");
+        }
     }
 
     #[test]
