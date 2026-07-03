@@ -833,16 +833,22 @@ async fn processes_handler() -> impl IntoResponse {
 // ── Viz endpoints ──────────────────────────────────────────────────────────
 
 /// GET `/api/admin/viz/entangle` — Datum entanglement graph (Mermaid + SVG)
-async fn viz_entangle_handler() -> impl IntoResponse {
-    viz_output("entangle")
+async fn viz_entangle_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("entangle", hide_orphans)
 }
 
 /// GET `/api/admin/viz/task` — Task dependency graph (Mermaid + SVG)
-async fn viz_task_handler() -> impl IntoResponse {
-    viz_output("task")
+async fn viz_task_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("task", hide_orphans)
 }
 
-fn viz_output(subcommand: &str) -> impl IntoResponse {
+fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
     let mermaid = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "mermaid"])
         .output()
@@ -854,6 +860,12 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
             cleaned.replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD").replace("graph RL", "flowchart RL")
         }))
         .unwrap_or_default();
+
+    let mermaid = if hide_orphans && !mermaid.is_empty() {
+        filter_orphans_from_mermaid(&mermaid).to_mermaid()
+    } else {
+        mermaid
+    };
 
     let svg = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "svg"])
@@ -1727,17 +1739,8 @@ function loadKnowledgeGraph() {{
 function toggleOrphans() {{
   var hide = document.getElementById('hide-orphans').checked;
   try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
-  var cy = window._cy;
-  if (cy) {{
-    if (hide) {{
-      cy.nodes().filter(function(n) {{ return n.degree() === 0; }}).style('display', 'none');
-    }} else {{
-      cy.nodes().style('display', 'element');
-    }}
-  }}
   var sel = document.getElementById('viz-select').value;
-  if (sel === 'isometric') return loadGraph('isometric');
-  renderMermaid();
+  if (sel) {{ loadGraph(sel); }}
 }}
 
 // Restore orphan filter on load
@@ -1853,7 +1856,9 @@ function loadGraph(sel) {{
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
     return;
   }}
-  fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
+  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+  var params = hideOrphans ? '?hide_orphans=true' : '';
+  fetch('/api/admin/viz/' + sel + params).then(function(r){{return r.json();}}).then(function(d) {{
     currentVizData = d;
     title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
     status.textContent = (d.mermaid||'').length + ' chars';
