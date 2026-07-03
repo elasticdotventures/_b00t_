@@ -22,7 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::mermaid_to_isometric_svg;
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response};
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
@@ -386,7 +386,7 @@ fn join_mermaid(diagrams: &[String]) -> String {
     format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
 }
 
-/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG)
+/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG + glTF)
 /// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
 async fn viz_isometric_handler() -> impl IntoResponse {
     let output = std::process::Command::new("b00t-cli")
@@ -398,15 +398,29 @@ async fn viz_isometric_handler() -> impl IntoResponse {
         .replace("```mermaid\n", "").replace("\n```", "")
         .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
-    let svg = mermaid_to_isometric_svg(&raw).unwrap_or_else(|e| {
-        format!("<svg><text fill='red'>{}</text></svg>", e.replace('"', "&quot;"))
-    });
-
-    axum::Json(serde_json::json!({
-        "svg": svg,
-        "format": "isometric",
-        "solver": "kasuari/0.4/cassowary"
-    }))
+    match parse_mermaid(&raw) {
+        Ok(graph) => {
+            if let Err(e) = graph.validate() {
+                return axum::Json(serde_json::json!({
+                    "svg": format!("<svg><text fill='red'>validation: {}</text></svg>", e),
+                    "format": "isometric",
+                    "error": e.to_string()
+                }));
+            }
+            graph_to_isometric_response(&graph)
+                .unwrap_or_else(|e| serde_json::json!({
+                    "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                    "format": "isometric",
+                    "error": e
+                }))
+                .into()
+        }
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>parse: {}</text></svg>", e),
+            "format": "isometric",
+            "error": e.to_string()
+        })),
+    }
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)

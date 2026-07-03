@@ -1758,20 +1758,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "b00t-lsp"
-version = "0.9.5"
-dependencies = [
- "anyhow",
- "b00t-datum-core",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toml 1.1.2+spec-1.1.0",
- "tower-lsp",
-]
-
-[[package]]
 name = "b00t-mcp"
 version = "0.9.5"
 dependencies = [
