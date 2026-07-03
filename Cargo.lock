@@ -1812,6 +1812,14 @@ dependencies = [
 
 [[package]]
 name = "b00t-py"
+version = "0.9.4"
+dependencies = [
+ "mermaid-rs-renderer",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "b00t-py"
 version = "0.9.5"
 dependencies = [
  "anyhow",
