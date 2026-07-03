@@ -169,6 +169,9 @@ pub struct McpCommandRegistry {
     commands: Arc<Vec<Box<dyn Fn() -> Tool + Send + Sync>>>,
     executors:
         Arc<HashMap<String, Box<dyn Fn(&HashMap<String, Value>) -> Result<String> + Send + Sync>>>,
+    /// Post-execute hooks keyed by tool name. Called after a successful tool execution.
+    /// Used to fire tools/list_changed notifications when stack load/unload runs.
+    post_hooks: Arc<HashMap<String, Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl McpCommandRegistry {
@@ -176,6 +179,7 @@ impl McpCommandRegistry {
         Self {
             commands: Arc::new(Vec::new()),
             executors: Arc::new(HashMap::new()),
+            post_hooks: Arc::new(HashMap::new()),
         }
     }
 
@@ -271,10 +275,14 @@ impl McpCommandRegistry {
             .collect()
     }
 
-    /// Execute a tool call
+    /// Execute a tool call, then fire any registered post-hook for that tool.
     pub fn execute(&self, tool_name: &str, params: &HashMap<String, Value>) -> Result<String> {
         if let Some(executor) = self.executors.get(tool_name) {
-            executor(params)
+            let result = executor(params)?;
+            if let Some(hook) = self.post_hooks.get(tool_name) {
+                hook();
+            }
+            Ok(result)
         } else {
             anyhow::bail!("Unknown tool: {}", tool_name)
         }
@@ -286,6 +294,7 @@ pub struct McpCommandRegistryBuilder {
     commands: Vec<Box<dyn Fn() -> Tool + Send + Sync>>,
     executors:
         HashMap<String, Box<dyn Fn(&HashMap<String, Value>) -> Result<String> + Send + Sync>>,
+    post_hooks: HashMap<String, Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl McpCommandRegistryBuilder {
@@ -293,7 +302,16 @@ impl McpCommandRegistryBuilder {
         Self {
             commands: Vec::new(),
             executors: HashMap::new(),
+            post_hooks: HashMap::new(),
         }
+    }
+
+    /// Register a callback to fire after successful execution of `tool_name`.
+    ///
+    /// Primary use: fire `notifications/tools/list_changed` after stack load/unload.
+    pub fn add_post_hook(&mut self, tool_name: &str, hook: Arc<dyn Fn() + Send + Sync>) -> &mut Self {
+        self.post_hooks.insert(tool_name.to_string(), hook);
+        self
     }
 
     /// Register a command that implements both McpReflection and McpExecutor
@@ -318,6 +336,7 @@ impl McpCommandRegistryBuilder {
         McpCommandRegistry {
             commands: Arc::new(self.commands),
             executors: Arc::new(self.executors),
+            post_hooks: Arc::new(self.post_hooks),
         }
     }
 }

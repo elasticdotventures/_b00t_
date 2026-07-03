@@ -55,10 +55,34 @@ impl B00tMcpServerRusty {
     pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str, code_mode: bool) -> Result<Self> {
         let working_dir = working_dir.as_ref().to_path_buf();
 
+        // Build the peer Arc first so the notify closure can capture it before self exists.
+        let notification_peer: std::sync::Arc<tokio::sync::Mutex<Option<Peer<RoleServer>>>> =
+            std::sync::Arc::new(tokio::sync::Mutex::new(None));
+
+        let notify_fn: std::sync::Arc<dyn Fn() + Send + Sync> = {
+            let peer_arc = std::sync::Arc::clone(&notification_peer);
+            std::sync::Arc::new(move || {
+                let peer_arc = std::sync::Arc::clone(&peer_arc);
+                tokio::spawn(async move {
+                    let guard = peer_arc.lock().await;
+                    if let Some(peer) = guard.as_ref() {
+                        let notification = ToolListChangedNotification {
+                            method: ToolListChangedNotificationMethod,
+                            extensions: Extensions::new(),
+                        };
+                        let msg = ServerNotification::ToolListChangedNotification(notification);
+                        if let Err(e) = peer.send_notification(msg).await {
+                            tracing::warn!("tools/list_changed notification failed: {e}");
+                        }
+                    }
+                });
+            })
+        };
+
         let registry = if code_mode {
             create_code_mode_registry()
         } else {
-            create_mcp_registry()
+            crate::mcp_tools::create_mcp_registry_with_notify(notify_fn)
         };
 
         Ok(Self {
@@ -66,7 +90,7 @@ impl B00tMcpServerRusty {
             registry,
             chat_runtime: ChatRuntime::global(),
             client_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            notification_peer: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            notification_peer,
         })
     }
 

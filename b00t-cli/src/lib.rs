@@ -2255,6 +2255,7 @@ pub fn load_runtime_datum(name: &str, path: &str) -> Result<RuntimeConfig> {
 }
 
 /// Datum dispatch resolution — what action to take for `b00t <name>`.
+#[derive(Clone)]
 pub enum DatumDispatch {
     /// Launch via sandbox (runtime datum)
     Runtime(RuntimeConfig),
