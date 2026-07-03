@@ -1426,10 +1426,92 @@ impl crate::clap_reflection::McpExecutor for BVerifyCommand {
     }
 }
 
+/// Activate a named b00t hive profile (stack-role binding).
+///
+/// Runs `b00t hive activate=<profile>` which transitions system state, starts
+/// declared services, and enforces resource exclusion groups. After activation,
+/// the MCP server sends a `notifications/tools/list_changed` event so the host
+/// client re-fetches the tool list automatically.
+///
+/// Examples:
+///   b00t_mcp_stack_load("finetune")   → activates finetune.hive.toml, claims GPU
+///   b00t_mcp_stack_load("inference")  → activates inference.hive.toml, starts vLLM
+#[derive(Parser, Clone)]
+pub struct BStackLoadCommand {
+    #[arg(help = "Hive profile name to activate (matches _b00t_/<name>.hive.toml)")]
+    pub profile: String,
+    #[arg(long, help = "Dry-run: print plan without activating")]
+    pub dry_run: bool,
+}
+impl crate::clap_reflection::McpReflection for BStackLoadCommand {
+    fn mcp_tool_name() -> String { "b00t_mcp_stack_load".to_string() }
+    fn command_path() -> Vec<String> { vec!["hive".into(), "activate".into()] }
+}
+impl crate::clap_reflection::McpExecutor for BStackLoadCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let profile = params.get("profile").and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_mcp_stack_load requires profile: string"))?;
+        let dry_run = params.get("dry_run").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let activate_arg = format!("activate={profile}");
+        let mut args = vec!["hive", &activate_arg];
+        if dry_run { args.push("--dry-run"); }
+
+        let output = std::process::Command::new("b00t-cli")
+            .args(&args)
+            .output()
+            .map_err(|e| anyhow::anyhow!("b00t-cli exec failed: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if output.status.success() {
+            Ok(format!("✅ Stack '{profile}' activated\n{stdout}"))
+        } else {
+            anyhow::bail!("hive activate={profile} failed:\n{stderr}")
+        }
+    }
+}
+
+/// Deactivate a named b00t hive profile (releases resources, stops declared services).
+///
+/// Runs `b00t hive deactivate=<profile>` and sends `notifications/tools/list_changed`
+/// so the host client re-fetches the updated tool list.
+#[derive(Parser, Clone)]
+pub struct BStackUnloadCommand {
+    #[arg(help = "Hive profile name to deactivate")]
+    pub profile: String,
+}
+impl crate::clap_reflection::McpReflection for BStackUnloadCommand {
+    fn mcp_tool_name() -> String { "b00t_mcp_stack_unload".to_string() }
+    fn command_path() -> Vec<String> { vec!["hive".into(), "deactivate".into()] }
+}
+impl crate::clap_reflection::McpExecutor for BStackUnloadCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let profile = params.get("profile").and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_mcp_stack_unload requires profile: string"))?;
+
+        let deactivate_arg = format!("deactivate={profile}");
+        let output = std::process::Command::new("b00t-cli")
+            .args(["hive", &deactivate_arg])
+            .output()
+            .map_err(|e| anyhow::anyhow!("b00t-cli exec failed: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        if output.status.success() {
+            Ok(format!("✅ Stack '{profile}' deactivated\n{stdout}"))
+        } else {
+            anyhow::bail!("hive deactivate={profile} failed:\n{stderr}")
+        }
+    }
+}
+
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover + viz + log + verify + DataFramerr (19 tools)
+    // Surface: learn + whoami + status + exec + discover + viz + log + verify + stack_load + stack_unload + DataFramerr (21 tools)
     builder
         .register::<LearnCommand>()
         .register::<WhoamiCommand>()
@@ -1438,7 +1520,9 @@ pub fn create_mcp_registry() -> McpCommandRegistry {
         .register::<BDiscoverCommand>()
         .register::<BVizGenerateCommand>()
         .register::<BLogCommand>()
-        .register::<BVerifyCommand>();
+        .register::<BVerifyCommand>()
+        .register::<BStackLoadCommand>()
+        .register::<BStackUnloadCommand>();
     crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
     builder.build()
 }
@@ -1766,7 +1850,7 @@ mod tests {
         assert!(surface_names.contains(&"learn"),   "learn must be in surface");
         assert!(surface_names.contains(&"exec"),    "exec must be in surface");
         assert!(surface_names.contains(&"discover"),"discover must be in surface");
-        assert_eq!(surface_tools.len(), 19, "surface registry must expose exactly 19 tools (learn+whoami+status+exec+discover+viz+log+verify+DataFramerr)");
+        assert_eq!(surface_tools.len(), 21, "surface registry must expose exactly 21 tools (learn+whoami+status+exec+discover+viz+log+verify+stack_load+stack_unload+DataFramerr)");
 
         // Full registry: all tools for debug/migration
         let full = create_full_mcp_registry();
