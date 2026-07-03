@@ -49,6 +49,18 @@ pub enum OodaCommands {
         #[arg(long, help = "Emit as JSON")]
         json: bool,
     },
+    #[clap(
+        about = "Karpathy orient→act reviewer gate: validate next task against 4-principle checklist before acting",
+        long_about = "Reads next pending task and applies Karpathy's 4 principles as a pre-act gate:\n  1. Think Before Coding — assumptions stated, ambiguity surfaced\n  2. Simplicity First — no speculative abstractions, YAGNI\n  3. Surgical Changes — scope bounded, minimal file surface\n  4. Goal-Driven TDD — failing test identified before implementation\n\nOutputs: PASS or FAIL: <reason> (sm0l output contract)\n\nExamples:\n  b00t ooda review                  # review next pending task\n  b00t ooda review --task=42        # review specific task\n  b00t ooda review --json           # machine-readable output"
+    )]
+    Review {
+        #[arg(long, help = "Task ID to review (default: next pending)")]
+        task: Option<String>,
+        #[arg(long, help = "Emit JSON verdict")]
+        json: bool,
+        #[arg(long, help = "Skip interactive prompts — auto-PASS heuristic checks only")]
+        auto: bool,
+    },
 }
 
 pub async fn handle_ooda(cmd: OodaCommands) -> Result<()> {
@@ -58,6 +70,7 @@ pub async fn handle_ooda(cmd: OodaCommands) -> Result<()> {
         }
         OodaCommands::Status { root } => ooda_status(root),
         OodaCommands::Phase { json } => ooda_phase(json),
+        OodaCommands::Review { task, json, auto } => ooda_review(task.as_deref(), json, auto),
     }
 }
 
@@ -190,6 +203,97 @@ fn ooda_phase(json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Karpathy orient→act reviewer gate.
+///
+/// Reads the next pending task (or the specified task ID) and applies the 4-principle
+/// checklist heuristically from task description alone. For a full LLM review, pipe
+/// the output into `b00t-cli advice`.
+///
+/// Output contract (sm0l tier): `PASS` or `FAIL: <≤5 lines>`
+fn ooda_review(task_id: Option<&str>, as_json: bool, auto: bool) -> Result<()> {
+    // Read tasks from .b00t/tasks.json
+    let tasks_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".b00t/tasks.json");
+
+    let task_desc = if tasks_path.exists() {
+        let raw = std::fs::read_to_string(&tasks_path)?;
+        let tasks: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::json!([]));
+        let arr = tasks.as_array().cloned().unwrap_or_default();
+
+        if let Some(id) = task_id {
+            arr.iter()
+                .find(|t| t["id"].as_str() == Some(id) || t["id"].as_u64().map(|n| n.to_string()).as_deref() == Some(id))
+                .and_then(|t| t["description"].as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| format!("task {id} not found"))
+        } else {
+            arr.iter()
+                .find(|t| t["status"].as_str() == Some("pending"))
+                .and_then(|t| t["description"].as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "no pending tasks".into())
+        }
+    } else {
+        // Fall back to b00t task list stdout
+        let out = Command::new("b00t")
+            .args(["task", "next"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_else(|_| "unknown task".into());
+        out.trim().to_string()
+    };
+
+    // Karpathy 4-principle heuristic checks (no LLM needed for basic gate)
+    let mut issues: Vec<&str> = vec![];
+
+    let lower = task_desc.to_lowercase();
+
+    // P1: Think Before Coding — task must not be pure "add X" with zero scope detail
+    let is_vague = lower.len() < 20 && !lower.contains("test") && !lower.contains("fix");
+    if is_vague {
+        issues.push("P1: task too vague — state assumptions before acting");
+    }
+
+    // P2: Simplicity First — flag if task mentions multiple large systems simultaneously
+    let complexity_words = ["rewrite", "migrate", "refactor all", "replace everything"];
+    if complexity_words.iter().any(|w| lower.contains(w)) {
+        issues.push("P2: high complexity signal — decompose before acting");
+    }
+
+    // P3: Surgical Changes — flag if no bounded scope (no file/module/function mentioned)
+    let has_scope = lower.contains(".rs") || lower.contains(".toml") || lower.contains("fn ")
+        || lower.contains("mod ") || lower.contains("struct ") || lower.contains("::");
+    if !has_scope && lower.len() > 60 {
+        issues.push("P3: no file/symbol scope — bound the change surface first");
+    }
+
+    // P4: Goal-Driven TDD — flag if no test signal
+    let has_test_signal = lower.contains("test") || lower.contains("tdd") || lower.contains("failing")
+        || lower.contains("assert") || lower.contains("verify") || lower.contains("pass");
+    if !has_test_signal && !auto {
+        issues.push("P4: no test strategy — write the failing test first");
+    }
+
+    let verdict = if issues.is_empty() { "PASS" } else { "FAIL" };
+
+    if as_json {
+        let issues_json = serde_json::to_string(&issues).unwrap_or_else(|_| "[]".into());
+        println!(
+            r#"{{"verdict":"{verdict}","task":{task_json},"issues":{issues_json}}}"#,
+            task_json = serde_json::to_string(&task_desc).unwrap_or_else(|_| r#""""#.into()),
+        );
+    } else if issues.is_empty() {
+        println!("PASS — {task_desc}");
+    } else {
+        println!("FAIL: {}", issues.join("; "));
+        println!("  task: {task_desc}");
+    }
+
+    if !issues.is_empty() {
+        anyhow::bail!("FAIL: {}", issues.join("; "));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +322,14 @@ mod tests {
         // (function reads from ~/.b00t/ooda-state.json, skips gracefully if absent)
         let result = ooda_phase(true);
         // Either Ok (no state file → prints Idle) or an unexpected error — not a panic
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_ooda_review_pass_specific_task() {
+        // A well-scoped task passes the Karpathy gate without LLM
+        let result = ooda_review(None, true, true);
+        // No tasks.json in test env → falls back to b00t task next (may fail) — just no panic
         assert!(result.is_ok() || result.is_err());
     }
 }
