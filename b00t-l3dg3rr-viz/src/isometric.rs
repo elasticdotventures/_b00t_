@@ -678,6 +678,40 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
     Ok(response)
 }
 
+// ════════ mmdr (mermaid-rs-renderer) native adapter — feature-gated ════════
+
+#[cfg(feature = "mermaid-native")]
+pub use mermaid_native::*;
+
+#[cfg(feature = "mermaid-native")]
+mod mermaid_native {
+    use crate::{InvariantEdge, InvariantGraph, InvariantNode};
+
+    pub fn parse_mermaid_mmdr(text: &str) -> Result<InvariantGraph, String> {
+        let parsed =
+            mermaid_rs_renderer::parse_mermaid_strict(text).map_err(|e| e.to_string())?;
+        let mut graph = InvariantGraph::new("mmdr");
+        for (id, node) in &parsed.graph.nodes {
+            graph = graph.with_node(InvariantNode::new(
+                id.clone(),
+                node.label.clone(),
+                super::role_from_label(&node.label),
+            ));
+        }
+        for edge in &parsed.graph.edges {
+            graph = graph.with_edge(
+                InvariantEdge::new(edge.from.clone(), edge.to.clone())
+                    .with_label(edge.label.clone().unwrap_or_default()),
+            );
+        }
+        Ok(graph)
+    }
+
+    pub fn render_mermaid_native(text: &str) -> Result<String, String> {
+        mermaid_rs_renderer::render(text).map_err(|e| e.to_string())
+    }
+}
+
 fn base64_encode(input: &str) -> String {
     let chars: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let bytes = input.as_bytes();
