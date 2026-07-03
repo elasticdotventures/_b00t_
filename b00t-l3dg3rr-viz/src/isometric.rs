@@ -810,7 +810,19 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
     }
 
     for (layer, ids) in &layer_nodes {
+        // Anchor the first node in each layer with a REQUIRED x-position.
+        // Without this, conflicting WEAK preferences create multiple valid
+        // solutions (push left vs push right) and the solver picks based on
+        // internal variable-ID ordering — which varies per process invocation.
+        if let Some(first_vars) = ids.first().and_then(|id| node_vars.get(id)) {
+            let anchor_x = (*layer as f64) * 0.5 * NODE_SPACING;
+            solver
+                .add_constraint(first_vars.x | EQ(Strength::REQUIRED) | anchor_x)
+                .map_err(|e| format!("constraint error: {e:?}"))?;
+        }
+
         for (i, id) in ids.iter().enumerate() {
+            if i == 0 { continue; }
             if let Some(vars) = node_vars.get(id) {
                 let pref_x = (*layer as f64) * 0.5 * NODE_SPACING + i as f64 * NODE_SPACING;
                 solver
@@ -824,7 +836,9 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
                 let a_vars = &node_vars[&ids[i]];
                 let b_vars = &node_vars[&ids[j]];
                 solver
-                    .add_constraint((b_vars.x - a_vars.x) | GE(Strength::STRONG) | MIN_X_DIST)
+                    .add_constraint(
+                        (b_vars.x - a_vars.x) | GE(Strength::REQUIRED) | MIN_X_DIST,
+                    )
                     .map_err(|e| format!("constraint error: {e:?}"))?;
             }
         }
