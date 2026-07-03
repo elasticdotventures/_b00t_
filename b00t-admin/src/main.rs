@@ -853,7 +853,7 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
 <script>
-window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
+window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mermaid-rs-renderer...</text></svg>'; }};
 window._wasmLoadStart = Date.now();
 (async function() {{
   var wasmUrl = '/wasm/wasm/mermaid_bg.wasm';
@@ -884,8 +884,8 @@ window._wasmLoadStart = Date.now();
     await m.default();
     window._mermaidReady = true;
     window._mermaidRender = m.render_mermaid;
-    console.log('mmdr WASM ready (' + ((Date.now()-window._wasmLoadStart)/1000).toFixed(1) + 's)');
-  }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
+    console.log('mermaid-rs-renderer ready (' + ((Date.now()-window._wasmLoadStart)/1000).toFixed(1) + 's)');
+  }} catch(e) {{ console.warn('mermaid-rs-renderer:', e.message); }}
 }})();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
@@ -1518,7 +1518,6 @@ document.addEventListener('keydown', function(e) {{
 }});
 
 // ════════ Mermaid Init (WASM) ════════
-(async function(){{ try {{ await window._mermaidInit(); console.log('mmdr WASM ready'); }} catch(e){{ console.warn('mmdr WASM:', e); }} }})();
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
