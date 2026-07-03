@@ -1752,9 +1752,7 @@ dependencies = [
 name = "b00t-isometric-wasm"
 version = "0.9.5"
 dependencies = [
- "blake3",
  "kasuari",
- "mermaid-rs-renderer",
  "serde",
  "serde_json",
 ]

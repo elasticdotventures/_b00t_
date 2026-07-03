@@ -12,16 +12,7 @@ categories = ["visualization", "data-structures"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 kasuari = "0.4"
-mermaid-rs-renderer = { version = "0.3", default-features = false, optional = true }
-
-[features]
-default = []
-mermaid-native = ["dep:mermaid-rs-renderer"]
-
-[dev-dependencies]
-blake3 = "1.8"
 
 [lints]
 workspace = true
