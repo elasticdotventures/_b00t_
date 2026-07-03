@@ -858,7 +858,8 @@ window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Load
 (async function() {{
   try {{
     var m = await import('/wasm/wasm/b00t_mermaid.js');
-    window._mermaidInit = m.default;
+    await m.default();
+    window._mermaidInit = function() {{ return Promise.resolve(); }};
     window._mermaidRender = m.render_mermaid;
     console.log('mmdr WASM ready');
   }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
