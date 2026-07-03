@@ -14,6 +14,11 @@ categories = ["visualization", "data-structures"]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 kasuari = "0.4"
+mermaid-rs-renderer = { version = "0.3", default-features = false, optional = true }
+
+[features]
+default = []
+mermaid-native = ["dep:mermaid-rs-renderer"]
 
 [lints]
 workspace = true
