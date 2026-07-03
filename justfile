@@ -2646,7 +2646,7 @@ js-check:
 cdp-check url="http://localhost:31337/":
     bash scripts/b00t-cdp-check.sh {{url}}
 
-# 🚀 Full deploy: test → build → restart → verify
+# 🚀 Full deploy: test → build → restart → verify → e2e
 deploy:
     @echo "🥾 Deploying..."
     cargo test -p b00t-admin -- html_sanity
@@ -2658,6 +2658,8 @@ deploy:
     @bash scripts/b00t-js-check.sh
     @echo "  jsdom..."
     @bash scripts/b00t-jsdom-test.sh 2>/dev/null || echo "  ⚠️  jsdom skipped (install jsdom)"
+    @echo "  e2e graphs..."
+    cargo test -p b00t-admin --test graph_e2e 2>&1 | tail -5
 
 # 🧪 Full visual test suite
 test-visual: jsdom-test playwright-test

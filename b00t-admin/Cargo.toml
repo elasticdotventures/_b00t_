@@ -49,3 +49,6 @@ tokio-stream = "0.1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ureq = { version = "2", features = ["json"] }
