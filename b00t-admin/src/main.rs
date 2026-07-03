@@ -852,7 +852,18 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+window._mermaidInit = function() {{ return Promise.resolve(); }};
+window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
+(async function() {{
+  try {{
+    var m = await import('/wasm/wasm/b00t_mermaid.js');
+    window._mermaidInit = m.default;
+    window._mermaidRender = m.render_mermaid;
+    console.log('mmdr WASM ready');
+  }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
+}})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -1480,10 +1491,8 @@ document.addEventListener('keydown', function(e) {{
   }}
 }});
 
-// ════════ Mermaid Init ════════
-if (typeof mermaid !== 'undefined') {{
-    mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
-}}
+// ════════ Mermaid Init (WASM) ════════
+(async function(){{ try {{ await window._mermaidInit(); console.log('mmdr WASM ready'); }} catch(e){{ console.warn('mmdr WASM:', e); }} }})();
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
@@ -1751,37 +1760,18 @@ function addStatus(type, msg) {{
 function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
-  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-   var raw = currentVizData.mermaid;
-   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-   var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-   var graphs = [stripped];
-   document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
-  startProgress(graphs.length);
-  var html = '';
-  var pending = graphs.length;
-  var errors = 0;
-  graphs.forEach(function(g, idx) {{
-    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
-    try {{
-      mermaid.render(graphId, g).then(function(result) {{
-        html += '<div class="fade-in" style="margin-bottom:16px;">' + result.svg + '</div>';
-        pending--;
-        var done = graphs.length - pending;
-        updateProgress(done, graphs.length, 'Graph ' + (idx+1) + ' rendered');
-        if (pending === 0) {{
-          target.innerHTML = html;
-          if (errors) addStatus('error', errors + ' error(s)');
-          finishProgress();
-        }}
-      }}).catch(function(e) {{
-        errors++; pending--;
-        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
-        addStatus('error', 'Graph ' + (idx+1) + ' failed: ' + e.message);
-        if (pending === 0) {{ target.innerHTML = html; finishProgress(); }}
-      }});
-    }} catch(e) {{ errors++; pending--; addStatus('error', 'Exception: ' + e.message); if (pending === 0) {{ target.innerHTML = html; finishProgress(); }} }}
-  }});
+  var raw = currentVizData.mermaid;
+  if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
+  if (!window._mermaidRender) {{ target.innerHTML = '<div style="color:#eab308;padding:20px;">WASM module loading...</div>'; return; }}
+  try {{
+    var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+    var svg = window._mermaidRender(stripped);
+    target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
+    document.getElementById('viz-status').textContent = 'WASM rendered · ' + (raw||'').length + ' chars';
+  }} catch(e) {{
+    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">' + e.message + '</div>';
+    addStatus('error', 'Mermaid render failed: ' + e.message);
+  }}
 }}
 
 function loadGraph(sel) {{
@@ -2113,7 +2103,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("mermaid.min.js"));
+        assert!(h.contains("b00t_mermaid.js"));
         assert!(h.contains("cytoscape.min.js"));
     }
 
