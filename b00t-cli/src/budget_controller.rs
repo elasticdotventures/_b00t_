@@ -284,6 +284,116 @@ pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &
     }
 }
 
+/// GPU-aware ch0nky model router.
+///
+/// Checks local GPU free memory and selects the appropriate ch0nky model endpoint:
+/// - GPU free ≥ 4000 MB → local Qwen3-Coder-30B on vLLM (cheap, fast)
+/// - GPU free < 4000 MB → Fable 5 via Anthropic API (cloud burst, tool-use optimized)
+///
+/// Callers set the returned env vars before spawning sub-agents:
+/// ```text
+/// B00T_AI_CH0NKY_MODEL=<model>  B00T_AI_CH0NKY_BASE=<base_url>
+/// ```
+#[derive(Debug, Clone)]
+pub struct ChonkyModelGate {
+    /// Threshold below which we fall back to Fable 5 (default: LOCAL_GPU_FREE_MB_GATE)
+    pub gpu_threshold_mb: u32,
+    /// Local vLLM model name (Qwen3-Coder-30B)
+    pub local_model: String,
+    /// Local vLLM base URL
+    pub local_base: String,
+    /// Fable 5 model id for Anthropic fallback
+    pub fable_model: String,
+    /// Anthropic API base URL
+    pub fable_base: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChonkyModelSelection {
+    pub model: String,
+    pub base_url: String,
+    pub tier_source: ChonkyTierSource,
+    pub gpu_free_mb: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChonkyTierSource {
+    LocalVllm,     // GPU free — use local Qwen3-Coder
+    FableFallback, // GPU claimed — burst to Fable 5
+    EnvOverride,   // B00T_AI_CH0NKY_MODEL set explicitly in environment
+}
+
+impl Default for ChonkyModelGate {
+    fn default() -> Self {
+        Self {
+            gpu_threshold_mb: 4000,
+            local_model: "Qwen/Qwen3-Coder-30B-Instruct".into(),
+            local_base: "http://localhost:8000/v1".into(),
+            fable_model: "claude-fable-5".into(),
+            fable_base: "https://api.anthropic.com/v1".into(),
+        }
+    }
+}
+
+impl ChonkyModelGate {
+    /// Select ch0nky model based on GPU availability.
+    ///
+    /// Checks `B00T_AI_CH0NKY_MODEL` env var first (explicit override wins).
+    /// Falls back to GPU probe → local or Fable 5.
+    pub fn select(&self) -> ChonkyModelSelection {
+        // Env override takes precedence
+        if let Ok(m) = std::env::var("B00T_AI_CH0NKY_MODEL") {
+            let base = std::env::var("B00T_AI_CH0NKY_BASE").unwrap_or_else(|_| self.local_base.clone());
+            return ChonkyModelSelection {
+                model: m,
+                base_url: base,
+                tier_source: ChonkyTierSource::EnvOverride,
+                gpu_free_mb: None,
+            };
+        }
+
+        // Probe GPU
+        let gpu_free_mb = crate::hive::SystemSnapshot::capture()
+            .ok()
+            .and_then(|s| s.gpu_free_mb);
+
+        let is_local_available = gpu_free_mb.map(|mb| mb >= self.gpu_threshold_mb).unwrap_or(false);
+
+        if is_local_available {
+            ChonkyModelSelection {
+                model: self.local_model.clone(),
+                base_url: self.local_base.clone(),
+                tier_source: ChonkyTierSource::LocalVllm,
+                gpu_free_mb,
+            }
+        } else {
+            ChonkyModelSelection {
+                model: self.fable_model.clone(),
+                base_url: self.fable_base.clone(),
+                tier_source: ChonkyTierSource::FableFallback,
+                gpu_free_mb,
+            }
+        }
+    }
+
+    /// Emit shell export lines for the selected model (for eval in shell scripts).
+    pub fn export_env(&self, sel: &ChonkyModelSelection) -> String {
+        format!(
+            "export B00T_AI_CH0NKY_MODEL={} B00T_AI_CH0NKY_BASE={}",
+            shlex_quote(&sel.model),
+            shlex_quote(&sel.base_url),
+        )
+    }
+}
+
+fn shlex_quote(s: &str) -> String {
+    if s.chars().all(|c| c.is_alphanumeric() || "-_:/=.".contains(c)) {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,5 +502,46 @@ mod tests {
         assert_eq!(deserialized.spent_today, state.spent_today);
         assert_eq!(deserialized.jobs_completed, state.jobs_completed);
         assert_eq!(deserialized.status, state.status);
+    }
+
+    #[test]
+    fn test_ch0nky_gate_env_override() {
+        // When B00T_AI_CH0NKY_MODEL is set, EnvOverride wins regardless of GPU state
+        unsafe { std::env::set_var("B00T_AI_CH0NKY_MODEL", "test-model") };
+        unsafe { std::env::set_var("B00T_AI_CH0NKY_BASE", "http://test:8000/v1") };
+        let gate = ChonkyModelGate::default();
+        let sel = gate.select();
+        assert_eq!(sel.tier_source, ChonkyTierSource::EnvOverride);
+        assert_eq!(sel.model, "test-model");
+        assert_eq!(sel.base_url, "http://test:8000/v1");
+        unsafe { std::env::remove_var("B00T_AI_CH0NKY_MODEL") };
+        unsafe { std::env::remove_var("B00T_AI_CH0NKY_BASE") };
+    }
+
+    #[test]
+    fn test_ch0nky_gate_fable_fallback_when_gpu_unavailable() {
+        // No GPU detected (SystemSnapshot returns None) → fable fallback
+        unsafe { std::env::remove_var("B00T_AI_CH0NKY_MODEL") };
+        let gate = ChonkyModelGate {
+            gpu_threshold_mb: u32::MAX, // force fallback by setting impossible threshold
+            ..ChonkyModelGate::default()
+        };
+        let sel = gate.select();
+        assert_eq!(sel.tier_source, ChonkyTierSource::FableFallback);
+        assert_eq!(sel.model, "claude-fable-5");
+    }
+
+    #[test]
+    fn test_ch0nky_gate_export_env() {
+        let gate = ChonkyModelGate::default();
+        let sel = ChonkyModelSelection {
+            model: "claude-fable-5".into(),
+            base_url: "https://api.anthropic.com/v1".into(),
+            tier_source: ChonkyTierSource::FableFallback,
+            gpu_free_mb: Some(1000),
+        };
+        let env_str = gate.export_env(&sel);
+        assert!(env_str.contains("B00T_AI_CH0NKY_MODEL=claude-fable-5"));
+        assert!(env_str.contains("B00T_AI_CH0NKY_BASE=https://api.anthropic.com/v1"));
     }
 }
