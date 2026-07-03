@@ -12,6 +12,7 @@ categories = ["visualization", "data-structures"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 kasuari = "0.4"
 
 [lints]

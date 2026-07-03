@@ -1529,6 +1529,7 @@ version = "0.9.4"
 dependencies = [
  "kasuari",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

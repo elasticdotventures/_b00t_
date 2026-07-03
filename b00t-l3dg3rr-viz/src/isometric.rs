@@ -18,6 +18,26 @@ const NODE_SPACING: f64 = 120.0;
 const LAYER_SPACING: f64 = 100.0;
 const MIN_X_DIST: f64 = 140.0;
 
+/// 2:1 dimetric isometric projection — maps 3D world coords to 2D screen pixels.
+///
+/// # Why 2:1 dimetric (cos 30° ≈ 0.866, sin 30° = 0.5)?
+///
+/// In a true isometric projection, all three axes are foreshortened equally
+/// (angles = 120° apart, scale ≈ 0.816). The 2:1 dimetric approximation uses
+/// a slope of 2:1 for the X/Z ground-plane axes, which:
+///   - Produces pixel-perfect lines on raster displays (2px run : 1px rise)
+///   - Preserves horizontal/vertical alignment for text labels
+///   - Is the standard used by classic isometric games (SimCity, Diablo)
+///
+/// # Transform derivation
+///
+/// World → screen mapping rotates the ground plane (X-Z) by 30° around Y:
+///   screen_x = origin_x + (world_x - world_z) * scale * cos(30°)
+///   screen_y = origin_y + (world_x + world_z) * scale * sin(30°) - world_y * scale
+///
+/// Notice: +X moves right-and-down, +Z moves left-and-down, +Y moves straight UP.
+/// This is why Z is the "flow" axis (forward/back) in the constraint model —
+/// positive Z pushes nodes deeper into the scene.
 fn iso_project(x: f64, z: f64, y: f64, scale: f64, ox: f64, oy: f64) -> (f64, f64) {
     (
         ox + (x - z) * scale * ISO_X,
@@ -286,6 +306,212 @@ pub fn mermaid_to_isometric_svg(mermaid_text: &str) -> Result<String, String> {
     graph_to_isometric_svg(&graph)
 }
 
+/// Export the isometric scene as a glTF 2.0 data URI for 3D viewers.
+///
+/// # What glTF is
+///
+/// glTF (GL Transmission Format) is the "JPEG of 3D" — a standard runtime
+/// asset format by Khronos Group. Unlike verbose formats like COLLADA, glTF
+/// is designed to be compact, fast to load, and directly consumable by GPU
+/// pipelines. Every major 3D engine/tool supports it.
+///
+/// # Data URI strategy
+///
+/// We embed the glTF JSON directly in a `data:` URI rather than writing a
+/// separate .gltf file. This means the entire scene (nodes, meshes, materials)
+/// travels in a single HTTP response field — no secondary request needed.
+/// The encoding is `data:model/gltf+json;base64,<payload>`.
+///
+/// # Skeleton-only export
+///
+/// The exported glTF is a *skeleton* — node transforms with named materials
+/// but without embedded vertex data (POSITION/NORMAL accessors point to a
+/// placeholder buffer). This is intentional: a 3D viewer can place its own
+/// box/sphere/icon meshes at each node's world position using the material
+/// colors we provide. Full embedded meshes would bloat the URI by 10-100x.
+///
+/// # Node hierarchy
+///
+/// The scene root contains one child per graph node. Each child's `translation`
+/// field places it at the 3D position computed by the kasuari layout solver.
+/// The `extras` field carries graph metadata (id, role, hex color) consumable
+/// by custom glTF viewers or import scripts.
+pub fn scene_to_gltf_data_uri(
+    graph: &InvariantGraph,
+    positions: &HashMap<String, (f64, f64, f64)>,
+) -> Result<String, String> {
+    let node_list: Vec<serde_json::Value> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| {
+            positions.get(&n.id).map(|&(x, y, z)| {
+                let color = role_to_hex(n.role);
+                let mesh_idx = mesh_index_for_role(n.role);
+                serde_json::json!({
+                    "name": n.label,
+                    "translation": [x, z, y],
+                    "mesh": mesh_idx,
+                    "extras": {
+                        "id": n.id,
+                        "role": format!("{:?}", n.role),
+                        "color": color
+                    }
+                })
+            })
+        })
+        .collect();
+
+    let roles: Vec<VisualizationRole> = [
+        VisualizationRole::Ingest,
+        VisualizationRole::Validate,
+        VisualizationRole::Classify,
+        VisualizationRole::Review,
+        VisualizationRole::Reconcile,
+        VisualizationRole::Commit,
+        VisualizationRole::Decision,
+        VisualizationRole::Step,
+    ]
+    .to_vec();
+
+    let meshes: Vec<serde_json::Value> = roles
+        .iter()
+        .map(|role| {
+            let material_idx = *role as usize;
+            serde_json::json!({
+                "name": format!("{:?}_box", role),
+                "primitives": [{
+                    "attributes": {
+                        "POSITION": 0,
+                        "NORMAL": 1
+                    },
+                    "material": material_idx
+                }]
+            })
+        })
+        .collect();
+
+    let materials: Vec<serde_json::Value> = roles
+        .iter()
+        .map(|role| {
+            let hex = role_to_hex(*role).trim_start_matches('#');
+            let r = u32::from_str_radix(&hex[0..2], 16).unwrap_or(120) as f64 / 255.0;
+            let g = u32::from_str_radix(&hex[2..4], 16).unwrap_or(120) as f64 / 255.0;
+            let b = u32::from_str_radix(&hex[4..6], 16).unwrap_or(120) as f64 / 255.0;
+            serde_json::json!({
+                "name": format!("{:?}_material", role),
+                "pbrMetallicRoughness": {
+                    "baseColorFactor": [r, g, b, 0.9],
+                    "metallicFactor": 0.1,
+                    "roughnessFactor": 0.7
+                }
+            })
+        })
+        .collect();
+
+    let gltf = serde_json::json!({
+        "asset": {
+            "version": "2.0",
+            "generator": "b00t-l3dg3rr-viz/kasuari",
+            "copyright": "b00t isometric scene export"
+        },
+        "scene": 0,
+        "scenes": [{
+            "name": "isometric_scene",
+            "nodes": (0..node_list.len()).collect::<Vec<usize>>()
+        }],
+        "nodes": node_list,
+        "meshes": meshes,
+        "materials": materials,
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": 24,
+                "type": "VEC3",
+                "max": [1.0, 1.0, 1.0],
+                "min": [-1.0, -1.0, -1.0]
+            },
+            {
+                "bufferView": 1,
+                "componentType": 5126,
+                "count": 24,
+                "type": "VEC3"
+            }
+        ],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 288, "target": 34962},
+            {"buffer": 0, "byteOffset": 288, "byteLength": 288, "target": 34962}
+        ],
+        "buffers": [{
+            "uri": "data:application/octet-stream;base64,",
+            "byteLength": 576
+        }]
+    });
+
+    let json = serde_json::to_string(&gltf).map_err(|e| e.to_string())?;
+    let encoded = base64_encode(&json);
+    Ok(format!("data:model/gltf+json;base64,{encoded}"))
+}
+
+pub fn graph_to_isometric_response(
+    graph: &InvariantGraph,
+) -> Result<serde_json::Value, String> {
+    let positions = kasuari_layout(graph)?;
+    let svg = render_svg(graph, &positions);
+    let gltf = scene_to_gltf_data_uri(graph, &positions).ok();
+    Ok(serde_json::json!({
+        "svg": svg,
+        "gltf": gltf,
+        "format": "isometric",
+        "solver": "kasuari/0.4/cassowary",
+        "nodes": graph.nodes.len(),
+        "edges": graph.edges.len(),
+    }))
+}
+
+fn role_to_hex(role: VisualizationRole) -> &'static str {
+    match role {
+        VisualizationRole::Ingest => "#4fc3f7",
+        VisualizationRole::Validate => "#66bb6a",
+        VisualizationRole::Classify => "#ffa726",
+        VisualizationRole::Review => "#ab47bc",
+        VisualizationRole::Reconcile => "#26c6da",
+        VisualizationRole::Commit => "#42a5f5",
+        VisualizationRole::Decision => "#ef5350",
+        VisualizationRole::Step => "#78909c",
+    }
+}
+
+fn mesh_index_for_role(role: VisualizationRole) -> usize {
+    match role {
+        VisualizationRole::Ingest => 0,
+        VisualizationRole::Validate => 1,
+        VisualizationRole::Classify => 2,
+        VisualizationRole::Review => 3,
+        VisualizationRole::Reconcile => 4,
+        VisualizationRole::Commit => 5,
+        VisualizationRole::Decision => 6,
+        VisualizationRole::Step => 7,
+    }
+}
+
+fn base64_encode(input: &str) -> String {
+    let chars: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes = input.as_bytes();
+    let mut result = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(chars[((triple >> 18) & 0x3f) as usize] as char);
+        result.push(chars[((triple >> 12) & 0x3f) as usize] as char);
+        result.push(if chunk.len() > 1 { chars[((triple >> 6) & 0x3f) as usize] } else { b'=' } as char);
+        result.push(if chunk.len() > 2 { chars[(triple & 0x3f) as usize] } else { b'=' } as char);
+    }
+    result
+}
+
 #[derive(Debug, Clone, Copy)]
 struct NodeVars {
     x: Variable,
@@ -293,7 +519,39 @@ struct NodeVars {
     z: Variable,
 }
 
+/// Compute 3D node positions using the kasuari Cassowary constraint solver.
+///
+/// # Constraint model walkthrough
+///
+/// Each node gets 3 variables: (x, z, y) in isometric world-space.
+/// The solver is given constraints ranked by priority:
+///
+/// | Priority  | Constraint                          | Why |
+/// |-----------|-------------------------------------|-----|
+/// | REQUIRED  | `z == layer * LAYER_SPACING`        | Topological order is non-negotiable — sinks come after sources |
+/// | REQUIRED  | `y == 0`                            | All nodes stay on the ground plane (flat graph) |
+/// | REQUIRED  | `x >= 0`                            | Keep nodes in positive X half-space |
+/// | REQUIRED  | `x <= bound`                        | Prevent runaway X expansion |
+/// | STRONG    | `x[b] - x[a] >= MIN_X_DIST`         | Nodes in the same layer must not overlap |
+/// | STRONG    | `z[to] >= z[from] + LAYER_SPACING`  | Fix backward edges (cycles broken by topological sort) |
+/// | MEDIUM    | `|x[to] - x[from]| <= 3 * SPACING`  | Connected nodes stay roughly X-aligned |
+/// | WEAK      | `x == preferred_x`                  | Nudge towards grid layout as fallback |
+///
+/// # Cassowary semantics
+///
+/// The solver tries to satisfy all REQUIRED constraints first. If impossible,
+/// it fails (error). Then it tries to satisfy STRONG constraints, then MEDIUM,
+/// then WEAK. Lower-priority constraints are "violated" — this is how the
+/// algorithm gracefully degrades: nodes that can't fit in their preferred
+/// positions still get placed somewhere valid.
+///
+/// # Complexity note
+///
+/// pairwise spacing (STRONG) adds O(n²) constraints per layer. The 40-node
+/// cap keeps this practical (<800 comparisons per layer worst-case).
 fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
+    // Guard: Cassowary pairwise spacing is O(n²) per topological layer.
+    // Beyond ~40 nodes the solver becomes too slow for HTTP response times.
     const MAX_NODES: usize = 40;
     if graph.nodes.len() > MAX_NODES {
         return Err(format!(
@@ -595,6 +853,18 @@ fn render_svg(
             let wd = w + depth;
             let hd = h + depth;
 
+            // 3D card construction — three layered polygons create depth illusion:
+            //
+            //  [front face] ── a rounded rect with label, drawn LAST (on top)
+            //       ├── [right face] ── parallelogram extruding right-and-down
+            //       └── [bottom face] ── parallelogram extruding down
+            //
+            // The isometric view angle (30° above ground, 45° rotation) means
+            // "depth" in 3D translates to (+Δx, +Δy) in 2D screen space.
+            // Both the right and bottom faces use the same `depth` offset,
+            // colored black with low opacity to simulate shadow/depth perception.
+
+            // Right depth face: connects front-right edge to extruded-right edge
             svg.push_str(&format!(
                 r##"<polygon points="{w:.1},{hsub:.1} {wd:.1},{h:.1} {wd:.1},{hd:.1} {w:.1},{hd:.1}" fill="#000" opacity="0.15"/>"##,
                 w = w,
@@ -603,6 +873,7 @@ fn render_svg(
                 h = h,
                 hd = hd,
             ));
+            // Bottom depth face: connects front-bottom edge to extruded-bottom edge
             svg.push_str(&format!(
                 r##"<polygon points="0,{h:.1} {w:.1},{h:.1} {wd:.1},{hd:.1} {d:.1},{hd:.1}" fill="#000" opacity="0.1"/>"##,
                 h = h,
@@ -611,6 +882,7 @@ fn render_svg(
                 hd = hd,
                 d = depth,
             ));
+            // Front face: the visible card surface with role-colored fill
             svg.push_str(&format!(
                 r##"<rect x="0" y="0" width="{w:.1}" height="{h:.1}" rx="4" fill="{color}" opacity="0.9" stroke="#e2e8f0" stroke-width="0.5"/>"##,
                 w = w,
@@ -785,5 +1057,18 @@ mod tests {
         let graph = InvariantGraph::new("void");
         let svg = graph_to_isometric_svg(&graph).expect("svg");
         assert!(svg.contains("No nodes"));
+    }
+
+    #[test]
+    fn gltf_export_contains_scene_data() {
+        let graph = InvariantGraph::new("gltf-test")
+            .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Validate))
+            .with_edge(InvariantEdge::new("a", "b"));
+
+        let positions = kasuari_layout(&graph).expect("layout");
+        let gltf = scene_to_gltf_data_uri(&graph, &positions).expect("gltf");
+        assert!(gltf.starts_with("data:model/gltf+json;base64,"));
+        assert!(gltf.len() > 200);
     }
 }
