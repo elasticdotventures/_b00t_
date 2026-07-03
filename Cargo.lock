@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mermaid-wasm"
-version = "0.9.5"
+version = "0.9.4"
 dependencies = [
  "mermaid-rs-renderer",
  "wasm-bindgen",

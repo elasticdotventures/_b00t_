@@ -865,12 +865,34 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
 <script>
-window._mermaidInit = function() {{ return Promise.resolve(); }};
 window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
 window._wasmLoadStart = Date.now();
 (async function() {{
+  var wasmUrl = '/wasm/wasm/mermaid_bg.wasm';
+  var meter = document.getElementById('mermaid-target');
   try {{
-    var m = await import('/wasm/wasm/b00t_mermaid.js');
+    var resp = await fetch(wasmUrl);
+    var total = parseInt(resp.headers.get('Content-Length') || '5000000');
+    var reader = resp.body.getReader();
+    var received = 0;
+    var chunks = [];
+    while (true) {{
+      var r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value);
+      received += r.value.length;
+      var pct = Math.min(99, Math.round(received / total * 100));
+      var mb = (received / 1048576).toFixed(1);
+      var tmb = (total / 1048576).toFixed(1);
+      if (meter) meter.innerHTML = '<div style=\"display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;\">' +
+        '<div style=\"font-size:13px;margin-bottom:10px;\">Loading Mermaid renderer</div>' +
+        '<div style=\"width:220px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;\"><div style=\"width:'+pct+'%;height:100%;background:#38bdf8;border-radius:3px;transition:width 0.2s;\"></div></div>' +
+        '<div style=\"font-size:10px;margin-top:6px;\">'+mb+' / '+tmb+' MB ('+pct+'%)</div></div>';
+    }}
+    window._wasmBytes = new Blob(chunks);
+  }} catch(e) {{ console.warn('wasm prefetch:', e.message); }}
+  try {{
+    var m = await import('/wasm/wasm/mermaid.js');
     await m.default();
     window._mermaidReady = true;
     window._mermaidRender = m.render_mermaid;
@@ -2127,7 +2149,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("b00t_mermaid.js"));
+        assert!(h.contains("mermaid.js"));
         assert!(h.contains("cytoscape.min.js"));
     }
 
