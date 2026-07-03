@@ -520,6 +520,13 @@ distill file tier="sm0l":
         exit 1
     fi
 
+# Distil ch0nky sub-agent transcript → diff+test output contract enforcement.
+# Called by SubagentStop hook to compress agent output before returning to executive.
+# Input: transcript on stdin. Output: compressed diff+test summary (≤50 lines).
+# 🤓 enforces the ch0nky output contract: diff + test result only; no raw transcripts.
+distill-ch0nky:
+    python3 _b00t_/scripts/distill-ch0nky.py
+
 # Deterministic node snapshot: refresh soul node.* + HW-drift check (P3),
 # then show the compressed node identity line (P2).
 node-snapshot:
