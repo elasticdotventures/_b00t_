@@ -1914,6 +1914,10 @@ async fn main() {
     let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
+            // --help / --version: let clap print and exit 0
+            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+                e.exit();
+            }
             // Datum-driven dispatch: search the datum space for <name>
             if raw_args.len() > 1 {
                 let candidate = &raw_args[1];
