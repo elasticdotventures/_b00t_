@@ -901,3 +901,61 @@ provider-train-list:
 # Cancel a training job
 provider-train-cancel job_id:
     b00t-cli provider job cancel --provider {{ ORCHESTRATOR }} {{ job_id }}
+
+# ── MLflow public tunnel (required for RunPod training) ───────────────────────
+# Exposes local MLflow (NodePort 30803) via Cloudflare Tunnel.
+# Run once before `b00t-cli runpod train`; copy the https URL printed and:
+#   export MLFLOW_TRACKING_URI=https://xxx.trycloudflare.com
+# Keep this terminal open for the duration of training.
+mlflow-tunnel:
+    #!/usr/bin/env bash
+    echo "Starting Cloudflare tunnel → MLflow (port 30803)"
+    echo "Copy the https://xxx.trycloudflare.com URL and:"
+    echo "  export MLFLOW_TRACKING_URI=https://xxx.trycloudflare.com"
+    echo ""
+    cloudflared tunnel --url http://localhost:30803
+
+# ── Local smoke test (5 steps, verifies full pipeline without full training) ──
+# Prerequisites: just ai-finetune::inference-down  (frees GPU)
+# After:         just ai-finetune::inference-up    (restores inference)
+# 🤓 Uses podman + unsloth image — no local Python package installs; same env as RunPod.
+#    --network=host lets the container reach the k8s MLflow NodePort (localhost:30803).
+#    --userns=keep-id: rootless podman bind mount (not --user uid:gid).
+train-smoke-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://localhost:30803}"
+    echo "GPU free before:"
+    nvidia-smi --query-gpu=memory.free --format=csv,noheader
+    echo "MLflow: $MLFLOW_TRACKING_URI"
+    echo ""
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        --userns=keep-id \
+        --network=host \
+        -v "$(pwd):/workspace/b00t:Z" \
+        -v "$(which uv):/usr/local/bin/uv:ro" \
+        -e MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
+        -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}" \
+        -e HF_TOKEN="${HF_TOKEN:-}" \
+        docker.io/unsloth/unsloth:latest \
+        bash -c "uv pip install --system -q mlflow pyyaml datasets trl 2>&1 | tail -3 && \
+                 cd /workspace/b00t && \
+                 python3 fine-tune/train_unsloth.py --config fine-tune/config.yaml --max-steps 5"
+    echo ""
+    echo "✅ smoke-test done — http://localhost:30803"
+
+# Scale down inference to free GPU for local training, then restore after
+inference-down:
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    @echo "⏳ waiting for pods to terminate..."
+    kubectl wait --for=delete pod -l app=ch0nky -n b00t-inference --timeout=60s || true
+    kubectl wait --for=delete pod -l app=sm0l -n b00t-inference --timeout=60s || true
+    nvidia-smi --query-gpu=memory.free --format=csv,noheader
+
+inference-up:
+    kubectl scale deployment ch0nky --replicas=1 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+    @echo "inference restored"

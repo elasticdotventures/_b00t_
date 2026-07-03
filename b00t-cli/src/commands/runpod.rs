@@ -71,6 +71,20 @@ pub enum RunpodCommands {
     },
 }
 
+fn pod_env_vars() -> Vec<runpod::EnvVar> {
+    // Pass secrets from local env to the RunPod pod.
+    // Only includes vars that are actually set and non-empty.
+    ["HF_TOKEN", "MLFLOW_TRACKING_URI", "MLFLOW_EXPERIMENT_NAME"]
+        .iter()
+        .filter_map(|k| {
+            std::env::var(k).ok().filter(|v| !v.is_empty()).map(|v| runpod::EnvVar {
+                key: k.to_string(),
+                value: v,
+            })
+        })
+        .collect()
+}
+
 pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
     use runpod::{CreateOnDemandPodRequest, CreateSpotPodRequest, RunpodClient};
 
@@ -174,13 +188,15 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
 
             let gpu_type = gpu.unwrap_or_else(|| "NVIDIA RTX 4090".to_string());
 
+            // Install uv then use it for all subsequent installs; unsloth image has CUDA+torch+unsloth
             let startup_cmd = format!(
                 "set -euo pipefail; \
-                 apt-get install -y git-lfs >/dev/null 2>&1 || true; \
+                 curl -LsSf https://astral.sh/uv/install.sh | sh; \
+                 export PATH=\"$HOME/.local/bin:$PATH\"; \
+                 uv pip install --system -q mlflow pyyaml datasets trl 2>&1 | tail -3; \
                  git clone --depth=1 https://github.com/elasticdotventures/_b00t_.git /workspace/b00t; \
                  cd /workspace/b00t; \
-                 uv pip install unsloth[colab-new] trl peft accelerate bitsandbytes >/dev/null 2>&1; \
-                 uv run python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
+                 python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
                  echo DONE"
             );
 
@@ -202,6 +218,14 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
             let image = "docker.io/unsloth/unsloth:latest".to_string();
             let bash_args = vec!["bash".to_string(), "-c".to_string(), startup_cmd];
 
+            let env = pod_env_vars();
+            if env.is_empty() {
+                eprintln!("⚠️  HF_TOKEN and MLFLOW_TRACKING_URI not set — adapter won't push to HF and MLflow won't track");
+            } else {
+                let keys: Vec<_> = env.iter().map(|e| e.key.as_str()).collect();
+                println!("env passed to pod: {}", keys.join(", "));
+            }
+
             let pod_id = if spot {
                 let req = CreateSpotPodRequest {
                     name: pod_name.clone(),
@@ -213,6 +237,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     container_disk_in_gb: 80,
                     bid_per_gpu: 0.5,
                     docker_args: Some(bash_args),
+                    env,
                     ..Default::default()
                 };
                 client.create_spot_pod(req).await.context("create_spot_pod failed")?
@@ -226,6 +251,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     gpu_count: Some(1),
                     container_disk_in_gb: Some(80),
                     docker_args: Some(bash_args),
+                    env,
                     ..Default::default()
                 };
                 client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?
