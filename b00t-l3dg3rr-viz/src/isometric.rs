@@ -357,6 +357,12 @@ pub fn filter_orphans(graph: &InvariantGraph) -> InvariantGraph {
     filtered
 }
 
+/// Strip orphan nodes from raw mermaid text.
+pub fn filter_orphans_from_mermaid(mermaid: &str) -> InvariantGraph {
+    let graph = parse_mermaid(mermaid).unwrap_or_else(|_| InvariantGraph::new("empty"));
+    filter_orphans(&graph)
+}
+
 pub fn mermaid_to_isometric_svg(mermaid_text: &str) -> Result<String, String> {
     let graph = parse_mermaid(mermaid_text).map_err(|e| e.to_string())?;
     if let Err(e) = graph.validate() {
