@@ -17,7 +17,8 @@ const ISO_Y: f64 = 0.5; // sin(30°)
 const NODE_SPACING: f64 = 120.0;
 const LAYER_SPACING: f64 = 100.0;
 const MIN_X_DIST: f64 = 140.0;
-const MAX_NODES: usize = 40;
+const MAX_NODES: usize = 80;
+const MAX_SUBGRAPHS: usize = 300;
 
 /// 2:1 dimetric isometric projection — maps 3D world coords to 2D screen pixels.
 ///
@@ -681,7 +682,7 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         .iter()
         .enumerate()
         .filter(|(_, ids)| ids.len() <= MAX_NODES)
-        .take(50)
+        .take(MAX_SUBGRAPHS)
         .map(|(i, ids)| {
             let sub = build_component_subgraph(graph, ids, i);
             let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
