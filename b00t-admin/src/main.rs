@@ -22,6 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
+use b00t_l3dg3rr_viz::isometric::mermaid_to_isometric_svg;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
@@ -386,6 +387,7 @@ fn join_mermaid(diagrams: &[String]) -> String {
 }
 
 /// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG)
+/// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
 async fn viz_isometric_handler() -> impl IntoResponse {
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
@@ -396,19 +398,14 @@ async fn viz_isometric_handler() -> impl IntoResponse {
         .replace("```mermaid\n", "").replace("\n```", "")
         .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
-    // Generate isometric SVG via Python (faster iteration than Rust SVG builder)
-    let svg = std::process::Command::new("python3")
-        .arg("-c")
-        .arg(include_str!("../../scripts/iso_scene.py"))
-        .arg(&raw)
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_else(|| "<svg><text fill='red'>Generation failed</text></svg>".into());
+    let svg = mermaid_to_isometric_svg(&raw).unwrap_or_else(|e| {
+        format!("<svg><text fill='red'>{}</text></svg>", e.replace('"', "&quot;"))
+    });
 
     axum::Json(serde_json::json!({
         "svg": svg,
-        "format": "isometric"
+        "format": "isometric",
+        "solver": "kasuari/0.4/cassowary"
     }))
 }
 

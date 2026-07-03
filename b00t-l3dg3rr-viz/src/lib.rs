@@ -6,11 +6,13 @@
 //! implement or build an [`InvariantGraph`], validate its type invariants, then
 //! render Mermaid or deterministic SVG documentation.
 
+pub mod isometric;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Stable visual category shared by l3dg3rr docs and b00t capability graphs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum VisualizationRole {
     Ingest,
     Validate,

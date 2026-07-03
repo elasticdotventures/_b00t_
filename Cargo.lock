@@ -1151,6 +1151,7 @@ version = "0.9.4"
 dependencies = [
  "axum 0.8.9",
  "b00t-c0re-lib",
+ "b00t-l3dg3rr-viz",
  "chrono",
  "futures",
  "handlebars",
@@ -1526,6 +1527,7 @@ dependencies = [
 name = "b00t-l3dg3rr-viz"
 version = "0.9.4"
 dependencies = [
+ "kasuari",
  "serde",
 ]
 
@@ -6473,6 +6475,17 @@ dependencies = [
  "jiff",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "kasuari"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bde5057d6143cc94e861d90f591b9303d6716c6b9602309150bd068853c10899"
+dependencies = [
+ "hashbrown 0.16.1",
+ "portable-atomic",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
