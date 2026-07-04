@@ -7,6 +7,7 @@
 //! render Mermaid or deterministic SVG documentation.
 
 pub mod isometric;
+pub mod artifact;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
