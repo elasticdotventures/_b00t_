@@ -19,6 +19,8 @@ name = "operator"
 type = "agent"
 hint = "Operator agent — scouts, recruits, trains, and registers agents into hive crew; executive's talent acquisition and training arm"
 
+entangled_mcp = ["b00t-mcp.mcp", "irontology-mcp.mcp", "brave-search.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 

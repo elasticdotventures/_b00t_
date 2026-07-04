@@ -3,6 +3,8 @@ name = "crw"
 type = "mcp"
 hint = "CRW — 6MB Rust web scraper. Self-hosted, no Docker, 85ms cold start."
 
+entangled_cli = ["crw.cli"]
+
 # 🤓 crw = "crawl". Single binary, embeds HTTP client — no Chrome/headless browser.
 #    Two modes: embedded (local, no API key) and cloud (fastcrw.com, adds web search).
 #    Comparison: Firecrawl self-hosted (4GB, 5 containers, 30s cold) vs CRW (6MB, 0, 85ms).

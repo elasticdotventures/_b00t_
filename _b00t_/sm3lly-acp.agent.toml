@@ -5,6 +5,8 @@ name = "sm3lly-acp"
 type = "agent"
 hint = "Remote sm3llsl1k3s0ld3r solar+battery node route for ch0nky Qwen36 ACP delegation over NATS"
 
+entangled_mcp = ["b00t-mcp.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 

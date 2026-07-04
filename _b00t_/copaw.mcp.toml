@@ -2,6 +2,8 @@
 name = "copaw"
 type = "mcp"
 hint = "Copaw memory provider - PDF, chat, agent memory via MCP. Preferred b00t memory backend when available. See: https://copaw.agentscope.io/docs/memory"
+
+entangled_cli = ["copaw.cli"]
 desires = "latest"
 
 install = '''

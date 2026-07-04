@@ -2,6 +2,8 @@
 name = "irontology-mcp"
 type = "mcp"
 hint = "Enterprise knowledge ingestion and ontology discovery MCP server"
+
+entangled_cli = ["irontology-mcp.cli"]
 requires_sudo = false
 
 [[b00t.mcp.stdio]]

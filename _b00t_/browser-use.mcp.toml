@@ -3,6 +3,8 @@ name = "browser-use"
 type = "mcp"
 hint = "Browser automation MCP server for web interactions"
 
+entangled_cli = ["browser-use.cli"]
+
 [[b00t.gate]]
 env = "OPENAI_API_KEY"
 hint = "Set to real key for OpenAI, or any non-empty string (e.g. 'local') when using vLLM via OPENAI_BASE_URL"
