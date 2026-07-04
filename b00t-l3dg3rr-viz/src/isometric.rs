@@ -738,7 +738,7 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         indexed
             .into_iter()
             .take(MAX_SUBGRAPHS)
-            .map(|(i, ids, count)| {
+            .map(|(i, ids, _count)| {
             let sub = build_component_subgraph(graph, &ids, i);
             let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
                 format!("<svg><text fill='red'>{}</text></svg>", e)
