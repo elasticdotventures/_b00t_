@@ -142,10 +142,12 @@
 .b00t/ralph/loop.log
 .b00t/ralph/status.json
 .b00t/tasks.json
+.b00t/last-delegate-token
 .bugs/*.jsonl
 .cache
 .cache/
 .cargo/*
+**/.cargo/*
 .claude-plugin/recipes/mcp-servers/*.json
 .claude/
 .claude/*
@@ -233,6 +235,10 @@ coverage
 coverage.xml
 db.sqlite3
 db.sqlite3-journal
+# b00t soul SQLite backend — runtime artifact, not source
+soul.db
+soul.db-shm
+soul.db-wal
 dev-debug.log
 develop-eggs/
 dist

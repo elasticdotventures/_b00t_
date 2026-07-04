@@ -20,8 +20,11 @@ setup:
     @echo "Setting up environment for KiCad in a containerized toolchain."
     # Any initialization logic here
 
+# 🤓 run-kicad/build both use --rm, so containers are already auto-removed
+#    on exit — a bare `docker system prune -f` here would also wipe other
+#    projects' dangling images/build cache on the host for no benefit to
+#    this tool specifically.
 # Custom clean-up function (if needed)
 clean:
-    @echo "Cleaning up container instances or temp files..."
-    docker system prune -f
+    @echo "No persistent containers to clean — run-kicad/build already use --rm."
 

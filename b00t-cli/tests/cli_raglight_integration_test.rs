@@ -6,6 +6,7 @@ use tempfile::TempDir;
 
 mod common;
 
+#[allow(dead_code)]
 fn setup_temp_dir() -> TempDir {
     tempfile::tempdir().expect("Failed to create temp directory")
 }

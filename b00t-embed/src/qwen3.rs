@@ -428,8 +428,6 @@ fn detect_safetensors_dtype(path: &std::path::Path) -> Result<DType> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_qwen3_composable_new_exists() {
         // Verify the struct exists and has the right API shape
