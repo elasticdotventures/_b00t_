@@ -214,15 +214,16 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
 
             let gpu_type = gpu.unwrap_or_else(|| "NVIDIA RTX 4090".to_string());
 
-            // Install uv then use it for all subsequent installs; unsloth image has CUDA+torch+unsloth
+            // unsloth:latest uses supervisord entrypoint but RunPod overrides CMD with docker_args.
+            // Python is in /opt/venv; uv is installed via astral installer for clean package mgmt.
             let startup_cmd = format!(
                 "set -euo pipefail; \
-                 curl -LsSf https://astral.sh/uv/install.sh | sh; \
+                 curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -2; \
                  export PATH=\"$HOME/.local/bin:$PATH\"; \
-                 uv pip install --system -q mlflow pyyaml datasets trl 2>&1 | tail -3; \
+                 uv pip install --python /opt/venv/bin/python3 -q 'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -3; \
                  git clone --depth=1 https://github.com/elasticdotventures/_b00t_.git /workspace/b00t; \
                  cd /workspace/b00t; \
-                 python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
+                 /opt/venv/bin/python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
                  echo DONE"
             );
 
