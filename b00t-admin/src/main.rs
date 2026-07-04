@@ -1853,9 +1853,6 @@ function loadGraph(sel) {{
       var depthInfo = '';
       if (d.depth) {{
         depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
-      if (d.depth.extended + d.depth.historical > 0) {{
-        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
-      }}
       }}
       status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
       setTimeout(function(){{
@@ -1995,8 +1992,18 @@ var ISO_ROLES = [
 
 function buildIsoLegend(container) {{
   var used = new Set();
-  container.querySelectorAll('[data-node-role]').forEach(function(n){{ used.add(n.getAttribute('data-node-role')); }});
-  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
+  var depthCounts = {{surface:0, extended:0, historical:0}};
+  container.querySelectorAll('[data-context-depth]').forEach(function(n){{
+    var d = n.getAttribute('data-context-depth');
+    if (depthCounts[d] !== undefined) depthCounts[d]++;
+    used.add(n.getAttribute('data-node-role'));
+  }});
+  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;flex-direction:column;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px;">';
+  if (depthCounts.surface > 0) html += '<span style="background:#334155;color:#e2e8f0;padding:2px 6px;border-radius:3px;font-size:9px;opacity:1.0;" title="Directly connected nodes">Surface '+depthCounts.surface+'</span>';
+  if (depthCounts.extended > 0) html += '<span style="background:#334155;color:#94a3b8;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.5;" onclick="toggleDepth(this,event)" title="Orphan tools — click to show">Extended '+depthCounts.extended+'</span>';
+  if (depthCounts.historical > 0) html += '<span style="background:#334155;color:#64748b;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.2;" title="Reference docs — click show all">Historical '+depthCounts.historical+'</span>';
+  html += '</div><div style="display:flex;flex-wrap:wrap;gap:3px;">';
   ISO_ROLES.forEach(function(r) {{
     if (!used.has(r.r)) return;
     html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
@@ -2015,18 +2022,19 @@ function toggleDepth(link, e) {{
   link.textContent = _showAllDepth ? 'hide extended' : 'show all';
   var svg = document.querySelector('#mermaid-target svg');
   if (!svg) return;
-  var connected = new Set();
-  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
-    connected.add(el.getAttribute('data-edge-from'));
-    connected.add(el.getAttribute('data-edge-to'));
-  }});
   svg.querySelectorAll('.iso-node').forEach(function(n) {{
-    var nid = n.getAttribute('data-node-id');
-    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
+    var d = n.getAttribute('data-context-depth');
+    if (d === 'surface') return;
+    n.style.display = _showAllDepth ? '' : 'none';
   }});
   svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
     var f = el.getAttribute('data-edge-from');
-    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
+    var t = el.getAttribute('data-edge-to');
+    var fromN = svg.querySelector('[data-node-id=\"'+f+'\"]');
+    var toN = svg.querySelector('[data-node-id=\"'+t+'\"]');
+    var fromD = fromN ? fromN.getAttribute('data-context-depth') : 'surface';
+    var toD = toN ? toN.getAttribute('data-context-depth') : 'surface';
+    el.setAttribute('opacity', (_showAllDepth || (fromD === 'surface' && toD === 'surface')) ? '0.5' : '0.05');
   }});
 }}
 

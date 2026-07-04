@@ -1088,6 +1088,7 @@ fn render_svg(
     graph: &InvariantGraph,
     positions: &HashMap<String, (f64, f64, f64)>,
 ) -> String {
+    let depth_map = ContextDepth::classify(graph);
     let scale = 0.6;
     let ox = 400.0;
     let oy = 80.0;
@@ -1198,10 +1199,13 @@ fn render_svg(
             };
 
             let layer = positions.get(&node.id).map(|&(_, _, z)| z as i32).unwrap_or(0);
+            let cdepth = depth_map.get(&node.id).copied().unwrap_or(ContextDepth::Surface);
+            let depth_str = match cdepth { ContextDepth::Surface => "surface", ContextDepth::Extended => "extended", ContextDepth::Historical => "historical" };
+            let opacity = match cdepth { ContextDepth::Surface => "1", ContextDepth::Extended => "0.5", ContextDepth::Historical => "0.2" };
             svg.push_str(&format!(
-                r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}">"##,
+                r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}" data-context-depth="{}" opacity="{}">"##,
                 sx - hw, sy - hh,
-                escape_xml(&node.id), node.role.as_str(), layer
+                escape_xml(&node.id), node.role.as_str(), layer, depth_str, opacity
             ));
 
             let w = hw * 2.0;
