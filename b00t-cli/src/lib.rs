@@ -100,6 +100,7 @@ pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_database;
 pub mod datum_docker;
+pub mod datum_guard;
 pub mod datum_gemini;
 pub mod training_examples;
 pub mod datum_job;
@@ -702,6 +703,14 @@ pub struct BootDatum {
     // Orchestration / stack / job / skill metadata
     pub orchestration: Option<OrchestrationConfig>,
     pub stack: Option<serde_json::Value>,
+
+    // Model cache guard — disk-space gate + usage tracking
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_hf_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_size_gb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_size_4bit_gb: Option<f64>,
     pub job: Option<serde_json::Value>,
     pub skill: Option<serde_json::Value>,
 
@@ -1785,7 +1794,7 @@ fn create_mcp_datum_from_json(
         "transport": transport_type
     });
 
-    BootDatum {
+    BootDatum { model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None, 
         name,
         datum_type: Some(DatumType::Mcp),
         hint: hint.or_else(|| server_config.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string())).unwrap_or_else(|| "MCP server".to_string()),
@@ -1878,7 +1887,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 "transport": "httpstream"
             });
 
-            return Ok(BootDatum {
+            return Ok(BootDatum { model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None, 
                 name: name_str,
                 datum_type: Some(DatumType::Mcp),
                 hint: hint
@@ -4203,6 +4212,7 @@ hint = "containers"
             entangled_mcp: None, entangled_ai_models: None, entangled_apis: None,
             entangled_docker: None, entangled_k8s: None, channel_prefix: None,
             depends_on: None, members: None, orchestration: None,
+            model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None,
             stack: None, job: None, skill: None, dsn: None, justfile: None,
             learn: None, lfmf_category: None, usage: None, provides: None,
             protocol: None, implements: None, hook_detect: None,
