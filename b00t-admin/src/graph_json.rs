@@ -4,6 +4,7 @@
 
 use b00t_l3dg3rr_viz::{InvariantEdge, InvariantGraph, InvariantNode, VisualizationRole};
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, ContextDepth, filter_orphans};
+use b00t_l3dg3rr_viz::artifact::curate_orphans;
 use axum::extract::Query;
 use std::collections::HashMap;
 
@@ -11,6 +12,7 @@ pub async fn entangle_json_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl axum::response::IntoResponse {
     let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    let curate = params.get("curate").map(|v| v == "true").unwrap_or(false);
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
@@ -52,9 +54,18 @@ pub async fn entangle_json_handler(
         depth.values().filter(|d| matches!(d, ContextDepth::Historical)).count(),
     );
 
-    axum::Json(serde_json::json!({
+    let mut response = serde_json::json!({
         "nodes": nodes,
         "edges": edges,
         "depth": { "surface": surface, "extended": extended, "historical": historical },
-    }))
+    });
+
+    if curate {
+        let curation = curate_orphans(&nodes, &edges);
+        if let Some(obj) = response.as_object_mut() {
+            obj.insert("curation".to_string(), serde_json::json!(curation));
+        }
+    }
+
+    axum::Json(response)
 }
