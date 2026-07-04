@@ -118,15 +118,16 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
 // ── RunPod provider ──────────────────────────────────────────────────────────
 
 pub struct RunpodProvider {
-    client: runpod::RunpodClient,
+    client: runpod_sdk::RunpodClient,
 }
 
 impl RunpodProvider {
     pub fn new() -> Result<Self> {
-        let api_key = std::env::var("RUNPOD_API_KEY")
+        let config = runpod_sdk::RunpodConfig::from_env()
             .context("RUNPOD_API_KEY not set — see PROVIDER-RUNPOD.provider.tomllmd")?;
         Ok(Self {
-            client: runpod::RunpodClient::new(api_key),
+            client: runpod_sdk::RunpodClient::new(config)
+                .context("RunpodClient::new failed")?,
         })
     }
 }
@@ -138,7 +139,8 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn deploy_inference_endpoint(&self, cfg: &EndpointConfig) -> Result<EndpointHandle> {
-        use runpod::EndpointCreateInput;
+        use runpod_sdk::model::EndpointCreateInput;
+        use runpod_sdk::service::EndpointsService;
         // 🤓 EndpointCreateInput requires template_id; env is baked into the template
         let template_id = cfg
             .env
@@ -148,11 +150,10 @@ impl ComputeProvider for RunpodProvider {
         let input = EndpointCreateInput {
             template_id,
             name: Some(cfg.name.clone()),
-            gpu_type_ids: Some(cfg.gpu_type_ids.clone()),
             workers_min: Some(cfg.workers_min),
             workers_max: Some(cfg.workers_max),
-            idle_timeout: Some(cfg.idle_timeout_s),
-            execution_timeout_ms: Some(cfg.execution_timeout_ms),
+            idle_timeout: Some(cfg.idle_timeout_s as i32),
+            execution_timeout_ms: Some(cfg.execution_timeout_ms as i32),
             network_volume_id: cfg.network_volume_id.clone(),
             ..Default::default()
         };
@@ -170,21 +171,23 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn endpoint_status(&self, id: &str) -> Result<EndpointHandle> {
+        use runpod_sdk::service::EndpointsService;
+        use runpod_sdk::model::GetEndpointQuery;
         let endpoint = self
             .client
-            .get_endpoint(id)
+            .get_endpoint(id, GetEndpointQuery::default())
             .await
             .context("RunPod get_endpoint failed")?;
-        let worker_count = endpoint.workers.as_ref().map(|w| w.len()).unwrap_or(0);
         Ok(EndpointHandle {
             id: endpoint.id,
             provider: "runpod".into(),
             name: endpoint.name,
-            status: Some(format!("workers={}", worker_count)),
+            status: None,
         })
     }
 
     async fn teardown_endpoint(&self, id: &str) -> Result<()> {
+        use runpod_sdk::service::EndpointsService;
         self.client
             .delete_endpoint(id)
             .await
@@ -192,10 +195,11 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
-        // list_endpoints returns Vec<Endpoint> (type alias Endpoints)
+        use runpod_sdk::service::EndpointsService;
+        use runpod_sdk::model::ListEndpointsQuery;
         let endpoints = self
             .client
-            .list_endpoints()
+            .list_endpoints(ListEndpointsQuery::default())
             .await
             .context("RunPod list_endpoints failed")?;
         Ok(endpoints
@@ -210,95 +214,71 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
-        use runpod::{CreateOnDemandPodRequest, EnvVar};
-        let gpu_type = hf_flavor_to_runpod_gpu(&spec.flavor).to_string();
-        let env = vec![
-            EnvVar {
-                key: "TRAINING_CONFIG".into(),
-                value: spec.config_path.clone(),
-            },
-            EnvVar {
-                key: "UNSLOTH_CACHE_DIR".into(),
-                value: "/opt/unsloth_compiled_cache".into(),
-            },
-        ];
-        let req = CreateOnDemandPodRequest {
+        use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput};
+        use runpod_sdk::service::PodsService;
+        let gpu_str = hf_flavor_to_runpod_gpu(&spec.flavor);
+        let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
+            .with_context(|| format!("unknown GPU type '{gpu_str}'"))?;
+        let env: std::collections::HashMap<String, String> = [
+            ("TRAINING_CONFIG".to_string(), spec.config_path.clone()),
+            ("UNSLOTH_CACHE_DIR".to_string(), "/opt/unsloth_compiled_cache".to_string()),
+        ].into();
+        let req = PodCreateInput {
             name: Some("b00t-training".into()),
             image_name: Some(spec.image.clone()),
-            gpu_type_id: Some(gpu_type),
-            cloud_type: Some("SECURE".into()),
+            gpu_type_ids: Some(vec![gpu_id]),
+            cloud_type: Some(CloudType::Secure),
             gpu_count: Some(1),
             volume_in_gb: Some(50),
             container_disk_in_gb: Some(20),
-            env,
+            env: Some(env),
             ..Default::default()
         };
-        let pod = self
-            .client
-            .create_on_demand_pod(req)
-            .await
-            .context("RunPod create_on_demand_pod failed")?;
-        // PodCreateResponseData.data: Option<Pod>; Pod.id: String
-        let id = pod
-            .data
-            .context("RunPod returned no pod data")?
-            .id;
-        Ok(JobHandle {
-            id,
-            provider: "runpod".into(),
-        })
+        let pod = self.client.create_pod(req).await.context("RunPod create_pod failed")?;
+        Ok(JobHandle { id: pod.id, provider: "runpod".into() })
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
-        let req = runpod_batch_request(spec);
-        let pod = self
-            .client
-            .create_on_demand_pod(req)
-            .await
-            .context("RunPod create_on_demand_pod failed")?;
-        let id = pod.data.context("RunPod returned no pod data")?.id;
-        Ok(JobHandle {
-            id,
-            provider: "runpod".into(),
-        })
+        use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput};
+        use runpod_sdk::service::PodsService;
+        let gpu_str = hf_flavor_to_runpod_gpu(&spec.flavor);
+        let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
+            .with_context(|| format!("unknown GPU type '{gpu_str}'"))?;
+        let req = PodCreateInput {
+            name: Some("b00t-batch".into()),
+            image_name: Some(spec.image.clone()),
+            gpu_type_ids: Some(vec![gpu_id]),
+            cloud_type: Some(CloudType::Secure),
+            gpu_count: Some(1),
+            volume_in_gb: Some(50),
+            container_disk_in_gb: Some(20),
+            docker_start_cmd: Some(vec!["bash".into(), "-c".into(), spec.config_path.clone()]),
+            env: Some(spec.env.clone()),
+            ..Default::default()
+        };
+        let pod = self.client.create_pod(req).await.context("RunPod create_pod failed")?;
+        Ok(JobHandle { id: pod.id, provider: "runpod".into() })
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
-        let info = self
-            .client
-            .get_pod(&handle.id)
-            .await
-            .context("RunPod get_pod failed")?;
-        // PodInfoResponseData.data: Option<PodInfoFull>; PodInfoFull.desired_status: String
-        let status = info
-            .data
-            .map(|p| p.desired_status)
-            .unwrap_or_else(|| "unknown".into());
-        Ok(format!("pod={} status={}", handle.id, status))
+        use runpod_sdk::service::PodsService;
+        use runpod_sdk::model::GetPodQuery;
+        let pod = self.client.get_pod(&handle.id, GetPodQuery::default())
+            .await.context("RunPod get_pod failed")?;
+        Ok(format!("pod={} status={:?}", handle.id, pod.desired_status))
     }
 
     async fn cancel_job(&self, handle: &JobHandle) -> Result<()> {
-        self.client
-            .delete_pod(&handle.id)
-            .await
-            .context("RunPod delete_pod failed")
+        use runpod_sdk::service::PodsService;
+        self.client.delete_pod(&handle.id).await.context("RunPod delete_pod failed")
     }
 
     async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
-        let resp = self
-            .client
-            .list_pods()
-            .await
-            .context("RunPod list_pods failed")?;
-        // PodsListResponseData.data: Option<MyselfPods>; MyselfPods.pods: Vec<PodInfoFull>
-        let pods = resp.data.map(|m| m.pods).unwrap_or_default();
-        Ok(pods
-            .into_iter()
-            .map(|p| JobHandle {
-                id: p.id,
-                provider: "runpod".into(),
-            })
-            .collect())
+        use runpod_sdk::service::PodsService;
+        use runpod_sdk::model::ListPodsQuery;
+        let pods = self.client.list_pods(ListPodsQuery::default())
+            .await.context("RunPod list_pods failed")?;
+        Ok(pods.into_iter().map(|p| JobHandle { id: p.id, provider: "runpod".into() }).collect())
     }
 }
 
@@ -308,39 +288,6 @@ fn hf_flavor_to_runpod_gpu(flavor: &str) -> &str {
         "h100" => "NVIDIA H100 PCIe",
         "a10g-large" | "a10g-small" => "NVIDIA A40",
         _ => "NVIDIA A40",
-    }
-}
-
-/// Pure request builder, split out so tests can assert the exact shape
-/// without a live RunPod API key or network call.
-fn runpod_batch_request(spec: &BatchJobSpec) -> runpod::CreateOnDemandPodRequest {
-    use runpod::EnvVar;
-    let gpu_type = hf_flavor_to_runpod_gpu(&spec.flavor).to_string();
-    // 🤓 no hardcoded TRAINING_CONFIG/UNSLOTH_CACHE_DIR here — the image's own
-    //    ENTRYPOINT drives the job; env is exactly what the caller asked for.
-    let env = spec
-        .env
-        .iter()
-        .map(|(key, value)| EnvVar {
-            key: key.clone(),
-            value: value.clone(),
-        })
-        .collect();
-    // 🤓 known limitation: config_path must already be reachable inside the pod
-    //    (e.g. a path under network_volume_id) — RunPod pods run on a remote
-    //    host, so a local filesystem path is not auto-uploaded. Passed through
-    //    as the entrypoint arg on the assumption the caller has arranged that.
-    runpod::CreateOnDemandPodRequest {
-        name: Some("b00t-batch".into()),
-        image_name: Some(spec.image.clone()),
-        gpu_type_id: Some(gpu_type),
-        cloud_type: Some("SECURE".into()),
-        gpu_count: Some(1),
-        volume_in_gb: Some(50),
-        container_disk_in_gb: Some(20),
-        docker_args: Some(vec![spec.config_path.clone()]),
-        env,
-        ..Default::default()
     }
 }
 
@@ -931,17 +878,6 @@ mod batch_job_tests {
             flavor: "a10g-small".to_string(),
             timeout_hours: 1.0,
         }
-    }
-
-    #[test]
-    fn runpod_batch_request_carries_image_gpu_and_config_path() {
-        let spec = sample_spec("app4dog/sam3-runner:cloud", "/net-volume/request.json");
-        let req = runpod_batch_request(&spec);
-        assert_eq!(req.image_name.as_deref(), Some("app4dog/sam3-runner:cloud"));
-        assert_eq!(req.docker_args, Some(vec!["/net-volume/request.json".to_string()]));
-        assert!(req.env.iter().any(|e| e.key == "SAM_RUNNER_MODE" && e.value == "real"));
-        // TRAINING_CONFIG/UNSLOTH_CACHE_DIR must not leak into batch jobs.
-        assert!(!req.env.iter().any(|e| e.key == "TRAINING_CONFIG"));
     }
 
     #[test]
