@@ -10,3 +10,4 @@ just module invocation: Justfile modules (e.g., 'mod b00t') must be invoked from
 
 ---
 🦨 b00t-run-hallucination: The help text says b00t run <name> but b00t run is not a CLI command. It's a hidden shortcut RunDatum that the help text describes as datum dispatch. Should be b00t <name> directly, not b00t run <name>. Fix help text and auto-dispatch.
+datum validation paths: Use absolute paths when validating project-local datum files from recipes; relative paths may resolve as global datum keys.
