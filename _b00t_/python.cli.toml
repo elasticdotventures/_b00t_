@@ -1,5 +1,6 @@
 [b00t]
 name = "python"
+trigger_words = ["python", "pip", "venv", "script", "package"]
 type = "cli"
 desires = "3.12.0"
 hint = "Python 3.12+ programming language - required for modern async features and type hints"

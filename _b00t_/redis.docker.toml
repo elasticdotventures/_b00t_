@@ -1,5 +1,6 @@
 [b00t]
 name = "redis"
+depends_on = ["b00t.cli"]
 type = "docker"
 hint = "Redis in-memory data structure store for caching and message queuing"
 desires = "7-alpine"

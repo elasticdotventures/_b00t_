@@ -6,9 +6,9 @@
 
 [b00t]
 name = "inference-qwen36-27b"
+depends_on = ["inference-qwen36-27b-mtp-podman.hive", "qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 type = "hive_profile"
 hint = "Qwen3.6-27B GGUF on vLLM at :8001 — ch0nky tier; Q4_K_M ~15GB VRAM; RTX 3090"
-depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 Q4_K_M weights ~15GB + vLLM overhead ~2GB + KV cache ~2GB = ~19GB peak

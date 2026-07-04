@@ -1,5 +1,6 @@
 [b00t]
 name = "ollama"
+trigger_words = ["ollama", "inference", "model", "embedding", "local"]
 type = "ai"
 hint = "Self-hosted Ollama server for local AI inference"
 
