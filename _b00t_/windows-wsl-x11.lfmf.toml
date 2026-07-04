@@ -1,0 +1,10 @@
+[b00t]
+name = "windows-wsl-x11"
+type = "lfmf"
+hint = "Windows Terminal has best Emoji support but doesn't support X11 forwarding"
+
+[lfmf]
+lesson = "X11 forwarding from WSL to Windows requires setting DISPLAY=127.0.0.1:0 and using ssh -X to the target host. Windows Terminal does not natively forward X11."
+context = "WSL2 environment on Windows 10/11"
+workaround = "export DISPLAY=127.0.0.1:0 && ssh -X brianh@host"
+tags = ["wsl", "x11", "windows", "display"]
