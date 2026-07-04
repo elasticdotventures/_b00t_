@@ -11,6 +11,9 @@ name = "pi"
 type = "agent"
 desires = "latest"
 hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with opencode via hive stop/start"
+
+entangled_mcp = ["pi-mcp-adapter.mcp", "b00t-mcp.mcp"]
+
 install = "npm install -g @mariozechner/pi-coding-agent@latest"
 update = "npm install -g @mariozechner/pi-coding-agent@latest"
 version = "pi --version"

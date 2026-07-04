@@ -3,6 +3,8 @@ name = "rust-doc"
 type = "mcp"
 hint = "Rust crate documentation via semantic search — b00t vendor submodule. Per-crate MCP server with OpenAI embeddings + cosine similarity RAG"
 
+entangled_cli = ["rust-doc.cli"]
+
 [b00t.learn]
 topic = "rust-docs"
 

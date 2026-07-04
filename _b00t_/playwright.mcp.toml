@@ -3,6 +3,8 @@ name = "playwright"
 type = "mcp"
 hint = "MCP server"
 
+entangled_cli = ["playwright.cli"]
+
 [[b00t.gate]]
 command = "npx"
 

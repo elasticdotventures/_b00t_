@@ -22,6 +22,7 @@ members = [
     "b00t-datum-core",
     "b00t-zellij",
     "b00t-admin",
+    "b00t-mermaid-wasm",
     "crates/ufo-types",
     "b00t-ui-wasm",
 ]

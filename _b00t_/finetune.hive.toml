@@ -2,6 +2,7 @@
 name = "finetune"
 type = "hive_profile"
 hint = "QLoRA fine-tuning mode — stops all inference, frees full GPU for unsloth training"
+depends_on = ["b00t-finetune.cli", "huggingface.cli"]
 
 [b00t.hive.resources]
 # 🤓 unsloth Qwen3-8B 4-bit ≈ 8GB VRAM + 6GB activations; ch0nky headroom margin

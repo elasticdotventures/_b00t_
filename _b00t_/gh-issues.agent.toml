@@ -11,6 +11,8 @@ type = "agent"
 desires = "latest"
 hint = "GitHub issue triage agent — grok-powered integration review; analyzes fit into b00ty-verse; posts structured review comments"
 
+entangled_mcp = ["b00t-mcp.mcp", "grok-guru.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 

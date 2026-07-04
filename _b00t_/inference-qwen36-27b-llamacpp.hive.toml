@@ -8,6 +8,7 @@
 name = "inference-qwen36-27b-llamacpp"
 type = "hive_profile"
 hint = "Qwen3.6-27B GGUF via llamacpp podman at :8001 — GGUF-native, OpenAI-compat server, RTX 3090"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 Q4_K_M -ngl 999 (full GPU): ~15GB VRAM + ~3GB overhead = ~18GB; llamacpp leaner than vLLM

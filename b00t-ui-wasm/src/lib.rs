@@ -11,6 +11,7 @@ mod api;
 mod components;
 mod pages;
 mod sleep;
+mod mermaid;
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::{Outlet, Router, Routable};

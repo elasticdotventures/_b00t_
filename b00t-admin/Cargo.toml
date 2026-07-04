@@ -24,6 +24,7 @@ serde_json.workspace = true
 tokio.workspace = true
 chrono.workspace = true
 b00t-c0re-lib = { workspace = true }
+b00t-l3dg3rr-viz = { workspace = true, features = ["mermaid-native"] }
 
 # HTTP server
 axum = { version = "0.8", features = ["macros", "ws"] }
@@ -48,3 +49,6 @@ tokio-stream = "0.1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ureq = { version = "2", features = ["json"] }

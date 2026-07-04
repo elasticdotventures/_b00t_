@@ -7,7 +7,7 @@ edition.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [package.metadata.wasm-pack]
-wasm-opt = false
+wasm-opt = ["-Os", "--no-validation"]
 
 [dependencies]
 dioxus = { version = "0.6", features = ["web", "router"] }
@@ -20,3 +20,4 @@ reqwest = { version = "0.12", features = ["json"] }
 gloo-net = "0.6"
 web-sys = { version = "0.3", features = ["console", "Document", "Window", "Element", "HtmlScriptElement", "HtmlElement"] }
 js-sys = "0.3"
+mermaid-rs-renderer = { version = "0.3", default-features = false }

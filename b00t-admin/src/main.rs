@@ -22,6 +22,8 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
+use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
@@ -385,8 +387,13 @@ fn join_mermaid(diagrams: &[String]) -> String {
     format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
 }
 
-/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG)
-async fn viz_isometric_handler() -> impl IntoResponse {
+/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG + glTF)
+/// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
+/// Query params: `hide_orphans=true` — strip nodes with zero edges.
+async fn viz_isometric_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
@@ -396,20 +403,73 @@ async fn viz_isometric_handler() -> impl IntoResponse {
         .replace("```mermaid\n", "").replace("\n```", "")
         .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
 
-    // Generate isometric SVG via Python (faster iteration than Rust SVG builder)
-    let svg = std::process::Command::new("python3")
-        .arg("-c")
-        .arg(include_str!("../../scripts/iso_scene.py"))
-        .arg(&raw)
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .unwrap_or_else(|| "<svg><text fill='red'>Generation failed</text></svg>".into());
+    match parse_mermaid(&raw) {
+        Ok(mut graph) => {
+            if hide_orphans {
+                graph = filter_orphans(&graph);
+            }
+            if let Err(e) = graph.validate() {
+                return axum::Json(serde_json::json!({
+                    "svg": format!("<svg><text fill='red'>validation: {}</text></svg>", e),
+                    "format": "isometric",
+                    "error": e.to_string()
+                }));
+            }
+            let response = graph_to_isometric_response(&graph);
+            match response {
+                Ok(r) => r.into(),
+                Err(_) => {
+                    // Direct layout failed (>40 nodes). Try container grouping.
+                    graph_to_container_response(&graph)
+                        .unwrap_or_else(|e| serde_json::json!({
+                            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                            "format": "isometric",
+                            "error": e
+                        }))
+                        .into()
+                }
+            }
+        }
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>parse: {}</text></svg>", e),
+            "format": "isometric",
+            "error": e.to_string()
+        })),
+    }
+}
 
-    axum::Json(serde_json::json!({
-        "svg": svg,
-        "format": "isometric"
-    }))
+/// GET `/api/admin/viz/isometric/demo` — Tax-Lawyer demonstration graph
+async fn viz_isometric_demo_handler() -> impl IntoResponse {
+    let graph = tax_lawyer_demo();
+    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| serde_json::json!({
+        "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+        "format": "isometric",
+        "error": e
+    })))
+}
+
+/// POST `/api/admin/viz/mermaid/render` — Server-side Mermaid SVG rendering
+async fn viz_mermaid_render_handler(
+    axum::extract::Json(body): axum::extract::Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
+    let hide_orphans = body.get("hide_orphans").and_then(|v| v.as_bool()).unwrap_or(false);
+    if text.is_empty() {
+        return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
+    }
+    let to_render = if hide_orphans {
+        let graph = filter_orphans_from_mermaid(text);
+        graph.to_mermaid()
+    } else {
+        text.to_string()
+    };
+    match render_mermaid_native(&to_render) {
+        Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+            "error": e,
+        })),
+    }
 }
 
 /// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
@@ -773,16 +833,22 @@ async fn processes_handler() -> impl IntoResponse {
 // ── Viz endpoints ──────────────────────────────────────────────────────────
 
 /// GET `/api/admin/viz/entangle` — Datum entanglement graph (Mermaid + SVG)
-async fn viz_entangle_handler() -> impl IntoResponse {
-    viz_output("entangle")
+async fn viz_entangle_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("entangle", hide_orphans)
 }
 
 /// GET `/api/admin/viz/task` — Task dependency graph (Mermaid + SVG)
-async fn viz_task_handler() -> impl IntoResponse {
-    viz_output("task")
+async fn viz_task_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("task", hide_orphans)
 }
 
-fn viz_output(subcommand: &str) -> impl IntoResponse {
+fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
     let mermaid = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "mermaid"])
         .output()
@@ -794,6 +860,12 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
             cleaned.replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD").replace("graph RL", "flowchart RL")
         }))
         .unwrap_or_default();
+
+    let mermaid = if hide_orphans && !mermaid.is_empty() {
+        filter_orphans_from_mermaid(&mermaid).to_mermaid()
+    } else {
+        mermaid
+    };
 
     let svg = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "svg"])
@@ -823,7 +895,6 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -1287,6 +1358,8 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 /* ── Fade transitions ── */
 .fade-in {{ animation: fadeIn 0.3s ease-in; }}
 @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+@keyframes wasm-spin {{ to {{ transform: rotate(360deg); }} }}
+.wasm-spinner {{ animation: wasm-spin 1s linear infinite; }}
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {{ width: 6px; }}
@@ -1355,8 +1428,6 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
         <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
       </div>
       <div style="margin:4px 0;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
-        <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
-        <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphans</label>
         <span style="margin-left:auto;color:#64748b;">Shift+scroll: 10× zoom</span>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
@@ -1381,6 +1452,10 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
 <div class="panel" id="type-panel" data-b00t="panel:types" data-b00t-label="Type Explorer">
   <h2>🔬 Type Explorer</h2>
+  <div style="margin:0 0 8px;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
+    <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
+    <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphan nodes (no connections)</label>
+  </div>
   <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
 </div>
 
@@ -1451,10 +1526,7 @@ document.addEventListener('keydown', function(e) {{
   }}
 }});
 
-// ════════ Mermaid Init ════════
-if (typeof mermaid !== 'undefined') {{
-    mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
-}}
+// ════════ Mermaid Init (WASM) ════════
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
@@ -1666,15 +1738,9 @@ function loadKnowledgeGraph() {{
 
 function toggleOrphans() {{
   var hide = document.getElementById('hide-orphans').checked;
-  var cy = window._cy;
-  if (!cy) return;
-  if (hide) {{
-    var orphans = cy.nodes().filter(function(n) {{ return n.degree() === 0; }});
-    orphans.style('display', 'none');
-  }} else {{
-    cy.nodes().style('display', 'element');
-  }}
   try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
+  var sel = document.getElementById('viz-select').value;
+  if (sel) {{ loadGraph(sel); }}
 }}
 
 // Restore orphan filter on load
@@ -1722,36 +1788,26 @@ function addStatus(type, msg) {{
 function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
-  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
-   var raw = currentVizData.mermaid;
-   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
-   var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
-   var graphs = [stripped];
-   document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
-  startProgress(graphs.length);
-  var html = '';
-  var pending = graphs.length;
-  var errors = 0;
-  graphs.forEach(function(g, idx) {{
-    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
-    try {{
-      mermaid.render(graphId, g).then(function(result) {{
-        html += '<div class="fade-in" style="margin-bottom:16px;">' + result.svg + '</div>';
-        pending--;
-        var done = graphs.length - pending;
-        updateProgress(done, graphs.length, 'Graph ' + (idx+1) + ' rendered');
-        if (pending === 0) {{
-          target.innerHTML = html;
-          if (errors) addStatus('error', errors + ' error(s)');
-          finishProgress();
-        }}
-      }}).catch(function(e) {{
-        errors++; pending--;
-        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
-        addStatus('error', 'Graph ' + (idx+1) + ' failed: ' + e.message);
-        if (pending === 0) {{ target.innerHTML = html; finishProgress(); }}
-      }});
-    }} catch(e) {{ errors++; pending--; addStatus('error', 'Exception: ' + e.message); if (pending === 0) {{ target.innerHTML = html; finishProgress(); }} }}
+  var raw = currentVizData.mermaid;
+  if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
+  var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering ' + stripped.length + ' chars...</span></div>';
+  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+  fetch('/api/admin/viz/mermaid/render', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{text: stripped, hide_orphans: hideOrphans}})
+  }}).then(function(r){{return r.json();}}).then(function(d) {{
+    var svg = d.svg || '';
+    svg = svg.replace(/fill=\"\u0023FFFFFF\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/fill=\"white\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/background:\s*\u0023FFFFFF/g, 'background:\u00230f172a');
+    svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
+    target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
+    document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
+  }}).catch(function(e) {{
+    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
+    addStatus('error', 'Mermaid render failed: ' + e.message);
   }});
 }}
 
@@ -1779,21 +1835,248 @@ function loadGraph(sel) {{
     return;
   }}
   if (sel === 'isometric') {{
-    fetch('/api/admin/viz/isometric').then(function(r){{return r.json();}}).then(function(d) {{
-      var target = document.getElementById('mermaid-target');
-      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No isometric data</div>';
-      title.textContent = 'Isometric View';
-      status.textContent = '3D Projection';
+    var target = document.getElementById('mermaid-target');
+    target.style.position = 'relative';
+    target.style.overflow = 'hidden';
+    target.style.cursor = 'grab';
+    target.style.minHeight = '400px';
+    target.innerHTML = '<div style="color:#64748b;padding:40px;text-align:center;">Loading isometric view...</div>';
+    window._isoViewStack = [];
+    window._isoCurrentData = null;
+    var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+    var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
+    fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
+      window._isoCurrentData = d;
+      d._roleLegend = ISO_ROLES;
+      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
+      title.textContent = d.grouped ? 'Container View' : 'Isometric View';
+      var depthInfo = '';
+      if (d.depth) {{
+        depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
+      if (d.depth.extended + d.depth.historical > 0) {{
+        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
+      }}
+      }}
+      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
+      setTimeout(function(){{
+        attachIsoViewer(target);
+        buildIsoLegend(target);
+        if (d.grouped) buildContainerDrilldown(target, d);
+      }}, 50);
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
     return;
   }}
-  fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
+  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+  var params = hideOrphans ? '?hide_orphans=true' : '';
+  fetch('/api/admin/viz/' + sel + params).then(function(r){{return r.json();}}).then(function(d) {{
     currentVizData = d;
     title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
     status.textContent = (d.mermaid||'').length + ' chars';
     renderMermaid();
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
+
+
+// ════════ Interactive Isometric Viewer ════════
+
+function attachIsoViewer(container) {{
+  var svg = container.querySelector('svg');
+  if (!svg) return;
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  var viewBox = svg.getAttribute('viewBox') || '0 0 800 600';
+  var vb = viewBox.split(' ').map(Number);
+  var state = {{ x: 0, y: 0, scale: 1, minScale: 0.2, maxScale: 4 }};
+
+  function updateView() {{
+    var w = vb[2], h = vb[3];
+    var ox = vb[0] + w/2, oy = vb[1] + h/2;
+    var tx = ox + state.x/state.scale - ox/state.scale;
+    var ty = oy + state.y/state.scale - oy/state.scale;
+    svg.setAttribute('viewBox', [tx,ty,w/state.scale,h/state.scale].join(' '));
+  }}
+
+  // Pan drag
+  var dragging = false, lx = 0, ly = 0;
+  function pos(e) {{ return e.touches ? {{x:e.touches[0].clientX,y:e.touches[0].clientY}} : {{x:e.clientX,y:e.clientY}}; }}
+  function onStart(e) {{ dragging=true; var p=pos(e); lx=p.x-state.x; ly=p.y-state.y; container.style.cursor='grabbing'; e.preventDefault(); }}
+  function onMove(e) {{ if(!dragging)return; var p=pos(e); state.x=p.x-lx; state.y=p.y-ly; updateView(); }}
+  function onEnd() {{ dragging=false; container.style.cursor='grab'; }}
+  container.addEventListener('mousedown',onStart);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onEnd);
+  container.addEventListener('touchstart',onStart,{{passive:false}});
+  window.addEventListener('touchmove',onMove,{{passive:false}});
+  window.addEventListener('touchend',onEnd);
+
+  // Zoom
+  container.addEventListener('wheel',function(e) {{
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? -0.15 : 0.15;
+    if (e.shiftKey) delta *= 3;
+    state.scale = Math.min(state.maxScale, Math.max(state.minScale, state.scale * (1 + delta)));
+    updateView();
+  }},{{passive:false}});
+
+  // Node click → highlight connected
+  var allEdges = Array.from(svg.querySelectorAll('[data-edge-from]'));
+  function highlightNode(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='0.25';n.style.filter='grayscale(1)'; }});
+    allEdges.forEach(function(e){{ e.setAttribute('opacity','0.1'); }});
+    if (nodeEl) {{
+      nodeEl.style.opacity = '1'; nodeEl.style.filter = 'none';
+      allEdges.forEach(function(e) {{
+        if (e.getAttribute('data-edge-from')===nid || e.getAttribute('data-edge-to')===nid) {{
+          e.setAttribute('opacity','0.9'); e.setAttribute('stroke-width','3');
+        }}
+      }});
+    }}
+  }}
+  svg.addEventListener('click',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    highlightNode(nodeEl);
+    if (!nodeEl) {{
+      svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='1';n.style.filter='none'; }});
+      allEdges.forEach(function(e){{ e.setAttribute('opacity','0.5');e.setAttribute('stroke-width','1.5'); }});
+    }}
+  }});
+
+  // Double-click → center on node
+  svg.addEventListener('dblclick',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    if (!nodeEl) {{ state.x=0;state.y=0;state.scale=1;updateView();return; }}
+    var c = nodeEl.querySelector('text');
+    if (!c) return;
+    var bbox = c.getBBox();
+    var cx = bbox.x + bbox.width/2, cy = bbox.y + bbox.height/2;
+    state.x = -cx * state.scale + vb[2]/2;
+    state.y = -cy * state.scale + vb[3]/2;
+    state.scale = Math.min(state.maxScale, state.scale * 1.5);
+    updateView();
+  }});
+
+  // Keyboard
+  document.addEventListener('keydown',function(e) {{
+    if (!container.closest('[data-b00t="panel:viz"]')) return;
+    var step = 40 / state.scale;
+    switch(e.key) {{
+      case 'ArrowLeft': state.x+=step;break;
+      case 'ArrowRight': state.x-=step;break;
+      case 'ArrowUp': state.y+=step;break;
+      case 'ArrowDown': state.y-=step;break;
+      case '+':case'=': state.scale=Math.min(state.maxScale,state.scale*1.2);break;
+      case '-': state.scale=Math.max(state.minScale,state.scale/1.2);break;
+      case '0':case'Home': state.x=0;state.y=0;state.scale=1;break;
+      case 'Escape': highlightNode(null);break;
+      default: return;
+    }}
+    updateView();e.preventDefault();
+  }});
+
+  // Reset button
+  var resetBtn = document.createElement('div');
+  resetBtn.innerHTML = '↺';
+  resetBtn.style.cssText = 'position:absolute;top:4px;right:4px;width:28px;height:28px;background:#334155;color:#e2e8f0;border-radius:4px;text-align:center;line-height:28px;cursor:pointer;font-size:16px;z-index:10;user-select:none;';
+  resetBtn.title = 'Reset view (Home key)';
+  resetBtn.onclick = function(){{ state.x=0;state.y=0;state.scale=1;updateView(); }};
+  container.appendChild(resetBtn);
+}}
+
+// ════════ Role Legend ════════
+var ISO_ROLES = [
+  {{r:'data',e:'📄',c:'#334155'}},{{r:'intelligence',e:'🧠',c:'#0284c7'}},{{r:'rule',e:'⚖️',c:'#b91c1c'}},
+  {{r:'security',e:'🛡️',c:'#0f766e'}},{{r:'human',e:'👤',c:'#b45309'}},{{r:'logic',e:'❓',c:'#b91c1c'}},
+  {{r:'storage',e:'💾',c:'#15803d'}},{{r:'report',e:'📊',c:'#166534'}},{{r:'task',e:'⚙️',c:'#475569'}},
+  {{r:'event',e:'📅',c:'#7e22ce'}},{{r:'ingest',e:'📥',c:'#1d4ed8'}},{{r:'validate',e:'✅',c:'#16a34a'}},
+  {{r:'classify',e:'🏷️',c:'#7c3aed'}},{{r:'review',e:'👁️',c:'#c026d3'}},{{r:'reconcile',e:'🔄',c:'#2563eb'}},
+  {{r:'commit',e:'💾',c:'#0891b2'}},{{r:'decision',e:'❓',c:'#dc2626'}},{{r:'step',e:'⚙️',c:'#52525b'}}
+];
+
+function buildIsoLegend(container) {{
+  var used = new Set();
+  container.querySelectorAll('[data-node-role]').forEach(function(n){{ used.add(n.getAttribute('data-node-role')); }});
+  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
+  ISO_ROLES.forEach(function(r) {{
+    if (!used.has(r.r)) return;
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
+  }});
+  html += '</div>';
+  var leg = document.createElement('div'); leg.innerHTML = html;
+  container.appendChild(leg);
+}}
+
+// ════════ Depth toggle — show/hide extended+historical nodes ════════
+
+var _showAllDepth = false;
+function toggleDepth(link, e) {{
+  e.preventDefault();
+  _showAllDepth = !_showAllDepth;
+  link.textContent = _showAllDepth ? 'hide extended' : 'show all';
+  var svg = document.querySelector('#mermaid-target svg');
+  if (!svg) return;
+  var connected = new Set();
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    connected.add(el.getAttribute('data-edge-from'));
+    connected.add(el.getAttribute('data-edge-to'));
+  }});
+  svg.querySelectorAll('.iso-node').forEach(function(n) {{
+    var nid = n.getAttribute('data-node-id');
+    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
+  }});
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    var f = el.getAttribute('data-edge-from');
+    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
+  }});
+}}
+
+// ════════ Container drill-down (branch-and-bound sub-graphs) ════════
+
+function buildContainerDrilldown(container, data) {{
+  if (!data.components || !data.components.length) return;
+  var subMap = {{}};
+  data.components.forEach(function(c) {{ subMap[c.id] = c; }});
+
+  container.querySelectorAll('.iso-node').forEach(function(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    if (!nid || !nid.startsWith('__container_')) return;
+    nodeEl.style.cursor = 'pointer';
+    nodeEl.title = 'Double-click to drill down';
+    nodeEl.addEventListener('dblclick', function(e) {{
+      e.stopPropagation();
+      var sub = subMap[nid];
+      if (!sub || !sub.svg) return;
+      window._isoViewStack.push({{
+        svg: container.querySelector('svg').outerHTML,
+        svgEl: container.querySelector('svg'),
+        legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
+      }});
+      container.innerHTML = sub.svg;
+      container.querySelector('svg').style.width = '100%';
+      container.querySelector('svg').style.height = '100%';
+      var back = document.createElement('div');
+      back.innerHTML = '← Back';
+      back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
+      back.title = 'Back to container view';
+      back.onclick = function() {{
+        var prev = window._isoViewStack.pop();
+        if (prev) {{
+          container.innerHTML = '';
+          var wrapper = document.createElement('div');
+          wrapper.innerHTML = prev.svg;
+          container.appendChild(wrapper.firstChild);
+          if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
+        }}
+        attachIsoViewer(container);
+        buildIsoLegend(container);
+      }};
+      container.appendChild(back);
+      buildIsoLegend(container);
+      attachIsoViewer(container);
+    }});
+  }});
+}}
+
 </script>
 
 <div id="autopilot-badge">
@@ -1847,6 +2130,8 @@ async fn main() {
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
         .route("/api/admin/viz/task", get(viz_task_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
+        .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
+        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler).post(viz_mermaid_render_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
@@ -1891,7 +2176,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("mermaid.min.js"));
+        assert!(h.contains("cytoscape"));
         assert!(h.contains("cytoscape.min.js"));
     }
 

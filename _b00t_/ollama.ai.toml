@@ -3,6 +3,8 @@ name = "ollama"
 type = "ai"
 hint = "Self-hosted Ollama server for local AI inference"
 
+entangled_cli = ["b00t.cli"]
+
 [models.llama2]
 capabilities = "text,chat"
 context_length = 4096

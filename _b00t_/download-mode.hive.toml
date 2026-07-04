@@ -2,6 +2,7 @@
 name = "download-mode"
 type = "hive_profile"
 hint = "HuggingFace model download mode — inference OFF, full RAM/disk bandwidth for downloads"
+depends_on = ["huggingface.cli", "hf.cli"]
 
 [b00t.hive.resources]
 # 🤓 hf downloader uses ~2GB RAM for Python + HF client + download buffers

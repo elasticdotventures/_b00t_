@@ -4,7 +4,7 @@ type = "role"
 hint = "Frontier AI engineer: model architecture analysis, hyperparameter reasoning, MoE/LoRA design, b00t cognitive tier routing, failure diagnosis."
 
 # Inherits ai-worker + adds architectural reasoning and failure-mode knowledge
-depends_on = ["ai-worker", "ai-finetune", "hf-cli", "just.cli"]
+depends_on = ["ai-worker", "ai-finetune", "hf-cli", "just.cli", "vllm.cli", "ollama.ai", "mistralrs.cli", "llama-cpp-server.container", "nomic-embed.api"]
 
 skills = [
     "ai-finetune",
