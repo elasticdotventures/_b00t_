@@ -15,6 +15,7 @@
 name = "mistralrs-proxy"
 type = "hive_profile"
 hint = "liter-llm/mistralrs-proxy gateway at :1234 — soup-of-the-day routing, cost accounting, no static .service"
+depends_on = ["mistralrs.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 ram_gb = 1

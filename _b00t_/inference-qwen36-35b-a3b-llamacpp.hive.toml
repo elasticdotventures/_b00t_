@@ -8,6 +8,7 @@
 name = "inference-qwen36-35b-a3b-llamacpp"
 type = "hive_profile"
 hint = "Qwen3.6-35B-A3B UD-IQ4_XS via llamacpp podman — 17.7GB VRAM + 6GB KV, 64k ctx, RTX3090"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 UD-IQ4_XS: 17.7GB VRAM; ~6GB headroom for KV cache at 64k context on RTX 3090 24GB

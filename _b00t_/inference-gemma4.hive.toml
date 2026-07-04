@@ -2,6 +2,7 @@
 name = "inference-gemma4"
 type = "hive_profile"
 hint = "Ollama gemma4:e2b (E2B Q4_K_M ~3.2GB VRAM) — local gemma4 subagent via ollama"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 gemma4:e2b Q4_K_M = ~3.2GB VRAM + ~1GB RAM overhead for ollama
