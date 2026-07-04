@@ -102,6 +102,7 @@ pub mod datum_database;
 pub mod datum_docker;
 pub mod datum_guard;
 pub mod datum_gemini;
+pub mod training_examples;
 pub mod datum_job;
 pub mod datum_justfile;
 pub mod datum_k8s;
