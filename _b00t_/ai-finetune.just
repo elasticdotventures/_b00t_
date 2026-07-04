@@ -901,3 +901,110 @@ provider-train-list:
 # Cancel a training job
 provider-train-cancel job_id:
     b00t-cli provider job cancel --provider {{ ORCHESTRATOR }} {{ job_id }}
+
+
+# ── MLflow public tunnel (required for RunPod training) ───────────────────────
+# Exposes local MLflow (NodePort 30803) via Cloudflare Tunnel.
+# Run once before `b00t-cli runpod train`; copy the https URL printed and:
+#   export MLFLOW_TRACKING_URI=https://xxx.trycloudflare.com
+# Keep this terminal open for the duration of training.
+mlflow-tunnel:
+    #!/usr/bin/env bash
+    echo "Starting Cloudflare tunnel → MLflow (port 30803)"
+    echo "Copy the https://xxx.trycloudflare.com URL and:"
+    echo "  export MLFLOW_TRACKING_URI=https://xxx.trycloudflare.com"
+    echo ""
+    cloudflared tunnel --url http://localhost:30803
+
+# ── Local smoke test (5 steps, verifies full pipeline without full training) ──
+# Prerequisites: just ai-finetune::inference-down  (frees GPU)
+# After:         just ai-finetune::inference-up    (restores inference)
+# 🤓 Uses podman + unsloth image — no local Python package installs; same env as RunPod.
+#    --network=host lets the container reach the k8s MLflow NodePort (localhost:30803).
+#    --userns=keep-id: rootless podman bind mount (not --user uid:gid).
+train-smoke-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://localhost:30803}"
+    echo "GPU free before:"
+    nvidia-smi --query-gpu=memory.free --format=csv,noheader
+    echo "MLflow: $MLFLOW_TRACKING_URI"
+    echo ""
+    # 🤓 unsloth:latest uses supervisord entrypoint (studio UI) — must override.
+    #    Python lives in /opt/venv; uv mounted from host for installs.
+    #    --userns=keep-id conflicts with nvidia-container-toolkit hook → omit it.
+    # 🤓 HF cache is mounted so the model survives container restarts.
+    #    unsloth writes to /root/.cache/huggingface — keep-id would conflict with nvidia hook,
+    #    so we mount host cache path directly (same uid=root inside container is fine for read).
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        --entrypoint bash \
+        --network=host \
+        -v "$(pwd):/workspace/b00t:ro" \
+        -v "$(which uv):/usr/local/bin/uv:ro" \
+        -v "$HOME/.cache/huggingface:/root/.cache/huggingface:Z" \
+        -e MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
+        -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}" \
+        -e HF_TOKEN="${HF_TOKEN:-}" \
+        docker.io/unsloth/unsloth:latest \
+        -c "uv pip install --python /opt/venv/bin/python3 -q 'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -3 && \
+            cd /workspace/b00t && \
+            /opt/venv/bin/python3 fine-tune/train_unsloth.py --config fine-tune/config.yaml --max-steps 5"
+    echo ""
+    echo "✅ smoke-test done — http://localhost:30803"
+
+# Scale down inference to free GPU for local training, then restore after
+inference-down:
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+    @echo "⏳ waiting for pods to terminate..."
+    kubectl wait --for=delete pod -l app=ch0nky -n b00t-inference --timeout=60s || true
+    kubectl wait --for=delete pod -l app=sm0l -n b00t-inference --timeout=60s || true
+    nvidia-smi --query-gpu=memory.free --format=csv,noheader
+
+inference-up:
+    kubectl scale deployment ch0nky --replicas=1 -n b00t-inference
+    kubectl scale deployment sm0l --replicas=1 -n b00t-inference
+    @echo "inference restored"
+
+# ── RunPod training lifecycle ──────────────────────────────────────────────────
+# Launch a training pod on RunPod A100 80GB (on-demand, SECURE cloud).
+# Requires: RUNPOD_API_KEY, HF_TOKEN, MLFLOW_TRACKING_URI env vars set.
+# Set MLFLOW_TRACKING_URI to the cloudflared tunnel URL before running.
+# Usage: just ai-finetune::runpod-train
+runpod-train:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${RUNPOD_API_KEY:?RUNPOD_API_KEY required — add to ~/.b00t/.env}"
+    : "${HF_TOKEN:?HF_TOKEN required for hub push}"
+    : "${MLFLOW_TRACKING_URI:?MLFLOW_TRACKING_URI required — run mlflow-tunnel first}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB"
+
+# Tail logs for a running RunPod training pod.
+# Usage: just ai-finetune::runpod-logs <pod-id>
+runpod-logs pod_id:
+    b00t-cli runpod logs {{pod_id}}
+
+# Show status of all b00t RunPod pods.
+runpod-pods:
+    b00t-cli runpod pods
+
+# Stop a RunPod training pod (does not delete — preserves logs/volumes).
+# Usage: just ai-finetune::runpod-stop <pod-id>
+runpod-stop pod_id:
+    b00t-cli runpod stop {{pod_id}}
+
+# Delete a RunPod training pod (permanent).
+# Usage: just ai-finetune::runpod-delete <pod-id>
+runpod-delete pod_id:
+    b00t-cli runpod delete {{pod_id}}
+
+# Dry-run: print pod spec without launching.
+runpod-dry-run:
+    #!/usr/bin/env bash
+    export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://192.168.1.137:30803}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
+
