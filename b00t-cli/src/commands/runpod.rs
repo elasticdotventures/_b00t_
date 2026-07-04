@@ -136,7 +136,8 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
                 .unwrap_or("unknown")
                 .to_string();
 
-            let image = "nvcr.io/nvidia/pytorch:24.12-py3".to_string();
+            // runpod/pytorch has bash + cuda + python pre-installed; simpler than nvcr.io NGC image
+            let image = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04".to_string();
             let startup_cmd = format!(
                 "set -euo pipefail; \
                  export PATH=\"$HOME/.local/bin:$PATH\"; \
@@ -209,8 +210,8 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
                 cloud_type: Some(CloudType::Secure),
                 gpu_count: Some(1),
                 container_disk_in_gb: Some(80),
-                // docker_start_cmd passes our script as CMD — NVIDIA ENTRYPOINT runs first (CUDA setup)
-                docker_start_cmd: Some(vec!["bash".to_string(), "-c".to_string(), startup_cmd]),
+                // docker_entrypoint replaces ENTRYPOINT — the only REST-API-honored field for custom startup
+                docker_entrypoint: Some(vec!["bash".to_string(), "-c".to_string(), startup_cmd]),
                 support_public_ip: Some(true),
                 interruptible: Some(spot),
                 env: Some(env),
