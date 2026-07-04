@@ -115,7 +115,7 @@ ndarray = "0.15"
 # 🤓 async-trait: Syntactic sugar for trait methods with async fn (Task 2: LLMInference trait definition)
 async-trait = "0.1"
 # RunPod GPU cloud client — serverless endpoints + on-demand pods; reqwest-based async
-runpod = "0.1.30"
+runpod = { git = "https://github.com/PromptExecution/runpod.rs", branch = "fix/b00t-support-public-ip" }
 gix-attributes = "0.33"
 bstr = "1.12"
 
