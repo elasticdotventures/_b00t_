@@ -121,3 +121,6 @@
 [submodule "vendor/aohp"]
 	path = vendor/aohp
 	url = https://github.com/PromptExecution/aohp-b00t.git
+[submodule "vendor/pyinfra"]
+	path = vendor/pyinfra
+	url = https://github.com/pyinfra-dev/pyinfra

@@ -1,0 +1,51 @@
+[b00t]
+name = "assimilate-governance"
+type = "skill"
+hint = "Canonical governance pipeline for b00t grok assimilate — research → analysis → datum → verify"
+
+[b00t.pipeline]
+phases = ["research", "evaluate", "assimilate", "index", "datum", "verify"]
+
+  [b00t.pipeline.research]
+  description = "Fetch README, docs, and existing b00t datums for the topic"
+  agent_tier = "sm0l"
+  tools = ["web-reader", "b00t-learn"]
+  output = "research_report.md"
+
+  [b00t.pipeline.evaluate]
+  description = "ADOPT/EVALUATE/SKIP verdict using MECE + TRIZ IFR analysis"
+  agent_tier = "frontier"
+  tools = ["b00t-learn", "b00t-task"]
+  output = "verdict.md"
+  gate = "operator_approval"
+
+  [b00t.pipeline.assimilate]
+  description = "Run b00t grok assimilate --enhanced --b00tyverse --index-target codebase-memory"
+  agent_tier = "ch0nky"
+  tools = ["b00t-grok"]
+  output = "datum_hash"
+
+  [b00t.pipeline.index]
+  description = "Confirm codebase-memory index updated; run b00t grok query to verify recall"
+  agent_tier = "sm0l"
+  tools = ["codebase-memory-mcp", "b00t-grok"]
+  output = "index_confirmation"
+
+  [b00t.pipeline.datum]
+  description = "Write <topic>.cli.tomllm in _b00t_/datums/ with full b00t:map footer"
+  agent_tier = "ch0nky"
+  tools = ["write"]
+  output = "datum_path"
+
+  [b00t.pipeline.verify]
+  description = "b00t learn <topic> → confirm datum loads; run b00t grok query <topic>"
+  agent_tier = "sm0l"
+  tools = ["b00t-learn", "b00t-grok"]
+  output = "PASS | FAIL: <excerpt>"
+
+# b00t:map v1
+# summary: assimilate-governance skill — 6-phase pipeline for canonical b00t datum creation from external repos
+# tags: assimilate, governance, pipeline, skill, datum, b00tyverse
+# tier: frontier
+# cmds: b00t learn assimilate-governance
+# complexity: 6
