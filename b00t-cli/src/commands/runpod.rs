@@ -142,9 +142,10 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
                 "set -euo pipefail; \
                  export PATH=\"$HOME/.local/bin:$PATH\"; \
                  curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -1; \
-                 uv pip install --system -q \
+                 uv pip install --system -q 'torch==2.6.0' --index-url https://download.pytorch.org/whl/cu124 2>&1 | tail -2; \
+                 uv pip install --system -q --no-build-isolation \
                    'unsloth[cu124-ampere-torch260]' \
-                   'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -5; \
+                   mlflow pyyaml datasets trl 2>&1 | tail -5; \
                  git clone --depth=1 https://github.com/elasticdotventures/_b00t_.git /workspace/b00t; \
                  cd /workspace/b00t; \
                  python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
