@@ -507,12 +507,56 @@ pub fn scene_to_gltf_data_uri(
     Ok(format!("data:model/gltf+json;base64,{encoded}"))
 }
 
+/// Contextual depth: derived from graph connectivity, not file location.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextDepth {
+    Surface,
+    Extended,
+    Historical,
+}
+
+impl ContextDepth {
+    pub fn classify(graph: &InvariantGraph) -> std::collections::HashMap<String, Self> {
+        let connected: std::collections::HashSet<&str> = graph
+            .edges.iter()
+            .flat_map(|e| [e.from.as_str(), e.to.as_str()])
+            .collect();
+        graph.nodes.iter().map(|n| {
+            let depth = if connected.contains(n.id.as_str()) {
+                Self::Surface
+            } else if is_tool_role(&n.role) {
+                Self::Extended
+            } else {
+                Self::Historical
+            };
+            (n.id.clone(), depth)
+        }).collect()
+    }
+}
+
+fn is_tool_role(role: &VisualizationRole) -> bool {
+    matches!(role,
+        VisualizationRole::Data | VisualizationRole::Intelligence |
+        VisualizationRole::Rule | VisualizationRole::Security |
+        VisualizationRole::Storage | VisualizationRole::Ingest |
+        VisualizationRole::Classify | VisualizationRole::Reconcile |
+        VisualizationRole::Commit | VisualizationRole::Step |
+        VisualizationRole::Task | VisualizationRole::Event |
+        VisualizationRole::Human
+    )
+}
+
 pub fn graph_to_isometric_response(
     graph: &InvariantGraph,
 ) -> Result<serde_json::Value, String> {
     let positions = kasuari_layout(graph)?;
     let svg = render_svg(graph, &positions);
     let gltf = scene_to_gltf_data_uri(graph, &positions).ok();
+    let depth = ContextDepth::classify(graph);
+    let surface_count = depth.values().filter(|d| matches!(d, ContextDepth::Surface)).count();
+    let extended_count = depth.values().filter(|d| matches!(d, ContextDepth::Extended)).count();
+    let historical_count = depth.values().filter(|d| matches!(d, ContextDepth::Historical)).count();
     Ok(serde_json::json!({
         "svg": svg,
         "gltf": gltf,
@@ -520,6 +564,11 @@ pub fn graph_to_isometric_response(
         "solver": "kasuari/0.4/cassowary",
         "nodes": graph.nodes.len(),
         "edges": graph.edges.len(),
+        "depth": {
+            "surface": surface_count,
+            "extended": extended_count,
+            "historical": historical_count,
+        },
     }))
 }
 
