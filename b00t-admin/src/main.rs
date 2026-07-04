@@ -22,6 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
+mod graph_json;
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
@@ -2142,6 +2143,7 @@ async fn main() {
         .route("/api/admin/processes", get(processes_handler))
         // API — visualizations
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
+        .route("/api/admin/viz/entangle/json", get(graph_json::entangle_json_handler))
         .route("/api/admin/viz/task", get(viz_task_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
         .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
