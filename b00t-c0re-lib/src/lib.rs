@@ -38,6 +38,7 @@ pub mod datum_ai_model;
 pub mod datum_lsp;
 pub mod data_fabric;
 pub mod doc_pipeline;
+pub mod z3_examples;
 pub mod dual_grok;
 pub mod dual_install;
 pub mod events;
