@@ -695,6 +695,10 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
+    // Classifier hints for orphan matching
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trigger_words: Option<Vec<String>>,
+
     // Orchestration / stack / job / skill metadata
     pub orchestration: Option<OrchestrationConfig>,
     pub stack: Option<serde_json::Value>,
