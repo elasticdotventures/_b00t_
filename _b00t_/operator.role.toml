@@ -1,5 +1,6 @@
 [b00t]
 name = "operator"
+trigger_words = ["operator", "hive", "dispatch", "orchestrate", "manage"]
 type = "role"
 hint = "Hive operator role: MCP assimilation, crew dispatch, resource-gated multi-agent orchestration."
 

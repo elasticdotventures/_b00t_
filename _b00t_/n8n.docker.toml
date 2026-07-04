@@ -1,5 +1,6 @@
 [b00t]
 name = "n8n"
+depends_on = ["b00t.cli"]
 type = "docker"
 desires = "latest"
 hint = "n8n - Workflow automation tool for technical teams. Self-hosted alternative to Zapier/Make. Perfect for AI/ML pipeline orchestration, budget-aware scheduling, and complex multi-step jobs."

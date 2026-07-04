@@ -4,7 +4,7 @@
 
 use b00t_l3dg3rr_viz::{InvariantEdge, InvariantGraph, InvariantNode, VisualizationRole};
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, ContextDepth, filter_orphans};
-use b00t_l3dg3rr_viz::artifact::curate_orphans;
+use b00t_l3dg3rr_viz::artifact::{curate_orphans, ClassifierHints};
 use axum::extract::Query;
 use std::collections::HashMap;
 

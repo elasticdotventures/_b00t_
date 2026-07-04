@@ -1,5 +1,6 @@
 [b00t]
 name = "postgres"
+depends_on = ["b00t.cli"]
 type = "docker"
 hint = "PostgreSQL database server via Docker container"
 desires = "16-alpine"
