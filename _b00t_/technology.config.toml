@@ -1,0 +1,22 @@
+[b00t]
+name = "technology"
+type = "config"
+hint = "Inventory of b00t core init scripts by level and function"
+
+[config]
+scripts = [
+  "bash.🔨/_b00t_PROJECT_ID_maker.sh — project ID generation",
+  "bash.🔨/c0re_init.10级.🥾.sh — _b00t_ libraries",
+  "bash.🔨/c0re_init.20级.🐙.sh — GitHub init",
+  "bash.🔨/c0re_init.20级.🐧.sh — Linux init",
+  "bash.🔨/c0re_init.20级.🐳.sh — Docker init",
+  "bash.🔨/c0re_init.40级.🐍.sh — Python init",
+  "bash.🔨/c0re_init.40级.🦄.🚀.sh — Node.js init",
+  "bash.🔨/c0re_init.50级.👾.sh — Games init",
+  "bash.🔨/c0re_init.50级.🤖.sh — AI/ML init",
+  "bash.🔨/c0re_init.50级.🦉.sh — Knowledge init",
+  "bash.🔨/c0re_init.60级.🎙️💙.sh — VSCode init",
+  "bash.🔨/c0re_init.60级.💰.sh — Financial init",
+  "bash.🔨/_c0re_init.新新.sh — New system init",
+]
+notes = "File naming convention changed; this datum maps old → new layout"
