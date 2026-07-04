@@ -727,13 +727,19 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         serde_json::json!({"svg": format!("<svg><text fill='red'>container: {}</text></svg>", e), "format": "isometric"})
     });
 
-    let subgraphs: Vec<serde_json::Value> = components
-        .iter()
-        .enumerate()
-        .filter(|(_, ids)| ids.len() <= MAX_NODES)
-        .take(MAX_SUBGRAPHS)
-        .map(|(i, ids)| {
-            let sub = build_component_subgraph(graph, ids, i);
+    let subgraphs: Vec<serde_json::Value> = {
+        let mut indexed: Vec<_> = components
+            .iter()
+            .enumerate()
+            .filter(|(_, ids)| ids.len() <= MAX_NODES)
+            .map(|(i, ids)| (i, ids.clone(), ids.len()))
+            .collect();
+        indexed.sort_by_key(|(_, _, n)| std::cmp::Reverse(*n));
+        indexed
+            .into_iter()
+            .take(MAX_SUBGRAPHS)
+            .map(|(i, ids, count)| {
+            let sub = build_component_subgraph(graph, &ids, i);
             let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
                 format!("<svg><text fill='red'>{}</text></svg>", e)
             });
@@ -744,7 +750,8 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
                 "node_ids": ids,
             })
         })
-        .collect();
+        .collect()
+    };
 
     let mut response = container_response;
     if let Some(obj) = response.as_object_mut() {

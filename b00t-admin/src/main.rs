@@ -2054,14 +2054,16 @@ function buildContainerDrilldown(container, data) {{
       e.stopPropagation();
       var sub = subMap[nid];
       if (!sub || !sub.svg) return;
+      var svgEl = container.querySelector('svg');
+      var viewBox = svgEl ? svgEl.getAttribute('viewBox') : '';
       window._isoViewStack.push({{
-        svg: container.querySelector('svg').outerHTML,
-        svgEl: container.querySelector('svg'),
+        svg: svgEl ? svgEl.outerHTML : '',
+        viewBox: viewBox,
         legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
       }});
       container.innerHTML = sub.svg;
-      container.querySelector('svg').style.width = '100%';
-      container.querySelector('svg').style.height = '100%';
+      var newSvg = container.querySelector('svg');
+      if (newSvg) {{ newSvg.style.width = '100%'; newSvg.style.height = '100%'; }}
       var back = document.createElement('div');
       back.innerHTML = '← Back';
       back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
@@ -2073,6 +2075,10 @@ function buildContainerDrilldown(container, data) {{
           var wrapper = document.createElement('div');
           wrapper.innerHTML = prev.svg;
           container.appendChild(wrapper.firstChild);
+          if (prev.viewBox) {{
+            var restoredSvg = container.querySelector('svg');
+            if (restoredSvg) restoredSvg.setAttribute('viewBox', prev.viewBox);
+          }}
           if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
         }}
         attachIsoViewer(container);
