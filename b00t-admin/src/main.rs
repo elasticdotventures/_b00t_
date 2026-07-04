@@ -1850,7 +1850,14 @@ function loadGraph(sel) {{
       d._roleLegend = ISO_ROLES;
       target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
       title.textContent = d.grouped ? 'Container View' : 'Isometric View';
-      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari');
+      var depthInfo = '';
+      if (d.depth) {{
+        depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
+      if (d.depth.extended + d.depth.historical > 0) {{
+        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
+      }}
+      }}
+      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
       setTimeout(function(){{
         attachIsoViewer(target);
         buildIsoLegend(target);
@@ -1997,6 +2004,30 @@ function buildIsoLegend(container) {{
   html += '</div>';
   var leg = document.createElement('div'); leg.innerHTML = html;
   container.appendChild(leg);
+}}
+
+// ════════ Depth toggle — show/hide extended+historical nodes ════════
+
+var _showAllDepth = false;
+function toggleDepth(link, e) {{
+  e.preventDefault();
+  _showAllDepth = !_showAllDepth;
+  link.textContent = _showAllDepth ? 'hide extended' : 'show all';
+  var svg = document.querySelector('#mermaid-target svg');
+  if (!svg) return;
+  var connected = new Set();
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    connected.add(el.getAttribute('data-edge-from'));
+    connected.add(el.getAttribute('data-edge-to'));
+  }});
+  svg.querySelectorAll('.iso-node').forEach(function(n) {{
+    var nid = n.getAttribute('data-node-id');
+    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
+  }});
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    var f = el.getAttribute('data-edge-from');
+    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
+  }});
 }}
 
 // ════════ Container drill-down (branch-and-bound sub-graphs) ════════
