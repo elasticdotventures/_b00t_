@@ -29,7 +29,7 @@ b00t-l3dg3rr-viz = { workspace = true, features = ["mermaid-native"] }
 # HTTP server
 axum = { version = "0.8", features = ["macros", "ws"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs", "compression-gzip"] }
 
 # Backend proxy
 reqwest = { version = "0.12", features = ["json"] }
