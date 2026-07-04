@@ -850,7 +850,7 @@ struct NodeVars {
 ///
 /// pairwise spacing (STRONG) adds O(n²) constraints per layer. The 40-node
 /// cap keeps this practical (<800 comparisons per layer worst-case).
-fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
+pub fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
     // Guard: Cassowary pairwise spacing is O(n²) per topological layer.
     // Beyond 40 nodes the solver becomes too slow for HTTP response times.
     // Use container grouping for larger graphs.
