@@ -123,7 +123,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     name,
                     image_name: image,
                     gpu_type_id: gpu,
-                    cloud_type: Some("ALL".to_string()),
+                    cloud_type: Some("SECURE".to_string()),
                     gpu_count: 1,
                     volume_in_gb: 0,
                     container_disk_in_gb: disk,
@@ -138,9 +138,10 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     name: Some(name),
                     image_name: Some(image),
                     gpu_type_id: Some(gpu),
-                    cloud_type: Some("ALL".to_string()),
+                    cloud_type: Some("SECURE".to_string()),
                     gpu_count: Some(1),
                     container_disk_in_gb: Some(disk),
+                    ports: Some(vec![]),
                     ..Default::default()
                 };
                 let resp = client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?;
@@ -207,7 +208,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     name: pod_name.clone(),
                     image_name: image,
                     gpu_type_id: gpu_type,
-                    cloud_type: Some("ALL".to_string()),
+                    cloud_type: Some("SECURE".to_string()),
                     gpu_count: 1,
                     volume_in_gb: 0,
                     container_disk_in_gb: 80,
@@ -222,10 +223,12 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     name: Some(pod_name.clone()),
                     image_name: Some(image),
                     gpu_type_id: Some(gpu_type),
-                    cloud_type: Some("ALL".to_string()),
+                    cloud_type: Some("SECURE".to_string()),
                     gpu_count: Some(1),
                     container_disk_in_gb: Some(80),
                     docker_args: Some(bash_args),
+                    ports: Some(vec![]),
+                    env,
                     ..Default::default()
                 };
                 client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?
