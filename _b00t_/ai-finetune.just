@@ -929,20 +929,27 @@ train-smoke-test:
     nvidia-smi --query-gpu=memory.free --format=csv,noheader
     echo "MLflow: $MLFLOW_TRACKING_URI"
     echo ""
+    # 🤓 unsloth:latest uses supervisord entrypoint (studio UI) — must override.
+    #    Python lives in /opt/venv; uv mounted from host for installs.
+    #    --userns=keep-id conflicts with nvidia-container-toolkit hook → omit it.
+    # 🤓 HF cache is mounted so the model survives container restarts.
+    #    unsloth writes to /root/.cache/huggingface — keep-id would conflict with nvidia hook,
+    #    so we mount host cache path directly (same uid=root inside container is fine for read).
     podman run --rm \
         --device nvidia.com/gpu=all \
         --security-opt=label=disable \
-        --userns=keep-id \
+        --entrypoint bash \
         --network=host \
-        -v "$(pwd):/workspace/b00t:Z" \
+        -v "$(pwd):/workspace/b00t:ro" \
         -v "$(which uv):/usr/local/bin/uv:ro" \
+        -v "$HOME/.cache/huggingface:/root/.cache/huggingface:Z" \
         -e MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
         -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}" \
         -e HF_TOKEN="${HF_TOKEN:-}" \
         docker.io/unsloth/unsloth:latest \
-        bash -c "uv pip install --system -q mlflow pyyaml datasets trl 2>&1 | tail -3 && \
-                 cd /workspace/b00t && \
-                 python3 fine-tune/train_unsloth.py --config fine-tune/config.yaml --max-steps 5"
+        -c "uv pip install --python /opt/venv/bin/python3 -q 'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -3 && \
+            cd /workspace/b00t && \
+            /opt/venv/bin/python3 fine-tune/train_unsloth.py --config fine-tune/config.yaml --max-steps 5"
     echo ""
     echo "✅ smoke-test done — http://localhost:30803"
 
