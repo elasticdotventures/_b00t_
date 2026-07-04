@@ -3,6 +3,7 @@
 
 [b00t]
 name = "demo-mcp-tools"
+parent = "b00t-mcp.mcp"
 type = "job"
 hint = "Demonstrate MCP tool execution in workflows"
 version = "1.0.0"
@@ -35,7 +36,7 @@ params = { path = "/tmp" }
 [[b00t.job.steps]]
 name = "read-test-file"
 description = "Read test file contents via MCP"
-depends_on = []
+depends_on = ["b00t-mcp.mcp"]
 
 [b00t.job.steps.task]
 type = "mcp"
@@ -60,7 +61,7 @@ cat /tmp/b00t-job-test.txt
 [[b00t.job.steps]]
 name = "read-created-file"
 description = "Read the file we just created via MCP"
-depends_on = ["create-test-data"]
+depends_on = ["b00t-mcp.mcp"]
 
 [b00t.job.steps.task]
 type = "mcp"

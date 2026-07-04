@@ -1,0 +1,5 @@
+[b00t]
+name = "openapi"
+depends_on = ["b00t.cli"]
+type = "skill"
+hint = "OpenAPI specification workflow for API design"

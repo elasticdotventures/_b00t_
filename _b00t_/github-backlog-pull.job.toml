@@ -3,6 +3,7 @@
 
 [b00t]
 name = "github-backlog-pull"
+parent = "gh.cli"
 type = "job"
 hint = "Pull tagged GitHub issues into the alpha node backlog and task queue"
 version = "1.0.0"
@@ -31,7 +32,7 @@ timeout_ms = 30000
 name = "sync-backlog"
 description = "Sync new issues into backlog and promote to queue"
 checkpoint = "backlog-synced"
-depends_on = ["fetch-issues"]
+depends_on = ["gh.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"

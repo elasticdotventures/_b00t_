@@ -1,5 +1,7 @@
 [b00t]
 name = "llm-batch-job"
+parent = "llm-inference-pipeline.stack"
+depends_on = ["n8n.docker", "python.cli"]
 type = "job"
 hint = "Batch inference job for LLM pipeline. Orchestrator-agnostic definition."
 

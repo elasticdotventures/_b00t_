@@ -3,6 +3,7 @@
 
 [b00t]
 name = "build-and-test"
+parent = "b00t.cli"
 type = "job"
 hint = "Multi-stage build and test workflow for b00t-cli"
 version = "1.0.0"
@@ -54,7 +55,7 @@ timeout_ms = 30000
 name = "lint"
 description = "Run clippy lints on codebase"
 checkpoint = "lint-pass"
-depends_on = ["clean"]
+depends_on = ["b00t.cli", "rust.cli", "cargo.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"
@@ -70,7 +71,7 @@ timeout_ms = 120000
 name = "build-debug"
 description = "Build debug binaries"
 checkpoint = "debug-built"
-depends_on = ["lint"]
+depends_on = ["b00t.cli", "rust.cli", "cargo.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"
@@ -86,7 +87,7 @@ timeout_ms = 300000
 name = "test-unit"
 description = "Run unit tests"
 checkpoint = "tests-pass"
-depends_on = ["build-debug"]
+depends_on = ["b00t.cli", "rust.cli", "cargo.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"
@@ -102,7 +103,7 @@ timeout_ms = 180000
 name = "build-release"
 description = "Build optimized release binaries"
 checkpoint = "release-built"
-depends_on = ["test-unit"]
+depends_on = ["b00t.cli", "rust.cli", "cargo.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"
@@ -119,7 +120,7 @@ timeout_ms = 600000
 name = "verify"
 description = "Verify built binaries execute correctly"
 checkpoint = "verified"
-depends_on = ["build-release"]
+depends_on = ["b00t.cli", "rust.cli", "cargo.cli", "git.cli"]
 
 [b00t.job.steps.task]
 type = "bash"
@@ -133,6 +134,7 @@ echo "Binaries verified"
 # Rollback steps on failure
 [[b00t.job.rollback]]
 name = "restore-workspace"
+parent = "b00t.cli"
 description = "Restore workspace on failure"
 
 [b00t.job.rollback.task]

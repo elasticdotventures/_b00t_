@@ -1,5 +1,6 @@
 [b00t]
 name = "llm-inference-pipeline"
+depends_on = ["llm-batch-job.job"]
 type = "stack"
 hint = "LLM inference pipeline with GPU batching and budget-aware scheduling. Optimized for batch processing to minimize model loading overhead."
 members = ["python.cli", "n8n.docker"]
