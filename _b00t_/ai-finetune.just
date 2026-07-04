@@ -15,6 +15,10 @@
 # Paths are relative to repo root (justfile_directory())
 
 set working-directory := ".."
+
+# b00t-cli binary: use cargo-installed if it has runpod, otherwise fall back to debug build
+_cli := `sh -c 'for c in ~/.local/bin/b00t-cli ~/.cargo/bin/b00t-cli; do [ -x "$c" ] && "$c" runpod --help 2>/dev/null | grep -q pods && echo "$c" && exit; done; echo ./target/debug/b00t-cli'`
+
 dataset:
     uv run python3 fine-tune/generate_dataset.py
 
@@ -984,28 +988,28 @@ runpod-train:
 # Tail logs for a running RunPod training pod.
 # Usage: just ai-finetune::runpod-logs <pod-id>
 runpod-logs pod_id:
-    b00t-cli runpod logs {{pod_id}}
+    {{_cli}} runpod logs {{pod_id}}
 
 # Show status of all b00t RunPod pods.
 runpod-pods:
-    b00t-cli runpod pods
+    {{_cli}} runpod pods
 
 # Stop a RunPod training pod via b00t-cli (does not delete — preserves logs/volumes).
 # Usage: just ai-finetune::runpod-cli-stop <pod-id>
 runpod-cli-stop pod_id:
-    b00t-cli runpod stop {{pod_id}}
+    {{_cli}} runpod stop {{pod_id}}
 
 # Delete a RunPod training pod (permanent).
 # Usage: just ai-finetune::runpod-delete <pod-id>
 runpod-delete pod_id:
-    b00t-cli runpod delete {{pod_id}}
+    {{_cli}} runpod delete {{pod_id}}
 
 # Dry-run: print pod spec without launching.
 runpod-dry-run:
     #!/usr/bin/env bash
     export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://192.168.1.137:30803}"
     export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
-    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
+    {{_cli}} runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
 
 # ── SAM3 local provider ────────────────────────────────────────────────────────
 # Build the app4dog/sam3-runner:local container image.
@@ -1150,7 +1154,7 @@ runpod-stop pod_id="dsmiude96elaym":
 
 # Stage 0: Pre-flight — validate env, costs, disk, GPU availability before launch.
 # Exit 0=OK, 1=BLOCKED (operator must resolve), 2=WARN (proceed with caution)
-runpod-preflight gpu="A100 SXM4 80GB" max_cost_hr="3.0":
+runpod-preflight gpu="NVIDIA A100-SXM4-80GB" max_cost_hr="3.0":
     #!/usr/bin/env python3
     import os, sys, urllib.request, json
     errors = []
@@ -1170,27 +1174,35 @@ runpod-preflight gpu="A100 SXM4 80GB" max_cost_hr="3.0":
         errors.append("RUNPOD_API_KEY not in ~/.b00t/.env")
     if not env.get("MLFLOW_TRACKING_URI"):
         warnings.append("MLFLOW_TRACKING_URI not set — training won't log to MLflow")
-    if float("{{max_cost_hr}}") > 5.0:
-        errors.append(f"max_cost_hr={{max_cost_hr}} exceeds safety cap of $5.00/hr")
+    # just substitutes {{max_cost_hr}} and {{gpu}} before Python runs
+    max_hr = float("{{max_cost_hr}}")
+    gpu_name = "{{gpu}}"
+    if max_hr > 5.0:
+        errors.append(f"max_cost_hr={max_hr} exceeds safety cap of $5.00/hr")
     for e in errors:
-        print(f"🚫 BLOCKED: {e}")
+        print(f"BLOCKED: {e}")
     for w in warnings:
-        print(f"⚠️  WARN: {w}")
+        print(f"WARN: {w}")
     if errors:
         sys.exit(1)
-    print(f"✅ preflight OK — GPU={{gpu}} max=${{'{{max_cost_hr}}'}}/hr tok={tok[:8]}***")
-    sys.exit(2 if warnings else 0)
+    # warnings are non-blocking -- exit 0 so pipeline continues
+    tok_display = tok[:8] if tok else "none"
+    print(f"preflight OK -- GPU={gpu_name} max=${max_hr}/hr HF_TOKEN={tok_display}***")
+    sys.exit(0)
 
 # Stage 1: Launch training pod (wraps b00t-cli runpod train).
 # Emits pod_id to stdout on success for downstream stages.
-runpod-launch config="fine-tune/config.yaml" gpu="A100 SXM4 80GB" spot="false":
+runpod-launch config="fine-tune/config.yaml" gpu="NVIDIA A100-SXM4-80GB" spot="false":
     #!/usr/bin/env bash
     set -euo pipefail
-    just --justfile {{justfile()}} runpod-preflight || { echo "FAIL: preflight blocked"; exit 1; }
-    POD_ID=$(b00t-cli runpod train --config "{{config}}" --gpu-type "{{gpu}}" --spot {{spot}} --dry-run=false 2>&1 | grep -oP 'pod_id=\K[a-z0-9]+' || true)
+    just --justfile {{source_file()}} runpod-preflight || { echo "FAIL: preflight blocked"; exit 1; }
+    SPOT_FLAG=""; [[ "{{spot}}" == "true" ]] && SPOT_FLAG="--spot"
+    LAUNCH_OUT=$({{_cli}} runpod train --config "{{config}}" --gpu "{{gpu}}" $SPOT_FLAG 2>&1)
+    echo "$LAUNCH_OUT"
+    POD_ID=$(echo "$LAUNCH_OUT" | grep -oP '(?<=training pod: )[a-z0-9]+' || true)
     if [[ -z "$POD_ID" ]]; then
         echo "FAIL: b00t-cli runpod train did not emit pod_id — check b00t-cli runpod train output"
-        b00t-cli runpod train --config "{{config}}" --gpu-type "{{gpu}}" --spot {{spot}} 2>&1 | tail -10
+        {{_cli}} runpod train --config "{{config}}" --gpu "{{gpu}}" $SPOT_FLAG 2>&1 | tail -10
         exit 1
     fi
     echo "pod_id=${POD_ID}"
@@ -1207,7 +1219,7 @@ runpod-await pod_id="" repo="elasticdotventures/b00t-qwen36-35b-a3b" timeout_min
     [[ -z "$PID" ]] && { echo "FAIL: no pod_id — run runpod-launch first or pass pod_id=<id>"; exit 1; }
     DEADLINE=$(( $(date +%s) + {{timeout_min}} * 60 ))
     echo "⏳ waiting for ${PID} → HF:{{repo}} (timeout={{timeout_min}}min)"
-    just --justfile {{justfile()}} runpod-wait pod_id="$PID" repo="{{repo}}" interval="90" &
+    just --justfile {{source_file()}} runpod-wait pod_id="$PID" repo="{{repo}}" interval="90" &
     WAIT_PID=$!
     while kill -0 $WAIT_PID 2>/dev/null; do
         [[ $(date +%s) -gt $DEADLINE ]] && { kill $WAIT_PID 2>/dev/null; echo "FAIL: timeout after {{timeout_min}}min"; exit 1; }
@@ -1253,7 +1265,7 @@ runpod-verify repo="elasticdotventures/b00t-qwen36-35b-a3b":
 #    3. agent fixed it → retry the failed stage ONCE
 #    4. only if the agent exhausted its iterations → record a NEW lfmf lesson
 #    This is fail → consult → agent-fix → (unfixable) → lfmf; NOT fail → lfmf.
-runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen36-35b-a3b" gpu="A100 SXM4 80GB" spot="false" timeout_min="180":
+runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen36-35b-a3b" gpu="NVIDIA A100-SXM4-80GB" spot="false" timeout_min="180":
     #!/usr/bin/env bash
     set -euo pipefail
     # fail_stage: Kaizen agent-fix-first. Returns 0 if the agent fixed the
@@ -1302,10 +1314,10 @@ runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwe
     echo "  spot:    {{spot}}"
     echo "  timeout: {{timeout_min}}min"
     echo ""
-    run_stage preflight "env/cost gate" just --justfile {{justfile()}} runpod-preflight gpu="{{gpu}}"
-    run_stage launch "pod did not start" just --justfile {{justfile()}} runpod-launch config="{{config}}" gpu="{{gpu}}" spot="{{spot}}"
+    run_stage preflight "env/cost gate" just --justfile {{source_file()}} runpod-preflight gpu="{{gpu}}"
+    run_stage launch "pod did not start" just --justfile {{source_file()}} runpod-launch config="{{config}}" gpu="{{gpu}}" spot="{{spot}}"
     POD_ID=$(cat /tmp/b00t-runpod-active-pod-id 2>/dev/null || echo "")
-    run_stage await "training timeout or pod stopped" just --justfile {{justfile()}} runpod-await pod_id="$POD_ID" repo="{{repo}}" timeout_min="{{timeout_min}}"
-    run_stage verify "adapter missing from HF Hub" just --justfile {{justfile()}} runpod-verify repo="{{repo}}"
+    run_stage await "training timeout or pod stopped" just --justfile {{source_file()}} runpod-await pod_id="$POD_ID" repo="{{repo}}" timeout_min="{{timeout_min}}"
+    run_stage verify "adapter missing from HF Hub" just --justfile {{source_file()}} runpod-verify repo="{{repo}}"
     echo ""
     echo "✅ Pipeline COMPLETE — adapter at https://huggingface.co/{{repo}}"
