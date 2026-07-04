@@ -1,5 +1,6 @@
 [b00t]
 name = "b00t"
+trigger_words = ["b00t", "cli", "bootstrap", "install", "detect"]
 depends_on = ["build-and-test.job", "test-apalis.job"]
 type = "cli"
 desires = "0.7.35"
