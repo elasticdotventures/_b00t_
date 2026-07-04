@@ -966,3 +966,43 @@ inference-up:
     kubectl scale deployment ch0nky --replicas=1 -n b00t-inference
     kubectl scale deployment sm0l --replicas=1 -n b00t-inference
     @echo "inference restored"
+
+# ── RunPod training lifecycle ──────────────────────────────────────────────────
+# Launch a training pod on RunPod A100 80GB (on-demand, SECURE cloud).
+# Requires: RUNPOD_API_KEY, HF_TOKEN, MLFLOW_TRACKING_URI env vars set.
+# Set MLFLOW_TRACKING_URI to the cloudflared tunnel URL before running.
+# Usage: just ai-finetune::runpod-train
+runpod-train:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${RUNPOD_API_KEY:?RUNPOD_API_KEY required — add to ~/.b00t/.env}"
+    : "${HF_TOKEN:?HF_TOKEN required for hub push}"
+    : "${MLFLOW_TRACKING_URI:?MLFLOW_TRACKING_URI required — run mlflow-tunnel first}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB"
+
+# Tail logs for a running RunPod training pod.
+# Usage: just ai-finetune::runpod-logs <pod-id>
+runpod-logs pod_id:
+    b00t-cli runpod logs {{pod_id}}
+
+# Show status of all b00t RunPod pods.
+runpod-pods:
+    b00t-cli runpod pods
+
+# Stop a RunPod training pod (does not delete — preserves logs/volumes).
+# Usage: just ai-finetune::runpod-stop <pod-id>
+runpod-stop pod_id:
+    b00t-cli runpod stop {{pod_id}}
+
+# Delete a RunPod training pod (permanent).
+# Usage: just ai-finetune::runpod-delete <pod-id>
+runpod-delete pod_id:
+    b00t-cli runpod delete {{pod_id}}
+
+# Dry-run: print pod spec without launching.
+runpod-dry-run:
+    #!/usr/bin/env bash
+    export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://192.168.1.137:30803}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run

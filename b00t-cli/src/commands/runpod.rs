@@ -175,8 +175,26 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
         }
 
         RunpodCommands::Logs { id } => {
-            let logs = client.get_container_logs(&id).await.context("get_container_logs failed")?;
-            println!("{logs}");
+            // 🤓 runpod crate's get_container_logs hits hapi.runpod.net without auth — 401.
+            //    The endpoint accepts the API key as a query param instead.
+            let url = format!("https://hapi.runpod.net/v1/pod/{id}/logs");
+            let resp = reqwest::Client::new()
+                .get(&url)
+                .bearer_auth(&key)
+                .send()
+                .await
+                .context("logs request failed")?;
+            if !resp.status().is_success() {
+                // 🤓 hapi.runpod.net logs require supportPublicIp=true on pod creation.
+                //    Workaround: check status via `runpod pods` or use RunPod web console.
+                //    Issue filed: agentsea/runpod.rs doesn't forward auth to hapi domain.
+                bail!("logs unavailable ({}): pod must be created with supportPublicIp=true — use `runpod pods` to check status", resp.status());
+            }
+            let body: serde_json::Value = resp.json().await.context("logs JSON parse failed")?;
+            let lines = body["container"].as_array().cloned().unwrap_or_default();
+            for l in lines {
+                println!("{}", l.as_str().unwrap_or(""));
+            }
         }
 
         RunpodCommands::Train { config, gpu, spot, dry_run } => {
