@@ -1008,3 +1008,43 @@ runpod-dry-run:
     export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
     b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
 
+# ── SAM3 local provider ────────────────────────────────────────────────────────
+# Build the app4dog/sam3-runner:local container image.
+sam3-build:
+    podman build -t app4dog/sam3-runner:local app4dog/sam3-runner/
+    @echo "✅ app4dog/sam3-runner:local built"
+
+# Run SAM3 on a request JSON file.
+# Usage: just ai-finetune::sam3-run /path/to/request.json /path/to/output/
+sam3-run request_path output_dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -f "{{request_path}}" ]] || { echo "ERROR: request file not found: {{request_path}}"; exit 1; }
+    mkdir -p "{{output_dir}}"
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        --entrypoint python3 \
+        -v "{{request_path}}:/workspace/request.json:ro" \
+        -v "{{output_dir}}:/workspace:rw" \
+        app4dog/sam3-runner:local \
+        /app/run.py /workspace/request.json
+    @echo "✅ result → {{output_dir}}/result.json"
+
+# Quick smoke-test: segment a test image with a text prompt.
+sam3-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TMP=$(mktemp -d)
+    # Download a small test image
+    curl -sL "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Cute_dog.jpg/320px-Cute_dog.jpg" -o "$TMP/dog.jpg"
+    # write request.json via base64 to avoid just parser issues with float literals
+    echo 'eyJzb3VyY2VfdHlwZSI6InBhdGgiLCJpbWFnZV9wYXRoIjoiL3dvcmtzcGFjZS9kb2cuanBnIiwib3V0cHV0X3BhdGgiOiIvd29ya3NwYWNlL3Jlc3VsdC5qc29uIiwicHJvbXB0cyI6W3sidHlwZSI6InRleHQiLCJ2YWx1ZSI6ImRvZyJ9XSwibW9kZWxfaWQiOiJmYWNlYm9vay9zYW0zIiwiZGV2aWNlIjoiY3VkYSIsInNjb3JlX3RocmVzaG9sZCI6MC4zLCJvdXRwdXRfZm9ybWF0IjoicmxlIn0=' | base64 -d > "$TMP/request.json"
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        -v "$TMP:/workspace:rw" \
+        app4dog/sam3-runner:local
+    echo "--- result ---"
+    python3 -c "import json; d=json.load(open('$TMP/result.json')); print(f'{d[\"segment_count\"]} segments, timing={d[\"timing\"]}')"
+    echo "✅ SAM3 smoke test passed → $TMP/result.json"
