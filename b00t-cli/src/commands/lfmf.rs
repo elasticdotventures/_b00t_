@@ -2,10 +2,8 @@ use anyhow::Result;
 use b00t_c0re_lib::LfmfSystem;
 use tiktoken_rs::o200k_base;
 
-/// Handle LFMF (Lessons From My Failures) recording
-/// Uses shared LFMF system from b00t-c0re-lib for consistency
-pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
-    // Ensure lessons write into the provided path unless explicitly overridden
+/// Ensure B00T_LEARN_DIR points into the provided path unless explicitly overridden.
+fn ensure_learn_dir(path: &str) -> Result<()> {
     if std::env::var("B00T_LEARN_DIR").is_err() {
         let learn_dir = crate::get_expanded_path(path)?
             .join("learn")
@@ -15,6 +13,43 @@ pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> R
             std::env::set_var("B00T_LEARN_DIR", &learn_dir);
         }
     }
+    Ok(())
+}
+
+/// Handle LFMF advice retrieval — print prior lessons for a tool to stdout.
+///
+/// Kaizen agent-fix-first: consult prior lessons BEFORE attempting a fix so
+/// agents benefit from past failures. Diagnostics go to stderr so stdout can
+/// be captured cleanly in bash: `ADVICE=$(b00t-cli lfmf advice runpod)`.
+///
+/// With `query`: similarity-ranked matches via `LfmfSystem::get_advice`.
+/// Without: all recorded lessons via `LfmfSystem::list_lessons`.
+pub async fn handle_lfmf_advice(path: &str, tool: &str, query: Option<&str>) -> Result<()> {
+    ensure_learn_dir(path)?;
+
+    let config = LfmfSystem::load_config(path)?;
+    let mut lfmf_system = LfmfSystem::new(config);
+
+    // 🤓 Vector DB init is deliberately skipped: advice must be deterministic
+    // and clean on stdout for bash capture. Without initialize() the grok
+    // client stays None and LfmfSystem uses its filesystem fallback
+    // (~/.b00t/learn/<tool>.md), which is authoritative for recorded lessons.
+    let lessons = match query {
+        Some(q) => lfmf_system.get_advice(tool, q, Some(5)).await?,
+        None => lfmf_system.list_lessons(tool, Some(10)).await?,
+    };
+
+    for lesson in lessons.into_iter().filter(|l| !l.trim().is_empty()) {
+        println!("{}", lesson);
+    }
+    Ok(())
+}
+
+/// Handle LFMF (Lessons From My Failures) recording
+/// Uses shared LFMF system from b00t-c0re-lib for consistency
+pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> Result<()> {
+    // Ensure lessons write into the provided path unless explicitly overridden
+    ensure_learn_dir(path)?;
 
     // Expect lesson in "<topic>: <body>" format
     let parts: Vec<&str> = lesson.splitn(2, ':').map(|s| s.trim()).collect();
