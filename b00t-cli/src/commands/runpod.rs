@@ -1,196 +1,114 @@
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
+use runpod_sdk::{RunpodClient, RunpodConfig};
+use runpod_sdk::model::{
+    CloudType, GpuTypeId, ListPodsQuery, PodCreateInput,
+};
+use runpod_sdk::service::PodsService;
+use std::collections::HashMap;
 
-fn api_key() -> Result<String> {
+#[derive(Subcommand, Debug, Clone)]
+pub enum RunpodCommands {
+    #[clap(about = "Verify API key + list available GPU types")]
+    Ping,
+    #[clap(about = "List running pods")]
+    Pods,
+    #[clap(about = "Stop a pod")]
+    Stop {
+        id: String,
+    },
+    #[clap(about = "Delete a pod")]
+    Delete {
+        id: String,
+    },
+    #[clap(about = "Get container logs (requires supportPublicIp=true on pod creation)")]
+    Logs {
+        id: String,
+    },
+    #[clap(about = "Launch a training pod using a b00t fine-tune config YAML")]
+    Train {
+        #[clap(long, default_value = "fine-tune/config-smol.yaml")]
+        config: String,
+        #[clap(long, default_value = "NVIDIA RTX 4090", help = "GPU type override")]
+        gpu: String,
+        #[clap(long, action, help = "Use spot pricing (cheaper, interruptible)")]
+        spot: bool,
+        #[clap(long, action, help = "Dry-run: print pod spec without launching")]
+        dry_run: bool,
+    },
+}
+
+fn load_key() -> Result<String> {
     if let Ok(k) = std::env::var("RUNPOD_API_KEY") {
-        return Ok(k);
+        if !k.is_empty() {
+            return Ok(k);
+        }
     }
     let env_path = dirs::home_dir()
         .unwrap_or_default()
         .join(".b00t/.env");
     if env_path.exists() {
         for line in std::fs::read_to_string(&env_path)?.lines() {
-            if let Some(v) = line.strip_prefix("RUNPOD_API_KEY=") {
-                return Ok(v.trim().to_string());
-            }
-        }
-    }
-    bail!("RUNPOD_API_KEY not set — add to ~/.b00t/.env or environment")
-}
-
-#[derive(Debug, Subcommand, Clone)]
-pub enum RunpodCommands {
-    #[clap(about = "Verify API key + list available GPU types")]
-    Ping {
-        #[arg(long, help = "Show all GPU types")]
-        verbose: bool,
-    },
-    #[clap(about = "List running pods")]
-    Pods {
-        #[arg(long, help = "JSON output")]
-        json: bool,
-    },
-    #[clap(about = "Start a pod (on-demand)")]
-    Start {
-        #[arg(long, help = "Docker image", default_value = "runpod/pytorch:latest")]
-        image: String,
-        #[arg(long, help = "GPU type ID", default_value = "NVIDIA RTX 4090")]
-        gpu: String,
-        #[arg(long, help = "Pod name", default_value = "b00t-pod")]
-        name: String,
-        #[arg(long, help = "Use spot (interruptible) pricing")]
-        spot: bool,
-        #[arg(long, help = "Disk GB", default_value_t = 20)]
-        disk: i32,
-    },
-    #[clap(about = "Stop a pod")]
-    Stop {
-        #[arg(help = "Pod ID")]
-        id: String,
-    },
-    #[clap(about = "Delete a pod")]
-    Delete {
-        #[arg(help = "Pod ID")]
-        id: String,
-    },
-    #[clap(about = "Get container logs")]
-    Logs {
-        #[arg(help = "Pod ID")]
-        id: String,
-    },
-    #[clap(about = "Launch a training pod using a b00t fine-tune config YAML")]
-    Train {
-        #[arg(long, default_value = "fine-tune/config-smol.yaml", help = "Config YAML path")]
-        config: String,
-        #[arg(long, help = "GPU type override (default: NVIDIA RTX 4090)")]
-        gpu: Option<String>,
-        #[arg(long, help = "Use spot pricing (cheaper, interruptible)")]
-        spot: bool,
-        #[arg(long, help = "Dry-run: print pod spec without launching")]
-        dry_run: bool,
-    },
-}
-
-fn pod_env_vars() -> Vec<runpod::EnvVar> {
-    let mut vars = vec![];
-    // 🤓 huggingface_hub checks HUGGING_FACE_HUB_TOKEN before HF_TOKEN; pass whichever is set
-    //    as HF_TOKEN so the training script's push_to_hub call authenticates correctly.
-    let hf_token = std::env::var("HF_TOKEN")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .or_else(|| std::env::var("HUGGING_FACE_HUB_TOKEN").ok().filter(|v| !v.is_empty()));
-    if let Some(tok) = hf_token {
-        vars.push(runpod::EnvVar { key: "HF_TOKEN".to_string(), value: tok.clone() });
-        vars.push(runpod::EnvVar { key: "HUGGING_FACE_HUB_TOKEN".to_string(), value: tok });
-    }
-    // NGC_API_KEY — allows training pods to pull nvcr.io containers + push to NGC model registry
-    let ngc_key = std::env::var("NGC_API_KEY").ok().filter(|v| !v.is_empty())
-        .or_else(|| std::env::var("NVIDIA_API_KEY").ok().filter(|v| !v.is_empty()));
-    if let Some(k) = ngc_key {
-        vars.push(runpod::EnvVar { key: "NGC_API_KEY".to_string(), value: k.clone() });
-        vars.push(runpod::EnvVar { key: "NVIDIA_API_KEY".to_string(), value: k });
-    }
-    for k in &["MLFLOW_TRACKING_URI", "MLFLOW_EXPERIMENT_NAME"] {
-        if let Ok(v) = std::env::var(k) {
-            if !v.is_empty() {
-                vars.push(runpod::EnvVar { key: k.to_string(), value: v });
-            }
-        }
-    }
-    vars
-}
-pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
-    use runpod::{CreateOnDemandPodRequest, CreateSpotPodRequest, RunpodClient};
-
-    let key = api_key()?;
-    let client = RunpodClient::new(&key);
-
-    match cmd {
-        RunpodCommands::Ping { verbose } => {
-            let resp = client
-                .list_gpu_types_graphql()
-                .await
-                .context("RunPod API unreachable")?;
-            let gpus = resp.data.unwrap_or_default();
-            println!("PASS — {} GPU types available", gpus.len());
-            if verbose {
-                for g in &gpus {
-                    println!("  {} — {} ({}GB)", g.id, g.display_name,
-                        g.memory_in_gb.map(|m| m.to_string()).unwrap_or_else(|| "?".into()));
-                }
-            } else {
-                for g in gpus.iter().take(5) {
-                    println!("  {} — {}", g.id, g.display_name);
-                }
-                if gpus.len() > 5 {
-                    println!("  … and {} more (--verbose to list all)", gpus.len() - 5);
+            if let Some(rest) = line.strip_prefix("RUNPOD_API_KEY=") {
+                let key = rest.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !key.is_empty() {
+                    return Ok(key);
                 }
             }
         }
+    }
+    bail!("RUNPOD_API_KEY not set — add it to ~/.b00t/.env or set the env var");
+}
 
-        RunpodCommands::Pods { json } => {
-            let resp = client.list_pods().await.context("list_pods failed")?;
-            let pods = resp.data.map(|d| d.pods).unwrap_or_default();
-            if json {
-                println!("{}", serde_json::to_string_pretty(&pods)?);
-            } else if pods.is_empty() {
+fn build_client(key: &str) -> Result<RunpodClient> {
+    let config = RunpodConfig::builder()
+        .with_api_key(key)
+        .build()
+        .context("RunpodConfig build failed")?;
+    RunpodClient::new(config).context("RunpodClient::new failed")
+}
+
+pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
+    match command {
+        RunpodCommands::Ping => {
+            let key = load_key()?;
+            let client = build_client(&key)?;
+            let pods = client.list_pods(ListPodsQuery::default()).await
+                .context("list_pods failed")?;
+            println!("PASS — API key valid; {} pod(s) visible", pods.len());
+        }
+
+        RunpodCommands::Pods => {
+            let key = load_key()?;
+            let client = build_client(&key)?;
+            let pods = client.list_pods(ListPodsQuery::default()).await
+                .context("list_pods failed")?;
+            if pods.is_empty() {
                 println!("No pods running.");
             } else {
                 for p in &pods {
-                    let dc = p.machine.as_ref()
-                        .map(|m| m.location.as_str())
-                        .unwrap_or("?");
-                    println!("{} — {} — {} — dc:{}", p.id, p.name, p.desired_status, dc);
+                    println!("{} — {} — {:?}", p.id, p.name.as_deref().unwrap_or("?"), p.desired_status);
                 }
-            }
-        }
-
-        RunpodCommands::Start { image, gpu, name, spot, disk } => {
-            if spot {
-                let req = CreateSpotPodRequest {
-                    name,
-                    image_name: image,
-                    gpu_type_id: gpu,
-                    cloud_type: Some("SECURE".to_string()),
-                    gpu_count: 1,
-                    volume_in_gb: 0,
-                    container_disk_in_gb: disk,
-                    bid_per_gpu: 0.5,
-                    ..Default::default()
-                };
-                let resp = client.create_spot_pod(req).await.context("create_spot_pod failed")?;
-                let pod_id = resp.data.map(|p| p.id).unwrap_or_else(|| "?".to_string());
-                println!("pod id: {pod_id}");
-            } else {
-                let req = CreateOnDemandPodRequest {
-                    name: Some(name),
-                    image_name: Some(image),
-                    gpu_type_id: Some(gpu),
-                    cloud_type: Some("SECURE".to_string()),
-                    gpu_count: Some(1),
-                    container_disk_in_gb: Some(disk),
-                    ports: Some(vec![]),
-                    ..Default::default()
-                };
-                let resp = client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?;
-                let pod_id = resp.data.map(|p| p.id).unwrap_or_else(|| "?".to_string());
-                println!("pod id: {pod_id}");
             }
         }
 
         RunpodCommands::Stop { id } => {
-            let _ = client.stop_pod(&id).await.context("stop_pod failed")?;
+            let key = load_key()?;
+            let client = build_client(&key)?;
+            client.stop_pod(&id).await.context("stop_pod failed")?;
             println!("stopped {id}");
         }
 
         RunpodCommands::Delete { id } => {
-            let _ = client.delete_pod(&id).await.context("delete_pod failed")?;
+            let key = load_key()?;
+            let client = build_client(&key)?;
+            client.delete_pod(&id).await.context("delete_pod failed")?;
             println!("deleted {id}");
         }
 
         RunpodCommands::Logs { id } => {
-            // 🤓 runpod crate's get_container_logs hits hapi.runpod.net without auth — 401.
-            //    The endpoint accepts the API key as a query param instead.
+            let key = load_key()?;
+            // 🤓 hapi.runpod.net logs require supportPublicIp=true on pod creation.
             let url = format!("https://hapi.runpod.net/v1/pod/{id}/logs");
             let resp = reqwest::Client::new()
                 .get(&url)
@@ -199,10 +117,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                 .await
                 .context("logs request failed")?;
             if !resp.status().is_success() {
-                // 🤓 hapi.runpod.net logs require supportPublicIp=true on pod creation.
-                //    Workaround: check status via `runpod pods` or use RunPod web console.
-                //    Issue filed: agentsea/runpod.rs doesn't forward auth to hapi domain.
-                bail!("logs unavailable ({}): pod must be created with supportPublicIp=true — use `runpod pods` to check status", resp.status());
+                bail!("logs unavailable ({}): pod must be created with support_public_ip=true — use `runpod pods` to check status", resp.status());
             }
             let body: serde_json::Value = resp.json().await.context("logs JSON parse failed")?;
             let lines = body["container"].as_array().cloned().unwrap_or_default();
@@ -212,19 +127,16 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
         }
 
         RunpodCommands::Train { config, gpu, spot, dry_run } => {
-            let yaml = std::fs::read_to_string(&config)
-                .with_context(|| format!("cannot read config: {config}"))?;
+            // Load fine-tune config YAML for base model name
+            let yaml_src = std::fs::read_to_string(&config)
+                .with_context(|| format!("read config {config}"))?;
+            let yaml: serde_yaml::Value = serde_yaml::from_str(&yaml_src)
+                .context("parse config YAML")?;
+            let base_model = yaml["base_model"].as_str()
+                .unwrap_or("unknown")
+                .to_string();
 
-            let base_model = yaml.lines()
-                .find_map(|l| l.strip_prefix("base_model:").map(|v| v.trim().trim_matches('"').to_string()))
-                .unwrap_or_else(|| "unsloth/Qwen2.5-0.5B-Instruct".into());
-
-            let gpu_type = gpu.unwrap_or_else(|| "NVIDIA RTX 4090".to_string());
-
-            // 🤓 Use NGC PyTorch container — standard bash entrypoint (no supervisord).
-            //    nvcr.io/nvidia/pytorch:24.12-py3 = PyTorch 2.5, CUDA 12.6, Python 3.10, Ampere-ready.
-            //    unsloth/unsloth:latest is WRONG: supervisord entrypoint ignores docker_args CMD.
-            //    NGC API key: NGC_API_KEY env var (or anonymous pull for public images).
+            let image = "nvcr.io/nvidia/pytorch:24.12-py3".to_string();
             let startup_cmd = format!(
                 "set -euo pipefail; \
                  export PATH=\"$HOME/.local/bin:$PATH\"; \
@@ -240,86 +152,77 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
 
             if dry_run {
                 println!("--- dry-run pod spec ---");
-                println!("image:   nvcr.io/nvidia/pytorch:24.12-py3");
-                println!("gpu:     {gpu_type}");
+                println!("image:   {image}");
+                println!("gpu:     {gpu}");
                 println!("model:   {base_model}");
                 println!("spot:    {spot}");
                 println!("cmd:     {startup_cmd}");
                 return Ok(());
             }
 
-            let ts = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let pod_name = format!("b00t-train-{ts}");
-            let image = "nvcr.io/nvidia/pytorch:24.12-py3".to_string();
-            let bash_args = vec!["bash".to_string(), "-c".to_string(), startup_cmd];
+            // Parse GPU type string → typed enum (rejects unknown GPU types at call site)
+            let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu.clone()))
+                .with_context(|| format!("unknown GPU type '{gpu}' — run `b00t-cli runpod ping` to list valid types"))?;
 
-            let env = pod_env_vars();
-            if env.is_empty() {
-                eprintln!("⚠️  HF_TOKEN and MLFLOW_TRACKING_URI not set — adapter won't push to HF and MLflow won't track");
-            } else {
-                let keys: Vec<_> = env.iter().map(|e| e.key.as_str()).collect();
-                println!("env passed to pod: {}", keys.join(", "));
+            // Collect env vars (log keys only — never log values)
+            let mut env: HashMap<String, String> = HashMap::new();
+            for var in &["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "NGC_API_KEY", "NVIDIA_API_KEY"] {
+                if let Ok(v) = std::env::var(var) {
+                    env.insert(var.to_string(), v);
+                }
+            }
+            // Also load from ~/.b00t/.env
+            let env_path = dirs::home_dir().unwrap_or_default().join(".b00t/.env");
+            if env_path.exists() {
+                for line in std::fs::read_to_string(&env_path)?.lines() {
+                    if line.starts_with('#') || !line.contains('=') { continue; }
+                    let (k, v) = line.split_once('=').unwrap();
+                    let k = k.trim().to_string();
+                    if ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "MLFLOW_TRACKING_URI",
+                        "MLFLOW_EXPERIMENT_NAME", "NGC_API_KEY", "NVIDIA_API_KEY"].contains(&k.as_str()) {
+                        env.entry(k).or_insert_with(|| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                    }
+                }
+            }
+            let env_keys: Vec<&str> = env.keys().map(String::as_str).collect();
+            eprintln!("env passed to pod: {}", env_keys.join(", "));
+
+            if let Some(uri) = env.get("MLFLOW_TRACKING_URI") {
+                if uri.is_empty() {
+                    eprintln!("⚠️  MLFLOW_TRACKING_URI not set — training won't log to MLflow");
+                }
             }
 
-            let pod_id = if spot {
-                let req = CreateSpotPodRequest {
-                    name: pod_name.clone(),
-                    image_name: image,
-                    gpu_type_id: gpu_type,
-                    cloud_type: Some("SECURE".to_string()),
-                    gpu_count: 1,
-                    volume_in_gb: 0,
-                    container_disk_in_gb: 80,
-                    bid_per_gpu: 0.5,
-                    docker_args: Some(bash_args),
-                    env,
-                    ..Default::default()
-                };
-                client.create_spot_pod(req).await.context("create_spot_pod failed")?
-                    .data.map(|p| p.id).unwrap_or_else(|| "?".to_string())
-            } else {
-                let req = CreateOnDemandPodRequest {
-                    name: Some(pod_name.clone()),
-                    image_name: Some(image),
-                    gpu_type_id: Some(gpu_type),
-                    cloud_type: Some("SECURE".to_string()),
-                    gpu_count: Some(1),
-                    container_disk_in_gb: Some(80),
-                    docker_args: Some(bash_args),
-                    ports: Some(vec![]),
-                    env,
-                    ..Default::default()
-                };
-                client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?
-                    .data.map(|p| p.id).unwrap_or_else(|| "?".to_string())
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let pod_name = format!("b00t-train-{ts}");
+
+            let key = load_key()?;
+            let client = build_client(&key)?;
+
+            let req = PodCreateInput {
+                name: Some(pod_name.clone()),
+                image_name: Some(image),
+                gpu_type_ids: Some(vec![gpu_id]),
+                cloud_type: Some(CloudType::Secure),
+                gpu_count: Some(1),
+                container_disk_in_gb: Some(80),
+                // docker_start_cmd passes our script as CMD — NVIDIA ENTRYPOINT runs first (CUDA setup)
+                docker_start_cmd: Some(vec!["bash".to_string(), "-c".to_string(), startup_cmd]),
+                support_public_ip: Some(true),
+                interruptible: Some(spot),
+                env: Some(env),
+                ..Default::default()
             };
 
+            let pod = client.create_pod(req).await.context("create_pod failed")?;
+            let pod_id = pod.id;
             println!("training pod: {pod_id} ({pod_name})");
             println!("monitor: b00t-cli runpod logs {pod_id}");
         }
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_api_key_lookup() {
-        // Structural test — no network call in unit tests.
-        // Integration: `b00t-cli runpod ping` against real API.
-        let original = std::env::var("RUNPOD_API_KEY").ok();
-        unsafe { std::env::remove_var("RUNPOD_API_KEY") };
-        let result = api_key();
-        if let Some(k) = original {
-            unsafe { std::env::set_var("RUNPOD_API_KEY", k) };
-        }
-        // Ok = key found in ~/.b00t/.env; Err = no key set — both valid
-        let _ = result;
-    }
 }

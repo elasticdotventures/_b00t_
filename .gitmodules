@@ -124,3 +124,6 @@
 [submodule "vendor/pyinfra"]
 	path = vendor/pyinfra
 	url = https://github.com/pyinfra-dev/pyinfra
+[submodule "vendor/runpod-sdk"]
+	path = vendor/runpod-sdk
+	url = git@github.com:PromptExecution/runpod-sdk.git
