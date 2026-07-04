@@ -1123,7 +1123,7 @@ runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen36-35b-a3b
     while true; do
         i=$((i+1))
         TS=$(date '+%H:%M:%S')
-        STATUS=$(curl -s "https://rest.runpod.io/v1/pods/{{pod_id}}" -H "Authorization: Bearer $KEY" | python3 -c "import json,sys; p=json.load(sys.stdin); print(p.get('desiredStatus','?'))")
+        STATUS=$(curl -s --max-time 10 "https://rest.runpod.io/v1/pods/{{pod_id}}" -H "Authorization: Bearer $KEY" 2>/dev/null | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw) if raw.strip() else {}; print(d.get('desiredStatus') or d.get('error','curl-fail'))" 2>/dev/null || echo "curl-fail")
         HF=$(python3 -c "import urllib.request,os,sys; urllib.request.urlopen(urllib.request.Request('https://huggingface.co/api/models/{{repo}}',headers={'Authorization':'Bearer '+os.environ.get('HUGGING_FACE_HUB_TOKEN','')}),timeout=8); print('FOUND')" 2>/dev/null || echo "NOT_FOUND")
         echo "$TS [$i] {{pod_id}} — $STATUS — HF:$HF"
         [[ "$HF" == "FOUND" ]] && { echo "✅ Adapter on HF Hub — training complete."; exit 0; }
@@ -1246,16 +1246,53 @@ runpod-verify repo="elasticdotventures/b00t-qwen36-35b-a3b":
     print(f"   lastModified: {d.get('lastModified')}")
     print(f"   files: {sibs[:10]}")
 
-# Full end-to-end pipeline: preflight → launch → await → verify → lfmf on failure.
-# 🤓 On any stage failure: writes b00t lfmf entry for kaizen learning.
+# Full end-to-end pipeline: preflight → launch → await → verify.
+# 🤓 Kaizen agent-fix-first on stage failure:
+#    1. consult lfmf FIRST (prior lessons inform the fix agent)
+#    2. spawn fix agent via `b00t-cli ooda run` (3 iterations)
+#    3. agent fixed it → retry the failed stage ONCE
+#    4. only if the agent exhausted its iterations → record a NEW lfmf lesson
+#    This is fail → consult → agent-fix → (unfixable) → lfmf; NOT fail → lfmf.
 runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen36-35b-a3b" gpu="A100 SXM4 80GB" spot="false" timeout_min="180":
     #!/usr/bin/env bash
     set -euo pipefail
-    STAGES=("preflight" "launch" "await" "verify")
+    # fail_stage: Kaizen agent-fix-first. Returns 0 if the agent fixed the
+    # stage (caller retries it once); exits 1 after recording a lesson if not.
     fail_stage() {
         local stage=$1 msg=$2
         echo "❌ STAGE FAILED: ${stage} — ${msg}"
-        b00t-cli lfmf runpod "stage=${stage} failed: ${msg}" 2>/dev/null || true
+        # 1. Consult prior lessons FIRST so the fix agent benefits from them
+        local advice
+        advice=$(b00t-cli lfmf advice runpod 2>/dev/null | tr '\n' ' ' | head -c 800)
+        [[ -z "${advice// /}" ]] && advice="no prior lessons"
+        echo "📚 prior lfmf advice: ${advice}"
+        # 2. Create fix task carrying stage context + advice
+        local task_id
+        task_id=$(b00t-cli task add "fix: runpod ${stage} failed — ${msg}. Advice: ${advice}" 2>/dev/null | grep -oP 'added #\K[0-9]+' || echo "")
+        # 3. Agent attempts the fix — 3 iterations max
+        if [[ -n "$task_id" ]]; then
+            echo "🤖 dispatching fix agent (task #${task_id}, max-iter=3)"
+            if b00t-cli ooda run --agent=claude --task="$task_id" --max-iter=3; then
+                echo "✅ Agent fixed ${stage} — retrying stage"
+                return 0
+            fi
+        else
+            echo "⚠️ could not create fix task — skipping agent remediation"
+        fi
+        # 4. Agent could not fix — NOW record the lesson for future agents
+        b00t-cli lfmf runpod "${stage}: ${msg} (agent exhausted 3 iterations)" 2>/dev/null || true
+        exit 1
+    }
+    # run_stage <stage> <fail-msg> <cmd...>: run cmd; on failure invoke
+    # fail_stage; if the agent fixed it, retry the stage ONCE before giving up.
+    run_stage() {
+        local stage=$1 msg=$2; shift 2
+        if "$@"; then return 0; fi
+        fail_stage "$stage" "$msg"   # exits 1 unless the agent fixed it
+        echo "🔁 retrying ${stage} after agent fix"
+        if "$@"; then return 0; fi
+        echo "❌ ${stage} failed again after agent fix"
+        b00t-cli lfmf runpod "${stage}: ${msg} (failed again after agent fix)" 2>/dev/null || true
         exit 1
     }
     echo "=== b00t RunPod Training Pipeline ==="
@@ -1265,11 +1302,10 @@ runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwe
     echo "  spot:    {{spot}}"
     echo "  timeout: {{timeout_min}}min"
     echo ""
-    just --justfile {{justfile()}} runpod-preflight gpu="{{gpu}}" || fail_stage preflight "env/cost gate"
-    just --justfile {{justfile()}} runpod-launch config="{{config}}" gpu="{{gpu}}" spot="{{spot}}" || fail_stage launch "pod did not start"
+    run_stage preflight "env/cost gate" just --justfile {{justfile()}} runpod-preflight gpu="{{gpu}}"
+    run_stage launch "pod did not start" just --justfile {{justfile()}} runpod-launch config="{{config}}" gpu="{{gpu}}" spot="{{spot}}"
     POD_ID=$(cat /tmp/b00t-runpod-active-pod-id 2>/dev/null || echo "")
-    just --justfile {{justfile()}} runpod-await pod_id="$POD_ID" repo="{{repo}}" timeout_min="{{timeout_min}}" || fail_stage await "training timeout or pod stopped"
-    just --justfile {{justfile()}} runpod-verify repo="{{repo}}" || fail_stage verify "adapter missing from HF Hub"
+    run_stage await "training timeout or pod stopped" just --justfile {{justfile()}} runpod-await pod_id="$POD_ID" repo="{{repo}}" timeout_min="{{timeout_min}}"
+    run_stage verify "adapter missing from HF Hub" just --justfile {{justfile()}} runpod-verify repo="{{repo}}"
     echo ""
     echo "✅ Pipeline COMPLETE — adapter at https://huggingface.co/{{repo}}"
-    b00t-cli lfmf runpod "pipeline complete: {{repo}} $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
