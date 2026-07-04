@@ -1,0 +1,41 @@
+[b00t]
+name = "pyinfra"
+type = "cli"
+hint = "Python-based infrastructure automation — declarative deployments without agents"
+
+install = "uv pip install pyinfra"
+version = "pyinfra --version"
+
+[b00t.source]
+url = "https://github.com/pyinfra-dev/pyinfra"
+docs = "https://pyinfra.com/"
+license = "MIT"
+language = "Python"
+stars_approx = 4000
+
+[b00t.b00tyverse]
+fork_url = "https://github.com/PromptExecution/pyinfra"
+vendor_path = "vendor/pyinfra"
+status = "assimilated"
+
+# Key concept: deploy.py files define operations; pyinfra executes them
+# against SSH hosts, Docker containers, or local via connectors
+
+[[b00t.usage]]
+description = "Deploy to a remote host"
+command = "pyinfra inventory.py deploy.py"
+
+[[b00t.usage]]
+description = "Deploy locally (for b00t hive tasks)"
+command = "pyinfra @local deploy.py"
+
+[[b00t.usage]]
+description = "Deploy into a Docker container"
+command = "pyinfra @docker/python:3 deploy.py"
+
+# b00t:map v1
+# summary: pyinfra — agentless Python infra automation; SSH/Docker/local connectors; b00tyverse fork at PromptExecution/pyinfra
+# tags: infrastructure, python, deployment, automation, ssh, docker, agentless
+# tier: ch0nky
+# cmds: b00t learn pyinfra
+# complexity: 4
