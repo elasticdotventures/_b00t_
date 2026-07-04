@@ -62,15 +62,36 @@ pub struct ExecArgs {
         help = "Sandbox provider: direct | systemd-run | podman"
     )]
     pub sandbox: String,
+
+    #[clap(
+        long,
+        help = "Justification for a Block-tier command — routes through adversarial-model review instead of the 5-minute resubmit bypass. See PRD-SUDO-OPERATOR-GOVERNANCE."
+    )]
+    pub justification: Option<String>,
+
+    #[clap(
+        long,
+        num_args = 0..,
+        help = "Commit hash(es) supporting --justification; their `git show --stat` grounds the adversarial review"
+    )]
+    pub cites: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct AuditLogEntry {
     ts: String,     // ISO8601
     cmd: String,    // full command string
-    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background"
+    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background" | "sudo-granted" | "sudo-denied" | "sudo-escalated"
     guard_msg: Option<String>,
     pid: Option<u32>, // child PID if executed
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    justification: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cited_commits: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sudo_disposition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    checkpoint_ref: Option<String>,
 }
 
 /// Load block-cache: cmd_key → unix timestamp of first rejection
@@ -191,6 +212,91 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
             // broad authority: proceed without user gate
         }
         GuardResult::Block { message } => {
+          if let Some(justification) = &args.justification {
+            // Adversarial-review path (PRD-SUDO-OPERATOR-GOVERNANCE) —
+            // replaces the anonymous TTL-bypass below when a justification
+            // is supplied. Justification-less Block behavior (the `else`
+            // branch) is completely unchanged.
+            use b00t_c0re_lib::sudo_operator::{adversarial_review, checkpoint_system_state, SudoDisposition, SudoGrantEvidence};
+
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let (review_event, disposition) =
+                adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
+
+            match &disposition {
+                SudoDisposition::Grant { ttl_seconds } => {
+                    let checkpoint_id = now_unix().to_string();
+                    let checkpoint =
+                        checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
+                    let evidence = SudoGrantEvidence::new(&review_event, &disposition)
+                        .with_checkpoint(checkpoint.as_evidence_string());
+
+                    eprintln!(
+                        "✅ SUDO-GRANT: {} (ttl={}s) evidence={}",
+                        cmd_str, ttl_seconds, evidence.content_hash
+                    );
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "sudo-granted".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                            justification: Some(justification.clone()),
+                            cited_commits: args.cites.clone(),
+                            sudo_disposition: Some(disposition.to_string()),
+                            checkpoint_ref: Some(checkpoint.as_evidence_string()),
+                        },
+                    );
+                    // fall through to execution below
+                }
+                SudoDisposition::Deny { reason } => {
+                    eprintln!("🚫 SUDO-DENY: {}", reason);
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "sudo-denied".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                            justification: Some(justification.clone()),
+                            cited_commits: args.cites.clone(),
+                            sudo_disposition: Some(disposition.to_string()),
+                            checkpoint_ref: None,
+                        },
+                    );
+                    std::process::exit(1);
+                }
+                SudoDisposition::Escalate { reason } => {
+                    eprintln!("📡 SUDO-ESCALATE: {}", reason);
+                    crate::budget_controller::fire_sudo_escalation(
+                        &cmd_str,
+                        justification,
+                        &args.cites,
+                        reason,
+                    );
+                    notify_send(&format!("b00t sudo escalation: {cmd_str}"), reason);
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "sudo-escalated".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                            justification: Some(justification.clone()),
+                            cited_commits: args.cites.clone(),
+                            sudo_disposition: Some(disposition.to_string()),
+                            checkpoint_ref: None,
+                        },
+                    );
+                    eprintln!("   Not executed. Resolve the escalation and re-run.");
+                    std::process::exit(1);
+                }
+            }
+          } else {
             let mut cache = load_block_cache(&cache_path);
             let now = now_unix();
 
@@ -213,6 +319,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                             result: "block-forced".into(),
                             guard_msg: Some(message.clone()),
                             pid: None,
+                                                ..Default::default()
                         },
                     );
                     // fall through to execution below
@@ -230,6 +337,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                             result: "block-rejected".into(),
                             guard_msg: Some(message.clone()),
                             pid: None,
+                                                ..Default::default()
                         },
                     );
 
@@ -241,6 +349,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                     std::process::exit(1);
                 }
             }
+          }
         }
     }
 
@@ -260,6 +369,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: "background".into(),
                 guard_msg: None,
                 pid: None,
+                        ..Default::default()
             },
         );
 
@@ -337,6 +447,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: format!("{}:{}", result_label, sandbox_kind_label),
                 guard_msg: guard_msg.clone(),
                 pid: Some(pid),
+                        ..Default::default()
             },
         );
         child.wait()?.code().unwrap_or(1)
@@ -353,6 +464,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: format!("{}:{}", result_label, sandbox_kind_label),
                 guard_msg,
                 pid: None,
+                        ..Default::default()
             },
         );
 
@@ -364,6 +476,18 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 }
 
 /// Parse simple duration string: "30s", "2m", "1h" → seconds
+/// Best-effort local desktop notification (Linux `notify-send`), used as
+/// one of the "plurality of channels" for a SudoDisposition::Escalate.
+/// Matches the fallback pattern already used for maintenance reminders
+/// (_b00t_/bash.🐚/README-bash.md, skills/b00t-maintenance/SKILL.md).
+/// Never fails the caller — this is a notification, not a gate.
+fn notify_send(summary: &str, body: &str) {
+    let _ = std::process::Command::new("notify-send")
+        .arg(summary)
+        .arg(body)
+        .spawn();
+}
+
 fn parse_duration(s: &str) -> Result<u64> {
     if let Some(n) = s.strip_suffix('s') {
         return Ok(n
