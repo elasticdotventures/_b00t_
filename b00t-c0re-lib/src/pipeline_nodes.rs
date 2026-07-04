@@ -683,17 +683,18 @@ impl PipelineNode for ChunkNode {
                 SemanticChunk::new(
                     "chunk:0", &input.source_id, 0,
                     &input.abstract_text, &["abstract", "source"],
-                    vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95,
+                    Self::embedding_for("chunk:0", &input.abstract_text), 0.95,
                     Some("Abstract"),
                 ),
             ];
         }
 
         sentences.iter().enumerate().map(|(i, sentence)| {
+            let chunk_id = format!("chunk:{i}");
             SemanticChunk::new(
-                &format!("chunk:{i}"), &input.source_id, i,
+                &chunk_id, &input.source_id, i,
                 sentence, &["abstract", "source"],
-                vec![0.12, 0.45, 0.78, 0.33, 0.91], 0.95,
+                Self::embedding_for(&chunk_id, sentence), 0.95,
                 Some("Abstract"),
             )
         }).collect()
@@ -711,6 +712,42 @@ impl PipelineNode for ChunkNode {
 
     fn visual_style(&self) -> NodeStyle {
         NodeStyle { fill: "#064e3b".to_string(), stroke: "#34d399".to_string(), shape: NodeShape::RoundedBox }
+    }
+}
+
+impl ChunkNode {
+    /// Generate a deterministic embedding vector from a chunk ID and content.
+    ///
+    /// Uses a djb2-like hash of the content to produce a 5-dimensional
+    /// pseudo-embedding. Same input always produces the same vector,
+    /// while different chunks produce different embeddings — simulating
+    /// real RAG embeddings without an actual model dependency.
+    fn embedding_for(chunk_id: &str, content: &str) -> Vec<f32> {
+        /// djb2 hash — simple, deterministic, and content-sensitive
+        fn djb2(s: &str) -> u64 {
+            let mut hash: u64 = 5381;
+            for b in s.bytes() {
+                hash = hash.wrapping_mul(33).wrapping_add(b as u64);
+            }
+            hash
+        }
+        // Combine chunk_id and content to produce a content-aware hash
+        let combined = format!("{chunk_id}:{content}");
+        let seed = djb2(&combined);
+        // Generate 5 pseudo-random f32 values in [0.0, 1.0) from the seed
+        // using a splitmix64-inspired xorshift
+        let mut state = seed;
+        let mut dims = Vec::with_capacity(5);
+        for _ in 0..5 {
+            state = state.wrapping_add(0x9E3779B97F4A7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+            z = z ^ (z >> 31);
+            // Map to [0.0, 1.0)
+            dims.push((z as f64 / u64::MAX as f64) as f32);
+        }
+        dims
     }
 }
 
@@ -944,12 +981,14 @@ impl PipelineNode for RequirementsNode {
         let req_type_cycle = [
             RequirementType::Functional,
             RequirementType::NonFunctional,
-            RequirementType::Constraint,
+            RequirementType::Security,
+            RequirementType::Performance,
         ];
         let stereotype_cycle = [
             SysMLv2Stereotype::FunctionalRequirement,
-            SysMLv2Stereotype::PerformanceRequirement,
             SysMLv2Stereotype::DesignConstraint,
+            SysMLv2Stereotype::SecurityRequirement,
+            SysMLv2Stereotype::PerformanceRequirement,
         ];
         input.iter().enumerate().map(|(i, ev)| {
             let idx = i % req_type_cycle.len();
@@ -1222,5 +1261,174 @@ mod tests {
         // With ≥4 requirements cycling through 3 types, we should see at least 2 different types
         let types_seen: std::collections::HashSet<_> = req_types.iter().map(|t| std::mem::discriminant(*t)).collect();
         assert!(types_seen.len() >= 2, "Expected ≥2 different RequirementType variants, got {}", types_seen.len());
+    }
+
+    #[test]
+    fn test_chunk_node_multi_chunk() {
+        let node = ChunkNode;
+        // Multi-sentence abstract: 5 sentences → expect 5 chunks
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:multi", "Multi-Chunk Test", &["Author"],
+            "First sentence. Second sentence. Third sentence. Fourth sentence. Fifth sentence.",
+        );
+        let chunks = node.execute(source);
+        assert_eq!(chunks.len(), 5, "Expected 5 chunks from 5-sentence abstract");
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(chunk.chunk_id, format!("chunk:{i}"));
+            assert_eq!(chunk.source_id, "arxiv:test:multi");
+            assert_eq!(chunk.chunk_index, i);
+            assert!(!chunk.content.is_empty());
+            assert_eq!(chunk.embedding.len(), 5, "Each chunk must have a 5-dim embedding");
+            assert!(chunk.confidence > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_chunk_node_single_sentence_fallback() {
+        let node = ChunkNode;
+        // Single sentence → still produces 1 chunk
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:single", "Single Sentence", &["Author"],
+            "A single sentence abstract.",
+        );
+        let chunks = node.execute(source);
+        assert_eq!(chunks.len(), 1);
+    }
+
+    #[test]
+    fn test_chunk_node_empty_abstract_fallback() {
+        let node = ChunkNode;
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:empty", "Empty Abstract", &["Author"], "",
+        );
+        let chunks = node.execute(source);
+        assert_eq!(chunks.len(), 1, "Empty abstract must produce a fallback chunk");
+    }
+
+    #[test]
+    fn test_chunk_node_deterministic_embeddings() {
+        let node = ChunkNode;
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:det", "Deterministic Test", &["Author"],
+            "Alpha. Beta. Gamma.",
+        );
+        let chunks_a = node.execute(source.clone());
+        let chunks_b = node.execute(source);
+        assert_eq!(chunks_a.len(), chunks_b.len());
+        for (a, b) in chunks_a.iter().zip(chunks_b.iter()) {
+            assert_eq!(a.embedding, b.embedding,
+                "Same input must produce identical embeddings");
+        }
+    }
+
+    #[test]
+    fn test_chunk_node_varied_embeddings() {
+        let node = ChunkNode;
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:var-emb", "Varied Embeddings", &["Author"],
+            "Different sentence one. Completely different sentence two.",
+        );
+        let chunks = node.execute(source);
+        assert_eq!(chunks.len(), 2);
+        // Different content must produce different embeddings
+        assert_ne!(chunks[0].embedding, chunks[1].embedding,
+            "Different chunks must have different embeddings");
+    }
+
+    #[test]
+    fn test_evidence_node_varied_types() {
+        let node = EvidenceNode;
+        // Build 4 chunks so we cycle through all 3 EvidenceType variants
+        let chunks: Vec<crate::doc_pipeline::SemanticChunk> = (0..4).map(|i| {
+            crate::doc_pipeline::SemanticChunk::new(
+                &format!("chunk:{i}"), "test:ev-types", i,
+                &format!("Sentence number {i} with some content for testing."),
+                &["test"], vec![0.1, 0.2, 0.3, 0.4, 0.5], 0.9,
+                Some("Test Section"),
+            )
+        }).collect();
+
+        let evidence = node.execute(chunks);
+        assert_eq!(evidence.len(), 4);
+
+        use crate::doc_pipeline::EvidenceType;
+        // Verify the cycle produces all three types
+        let types: Vec<&EvidenceType> = evidence.iter().map(|ev| &ev.evidence_type).collect();
+        assert!(types.contains(&&EvidenceType::Claim), "Must contain Claim evidence");
+        assert!(types.contains(&&EvidenceType::Statistic), "Must contain Statistic evidence");
+        assert!(types.contains(&&EvidenceType::Observation), "Must contain Observation evidence");
+
+        // Verify cycle order: Claim → Statistic → Observation → Claim
+        assert_eq!(types[0], &EvidenceType::Claim);
+        assert_eq!(types[1], &EvidenceType::Statistic);
+        assert_eq!(types[2], &EvidenceType::Observation);
+        assert_eq!(types[3], &EvidenceType::Claim);
+    }
+
+    #[test]
+    fn test_requirements_node_varied_types() {
+        let node = RequirementsNode;
+        // Build 4 evidence items → cycle through all 4 RequirementType variants
+        let evidence: Vec<crate::doc_pipeline::Evidence> = (0..4).map(|i| {
+            crate::doc_pipeline::Evidence::from_chunk(
+                &format!("ev:{:03}", i), &format!("chunk:{i}"), "test:req-types",
+                &format!("Statement {i} for testing."),
+                crate::doc_pipeline::EvidenceType::Claim, 0.9,
+                &format!("Quote {i}"), 0, 1,
+            )
+        }).collect();
+
+        let requirements = node.execute(evidence);
+        assert_eq!(requirements.len(), 4);
+
+        use crate::doc_pipeline::RequirementType;
+        let types: Vec<&RequirementType> = requirements.iter().map(|r| &r.req_type).collect();
+        assert!(types.contains(&&RequirementType::Functional), "Must contain Functional");
+        assert!(types.contains(&&RequirementType::NonFunctional), "Must contain NonFunctional");
+        assert!(types.contains(&&RequirementType::Security), "Must contain Security");
+        assert!(types.contains(&&RequirementType::Performance), "Must contain Performance");
+
+        // Verify cycle order: Functional → NonFunctional → Security → Performance
+        assert_eq!(types[0], &RequirementType::Functional);
+        assert_eq!(types[1], &RequirementType::NonFunctional);
+        assert_eq!(types[2], &RequirementType::Security);
+        assert_eq!(types[3], &RequirementType::Performance);
+
+        // Verify SysMLv2 stereotypes
+        use crate::doc_pipeline::SysMLv2Stereotype;
+        assert_eq!(requirements[0].sysml_stereotype, Some(SysMLv2Stereotype::FunctionalRequirement));
+        assert_eq!(requirements[2].sysml_stereotype, Some(SysMLv2Stereotype::SecurityRequirement));
+        assert_eq!(requirements[3].sysml_stereotype, Some(SysMLv2Stereotype::PerformanceRequirement));
+    }
+
+    #[test]
+    fn test_pipeline_varied_requirement_types_integration() {
+        // Full pipeline with multi-sentence abstract → verify varied types end-to-end
+        type Stage1 = Compose<ChunkNode, EvidenceNode>;
+        type FullPipeline = Compose<Stage1, RequirementsNode>;
+
+        let pipeline = FullPipeline {
+            first: Compose { first: ChunkNode, second: EvidenceNode },
+            second: RequirementsNode,
+        };
+
+        // 5 sentences → 5 chunks → 5 evidence → 5 requirements (cycling through 4 types)
+        let source = crate::doc_pipeline::DocumentSource::arxiv(
+            "test:full-varied",
+            "Full Pipeline Varied Types",
+            &["Author"],
+            "LLMs generate SRS documents. They outperform baseline methods. Security requirements must be explicit. Performance benchmarks show 3x improvement. Non-functional concerns are critical.",
+        );
+
+        let requirements: Vec<crate::doc_pipeline::Requirement> = pipeline.execute(source);
+        assert_eq!(requirements.len(), 5);
+
+        use crate::doc_pipeline::RequirementType;
+        let type_set: std::collections::HashSet<_> = requirements.iter()
+            .map(|r| std::mem::discriminant(&r.req_type))
+            .collect();
+        assert!(type_set.len() >= 3,
+            "Expected ≥3 different RequirementType variants across 5 requirements, got {}",
+            type_set.len());
     }
 }

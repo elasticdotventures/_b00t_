@@ -200,6 +200,8 @@ pub enum RequirementType {
     Interface,
     #[serde(rename = "design")]
     DesignConstraint,
+    Security,
+    Performance,
     Stakeholder,
 }
 
@@ -217,6 +219,8 @@ pub enum SysMLv2Stereotype {
     PerformanceRequirement,
     /// <<designConstraint>>
     DesignConstraint,
+    /// <<securityRequirement>>
+    SecurityRequirement,
     /// <<stakeholderRequirement>>
     StakeholderRequirement,
 }
