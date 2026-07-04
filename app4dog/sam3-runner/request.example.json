@@ -1,0 +1,14 @@
+{
+  "source_type": "path",
+  "image_path": "/workspace/input.jpg",
+  "prompts": [
+    {"type": "text", "value": "dog"},
+    {"type": "box", "value": [100, 200, 350, 480]},
+    {"type": "point", "value": {"coords": [225, 340], "label": 1}}
+  ],
+  "output_path": "/workspace/result.json",
+  "model_id": "facebook/sam3",
+  "device": "cuda",
+  "score_threshold": 0.5,
+  "output_format": "rle"
+}

@@ -56,6 +56,7 @@ pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
 pub mod ooda;
+pub mod ai_capability;
 pub mod pipeline_nodes;
 pub mod query_bus;
 pub mod rag;
