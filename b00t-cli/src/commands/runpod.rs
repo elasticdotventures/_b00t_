@@ -72,17 +72,25 @@ pub enum RunpodCommands {
 }
 
 fn pod_env_vars() -> Vec<runpod::EnvVar> {
-    // Pass secrets from local env to the RunPod pod.
-    // Only includes vars that are actually set and non-empty.
-    ["HF_TOKEN", "MLFLOW_TRACKING_URI", "MLFLOW_EXPERIMENT_NAME"]
-        .iter()
-        .filter_map(|k| {
-            std::env::var(k).ok().filter(|v| !v.is_empty()).map(|v| runpod::EnvVar {
-                key: k.to_string(),
-                value: v,
-            })
-        })
-        .collect()
+    let mut vars = vec![];
+    // 🤓 huggingface_hub checks HUGGING_FACE_HUB_TOKEN before HF_TOKEN; pass whichever is set
+    //    as HF_TOKEN so the training script's push_to_hub call authenticates correctly.
+    let hf_token = std::env::var("HF_TOKEN")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .or_else(|| std::env::var("HUGGING_FACE_HUB_TOKEN").ok().filter(|v| !v.is_empty()));
+    if let Some(tok) = hf_token {
+        vars.push(runpod::EnvVar { key: "HF_TOKEN".to_string(), value: tok.clone() });
+        vars.push(runpod::EnvVar { key: "HUGGING_FACE_HUB_TOKEN".to_string(), value: tok });
+    }
+    for k in &["MLFLOW_TRACKING_URI", "MLFLOW_EXPERIMENT_NAME"] {
+        if let Ok(v) = std::env::var(k) {
+            if !v.is_empty() {
+                vars.push(runpod::EnvVar { key: k.to_string(), value: v });
+            }
+        }
+    }
+    vars
 }
 
 pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
