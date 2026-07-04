@@ -1,5 +1,7 @@
 [b00t]
 name = "demo-langchain-agent"
+parent = "langchain-operator.agent"
+depends_on = ["python.cli"]
 type = "job"
 hint = "Demo workflow using LangChain agent for research tasks"
 
@@ -19,6 +21,7 @@ continue_on_failure = false
 
 [[b00t.job.steps]]
 name = "research-langchain"
+depends_on = ["python.cli"]
 description = "Use researcher agent to analyze LangChain integration"
 
 [b00t.job.steps.task]
@@ -39,6 +42,7 @@ timeout_ms = 180000
 
 [[b00t.job.steps]]
 name = "summarize-findings"
+depends_on = ["python.cli"]
 description = "Summarize the research findings"
 checkpoint = "research-complete"
 

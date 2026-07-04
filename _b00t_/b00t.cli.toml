@@ -1,5 +1,6 @@
 [b00t]
 name = "b00t"
+depends_on = ["build-and-test.job", "test-apalis.job"]
 type = "cli"
 desires = "0.7.35"
 install = "curl -fsSL https://raw.githubusercontent.com/elasticdotventures/dotfiles/main/install.sh | sh"

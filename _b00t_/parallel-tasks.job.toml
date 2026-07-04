@@ -3,6 +3,7 @@
 
 [b00t]
 name = "parallel-tasks"
+parent = "wrkflw.cli"
 type = "job"
 hint = "DAG workflow with parallel and sequential steps"
 version = "1.0.0"

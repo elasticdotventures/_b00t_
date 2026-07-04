@@ -3,6 +3,7 @@
 
 [b00t]
 name = "epoch-progression"
+parent = "alpha.agent"
 type = "job"
 hint = "Alpha node epoch progression — picks and executes tasks from the task queue"
 version = "1.0.0"
@@ -31,7 +32,7 @@ timeout_ms = 30000
 name = "execute-task"
 description = "Execute the picked task (runs tests or dispatches subagent)"
 checkpoint = "task-executed"
-depends_on = ["pick-task"]
+depends_on = ["b00t.cli"]
 
 [b00t.job.steps.task]
 type = "bash"

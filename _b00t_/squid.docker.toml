@@ -1,0 +1,4 @@
+[b00t]
+name = "squid"
+type = "docker"
+hint = "https://hub.docker.com/r/sameersbn/squid"

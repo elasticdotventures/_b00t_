@@ -1,5 +1,6 @@
 [b00t]
 name = "executive"
+depends_on = ["test-agent-simple.job"]
 type = "agent"
 hint = "Executive hive agent — manages system state transitions, resource scheduling, and agent delegation strategy"
 
@@ -77,18 +78,21 @@ max_concurrent_downloads = 1 # queue downloads; don't thrash disk
 
 [[b00t.agent.hive_strategy.transition_rules.rules]]
 name = "inference-ready"
+depends_on = ["test-agent-simple.job"]
 condition = "download_complete AND gpu_free_mb > 20000 AND ram_free_gb > 16"
 action = "b00t hive activate inference-qwen3"
 notify = "HIVE: Qwen3-Coder-Next ready, switching to inference mode"
 
 [[b00t.agent.hive_strategy.transition_rules.rules]]
 name = "inference-fallback"
+depends_on = ["test-agent-simple.job"]
 condition = "vllm_start_failed OR ram_free_gb < 4"
 action = "b00t hive activate inference-sm0l"
 notify = "⚠️ HIVE: falling back to sm0l inference (resource constraint)"
 
 [[b00t.agent.hive_strategy.transition_rules.rules]]
 name = "download-priority"
+depends_on = ["test-agent-simple.job"]
 condition = "download_queued AND inference_idle"
 action = "b00t hive activate download-mode"
 notify = "HIVE: inference idle, starting queued download"
