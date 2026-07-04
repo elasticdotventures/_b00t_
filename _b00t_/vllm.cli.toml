@@ -4,6 +4,7 @@
 
 [b00t]
 name = "vllm"
+trigger_words = ["vllm", "inference", "model", "gpu", "server", "qwen", "llama", "gemma"]
 type = "cli"
 desires = "0.19.1"
 hint = "vLLM 0.19.1 OpenAI-compat inference; GGUF, GPTQ, FP8, CPU offload for oversized models"
@@ -97,14 +98,17 @@ command = """curl -s http://localhost:8000/v1/chat/completions \
 
 [[b00t.references]]
 name = "vLLM 0.17.1 engine args"
+trigger_words = ["vllm", "inference", "model", "gpu", "server", "qwen", "llama", "gemma"]
 url = "https://docs.vllm.ai/en/v0.17.1/models/engine_args.html"
 
 [[b00t.references]]
 name = "Qwen3-Coder-Next GGUF"
+trigger_words = ["vllm", "inference", "model", "gpu", "server", "qwen", "llama", "gemma"]
 url = "https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF"
 
 [[b00t.references]]
 name = "Qwen3-Coder-Next collection"
+trigger_words = ["vllm", "inference", "model", "gpu", "server", "qwen", "llama", "gemma"]
 url = "https://huggingface.co/collections/Qwen/qwen3-coder-next"
 
 [validate]
