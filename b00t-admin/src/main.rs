@@ -1845,6 +1845,13 @@ function loadGraph(sel) {{
     window._isoViewStack = [];
     window._isoCurrentData = null;
     var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+    var useWasm = typeof window._isoRender === 'function';
+
+    if (useWasm) {{
+      loadIsometricWasm(target, hideOrphans);
+      return;
+    }}
+
     var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
     fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
       window._isoCurrentData = d;
@@ -2090,6 +2097,40 @@ function buildContainerDrilldown(container, data) {{
       attachIsoViewer(container);
     }});
   }});
+}}
+
+// ════════ WASM Isometric loader ════════
+
+(async function() {{
+  try {{
+    var m = await import('/wasm/wasm/isometric.js');
+    await m.default();
+    window._isoRender = m.render_isometric;
+    console.log('isometric WASM ready');
+  }} catch(e) {{ console.warn('isometric WASM:', e.message); }}
+}})();
+
+function loadIsometricWasm(target, hideOrphans) {{
+  var t0 = Date.now();
+  var jsonUrl = '/api/admin/viz/entangle/json' + (hideOrphans ? '?hide_orphans=true' : '');
+  fetch(jsonUrl).then(function(r){{return r.json();}}).then(function(d) {{
+    target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;">' +
+      '<div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:10px;\"></div>' +
+      '<div style=\"font-size:12px;\">Rendering ' + d.nodes.length + ' nodes...</div></div>';
+    setTimeout(function() {{
+      try {{
+        var svg = window._isoRender(JSON.stringify(d));
+        target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
+        var ms = Date.now() - t0;
+        document.getElementById('viz-title').textContent = 'Isometric View';
+        document.getElementById('viz-status').textContent = d.nodes.length + ' nodes, ' + d.edges.length + ' edges · WASM rendered in ' + ms + 'ms';
+        attachIsoViewer(target);
+        buildIsoLegend(target);
+      }} catch(e) {{
+        target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">WASM render error: ' + e.message + '</div>';
+      }}
+    }}, 50);
+  }}).catch(function(e){{ target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Fetch error: ' + e.message + '</div>'; }});
 }}
 
 </script>

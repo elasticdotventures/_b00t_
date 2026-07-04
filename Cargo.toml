@@ -23,6 +23,7 @@ members = [
     "b00t-zellij",
     "b00t-admin",
     "b00t-mermaid-wasm",
+    "b00t-isometric-wasm",
     "crates/ufo-types",
     "b00t-ui-wasm",
 ]
