@@ -83,6 +83,13 @@ fn pod_env_vars() -> Vec<runpod::EnvVar> {
         vars.push(runpod::EnvVar { key: "HF_TOKEN".to_string(), value: tok.clone() });
         vars.push(runpod::EnvVar { key: "HUGGING_FACE_HUB_TOKEN".to_string(), value: tok });
     }
+    // NGC_API_KEY — allows training pods to pull nvcr.io containers + push to NGC model registry
+    let ngc_key = std::env::var("NGC_API_KEY").ok().filter(|v| !v.is_empty())
+        .or_else(|| std::env::var("NVIDIA_API_KEY").ok().filter(|v| !v.is_empty()));
+    if let Some(k) = ngc_key {
+        vars.push(runpod::EnvVar { key: "NGC_API_KEY".to_string(), value: k.clone() });
+        vars.push(runpod::EnvVar { key: "NVIDIA_API_KEY".to_string(), value: k });
+    }
     for k in &["MLFLOW_TRACKING_URI", "MLFLOW_EXPERIMENT_NAME"] {
         if let Ok(v) = std::env::var(k) {
             if !v.is_empty() {
@@ -215,22 +222,26 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
 
             let gpu_type = gpu.unwrap_or_else(|| "NVIDIA RTX 4090".to_string());
 
-            // unsloth:latest uses supervisord entrypoint but RunPod overrides CMD with docker_args.
-            // Python is in /opt/venv; uv is installed via astral installer for clean package mgmt.
+            // 🤓 Use NGC PyTorch container — standard bash entrypoint (no supervisord).
+            //    nvcr.io/nvidia/pytorch:24.12-py3 = PyTorch 2.5, CUDA 12.6, Python 3.10, Ampere-ready.
+            //    unsloth/unsloth:latest is WRONG: supervisord entrypoint ignores docker_args CMD.
+            //    NGC API key: NGC_API_KEY env var (or anonymous pull for public images).
             let startup_cmd = format!(
                 "set -euo pipefail; \
-                 curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -2; \
                  export PATH=\"$HOME/.local/bin:$PATH\"; \
-                 uv pip install --python /opt/venv/bin/python3 -q 'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -3; \
+                 curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | tail -1; \
+                 uv pip install --system -q \
+                   'unsloth[cu124-ampere-torch260]' \
+                   'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -5; \
                  git clone --depth=1 https://github.com/elasticdotventures/_b00t_.git /workspace/b00t; \
                  cd /workspace/b00t; \
-                 /opt/venv/bin/python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
+                 python3 fine-tune/train_unsloth.py --config {config} 2>&1 | tee /workspace/train.log; \
                  echo DONE"
             );
 
             if dry_run {
                 println!("--- dry-run pod spec ---");
-                println!("image:   docker.io/unsloth/unsloth:latest");
+                println!("image:   nvcr.io/nvidia/pytorch:24.12-py3");
                 println!("gpu:     {gpu_type}");
                 println!("model:   {base_model}");
                 println!("spot:    {spot}");
@@ -243,7 +254,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
             let pod_name = format!("b00t-train-{ts}");
-            let image = "docker.io/unsloth/unsloth:latest".to_string();
+            let image = "nvcr.io/nvidia/pytorch:24.12-py3".to_string();
             let bash_args = vec!["bash".to_string(), "-c".to_string(), startup_cmd];
 
             let env = pod_env_vars();
