@@ -267,7 +267,7 @@ pub async fn handle_runpod(cmd: RunpodCommands) -> Result<()> {
                     container_disk_in_gb: Some(80),
                     docker_args: Some(bash_args),
                     ports: Some(vec![]),
-                    env,
+                    env: pod_env_vars(),
                     ..Default::default()
                 };
                 client.create_on_demand_pod(req).await.context("create_on_demand_pod failed")?
