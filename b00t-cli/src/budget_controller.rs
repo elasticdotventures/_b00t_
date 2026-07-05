@@ -503,9 +503,12 @@ mod tests {
         assert_eq!(deserialized.status, state.status);
     }
 
+    // Serialize env-var-mutating tests to prevent races between parallel test threads.
+    static CH0NKY_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
     #[test]
     fn test_ch0nky_gate_env_override() {
-        // When B00T_AI_CH0NKY_MODEL is set, EnvOverride wins regardless of GPU state
+        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
         unsafe { std::env::set_var("B00T_AI_CH0NKY_MODEL", "test-model") };
         unsafe { std::env::set_var("B00T_AI_CH0NKY_BASE", "http://test:8000/v1") };
         let gate = ChonkyModelGate::default();
@@ -519,7 +522,7 @@ mod tests {
 
     #[test]
     fn test_ch0nky_gate_fable_fallback_when_gpu_unavailable() {
-        // No GPU detected (SystemSnapshot returns None) → fable fallback
+        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
         unsafe { std::env::remove_var("B00T_AI_CH0NKY_MODEL") };
         let gate = ChonkyModelGate {
             gpu_threshold_mb: u32::MAX, // force fallback by setting impossible threshold

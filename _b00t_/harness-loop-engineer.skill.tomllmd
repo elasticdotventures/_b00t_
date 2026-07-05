@@ -1,0 +1,181 @@
+[b00t]
+name = "harness-loop-engineer"
+type = "skill"
+hint = "Harness-loop engineer: evaluate new tools for b00t integration using MECE/TRIZ/OODA/Kaizen; batteries-included agentic harness design"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["harness", "ooda", "triz", "mece", "kaizen", "design-thinking", "fine-tune", "agentic", "ralph", "context-management"]
+
+[b00t.skill]
+depends_on = ["b00t-interface-library", "b00t-hooks", "datum-authoring", "ooda"]
+unlocks = [
+    "harness-loop-engineer::evaluate-tool",
+    "harness-loop-engineer::surface-codepaths",
+    "harness-loop-engineer::mece-decompose",
+    "harness-loop-engineer::triz-ifr",
+    "harness-loop-engineer::kaizen-backlog",
+    "harness-loop-engineer::context-budget",
+    "harness-loop-engineer::ralph-handoff",
+    "harness-loop-engineer::fine-tune-signal",
+    "harness-loop-engineer::pattern-canonicalize",
+]
+
+# ── Harness-Loop Engineer ──────────────────────────────────────────────────────
+#
+# The harness engineer evaluates new tools/libraries FROM AN AGENT'S POINT OF VIEW.
+# Primary concern: does this tool reduce context cost, increase determinism,
+# or produce fine-tune-ready signal? Secondary: does it fit b00t patterns?
+#
+# Core axiom (joelniklaus harness-optimization):
+#   "Don't train the model — evolve the harness."
+#   State-of-the-art performance comes from deterministic process sequences,
+#   not bigger weights. Fine-tuned models + b00t harness >> frontier zero-shot.
+#
+# 🤓 TRIZ IFR for every new tool: what is the IDEAL FINAL RESULT if this tool
+#    replaced the manual/ad-hoc pattern it targets? Delete the manual work.
+
+# ── Evaluate Tool (harness-loop-engineer::evaluate-tool) ─────────────────────
+[b00t.skill.recipes."harness-loop-engineer::evaluate-tool"]
+description = "MECE capability audit of a new tool for b00t integration"
+# @example: b00t learn harness-loop-engineer; b00t exec "evaluate tool XYZ"
+steps = [
+    "1. DISCOVER: b00t assimilate <url>; b00t grok ask <tool-name> to surface prior art",
+    "2. MECE-DECOMPOSE: split tool capabilities into mutually-exclusive function surfaces",
+    "3. TRIZ-IFR: for each surface, state the Ideal Final Result (what manual work does it delete?)",
+    "4. KAIZEN-GATE: score each surface 1-5 on: context-savings / determinism / fine-tune-signal",
+    "5. VERDICT: ADOPT (score≥4) | EVALUATE (score 2-3) | SKIP (score≤1)",
+    "6. IF ADOPT: create datum via b00t datum authoring pattern; add to justfile",
+    "7. IF SKIP: b00t lfmf harness-loop <tool> '<reason for skip>'",
+]
+
+# ── Surface Codepaths (harness-loop-engineer::surface-codepaths) ─────────────
+[b00t.skill.recipes."harness-loop-engineer::surface-codepaths"]
+description = "Map all CLI/MCP/API surfaces of a tool into typed b00t codepaths"
+steps = [
+    "1. Run tool --help; capture as structured output (JSON preferred)",
+    "2. Map each subcommand to a BootDatum type: Cli / Mcp / Skill / Agent",
+    "3. Identify which surfaces produce deterministic output (pipe-safe vs interactive)",
+    "4. Write named just recipes for pipe-safe surfaces → deterministic token-efficient chains",
+    "5. Flag interactive surfaces with ⚠️ — these block OODA automation",
+    "6. Add to justfile under # @tribal: <tool> recipes section",
+]
+
+# ── MECE Decompose (harness-loop-engineer::mece-decompose) ───────────────────
+[b00t.skill.recipes."harness-loop-engineer::mece-decompose"]
+description = "Apply MECE decomposition to a problem or tool capability space"
+# Mutually Exclusive, Collectively Exhaustive — no overlaps, no gaps
+steps = [
+    "1. List all known capability surfaces (brainstorm, no filtering)",
+    "2. Group into ≤5 exclusive buckets (e.g. Discover/Plan/Implement/Review/Ship)",
+    "3. Verify MECE: each item fits exactly one bucket; all items covered",
+    "4. Assign each bucket a tier: sm0l / ch0nky / frontier",
+    "5. Sequence buckets by dependency (DAG, not waterfall)",
+    "6. Record in b00t task list: b00t task add '<bucket>: <description>'",
+]
+
+# ── TRIZ IFR (harness-loop-engineer::triz-ifr) ────────────────────────────────
+[b00t.skill.recipes."harness-loop-engineer::triz-ifr"]
+description = "State the Ideal Final Result for a proposed change — delete the manual work"
+# IFR = the system achieves the result itself with no extra cost / complexity
+steps = [
+    "1. State current manual process: 'Agent does X by hand each time'",
+    "2. State IFR: 'X happens automatically, zero agent tokens, zero human approval'",
+    "3. Identify the contradiction: what prevents IFR from being true now?",
+    "4. Apply TRIZ principle: Segmentation / Prior Action / Dynamics / Extraction",
+    "5. Propose minimal mechanical implementation that moves toward IFR",
+    "6. Record IFR + contradiction + principle in datum as # @tribal comment",
+]
+
+# ── Kaizen Backlog (harness-loop-engineer::kaizen-backlog) ───────────────────
+[b00t.skill.recipes."harness-loop-engineer::kaizen-backlog"]
+description = "Build and maintain the Kaizen improvement backlog for b00t harness"
+steps = [
+    "1. K1 (now, non-breaking): small safe improvements, no API changes",
+    "2. K2 (next sprint): moderate refactors, documented migration path",
+    "3. K3 (next quarter): architectural improvements, executive gate required",
+    "4. K4 (stretch): paradigm shifts — new DatumStore, new transport, new model tier",
+    "5. Assign each item a TRIZ IFR + certainty grade: HIGH/MEDIUM/LOW",
+    "6. b00t task add 'K<n>: <description>' for each item",
+    "7. Every session: pop K1s first; checkpoint after each; OODA until MECE",
+]
+
+# ── Context Budget (harness-loop-engineer::context-budget) ───────────────────
+[b00t.skill.recipes."harness-loop-engineer::context-budget"]
+description = "Audit and reduce agent context consumption per operation"
+# Context is the scarcest resource — every token costs latency + money
+steps = [
+    "1. Identify the top 3 context consumers in the current session (tool outputs, reads)",
+    "2. For each: can it be replaced by a named just recipe with awk/grep pipeline?",
+    "3. For each: can it be replaced by a b00t MCP call (structured, compressed)?",
+    "4. For each: can it be deferred to a sm0l subagent (compress output before returning)?",
+    "5. Write the just recipe or MCP wrapper; delete the raw bash call",
+    "6. b00t lfmf context-budget '<old pattern>' '<new pattern + savings estimate>'",
+    "Examples:",
+    "  BAD:  cargo test 2>&1 (full output floods context)",
+    "  GOOD: just test-summary (awk reduces to 1 line: '1669 passed, 0 failed, 11 ignored')",
+    "  BAD:  find . -name '*.toml' | xargs grep name (50+ lines)",
+    "  GOOD: b00t datum list (structured, paginated, compressed)",
+]
+
+# ── Ralph Handoff (harness-loop-engineer::ralph-handoff) ─────────────────────
+[b00t.skill.recipes."harness-loop-engineer::ralph-handoff"]
+description = "Context-forward handoff pattern: give fresh agent compressed state, clear goal"
+# Ralph = b00t's outer OODA loop agent; handoff keeps momentum across context limits
+steps = [
+    "1. CHECKPOINT: b00t checkpoint (commit + summarize current state)",
+    "2. COMPRESS: summarize session to ≤500 tokens (what changed, what's next, blockers)",
+    "3. WRITE: b00t context save '<session-slug>'",
+    "4. BRIEF: write AGENTS/handoff-<slug>.md with: branch, tasks done, tasks pending, IFR",
+    "5. SPAWN: just compile-agent <role> 3 /tmp/agent.md && claude --agent /tmp/agent.md",
+    "6. NEW AGENT: reads handoff, runs b00t whoami, resumes from last checkpoint",
+    "7. VERIFY: new agent confirms prior work and proceeds — no re-derivation",
+]
+
+# ── Fine-tune Signal (harness-loop-engineer::fine-tune-signal) ───────────────
+[b00t.skill.recipes."harness-loop-engineer::fine-tune-signal"]
+description = "Generate high-quality fine-tune signal from b00t harness interactions"
+# Goal: models trained on b00t patterns outperform frontier zero-shot
+# because they arrive 'batteries included' — pattern-fluent, no scaffold needed
+steps = [
+    "1. Every successful tool invocation: log as (input, tool-call, output) triple",
+    "2. Every LFMF lesson: log as (wrong-pattern, correct-pattern, reason) triple",
+    "3. Every OODA cycle: log phase transitions as structured decision events",
+    "4. Format as ChatML/Alpaca for b00t fine-tune dataset",
+    "5. Push to HF dataset: just hf-push-dataset b00t-harness-traces",
+    "6. Gate on quality: sm0l model scores each triple PASS/FAIL before inclusion",
+    "7. Fine-tune cycle: ai-finetune::train on new dataset → smoke-test → adapter tag",
+]
+
+# ── Pattern Canonicalize (harness-loop-engineer::pattern-canonicalize) ────────
+[b00t.skill.recipes."harness-loop-engineer::pattern-canonicalize"]
+description = "Convert ad-hoc agent behavior into reusable canonical b00t patterns"
+steps = [
+    "1. Identify repetitive agent action (≥2 occurrences in session)",
+    "2. Name it: <verb>-<noun> in snake_case (e.g. scan-datums, gate-gpu, emit-evidence)",
+    "3. Write it as a just recipe OR b00t MCP tool wrapper",
+    "4. Add to justfile under appropriate section",
+    "5. Document in a .skill.tomllmd datum with TRIZ IFR + type_tags",
+    "6. b00t lfmf pattern-canonicalize '<old-pattern>' '<new canonical name'",
+    "7. In next session: use canonical name — zero re-derivation tokens",
+]
+
+# ── OODA Integration ───────────────────────────────────────────────────────────
+# The harness-loop-engineer runs inside the b00t OODA loop:
+#   Observe: b00t ooda status — what phase? what's blocking?
+#   Orient:  evaluate-tool + mece-decompose + kaizen-backlog
+#   Decide:  ADOPT/EVALUATE/SKIP verdict per surface
+#   Act:     write datum, just recipe, or b00t lfmf; checkpoint; advance task
+#
+# Every Act produces evidence: b00t checkpoint creates a commit with tests passing.
+# The ralph-handoff pattern ensures no work is lost across context boundaries.
+#
+# Reference: joelniklaus/harness-optimization — "Don't train the model, evolve the harness"
+# Key insight: deterministic harness patterns as fine-tune corpus → batteries-included models
+
+# b00t:map v1
+# summary: Harness-loop engineer skill — evaluate tools for b00t via MECE/TRIZ/OODA/Kaizen
+# tags: harness, ooda, triz, mece, kaizen, design-thinking, fine-tune, agentic, ralph, context
+# tier: frontier
+# cmds: b00t learn harness-loop-engineer; b00t ooda run
+# complexity: 8

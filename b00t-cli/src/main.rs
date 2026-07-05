@@ -187,6 +187,9 @@ Tips:
 - Body: <250 tokens, actionable, never repo-specific.
 - Affirmative: 'Do X for Y benefit', not 'Don't do X'.
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+
+Advice mode (consult prior lessons before fixing):
+  b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
     Lfmf {
@@ -1914,6 +1917,10 @@ async fn main() {
     let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
+            // --help / --version: let clap print and exit 0
+            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+                e.exit();
+            }
             // Datum-driven dispatch: search the datum space for <name>
             if raw_args.len() > 1 {
                 let candidate = &raw_args[1];
@@ -2645,7 +2652,16 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) =
+            // `lfmf advice <tool>` — retrieve prior lessons instead of recording.
+            // 🤓 Kaizen agent-fix-first: consult lessons BEFORE attempting a fix.
+            if tool == "advice" {
+                if let Err(e) =
+                    b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
+                {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) =
                 b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
             {
                 eprintln!("Error: {}", e);

@@ -27,10 +27,9 @@ members = [
     "crates/ufo-types",
     "b00t-ui-wasm",
 ]
-exclude = [
-    "vendor/embed-anything-b00t",
+exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-server",
-]
+    "vendor/runpod-sdk"]
 resolver = "2"
 
 [workspace.package]
@@ -105,3 +104,5 @@ too_many_lines = { level = "allow", priority = 1 }
 # TODO: upstream PR to gemm crate.
 [patch.crates-io]
 # gemm-common = { path = "vendor/gemm-common" }  # TODO: init submodule
+# 🤓 runpod-sdk: upstream has required Pod/Machine fields absent in API responses; fixed locally, PR pending
+runpod-sdk = { path = "vendor/runpod-sdk" }

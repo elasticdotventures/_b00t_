@@ -417,3 +417,6 @@ template vars in bash bodies: just {{ }} template interpolation only works in re
 
 ---
 justfile scope: b00t root justfile is for b00t commands only; repo-specific CI/wrkflw targets belong in that repo's own justfile; always run b00t-cli learn just before editing any justfile
+
+---
+source_file vs justfile: In just modules, justfile() returns the ROOT justfile path; use source_file() to get the current module file path for cross-recipe calls within a module.

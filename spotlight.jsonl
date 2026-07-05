@@ -37,3 +37,11 @@
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:09:53.295003875+00:00"}
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:10:09.342044809+00:00"}
 {"consumer":"rust-doc","event":"spotlight.llm.chat_completions","latency_ms":0,"model":"ch0nky","ts":"2026-06-28T07:10:41.390786182+00:00"}
+{"ts":"2026-07-02T14:24:11.263606715+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-02T15:13:48.305967385+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-03T10:14:40.108736345+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-03T10:15:24.195201367+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-03T10:22:37.292663+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-03T10:39:51.351809219+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"ts":"2026-07-03T10:48:23.891606590+00:00","event":"spotlight.llm.chat_completions","consumer":"test-consumer","model":"test-model","latency_ms":42}
+{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-07-03T13:23:12.817354579+00:00"}

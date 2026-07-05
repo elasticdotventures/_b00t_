@@ -526,13 +526,13 @@ optional_for = []
             std::fs::write(&p, content).unwrap();
         }
 
-        // Capture stdout
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
-        // Need to make the datum_dir point to our temp dir
+        // _B00T_TEST_ROOT overrides get_workspace_root() so it uses our temp dir
+        // instead of calling `git rev-parse` (which races on .gitconfig during parallel tests).
+        // SAFETY: test holds CWD_LOCK so no other test reads this env var concurrently.
+        unsafe { std::env::set_var("_B00T_TEST_ROOT", dir.path()) };
         let result = export_topology("mermaid", None, 3);
+        unsafe { std::env::remove_var("_B00T_TEST_ROOT") };
         assert!(result.is_ok(), "export_topology failed: {:?}", result.err());
-        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]

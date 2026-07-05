@@ -49,9 +49,11 @@ impl GatesCommands {
                     }),
                 };
 
-                // ZellijGate::check is async — spin a local runtime
-                let rt = tokio::runtime::Runtime::new()?;
-                let result = rt.block_on(gate.check(action, &ctx));
+                // ZellijGate::check is async; we're inside #[tokio::main] so
+                // Runtime::new() would panic — use block_in_place instead.
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(gate.check(action, &ctx))
+                });
 
                 let (verdict, detail) = match &result {
                     GateResult::Allow => ("Allow", "action permitted".to_string()),

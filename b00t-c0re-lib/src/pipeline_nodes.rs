@@ -62,6 +62,28 @@ use crate::doc_pipeline::{
 ///
 /// Each node has an internal state machine with formal transition guards.
 /// `state_machine()` returns the full state graph with FOL transition guards.
+/// # PolyConnector — typed composable node algebra
+///
+/// Every `PipelineNode` is a **PolyConnector**: a typed I/O boundary whose
+/// composition correctness is enforced at compile time, not runtime.
+///
+/// The algebra mirrors Rust iterators — `map`, `filter_map`, `batch`, `fan_out`,
+/// `then` (flatMap) — but operates on typed *nodes* not values.  The type system
+/// guarantees edge compatibility: mismatched I/O types don't compile.
+///
+/// ```text
+/// FetchNode               (String      → DocumentSource)
+///   .then(ChunkNode)      (DocumentSource → SemanticChunk)
+///   .map(|c| c.text)      (SemanticChunk  → String)
+///   .batch()              (Vec<String>    → Vec<String>)
+///   .fan_out(Sam3Node)    ((Vec<String>, SamOutput))
+/// ```
+///
+/// This pattern extends throughout b00t wherever typed I/O flows exist:
+/// - AI capability nodes (ai_capability.rs — Sam3Node, future VLM/ASR nodes)
+/// - Assimilation pipeline (assimilate/mod.rs — fetch→extract→index)
+/// - OODA phases (ooda.rs — each phase is a node; run_phases = Compose chain)
+/// - Agent coordination tasks (agent_coordination.rs — delegate_task wraps a node)
 pub trait PipelineNode: Debug + Send + Sync {
     /// Input type — what this node consumes
     type Input: Debug + Clone + Send + Sync;
@@ -70,47 +92,80 @@ pub trait PipelineNode: Debug + Send + Sync {
 
     // ── Identity ──────────────────────────────────────────────────────
 
-    /// Unique node identifier (e.g., "chunk", "extract-evidence")
     fn node_id(&self) -> &str;
-    /// Human-readable label for diagrams
     fn node_label(&self) -> &str;
-    /// Node category for grouping (e.g., "ingest", "extract", "derive")
     fn node_category(&self) -> NodeCategory;
 
     // ── FOL Contracts ─────────────────────────────────────────────────
 
-    /// Pre-conditions — FOL formulas that must hold before execution.
-    ///
-    /// Example: `∃ input: is_valid_document(input)`
     fn preconditions(&self) -> Vec<SerializableFOLFormula>;
-
-    /// Post-conditions — FOL formulas guaranteed after execution.
-    ///
-    /// Example: `∀ chunk: chunk ∈ output → has_embedding(chunk)`
     fn postconditions(&self) -> Vec<SerializableFOLFormula>;
-
-    /// Invariants — FOL formulas that always hold.
     fn invariants(&self) -> Vec<SerializableFOLFormula>;
 
     // ── Execution ─────────────────────────────────────────────────────
 
-    /// Execute this node — transform Input → Output
     fn execute(&self, input: Self::Input) -> Self::Output;
 
     // ── State Machine ─────────────────────────────────────────────────
 
-    /// Return the full state machine for this node (if stateful).
-    /// Stateless nodes return an empty machine.
     fn state_machine(&self) -> StateMachine;
 
     // ── Visualization ─────────────────────────────────────────────────
 
-    /// Input port labels (for node graph rendering)
     fn input_ports(&self) -> Vec<PortDef>;
-    /// Output port labels
     fn output_ports(&self) -> Vec<PortDef>;
-    /// Visual style
     fn visual_style(&self) -> NodeStyle;
+
+    // ── PolyConnector combinators (where Self: Sized for by-value moves) ─
+
+    /// Sequential composition: `self` then `next`.  Type-checked: `Self::Output = N::Input`.
+    fn then<N>(self, next: N) -> Compose<Self, N>
+    where
+        Self: Sized,
+        N: PipelineNode<Input = Self::Output>,
+    {
+        Compose { first: self, second: next }
+    }
+
+    /// Functor map: transform the output type with a closure.
+    fn map<F, O2>(self, f: F) -> MapNode<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Output) -> O2 + Send + Sync,
+        O2: Debug + Clone + Send + Sync,
+    {
+        MapNode { node: self, f }
+    }
+
+    /// Filter-map: optionally transform the output.
+    /// `None` means the item was filtered out; the caller decides what to do with gaps.
+    fn filter_map<F, O2>(self, f: F) -> FilterMapNode<Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Output) -> Option<O2> + Send + Sync,
+        O2: Debug + Clone + Send + Sync,
+    {
+        FilterMapNode { node: self, f }
+    }
+
+    /// Batch: run this node over every element of `Vec<Input>` → `Vec<Output>`.
+    fn batch(self) -> BatchNode<Self>
+    where
+        Self: Sized,
+        Self::Input: Clone,
+    {
+        BatchNode { node: self }
+    }
+
+    /// Fan-out: clone the input, send through two independent nodes, return both outputs.
+    fn fan_out<N>(self, other: N) -> FanOut<Self, N>
+    where
+        Self: Sized,
+        N: PipelineNode<Input = Self::Input>,
+        Self::Input: Clone,
+    {
+        FanOut { left: self, right: other }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -217,6 +272,172 @@ where
             stroke: "#6366f1".to_string(),
             shape: NodeShape::RoundedBox,
         }
+    }
+}
+
+// ── PolyConnector: MapNode ─────────────────────────────────────────────────
+
+/// Functor adapter: applies `f` to the output of `N`.  `N::Input → O2`.
+pub struct MapNode<N, F> {
+    pub node: N,
+    pub f: F,
+}
+
+impl<N: Debug, F> Debug for MapNode<N, F> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.debug_struct("MapNode").field("node", &self.node).field("f", &"<fn>").finish()
+    }
+}
+
+impl<N, F, O2> PipelineNode for MapNode<N, F>
+where
+    N: PipelineNode,
+    F: Fn(N::Output) -> O2 + Send + Sync,
+    O2: Debug + Clone + Send + Sync,
+{
+    type Input = N::Input;
+    type Output = O2;
+
+    fn node_id(&self)    -> &str { "map" }
+    fn node_label(&self) -> &str { "Map" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+    fn preconditions(&self)  -> Vec<SerializableFOLFormula> { self.node.preconditions() }
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
+    fn invariants(&self)     -> Vec<SerializableFOLFormula> { self.node.invariants() }
+    fn execute(&self, input: N::Input) -> O2 { (self.f)(self.node.execute(input)) }
+    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn input_ports(&self)  -> Vec<PortDef> { self.node.input_ports() }
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "mapped".into(), port_type: "O2".into(), direction: PortDirection::Output }]
+    }
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#0f172a".into(), stroke: "#a78bfa".into(), shape: NodeShape::Diamond }
+    }
+}
+
+// ── PolyConnector: FilterMapNode ───────────────────────────────────────────
+
+/// Option-gated map: `N::Input → Option<O2>`.
+/// `None` means the item was filtered out; the caller decides what to do with gaps.
+pub struct FilterMapNode<N, F> {
+    pub node: N,
+    pub f: F,
+}
+
+impl<N: Debug, F> Debug for FilterMapNode<N, F> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.debug_struct("FilterMapNode").field("node", &self.node).field("f", &"<fn>").finish()
+    }
+}
+
+impl<N, F, O2> PipelineNode for FilterMapNode<N, F>
+where
+    N: PipelineNode,
+    F: Fn(N::Output) -> Option<O2> + Send + Sync,
+    O2: Debug + Clone + Send + Sync,
+{
+    type Input = N::Input;
+    type Output = Option<O2>;
+
+    fn node_id(&self)    -> &str { "filter_map" }
+    fn node_label(&self) -> &str { "FilterMap" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+    fn preconditions(&self)  -> Vec<SerializableFOLFormula> { self.node.preconditions() }
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
+    fn invariants(&self)     -> Vec<SerializableFOLFormula> { self.node.invariants() }
+    fn execute(&self, input: N::Input) -> Option<O2> { (self.f)(self.node.execute(input)) }
+    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn input_ports(&self)  -> Vec<PortDef> { self.node.input_ports() }
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "filtered".into(), port_type: "Option<O2>".into(), direction: PortDirection::Output }]
+    }
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#0f172a".into(), stroke: "#f59e0b".into(), shape: NodeShape::Diamond }
+    }
+}
+
+// ── PolyConnector: BatchNode ───────────────────────────────────────────────
+
+/// Batch adapter: runs `N` over every element of `Vec<N::Input>` → `Vec<N::Output>`.
+#[derive(Debug)]
+pub struct BatchNode<N> {
+    pub node: N,
+}
+
+impl<N> PipelineNode for BatchNode<N>
+where
+    N: PipelineNode,
+    N::Input: Clone,
+{
+    type Input = Vec<N::Input>;
+    type Output = Vec<N::Output>;
+
+    fn node_id(&self)    -> &str { "batch" }
+    fn node_label(&self) -> &str { "Batch" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+    fn preconditions(&self)  -> Vec<SerializableFOLFormula> { self.node.preconditions() }
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> { self.node.postconditions() }
+    fn invariants(&self)     -> Vec<SerializableFOLFormula> { self.node.invariants() }
+    fn execute(&self, inputs: Vec<N::Input>) -> Vec<N::Output> {
+        inputs.into_iter().map(|i| self.node.execute(i)).collect()
+    }
+    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn input_ports(&self)  -> Vec<PortDef> {
+        vec![PortDef { name: "batch_in".into(), port_type: "Vec<I>".into(), direction: PortDirection::Input }]
+    }
+    fn output_ports(&self) -> Vec<PortDef> {
+        vec![PortDef { name: "batch_out".into(), port_type: "Vec<O>".into(), direction: PortDirection::Output }]
+    }
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#0f172a".into(), stroke: "#34d399".into(), shape: NodeShape::RoundedBox }
+    }
+}
+
+// ── PolyConnector: FanOut ──────────────────────────────────────────────────
+
+/// Fan-out: clone input, run through two independent nodes, return both outputs.
+/// `I → (L::Output, R::Output)` where both `L` and `R` accept `I`.
+#[derive(Debug)]
+pub struct FanOut<L, R> {
+    pub left: L,
+    pub right: R,
+}
+
+impl<L, R> PipelineNode for FanOut<L, R>
+where
+    L: PipelineNode,
+    R: PipelineNode<Input = L::Input>,
+    L::Input: Clone,
+{
+    type Input = L::Input;
+    type Output = (L::Output, R::Output);
+
+    fn node_id(&self)    -> &str { "fan_out" }
+    fn node_label(&self) -> &str { "FanOut" }
+    fn node_category(&self) -> NodeCategory { NodeCategory::Composite }
+    fn preconditions(&self)  -> Vec<SerializableFOLFormula> {
+        let mut p = self.left.preconditions(); p.extend(self.right.preconditions()); p
+    }
+    fn postconditions(&self) -> Vec<SerializableFOLFormula> {
+        let mut p = self.left.postconditions(); p.extend(self.right.postconditions()); p
+    }
+    fn invariants(&self) -> Vec<SerializableFOLFormula> {
+        let mut p = self.left.invariants(); p.extend(self.right.invariants()); p
+    }
+    fn execute(&self, input: L::Input) -> (L::Output, R::Output) {
+        let l = self.left.execute(input.clone());
+        let r = self.right.execute(input);
+        (l, r)
+    }
+    fn state_machine(&self) -> StateMachine { self.left.state_machine() }
+    fn input_ports(&self) -> Vec<PortDef> { self.left.input_ports() }
+    fn output_ports(&self) -> Vec<PortDef> {
+        let mut p = self.left.output_ports();
+        p.extend(self.right.output_ports());
+        p
+    }
+    fn visual_style(&self) -> NodeStyle {
+        NodeStyle { fill: "#0f172a".into(), stroke: "#f472b6".into(), shape: NodeShape::RoundedBox }
     }
 }
 
@@ -1430,5 +1651,75 @@ mod tests {
         assert!(type_set.len() >= 3,
             "Expected ≥3 different RequirementType variants across 5 requirements, got {}",
             type_set.len());
+    }
+
+    // ── PolyConnector combinator tests ────────────────────────────────────────
+
+    /// `map` wraps a node's output type without touching its input.
+    #[test]
+    fn test_polyconnector_map() {
+        let node = FetchNode;
+        let mapped = node.map(|doc: crate::doc_pipeline::DocumentSource| doc.source_id.clone());
+        // Type: FetchNode::Input=String → MapNode output=String
+        let result = mapped.execute("test-arxiv-id".to_string());
+        // arxiv_id from FetchNode should round-trip through the map closure
+        assert_eq!(result, "arxiv:test-arxiv-id");
+        assert_eq!(mapped.node_id(), "map");
+    }
+
+    /// `filter_map` wraps output in Option; None when predicate rejects.
+    #[test]
+    fn test_polyconnector_filter_map_pass() {
+        let node = FetchNode;
+        let filtered = node.filter_map(|doc: crate::doc_pipeline::DocumentSource| {
+            if doc.source_id.is_empty() { None } else { Some(doc.source_id.clone()) }
+        });
+        let result = filtered.execute("2501.00001".to_string());
+        assert_eq!(result, Some("arxiv:2501.00001".to_string()));
+    }
+
+    #[test]
+    fn test_polyconnector_filter_map_reject() {
+        let node = FetchNode;
+        let filtered = node.filter_map(|_doc: crate::doc_pipeline::DocumentSource| {
+            Option::<String>::None
+        });
+        let result = filtered.execute("anything".to_string());
+        assert!(result.is_none());
+    }
+
+    /// `batch` lifts a node to operate over Vec<Input> → Vec<Output>.
+    #[test]
+    fn test_polyconnector_batch() {
+        let node = FetchNode.map(|doc: crate::doc_pipeline::DocumentSource| {
+            doc.source_id.clone()
+        });
+        let batched = node.batch();
+        let results = batched.execute(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        assert_eq!(results, vec!["arxiv:a", "arxiv:b", "arxiv:c"]);
+        assert_eq!(batched.node_id(), "batch");
+    }
+
+    /// `fan_out` clones the input, routes through two nodes, returns both outputs.
+    #[test]
+    fn test_polyconnector_fan_out() {
+        let left  = FetchNode.map(|doc: crate::doc_pipeline::DocumentSource| doc.source_id.clone());
+        let right = FetchNode.map(|doc: crate::doc_pipeline::DocumentSource| doc.title.clone());
+        let fan   = left.fan_out(right);
+        let (id, title) = fan.execute("my-paper".to_string());
+        assert_eq!(id, "arxiv:my-paper");
+        assert!(!title.is_empty());
+        assert_eq!(fan.node_id(), "fan_out");
+    }
+
+    /// Full PolyConnector chain: FetchNode.map().batch().then(...)
+    /// The type system enforces correctness — this won't compile if types mismatch.
+    #[test]
+    fn test_polyconnector_chain() {
+        let chain = FetchNode
+            .map(|doc: crate::doc_pipeline::DocumentSource| doc.source_id.clone())
+            .filter_map(|id: String| if id.is_empty() { None } else { Some(id.to_uppercase()) });
+        let result = chain.execute("arxiv:123".to_string());
+        assert_eq!(result, Some("ARXIV:ARXIV:123".to_string()));
     }
 }

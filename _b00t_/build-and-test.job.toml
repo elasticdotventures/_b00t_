@@ -141,7 +141,6 @@ echo "Binaries verified"
 #    re-running `cargo build` after a fix reuses the existing cache.
 [[b00t.job.rollback]]
 name = "report-failure"
-parent = "b00t.cli"
 description = "Report failure without touching the shared build cache"
 
 [b00t.job.rollback.task]

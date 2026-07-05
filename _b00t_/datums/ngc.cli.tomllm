@@ -1,0 +1,67 @@
+# NGC CLI — NVIDIA GPU Cloud catalog + model farm access
+# @tribal: NGC_API_KEY is the same credential for container pulls, model downloads, and NIM API.
+#          NVIDIA_API_KEY is the alias used by build.nvidia.com / integrate.api.nvidia.com.
+#          They are interchangeable — set BOTH to the same value.
+# @example: b00t learn ngc
+# @example: just ngc::container-pull pytorch:24.12-py3
+# @example: just ngc::model-list nemotron
+
+[b00t.schema]
+version = "1.0"
+
+[datum]
+name = "ngc"
+title = "NVIDIA GPU Cloud (NGC) CLI"
+description = """
+NGC gives b00t access to:
+1. Curated container catalog  (nvcr.io/nvidia/*) — modern PyTorch, TensorRT, TensorFlow
+2. Pre-trained model registry — Nemotron, Llama-3, Mistral, Gemma via NVIDIA hosting
+3. Free developer model API   — OpenAI-compatible, generous daily limits for open-weight models
+4. NGC CLI tool               — browse/pull containers and models from terminal
+
+Key endpoints:
+- Container registry : nvcr.io/nvidia/<image>:<tag>
+- Model API base URL : https://integrate.api.nvidia.com/v1  (OpenAI-compatible)
+- NGC CLI docs       : https://docs.ngc.nvidia.com/cli/index.html
+- Catalog UI         : https://catalog.ngc.nvidia.com
+"""
+type = "cli"
+type_tags = ["catalog", "containers", "model-api", "nvidia", "gpu"]
+tier = "frontier"
+
+[datum.env]
+# Add to ~/.b00t/.env
+NGC_API_KEY   = ""   # https://org.ngc.nvidia.com/setup/api-key
+NVIDIA_API_KEY = ""  # same value — alias used by integrate.api.nvidia.com
+
+[datum.images]
+# NGC PyTorch containers — use these for RunPod training pods (no supervisord)
+# Format: nvcr.io/nvidia/pytorch:<yy.mm>-py3
+# CUDA 12.6, PyTorch 2.5: "24.12-py3"
+# CUDA 12.8, PyTorch 2.6: "25.03-py3"
+training_base = "nvcr.io/nvidia/pytorch:24.12-py3"
+training_latest = "nvcr.io/nvidia/pytorch:25.03-py3"
+tensorrt = "nvcr.io/nvidia/tensorrt:25.03-py3"
+
+[datum.models]
+# Free-tier models via integrate.api.nvidia.com (NVIDIA developer program)
+# Rate limits: generous daily tokens; no persistent cost for members
+nemotron_70b  = "nvidia/llama-3.1-nemotron-70b-instruct"
+nemotron_51b  = "nvidia/nemotron-4-51b-instruct"
+llama3_1_70b  = "meta/llama-3.1-70b-instruct"
+llama3_1_405b = "meta/llama-3.1-405b-instruct"
+mixtral_8x22b = "mistralai/mixtral-8x22b-instruct-v0.1"
+qwen25_72b    = "qwen/qwen2.5-72b-instruct"
+
+[datum.guards]
+# Replaces 'docker pull nvcr.io/*' with NGC CLI pull for auth
+pull_pattern = "docker pull nvcr.io/*"
+pull_action  = "ngc registry image pull"
+
+[b00t.map]
+# b00t:map v1
+# summary: NVIDIA NGC catalog — containers, models, free OpenAI-compatible model API
+# tags: nvidia, ngc, containers, nemotron, llama, model-api, gpu, finetune
+# tier: frontier
+# cmds: ngc config set; ngc registry image list nvidia/pytorch; just ngc::container-list
+# complexity: 3
