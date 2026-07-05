@@ -1405,6 +1405,7 @@ dependencies = [
  "glob",
  "hex",
  "hf-hub",
+ "hostname",
  "inquire",
  "k0mmand3r",
  "k8s-openapi",

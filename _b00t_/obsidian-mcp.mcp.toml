@@ -1,0 +1,56 @@
+# b00t datum: obsidian-mcp-connector bridge
+# type: mcp
+# Bridges MCP stdio ↔ HTTP to a running Obsidian instance on the Windows host.
+# Requires: Obsidian with MCP Connector plugin enabled on the Windows host,
+#           and OBSIDIAN_TOKEN set in env.
+#
+# 🤓 Two deployment modes:
+#   1. Container (default): podman run -i obsidian-mcp-bridge → host.docker.internal:27200
+#   2. Direct (no container): npx -y mcp-remote http://localhost:27200/mcp --header ...
+
+[b00t]
+name = "obsidian-mcp"
+type = "mcp"
+hint = "MCP server bridging to Obsidian vault via obsidian-mcp-connector plugin"
+depends_on = ["obsidian-mcp-bridge.docker"]
+
+[b00t.learn]
+topic = "obsidian-mcp-connector"
+auto_digest = false
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "podman"
+args = ["run", "-i", "--rm", "--name", "obsidian-mcp", "--network", "host",
+        "-e", "OBSIDIAN_TOKEN", "obsidian-mcp-bridge:latest"]
+requires = ["OBSIDIAN_TOKEN"]
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "npx"
+args = ["-y", "mcp-remote", "http://localhost:27200/mcp", "--header", "Authorization: Bearer ${OBSIDIAN_TOKEN}"]
+requires = ["OBSIDIAN_TOKEN"]
+
+[[b00t.references]]
+name = "GitHub: istefox/obsidian-mcp-connector"
+url = "https://github.com/istefox/obsidian-mcp-connector"
+
+[[b00t.references]]
+name = "MCP Remote (npm)"
+url = "https://www.npmjs.com/package/mcp-remote"
+
+[[b00t.usage]]
+description = "Build the container image"
+command = "podman build -t obsidian-mcp-bridge containers/obsidian-mcp-bridge"
+
+[[b00t.usage]]
+description = "Run as stdio MCP server (container mode)"
+command = "OBSIDIAN_TOKEN=your_token podman run -i --rm --network host obsidian-mcp-bridge:latest"
+
+[[b00t.usage]]
+description = "Run as HTTP relay (exposes :27201)"
+command = "OBSIDIAN_TOKEN=your_token podman run -d --rm --network host --name obsidian-mcp obsidian-mcp-bridge:latest http"
+
+[[b00t.usage]]
+description = "Run directly without container (via npx)"
+command = "OBSIDIAN_TOKEN=your_token npx -y mcp-remote http://localhost:27200/mcp --header 'Authorization: Bearer $OBSIDIAN_TOKEN'"
