@@ -4220,7 +4220,7 @@ hint = "containers"
             hook_install: None, hook_update: None, hook_learn: None,
             uninstall: None, hook_uninstall: None, unlocks: None,
             type_tags: None, maintenance: None, required_for_core: None,
-            runtime: None, polyseme: None,
+            runtime: None, polyseme: None, trigger_words: None,
         }
     }
 
