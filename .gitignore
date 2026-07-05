@@ -315,7 +315,7 @@ session-guards.json
 # Runtime state files
 exec-audit.json
 ooda-state.json
-evidence/satisfies.jsonl
+evidence/
 test/bats/
 test/test_helper/
 buildd/
