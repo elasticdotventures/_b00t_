@@ -2,9 +2,9 @@
 //! Returns { nodes: [...], edges: [...], depth: {...} } directly,
 //! letting the WASM layout engine do SVG rendering client-side.
 
-use b00t_l3dg3rr_viz::{InvariantEdge, InvariantGraph, InvariantNode, VisualizationRole};
+use b00t_l3dg3rr_viz::InvariantGraph;
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, ContextDepth, filter_orphans};
-use b00t_l3dg3rr_viz::artifact::{curate_orphans, ClassifierHints};
+use b00t_l3dg3rr_viz::artifact::curate_orphans;
 use axum::extract::Query;
 use std::collections::HashMap;
 

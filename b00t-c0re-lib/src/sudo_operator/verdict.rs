@@ -20,7 +20,7 @@ use std::path::Path;
 /// the in-cluster Service port (8000) that hive.toml's B00T_AI_CH0NKY_BASE-
 /// style vars assume for pod-to-pod traffic. Overridable via env.
 const DEFAULT_SM0L_BASE: &str = "http://127.0.0.1:30801/v1";
-const SM0L_API_KEY: &str = "local-b00t";
+const SM0L_API_KEY: &str = "local-b00t"; // default; overridable via B00T_AI_SM0L_KEY
 
 /// Resolve `git show --stat` for each cited commit hash, in `project_root`.
 /// Commits that fail to resolve are simply omitted — treated as
@@ -160,6 +160,7 @@ pub fn adversarial_review(
     let prompt = build_prompt(&event);
 
     let base_url = std::env::var("B00T_AI_SM0L_BASE").unwrap_or_else(|_| DEFAULT_SM0L_BASE.to_string());
+    let api_key = std::env::var("B00T_AI_SM0L_KEY").unwrap_or_else(|_| SM0L_API_KEY.to_string());
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     let body = serde_json::json!({
@@ -183,7 +184,7 @@ pub fn adversarial_review(
                 let client = reqwest::Client::new();
                 let resp = client
                     .post(&url)
-                    .bearer_auth(SM0L_API_KEY)
+                    .bearer_auth(&api_key)
                     .json(&body)
                     .send()
                     .await

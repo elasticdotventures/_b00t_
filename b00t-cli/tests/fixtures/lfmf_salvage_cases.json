@@ -1,0 +1,56 @@
+{
+  "comment": "Salvage-first lesson parsing cases. Token counter in tests is whitespace word count; limits are parameters so cases stay small. Meta-pattern under test: NEVER lose the payload — malformed input degrades to salvage, not bail.",
+  "topic_max": 5,
+  "body_max": 10,
+  "cases": [
+    {
+      "name": "well_formed",
+      "raw": "atomic commits: commit small focused changes",
+      "topic": "atomic commits",
+      "body": "commit small focused changes",
+      "salvage": null
+    },
+    {
+      "name": "no_colon_auto_topic",
+      "raw": "podman rootless bind mounts need userns keep-id",
+      "topic": "podman rootless bind mounts need",
+      "body": "podman rootless bind mounts need userns keep-id",
+      "salvage": "no_colon"
+    },
+    {
+      "name": "url_colon_not_topic_separator",
+      "raw": "use https://example.com/docs for setup guidance and vibes",
+      "topic": "use https://example.com/docs for setup guidance",
+      "body": "use https://example.com/docs for setup guidance and vibes",
+      "salvage": "url_colon"
+    },
+    {
+      "name": "topic_overflow_truncated_full_raw_becomes_body",
+      "raw": "one two three four five six seven: body text",
+      "topic": "one two three four five",
+      "body": "one two three four five six seven: body text",
+      "salvage": "topic_overflow"
+    },
+    {
+      "name": "body_overflow_recorded_anyway",
+      "raw": "big lesson: w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11",
+      "topic": "big lesson",
+      "body": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11",
+      "salvage": "body_overflow"
+    },
+    {
+      "name": "empty_body_salvaged",
+      "raw": "oops:",
+      "topic": "oops",
+      "body": "oops",
+      "salvage": "empty_part"
+    },
+    {
+      "name": "empty_topic_salvaged",
+      "raw": ": just a body here",
+      "topic": "just a body here",
+      "body": "just a body here",
+      "salvage": "empty_part"
+    }
+  ]
+}

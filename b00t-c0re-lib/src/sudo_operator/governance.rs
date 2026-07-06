@@ -11,6 +11,7 @@
 //    Without evidence → command DID NOT HAPPEN. Grant additionally requires
 //    a checkpoint reference before the command executes (see checkpoint.rs).
 
+use crate::reviewer::governance::SatisfiesResult;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -133,6 +134,49 @@ impl SudoGrantEvidence {
     }
 }
 
+// ── Satisfies<SudoGrantConstraint> (Tax-Lawyer pattern) ─────────────────────
+// UFO: Abstract — constraints are formal rules governing the grant moment,
+// independent of any particular grant instance (see PRD [ufo_grounding]).
+// 🤓 No free-standing Satisfies<T> trait exists in the workspace yet; this
+//    mirrors reviewer::governance's constraint-enum + SatisfiesResult idiom
+//    and reuses the reviewer's SatisfiesResult type directly.
+
+/// A constraint a sudo-grant's evidence must satisfy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SudoGrantConstraint {
+    /// The governance invariant gating execution: evidence verifies
+    /// (content_hash is a real SHA-256 digest) AND the Grant carries a
+    /// checkpoint reference. Delegates to grant_is_execution_ready().
+    ExecutionReady,
+}
+
+impl SudoGrantConstraint {
+    /// FOL: constraint(evidence) → bool
+    pub fn evaluate(&self, evidence: &SudoGrantEvidence) -> bool {
+        match self {
+            SudoGrantConstraint::ExecutionReady => {
+                evidence.verify() && evidence.grant_is_execution_ready()
+            }
+        }
+    }
+}
+
+impl SudoGrantEvidence {
+    /// Satisfies<SudoGrantConstraint>: a Grant satisfies ExecutionReady only
+    /// with BOTH verified evidence and a checkpoint ref; Deny/Escalate never do.
+    pub fn satisfies(&self, constraint: &SudoGrantConstraint) -> SatisfiesResult {
+        if constraint.evaluate(self) {
+            SatisfiesResult::yes("grant has verified evidence and a checkpoint ref")
+        } else if !self.verify() {
+            SatisfiesResult::no("evidence failed self-consistency check")
+        } else {
+            SatisfiesResult::no(
+                "grant is not execution-ready (non-Grant disposition or missing checkpoint ref)",
+            )
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +242,41 @@ mod tests {
         assert!(SudoDisposition::Grant { ttl_seconds: 1 }.permits_execution());
         assert!(!SudoDisposition::Deny { reason: "x".into() }.permits_execution());
         assert!(!SudoDisposition::Escalate { reason: "x".into() }.permits_execution());
+    }
+
+    #[test]
+    fn test_satisfies_execution_ready_grant_with_checkpoint() {
+        let evidence =
+            SudoGrantEvidence::new(&sample_event(), &SudoDisposition::Grant { ttl_seconds: 60 })
+                .with_checkpoint("git_tag=checkpoint/sudo/abc123");
+        let result = evidence.satisfies(&SudoGrantConstraint::ExecutionReady);
+        assert!(result.satisfied);
+        assert!(!result.is_violated());
+    }
+
+    #[test]
+    fn test_satisfies_unsatisfied_without_checkpoint() {
+        let evidence =
+            SudoGrantEvidence::new(&sample_event(), &SudoDisposition::Grant { ttl_seconds: 60 });
+        assert!(evidence.satisfies(&SudoGrantConstraint::ExecutionReady).is_violated());
+    }
+
+    #[test]
+    fn test_satisfies_unsatisfied_for_deny_even_with_checkpoint() {
+        let evidence = SudoGrantEvidence::new(
+            &sample_event(),
+            &SudoDisposition::Deny { reason: "no".into() },
+        )
+        .with_checkpoint("git_tag=checkpoint/sudo/abc123");
+        assert!(evidence.satisfies(&SudoGrantConstraint::ExecutionReady).is_violated());
+    }
+
+    #[test]
+    fn test_satisfies_unsatisfied_for_tampered_hash() {
+        let mut evidence =
+            SudoGrantEvidence::new(&sample_event(), &SudoDisposition::Grant { ttl_seconds: 60 })
+                .with_checkpoint("git_tag=checkpoint/sudo/abc123");
+        evidence.content_hash = "not-a-hash".into();
+        assert!(evidence.satisfies(&SudoGrantConstraint::ExecutionReady).is_violated());
     }
 }
