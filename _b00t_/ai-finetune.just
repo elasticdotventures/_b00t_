@@ -1322,3 +1322,9 @@ runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwe
     run_stage verify "adapter missing from HF Hub" just --justfile {{source_file()}} runpod-verify repo="{{repo}}"
     echo ""
     echo "✅ Pipeline COMPLETE — adapter at https://huggingface.co/{{repo}}"
+
+# ── Evidence → training examples (#595) ───────────────────────────────────────
+# Convert local gate evidence (PASS entries, deduped) into verify-loop examples.
+evidence-train out="fine-tune/evidence_train.jsonl":
+    uv run python3 fine-tune/evidence_to_train.py --out {{out}}
+    @echo "merge into train.jsonl only after operator curation"
