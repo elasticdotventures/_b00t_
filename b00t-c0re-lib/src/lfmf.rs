@@ -218,7 +218,12 @@ impl LfmfSystem {
         let category = self.resolve_category(tool);
         let lesson_obj = self.parse_lesson(&category, lesson)?;
 
-        // Try to store in vector database first
+        // 🤓 Durable-first: the filesystem write MUST precede vector enrichment.
+        // A death between the two (SIGPIPE from a truncating pipe, ctrl-c, crash)
+        // must never lose the payload — the cheap local store is the source of
+        // truth, the vector DB is an index.
+        self.store_in_filesystem(&lesson_obj)?;
+
         let vector_stored = if let Some(ref client) = self.grok_client {
             match self.store_in_vector_db(client, &lesson_obj).await {
                 Ok(_) => true,
@@ -231,14 +236,11 @@ impl LfmfSystem {
             false
         };
 
-        // Circuit breaker: storage failed → disable grok_client so list_lessons
-        // reads from filesystem where we know the data was written
+        // Circuit breaker: vector storage failed → disable grok_client so
+        // list_lessons reads from filesystem where the data was just written
         if !vector_stored && self.grok_client.is_some() {
             self.grok_client = None;
         }
-
-        // Always store in filesystem as backup
-        self.store_in_filesystem(&lesson_obj)?;
 
         Ok(())
     }

@@ -14,3 +14,6 @@ datum validation paths: Use absolute paths when validating project-local datum f
 
 ---
 salvage-first meta-pattern: an outer layer (CLI/MCP) must never validate stricter than the layer it fronts; degrade malformed input to salvage plus telemetry, never bail-and-discard — and keep diagnostics out of data channels (return empty vecs, print hints to stderr)
+
+---
+durable-first persistence: record_lesson tried vector store before filesystem write — SIGPIPE from a truncating pipe (lfmf ... | head -1) killed the process between them and lost the payload; cheap local store MUST come first, enrichment second
