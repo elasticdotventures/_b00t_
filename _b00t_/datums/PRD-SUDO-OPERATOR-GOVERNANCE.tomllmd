@@ -15,7 +15,13 @@ type_tags = ["prd", "sudo", "governance", "satisfies", "constraint", "ledgrrr", 
 [prd]
 id     = "PRD-SUDO-OPERATOR-GOVERNANCE"
 title  = "Sudo Operator Governance — adversarial-model review gate for privileged commands, with evidence and pre-grant checkpoint"
-status = "proposed"
+status = "partial"
+# 🤓 v1 implemented (b00t-c0re-lib/src/sudo_operator/{governance,checkpoint,verdict}.rs
+#    + b00t-cli exec.rs): adversarial review via sm0l, evidence+checkpoint-gated
+#    Grant (Satisfies<SudoGrantConstraint> via reviewer's SatisfiesResult idiom),
+#    fail-safe Escalate (n8n webhook + notify-send, then deny), exec.rs
+#    --justification/--cites wiring. Remaining: ledgerr-mcp actions (phase 6)
+#    and arc-kit-au evidence-graph wiring.
 tier   = "frontier"
 extends = "PRD-REVIEWER-GOVERNANCE-ENGINE"
 inherits_from = ["ufo-types::Satisfies<C>", "arc-kit-au::evidence", "job_executor::checkpoint"]
@@ -302,8 +308,8 @@ phases = [
 
 [acceptance]
 must = [
-    "SudoGrantVerdict implements Satisfies<SudoGrantConstraint>",
-    "evidence_node() produces deterministic Blake3 hash from command + justification + cited commits + disposition",
+    "Sudo grant evidence implements Satisfies<SudoGrantConstraint> (reviewer-module SatisfiesResult idiom; carried by SudoGrantEvidence)",
+    "SudoGrantEvidence produces deterministic SHA-256 hash from command + justification + cited commits + disposition (Blake3 migration deferred to arc-kit-au phase-6 wiring — see [[related]] VENDOR-LEDGRRR note)",
     "Grant requires BOTH evidence_node() AND checkpoint_system_state() before command executes",
     "Deny and Escalate never execute the command",
     "Escalate fires the n8n webhook AND notify-send, then denies (no synchronous wait in v1)",
