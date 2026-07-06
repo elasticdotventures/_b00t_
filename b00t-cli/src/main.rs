@@ -169,7 +169,13 @@ Good entries separate neophyte from master. Bad entries are vague, negative, or 
 
 Usage:
   b00t-cli lfmf <tool> "<topic>: <body>"
+  b00t-cli lfmf <tool> "<lesson>"        # colon optional — topic auto-derived, entry salvage-marked
   b00t-cli lfmf --tool <tool> --lesson "<topic>: <body>"
+  b00t-cli lfmf stats all|<tool>         # hit/salvage/miss telemetry report
+
+Salvage-first: malformed lessons (missing colon, URL first-colon, over-long topic/body)
+are NEVER discarded — the payload is recorded with a `<!-- salvaged:<kind> -->` marker
+and counted in telemetry (~/.b00t/lfmf-telemetry.jsonl, override $B00T_LFMF_TELEMETRY).
 
 Examples:
   # Good
@@ -2652,9 +2658,16 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
+            // `lfmf stats all|<tool>` — hit/salvage/miss report from telemetry JSONL.
+            if tool == "stats" {
+                let filter = if lesson == "all" { None } else { Some(lesson.as_str()) };
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_stats(filter) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             // `lfmf advice <tool>` — retrieve prior lessons instead of recording.
             // 🤓 Kaizen agent-fix-first: consult lessons BEFORE attempting a fix.
-            if tool == "advice" {
+            } else if tool == "advice" {
                 if let Err(e) =
                     b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
                 {

@@ -375,10 +375,9 @@ impl LfmfSystem {
         let tool_file = learn_dir.join(format!("{}.md", tool));
 
         if !tool_file.exists() {
-            return Ok(vec![format!(
-                "💡 No lessons found for tool '{}'. Record lessons with: lfmf {} \"<topic>: <lesson>\"",
-                tool, tool
-            )]);
+            // 🤓 Empty vec, not a sentinel message — diagnostics belong to callers,
+            // never the data channel (bash capture, knowledge aggregation).
+            return Ok(Vec::new());
         }
 
         let content = fs::read_to_string(&tool_file).context(format!(
@@ -490,10 +489,9 @@ impl LfmfSystem {
         let tool_file = learn_dir.join(format!("{}.md", category));
 
         if !tool_file.exists() {
-            return Ok(vec![format!(
-                "No lessons found for category '{}'",
-                category
-            )]);
+            // 🤓 Empty vec, not a sentinel message: lessons are DATA (bash-captured,
+            // knowledge-aggregated) — diagnostics belong to callers, never the data channel.
+            return Ok(Vec::new());
         }
 
         let content = fs::read_to_string(&tool_file)?;
