@@ -32,7 +32,7 @@ jobs:
           submodules: false
 
       - name: Initialize l3dg3rr submodule
-        run: git submodule update --init --recursive vendor/ledgrrr
+        run: git submodule update --init --recursive vendor/ledgrrr vendor/runpod-sdk
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

@@ -835,7 +835,7 @@ struct NodeVars {
 /// | REQUIRED  | `x <= bound`                        | Prevent runaway X expansion |
 /// | STRONG    | `x[b] - x[a] >= MIN_X_DIST`         | Nodes in the same layer must not overlap |
 /// | STRONG    | `z[to] >= z[from] + LAYER_SPACING`  | Fix backward edges (cycles broken by topological sort) |
-/// | MEDIUM    | `|x[to] - x[from]| <= 3 * SPACING`  | Connected nodes stay roughly X-aligned |
+/// | MEDIUM    | `\|x[to] - x[from]\| <= 3 * SPACING`  | Connected nodes stay roughly X-aligned |
 /// | WEAK      | `x == preferred_x`                  | Nudge towards grid layout as fallback |
 ///
 /// # Cassowary semantics
