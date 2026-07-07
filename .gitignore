@@ -340,3 +340,9 @@ fine-tune/evidence_train.jsonl
 
 # serena pod runtime artifacts (writes into its config hostPath)
 _b00t_/k8s/serena-config/news*
+
+# serena runtime cache (project.yml IS tracked)
+.serena/cache/
+
+# harvest output — mined from local transcripts, derived data
+harvest_candidates.jsonl
