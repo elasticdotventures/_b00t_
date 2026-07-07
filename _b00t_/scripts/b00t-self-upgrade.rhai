@@ -1,59 +1,39 @@
 // b00t-self-upgrade.rhai — zero-shot self-upgrade detection + execution
-//
-// Runs before the ralph loop. Checks if workspace has a newer b00t version
-// than the installed binary. Auto-upgrades if needed.
-//
-// Returns: "upgraded" | "current" | "error:<msg>"
-//
-// Used by: b00t up (default flow, no --self flag)
-
-fn shell_quote(s) {
-    let out = s;
-    out = out.replace("'", "'\\''");
-    "'" + out + "'"
-}
 
 let result = "current";
 let workspace_root = WORKSPACE_ROOT;
 
 if workspace_root == "" {
-    log_warn("b00t-self-upgrade: no workspace root — skipping");
+    log_warn("b00t-self-upgrade: no workspace root");
     return result;
 }
 
-// 1. Detect installed version vs workspace version
-let cargo_toml = workspace_root + "/b00t-cli/Cargo.toml";
+// Read workspace version from root Cargo.toml
+let grep_cmd = "grep '^version' " + workspace_root + "/Cargo.toml | head -1";
+let version_line = run_cmd(grep_cmd);
+let ws_raw = str_strip(version_line);
 
-if !file_exists(cargo_toml) {
-    log_warn("b00t-self-upgrade: no b00t-cli/Cargo.toml found at " + workspace_root);
-    return result;
-}
-
-// Read workspace version from Cargo.toml
-let version_line = run_cmd("grep '^version' " + shell_quote(cargo_toml) + " | head -1");
-let workspace_version = version_line.trim();
-
-if workspace_version == "" {
+if ws_raw == "" {
     log_warn("b00t-self-upgrade: could not parse workspace version");
     return result;
 }
 
-// Strip prefix
-let parts = workspace_version.split("=");
-if parts.len() < 2 {
-    log_warn("b00t-self-upgrade: unexpected version format: " + workspace_version);
+// Parse: "version = \"0.9.4\"" -> "0.9.4"
+let eq_idx = ws_raw.index_of("=");
+if eq_idx < 0 {
+    log_warn("b00t-self-upgrade: unexpected version format: " + ws_raw);
     return result;
 }
-let raw_ver = parts[1].trim();
-let ws_ver = raw_ver.trim_matches('"').trim_matches('\'');
+let after_eq = ws_raw.sub_string(eq_idx + 1);
+let raw_ver = str_strip(after_eq);
+let ws_ver = raw_ver.replace("\"", "");
 
-// 2. Get installed version
+// Get installed version
 let installed_out = run_cmd("b00t --version 2>/dev/null | head -1");
-let installed_parts = installed_out.split("\n");
-let installed_line = installed_parts[0].trim();
-// Format: "b00t-cli 0.9.1" — extract the version part
-let ver_parts = installed_line.split(" ");
-let installed_ver = if ver_parts.len() >= 2 { ver_parts[ver_parts.len()-1].trim() } else { "" };
+let line_brk = installed_out.index_of("\n");
+let installed_line = if line_brk >= 0 { installed_out.sub_string(0, line_brk) } else { installed_out };
+let sp_idx = installed_line.index_of(" ");
+let installed_ver = if sp_idx >= 0 { installed_line.sub_string(sp_idx + 1) } else { installed_line };
 
 log_info("b00t version: installed=" + installed_ver + " workspace=" + ws_ver);
 
@@ -62,20 +42,19 @@ if installed_ver == ws_ver || installed_ver == "" || ws_ver == "" {
     return result;
 }
 
-// 3. Upgrade needed — run workspace build
+// Upgrade needed
 log_warn("b00t version mismatch: installed v" + installed_ver + " < workspace v" + ws_ver);
 log_info("Running self-upgrade via workspace build...");
-
-let upgrade_out = run_cmd("cargo install --path " + shell_quote(workspace_root + "/b00t-cli") + " --force 2>&1");
-
+let upgrade_cmd = "cargo install --path " + workspace_root + "/b00t-cli --force 2>&1";
+let upgrade_out = run_cmd(upgrade_cmd);
 log_info("upgrade output: " + upgrade_out);
 
-// 4. Verify
-let verify_out = run_cmd("b00t --version 2>/dev/null | head -1");
-let verify_parts = verify_out.split("\n");
-let verify_line = verify_parts[0].trim();
-let new_parts = verify_line.split(" ");
-let new_ver = if new_parts.len() >= 2 { new_parts[new_parts.len()-1].trim() } else { "" };
+// Verify
+let vout = run_cmd("b00t --version 2>/dev/null | head -1");
+let vbrk = vout.index_of("\n");
+let vline = if vbrk >= 0 { vout.sub_string(0, vbrk) } else { vout };
+let vsp = vline.index_of(" ");
+let new_ver = if vsp >= 0 { vline.sub_string(vsp + 1) } else { vline };
 
 if new_ver == ws_ver {
     log_success("b00t upgraded to v" + new_ver);
