@@ -1,0 +1,11 @@
+# Winner: .tomllmd outranks .toml for the same stem.
+[b00t]
+name = "shadowed"
+type = "config"
+hint = "winner: highest-rank dialect for stem 'shadowed.config'"
+
+# b00t:map v1
+# summary: shadowing winner fixture
+# tags: fixture, shadow
+# tier: sm0l
+# complexity: 1

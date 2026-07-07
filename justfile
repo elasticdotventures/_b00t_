@@ -2745,3 +2745,15 @@ check-warnings:
 # Show all diagnostic file locations
 check-warnings-locs:
     @cargo check 2>&1 | grep "^\s*-->" | sort -u
+
+# validate-datums: check datum dialects (.tomllm/.tomllmd/gate/hive) — taplo if installed, else b00t-lsp --check (task #109 CI surface)
+validate-datums dir="_b00t_":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v taplo >/dev/null 2>&1; then
+        taplo check
+    else
+        echo "taplo not installed — falling back to b00t-lsp --check"
+        cargo build -p b00t-lsp --quiet
+        ./target/debug/b00t-lsp --check {{dir}}
+    fi

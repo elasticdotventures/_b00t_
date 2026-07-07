@@ -1,0 +1,4 @@
+[b00t]
+name = "shadowed"
+type = "config"
+hint = "loser: .toml is outranked by .tomllmd with the same stem"
