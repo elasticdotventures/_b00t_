@@ -137,6 +137,11 @@ impl UpArgs {
             }
         }
 
+        // Zero-shot self-upgrade: detect if b00t needs updating and auto-upgrade
+        if let Err(e) = try_auto_upgrade() {
+            eprintln!("  ⚠️  Auto-upgrade check failed (non-fatal): {e}");
+        }
+
         let target = self.resolved_target();
 
         let workspace_root = crate::utils::get_workspace_root();
@@ -570,6 +575,35 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Zero-shot auto-upgrade: detect if b00t needs updating via rhai script.
+/// Runs before the ralph loop. Non-fatal — upgrades are best-effort.
+fn try_auto_upgrade() -> Result<()> {
+    let context = b00t_c0re_lib::B00tContext::current()?;
+    let engine = b00t_c0re_lib::RhaiEngine::new(context)?;
+
+    let script_path = engine.scripts_dir().join("b00t-self-upgrade.rhai");
+
+    if !script_path.exists() {
+        return Ok(());
+    }
+
+    let result = engine
+        .execute_file(&script_path)
+        .context("Self-upgrade rhai script failed")?;
+
+    let outcome: String = result.cast::<String>();
+    match outcome.as_str() {
+        "upgraded" => println!("  ✅ b00t auto-upgraded"),
+        "current" => {}
+        _ => {
+            if outcome.starts_with("error:") {
+                eprintln!("  ⚠️  Self-upgrade issue: {}", outcome);
+            }
+        }
+    }
     Ok(())
 }
 
