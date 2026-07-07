@@ -26,7 +26,8 @@ if eq_idx < 0 {
 }
 let after_eq = ws_raw.sub_string(eq_idx + 1);
 let raw_ver = str_strip(after_eq);
-let ws_ver = raw_ver.replace("\"", "");
+let q_parts = raw_ver.split("\"");
+let ws_ver = if q_parts.len() >= 2 { q_parts[1] } else { raw_ver };
 
 // Get installed version
 let installed_out = run_cmd("b00t --version 2>/dev/null | head -1");
