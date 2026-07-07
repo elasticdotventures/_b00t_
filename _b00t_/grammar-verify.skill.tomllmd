@@ -14,6 +14,8 @@ unlocks = [
     "grammar-verify::audit-free-slots",
     "grammar-verify::one-shape-trinity",
     "grammar-verify::extend-domain",
+    "grammar-verify::schema-as-grammar",
+    "grammar-verify::backend-adapter",
 ]
 
 # ── The Pattern: LLM proposes, grammar constrains, Z3 disposes ────────────────
@@ -71,6 +73,44 @@ unlocks = [
 # Grammar shrinks the hallucination surface to two checkable holes;
 # the solver plugs them. Training makes compliance cheap.
 
+# ── JSON Schema IS a grammar (the portable leg) ──────────────────────────────
+#
+# Any JSON Schema compiles mechanically to a grammar whose language is exactly
+# "documents satisfying this schema" — llama.cpp does schema→GBNF internally.
+# Validation moves from after-the-fact rejection (audit posture) to
+# during-decode impossibility (grammar posture). Same logit masking.
+#
+# Rule of thumb:
+#   machine-consumed output  → JSON Schema, derived from the CONSUMING type
+#   human-readable + forced structure (b00t-verify shape) → hand GBNF
+#
+# 🤓 IFR (zero hand-maintenance): derive the schema from the Rust type that
+#    deserializes the response — schemars #[derive(JsonSchema)] on
+#    SudoDisposition/BootDatum/etc. The type system becomes the grammar
+#    authority; serde-compatible by construction; drift impossible.
+#    (Aligns with Govcraft HolonEmit / f0undry zero-hand-maintenance graph.)
+#
+# ⚠️ Schema constrains FORM, never truth: {"disposition":"grant","reason":
+#    "looks fine lol"} is schema-perfect and semantically hollow. String free
+#    slots keep their solver/gate audit. Schema is the grammar leg of the
+#    trinity, never the solver leg.
+
+# ── Backend portability: one schema, per-server dialects ─────────────────────
+#
+# JSON Schema is the lingua franca across the inference fleet; each backend
+# takes it through a different request field. GBNF only works on llama.cpp.
+#
+#   llama-server : "json_schema": {...}          (also "grammar": "<gbnf>")
+#   vLLM         : "guided_json": {...}          (vLLM extension field)
+#   OpenAI-compat: "response_format": {"type": "json_schema",
+#                    "json_schema": {"name": "...", "schema": {...}, "strict": true}}
+#                  (newest vLLM + llama-server accept this too — prefer it,
+#                   fall back to the native field per backend)
+#
+# b00t abstraction: b00t-mcp/src/schema_constraint.rs —
+#   constrain_request(&mut request, &schema, Backend) sets the right field(s);
+#   proxy_chat can stamp it based on which upstream the soul resolved.
+
 # ── Recipes ───────────────────────────────────────────────────────────────────
 
 [b00t.skill.recipes."grammar-verify::author-grammar"]
@@ -100,6 +140,25 @@ examples = [
     "prolog/lean4 assertions — BVerifyCommand format field already reserves them",
 ]
 
+[b00t.skill.recipes."grammar-verify::schema-as-grammar"]
+description = "Constrain JSON-shaped output from the consuming Rust type, not by hand"
+steps = [
+    "Identify the Rust type that deserializes the model output (e.g. SudoDisposition)",
+    "#[derive(JsonSchema)] via schemars; enums become \"enum\" constraints for free",
+    "Set additionalProperties=false and required=[...] — closed shapes only",
+    "Ship the schema through constrain_request() — never hand-write GBNF for JSON",
+    "String free slots still get their audit (solver, gates, git show)",
+]
+
+[b00t.skill.recipes."grammar-verify::backend-adapter"]
+description = "Same schema on vLLM and llama-server via dialect mapping"
+steps = [
+    "Prefer OpenAI response_format json_schema (both backends, recent versions)",
+    "Fallbacks: llama-server \"json_schema\" / \"grammar\"; vLLM \"guided_json\"",
+    "b00t-mcp schema_constraint.rs holds the mapping — extend Backend enum there",
+    "Verify per-backend with a smoke: malformed-by-schema prompt must be impossible",
+]
+
 [b00t.skill.verify]
 tests = [
     "cargo test -p b00t-mcp --lib verify_tool_loop   # 9 tests: loop + audit",
@@ -108,8 +167,8 @@ tests = [
 
 # b00t:map v1
 # summary: Grammar-forced verification — GBNF makes structural hallucination unrepresentable; Z3 audit plugs the semantic free slots; one shape across training/grammar/executor
-# tags: verification, gbnf, constrained-decoding, z3, hallucination-reduction, llamacpp, vllm, agentic-proxy
+# tags: verification, gbnf, json-schema, constrained-decoding, z3, hallucination-reduction, llamacpp, vllm, schemars, agentic-proxy
 # tier: ch0nky
 # cmds: b00t learn grammar-verify; llama-server --grammar-file _b00t_/b00t-verify.gbnf; cargo test -p b00t-mcp --lib verify_tool_loop
-# related: gh#595 gh#596 gh#597 gh#643; _b00t_/b00t-verify.gbnf; b00t-mcp/src/verify_tool_loop.rs; fine-tune/evidence_to_train.py
+# related: gh#595 gh#596 gh#597 gh#643; _b00t_/b00t-verify.gbnf; b00t-mcp/src/verify_tool_loop.rs; b00t-mcp/src/schema_constraint.rs; fine-tune/evidence_to_train.py
 # complexity: 6
