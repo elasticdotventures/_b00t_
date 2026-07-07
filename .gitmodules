@@ -127,3 +127,6 @@
 [submodule "vendor/runpod-sdk"]
 	path = vendor/runpod-sdk
 	url = https://github.com/PromptExecution/runpod-sdk.git
+[submodule "vendor/serena"]
+	path = vendor/serena
+	url = https://github.com/oraios/serena

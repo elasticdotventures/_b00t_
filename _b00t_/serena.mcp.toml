@@ -1,0 +1,65 @@
+[b00t]
+name = "serena"
+type = "mcp"
+hint = "Serena (oraios, MIT) — LSP-backed semantic code retrieval + symbolic patching MCP; 83-96% context savings vs whole-file reads; c0re default"
+lfmf_category = "serena"
+c0re = true    # 🤓 operator verdict 2026-07-07: >5% savings threshold cleared by 17x → default b00t
+
+[b00t.learn]
+topic = "serena"
+auto_digest = true
+
+[b00t.source]
+url = "https://github.com/oraios/serena"
+
+[b00t.b00tyverse]
+fork_url = "https://github.com/PromptExecution/serena"
+vendor_path = "vendor/serena"
+status = "assimilated"
+
+# ── Why c0re: measured contextual savings (this repo, 2026-07-07) ────────────
+# Symbol-scoped read vs whole-file Read (tokens ≈ chars/4):
+#   record_lesson (30 ln)  vs lfmf.rs (694 ln):            337 vs  5,828 = 94% saved
+#   ChunkNode impl (60 ln) vs pipeline_nodes.rs (1725 ln): 675 vs 17,177 = 96% saved
+#   proxy_chat (120 ln)    vs server_llm.rs (767 ln):    1,350 vs  7,880 = 83% saved
+# Even charging ~500 tok for symbol_overview, savings stay 75-90% on targeted ops.
+# Control experiment: an agent session without serena degenerated to manual
+# `grep -n` + `sed -n 'X,Yp'` spans — an error-prone imitation of find_symbol.
+#
+# Key tools — retrieval: find_symbol, symbol_overview, find_referencing_symbols,
+# find_declaration, find_implementations, type_hierarchy, diagnostics.
+# Symbolic patching (the unique lever): replace_symbol_body, insert_after_symbol,
+# insert_before_symbol, safe_delete; refactors rename/move/inline collapse
+# "8-12 error-prone steps into one atomic call" — edits address the AST/symbol
+# graph, not line numbers, so they survive file drift between read and write.
+# 40+ languages via language servers (Rust/Python/TS/Go/...); JetBrains backend optional.
+
+# ── Conditional install: uvx-first (zero-install), tool-install for daily use ─
+# ⚠️ package is serena-agent (NOT 'serena'); uv only, never pip.
+install = "uv tool install -p 3.13 serena-agent"
+version = "serena --version"
+
+# Priority 0: installed binary (fast startup, survives offline)
+[[b00t.mcp.stdio]]
+priority = 0
+command = "serena"
+requires = ["uv"]
+transport = "stdio"
+args = ["start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
+
+# Priority 1: uvx on-demand — conditional/zero-install fallback when the tool
+# isn't installed; first launch pays package resolution.
+[[b00t.mcp.stdio]]
+priority = 1
+command = "uvx"
+requires = ["uv"]
+transport = "stdio"
+args = ["--from", "serena-agent", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
+
+# b00t:map v1
+# summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; 83-96% measured context savings; uvx conditional install
+# tags: mcp, lsp, ast, semantic-editing, symbol-patching, context-savings, c0re, coding-agent
+# tier: sm0l
+# cmds: b00t mcp install serena; serena start-mcp-server; b00t learn serena
+# related: b00t learn grammar-verify; vendor/serena; gh#103 datum-dedup
+# complexity: 4
