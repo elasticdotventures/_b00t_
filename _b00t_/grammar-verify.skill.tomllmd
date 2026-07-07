@@ -1,0 +1,115 @@
+[b00t]
+name = "grammar-verify"
+type = "skill"
+hint = "LLM proposes, grammar constrains, Z3 disposes — constrained decoding makes structural hallucination unrepresentable; a solver audit plugs the semantic residue"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["verification", "gbnf", "constrained-decoding", "z3", "hallucination-reduction", "llamacpp", "vllm", "tool-calling", "fine-tune", "agentic-proxy"]
+
+[b00t.skill]
+depends_on = ["z3-verify"]
+unlocks = [
+    "grammar-verify::author-grammar",
+    "grammar-verify::audit-free-slots",
+    "grammar-verify::one-shape-trinity",
+    "grammar-verify::extend-domain",
+]
+
+# ── The Pattern: LLM proposes, grammar constrains, Z3 disposes ────────────────
+#
+# GBNF constrained decoding intersects the model's token distribution with the
+# set of grammar-legal continuations AT EVERY STEP — illegal tokens get logits
+# masked to -inf before sampling. It is arithmetic on logits, not an
+# instruction the model may ignore. Consequence:
+#
+#   STRUCTURAL hallucination is eliminated with probability 1.
+#   Responses outside the grammar are UNREPRESENTABLE, not discouraged.
+#
+# This reclassifies trust: "the model was trained to call verify" is a
+# probabilistic claim about opaque weights; "unverified claims are not in the
+# grammar" is a property of a 37-line reviewable artifact. Audit the grammar,
+# not the model.
+#
+# 🤓 What grammar CANNOT do: constrain truth. Free slots (assertion text, a
+#    forced result token) can still carry confident lies — the model MUST pick
+#    sat|unsat|unknown but nothing makes it pick the true one. The residue is
+#    exactly the machine-checkable part: pair every grammar with a solver
+#    audit that overwrites claimed verdicts with actual ones.
+
+# ── Failure mode that MUST be designed out (smoke-proven 2026-07-07) ─────────
+#
+# 🚩 An optional-verification grammar forces nothing. `claim | toolcall claim`
+#    let Qwen3.6-35B-A3B take the bare-claim branch 100% of the time. The
+#    grammar was the bug, not the model. RULE: the forced production must have
+#    minimum-one repetition (`toolcall{1,3} claim`) — the unverified shape must
+#    not exist in the language.
+#
+# ⚠️ Thinking models (Qwen3.6): an unbounded `think?` production defers the
+#    forced section past small token budgets. Bound it, strip it via chat
+#    template reasoning budget, or budget -n generously.
+#
+# ⚠️ Forcing low-probability tokens degrades surrounding text quality — the
+#    model gets dragged. Antidote: train the shape (see trinity below) so the
+#    model walks into the grammar willingly.
+
+# ── One shape across three layers (the trinity) ──────────────────────────────
+#
+# The SAME literal shape appears in training data, grammar, and runtime:
+#   [tool_call: verify assertion="<smt2>"] → [result: sat|unsat|unknown] →
+#
+#   1. TRAINING  (gh#595): fine-tune/evidence_to_train.py converts gate-PASS
+#      evidence into examples emitting this shape — model learns the habit.
+#   2. GRAMMAR   (gh#596): _b00t_/b00t-verify.gbnf forces the shape at
+#      decode time — habit becomes law. llama-server --grammar-file <f>, or
+#      per-request via the "grammar" field (surgical: one endpoint per policy).
+#   3. EXECUTOR  (gh#597): b00t-mcp/src/verify_tool_loop.rs — structured
+#      tool_calls get executed + re-entered (agentic proxy, cap 3); grammar-
+#      shaped content gets AUDITED: each claimed result re-solved by real z3,
+#      mismatches rewritten, b00t_verify_audit attached to the response.
+#
+# Grammar shrinks the hallucination surface to two checkable holes;
+# the solver plugs them. Training makes compliance cheap.
+
+# ── Recipes ───────────────────────────────────────────────────────────────────
+
+[b00t.skill.recipes."grammar-verify::author-grammar"]
+description = "Write a GBNF that makes the unwanted output class unrepresentable"
+steps = [
+    "Name the response class that must not exist (e.g. unverified claim)",
+    "Write root so the forced production has {1,n} minimum-one repetition — never optional",
+    "Free slots get the tightest char class that still fits payloads (v1: assertion = [^\"\\x00]+, no quote escape)",
+    "Smoke against the REAL parser: llama-completion -m <qwen3.6-gguf> --grammar-file <f> -n 96 --temp 0",
+    "Adversarial check: can the model reach a compliant-looking output WITHOUT the forced section? If yes, the grammar is the bug",
+]
+
+[b00t.skill.recipes."grammar-verify::audit-free-slots"]
+description = "Solver-audit the grammar's free slots — form is forced, truth is checked"
+steps = [
+    "Enumerate free slots; each needs a machine check or it is a lie channel",
+    "Reuse extract_grammar_claims/audit_grammar_content (b00t-mcp verify_tool_loop) for the b00t-verify shape",
+    "Rewrite wrong verdicts in-place; attach audit summary field; emit spotlight event",
+]
+
+[b00t.skill.recipes."grammar-verify::extend-domain"]
+description = "Apply the pattern beyond SMT2/Z3"
+examples = [
+    "forced citation blocks audited against a retrieval index",
+    "k8s-manifest-only responses audited by kubeconform",
+    "JSON tool output via llama.cpp --json-schema (grammar compiled from schema)",
+    "prolog/lean4 assertions — BVerifyCommand format field already reserves them",
+]
+
+[b00t.skill.verify]
+tests = [
+    "cargo test -p b00t-mcp --lib verify_tool_loop   # 9 tests: loop + audit",
+    "cargo test -p b00t-c0re-lib --lib z3_           # 8 z3 example proofs",
+]
+
+# b00t:map v1
+# summary: Grammar-forced verification — GBNF makes structural hallucination unrepresentable; Z3 audit plugs the semantic free slots; one shape across training/grammar/executor
+# tags: verification, gbnf, constrained-decoding, z3, hallucination-reduction, llamacpp, vllm, agentic-proxy
+# tier: ch0nky
+# cmds: b00t learn grammar-verify; llama-server --grammar-file _b00t_/b00t-verify.gbnf; cargo test -p b00t-mcp --lib verify_tool_loop
+# related: gh#595 gh#596 gh#597 gh#643; _b00t_/b00t-verify.gbnf; b00t-mcp/src/verify_tool_loop.rs; fine-tune/evidence_to_train.py
+# complexity: 6
