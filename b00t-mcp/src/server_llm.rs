@@ -655,6 +655,29 @@ async fn proxy_chat(
                             .emit_spotlight(&consumer, "chat_completions.verify_loop", &model, loop_latency)
                             .await;
                         return (StatusCode::OK, Json(final_response)).into_response();
+                    } else if let Some(content) =
+                        response_json["choices"][0]["message"]["content"].as_str()
+                    {
+                        // Grammar-shape audit (#596): b00t-verify.gbnf output puts
+                        // verify calls inline in content with a model-filled result
+                        // slot — check each against real Z3 and correct mismatches.
+                        let audit = tokio::task::block_in_place(|| {
+                            crate::verify_tool_loop::audit_grammar_content(
+                                content,
+                                crate::verify_tool_loop::z3_result_of,
+                            )
+                        });
+                        if let Some((audited_content, summary)) = audit {
+                            let mut corrected = response_json.clone();
+                            corrected["choices"][0]["message"]["content"] =
+                                Value::String(audited_content);
+                            corrected["b00t_verify_audit"] =
+                                serde_json::to_value(&summary).unwrap_or(Value::Null);
+                            state
+                                .emit_spotlight(&consumer, "chat_completions.verify_audit", &model, start.elapsed().as_millis() as u64)
+                                .await;
+                            return (StatusCode::OK, Json(corrected)).into_response();
+                        }
                     }
                 }
             }

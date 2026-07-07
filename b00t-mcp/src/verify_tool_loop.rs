@@ -168,6 +168,89 @@ where
     response
 }
 
+// ── Grammar-shape audit (#596 bridge) ────────────────────────────────────────
+// The b00t-verify.gbnf grammar forces llama.cpp output into
+//   [tool_call: verify assertion="X"] → [result: R] →
+// but in non-streaming mode the MODEL fills the result slot itself (a
+// hallucinated verdict). The proxy audits each claimed result against real Z3
+// and corrects mismatches — grammar guarantees the shape, the audit
+// guarantees the truth. True mid-stream injection remains follow-up (gh#596).
+
+/// One grammar-shaped verify claim found in message content.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrammarClaim {
+    pub assertion: String,
+    pub claimed_result: String,
+}
+
+/// Summary of an audit pass over grammar-shaped content.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct GrammarAudit {
+    pub checked: usize,
+    pub corrected: usize,
+}
+
+/// Parse grammar-shaped verify claims out of free text.
+pub fn extract_grammar_claims(content: &str) -> Vec<GrammarClaim> {
+    grammar_shape_regex()
+        .captures_iter(content)
+        .map(|c| GrammarClaim {
+            assertion: c[1].to_string(),
+            claimed_result: c[2].to_string(),
+        })
+        .collect()
+}
+
+/// Audit grammar-shaped claims: run each assertion through `solve` (returns
+/// "sat" | "unsat" | "unknown") and rewrite any result token the model got
+/// wrong. Returns the (possibly corrected) content and the audit summary;
+/// None when the content carries no grammar-shaped claims.
+pub fn audit_grammar_content<F>(content: &str, solve: F) -> Option<(String, GrammarAudit)>
+where
+    F: Fn(&str) -> String,
+{
+    let re = grammar_shape_regex();
+    if !re.is_match(content) {
+        return None;
+    }
+    let mut checked = 0;
+    let mut corrected = 0;
+    let audited = re
+        .replace_all(content, |caps: &regex::Captures| {
+            checked += 1;
+            let assertion = &caps[1];
+            let claimed = &caps[2];
+            let actual = solve(assertion);
+            if actual != claimed {
+                corrected += 1;
+            }
+            format!("[tool_call: verify assertion=\"{assertion}\"] → [result: {actual}] → ")
+        })
+        .into_owned();
+    Some((audited, GrammarAudit { checked, corrected }))
+}
+
+fn grammar_shape_regex() -> &'static regex::Regex {
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(
+            r#"\[tool_call: verify assertion="([^"]*)"\] → \[result: (sat|unsat|unknown)\] → "#,
+        )
+        .expect("grammar shape regex compiles")
+    })
+}
+
+/// Solve one assertion via the local z3 surface, returning just the result
+/// token ("sat" | "unsat" | "unknown") for grammar-audit rewriting.
+pub fn z3_result_of(assertion: &str) -> String {
+    let raw = execute_verify_call(&VerifyCall { id: String::new(), assertion: assertion.to_string() });
+    serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|v| v["result"].as_str().map(str::to_string))
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 /// Execute one verify call against the local z3 surface (BVerifyCommand).
 pub fn execute_verify_call(call: &VerifyCall) -> String {
     use crate::clap_reflection::McpExecutor;
@@ -267,6 +350,30 @@ mod tests {
 
     fn stop_response(content: &str) -> Value {
         json!({"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]})
+    }
+
+    #[test]
+    fn grammar_claims_extract_and_audit_corrects_hallucinated_result() {
+        let content = "<think>done</think>\n[tool_call: verify assertion=\"(assert (and (> x 0) (< x 0)))(check-sat)\"] → [result: sat] → therefore x exists.";
+        let claims = extract_grammar_claims(content);
+        assert_eq!(claims.len(), 1);
+        assert_eq!(claims[0].claimed_result, "sat");
+
+        // Real z3 would say unsat — the model hallucinated sat; audit corrects it.
+        let (audited, summary) = audit_grammar_content(content, |_a| "unsat".to_string()).unwrap();
+        assert!(audited.contains("[result: unsat]"), "corrected: {audited}");
+        assert!(audited.contains("therefore x exists."), "claim text preserved");
+        assert_eq!(summary, GrammarAudit { checked: 1, corrected: 1 });
+
+        // Agreeing result → no correction counted
+        let (_same, summary2) = audit_grammar_content(content, |_a| "sat".to_string()).unwrap();
+        assert_eq!(summary2, GrammarAudit { checked: 1, corrected: 0 });
+    }
+
+    #[test]
+    fn grammar_audit_none_for_plain_text() {
+        assert!(audit_grammar_content("just a plain answer", |_| unreachable!()).is_none());
+        assert!(extract_grammar_claims("no calls here").is_empty());
     }
 
     #[tokio::test]
