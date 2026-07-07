@@ -142,6 +142,7 @@
 .b00t/ralph/loop.log
 .b00t/ralph/status.json
 .b00t/tasks.json
+.b00t/harvest_state.json
 .b00t/last-delegate-token
 .bugs/*.jsonl
 .cache

@@ -20,8 +20,16 @@ Output: harvest_candidates.jsonl, one candidate per line:
   {source_file, session_ts, kind, tool, candidate_lesson,
    evidence_excerpt (<=200 chars), confidence (0-1)}
 
+A watermark (.b00t/harvest_state.json) records each transcript's (mtime,
+size) plus every lesson hash already surfaced, so re-running harvest skips
+unchanged files and suppresses lessons already emitted -- default output is
+"what's new since last harvest," not the full corpus again. Use --full to
+force a complete rescan+re-emit (e.g. after tuning the extraction regexes).
+
 Usage:
   uv run scripts/b00t-harvest.py ~/.claude/projects -o harvest_candidates.jsonl --report
+  uv run scripts/b00t-harvest.py ~/.claude/projects --full          # rescan everything
+  uv run scripts/b00t-harvest.py ~/.claude/projects --reset-state   # forget the watermark
 """
 
 from __future__ import annotations
@@ -373,6 +381,32 @@ def dedupe(candidates):
 
 
 # ---------------------------------------------------------------------------
+# Watermark state -- which transcripts and lessons were already harvested
+# ---------------------------------------------------------------------------
+
+DEFAULT_STATE_FILE = Path(".b00t/harvest_state.json")
+
+
+def load_state(path: Path) -> dict:
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {"files": {}, "seen": []}
+
+
+def save_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def file_signature(path: Path) -> tuple[float, int]:
+    st = path.stat()
+    return st.st_mtime, st.st_size
+
+
+# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
@@ -386,15 +420,37 @@ def harvest_file(path: Path) -> list[dict]:
     return dedupe(cands)
 
 
-def harvest_tree(root: Path) -> list[dict]:
-    cands = []
+def harvest_tree(root: Path, state: dict, full: bool = False):
+    """Scan transcripts, skipping ones unchanged since the last harvest.
+
+    Returns (candidates, n_files_total, n_scanned, n_skipped). `candidates`
+    only reflects files that were (re)scanned this run -- an unchanged file
+    contributes nothing, because its lessons are already in state["seen"]
+    from a prior run and re-parsing it would just reproduce them.
+    """
     files = sorted(root.rglob("*.jsonl")) if root.is_dir() else [root]
+    file_state = state.setdefault("files", {})
+    cands = []
+    scanned = skipped = 0
     for f in files:
+        key = str(f)
+        try:
+            sig = file_signature(f)
+        except OSError as e:
+            print(f"warn: skipping {f}: {e}", file=sys.stderr)
+            continue
+        prev = file_state.get(key)
+        if not full and prev and tuple(prev.get("sig", ())) == sig:
+            skipped += 1
+            continue
         try:
             cands.extend(harvest_file(f))
         except OSError as e:
             print(f"warn: skipping {f}: {e}", file=sys.stderr)
-    return dedupe(cands), len(files) if root.is_dir() else 1
+            continue
+        file_state[key] = {"sig": list(sig)}
+        scanned += 1
+    return dedupe(cands), len(files), scanned, skipped
 
 
 def report(candidates):
@@ -419,20 +475,46 @@ def main(argv=None):
     ap.add_argument("-o", "--output", type=Path, default=Path("harvest_candidates.jsonl"))
     ap.add_argument("--report", action="store_true", help="print counts + top-20 candidates")
     ap.add_argument("--min-confidence", type=float, default=0.0)
+    ap.add_argument("--state-file", type=Path, default=DEFAULT_STATE_FILE,
+                     help=f"watermark tracking harvested files+lessons (default: {DEFAULT_STATE_FILE})")
+    ap.add_argument("--full", action="store_true",
+                     help="ignore the watermark: rescan every file and re-emit every lesson")
+    ap.add_argument("--reset-state", action="store_true",
+                     help="forget the watermark before running (implies --full)")
+    ap.add_argument("--no-state", action="store_true",
+                     help="preview mode: don't read or write the watermark at all")
     args = ap.parse_args(argv)
 
     root = args.root.expanduser()
-    candidates, n_files = harvest_tree(root)
+    full = args.full or args.reset_state
+    state = {"files": {}, "seen": []} if (args.no_state or args.reset_state) else load_state(args.state_file)
+
+    candidates, n_files, n_scanned, n_skipped = harvest_tree(root, state, full=full)
     candidates = [c for c in candidates if c["confidence"] >= args.min_confidence]
-    candidates.sort(key=lambda c: (-c["confidence"], c["source_file"]))
+
+    seen = set(state.get("seen", []))
+    if full:
+        new_candidates = candidates
+    else:
+        new_candidates = [c for c in candidates
+                           if dedup_key(c["kind"], c["candidate_lesson"]) not in seen]
+    new_candidates.sort(key=lambda c: (-c["confidence"], c["source_file"]))
 
     with open(args.output, "w", encoding="utf-8") as out:
-        for c in candidates:
+        for c in new_candidates:
             out.write(json.dumps(c, ensure_ascii=False) + "\n")
 
-    print(f"scanned {n_files} transcript file(s); wrote {len(candidates)} candidates -> {args.output}")
+    if not args.no_state:
+        seen.update(dedup_key(c["kind"], c["candidate_lesson"]) for c in candidates)
+        state["seen"] = sorted(seen)
+        save_state(args.state_file, state)
+
+    suppressed = len(candidates) - len(new_candidates)
+    print(f"scanned {n_scanned} new/changed file(s), skipped {n_skipped} unchanged "
+          f"(of {n_files} total); wrote {len(new_candidates)} new candidate(s) -> {args.output}"
+          + (f" ({suppressed} already-seen suppressed)" if suppressed else ""))
     if args.report:
-        report(candidates)
+        report(new_candidates)
     return 0
 
 

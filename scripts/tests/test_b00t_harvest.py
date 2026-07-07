@@ -92,7 +92,7 @@ def test_normalization_dedup_key(harvest):
 def test_cli_end_to_end(tmp_path):
     out = tmp_path / "out.jsonl"
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT), str(FIXTURE.parent), "-o", str(out), "--report"],
+        [sys.executable, str(SCRIPT), str(FIXTURE.parent), "-o", str(out), "--report", "--no-state"],
         capture_output=True, text=True, timeout=60,
     )
     assert proc.returncode == 0, proc.stderr
@@ -100,3 +100,44 @@ def test_cli_end_to_end(tmp_path):
     assert len(lines) >= 3
     assert "error_resolution" in proc.stdout
     assert "marker" in proc.stdout
+
+
+def _run_cli(tmp_path, out_name, *extra):
+    out = tmp_path / out_name
+    state = tmp_path / "harvest_state.json"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), str(FIXTURE.parent), "-o", str(out),
+         "--state-file", str(state), *extra],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    lines = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
+    return lines, proc.stdout, state
+
+
+def test_watermark_suppresses_reprocessing(tmp_path):
+    """Second run over the SAME unchanged corpus should skip every file and
+    emit zero candidates -- the whole point of task: 'clear lessons after a
+    harvest so we don't reprocess'."""
+    first, out1, state = _run_cli(tmp_path, "run1.jsonl")
+    assert len(first) >= 3
+    assert state.exists()
+
+    second, out2, _ = _run_cli(tmp_path, "run2.jsonl")
+    assert second == []
+    assert "skipped" in out2
+    assert "wrote 0 new candidate" in out2
+
+
+def test_watermark_full_bypasses_state(tmp_path):
+    """--full re-emits everything even with a populated watermark."""
+    first, _, _ = _run_cli(tmp_path, "run1.jsonl")
+    full, _, _ = _run_cli(tmp_path, "run2.jsonl", "--full")
+    assert len(full) == len(first)
+
+
+def test_watermark_reset_state_clears_history(tmp_path):
+    _run_cli(tmp_path, "run1.jsonl")
+    reset, out, _ = _run_cli(tmp_path, "run2.jsonl", "--reset-state")
+    assert len(reset) >= 3
+    assert "wrote 0 new" not in out
