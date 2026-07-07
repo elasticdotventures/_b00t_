@@ -1,0 +1,52 @@
+[b00t]
+name = "first-principles"
+type = "skill"
+hint = "Decompose to atoms; rebuild from base truths; ignore analogy and precedent"
+
+# ── salvaged content (was YAML frontmatter in a .toml — task #115) ──────────
+# 🤓 payload preserved VERBATIM below; distill to structured fields later (#98)
+# version: 1.0.0
+# tags:
+# - transferable
+# - first-principles
+# - reasoning
+# - decompose
+# - atoms
+# - assumptions
+# - base-truth
+# tier: ch0nky
+# complexity: 5
+# description: 'First-principles reasoning: refuse inherited assumptions; derive from base truths.'
+#
+# ## What
+# 
+# First-principles reasoning means refusing inherited assumptions and deriving conclusions from base truths. Step 1: state what you believe to be true about the problem. Step 2: for each belief, ask "is this a fact, or did I inherit it from convention?" Step 3: discard the inherited beliefs and rebuild from what remains.
+# 
+# Elon Musk's classic example: "batteries are expensive" → why? → materials → materials are cheap → rethink assembly. In software: "we need a database" → why? → persistent state → what's the simplest persistent state? The key test: "would this design make sense to someone who had never seen this domain before?"
+# 
+# ## When to Use
+# 
+# Apply first-principles thinking to high-stakes decisions where inherited assumptions may be hiding better solutions. It is expensive — do not use it for every micro-choice. Use it when analogy reasoning ("we do it this way because that's how X does it") would lead to a suboptimal outcome.
+# 
+# ## How
+# 
+# 1. State every belief you hold about the problem.
+# 2. Challenge each belief — is it a fact or inherited convention?
+# 3. Discard inherited beliefs. Rebuild from undeniable base truths.
+# 4. Verify: would this design make sense to a domain newcomer?
+# 5. Beware the anti-pattern of defaulting to analogy reasoning instead.
+# 
+# <!-- b00t:map v1
+# summary: first-principles — decompose to base truths; reject inherited assumptions
+# tags: transferable, reasoning, decompose, assumptions, base-truth
+# tier: ch0nky
+# cmds: b00t learn first-principles
+# complexity: 5
+# -->
+
+# b00t:map v1
+# summary: Decompose to atoms; rebuild from base truths; ignore analogy and precedent (salvaged from YAML-frontmatter .toml)
+# tags: first, principles
+# tier: sm0l
+# cmds: b00t learn first-principles
+# complexity: 3

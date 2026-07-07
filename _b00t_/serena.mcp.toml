@@ -79,6 +79,17 @@ requires = ["uv"]
 transport = "stdio"
 args = ["--from", "serena-agent", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
 
+# ── Composition knowledge — graph-visible triples (task #107) ────────────────
+# 🤓 emitted as b00t:composes_with / b00t:measured by datum_triples.rs;
+#    measured values are the symbol-scoped-read savings documented above.
+[b00t.compose]
+composes_with = ["grammar-verify", "b00t-lsp"]
+measured = [
+    { metric = "context_savings_record_lesson", value = "94%" },
+    { metric = "context_savings_chunknode_impl", value = "96%" },
+    { metric = "context_savings_proxy_chat", value = "83%" },
+]
+
 # b00t:map v1
 # summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; packaging ladder k8s>podman>binary>uvx; 83-96% measured context savings
 # tags: mcp, lsp, ast, semantic-editing, symbol-patching, context-savings, c0re, k8s, podman, coding-agent

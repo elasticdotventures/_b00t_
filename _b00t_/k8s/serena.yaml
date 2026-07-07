@@ -35,7 +35,7 @@ spec:
             - { name: serena-config, mountPath: /workspaces/serena/config }
           resources:
             requests: { cpu: 250m, memory: 512Mi }
-            limits: { cpu: "2", memory: 2Gi }
+            limits: { cpu: "3", memory: 5Gi }
       volumes:
         - name: workspace
           hostPath: { path: /home/brianh/.b00t, type: Directory }
