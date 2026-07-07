@@ -334,3 +334,6 @@ fine-tune/output-*/
 
 # unregistered vendor checkout — register as submodule or remove (operator decision)
 vendor/pi-mono/
+
+# generated from local-only evidence/ — regenerate via just ai-finetune::evidence-train
+fine-tune/evidence_train.jsonl

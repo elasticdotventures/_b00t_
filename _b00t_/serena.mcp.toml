@@ -1,0 +1,88 @@
+[b00t]
+name = "serena"
+type = "mcp"
+hint = "Serena (oraios, MIT) — LSP-backed semantic code retrieval + symbolic patching MCP; 83-96% context savings vs whole-file reads; c0re default"
+lfmf_category = "serena"
+c0re = true    # 🤓 operator verdict 2026-07-07: >5% savings threshold cleared by 17x → default b00t
+
+[b00t.learn]
+topic = "serena"
+auto_digest = true
+
+[b00t.source]
+url = "https://github.com/oraios/serena"
+
+[b00t.b00tyverse]
+fork_url = "https://github.com/PromptExecution/serena"
+vendor_path = "vendor/serena"
+status = "assimilated"
+
+# ── Why c0re: measured contextual savings (this repo, 2026-07-07) ────────────
+# Symbol-scoped read vs whole-file Read (tokens ≈ chars/4):
+#   record_lesson (30 ln)  vs lfmf.rs (694 ln):            337 vs  5,828 = 94% saved
+#   ChunkNode impl (60 ln) vs pipeline_nodes.rs (1725 ln): 675 vs 17,177 = 96% saved
+#   proxy_chat (120 ln)    vs server_llm.rs (767 ln):    1,350 vs  7,880 = 83% saved
+# Key tools — retrieval: find_symbol, symbol_overview, find_referencing_symbols,
+# find_declaration, find_implementations, type_hierarchy, diagnostics.
+# Symbolic patching: replace_symbol_body, insert_after_symbol,
+# insert_before_symbol, safe_delete — edits address the symbol graph, not line
+# numbers, so they survive file drift. 40+ languages via language servers.
+
+# ── Packaging ladder (b00t tribal customs, operator 2026-07-07) ──────────────
+# 🤓 k8s (if kubectl on node) > Containerfile/podman > host binary > uvx LAST.
+#    Container encapsulation bounds the reasoning surface: a Containerfile is
+#    auditable and monitorable; uvx is worst — hardest to reason over all the
+#    things resolved-at-launch code could do. Encapsulation abstracts
+#    complexity so algorithmic search-space problems solve faster.
+# ⚠️ upstream Docker is EXPERIMENTAL (vendor/serena/DOCKER.md): image built
+#    locally (`serena:latest`), workspace must be volume-mounted, config dir
+#    mounted at /workspaces/serena/config with gui_log_window=False.
+# ⚠️ single-node k8s + podman-built image: import required
+#    (podman save serena:latest | k3s ctr images import -) before apply.
+
+install = "podman build -t serena:latest vendor/serena/"
+version = "podman image exists serena:latest && echo serena:latest || serena --version"
+
+# Priority 0: k8s (preferred when kubectl present) — stdio bridged via exec -i
+# into the long-lived pod. Manifest: _b00t_/k8s/serena.yaml (ns b00t-serena).
+[[b00t.mcp.stdio]]
+priority = 0
+command = "kubectl"
+requires = ["kubectl"]
+transport = "stdio"
+args = ["exec", "-i", "-n", "b00t-serena", "deploy/serena", "--", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "/workspace"]
+
+# Priority 1: podman container — Containerfile surface, easy to reason + monitor.
+# 🤓 --userns=keep-id per b00t podman law; workspace rw (symbolic patching writes).
+[[b00t.mcp.stdio]]
+priority = 1
+command = "podman"
+requires = ["podman"]
+transport = "stdio"
+args = ["run", "-i", "--rm", "--userns=keep-id", "-v", "{{PWD}}:/workspace:rw", "serena:latest", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "/workspace"]
+
+# Priority 2: host binary (uv tool install -p 3.13 serena-agent) — inspectable
+# pinned install, but unencapsulated host execution.
+[[b00t.mcp.stdio]]
+priority = 2
+command = "serena"
+requires = ["uv"]
+transport = "stdio"
+args = ["start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
+
+# Priority 3: uvx zero-install — LAST RESORT ONLY (resolves arbitrary code at
+# launch; the hardest surface to reason over). Verified working: Serena 1.5.3.
+[[b00t.mcp.stdio]]
+priority = 3
+command = "uvx"
+requires = ["uv"]
+transport = "stdio"
+args = ["--from", "serena-agent", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
+
+# b00t:map v1
+# summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; packaging ladder k8s>podman>binary>uvx; 83-96% measured context savings
+# tags: mcp, lsp, ast, semantic-editing, symbol-patching, context-savings, c0re, k8s, podman, coding-agent
+# tier: sm0l
+# cmds: podman build -t serena:latest vendor/serena/; kubectl apply -f _b00t_/k8s/serena.yaml; b00t mcp install serena
+# related: b00t learn grammar-verify; vendor/serena; _b00t_/k8s/serena.yaml; gh#103
+# complexity: 5

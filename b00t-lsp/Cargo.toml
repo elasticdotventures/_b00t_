@@ -1,0 +1,34 @@
+[package]
+name = "b00t-lsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Language server for b00t datum dialects (.toml/.tomllm/.tomllmd)"
+keywords = ["b00t", "lsp", "tomllm", "datum"]
+categories = ["development-tools"]
+
+[lib]
+name = "b00t_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "b00t-lsp"
+path = "src/main.rs"
+
+[[bin]]
+name = "dump-schemas"
+path = "src/bin/dump_schemas.rs"
+
+[dependencies]
+b00t-datum-core = { path = "../b00t-datum-core" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tokio.workspace = true
+tower-lsp = "0.20"
+
+[dev-dependencies]
+tempfile = "3.10"
