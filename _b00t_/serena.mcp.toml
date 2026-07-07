@@ -22,44 +22,67 @@ status = "assimilated"
 #   record_lesson (30 ln)  vs lfmf.rs (694 ln):            337 vs  5,828 = 94% saved
 #   ChunkNode impl (60 ln) vs pipeline_nodes.rs (1725 ln): 675 vs 17,177 = 96% saved
 #   proxy_chat (120 ln)    vs server_llm.rs (767 ln):    1,350 vs  7,880 = 83% saved
-# Even charging ~500 tok for symbol_overview, savings stay 75-90% on targeted ops.
-# Control experiment: an agent session without serena degenerated to manual
-# `grep -n` + `sed -n 'X,Yp'` spans — an error-prone imitation of find_symbol.
-#
 # Key tools — retrieval: find_symbol, symbol_overview, find_referencing_symbols,
 # find_declaration, find_implementations, type_hierarchy, diagnostics.
-# Symbolic patching (the unique lever): replace_symbol_body, insert_after_symbol,
-# insert_before_symbol, safe_delete; refactors rename/move/inline collapse
-# "8-12 error-prone steps into one atomic call" — edits address the AST/symbol
-# graph, not line numbers, so they survive file drift between read and write.
-# 40+ languages via language servers (Rust/Python/TS/Go/...); JetBrains backend optional.
+# Symbolic patching: replace_symbol_body, insert_after_symbol,
+# insert_before_symbol, safe_delete — edits address the symbol graph, not line
+# numbers, so they survive file drift. 40+ languages via language servers.
 
-# ── Conditional install: uvx-first (zero-install), tool-install for daily use ─
-# ⚠️ package is serena-agent (NOT 'serena'); uv only, never pip.
-install = "uv tool install -p 3.13 serena-agent"
-version = "serena --version"
+# ── Packaging ladder (b00t tribal customs, operator 2026-07-07) ──────────────
+# 🤓 k8s (if kubectl on node) > Containerfile/podman > host binary > uvx LAST.
+#    Container encapsulation bounds the reasoning surface: a Containerfile is
+#    auditable and monitorable; uvx is worst — hardest to reason over all the
+#    things resolved-at-launch code could do. Encapsulation abstracts
+#    complexity so algorithmic search-space problems solve faster.
+# ⚠️ upstream Docker is EXPERIMENTAL (vendor/serena/DOCKER.md): image built
+#    locally (`serena:latest`), workspace must be volume-mounted, config dir
+#    mounted at /workspaces/serena/config with gui_log_window=False.
+# ⚠️ single-node k8s + podman-built image: import required
+#    (podman save serena:latest | k3s ctr images import -) before apply.
 
-# Priority 0: installed binary (fast startup, survives offline)
+install = "podman build -t serena:latest vendor/serena/"
+version = "podman image exists serena:latest && echo serena:latest || serena --version"
+
+# Priority 0: k8s (preferred when kubectl present) — stdio bridged via exec -i
+# into the long-lived pod. Manifest: _b00t_/k8s/serena.yaml (ns b00t-serena).
 [[b00t.mcp.stdio]]
 priority = 0
+command = "kubectl"
+requires = ["kubectl"]
+transport = "stdio"
+args = ["exec", "-i", "-n", "b00t-serena", "deploy/serena", "--", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "/workspace"]
+
+# Priority 1: podman container — Containerfile surface, easy to reason + monitor.
+# 🤓 --userns=keep-id per b00t podman law; workspace rw (symbolic patching writes).
+[[b00t.mcp.stdio]]
+priority = 1
+command = "podman"
+requires = ["podman"]
+transport = "stdio"
+args = ["run", "-i", "--rm", "--userns=keep-id", "-v", "{{PWD}}:/workspace:rw", "serena:latest", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "/workspace"]
+
+# Priority 2: host binary (uv tool install -p 3.13 serena-agent) — inspectable
+# pinned install, but unencapsulated host execution.
+[[b00t.mcp.stdio]]
+priority = 2
 command = "serena"
 requires = ["uv"]
 transport = "stdio"
 args = ["start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
 
-# Priority 1: uvx on-demand — conditional/zero-install fallback when the tool
-# isn't installed; first launch pays package resolution.
+# Priority 3: uvx zero-install — LAST RESORT ONLY (resolves arbitrary code at
+# launch; the hardest surface to reason over). Verified working: Serena 1.5.3.
 [[b00t.mcp.stdio]]
-priority = 1
+priority = 3
 command = "uvx"
 requires = ["uv"]
 transport = "stdio"
 args = ["--from", "serena-agent", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
 
 # b00t:map v1
-# summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; 83-96% measured context savings; uvx conditional install
-# tags: mcp, lsp, ast, semantic-editing, symbol-patching, context-savings, c0re, coding-agent
+# summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; packaging ladder k8s>podman>binary>uvx; 83-96% measured context savings
+# tags: mcp, lsp, ast, semantic-editing, symbol-patching, context-savings, c0re, k8s, podman, coding-agent
 # tier: sm0l
-# cmds: b00t mcp install serena; serena start-mcp-server; b00t learn serena
-# related: b00t learn grammar-verify; vendor/serena; gh#103 datum-dedup
-# complexity: 4
+# cmds: podman build -t serena:latest vendor/serena/; kubectl apply -f _b00t_/k8s/serena.yaml; b00t mcp install serena
+# related: b00t learn grammar-verify; vendor/serena; _b00t_/k8s/serena.yaml; gh#103
+# complexity: 5
