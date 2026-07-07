@@ -36,9 +36,9 @@ command = """/home/brianh/.venv/bin/vllm serve \
 # ─── Prove vLLM works with a smaller/safer model ──────────────────────────────────────────────
 # 🤓 Use this to verify vLLM installation is functional before attempting GGUF patches
 [[b00t.usage]]
-description = "Prove vLLM works: serve Qwen2.5-7B-Instruct (safetensors, no patches needed)"
-command = """/home/brianh/.venv/bin/vllm serve Qwen/Qwen2.5-7B-Instruct \
-    --served-model-name qwen2.5-7b \
+description = "Prove vLLM works: serve Qwen3.6 (see qwen36-local.model.ai datum for variants)"
+command = """/home/brianh/.venv/bin/vllm serve Qwen/Qwen3.6-27B \
+    --served-model-name ch0nky \
     --port 8000 \
     --max-model-len 8192 \
     --gpu-memory-utilization 0.85"""
