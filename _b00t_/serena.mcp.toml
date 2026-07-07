@@ -38,7 +38,7 @@ status = "assimilated"
 #    locally (`serena:latest`), workspace must be volume-mounted, config dir
 #    mounted at /workspaces/serena/config with gui_log_window=False.
 # ⚠️ single-node k8s + podman-built image: import required
-#    (podman save serena:latest | k3s ctr images import -) before apply.
+#    (podman save serena:latest | sudo k0s ctr -n k8s.io images import -) before apply.
 
 install = "podman build -t serena:latest vendor/serena/"
 version = "podman image exists serena:latest && echo serena:latest || serena --version"
