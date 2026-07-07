@@ -20,10 +20,6 @@ crate-type = ["cdylib", "rlib"]
 name = "generate_schemas"
 path = "src/bin/generate_schemas.rs"
 
-[[bin]]
-name = "b00t-lsp"
-path = "src/bin/b00t-lsp.rs"
-
 [features]
 default = ["store-neumann"]
 python = ["pyo3"]

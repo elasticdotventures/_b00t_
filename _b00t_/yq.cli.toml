@@ -1,0 +1,38 @@
+[b00t]
+name = "yq"
+type = "cli"
+hint = "yq (mikefarah) — jq for YAML: structural path edits for k8s manifests and any YAML; NEVER sed a .yaml"
+
+install = "brew install yq || uv tool install yq"
+version = "yq --version"
+version_regex = 'version v(\d+\.\d+\.\d+)'
+
+[b00t.compose]
+composes_with = ["kubectl", "kustomize"]
+supersedes = ["sed-for-yaml"]
+
+[[b00t.usage]]
+description = "Edit a nested field in-place (multi-doc aware: select the right document first)"
+command = "yq -i 'select(.kind == \"Deployment\").spec.template.spec.containers[0].resources.limits.memory = \"5Gi\"' _b00t_/k8s/serena.yaml"
+
+[[b00t.usage]]
+description = "Read a path (returns null for docs lacking it in multi-doc files)"
+command = "yq '.spec.template.spec.containers[0].image' _b00t_/k8s/serena.yaml"
+
+[[b00t.usage]]
+description = "Validate + pretty-print all documents"
+command = "yq eval-all '.' file.yaml >/dev/null && echo valid"
+
+# 🤓 yq -i preserves comments and quoting style — sed cannot; sed on YAML
+#    breaks on indentation drift, multi-doc boundaries, and flow-style maps.
+# 🤓 live objects: kubectl patch --type merge changes CLUSTER state not the
+#    manifest (drift!) — edit the manifest with yq, then kubectl apply.
+# 🤓 environment variants: kustomize overlays (built into kubectl apply -k),
+#    patches become first-class artifacts instead of in-place edits.
+
+# b00t:map v1
+# summary: yq — structural YAML editing; the k8s manifest tool; sed is a machete, yq is a scalpel
+# tags: yaml, k8s, cli, manifests, jq
+# tier: sm0l
+# cmds: yq -i '<path> = <val>' file.yaml; yq '.path' file.yaml
+# complexity: 2

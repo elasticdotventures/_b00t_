@@ -35,7 +35,8 @@ pub mod ato_client;
 pub mod b00t_config;
 pub mod context;
 pub mod datum_ai_model;
-pub mod datum_lsp;
+// 🤓 datum_lsp stub removed: superseded by the b00t-lsp crate (real tower-lsp server);
+//    the stub bin shared target/debug/b00t-lsp and clobbered it on rebuild.
 pub mod data_fabric;
 pub mod doc_pipeline;
 pub mod z3_examples;
