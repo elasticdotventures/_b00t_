@@ -58,3 +58,4 @@ alias tf=tofu
 alias nsc='podman run --rm docker.io/natsio/nats-box:latest nsc'
 
 alias nsc='podman run --rm docker.io/natsio/nats-box:latest nsc'
+alias nats='podman run --rm -it --network host docker.io/natsio/nats-box:latest nats'
