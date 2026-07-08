@@ -1,0 +1,165 @@
+[b00t]
+name = "playbook"
+type = "skill"
+version = "0.1.0"
+hint = "Canonical b00t idioms — CLEAR discovery + anti-hallucination baseline"
+
+[b00t.skill]
+description = """
+Minimal playbook of b00t capabilities loaded at session start. Compact enough
+to prevent hallucination without wasting context. Everything else is discoverable
+via `b00t learn <topic>`, `b00t_mcp_discover`, or `b00t grok ask`.
+"""
+tier = "sm0l"
+complexity = 2
+context_cost = "~200 tokens"
+
+# ── CLEAR: Concise + Logical + Explicit + Adaptive + Reflective ────────────
+
+[[b00t.skill.capability]]
+id = "exec"
+label = "Execute commands"
+how = "b00t-mcp exec --argv '<command>'"
+prefer = "mcp__b00t-mcp__b00t_exec"
+never = "raw bash for b00t operations"
+
+[[b00t.skill.capability]]
+id = "discover"
+label = "Discover tools"
+how = "b00t-mcp discover --query '<keyword>'"
+when = "before using any unfamiliar b00t subcommand"
+
+[[b00t.skill.capability]]
+id = "learn"
+label = "Learn context"
+how = "b00t-mcp learn --topic '<topic>'"
+prefer = "b00t learn over raw file read"
+rule = "blessing manifest unlocks tools — no learn = no auth"
+
+[[b00t.skill.capability]]
+id = "task"
+label = "Track tasks"
+how = "b00t-mcp exec --argv 'task list|add|done'"
+rule = "b00t task, never taskmaster-ai"
+
+[[b00t.skill.capability]]
+id = "hive"
+label = "Resource gate"
+how = "b00t-mcp exec --argv 'hive status'"
+when = "before any side-effecting command"
+
+[[b00t.skill.capability]]
+id = "datum"
+label = "Read/write datums"
+how = "b00t-mcp exec --argv 'datum validate <path>'"
+rule = "write datum, validate datum, THEN read file if needed"
+
+[[b00t.skill.capability]]
+id = "delegate"
+label = "Delegate to sub-agent"
+tier = "ch0nky+"
+how = "b00t-mcp exec --argv 'agent invoke <name> <task>'"
+rule = "multi-step tasks → delegate to specialist. sm0l: execute inline."
+
+[[b00t.skill.capability]]
+id = "grok"
+label = "Search knowledge graph"
+how = "b00t-mcp exec --argv 'grok ask \"<question>\" -t <topic>'"
+when = "cross-domain question, pattern lookup, tribal knowledge"
+
+# ── Canonical idioms (anti-hallucination) ──────────────────────────────────
+
+[[b00t.skill.idiom]]
+symptom = "agent suggests 'pip install'"
+reality = "b00t uses 'uv pip install' — guarded with 🦨 redirect"
+
+[[b00t.skill.idiom]]
+symptom = "agent suggests 'docker run'"
+reality = "b00t uses 'podman --device nvidia.com/gpu=all' — guarded"
+
+[[b00t.skill.idiom]]
+symptom = "agent suggests 'systemctl start'"
+reality = "b00t uses 'podman kube play' or 'b00t hive activate' — guarded"
+
+[[b00t.skill.idiom]]
+symptom = "agent reads _b00t_/ or ._b00t_/ files directly (cat/grep/read)"
+reality = "b00t uses 'b00t learn <topic>' which enriches with metadata, tail-maps, authorization graph"
+
+[[b00t.skill.idiom]]
+symptom = "agent references 'taskmaster-ai'"
+reality = "PURGED — use 'b00t task list|add|done' exclusively"
+
+[[b00t.skill.idiom]]
+symptom = "agent works on 'main' or 'master' branch"
+reality = "branch with 'git checkout -b task/<N>-<slug>' — PR to merge"
+
+[[b00t.skill.idiom]]
+symptom = "agent outputs raw sub-agent context to executive"
+reality = "compress to PASS|FAIL:<5lines> or structured diff+test result"
+
+[[b00t.skill.idiom]]
+symptom = "agent installs packages without checking justfile"
+reality = "'just -l' first — recipe exists? use it. 2+ repeats? create one."
+
+[[b00t.skill.idiom]]
+symptom = "agent references cake in output"
+reality = "cake is earned by **observed behavior** (datum writes, delegate calls, guard compliance) — never by mentioning it"
+
+[[b00t.skill.idiom]]
+symptom = "agent uses 'find' or raw 'grep'"
+reality = "prefer 'fdfind' for file search, 'b00t-mcp discover' for capability search, 'codebase-memory-mcp' for structural search"
+
+# ── Tier routing (CLEAR: Logical order) ────────────────────────────────────
+
+[b00t.skill.tiers]
+sm0l = "grep, test, lint, classify → opencode run --model qwen36-local/sm0l"
+ch0nky = "implement, refactor, debug → agent invoke opencode --skill delegate"
+frontier = "architecture, security, protocol → opencode/big-pickle (cloud)"
+
+# ── Session bootstrap (CLEAR: Explicit first steps) ────────────────────────
+
+[b00t.skill.bootstrap]
+description = "Every agent session MUST execute these in order"
+steps = [
+    "1. b00t whoami --role=<current> → orient identity + blessings",
+    "2. b00t blessing --manifest --role=<current> → authorized tools",
+    "3. b00t hive status → resource gate",
+    "4. b00t task list → pending work",
+    "5. just -l → available recipes",
+    "6. b00t learn <top-N-skills> → load only what's needed for THIS task",
+]
+
+# ── Output contracts (CLEAR: Explicit format expectations) ─────────────────
+
+[b00t.skill.output_contracts]
+sm0l = "PASS | FAIL: <name> <5-line excerpt at file:line>"
+ch0nky = "diff stat + test result"
+frontier = "structured decision record (ADR format)"
+delegate = "compressed summary — NEVER raw sub-agent output"
+
+# ── Sharpen trigger (CLEAR: Adaptive — iterate if output misses) ──────────
+
+[b00t.skill.iterate]
+rule = "If any guard triggers OR cmdb_hits < 80% → re-plan with tighter constraints"
+action = "b00t learn <missing-skill> → retry with corrected context"
+
+# ── Usage ──────────────────────────────────────────────────────────────────
+
+[[b00t.usage]]
+description = "Load playbook at session start (always)"
+command = "b00t learn playbook"
+
+[[b00t.usage]]
+description = "Discover a capability you're unsure about"
+command = "b00t-mcp discover --query '<what you want to do>'"
+
+[[b00t.usage]]
+description = "Learn a skill only when needed"
+command = "b00t-mcp learn --topic '<topic>'"
+
+# b00t:map v1
+# summary: Canonical b00t playbook — CLEAR discovery + anti-hallucination idioms, ~200 token context cost
+# tags: playbook, canon, idioms, anti-hallucination, clear, discovery, bootstrap, output-contracts
+# tier: sm0l
+# cmds: b00t learn playbook
+# complexity: 2
