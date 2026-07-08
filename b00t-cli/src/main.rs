@@ -2693,7 +2693,10 @@ async fn main() {
             use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
+                for cause in e.chain().skip(1) {
+                    eprintln!("  caused by: {}", cause);
+                }
                 std::process::exit(1);
             }
         }

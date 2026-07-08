@@ -53,7 +53,7 @@ quality_check = { enabled = true, min_quality_score = 0.8 }
 # Maps task cognitive load to model tier
 # frontier: cloud API (claude-opus, gpt-4o) — complex reasoning, architecture
 # ch0nky: local qwen3-coder-next — code gen, refactor, review
-# sm0l:    local qwen2.5-3b or mistral-cpu — grep, classify, route, simple transforms
+# sm0l:    local qwen3.6-35b-a3b (3B active, 120 tok/s) or haiku — grep, classify, route, simple transforms
 frontier = { min_tokens = 4000, examples = ["architecture", "design", "security-review"] }
 ch0nky   = { min_tokens = 500,  examples = ["implement", "refactor", "debug", "explain"] }
 sm0l     = { min_tokens = 0,    examples = ["classify", "route", "grep", "format", "lint"] }

@@ -1,0 +1,37 @@
+# b00t-verify.gbnf — grammar-forced verify loop for llama.cpp (gh#596)
+#
+# Constrains ch0nky-on-llamacpp output so claim-shaped responses are
+# syntactically REQUIRED to route through the verify tool first: unverified
+# claims are not in the grammar, so the model cannot emit them. Grammar is
+# cheaper than fine-tuning — the model doesn't need to LEARN to call verify,
+# the grammar forces it (fine-tuning makes it prefer good claims; the grammar
+# ensures they're checked).
+#
+# The emitted tool_call line matches what b00t-mcp's verify tool loop
+# (b00t-mcp/src/verify_tool_loop.rs, gh#597) and the #595 training examples
+# use, so grammar-forced output, tool-loop transcripts, and training data all
+# share one shape.
+#
+# Load: llama-server ... --grammar-file _b00t_/b00t-verify.gbnf
+# ⚠️ v1 limitation: assertion strings cannot contain double quotes (no escape
+#    production); SMT2 rarely needs them. Repetition is capped at 3 verify
+#    calls to mirror MAX_TOOL_ITERATIONS in the proxy loop.
+
+# Qwen3.6 thinks before answering; allow one optional think block, then
+# AT LEAST one forced verification — claim-only output is not in the grammar.
+# (The issue sketch's `claim | tool_call claim` allowed unverified claims —
+# smoke-tested 2026-07-07: the model always took the claim branch.)
+root      ::= think? toolcall{1,3} claim
+think     ::= "<think>" [^<\x00]* "</think>" [\n]*
+
+# One forced verification round-trip. The result slot is filled by the
+# executor (b00t-mcp pauses generation, runs Z3, injects the result token).
+toolcall  ::= "[tool_call: verify assertion=\"" assertion "\"] → [result: " result "] → "
+result    ::= "sat" | "unsat" | "unknown"
+
+# SMT2 assertion body: anything except a closing double quote.
+assertion ::= [^"\x00]+
+
+# The claim itself: free text that must not open with '[' (which would be
+# ambiguous with a tool call) and must be non-empty.
+claim     ::= [^\x00\[] [^\x00]*
