@@ -1,7 +1,9 @@
 //! Content-type-aware router — detects type and dispatches to appropriate parser.
 //!
 //! Fills the explicit gap at grok.rs:164 ("URL fetching not yet implemented").
+//! Domain-specific routing: arxiv.org → arxiv-mcp-server (not webfetch).
 
+use crate::assimilate::domain_router;
 use anyhow::{Result, anyhow, bail};
 use std::path::Path;
 use std::time::Duration;
@@ -50,14 +52,96 @@ impl ContentRouter {
     }
 
     /// Route a source (URL or file path) to the appropriate parser.
+    /// 🤓 Domain-specific MCP routing: arxiv.org → arxiv-mcp-server (not webfetch)
     pub async fn route(&self, source: &str) -> Result<ParsedContent> {
         if source.starts_with("http://") || source.starts_with("https://") {
+            // Check for institutional MCP handlers first
+            if let Some((handler, resource_id)) = domain_router::extract_mcp_resource_id(source) {
+                return self.route_via_mcp(handler, &resource_id).await;
+            }
             self.route_url(source).await
         } else if Path::new(source).exists() {
             self.route_file(source)
         } else {
             bail!("source '{source}' is neither a valid URL nor an existing file")
         }
+    }
+
+    /// Route through an MCP server for institutional domains.
+    /// E.g., arxiv.org URLs → download_paper + read_paper via arxiv-mcp-server.
+    async fn route_via_mcp(
+        &self,
+        handler: &domain_router::McpDomainHandler,
+        resource_id: &str,
+    ) -> Result<ParsedContent> {
+        let mcp_url = std::env::var("B00T_MCP_GATEWAY")
+            .unwrap_or_else(|_| "http://127.0.0.1:8000/mcp".to_string());
+
+        // Download the paper via MCP
+        let download_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": handler.download_tool,
+                "arguments": { "paper_id": resource_id }
+            }
+        });
+
+        let client = &self.client;
+        let download_resp = client
+            .post(&mcp_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .json(&download_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("{} MCP download failed for '{}': {e}", handler.domain_label, resource_id))?;
+
+        if !download_resp.status().is_success() {
+            bail!(
+                "{} MCP download returned HTTP {} for {}",
+                handler.domain_label, download_resp.status(), resource_id
+            );
+        }
+
+        // Read the paper content via MCP
+        let read_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": handler.read_tool,
+                "arguments": { "paper_id": resource_id }
+            }
+        });
+
+        let read_resp = client
+            .post(&mcp_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .json(&read_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("{} MCP read failed for '{}': {e}", handler.domain_label, resource_id))?;
+
+        let read_json: serde_json::Value = read_resp
+            .json()
+            .await
+            .map_err(|e| anyhow!("{} MCP response parse failed: {e}", handler.domain_label))?;
+
+        let text = read_json
+            .pointer("/result/content/0/text")
+            .or_else(|| read_json.pointer("/result/text"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        Ok(ParsedContent {
+            text,
+            content_type: ContentType::Markdown,
+            source_url: Some(source.to_string()),
+        })
     }
 
     /// Fetch a URL and parse based on Content-Type header + extension.

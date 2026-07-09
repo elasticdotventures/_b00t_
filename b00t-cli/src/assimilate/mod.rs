@@ -6,6 +6,7 @@
 pub mod content_router;
 pub mod concept_extractor;
 pub mod crawl_engine;
+pub mod domain_router;
 pub mod pdf_extractor;
 pub mod index_dispatcher;
 
