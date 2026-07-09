@@ -1,0 +1,6 @@
+# Fixture: skill datum carrying aliases (mirrors eureka-composite-capability)
+[b00t]
+name = "aliased"
+type = "skill"
+hint = "Fixture: skill datum with aliases"
+aliases = ["ali", "alia"]

@@ -1,0 +1,83 @@
+[b00t]
+name = "github-code-review"
+type = "skill"
+hint = "gh CLI review mechanics: fetch PR context deterministically, inline comments, CI status, submit APPROVE/REQUEST_CHANGES"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["review", "github", "gh", "pr", "ci", "inline-comments", "reviewer", "cli"]
+
+[b00t.skill]
+depends_on = []
+unlocks = [
+    "github-code-review::fetch-context",
+    "github-code-review::check-ci",
+    "github-code-review::inline-comment",
+    "github-code-review::submit-verdict",
+]
+
+# ── GitHub Code Review Mechanics ──────────────────────────────────────────────
+#
+# Pure tooling skill: how a reviewer agent drives `gh` deterministically.
+# Analysis frameworks live in multi-framework-code-review; this skill is the
+# transport layer. Every command here is pipe-safe (JSON out, no pager).
+#
+# 🤓 Always pass --json + --jq to gh: raw human output wastes context and is
+#    version-unstable. GH_PAGER= gh ... kills the pager in non-tty sessions.
+
+[b00t.skill.recipes."github-code-review::fetch-context"]
+description = "Deterministic PR context fetch: metadata, files, diff artifact"
+# @example: gh pr view 612 --json title,body,files,additions,deletions
+steps = [
+    "1. gh pr view <n> --json number,title,body,author,baseRefName,headRefName,additions,deletions",
+    "2. gh pr view <n> --json files --jq '.files[].path' — changed-file inventory",
+    "3. gh pr diff <n> > /tmp/pr-<n>.diff — persist once, reuse for every analysis pass",
+    "4. gh pr view <n> --json reviews --jq '.reviews[] | {author: .author.login, state}' — prior verdicts",
+    "5. Compress to executive: '<n> files, +<a>/-<d>, CI <status>' — never paste the raw diff upward",
+]
+
+[b00t.skill.recipes."github-code-review::check-ci"]
+description = "CI/check status as a review precondition"
+steps = [
+    "1. gh pr checks <n> — table of check runs and conclusions",
+    "2. gh pr view <n> --json statusCheckRollup --jq '.statusCheckRollup[] | select(.conclusion != \"SUCCESS\")'",
+    "3. Red CI = review still runs, but verdict cannot be APPROVE until checks pass",
+    "4. Flaky check suspected? gh run rerun <run-id> once; twice-flaky = b00t task add 'bug: flaky check <name>'",
+]
+
+[b00t.skill.recipes."github-code-review::inline-comment"]
+description = "Attach findings to exact diff positions"
+steps = [
+    "1. Batch findings first — one review with N comments, never N single-comment reviews",
+    "2. gh api repos/{owner}/{repo}/pulls/<n>/comments -f body='<finding>' -f commit_id=<sha> -f path=<file> -F line=<line> -f side=RIGHT",
+    "3. Comment format: '<SEVERITY>: <finding>. Suggested fix: <one-liner>' — laconic, actionable",
+    "4. Position drift (file changed since fetch)? re-run fetch-context; never guess line numbers",
+]
+
+[b00t.skill.recipes."github-code-review::submit-verdict"]
+description = "Submit the review with machine-parseable verdict"
+steps = [
+    "1. Compose summary: counts per severity + top-3 findings, <=15 lines",
+    "2. APPROVE: gh pr review <n> --approve --body '<summary>'",
+    "3. REQUEST_CHANGES: gh pr review <n> --request-changes --body '<summary>'",
+    "4. Comment-only pass (no authority): gh pr review <n> --comment --body '<summary>'",
+    "5. Echo final line for pipeline consumers: 'VERDICT: APPROVE' or 'VERDICT: REQUEST_CHANGES'",
+    "6. Log verdict to .b00t/reviewer-audit.jsonl (quality-tracker consumes this)",
+]
+
+[b00t.compose]
+composes_with = [
+    "multi-framework-code-review",
+    "reviewer.role",
+    "pr-risk-scorer.datum",
+    "diff-analyzer",
+    "quality-tracker",
+    "gh.cli",
+]
+
+# b00t:map v1
+# summary: gh CLI review transport — deterministic PR context fetch, inline comments, CI gates, verdict submission
+# tags: review, github, gh, pr, ci, inline-comments, reviewer, cli
+# tier: sm0l
+# cmds: gh pr view <n> --json files; gh pr diff <n>; gh pr checks <n>; gh pr review <n> --request-changes
+# complexity: 3

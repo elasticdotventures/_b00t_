@@ -2,7 +2,7 @@
 # ⚠️ EXPERIMENTAL: upstream Docker support is experimental (vendor/serena/DOCKER.md);
 #    image is locally built. On single-node k8s with containerd:
 #      podman build -t serena:latest vendor/serena/
-#      podman save serena:latest | sudo k3s ctr images import -
+#      podman save serena:latest | sudo k0s ctr -n k8s.io images import -
 #    then: kubectl apply -f _b00t_/k8s/serena.yaml
 # MCP stdio bridges via: kubectl exec -i -n b00t-serena deploy/serena -- serena start-mcp-server ...
 apiVersion: v1
@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - name: serena
-          image: serena:latest
+          image: localhost/serena:latest
           imagePullPolicy: Never   # locally imported image
           # long-lived keepalive; MCP sessions arrive via kubectl exec -i
           command: ["sleep", "infinity"]
@@ -35,7 +35,7 @@ spec:
             - { name: serena-config, mountPath: /workspaces/serena/config }
           resources:
             requests: { cpu: 250m, memory: 512Mi }
-            limits: { cpu: "2", memory: 2Gi }
+            limits: { cpu: "3", memory: 5Gi }
       volumes:
         - name: workspace
           hostPath: { path: /home/brianh/.b00t, type: Directory }

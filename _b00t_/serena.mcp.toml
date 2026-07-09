@@ -38,7 +38,7 @@ status = "assimilated"
 #    locally (`serena:latest`), workspace must be volume-mounted, config dir
 #    mounted at /workspaces/serena/config with gui_log_window=False.
 # ⚠️ single-node k8s + podman-built image: import required
-#    (podman save serena:latest | k3s ctr images import -) before apply.
+#    (podman save serena:latest | sudo k0s ctr -n k8s.io images import -) before apply.
 
 install = "podman build -t serena:latest vendor/serena/"
 version = "podman image exists serena:latest && echo serena:latest || serena --version"
@@ -78,6 +78,17 @@ command = "uvx"
 requires = ["uv"]
 transport = "stdio"
 args = ["--from", "serena-agent", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "{{PWD}}"]
+
+# ── Composition knowledge — graph-visible triples (task #107) ────────────────
+# 🤓 emitted as b00t:composes_with / b00t:measured by datum_triples.rs;
+#    measured values are the symbol-scoped-read savings documented above.
+[b00t.compose]
+composes_with = ["grammar-verify", "b00t-lsp"]
+measured = [
+    { metric = "context_savings_record_lesson", value = "94%" },
+    { metric = "context_savings_chunknode_impl", value = "96%" },
+    { metric = "context_savings_proxy_chat", value = "83%" },
+]
 
 # b00t:map v1
 # summary: Serena LSP semantic retrieval + symbolic patching MCP — c0re default; packaging ladder k8s>podman>binary>uvx; 83-96% measured context savings

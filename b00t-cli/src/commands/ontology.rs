@@ -386,6 +386,24 @@ pub fn sparql_query(subject: Option<&str>, predicate: &str, datum_dir: &str) -> 
             }
         }
     }
+
+    // Merge rich BootDatum triples (datum_triples::compile_datum_triples) so
+    // composition knowledge (aliases, composes_with, measured, unlocks, …) is
+    // graph-visible. scan_datums above only parses top-level *.toml with a
+    // light schema; compile_datum_triples parses the full BootDatum including
+    // .tomllm/.tomllmd skills.
+    if !matches!(predicate, "type" | "b00t:type" | "roles" | "b00t:roles" | "validate" | "b00t:validate") {
+        let rich = crate::datum_triples::compile_datum_triples(datum_dir)?;
+        for (s, p, o) in rich {
+            if let Some(subj) = subject {
+                if !s.contains(subj) { continue; }
+            }
+            // "all" passes everything; a named predicate acts as a filter
+            // (e.g. --predicate composes_with matches b00t:composes_with).
+            if predicate != "all" && !p.contains(predicate) { continue; }
+            triples.push([s, p, o]);
+        }
+    }
     Ok(triples)
 }
 

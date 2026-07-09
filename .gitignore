@@ -142,6 +142,7 @@
 .b00t/ralph/loop.log
 .b00t/ralph/status.json
 .b00t/tasks.json
+.b00t/harvest_state.json
 .b00t/last-delegate-token
 .bugs/*.jsonl
 .cache
@@ -337,3 +338,12 @@ vendor/pi-mono/
 
 # generated from local-only evidence/ — regenerate via just ai-finetune::evidence-train
 fine-tune/evidence_train.jsonl
+
+# serena pod runtime artifacts (writes into its config hostPath)
+_b00t_/k8s/serena-config/news*
+
+# serena runtime cache (project.yml IS tracked)
+.serena/cache/
+
+# harvest output — mined from local transcripts, derived data
+harvest_candidates.jsonl
