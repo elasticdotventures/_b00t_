@@ -68,71 +68,100 @@ impl ContentRouter {
     }
 
     /// Route through an MCP server for institutional domains.
-    /// E.g., arxiv.org URLs → download_paper + read_paper via arxiv-mcp-server.
+    /// E.g., arxiv.org URLs → download_paper, huggingface.co → paper_search.
+    /// HF_TOKEN env var is passed as Authorization header when available.
     async fn route_via_mcp(
         &self,
         handler: &domain_router::McpDomainHandler,
         resource_id: &str,
     ) -> Result<ParsedContent> {
-        let mcp_url = std::env::var("B00T_MCP_GATEWAY")
-            .unwrap_or_else(|_| "http://127.0.0.1:8000/mcp".to_string());
+        let mcp_url = match handler.mcp_server.as_str() {
+            "arxiv-mcp-server" => std::env::var("ARXIV_MCP_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8000/mcp".to_string()),
+            "huggingface" => "https://huggingface.co/mcp".to_string(),
+            _ => bail!("unknown MCP server: {}", handler.mcp_server),
+        };
 
-        // Download the paper via MCP
-        let download_body = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": handler.download_tool,
-                "arguments": { "paper_id": resource_id }
+        let mut request = self.client.post(&mcp_url);
+
+        // Pass HF_TOKEN as Authorization header for HuggingFace
+        if handler.mcp_server == "huggingface" {
+            if let Ok(token) = std::env::var("HF_TOKEN") {
+                request = request.header("Authorization", format!("Bearer {}", token));
             }
-        });
-
-        let client = &self.client;
-        let download_resp = client
-            .post(&mcp_url)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json, text/event-stream")
-            .json(&download_body)
-            .send()
-            .await
-            .map_err(|e| anyhow!("{} MCP download failed for '{}': {e}", handler.domain_label, resource_id))?;
-
-        if !download_resp.status().is_success() {
-            bail!(
-                "{} MCP download returned HTTP {} for {}",
-                handler.domain_label, download_resp.status(), resource_id
-            );
         }
 
-        // Read the paper content via MCP
-        let read_body = serde_json::json!({
+        // Initialize MCP session
+        let init_body = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
+            "id": 1,
+            "method": "initialize",
             "params": {
-                "name": handler.read_tool,
-                "arguments": { "paper_id": resource_id }
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "b00t", "version": "0.1"}
             }
         });
 
-        let read_resp = client
-            .post(&mcp_url)
+        let init_resp = request
+            .try_clone()
+            .unwrap()
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream")
-            .json(&read_body)
+            .json(&init_body)
             .send()
             .await
-            .map_err(|e| anyhow!("{} MCP read failed for '{}': {e}", handler.domain_label, resource_id))?;
+            .map_err(|e| anyhow!("{} MCP init failed: {e}", handler.domain_label))?;
 
-        let read_json: serde_json::Value = read_resp
+        let session_id = init_resp
+            .headers()
+            .get("Mcp-Session-Id")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+            .ok_or_else(|| anyhow!("{} MCP: no session ID in init response", handler.domain_label))?;
+
+        // Send initialized notification
+        // 🤓 Some MCP servers require this before tools/call
+        let _notify = request
+            .try_clone()
+            .unwrap()
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            }))
+            .send()
+            .await;
+
+        // Call the fetch tool
+        let call_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": handler.fetch_tool,
+                "arguments": { &handler.fetch_arg: resource_id }
+            }
+        });
+
+        let call_resp = request
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .json(&call_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("{} MCP fetch failed: {e}", handler.domain_label))?;
+
+        let call_json: serde_json::Value = call_resp
             .json()
             .await
             .map_err(|e| anyhow!("{} MCP response parse failed: {e}", handler.domain_label))?;
 
-        let text = read_json
+        let text = call_json
             .pointer("/result/content/0/text")
-            .or_else(|| read_json.pointer("/result/text"))
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string();
@@ -140,7 +169,7 @@ impl ContentRouter {
         Ok(ParsedContent {
             text,
             content_type: ContentType::Markdown,
-            source_url: Some(source.to_string()),
+            source_url: Some(format!("{}://{}", handler.domain_label.to_lowercase(), resource_id)),
         })
     }
 

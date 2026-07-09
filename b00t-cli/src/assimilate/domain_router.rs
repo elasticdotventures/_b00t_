@@ -10,14 +10,14 @@ use regex::Regex;
 /// A domain handler: regex to match URLs, MCP tool chain to process them.
 #[derive(Debug, Clone)]
 pub struct McpDomainHandler {
-    /// Regex to match and extract resource ID (capture group 1 = paper ID)
+    /// Regex to match and extract resource ID (capture group 1 = resource ID)
     pub url_pattern: Regex,
     /// MCP server name (must be registered in b00t config)
     pub mcp_server: String,
-    /// Tool to download the resource
-    pub download_tool: String,
-    /// Tool to read the resource
-    pub read_tool: String,
+    /// Tool to fetch the resource
+    pub fetch_tool: String,
+    /// Argument name for the fetch tool
+    pub fetch_arg: String,
     /// Human-readable domain label
     pub domain_label: String,
 }
@@ -37,8 +37,8 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
                 r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$"
             ).expect("valid arxiv URL regex"),
             mcp_server: "arxiv-mcp-server".into(),
-            download_tool: "download_paper".into(),
-            read_tool: "read_paper".into(),
+            fetch_tool: "download_paper".into(),
+            fetch_arg: "paper_id".into(),
             domain_label: "arXiv".into(),
         },
         // huggingface.co — models, datasets, spaces, papers
@@ -46,13 +46,14 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
         //          https://huggingface.co/datasets/<user>/<repo>
         //          https://huggingface.co/spaces/<user>/<repo>
         //          https://huggingface.co/papers/<id>
+        // Uses paper_search for papers, hub_repo_details for models/datasets/spaces
         McpDomainHandler {
             url_pattern: Regex::new(
                 r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)"
             ).expect("valid huggingface URL regex"),
             mcp_server: "huggingface".into(),
-            download_tool: "hf_doc_fetch".into(),
-            read_tool: "hf_doc_fetch".into(),
+            fetch_tool: "paper_search".into(),
+            fetch_arg: "query".into(),
             domain_label: "HuggingFace".into(),
         },
     ]
@@ -97,7 +98,8 @@ mod tests {
     fn test_extract_mcp_resource_id() {
         let (handler, id) = extract_mcp_resource_id("https://arxiv.org/abs/2401.12345").unwrap();
         assert_eq!(handler.mcp_server, "arxiv-mcp-server");
-        assert_eq!(handler.download_tool, "download_paper");
+        assert_eq!(handler.fetch_tool, "download_paper");
+        assert_eq!(handler.fetch_arg, "paper_id");
         assert_eq!(id, "2401.12345");
 
         assert!(extract_mcp_resource_id("https://example.com/paper").is_none());
@@ -112,7 +114,7 @@ mod tests {
             ("https://huggingface.co/meta-llama/Llama-3.1-8B", Some("meta-llama/Llama-3.1-8B")),
             ("https://huggingface.co/datasets/squad/squad", Some("squad/squad")),
             ("https://huggingface.co/spaces/facebook/metaseq", Some("facebook/metaseq")),
-            ("https://huggingface.co/papers/2401.12345", Some("papers/2401.12345")),
+            ("https://huggingface.co/papers/2604.17472", Some("papers/2604.17472")),
             ("https://huggingface.co/google/gemma-2-2b-it?tab=readme", Some("google/gemma-2-2b-it")),
             ("https://example.com/paper", None),
         ];
@@ -128,7 +130,7 @@ mod tests {
         let (handler, id) =
             extract_mcp_resource_id("https://huggingface.co/meta-llama/Llama-3.1-8B").unwrap();
         assert_eq!(handler.mcp_server, "huggingface");
-        assert_eq!(handler.download_tool, "hf_doc_fetch");
+        assert_eq!(handler.fetch_tool, "paper_search");
         assert_eq!(id, "meta-llama/Llama-3.1-8B");
 
         let (handler, id) =
