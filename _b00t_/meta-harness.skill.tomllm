@@ -1,0 +1,119 @@
+[b00t]
+name = "meta-harness"
+type = "skill"
+version = "0.1.0"
+hint = "Meta-Harness loop — evolve the harness around a frozen model via OODA-driven mechanism search"
+
+[b00t.skill]
+description = """
+Evolves the agent harness (playbook, guards, delegate patterns, output contracts)
+around a frozen model. Each iteration: proposer reads history → proposes ONE mechanism
+→ Ralph executes against CI → blended score decides promotion.
+
+Based on: Meta-Harness (Lee et al., 2026), "Don't Train the Model, Evolve the Harness" (Niklaus, 2026)
+"""
+source = "https://arxiv.org/abs/2603.28052"
+tags = ["meta-harness", "ooda", "evolution", "harness", "proposer", "blended-scoring", "loop"]
+applies_to = [
+    "evolving agent instructions and output contracts",
+    "optimizing guard compliance rules",
+    "discovering effective delegation patterns",
+    "improving CMDB hygiene mechanisms",
+]
+tier = "frontier"
+complexity = 9
+
+# ── Proposer protocol ─────────────────────────────────────────────────────────
+[b00t.skill.proposer]
+description = "Frontier model that reads evaluation history and proposes one mechanism per iteration"
+model = "frontier"  # Claude Opus / GPT-5 class — needs strong reasoning
+max_iterations = 20
+protocol = "copy-adapt-one-mechanism"
+
+[b00t.skill.proposer.rules]
+rule_1 = "Copy current best harness exactly before adding ONE change"
+rule_2 = "No task-specific hints — mechanism must help on unfamiliar inputs"
+rule_3 = "Never read the test split — only dev set for evaluation"
+rule_4 = "Write pending_eval.json: hypothesis, changes, fix_tasks, regression_tasks, observed"
+rule_5 = "Compounding wins: each accepted mechanism is inherited by all later candidates"
+
+# ── Blended scoring ────────────────────────────────────────────────────────────
+[b00t.skill.scoring]
+description = "Composite objective that balances correctness, reliability, and cost"
+formula = "pooled_pass_rate + 0.5 * all_pass_rate - 0.005 * tokens_per_million"
+
+[b00t.skill.scoring.weights]
+pooled_pass_rate = 1.0
+all_pass_rate = 0.5
+cost_penalty = 0.005
+
+[b00t.skill.scoring.promotion]
+rule = "Candidate promoted only if blended score > incumbent by >= min_delta"
+min_delta = 1.0
+trials = 3
+noise_margin = "Three-trial average smooths single-run luck"
+
+# ── OODA loop phases ───────────────────────────────────────────────────────────
+[b00t.skill.ooda]
+description = "Two-layer OODA: outer loop proposes, inner loop (Ralph) executes"
+
+[b00t.skill.ooda.observe]
+description = "Read evaluation history: previous iterations, current frontier harness, CI results"
+inputs = [
+    ".b00t/meta-harness/frontier/ — current best harness state",
+    ".b00t/meta-harness/history.jsonl — iteration lineage",
+    "CI build/test results for last frontier",
+]
+output = "ObservationSummary { frontier_score, last_promoted, regression_risks }"
+
+[b00t.skill.ooda.orient]
+description = "Proposer analyzes history, forms hypothesis, designs ONE mechanism"
+inputs = ["ObservationSummary", "current harness (playbook + guards + delegate)"]
+output = "Hypothesis { description, mechanism_code, expected_fix_tasks, expected_regression_risks }"
+
+[b00t.skill.ooda.decide]
+description = "Write proposed mechanism as b00t task, dispatch to Ralph for execution"
+action = "b00t task add 'harness-evolve: <hypothesis-summary>' --priority high"
+evaluation = "CI pipeline runs build + tests against candidate harness"
+
+[b00t.skill.ooda.act]
+description = "Score the candidate, promote if it clears min_delta, otherwise discard"
+promotion = "Candidate promoted → becomes new frontier. Copy mechanism into production harness."
+rollback = "Candidate rejected → harness unchanged. Hypothesis logged as orphan for future stacking."
+
+# ── Evaluation pipeline ────────────────────────────────────────────────────────
+[b00t.skill.evaluation]
+description = "What counts as a passing evaluation"
+pipeline = [
+    "1. CI build must pass (cargo build / pnpm build)",
+    "2. Test suite must run (at minimum, non-flaky tests pass)",
+    "3. Guard compliance rate — fewer guard violations = higher score",
+    "4. CMDB hygiene rate — datum writes vs. raw file edits",
+    "5. Delegation evidence — b00t agent delegate calls logged",
+]
+
+# ── Integration ────────────────────────────────────────────────────────────────
+[b00t.skill.integration]
+ralph = "Inner loop executor — picks up b00t tasks and delegates to OpenCode"
+b00t_tasks = "Task system — proposer creates tasks, Ralph executes, CI evaluates"
+ci = "GitHub Actions — build + test gates for promotion decision"
+
+# ── Usage ──────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Run one Meta-Harness iteration (propose + execute + evaluate)"
+command = "python .b00t/meta-harness/meta_harness.py --iterations 1"
+
+[[b00t.usage]]
+description = "Run full evolution loop (20 iterations, unattended)"
+command = "python .b00t/meta-harness/meta_harness.py --iterations 20 --unattended"
+
+[[b00t.usage]]
+description = "View evolution history"
+command = "cat .b00t/meta-harness/history.jsonl | jq -s '.'"
+
+# b00t:map v1
+# summary: Meta-Harness loop — evolve b00t's harness via OODA-driven mechanism search with blended scoring
+# tags: meta-harness, ooda, evolution, harness, proposer, blended-scoring, ralph, ci
+# tier: frontier
+# cmds: python .b00t/meta-harness/meta_harness.py --iterations 20
+# complexity: 9
