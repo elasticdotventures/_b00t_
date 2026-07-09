@@ -41,6 +41,20 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
             read_tool: "read_paper".into(),
             domain_label: "arXiv".into(),
         },
+        // huggingface.co — models, datasets, spaces, papers
+        // Matches: https://huggingface.co/<user>/<repo>
+        //          https://huggingface.co/datasets/<user>/<repo>
+        //          https://huggingface.co/spaces/<user>/<repo>
+        //          https://huggingface.co/papers/<id>
+        McpDomainHandler {
+            url_pattern: Regex::new(
+                r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)"
+            ).expect("valid huggingface URL regex"),
+            mcp_server: "huggingface".into(),
+            download_tool: "hf_doc_fetch".into(),
+            read_tool: "hf_doc_fetch".into(),
+            domain_label: "HuggingFace".into(),
+        },
     ]
 }
 
@@ -87,5 +101,45 @@ mod tests {
         assert_eq!(id, "2401.12345");
 
         assert!(extract_mcp_resource_id("https://example.com/paper").is_none());
+    }
+
+    #[test]
+    fn test_huggingface_url_parsing() {
+        let re =
+            Regex::new(r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)").unwrap();
+
+        let cases = vec![
+            ("https://huggingface.co/meta-llama/Llama-3.1-8B", Some("meta-llama/Llama-3.1-8B")),
+            ("https://huggingface.co/datasets/squad/squad", Some("squad/squad")),
+            ("https://huggingface.co/spaces/facebook/metaseq", Some("facebook/metaseq")),
+            ("https://huggingface.co/papers/2401.12345", Some("papers/2401.12345")),
+            ("https://huggingface.co/google/gemma-2-2b-it?tab=readme", Some("google/gemma-2-2b-it")),
+            ("https://example.com/paper", None),
+        ];
+
+        for (url, expected) in cases {
+            let result = re.captures(url).and_then(|c| c.get(1).map(|m| m.as_str()));
+            assert_eq!(result, expected, "URL: {url}");
+        }
+    }
+
+    #[test]
+    fn test_huggingface_mcp_routing() {
+        let (handler, id) =
+            extract_mcp_resource_id("https://huggingface.co/meta-llama/Llama-3.1-8B").unwrap();
+        assert_eq!(handler.mcp_server, "huggingface");
+        assert_eq!(handler.download_tool, "hf_doc_fetch");
+        assert_eq!(id, "meta-llama/Llama-3.1-8B");
+
+        let (handler, id) =
+            extract_mcp_resource_id("https://huggingface.co/datasets/squad/squad").unwrap();
+        assert_eq!(handler.mcp_server, "huggingface");
+        assert_eq!(id, "squad/squad");
+
+        let (handler, id) =
+            extract_mcp_resource_id("https://huggingface.co/spaces/facebook/metaseq").unwrap();
+        assert_eq!(handler.mcp_server, "huggingface");
+        assert_eq!(handler.domain_label, "HuggingFace");
+        assert_eq!(id, "facebook/metaseq");
     }
 }
