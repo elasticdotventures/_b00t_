@@ -47,7 +47,7 @@ pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
     DiscoverableTransport, IpcTransport, TransportKind,
 };
-pub use message::ChatMessage;
+pub use message::{ChatMessage, TaskMessage};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};

@@ -41,3 +41,47 @@ impl ChatMessage {
         self
     }
 }
+
+/// ACP Task message — agent-to-agent work delegation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskMessage {
+    pub task_id: String,
+    pub action: String,
+    pub payload: serde_json::Value,
+    pub from_agent: String,
+    pub to_agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline: Option<DateTime<Utc>>,
+    #[serde(default = "default_priority")]
+    pub priority: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+fn default_priority() -> String { "normal".to_string() }
+
+impl TaskMessage {
+    pub fn new(
+        action: impl Into<String>,
+        from_agent: impl Into<String>,
+        to_agent: impl Into<String>,
+        payload: serde_json::Value,
+    ) -> Self {
+        Self {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            action: action.into(),
+            payload,
+            from_agent: from_agent.into(),
+            to_agent: to_agent.into(),
+            deadline: None,
+            priority: "normal".to_string(),
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn with_deadline(mut self, deadline: DateTime<Utc>) -> Self { self.deadline = Some(deadline); self }
+    pub fn with_priority(mut self, p: impl Into<String>) -> Self { self.priority = p.into(); self }
+
+    pub fn subject(&self) -> String { format!("b00t.tasks.{}", self.to_agent) }
+    pub fn broadcast_subject() -> &'static str { "b00t.tasks.*" }
+    pub fn agent_subject(agent_id: &str) -> String { format!("b00t.tasks.{}", agent_id) }
+}

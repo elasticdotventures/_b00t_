@@ -2,7 +2,7 @@
 
 use crate::{
     error::{ChatError, ChatResult},
-    message::ChatMessage,
+    message::{ChatMessage, TaskMessage},
     transport::{ChatTransport, ChatTransportConfig, ChatTransportKind},
 };
 
@@ -26,15 +26,26 @@ impl ChatClient {
             kind: ChatTransportKind::LocalSocket,
             socket_path: None,
             nats_url: None,
+            nats_user: None,
+            nats_password: None,
         })
     }
 
-    /// Convenience helper for the stubbed NATS transport.
-    pub fn nats(url: Option<String>) -> ChatResult<Self> {
+    /// NATS transport with credentials (falls back to env NATS_URL and default b00t/b00t-hive-lan).
+    pub fn nats(
+        url: Option<String>,
+        user: Option<String>,
+        password: Option<String>,
+    ) -> ChatResult<Self> {
+        let url = url
+            .or_else(|| std::env::var("NATS_URL").ok())
+            .unwrap_or_else(|| "nats://localhost:4222".to_string());
         Self::new(ChatTransportConfig {
             kind: ChatTransportKind::Nats,
             socket_path: None,
-            nats_url: url,
+            nats_url: Some(url),
+            nats_user: user.or_else(|| Some("b00t".to_string())),
+            nats_password: password.or_else(|| Some("b00t-hive-lan".to_string())),
         })
     }
 
@@ -54,6 +65,19 @@ impl ChatClient {
         self.send(&msg).await
     }
 
+    /// Send a task to another agent (NATS transport only).
+    pub async fn send_task(&self, task: &TaskMessage) -> ChatResult<()> {
+        self.transport.send_task(task).await
+    }
+
+    /// Subscribe to tasks for this agent. Returns a receiver of TaskMessages.
+    pub async fn subscribe_tasks(
+        &self,
+        agent_id: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
+        self.transport.subscribe_tasks(agent_id).await
+    }
+
     /// Return the transport identifier for telemetry.
     pub fn transport_kind(&self) -> &'static str {
         match &self.transport {
@@ -69,6 +93,8 @@ impl From<ChatTransportKind> for ChatTransportConfig {
             kind,
             socket_path: None,
             nats_url: None,
+            nats_user: None,
+            nats_password: None,
         }
     }
 }
