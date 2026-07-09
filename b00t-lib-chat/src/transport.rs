@@ -12,7 +12,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     error::{ChatError, ChatResult},
-    message::{ChatMessage, TaskMessage},
+    message::{ChatMessage, NotificationMessage, TaskMessage},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +85,14 @@ impl ChatTransport {
 
     pub async fn subscribe_tasks(&self, agent_id: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
         match self { ChatTransport::Nats(t) => t.subscribe_tasks(agent_id).await, ChatTransport::Local(_) => Err(ChatError::Other("task subscription requires NATS transport".into())) }
+    }
+
+    pub async fn publish_notification(&self, notification: &NotificationMessage) -> ChatResult<()> {
+        match self { ChatTransport::Nats(t) => t.publish_notification(notification).await, ChatTransport::Local(_) => Err(ChatError::Other("notification publish requires NATS transport".into())) }
+    }
+
+    pub async fn subscribe_notifications(&self, wildcard: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
+        match self { ChatTransport::Nats(t) => t.subscribe_notifications(wildcard).await, ChatTransport::Local(_) => Err(ChatError::Other("notification subscribe requires NATS transport".into())) }
     }
 }
 
@@ -180,6 +188,31 @@ impl RealNatsTransport {
         info!("Subscribed to NATS tasks on {}", subject);
         Ok(rx)
     }
+
+    async fn publish_notification(&self, notification: &NotificationMessage) -> ChatResult<()> {
+        let client = self.ensure_connected().await?;
+        let subject = notification.subject();
+        let payload = serde_json::to_vec(notification)?;
+        client.publish(subject.clone(), payload.into()).await.map_err(|e| ChatError::Other(format!("NATS notify publish failed: {}", e)))?;
+        debug!("NATS notification published to {}", subject);
+        Ok(())
+    }
+
+    async fn subscribe_notifications(&self, wildcard: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
+        let client = self.ensure_connected().await?;
+        let mut subscriber = client.subscribe(wildcard.to_string()).await.map_err(|e| ChatError::Other(format!("NATS notify subscribe failed: {}", e)))?;
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(msg) = subscriber.next().await {
+                match serde_json::from_slice::<NotificationMessage>(&msg.payload) {
+                    Ok(notification) => { if tx.send(notification).is_err() { break; } }
+                    Err(e) => { warn!("NATS notification deserialize failed: {}", e); }
+                }
+            }
+        });
+        info!("Subscribed to NATS notifications on {}", wildcard);
+        Ok(rx)
+    }
 }
 
 pub fn default_socket_path() -> ChatResult<PathBuf> {
@@ -200,6 +233,14 @@ mod tests {
         assert_eq!(task.subject(), "b00t.tasks.worker-7");
         assert_eq!(TaskMessage::agent_subject("worker-7"), "b00t.tasks.worker-7");
         assert_eq!(TaskMessage::broadcast_subject(), "b00t.tasks.*");
+    }
+
+    #[test]
+    fn test_notification_subject_convention() {
+        let n = NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
+        assert_eq!(n.subject(), "b00t.notify.gmail.new_email");
+        assert_eq!(NotificationMessage::wildcard_subject(), "b00t.notify.>");
+        assert_eq!(NotificationMessage::source_wildcard("files"), "b00t.notify.files.>");
     }
 
     #[tokio::test]

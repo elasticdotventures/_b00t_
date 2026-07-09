@@ -2,7 +2,7 @@
 
 use crate::{
     error::{ChatError, ChatResult},
-    message::{ChatMessage, TaskMessage},
+    message::{ChatMessage, NotificationMessage, TaskMessage},
     transport::{ChatTransport, ChatTransportConfig, ChatTransportKind},
 };
 
@@ -78,12 +78,29 @@ impl ChatClient {
         self.transport.subscribe_tasks(agent_id).await
     }
 
+    /// Publish a notification to NATS (e.g., MCP server event).
+    pub async fn publish_notification(&self, notification: &NotificationMessage) -> ChatResult<()> {
+        self.transport.publish_notification(notification).await
+    }
+
+    /// Subscribe to notifications matching a NATS subject wildcard (e.g., "b00t.notify.>").
+    pub async fn subscribe_notifications(
+        &self,
+        wildcard: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
+        self.transport.subscribe_notifications(wildcard).await
+    }
+
     /// Return the transport identifier for telemetry.
     pub fn transport_kind(&self) -> &'static str {
         match &self.transport {
             ChatTransport::Local(_) => "local",
             ChatTransport::Nats(_) => "nats",
         }
+    }
+
+    pub fn transport(&self) -> &ChatTransport {
+        &self.transport
     }
 }
 

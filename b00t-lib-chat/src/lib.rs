@@ -24,7 +24,9 @@
 //! # }
 //! ```
 
+pub mod assignment;
 // pub mod agent;  // 🤓 agent.rs uses full NATS Agent from old ACP - chat refactor simplified to stubs
+pub mod bridge;
 pub mod client;
 pub mod discovery;
 pub mod error;
@@ -40,6 +42,10 @@ pub mod transport;
 pub mod transports;
 
 // pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
+pub use assignment::{
+    AssignmentEngine, AssignmentRule, Condition, ConditionOp, TaskTemplate, TriggerKind,
+};
+pub use bridge::{McpBridge, McpServerSpec};
 pub use client::ChatClient;
 pub use discovery::{SocketRegistry, SocketRegistryBuilder};
 pub use error::{ChatError, ChatResult};
@@ -47,7 +53,7 @@ pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
     DiscoverableTransport, IpcTransport, TransportKind,
 };
-pub use message::{ChatMessage, TaskMessage};
+pub use message::{ChatMessage, NotificationMessage, TaskMessage};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};

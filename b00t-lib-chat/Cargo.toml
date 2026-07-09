@@ -37,6 +37,7 @@ k0mmand3r = { path = "../k0mmand3r", version = "0.9" }
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 async-trait = "0.1"
 async-stream = "0.3"
+regex = "1.0"
 
 # OpenTelemetry observability — workspace version + extra features for chat runtime
 opentelemetry = { workspace = true, features = ["metrics"] }
