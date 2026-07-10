@@ -642,6 +642,8 @@ fn notify_channel(
         kind: ChatTransportKind::LocalSocket,
         socket_path: None,
         nats_url: None,
+        nats_user: None,
+        nats_password: None,
     })
     .context("failed to initialize local chat client")?;
 
