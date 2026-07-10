@@ -165,7 +165,8 @@ impl RhaiEngine {
         });
 
         // String utilities
-        engine.register_fn("str_trim", |s: &str| -> String {
+        // 🤓 avoid registering str_trim — it shadows the built-in .trim() method on strings
+        engine.register_fn("str_strip", |s: &str| -> String {
             s.trim().to_string()
         });
 

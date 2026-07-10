@@ -1,0 +1,85 @@
+[b00t]
+name = "quality-tracker"
+type = "skill"
+hint = "Review-quality telemetry: enforce reviewer thresholds, maintain the audit log, track framework efficiency and lfmf lesson yield across sessions"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["quality", "review", "telemetry", "thresholds", "audit", "kaizen", "reviewer", "metrics"]
+
+[b00t.skill]
+depends_on = ["multi-framework-code-review"]
+unlocks = [
+    "quality-tracker::enforce-thresholds",
+    "quality-tracker::audit-log",
+    "quality-tracker::framework-efficiency",
+    "quality-tracker::pulse-report",
+]
+
+# ── Quality Tracker ───────────────────────────────────────────────────────────
+#
+# Closes the reviewer's Kaizen loop. Thresholds are DEFINED in
+# reviewer.role.toml [b00t.thresholds]; this skill is the recipe layer that
+# measures against them and records evidence. A review that emits a verdict
+# without passing enforce-thresholds is itself a guard violation.
+#
+# 🤓 Quality data lives in append-only JSONL, never in agent memory —
+#    cross-session trends require durable, greppable records.
+
+[b00t.skill.recipes."quality-tracker::enforce-thresholds"]
+description = "Gate a review's verdict on minimum quality bars"
+# Thresholds (authoritative copy: reviewer.role.toml [b00t.thresholds]):
+#   min_findings_per_100_lines = 1.5 | min_cross_validated_findings = 1
+#   max_false_contradictions = 0    | min_framework_efficiency_ratio = 0.3
+steps = [
+    "1. findings_density = total_findings * 100 / changed_lines; require >= 1.5",
+    "2. Require >= 1 cross-validated (2+ framework) finding on MEDIUM+ routes",
+    "3. Require 0 false contradictions: every TRIZ finding must cite both the improvement and the degradation",
+    "4. Below bar = re-run the deficient pass once; still below = flag 'LOW-SIGNAL REVIEW' in the summary, never pad findings",
+    "5. Only after this gate: multi-framework-code-review::verdict may emit",
+]
+
+[b00t.skill.recipes."quality-tracker::audit-log"]
+description = "Append every verdict to the durable audit trail"
+steps = [
+    "1. Target: .b00t/reviewer-audit.jsonl (reviewer.role [b00t.governance].audit_log)",
+    "2. Record per review: {ts, pr, route, changed_lines, findings: {mece, triz, eureka}, cross_validated, verdict}",
+    "3. Append-only — jq -c '.' >> .b00t/reviewer-audit.jsonl; never rewrite history",
+    "4. Read back trend: jq -s 'group_by(.verdict) | map({verdict: .[0].verdict, n: length})' .b00t/reviewer-audit.jsonl",
+]
+
+[b00t.skill.recipes."quality-tracker::framework-efficiency"]
+description = "Measure what each framework uniquely contributes"
+steps = [
+    "1. Per review: unique_findings(framework) / total_findings — require >= 0.3 per framework (efficiency ratio)",
+    "2. A framework consistently < 0.3 over 5+ reviews = its pass recipe needs revision, not removal",
+    "3. jq 'select(.findings.triz == 0)' .b00t/reviewer-audit.jsonl | wc -l — dead-lens detection",
+    "4. Findings caught by exactly one framework are the lens's justification — report them in pulse",
+]
+
+[b00t.skill.recipes."quality-tracker::pulse-report"]
+description = "Session-close reflection: convert review telemetry into hive knowledge"
+steps = [
+    "1. What did each framework uniquely catch? What escaped all three (found later in CI/prod)?",
+    "2. Every escape: b00t lfmf code-review '<pattern that escaped>: <lens that should have caught it>'",
+    "3. b00t lfmf stats code-review — verify lessons are landing (hit/salvage/miss telemetry)",
+    "4. Recurring escape class (3+ occurrences) = b00t task add 'kaizen: add <check> to <pass> recipe'",
+    "5. Report phygital-twin status: node_id, state, review_id, verdict (reviewer.role [b00t.phygital])",
+]
+
+[b00t.compose]
+composes_with = [
+    "multi-framework-code-review",
+    "reviewer.role",
+    "multi-framework-review.datum",
+    "github-code-review",
+    "harness-loop-engineer",
+    "pr-risk-scorer.datum",
+]
+
+# b00t:map v1
+# summary: Reviewer quality telemetry — threshold gates, append-only audit JSONL, framework efficiency, lfmf pulse loop
+# tags: quality, review, telemetry, thresholds, audit, kaizen, reviewer, metrics
+# tier: ch0nky
+# cmds: jq -s 'group_by(.verdict)' .b00t/reviewer-audit.jsonl; b00t lfmf stats code-review
+# complexity: 5

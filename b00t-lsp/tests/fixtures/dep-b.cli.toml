@@ -1,0 +1,4 @@
+[b00t]
+name = "dep-b"
+type = "cli"
+hint = "fixture cli datum, referenced by dotted name"

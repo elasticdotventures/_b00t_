@@ -63,6 +63,26 @@ message = "🦨 use uv (conda env not used in b00t hive; use uv venv + uv pip)"
 
 # --- Container guards ---
 [[b00t.hive.guards]]
+pattern = "systemctl"
+action = "warn"
+message = """⚠️  systemctl is deprecated for service management. b00t alternatives:
+  systemctl start X    → podman kube play _b00t_/k8s/<name>.pod.yml
+  systemctl stop X     → podman kube down _b00t_/k8s/<name>.pod.yml
+  systemctl status X   → podman pod ps --filter name=<name>
+  systemctl enable X   → podman generate systemd --new <name>
+  systemctl daemon-reload → b00t-cli datum validate ._b00t_/"""
+redirect = "use podman kube play or b00t hive activate"
+
+[[b00t.hive.guards]]
+pattern = "systemctl --user start b00t@"
+action = "warn"
+message = """⚠️  b00t service management: use b00t hive activate, not systemctl.
+  systemctl --user start b00t@inference-*  → b00t hive activate <profile>
+  systemctl --user start b00t@opencode-*   → opencode serve --port 3000 --model qwen36-local/sm0l
+  systemctl --user start b00t@pi-*         → b00t-cli agent invoke pi '<task>'"""
+redirect = "use b00t hive activate or b00t-cli agent invoke"
+
+[[b00t.hive.guards]]
 pattern = "docker run"
 action = "warn"
 message = "🦨 use podman run (CDI GPU passthrough: --device nvidia.com/gpu=all --security-opt=label=disable)"

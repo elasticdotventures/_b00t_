@@ -580,6 +580,20 @@ async fn proxy_chat(
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
+
+    // Opt-in (#597): B00T_VERIFY_TOOL_INJECT=1 advertises the verify tool to
+    // the model on requests that don't already carry one.
+    let body: Bytes = if std::env::var("B00T_VERIFY_TOOL_INJECT").ok().as_deref() == Some("1") {
+        match serde_json::from_slice::<Value>(&body) {
+            Ok(mut parsed) => {
+                crate::verify_tool_loop::inject_verify_tool(&mut parsed);
+                Bytes::from(serde_json::to_vec(&parsed).unwrap_or_else(|_| body.to_vec()))
+            }
+            Err(_) => body,
+        }
+    } else {
+        body
+    };
     let url = format!("{}/chat/completions", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
@@ -594,9 +608,80 @@ async fn proxy_chat(
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
-            let body = resp.bytes().await.unwrap_or_default();
+            let body_bytes = resp.bytes().await.unwrap_or_default();
             state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
-            (status, body).into_response()
+
+            // ── Verify tool loop (#597) ───────────────────────────────────────
+            // Non-streaming responses whose finish_reason is tool_calls on the
+            // `verify` tool are executed locally (Z3) and re-entered, up to
+            // MAX_TOOL_ITERATIONS. Streaming and foreign tools pass through.
+            let request_json: Option<Value> = serde_json::from_slice(&body).ok();
+            let is_stream = request_json
+                .as_ref()
+                .and_then(|r| r["stream"].as_bool())
+                .unwrap_or(false);
+            if status.is_success() && !is_stream {
+                if let (Some(request_json), Ok(response_json)) =
+                    (request_json, serde_json::from_slice::<Value>(&body_bytes))
+                {
+                    if !crate::verify_tool_loop::extract_verify_calls(&response_json).is_empty() {
+                        let upstream_url = format!("{}/chat/completions", state.upstream_url);
+                        let upstream_key = state.upstream_key.clone();
+                        let send = |next_body: Value| {
+                            let url = upstream_url.clone();
+                            let key = upstream_key.clone();
+                            async move {
+                                let client = reqwest::Client::new();
+                                let mut req = client
+                                    .post(&url)
+                                    .header("Content-Type", "application/json")
+                                    .json(&next_body);
+                                if !key.is_empty() {
+                                    req = req.header("Authorization", format!("Bearer {}", key));
+                                }
+                                let resp = req.send().await?;
+                                Ok(resp.json::<Value>().await?)
+                            }
+                        };
+                        let final_response = crate::verify_tool_loop::run_tool_loop(
+                            &request_json,
+                            response_json,
+                            send,
+                            crate::verify_tool_loop::execute_verify_call,
+                        )
+                        .await;
+                        let loop_latency = start.elapsed().as_millis() as u64;
+                        state
+                            .emit_spotlight(&consumer, "chat_completions.verify_loop", &model, loop_latency)
+                            .await;
+                        return (StatusCode::OK, Json(final_response)).into_response();
+                    } else if let Some(content) =
+                        response_json["choices"][0]["message"]["content"].as_str()
+                    {
+                        // Grammar-shape audit (#596): b00t-verify.gbnf output puts
+                        // verify calls inline in content with a model-filled result
+                        // slot — check each against real Z3 and correct mismatches.
+                        let audit = tokio::task::block_in_place(|| {
+                            crate::verify_tool_loop::audit_grammar_content(
+                                content,
+                                crate::verify_tool_loop::z3_result_of,
+                            )
+                        });
+                        if let Some((audited_content, summary)) = audit {
+                            let mut corrected = response_json.clone();
+                            corrected["choices"][0]["message"]["content"] =
+                                Value::String(audited_content);
+                            corrected["b00t_verify_audit"] =
+                                serde_json::to_value(&summary).unwrap_or(Value::Null);
+                            state
+                                .emit_spotlight(&consumer, "chat_completions.verify_audit", &model, start.elapsed().as_millis() as u64)
+                                .await;
+                            return (StatusCode::OK, Json(corrected)).into_response();
+                        }
+                    }
+                }
+            }
+            (status, body_bytes).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;

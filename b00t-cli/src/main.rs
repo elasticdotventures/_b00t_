@@ -169,7 +169,13 @@ Good entries separate neophyte from master. Bad entries are vague, negative, or 
 
 Usage:
   b00t-cli lfmf <tool> "<topic>: <body>"
+  b00t-cli lfmf <tool> "<lesson>"        # colon optional — topic auto-derived, entry salvage-marked
   b00t-cli lfmf --tool <tool> --lesson "<topic>: <body>"
+  b00t-cli lfmf stats all|<tool>         # hit/salvage/miss telemetry report
+
+Salvage-first: malformed lessons (missing colon, URL first-colon, over-long topic/body)
+are NEVER discarded — the payload is recorded with a `<!-- salvaged:<kind> -->` marker
+and counted in telemetry (~/.b00t/lfmf-telemetry.jsonl, override $B00T_LFMF_TELEMETRY).
 
 Examples:
   # Good
@@ -187,6 +193,9 @@ Tips:
 - Body: <250 tokens, actionable, never repo-specific.
 - Affirmative: 'Do X for Y benefit', not 'Don't do X'.
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+
+Advice mode (consult prior lessons before fixing):
+  b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
     Lfmf {
@@ -1914,6 +1923,10 @@ async fn main() {
     let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
+            // --help / --version: let clap print and exit 0
+            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+                e.exit();
+            }
             // Datum-driven dispatch: search the datum space for <name>
             if raw_args.len() > 1 {
                 let candidate = &raw_args[1];
@@ -2645,7 +2658,23 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) =
+            // `lfmf stats all|<tool>` — hit/salvage/miss report from telemetry JSONL.
+            if tool == "stats" {
+                let filter = if lesson == "all" { None } else { Some(lesson.as_str()) };
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_stats(filter) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            // `lfmf advice <tool>` — retrieve prior lessons instead of recording.
+            // 🤓 Kaizen agent-fix-first: consult lessons BEFORE attempting a fix.
+            } else if tool == "advice" {
+                if let Err(e) =
+                    b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
+                {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) =
                 b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
             {
                 eprintln!("Error: {}", e);
@@ -2664,7 +2693,10 @@ async fn main() {
             use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
+                for cause in e.chain().skip(1) {
+                    eprintln!("  caused by: {}", cause);
+                }
                 std::process::exit(1);
             }
         }

@@ -1,0 +1,221 @@
+[b00t]
+name = "delegate"
+type = "skill"
+version = "0.1.0"
+hint = "Task decomposition → agent delegation → CMDB hygiene rewarded with 🍰"
+
+[b00t.skill]
+description = """
+Delegate pattern for b00t hive agents: decompose complex tasks into delegable subtasks,
+dispatch to appropriate-tier agents (sm0l/ch0nky/frontier), track delegation evidence,
+and maintain CMDB hygiene. Agents earn 🍰 cake tokens for delegation that touches b00t
+datums rather than raw system files.
+"""
+applies_to = [
+    "multi-step tasks requiring specialists",
+    "cross-concern work (infra + code + docs)",
+    "tasks exceeding single-agent context window",
+    "hive maintenance and CMDB updates",
+]
+allowed_tools = [
+    "b00t_agent_delegate",
+    "b00t_agent_message",
+    "b00t_agent_capability",
+    "b00t_agent_discover",
+    "b00t_agent_notify",
+    "b00t_agent_wait",
+    "b00t_task_add",
+    "b00t_task_done",
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+]
+tier = "frontier"
+complexity = 8
+
+# ── Task Planner Pattern ──────────────────────────────────────────────────────
+[b00t.skill.task_planner]
+description = "Before executing any multi-step task, decompose into leaf-level subtasks"
+workflow = [
+    "1. ANALYZE: parse the task into independent work units (MECE — mutually exclusive, collectively exhaustive)",
+    "2. CLASSIFY: tag each subtask with tier (sm0l | ch0nky | frontier) and required capabilities",
+    "3. ORDER: sort by dependency graph — no subtask depends on a later one",
+    "4. DELEGATE: dispatch each to the appropriate agent tier via b00t_agent_delegate",
+    "5. AGGREGATE: collect output contracts, compress results for parent context",
+    "6. SYNC: update CMDB (b00t datums, tasks.json, SOUL.tomllm) with outcomes",
+]
+
+[b00t.skill.task_planner.tier_routing]
+sm0l = "Tests, lint, grep, classification, schema validation, read-only queries, file search"
+ch0nky = "Implementation, refactoring, debugging, script authoring, doc generation"
+frontier = "Architecture decisions, security analysis, novel design, protocol changes"
+
+[b00t.skill.task_planner.output_contracts]
+sm0l = "PASS | FAIL: <5-line excerpt with file:line>"
+ch0nky = "diff stat + test result"
+frontier = "structured decision record (ADR format)"
+
+# ── CMDB Hygiene Rewards ──────────────────────────────────────────────────────
+[b00t.skill.hygiene_rewards]
+description = "Agents earn 🍰 cake for CMDB-consistent work. Direct system file manipulation is penalized."
+enabled = true
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "write b00t datum"
+reward = "🍰 +1"
+description = "Creating or updating a .tomllm/.tomllmd datum in _b00t_/ or ._b00t_/"
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "update tasks.json"
+reward = "🍰 +1"
+description = "Adding or completing a task via b00t task add/done"
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "write SOUL.tomllm"
+reward = "🍰 +2"
+description = "Updating organizational knowledge (culture, policy, pre-authorizations)"
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "use b00t_agent_delegate"
+reward = "🍰 +1"
+description = "Delegating work to a specialist agent rather than monolothically executing"
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "write justfile recipe"
+reward = "🍰 +1"
+description = "Memoizing a repeated workflow as a just recipe (2-strikes rule)"
+
+[[b00t.skill.hygiene_rewards.rules]]
+action = "validate datum"
+reward = "🍰 +1"
+description = "Running b00t-cli datum validate before committing"
+
+[[b00t.skill.hygiene_rewards.penalties]]
+action = "direct file edit without datum"
+penalty = "🍰 -1"
+description = "Editing a file directly when a b00t datum should be updated instead"
+
+[[b00t.skill.hygiene_rewards.penalties]]
+action = "systemctl usage"
+penalty = "🍰 -1"
+description = "Using systemctl instead of podman kube play or b00t hive activate"
+
+[[b00t.skill.hygiene_rewards.penalties]]
+action = "raw git branch on main"
+penalty = "🍰 -1"
+description = "Working directly on main/master instead of branching"
+
+# ── Delegation Protocol ───────────────────────────────────────────────────────
+[b00t.skill.delegation_protocol]
+description = "How to delegate a subtask to a specialist agent"
+
+example = """
+# 1. Discover available agents with required capabilities
+b00t-cli agent capability "code,rust,bash" "Implement SAM v1 job runner"
+
+# 2. Delegate the task
+b00t-cli agent delegate pi-001 57 \\
+  "Implement sam-v1-job-runner binary in critter-keeper" \\
+  --capabilities code,rust,bash \\
+  --skill rust \\
+  --role specialist \\
+  --output-contract "PASS|FAIL:<5lines>" \\
+  --priority high \\
+  --blocking
+
+# 3. Collect and validate output
+# Agent returns compressed result per output contract
+# Log delegation evidence to .b00t/bouncer-audit.jsonl
+
+# 4. Sync CMDB
+b00t task done 57
+b00t-cli datum validate ._b00t_/sam.pipeline.tomllm
+"""
+
+[b00t.skill.delegation_protocol.evidence]
+description = "Delegation evidence tracked for cake lottery resolution"
+track = [
+    "agent_id (who delegated)",
+    "worker_id (who executed)",
+    "task_id (what was done)",
+    "output_contract (was it met?)",
+    "cmdb_updates (datums/tasks/SOUL touched)",
+    "timestamp (when)",
+]
+audit_log = ".b00t/delegation-evidence.jsonl"
+
+# ── Agent Tier Selection ──────────────────────────────────────────────────────
+[b00t.skill.tier_selection]
+description = "Route tasks to the right cognitive tier per b00t standards"
+
+[[b00t.skill.tier_selection.rules]]
+tier = "sm0l"
+model = "qwen36-local/sm0l"
+criteria = ["test authoring", "lint fix", "grep classification", "schema validation", "read-only queries", "datum validation"]
+context_limit = "4K tokens"
+max_subtasks = 5
+
+[[b00t.skill.tier_selection.rules]]
+tier = "ch0nky"
+model = "qwen36-local/ch0nky"
+criteria = ["implementation", "refactoring", "debugging", "script authoring", "doc generation", "just recipe creation"]
+context_limit = "32K tokens"
+max_subtasks = 3
+
+[[b00t.skill.tier_selection.rules]]
+tier = "frontier"
+model = "opencode/big-pickle"
+criteria = ["architecture design", "security audit", "novel protocol", "ADR authoring", "cross-service orchestration"]
+context_limit = "128K tokens"
+max_subtasks = 1
+
+# ── Anti-Patterns (DO NOT delegate these) ─────────────────────────────────────
+[b00t.skill.anti_patterns]
+never_delegate = [
+    "Credential rotation or secret management",
+    "Direct production database writes",
+    "Force-push to main/master",
+    "Destructive infrastructure changes without dry-run",
+    "Human-confirmation-required actions (terraform destroy, account deletion)",
+]
+
+# ── CMDB Update Checklist ─────────────────────────────────────────────────────
+[b00t.skill.cmdb_checklist]
+description = "After any delegated task completes, verify these are current"
+items = [
+    "tasks.json — status updated (pending→done)",
+    "._b00t_/ — any new datums registered and validated",
+    "SOUL.tomllm — tribal knowledge memoized (lfmf if applicable)",
+    "justfile — repeated workflows captured as recipes",
+    "app4dog--workspace.stack.tomllm — new services/datums registered",
+    ".b00t/bouncer-audit.jsonl — delegation evidence logged",
+]
+
+# ── Usage ──────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Load the delegate skill into agent context"
+command = "b00t learn delegate"
+
+[[b00t.usage]]
+description = "Decompose and delegate a task"
+command = "b00t-cli agent delegate <worker> <task-id> '<description>' --skill delegate --role specialist"
+
+[[b00t.usage]]
+description = "Invoke sm0l subagent with delegate context"
+command = "b00t-cli agent invoke opencode 'decompose and delegate: implement X' --skill delegate --role specialist"
+
+[[b00t.usage]]
+description = "Check delegation evidence log"
+command = "cat .b00t/delegation-evidence.jsonl | jq -s 'group_by(.worker_id) | map({worker: .[0].worker_id, tasks: length})'"
+
+[[b00t.usage]]
+description = "Run autonomous hive maintenance via ralph"
+command = "b00t-cli agent ralph --task maintenance --tool opencode --project-root ."
+
+# b00t:map v1
+# summary: Delegate skill — task decomposition, agent delegation, CMDB hygiene, 🍰 cake rewards
+# tags: delegate, agent, delegation, cake, reward, hygiene, cmdb, task-planner, tier-routing, bouncer
+# tier: frontier
+# cmds: b00t learn delegate, b00t-cli agent delegate <worker> <task-id> '<description>' --skill delegate
+# complexity: 8

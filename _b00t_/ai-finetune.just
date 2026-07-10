@@ -15,6 +15,10 @@
 # Paths are relative to repo root (justfile_directory())
 
 set working-directory := ".."
+
+# b00t-cli binary: use cargo-installed if it has runpod, otherwise fall back to debug build
+_cli := `sh -c 'for c in ~/.local/bin/b00t-cli ~/.cargo/bin/b00t-cli; do [ -x "$c" ] && "$c" runpod --help 2>/dev/null | grep -q pods && echo "$c" && exit; done; echo ./target/debug/b00t-cli'`
+
 dataset:
     uv run python3 fine-tune/generate_dataset.py
 
@@ -985,26 +989,342 @@ runpod-train:
 # Tail logs for a running RunPod training pod.
 # Usage: just ai-finetune::runpod-logs <pod-id>
 runpod-logs pod_id:
-    b00t-cli runpod logs {{pod_id}}
+    {{_cli}} runpod logs {{pod_id}}
 
 # Show status of all b00t RunPod pods.
 runpod-pods:
-    b00t-cli runpod pods
+    {{_cli}} runpod pods
 
-# Stop a RunPod training pod (does not delete — preserves logs/volumes).
-# Usage: just ai-finetune::runpod-stop <pod-id>
-runpod-stop pod_id:
-    b00t-cli runpod stop {{pod_id}}
+# Stop a RunPod training pod via b00t-cli (does not delete — preserves logs/volumes).
+# Usage: just ai-finetune::runpod-cli-stop <pod-id>
+runpod-cli-stop pod_id:
+    {{_cli}} runpod stop {{pod_id}}
 
 # Delete a RunPod training pod (permanent).
 # Usage: just ai-finetune::runpod-delete <pod-id>
 runpod-delete pod_id:
-    b00t-cli runpod delete {{pod_id}}
+    {{_cli}} runpod delete {{pod_id}}
 
 # Dry-run: print pod spec without launching.
 runpod-dry-run:
     #!/usr/bin/env bash
     export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://192.168.1.137:30803}"
     export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
-    b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
+    {{_cli}} runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
 
+# ── SAM3 local provider ────────────────────────────────────────────────────────
+# Build the app4dog/sam3-runner:local container image.
+sam3-build:
+    podman build -t app4dog/sam3-runner:local app4dog/sam3-runner/
+    @echo "✅ app4dog/sam3-runner:local built"
+
+# Run SAM3 on a request JSON file.
+# Usage: just ai-finetune::sam3-run /path/to/request.json /path/to/output/
+sam3-run request_path output_dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -f "{{request_path}}" ]] || { echo "ERROR: request file not found: {{request_path}}"; exit 1; }
+    mkdir -p "{{output_dir}}"
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        --entrypoint python3 \
+        -v "{{request_path}}:/workspace/request.json:ro" \
+        -v "{{output_dir}}:/workspace:rw" \
+        app4dog/sam3-runner:local \
+        /app/run.py /workspace/request.json
+    @echo "✅ result → {{output_dir}}/result.json"
+
+# Quick smoke-test: segment a test image with a text prompt.
+sam3-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TMP=$(mktemp -d)
+    # Download a small test image
+    curl -sL "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Cute_dog.jpg/320px-Cute_dog.jpg" -o "$TMP/dog.jpg"
+    # write request.json via base64 to avoid just parser issues with float literals
+    echo 'eyJzb3VyY2VfdHlwZSI6InBhdGgiLCJpbWFnZV9wYXRoIjoiL3dvcmtzcGFjZS9kb2cuanBnIiwib3V0cHV0X3BhdGgiOiIvd29ya3NwYWNlL3Jlc3VsdC5qc29uIiwicHJvbXB0cyI6W3sidHlwZSI6InRleHQiLCJ2YWx1ZSI6ImRvZyJ9XSwibW9kZWxfaWQiOiJmYWNlYm9vay9zYW0zIiwiZGV2aWNlIjoiY3VkYSIsInNjb3JlX3RocmVzaG9sZCI6MC4zLCJvdXRwdXRfZm9ybWF0IjoicmxlIn0=' | base64 -d > "$TMP/request.json"
+    podman run --rm \
+        --device nvidia.com/gpu=all \
+        --security-opt=label=disable \
+        -v "$TMP:/workspace:rw" \
+        app4dog/sam3-runner:local
+    echo "--- result ---"
+    python3 -c "import json; d=json.load(open('$TMP/result.json')); print(f'{d[\"segment_count\"]} segments, timing={d[\"timing\"]}')"
+    echo "✅ SAM3 smoke test passed → $TMP/result.json"
+
+# ── RunPod session monitoring (recurring tasks) ────────────────────────────────
+# 🤓 These are the recurring checks needed every RunPod training session.
+#    GPU=0% after model-download phase means either training completed or failed.
+#    HF Hub is ground truth for completion; pod status only tells you it's alive.
+#    Train log is at /workspace/train.log inside the container — no direct access
+#    without supportPublicIp=true (not in runpod crate v0.1.30).
+
+# Show all running pods with GPU utilization via RunPod GraphQL.
+# 🤓 just tokenizes every line of shebang recipe body — use #!/usr/bin/env python3 to avoid
+#    multiline python3 -c "..." failures; Python reads .env directly.
+runpod-gpu-status:
+    #!/usr/bin/env python3
+    import json, os, sys, urllib.request
+    env_path = os.path.expanduser("~/.b00t/.env")
+    env = {}
+    if os.path.exists(env_path):
+        for line in open(env_path):
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, _, v = line.partition("=")
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    key = env.get("RUNPOD_API_KEY") or os.environ.get("RUNPOD_API_KEY", "")
+    if not key:
+        print("ERROR: RUNPOD_API_KEY not in ~/.b00t/.env"); sys.exit(1)
+    req = urllib.request.Request(
+        "https://rest.runpod.io/v1/pods",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        pods = json.load(r)
+    # 🚩 REST /v1/pods exposes env vars incl HF_TOKEN in plaintext — never log raw response
+    if not pods:
+        print("no pods"); sys.exit(0)
+    for p in pods:
+        created = p.get("lastStartedAt", "?")[:19]
+        cost = p.get("costPerHr", "?")
+        gpus = p.get("gpuCount", "?")
+        print(f"{p['id']}  {p.get('name',''):30s}  {p.get('desiredStatus',''):10s}  GPUs={gpus}  ${cost}/hr  started={created}")
+
+# Check whether HF Hub adapter repo exists and show latest files.
+# Usage: just ai-finetune::runpod-hf-check repo="elasticdotventures/b00t-qwen36-35b-a3b"
+runpod-hf-check repo="elasticdotventures/b00t-qwen36-35b-a3b":
+    #!/usr/bin/env python3
+    import json, os, sys, urllib.request, urllib.error
+    repo = "{{repo}}"
+    tok = os.environ.get("HUGGING_FACE_HUB_TOKEN", "")
+    if not tok:
+        print("ERROR: HUGGING_FACE_HUB_TOKEN not set"); sys.exit(1)
+    req = urllib.request.Request(
+        f"https://huggingface.co/api/models/{repo}",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.load(r)
+        print(f"✅ MODEL EXISTS: {d.get('id')}")
+        print(f"   lastModified: {d.get('lastModified')}")
+        sibs = d.get("siblings") or []
+        print(f"   files: {[s['rfilename'] for s in sibs[:20]]}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"❌ NOT FOUND: {repo} — training not yet complete or HF push failed")
+        else:
+            print(f"HTTP {e.code}: {e.reason}")
+
+# Poll pod status + HF Hub every N seconds until adapter appears or pod stops.
+# Usage: just ai-finetune::runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen36-35b-a3b" interval="120"
+runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen36-35b-a3b" interval="120":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEY=$(grep -m1 'RUNPOD_API_KEY' ~/.b00t/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'")
+    i=0
+    while true; do
+        i=$((i+1))
+        TS=$(date '+%H:%M:%S')
+        STATUS=$(curl -s --max-time 10 "https://rest.runpod.io/v1/pods/{{pod_id}}" -H "Authorization: Bearer $KEY" 2>/dev/null | python3 -c "import json,sys; raw=sys.stdin.read(); d=json.loads(raw) if raw.strip() else {}; print(d.get('desiredStatus') or d.get('error','curl-fail'))" 2>/dev/null || echo "curl-fail")
+        HF=$(python3 -c "import urllib.request,os,sys; urllib.request.urlopen(urllib.request.Request('https://huggingface.co/api/models/{{repo}}',headers={'Authorization':'Bearer '+os.environ.get('HUGGING_FACE_HUB_TOKEN','')}),timeout=8); print('FOUND')" 2>/dev/null || echo "NOT_FOUND")
+        echo "$TS [$i] {{pod_id}} — $STATUS — HF:$HF"
+        [[ "$HF" == "FOUND" ]] && { echo "✅ Adapter on HF Hub — training complete."; exit 0; }
+        [[ "$STATUS" == EXITED* || "$STATUS" == STOPPED* ]] && { echo "⚠️  Pod stopped before HF push"; exit 1; }
+        sleep {{interval}}
+    done
+
+# Terminate a specific pod to stop billing.
+# Usage: just ai-finetune::runpod-stop pod_id="dsmiude96elaym"
+runpod-stop pod_id="dsmiude96elaym":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    KEY=$(grep -m1 'RUNPOD_API_KEY' ~/.b00t/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'")
+    echo "⚠️  Stopping pod {{pod_id}} (billing will end)"
+    curl -s -X DELETE "https://rest.runpod.io/v1/pods/{{pod_id}}" -H "Authorization: Bearer $KEY" | python3 -c "import json,sys; print(json.load(sys.stdin))"
+
+
+# ── Composable RunPod training pipeline — Kaizen auto-remediation ──────────────
+# 🤓 Each stage is a discrete recipe with structured exit codes:
+#    0 = PASS, 1 = FAIL (fatal), 2 = RETRY (transient — caller should retry)
+#    Chain: runpod-preflight → runpod-train → runpod-wait → runpod-verify
+#    On stage FAIL: agent-remediate is called with stage name + last log lines.
+#    b00t kaizen: every failure writes a lfmf entry for future sessions.
+
+# Stage 0: Pre-flight — validate env, costs, disk, GPU availability before launch.
+# Exit 0=OK, 1=BLOCKED (operator must resolve), 2=WARN (proceed with caution)
+runpod-preflight gpu="NVIDIA A100-SXM4-80GB" max_cost_hr="3.0":
+    #!/usr/bin/env python3
+    import os, sys, urllib.request, json
+    errors = []
+    warnings = []
+    tok = os.environ.get("HUGGING_FACE_HUB_TOKEN", "")
+    if not tok:
+        errors.append("HUGGING_FACE_HUB_TOKEN not set — HF push will fail")
+    env_path = os.path.expanduser("~/.b00t/.env")
+    env = {}
+    if os.path.exists(env_path):
+        for line in open(env_path):
+            if "=" in line and not line.startswith("#"):
+                k, _, v = line.partition("=")
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    key = env.get("RUNPOD_API_KEY") or os.environ.get("RUNPOD_API_KEY", "")
+    if not key:
+        errors.append("RUNPOD_API_KEY not in ~/.b00t/.env")
+    if not env.get("MLFLOW_TRACKING_URI"):
+        warnings.append("MLFLOW_TRACKING_URI not set — training won't log to MLflow")
+    # just substitutes {{max_cost_hr}} and {{gpu}} before Python runs
+    max_hr = float("{{max_cost_hr}}")
+    gpu_name = "{{gpu}}"
+    if max_hr > 5.0:
+        errors.append(f"max_cost_hr={max_hr} exceeds safety cap of $5.00/hr")
+    for e in errors:
+        print(f"BLOCKED: {e}")
+    for w in warnings:
+        print(f"WARN: {w}")
+    if errors:
+        sys.exit(1)
+    # warnings are non-blocking -- exit 0 so pipeline continues
+    tok_display = tok[:8] if tok else "none"
+    print(f"preflight OK -- GPU={gpu_name} max=${max_hr}/hr HF_TOKEN={tok_display}***")
+    sys.exit(0)
+
+# Stage 1: Launch training pod (wraps b00t-cli runpod train).
+# Emits pod_id to stdout on success for downstream stages.
+runpod-launch config="fine-tune/config.yaml" gpu="NVIDIA A100-SXM4-80GB" spot="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just --justfile {{source_file()}} runpod-preflight || { echo "FAIL: preflight blocked"; exit 1; }
+    SPOT_FLAG=""; [[ "{{spot}}" == "true" ]] && SPOT_FLAG="--spot"
+    LAUNCH_OUT=$({{_cli}} runpod train --config "{{config}}" --gpu "{{gpu}}" $SPOT_FLAG 2>&1)
+    echo "$LAUNCH_OUT"
+    POD_ID=$(echo "$LAUNCH_OUT" | grep -oP '(?<=training pod: )[a-z0-9]+' || true)
+    if [[ -z "$POD_ID" ]]; then
+        echo "FAIL: b00t-cli runpod train did not emit pod_id — check b00t-cli runpod train output"
+        {{_cli}} runpod train --config "{{config}}" --gpu "{{gpu}}" $SPOT_FLAG 2>&1 | tail -10
+        exit 1
+    fi
+    echo "pod_id=${POD_ID}"
+    echo "${POD_ID}" > /tmp/b00t-runpod-active-pod-id
+    echo "✅ launched: ${POD_ID}"
+
+# Stage 2: Block until HF adapter appears or pod stops (calls runpod-wait).
+# Reads pod_id from /tmp/b00t-runpod-active-pod-id if not provided.
+runpod-await pod_id="" repo="elasticdotventures/b00t-qwen36-35b-a3b" timeout_min="180":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PID="{{pod_id}}"
+    [[ -z "$PID" && -f /tmp/b00t-runpod-active-pod-id ]] && PID=$(cat /tmp/b00t-runpod-active-pod-id)
+    [[ -z "$PID" ]] && { echo "FAIL: no pod_id — run runpod-launch first or pass pod_id=<id>"; exit 1; }
+    DEADLINE=$(( $(date +%s) + {{timeout_min}} * 60 ))
+    echo "⏳ waiting for ${PID} → HF:{{repo}} (timeout={{timeout_min}}min)"
+    just --justfile {{source_file()}} runpod-wait pod_id="$PID" repo="{{repo}}" interval="90" &
+    WAIT_PID=$!
+    while kill -0 $WAIT_PID 2>/dev/null; do
+        [[ $(date +%s) -gt $DEADLINE ]] && { kill $WAIT_PID 2>/dev/null; echo "FAIL: timeout after {{timeout_min}}min"; exit 1; }
+        sleep 15
+    done
+    wait $WAIT_PID
+    EXIT=$?
+    if [[ $EXIT -eq 0 ]]; then
+        echo "✅ await complete — adapter on HF Hub"
+    else
+        echo "FAIL: runpod-wait exited $EXIT"
+        exit $EXIT
+    fi
+
+# Stage 3: Verify adapter is usable (HF Hub exists + files present).
+runpod-verify repo="elasticdotventures/b00t-qwen36-35b-a3b":
+    #!/usr/bin/env python3
+    import json, os, sys, urllib.request, urllib.error
+    repo = "{{repo}}"
+    tok = os.environ.get("HUGGING_FACE_HUB_TOKEN", "")
+    req = urllib.request.Request(
+        f"https://huggingface.co/api/models/{repo}",
+        headers={"Authorization": f"Bearer {tok}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        print(f"FAIL: HF Hub {e.code} — {repo} not found"); sys.exit(1)
+    sibs = [s["rfilename"] for s in (d.get("siblings") or [])]
+    required = ["adapter_config.json", "adapter_model.safetensors"]
+    missing = [f for f in required if not any(f in s for s in sibs)]
+    if missing:
+        print(f"FAIL: adapter incomplete — missing {missing}"); print(f"  found: {sibs}"); sys.exit(1)
+    print(f"✅ verify PASS — {repo}")
+    print(f"   lastModified: {d.get('lastModified')}")
+    print(f"   files: {sibs[:10]}")
+
+# Full end-to-end pipeline: preflight → launch → await → verify.
+# 🤓 Kaizen agent-fix-first on stage failure:
+#    1. consult lfmf FIRST (prior lessons inform the fix agent)
+#    2. spawn fix agent via `b00t-cli ooda run` (3 iterations)
+#    3. agent fixed it → retry the failed stage ONCE
+#    4. only if the agent exhausted its iterations → record a NEW lfmf lesson
+#    This is fail → consult → agent-fix → (unfixable) → lfmf; NOT fail → lfmf.
+runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen36-35b-a3b" gpu="NVIDIA A100-SXM4-80GB" spot="false" timeout_min="180":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # fail_stage: Kaizen agent-fix-first. Returns 0 if the agent fixed the
+    # stage (caller retries it once); exits 1 after recording a lesson if not.
+    fail_stage() {
+        local stage=$1 msg=$2
+        echo "❌ STAGE FAILED: ${stage} — ${msg}"
+        # 1. Consult prior lessons FIRST so the fix agent benefits from them
+        local advice
+        advice=$(b00t-cli lfmf advice runpod 2>/dev/null | tr '\n' ' ' | head -c 800)
+        [[ -z "${advice// /}" ]] && advice="no prior lessons"
+        echo "📚 prior lfmf advice: ${advice}"
+        # 2. Create fix task carrying stage context + advice
+        local task_id
+        task_id=$(b00t-cli task add "fix: runpod ${stage} failed — ${msg}. Advice: ${advice}" 2>/dev/null | grep -oP 'added #\K[0-9]+' || echo "")
+        # 3. Agent attempts the fix — 3 iterations max
+        if [[ -n "$task_id" ]]; then
+            echo "🤖 dispatching fix agent (task #${task_id}, max-iter=3)"
+            if b00t-cli ooda run --agent=claude --task="$task_id" --max-iter=3; then
+                echo "✅ Agent fixed ${stage} — retrying stage"
+                return 0
+            fi
+        else
+            echo "⚠️ could not create fix task — skipping agent remediation"
+        fi
+        # 4. Agent could not fix — NOW record the lesson for future agents
+        b00t-cli lfmf runpod "${stage}: ${msg} (agent exhausted 3 iterations)" 2>/dev/null || true
+        exit 1
+    }
+    # run_stage <stage> <fail-msg> <cmd...>: run cmd; on failure invoke
+    # fail_stage; if the agent fixed it, retry the stage ONCE before giving up.
+    run_stage() {
+        local stage=$1 msg=$2; shift 2
+        if "$@"; then return 0; fi
+        fail_stage "$stage" "$msg"   # exits 1 unless the agent fixed it
+        echo "🔁 retrying ${stage} after agent fix"
+        if "$@"; then return 0; fi
+        echo "❌ ${stage} failed again after agent fix"
+        b00t-cli lfmf runpod "${stage}: ${msg} (failed again after agent fix)" 2>/dev/null || true
+        exit 1
+    }
+    echo "=== b00t RunPod Training Pipeline ==="
+    echo "  config:  {{config}}"
+    echo "  repo:    {{repo}}"
+    echo "  gpu:     {{gpu}}"
+    echo "  spot:    {{spot}}"
+    echo "  timeout: {{timeout_min}}min"
+    echo ""
+    run_stage preflight "env/cost gate" just --justfile {{source_file()}} runpod-preflight gpu="{{gpu}}"
+    run_stage launch "pod did not start" just --justfile {{source_file()}} runpod-launch config="{{config}}" gpu="{{gpu}}" spot="{{spot}}"
+    POD_ID=$(cat /tmp/b00t-runpod-active-pod-id 2>/dev/null || echo "")
+    run_stage await "training timeout or pod stopped" just --justfile {{source_file()}} runpod-await pod_id="$POD_ID" repo="{{repo}}" timeout_min="{{timeout_min}}"
+    run_stage verify "adapter missing from HF Hub" just --justfile {{source_file()}} runpod-verify repo="{{repo}}"
+    echo ""
+    echo "✅ Pipeline COMPLETE — adapter at https://huggingface.co/{{repo}}"
+
+# ── Evidence → training examples (#595) ───────────────────────────────────────
+# Convert local gate evidence (PASS entries, deduped) into verify-loop examples.
+evidence-train out="fine-tune/evidence_train.jsonl":
+    uv run python3 fine-tune/evidence_to_train.py --out {{out}}
+    @echo "merge into train.jsonl only after operator curation"

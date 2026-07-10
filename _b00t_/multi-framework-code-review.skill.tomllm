@@ -1,0 +1,115 @@
+[b00t]
+name = "multi-framework-code-review"
+type = "skill"
+hint = "Umbrella review skill: MECE decomposition + TRIZ contradiction analysis + Eureka insight search over a PR/diff, cross-framework synthesis, machine-parseable VERDICT"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["review", "mece", "triz", "eureka", "multi-framework", "pr", "synthesis", "verdict", "reviewer"]
+
+[b00t.skill]
+depends_on = ["github-code-review", "diff-analyzer", "datum-review"]
+unlocks = [
+    "multi-framework-code-review::run-review",
+    "multi-framework-code-review::mece-pass",
+    "multi-framework-code-review::triz-pass",
+    "multi-framework-code-review::eureka-pass",
+    "multi-framework-code-review::synthesize",
+    "multi-framework-code-review::verdict",
+]
+
+# ── Multi-Framework Code Review ───────────────────────────────────────────────
+#
+# The reviewer role's core capability. Three analytic lenses run over the same
+# diff; findings are triangulated: 3-framework hit = critical, 2-framework =
+# high-confidence, 1-framework = suggestion. Phase machine + gh_labels are
+# authoritative in multi-framework-review.datum.toml — this skill is the
+# agent-executable recipe layer over that datum.
+#
+# 🤓 Never review from memory of the codebase — always re-fetch the diff.
+#    Stale context is the #1 source of false findings.
+
+[b00t.skill.recipes."multi-framework-code-review::run-review"]
+description = "Full 7-phase review of a PR: setup → mece → triz → eureka → synthesize → post → pulse"
+# @example: b00t learn multi-framework-code-review; then run-review on PR 612
+steps = [
+    "1. PRECHECK: just check-system-normal — abort review if precriteria fail",
+    "2. SETUP: gh pr view <n> --json title,files,additions,deletions,statusCheckRollup",
+    "3. DIFF: gh pr diff <n> > /tmp/pr-<n>.diff — single source of truth for all passes",
+    "4. SIZE-GATE: if diff >= 500 lines, dispatch mece/triz/eureka passes as parallel sub-agents (max 3)",
+    "5. Run mece-pass, triz-pass, eureka-pass over the same diff artifact",
+    "6. Run synthesize, then verdict",
+    "7. PULSE: b00t lfmf code-review '<what one framework caught that others missed>'",
+]
+
+[b00t.skill.recipes."multi-framework-code-review::mece-pass"]
+description = "MECE structural decomposition: exclusive buckets, coverage holes, boundary issues"
+steps = [
+    "1. Bucket every changed file into <=5 mutually-exclusive categories (e.g. logic/tests/config/docs/vendor)",
+    "2. Verify collectively-exhaustive: every hunk in exactly one bucket; zero orphans",
+    "3. Per bucket ask: is the change complete? (logic changed but no test bucket entry = coverage hole)",
+    "4. Flag boundary issues: one hunk serving two buckets = candidate split",
+    "5. Emit mece_findings as one line each: 'MECE|<bucket>|<file>:<line>|<gap>'",
+]
+
+[b00t.skill.recipes."multi-framework-code-review::triz-pass"]
+description = "TRIZ contradiction analysis: unnecessary trade-offs and engineering contradictions"
+steps = [
+    "1. For each design choice in the diff, state what it improves and what it degrades",
+    "2. A degradation accepted to gain an improvement = contradiction; list them all",
+    "3. Map each contradiction to a TRIZ principle: Segmentation / Prior Action / Extraction / Dynamics",
+    "4. Ask the IFR question: could the improvement exist WITHOUT the degradation?",
+    "5. Emit triz_findings: 'TRIZ|<contradiction>|<principle>|<file>:<line>'",
+    "6. Zero false contradictions tolerated (reviewer.role threshold max_false_contradictions = 0)",
+]
+
+[b00t.skill.recipes."multi-framework-code-review::eureka-pass"]
+description = "Eureka insight search: missing abstractions, prior art, the 10x-simpler question"
+steps = [
+    "1. b00t-cli ontology sparql --subject <changed-type> --predicate all — surface prior art in the type graph",
+    "2. grep the repo for near-duplicate functionality (DRY+NRtW violation = finding)",
+    "3. Ask: can this diff be radically simpler? (ponytail ladder rungs 2-6)",
+    "4. Ask: what abstraction is the diff dancing around without naming?",
+    "5. Emit eureka_findings: 'EUREKA|<insight>|<file>:<line>'",
+]
+
+[b00t.skill.recipes."multi-framework-code-review::synthesize"]
+description = "Cross-framework triangulation of mece/triz/eureka findings"
+steps = [
+    "1. Join findings on <file>:<line> proximity (same hunk = same locus)",
+    "2. 3-framework locus = CRITICAL; 2-framework = HIGH; 1-framework = SUGGESTION",
+    "3. Check thresholds: findings per 100 lines >= 1.5; cross-validated findings >= 1; each framework contributes >= 30%",
+    "4. Below threshold = re-run the weak pass once before synthesis (never pad findings)",
+    "5. CRITICAL findings: b00t task add 'critical: <finding>' — auto-promote to task queue",
+]
+
+[b00t.skill.recipes."multi-framework-code-review::verdict"]
+description = "Emit the machine-parseable verdict and post the review"
+steps = [
+    "1. Guard violation anywhere in diff = REQUEST_CHANGES, no exceptions",
+    "2. Any CRITICAL finding unresolved = REQUEST_CHANGES; scope drift = WARNING only",
+    "3. Post via github-code-review::submit-verdict (inline comments + summary)",
+    "4. Final output line, nothing after it: 'VERDICT: APPROVE' or 'VERDICT: REQUEST_CHANGES'",
+]
+
+[b00t.compose]
+composes_with = [
+    "multi-framework-review.datum",
+    "reviewer.role",
+    "github-code-review",
+    "diff-analyzer",
+    "quality-tracker",
+    "pr-risk-scorer.datum",
+    "datum-review",
+    "mece-analyzer.agent",
+    "triz-analyzer.agent",
+    "eureka-analyzer.agent",
+    "synthesis-agent.agent",
+]
+
+# b00t:map v1
+# summary: MECE+TRIZ+Eureka multi-lens PR review with cross-framework synthesis and machine-parseable VERDICT
+# tags: review, mece, triz, eureka, multi-framework, pr, synthesis, verdict, reviewer
+# tier: frontier
+# cmds: gh pr diff <n>; just check-system-normal; b00t learn multi-framework-code-review
+# complexity: 7

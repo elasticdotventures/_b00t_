@@ -233,6 +233,26 @@ pub struct SudoEscalationAlert {
     pub timestamp: String,
 }
 
+impl SudoEscalationAlert {
+    /// Build the webhook payload — separate from the HTTP fire so payload
+    /// construction is unit-testable without a network.
+    pub fn new(
+        command: &str,
+        justification: &str,
+        cited_commits: &[String],
+        reason: &str,
+    ) -> Self {
+        Self {
+            event: "sudo_grant_escalation".to_string(),
+            command: command.to_string(),
+            justification: justification.to_string(),
+            cited_commits: cited_commits.to_vec(),
+            reason: reason.to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+}
+
 /// Fire a sudo-grant escalation to the configured n8n webhook.
 ///
 /// Call site (`b00t exec`'s `handle_exec`) is a synchronous function that
@@ -245,22 +265,19 @@ pub struct SudoEscalationAlert {
 /// Best-effort: a webhook failure is logged but never blocks the
 /// (already-denied) command path.
 ///
-/// Webhook URL comes from `B00T_N8N_WEBHOOK_URL`; if unset, this is a no-op
-/// (same "skip silently" policy as `BudgetController::send_alert` when its
-/// `webhook_url` is `None`).
+/// Webhook URL comes from `B00T_N8N_WEBHOOK` (legacy alias
+/// `B00T_N8N_WEBHOOK_URL` still honored); if neither is set, skip with a
+/// single stderr note — same "don't gate on the webhook" policy as
+/// `BudgetController::send_alert` when its `webhook_url` is `None`.
 pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &[String], reason: &str) {
-    let Ok(webhook_url) = std::env::var("B00T_N8N_WEBHOOK_URL") else {
+    let Ok(webhook_url) =
+        std::env::var("B00T_N8N_WEBHOOK").or_else(|_| std::env::var("B00T_N8N_WEBHOOK_URL"))
+    else {
+        eprintln!("📡 B00T_N8N_WEBHOOK not set — skipping n8n escalation webhook");
         return;
     };
 
-    let alert = SudoEscalationAlert {
-        event: "sudo_grant_escalation".to_string(),
-        command: command.to_string(),
-        justification: justification.to_string(),
-        cited_commits: cited_commits.to_vec(),
-        reason: reason.to_string(),
-        timestamp: chrono::Utc::now().to_rfc3339(),
-    };
+    let alert = SudoEscalationAlert::new(command, justification, cited_commits, reason);
 
     let result: std::result::Result<(), String> = tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(async {
@@ -503,9 +520,12 @@ mod tests {
         assert_eq!(deserialized.status, state.status);
     }
 
+    // Serialize env-var-mutating tests to prevent races between parallel test threads.
+    static CH0NKY_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
     #[test]
     fn test_ch0nky_gate_env_override() {
-        // When B00T_AI_CH0NKY_MODEL is set, EnvOverride wins regardless of GPU state
+        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
         unsafe { std::env::set_var("B00T_AI_CH0NKY_MODEL", "test-model") };
         unsafe { std::env::set_var("B00T_AI_CH0NKY_BASE", "http://test:8000/v1") };
         let gate = ChonkyModelGate::default();
@@ -519,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_ch0nky_gate_fable_fallback_when_gpu_unavailable() {
-        // No GPU detected (SystemSnapshot returns None) → fable fallback
+        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
         unsafe { std::env::remove_var("B00T_AI_CH0NKY_MODEL") };
         let gate = ChonkyModelGate {
             gpu_threshold_mb: u32::MAX, // force fallback by setting impossible threshold
@@ -542,5 +562,31 @@ mod tests {
         let env_str = gate.export_env(&sel);
         assert!(env_str.contains("B00T_AI_CH0NKY_MODEL=claude-fable-5"));
         assert!(env_str.contains("B00T_AI_CH0NKY_BASE=https://api.anthropic.com/v1"));
+    }
+
+    #[test]
+    fn test_sudo_escalation_alert_payload() {
+        let alert = SudoEscalationAlert::new(
+            "sudo systemctl restart k0scontroller",
+            "kubelet device-plugin registration wedged",
+            &["deadbeef".to_string()],
+            "blast radius ambiguous",
+        );
+        let json = serde_json::to_value(&alert).unwrap();
+        assert_eq!(json["event"], "sudo_grant_escalation");
+        assert_eq!(json["command"], "sudo systemctl restart k0scontroller");
+        assert_eq!(json["justification"], "kubelet device-plugin registration wedged");
+        assert_eq!(json["cited_commits"][0], "deadbeef");
+        assert_eq!(json["reason"], "blast radius ambiguous");
+        // ts present and RFC 3339-parseable
+        let ts = json["timestamp"].as_str().unwrap();
+        assert!(chrono::DateTime::parse_from_rfc3339(ts).is_ok());
+    }
+
+    #[test]
+    fn test_sudo_escalation_alert_empty_cites() {
+        let alert = SudoEscalationAlert::new("cmd", "why", &[], "unsure");
+        let json = serde_json::to_value(&alert).unwrap();
+        assert!(json["cited_commits"].as_array().unwrap().is_empty());
     }
 }

@@ -1,0 +1,4 @@
+[b00t]
+name = "no-tailmap"
+type = "skill"
+hint = "fixture .tomllm missing the required tail-map block"

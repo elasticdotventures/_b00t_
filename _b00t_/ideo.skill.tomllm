@@ -1,0 +1,55 @@
+[b00t]
+name = "ideo"
+type = "skill"
+hint = "Design thinking — empathize→define→ideate→prototype→test; fail fast, iterate toward fit"
+
+# ── salvaged content (was YAML frontmatter in a .toml — task #115) ──────────
+# 🤓 payload preserved VERBATIM below; distill to structured fields later (#98)
+# version: 1.0.0
+# tags:
+# - transferable
+# - design-thinking
+# - empathy
+# - prototype
+# - iterate
+# - user
+# - ideo
+# - human-centered
+# - fail-fast
+# tier: sm0l
+# complexity: 3
+# description: 'IDEO design thinking: solve the right problem before solving the problem correctly.'
+#
+# ## What
+# 
+# IDEO design thinking focuses on solving the right problem before solving the problem correctly. Its 5 stages are: (1) Empathize — understand actual user pain (not assumed) through observation, interview, and shadowing. (2) Define — frame the problem as a "how might we..." question. Wrong frame equals wrong solution. (3) Ideate — generate many solutions before evaluating any. Diverge before converging. (4) Prototype — build the cheapest artifact that tests the riskiest assumption. (5) Test — expose the prototype to real users. Capture what surprises you, not what confirms you.
+# 
+# The fail fast rule: a prototype that takes a week is too expensive to abandon; build in hours. In software, the progression should be wireframe → mock → spike → MVP. Never start with production code.
+# 
+# ## When to Use
+# 
+# Apply design thinking when solving problems for users, designing new features, or when you are unsure what the real problem is. Use it when you need to understand user needs before jumping to solutions.
+# 
+# ## How
+# 
+# 1. Empathize: observe and interview actual users. Do not assume their pain.
+# 2. Define: frame the problem as a "how might we..." question.
+# 3. Ideate: generate many solutions before evaluating any.
+# 4. Prototype: build the cheapest artifact that tests the riskiest assumption.
+# 5. Test: expose to real users and capture surprises.
+# 6. Beware the anti-pattern: skipping empathy and assuming you know what the user needs.
+# 
+# <!-- b00t:map v1
+# summary: ideo design thinking — 5-stage human-centered problem solving; fail fast iterate
+# tags: transferable, design-thinking, prototype, user, empathy
+# tier: sm0l
+# cmds: b00t learn ideo
+# complexity: 3
+# -->
+
+# b00t:map v1
+# summary: Design thinking — empathize→define→ideate→prototype→test; fail fast, iterate toward fit (salvaged from YAML-frontmatter .toml)
+# tags: ideo
+# tier: sm0l
+# cmds: b00t learn ideo
+# complexity: 3

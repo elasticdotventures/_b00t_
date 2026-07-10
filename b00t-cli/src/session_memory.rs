@@ -23,6 +23,7 @@ pub struct SessionMemory {
 
 /// Configuration settings for b00t session behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SessionConfig {
     /// Environment variables to track for agent/environment detection
     pub tracked_env_vars: Vec<String>,

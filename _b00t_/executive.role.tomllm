@@ -45,7 +45,7 @@ exclusion_group = "hive-captain"
 # ⚠️需 b00t hive status to confirm which tier models are available (vllm active?)
 
 # sm0l: any small model capable; output contract = PASS or FAIL + ≤5 line excerpt
-sm0l  = { models = ["qwen2.5-3b", "haiku"], tasks = ["test", "lint", "classify", "route", "grep", "format"] }
+sm0l  = { models = ["qwen3.6-35b-a3b", "haiku"], tasks = ["test", "lint", "classify", "route", "grep", "format"] }
 
 # ch0nky: code-generation capable local inference; output = diff + test result
 ch0nky = { models = ["qwen3-coder-next", "sonnet"], tasks = ["implement", "refactor", "debug", "explain"] }

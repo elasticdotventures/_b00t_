@@ -1,0 +1,24 @@
+# taplo config — tier-1 editor/CI support for b00t datum dialects (task #109).
+# 🤓 taplo only sees *.toml by default; include globs opt the datum dialects in.
+# Schema emitted by: cargo run -p b00t-lsp --bin dump-schemas
+
+include = [
+    "**/*.tomllm",
+    "**/*.tomllmd",
+    "_b00t_/*.gate.toml",
+    "_b00t_/*.hive.toml",
+]
+exclude = ["vendor/**", "target/**", "node_modules/**", "_b00t_/_archive_/**"]
+
+[[rule]]
+name = "b00t-datum"
+include = [
+    "**/*.tomllm",
+    "**/*.tomllmd",
+    "_b00t_/*.gate.toml",
+    "_b00t_/*.hive.toml",
+]
+
+[rule.schema]
+path = "_b00t_/schemas/b00t-datum.schema.json"
+enabled = true
