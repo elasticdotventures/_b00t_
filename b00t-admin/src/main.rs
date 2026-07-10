@@ -22,10 +22,15 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
+mod graph_json;
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
+use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use reqwest::Client as ReqwestClient;
+
+include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -320,6 +325,195 @@ async fn pipeline_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl Int
     axum::Json(app.pipeline.clone())
 }
 
+/// GET `/api/admin/datums` — Datum health dashboard (parse errors, install status, stale binaries)
+async fn datum_health_handler() -> impl IntoResponse {
+    let output = std::process::Command::new("b00t-cli")
+        .args(["mcp", "list", "--json", "--all"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            match serde_json::from_str::<serde_json::Value>(&body) {
+                Ok(json) => {
+                    let servers = json.get("servers").cloned().unwrap_or_default();
+                    let total = servers.as_array().map(|a| a.len()).unwrap_or(0);
+                    let errors: Vec<_> = servers.as_array().map(|a| {
+                        a.iter().filter(|s| s.get("error").and_then(|e| e.as_str()).is_some()).cloned().collect::<Vec<_>>()
+                    }).unwrap_or_default();
+                    let not_installed: Vec<_> = servers.as_array().map(|a| {
+                        a.iter().filter(|s| !s.get("is_installed").unwrap_or(&serde_json::Value::Bool(false)).as_bool().unwrap_or(false)).cloned().collect::<Vec<_>>()
+                    }).unwrap_or_default();
+                    axum::Json(serde_json::json!({
+                        "total": total,
+                        "healthy": total.saturating_sub(errors.len()).saturating_sub(not_installed.len()),
+                        "parse_errors": errors.len(),
+                        "not_installed": not_installed.len(),
+                        "servers": servers,
+                    }))
+                }
+                Err(_) => axum::Json(serde_json::json!({"error": "parse failed"})),
+            }
+        }
+        _ => axum::Json(serde_json::json!({"error": "b00t-cli unavailable"})),
+    }
+}
+
+/// GET `/api/admin/graph` — Knowledge graph health (connectivity, isolates, hubs)
+#[allow(dead_code)]
+async fn graph_health_handler() -> impl IntoResponse {
+    let project_name = std::env::current_dir()
+        .map(|p| p.to_string_lossy().replace('/', "-").to_string())
+        .unwrap_or_default();
+    let output = std::process::Command::new("codebase-memory-mcp")
+        .args(["cli", "get_graph_schema", &format!("{{\"project\":\"{project_name}\"}}")])
+        .output();
+    let kg = match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            serde_json::from_str::<serde_json::Value>(&body).unwrap_or_default()
+        }
+        _ => serde_json::json!({"status": "offline"})
+    };
+    axum::Json(serde_json::json!({
+        "knowledge_graph": kg,
+        "mcp_health": "GET /api/admin/datums for MCP status",
+    }))
+}
+
+/// Join multiple mermaid diagram strings into a single fenced block with --- separators.
+fn join_mermaid(diagrams: &[String]) -> String {
+    let blocks: Vec<_> = diagrams.iter()
+        .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim().to_string())
+        .collect();
+    format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
+}
+
+/// GET `/api/admin/viz/isometric` — Isometric 3D graph view (SVG + glTF)
+/// Uses the `kasuari` Cassowary constraint solver for deterministic layout.
+/// Query params: `hide_orphans=true` — strip nodes with zero edges.
+async fn viz_isometric_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    let output = std::process::Command::new("b00t-cli")
+        .args(["viz", "entangle", "--format", "mermaid"])
+        .output();
+    let raw = output.ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default()
+        .replace("```mermaid\n", "").replace("\n```", "")
+        .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
+
+    match parse_mermaid(&raw) {
+        Ok(mut graph) => {
+            if hide_orphans {
+                graph = filter_orphans(&graph);
+            }
+            if let Err(e) = graph.validate() {
+                return axum::Json(serde_json::json!({
+                    "svg": format!("<svg><text fill='red'>validation: {}</text></svg>", e),
+                    "format": "isometric",
+                    "error": e.to_string()
+                }));
+            }
+            let response = graph_to_isometric_response(&graph);
+            match response {
+                Ok(r) => r.into(),
+                Err(_) => {
+                    // Direct layout failed (>40 nodes). Try container grouping.
+                    graph_to_container_response(&graph)
+                        .unwrap_or_else(|e| serde_json::json!({
+                            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                            "format": "isometric",
+                            "error": e
+                        }))
+                        .into()
+                }
+            }
+        }
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>parse: {}</text></svg>", e),
+            "format": "isometric",
+            "error": e.to_string()
+        })),
+    }
+}
+
+/// GET `/api/admin/viz/isometric/demo` — Tax-Lawyer demonstration graph
+async fn viz_isometric_demo_handler() -> impl IntoResponse {
+    let graph = tax_lawyer_demo();
+    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| serde_json::json!({
+        "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+        "format": "isometric",
+        "error": e
+    })))
+}
+
+/// POST `/api/admin/viz/mermaid/render` — Server-side Mermaid SVG rendering
+async fn viz_mermaid_render_handler(
+    axum::extract::Json(body): axum::extract::Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
+    let hide_orphans = body.get("hide_orphans").and_then(|v| v.as_bool()).unwrap_or(false);
+    if text.is_empty() {
+        return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
+    }
+    let to_render = if hide_orphans {
+        let graph = filter_orphans_from_mermaid(text);
+        graph.to_mermaid()
+    } else {
+        text.to_string()
+    };
+    match render_mermaid_native(&to_render) {
+        Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
+        Err(e) => axum::Json(serde_json::json!({
+            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+            "error": e,
+        })),
+    }
+}
+
+/// GET `/api/admin/display` — DatumType visual display descriptors (shapes, colors, SVG)
+async fn datum_display_handler() -> impl IntoResponse {
+    axum::Json(serde_json::json!({
+        "displays": [
+            {"datum_type":"K8s","label":"K8s","shape":"hexagon","color":"#326ce5","border_color":"#5b9cf5","icon":"☸","css_class":"dt-k8s"},
+            {"datum_type":"Docker","label":"Docker","shape":"hexagon","color":"#1d63ed","border_color":"#4d8bf7","icon":"🐳","css_class":"dt-docker"},
+            {"datum_type":"Hardware","label":"Hardware","shape":"hexagon","color":"#1a56db","border_color":"#3f83f8","icon":"💻","css_class":"dt-hardware"},
+            {"datum_type":"Overlay","label":"Overlay","shape":"hexagon","color":"#1e429f","border_color":"#4789fa","icon":"📋","css_class":"dt-overlay"},
+            {"datum_type":"Runtime","label":"Runtime","shape":"hexagon","color":"#233876","border_color":"#6094f7","icon":"⚡","css_class":"dt-runtime"},
+            {"datum_type":"Nix","label":"Nix","shape":"hexagon","color":"#5271ff","border_color":"#7b93ff","icon":"❄️","css_class":"dt-nix"},
+            {"datum_type":"Agent","label":"Agent","shape":"circle","color":"#059669","border_color":"#34d399","icon":"🤖","css_class":"dt-agent"},
+            {"datum_type":"Role","label":"Role","shape":"circle","color":"#047857","border_color":"#2dd4bf","icon":"🎭","css_class":"dt-role"},
+            {"datum_type":"Ai","label":"AI","shape":"circle","color":"#065f46","border_color":"#22c55e","icon":"🧠","css_class":"dt-ai"},
+            {"datum_type":"Training","label":"Training","shape":"circle","color":"#064e3b","border_color":"#10b981","icon":"🎓","css_class":"dt-training"},
+            {"datum_type":"Mcp","label":"MCP","shape":"diamond","color":"#7c3aed","border_color":"#a78bfa","icon":"🔌","css_class":"dt-mcp"},
+            {"datum_type":"McpServer","label":"MCP Server","shape":"diamond","color":"#6d28d9","border_color":"#8b5cf6","icon":"🖥️","css_class":"dt-mcp-server"},
+            {"datum_type":"Api","label":"API","shape":"diamond","color":"#5b21b6","border_color":"#7c3aed","icon":"🔗","css_class":"dt-api"},
+            {"datum_type":"Schema","label":"Schema","shape":"diamond","color":"#4c1d95","border_color":"#6d28d9","icon":"📐","css_class":"dt-schema"},
+            {"datum_type":"Skill","label":"Skill","shape":"triangle","color":"#d97706","border_color":"#fbbf24","icon":"🛠️","css_class":"dt-skill"},
+            {"datum_type":"Job","label":"Job","shape":"triangle","color":"#b45309","border_color":"#f59e0b","icon":"⏱️","css_class":"dt-job"},
+            {"datum_type":"Hook","label":"Hook","shape":"triangle","color":"#92400e","border_color":"#d97706","icon":"🪝","css_class":"dt-hook"},
+            {"datum_type":"Gate","label":"Gate","shape":"triangle","color":"#78350f","border_color":"#c27803","icon":"🚧","css_class":"dt-gate"},
+            {"datum_type":"Config","label":"Config","shape":"rectangle","color":"#0d9488","border_color":"#2dd4bf","icon":"⚙️","css_class":"dt-config"},
+            {"datum_type":"Bash","label":"Bash","shape":"rectangle","color":"#0f766e","border_color":"#14b8a6","icon":"💻","css_class":"dt-bash"},
+            {"datum_type":"Cli","label":"CLI","shape":"rectangle","color":"#115e59","border_color":"#0d9488","icon":"⌨️","css_class":"dt-cli"},
+            {"datum_type":"Justfile","label":"Justfile","shape":"rectangle","color":"#134e4a","border_color":"#0f766e","icon":"📜","css_class":"dt-justfile"},
+            {"datum_type":"Plan","label":"Plan","shape":"rectangle","color":"#0f766e","border_color":"#14b8a6","icon":"📋","css_class":"dt-plan"},
+            {"datum_type":"Vendor","label":"Vendor","shape":"rectangle","color":"#115e59","border_color":"#0d9488","icon":"📦","css_class":"dt-vendor"},
+            {"datum_type":"Stack","label":"Stack","shape":"vee","color":"#be123c","border_color":"#fb7185","icon":"📚","css_class":"dt-stack"},
+            {"datum_type":"Repo","label":"Repo","shape":"vee","color":"#9f1239","border_color":"#f43f5e","icon":"📁","css_class":"dt-repo"},
+            {"datum_type":"Vscode","label":"VSCode","shape":"vee","color":"#881337","border_color":"#e11d48","icon":"🆚","css_class":"dt-vscode"},
+            {"datum_type":"Apt","label":"Apt","shape":"vee","color":"#4c0519","border_color":"#9f1239","icon":"📦","css_class":"dt-apt"},
+            {"datum_type":"Database","label":"Database","shape":"rectangle","color":"#475569","border_color":"#94a3b8","icon":"🗄️","css_class":"dt-database"},
+            {"datum_type":"HiveProfile","label":"Hive","shape":"rectangle","color":"#334155","border_color":"#64748b","icon":"🏗️","css_class":"dt-hive"},
+            {"datum_type":"Polyseme","label":"Polyseme","shape":"circle","color":"#1e293b","border_color":"#475569","icon":"🔮","css_class":"dt-polyseme"},
+            {"datum_type":"Credential","label":"Credential","shape":"circle","color":"#0f172a","border_color":"#334155","icon":"🔐","css_class":"dt-credential"},
+            {"datum_type":"Unknown","label":"Unknown","shape":"rectangle","color":"#1e293b","border_color":"#475569","icon":"❓","css_class":"dt-unknown"}
+        ]
+    }))
+}
+
 /// GET `/api/admin/types` — List all reflected types
 async fn types_list_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl IntoResponse {
     let app = state.lock().await;
@@ -579,7 +773,9 @@ async fn health_metrics_handler() -> impl IntoResponse {
     axum::Json(serde_json::json!({
         "status": "operational",
         "service": "b00t-admin",
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": VERSION,
+        "built_at": BUILD_TIMESTAMP,
+        "git": GIT_HASH,
         "uptime": uptime,
         "cpu": {
             "logical_cores": cpu_count,
@@ -615,25 +811,14 @@ async fn processes_handler() -> impl IntoResponse {
             evidence_graph,
             req_graph,
         ],
-        "mermaid": format!(
-            "{}\n{}\n{}\n{}",
-            fetch_graph.to_mermaid(),
-            chunk_graph.to_mermaid(),
-            evidence_graph.to_mermaid(),
-            req_graph.to_mermaid(),
-        ),
+        "mermaid": join_mermaid(&[fetch_graph.to_mermaid(), chunk_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]),
         "pipelines": {
             "ato-legislation": {
                 "description": "ATO Legislation ingestion: AtoClient → LegislationChunker → EvidenceNode → RequirementsNode",
                 "jurisdiction": "AU",
                 "acts": ["ITAA 1997", "ITAA 1936", "GST Act 1999", "FBT Act 1986"],
-                "nodes": [legis_graph, evidence_graph, req_graph],
-                "mermaid": format!(
-                    "{}\n{}\n{}",
-                    legis_graph.to_mermaid(),
-                    evidence_graph.to_mermaid(),
-                    req_graph.to_mermaid(),
-                ),
+                "nodes": [&legis_graph, &evidence_graph, &req_graph],
+                "mermaid": join_mermaid(&[legis_graph.to_mermaid(), evidence_graph.to_mermaid(), req_graph.to_mermaid()]),
                 "health": {
                     "source": "https://www.legislation.gov.au",
                     "rate_limit_secs": 3,
@@ -649,25 +834,39 @@ async fn processes_handler() -> impl IntoResponse {
 // ── Viz endpoints ──────────────────────────────────────────────────────────
 
 /// GET `/api/admin/viz/entangle` — Datum entanglement graph (Mermaid + SVG)
-async fn viz_entangle_handler() -> impl IntoResponse {
-    viz_output("entangle")
+async fn viz_entangle_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("entangle", hide_orphans)
 }
 
 /// GET `/api/admin/viz/task` — Task dependency graph (Mermaid + SVG)
-async fn viz_task_handler() -> impl IntoResponse {
-    viz_output("task")
+async fn viz_task_handler(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    viz_output("task", hide_orphans)
 }
 
-fn viz_output(subcommand: &str) -> impl IntoResponse {
+fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
     let mermaid = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "mermaid"])
         .output()
         .ok()
         .and_then(|o| o.status.success().then(|| {
             let raw = String::from_utf8_lossy(&o.stdout).to_string();
-            raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string()
+            let cleaned = raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string();
+            // Mermaid v11 dropped `graph` syntax — must use `flowchart`
+            cleaned.replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD").replace("graph RL", "flowchart RL")
         }))
         .unwrap_or_default();
+
+    let mermaid = if hide_orphans && !mermaid.is_empty() {
+        filter_orphans_from_mermaid(&mermaid).to_mermaid()
+    } else {
+        mermaid
+    };
 
     let svg = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "svg"])
@@ -686,7 +885,8 @@ fn viz_output(subcommand: &str) -> impl IntoResponse {
 // Dashboard HTML (embedded)
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
+#[allow(unused_variables)]
+pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -696,7 +896,6 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -796,8 +995,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   }}
 
   @keyframes pulse {{
-    0%%, 100%% {{ opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }}
-    50%% {{ opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }}
+    0%, 100% {{ opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }}
+    50% {{ opacity: 0.6; box-shadow: 0 0 0 8px rgba(52,211,153,0); }}
   }}
 
   .header-info {{
@@ -807,13 +1006,14 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   }}
 
   /* Four panels grid */
-  .panel {{
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    padding: 20px;
-    overflow: auto;
-  }}
+   .panel {{
+     display: none; /* hidden by default — shown when section opens */
+     background: #0f172a;
+     border: 1px solid #1e293b;
+     border-radius: 12px;
+     padding: 20px;
+     overflow: auto;
+   }}
 
   .panel h2 {{
     font-size: 14px;
@@ -1044,7 +1244,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
   .flow-legend .dot {{
     width: 6px; height: 6px;
-    border-radius: 50%%;
+    border-radius: 50%;
     display: inline-block;
     margin-right: 4px;
   }}
@@ -1111,7 +1311,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
   .ws-dot {{
     width: 8px; height: 8px;
-    border-radius: 50%%;
+    border-radius: 50%;
   }}
 
   .ws-dot.connected {{ background: #34d399; }}
@@ -1159,6 +1359,8 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 /* ── Fade transitions ── */
 .fade-in {{ animation: fadeIn 0.3s ease-in; }}
 @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(4px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+@keyframes wasm-spin {{ to {{ transform: rotate(360deg); }} }}
+.wasm-spinner {{ animation: wasm-spin 1s linear infinite; }}
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {{ width: 6px; }}
@@ -1171,7 +1373,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <div class="sidebar">
   <div class="sidebar-header">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-      <div class="sidebar-header" id="status-dot" style="width:8px;height:8px;border-radius:50%%;background:#34d399;animation:pulse 2s infinite;display:inline-block;"></div>
+      <div class="sidebar-header" id="status-dot" style="width:8px;height:8px;border-radius:50%;background:#34d399;animation:pulse 2s infinite;display:inline-block;"></div>
       <h1 style="font-size:16px;color:#38bdf8;margin:0;">b00t</h1>
     </div>
     <div class="header-info" id="header-info" style="font-size:10px;color:#64748b;margin-top:4px;display:flex;align-items:center;gap:6px;">
@@ -1180,12 +1382,12 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
       <span id="header-status">Loading...</span>
     </div>
     <div style="margin-top:8px;font-size:9px;color:#475569;border-top:1px solid #1e293b;padding-top:6px;">
-      <span id="sidebar-version">🥾 v0.9.1</span>
+      <span id="sidebar-version">🥾</span>
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body open" id="section-pipeline" style="padding:8px 16px;">
+    <div class="accordion-header" onclick="toggleSection('pipeline')" data-b00t="section:pipeline" data-b00t-action="toggle" data-b00t-label="Pipeline Dashboard">📊 Pipeline <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-pipeline" style="padding:8px 16px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-chunks">0</div><div style="font-size:8px;color:#64748b;">Chunks</div></div>
         <div style="background:rgba(56,189,248,0.06);border-radius:4px;padding:6px;text-align:center;"><div style="font-size:18px;font-weight:700;color:#38bdf8;" id="stat-evidence">0</div><div style="font-size:8px;color:#64748b;">Evidence</div></div>
@@ -1204,26 +1406,30 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
   <div class="accordion-section">
     <div class="accordion-header" onclick="toggleSection('sim')" data-b00t="section:sim" data-b00t-action="toggle" data-b00t-label="Twin Simulation">👥 Simulation <span class="accordion-arrow">▶</span></div>
     <div class="accordion-body" id="section-sim" style="padding:8px 16px;">
-      <button class="sim-btn" onclick="simTick()" data-b00t="action:sim-tick" data-b00t-label="Simulation Tick" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
-      <button class="sim-btn rollback" onclick="simRollback()" data-b00t="action:sim-rollback" data-b00t-label="Simulation Rollback" style="display:block;width:100%%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
+      <button class="sim-btn" onclick="simTick()" data-b00t="action:sim-tick" data-b00t-label="Simulation Tick" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">▶ Tick</button>
+      <button class="sim-btn rollback" onclick="simRollback()" data-b00t="action:sim-rollback" data-b00t-label="Simulation Rollback" style="display:block;width:100%;margin-bottom:4px;padding:6px;font-size:11px;">↩ Rollback</button>
       <div style="font-size:10px;color:#64748b;margin-top:4px;"><span style="color:#94a3b8;">Tick:</span> <span id="sim-tick">0</span> · <span style="color:#94a3b8;">History:</span> <span id="sim-history">0</span></div>
-      <div style="font-size:10px;margin-top:4px;"><span id="ws-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%%;background:#ef4444;"></span> <span id="ws-text">WS: disconnected</span></div>
+      <div style="font-size:10px;margin-top:4px;"><span id="ws-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;"></span> <span id="ws-text">WS: disconnected</span></div>
     </div>
   </div>
   <div class="accordion-section">
-    <div class="accordion-header active" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
-    <div class="accordion-body open" id="section-viz" style="padding:8px 16px;">
-      <select id="viz-select" data-b00t="control:viz-select" data-b00t-action="select" data-b00t-label="Graph Type Selector" style="width:100%%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
+    <div class="accordion-header" onclick="toggleSection('viz')" data-b00t="section:viz" data-b00t-action="toggle" data-b00t-label="Visualizations">🎨 Visualizations <span class="accordion-arrow">▶</span></div>
+    <div class="accordion-body" id="section-viz" style="padding:8px 16px;">
+      <select id="viz-select" data-b00t="control:viz-select" data-b00t-action="select" data-b00t-label="Graph Type Selector" style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;padding:4px;border-radius:4px;font-family:inherit;font-size:11px;margin-bottom:4px;" onchange="onVizSelect()">
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
         <option value="task">📋 Tasks</option>
         <option value="pipeline">📊 Pipeline</option>
         <option value="ato">🏛️ ATO</option>
+        <option value="isometric">🧊 Isometric</option>
         <option value="kg">🕸️ Knowledge Graph</option>
       </select>
       <div id="viz-mode" style="display:flex;gap:2px;margin-bottom:4px;">
         <div class="code-tab active" data-viz="mermaid" data-b00t="tab:mermaid" data-b00t-label="Mermaid View">Mermaid</div>
         <div class="code-tab" data-viz="cytoscape" data-b00t="tab:cytoscape" data-b00t-label="Cytoscape View">Cytoscape</div>
+      </div>
+      <div style="margin:4px 0;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
+        <span style="margin-left:auto;color:#64748b;">Shift+scroll: 10× zoom</span>
       </div>
       <div id="viz-status" style="font-size:9px;color:#64748b;word-break:break-all;">Select a graph</div>
       <div class="progress-bar" id="progress-bar" style="display:none;"><div class="progress-fill" id="progress-fill"></div></div>
@@ -1247,6 +1453,10 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 
 <div class="panel" id="type-panel" data-b00t="panel:types" data-b00t-label="Type Explorer">
   <h2>🔬 Type Explorer</h2>
+  <div style="margin:0 0 8px;display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;">
+    <input type="checkbox" id="hide-orphans" onchange="toggleOrphans()" data-b00t="control:hide-orphans">
+    <label for="hide-orphans" data-b00t="label:hide-orphans">Hide orphan nodes (no connections)</label>
+  </div>
   <div class="type-detail" id="type-detail">Select a type from the sidebar</div>
 </div>
 
@@ -1266,7 +1476,7 @@ fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
     <div class="mermaid" id="mermaid-target" style="text-align:center;color:#64748b;padding:40px;">Select a visualization</div>
   </div>
   <div id="viz-cytoscape-container" style="background:#0f172a;border-radius:6px;min-height:400px;display:none;border:1px solid #1e293b;">
-    <div id="cytoscape-target" style="width:100%%;height:400px;"></div>
+    <div id="cytoscape-target" style="width:100%;height:400px;"></div>
   </div>
 </div>
 
@@ -1280,10 +1490,11 @@ function toggleSection(name) {{
   var isOpen = body.classList.contains('open');
   body.classList.toggle('open', !isOpen);
   body.previousElementSibling.classList.toggle('active', !isOpen);
-  // Hide/show corresponding main panel
   var panelMap = {{ pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' }};
   var panel = document.getElementById(panelMap[name]);
   if (panel) panel.style.display = isOpen ? 'none' : 'block';
+  // Persist section state
+  try {{ localStorage.setItem('b00t-section', name); localStorage.setItem('b00t-section-open', !isOpen); }} catch(e) {{}}
 }}
 
 // ════════ Keyboard Navigation ════════
@@ -1316,17 +1527,43 @@ document.addEventListener('keydown', function(e) {{
   }}
 }});
 
-// ════════ Mermaid Init ════════
-mermaid.initialize({{ startOnLoad: false, theme: 'dark', themeVariables: {{ background: '#0f172a' }} }});
+// ════════ Mermaid Init (WASM) ════════
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
 var TYPES = [];
 
-// Load initial data from API
-fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
-fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
-setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+// Restore persisted UI state — only opens, never closes
+(function() {{
+  try {{
+    var section = localStorage.getItem('b00t-section');
+    var wasOpen = localStorage.getItem('b00t-section-open');
+    var viz = localStorage.getItem('b00t-viz');
+    // Only open if it was previously open; default is all closed
+    if (section && wasOpen === 'true') {{
+      var body = document.getElementById('section-' + section);
+      if (body) {{
+        body.classList.add('open');
+        body.style.display = '';
+        body.previousElementSibling.classList.add('active');
+        var panelMap = {{ pipeline: 'pipeline-panel', types: 'type-panel', sim: 'sim-panel', viz: 'viz-panel' }};
+        var panel = document.getElementById(panelMap[section]);
+        if (panel) panel.style.display = 'block';
+      }}
+    }}
+    if (viz && document.getElementById('viz-select')) {{
+      document.getElementById('viz-select').value = viz;
+      onVizSelect();
+    }}
+  }} catch(e) {{}}
+}})();
+
+// Load initial data from API (skip in test environments without fetch)
+if (typeof fetch !== 'undefined') {{
+    fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}});
+    fetch('/api/admin/types').then(function(r){{return r.json();}}).then(function(t){{ TYPES = t.types || []; initTypeExplorer(); }}).catch(function(e){{}});
+    setInterval(function(){{ fetch('/api/admin/pipeline').then(function(r){{return r.json();}}).then(function(p){{ PIPELINE = p; updatePipeline(); }}).catch(function(e){{}}); }}, 5000);
+}}
 
 function updatePipeline() {{
   var p = PIPELINE;
@@ -1346,50 +1583,47 @@ function updatePipeline() {{
 }}
 
 // ════════ Heartbeat + Version ════════
+var beatFails = 0;
 function beat() {{
   var hb = document.getElementById('heartbeat');
   var vs = document.getElementById('header-version');
   var st = document.getElementById('header-status');
   var sv = document.getElementById('sidebar-version');
-  if (!hb) return;
-  // Fetch health API for server version
+  if (!hb || typeof fetch === 'undefined') return;
   fetch('/api/admin/health').then(function(r){{return r.json();}}).then(function(d) {{
     var ver = d.version || '?';
-    if (vs) vs.textContent = 'v' + ver + ' ·';
+    var built = d.built_at || '';
+    if (vs) vs.textContent = 'v' + ver + (built ? ' · built ' + built : '') + ' ·';
     if (sv) sv.textContent = '🥾 v' + ver;
     if (st) st.textContent = d.service || 'Healthy';
     hb.style.background = '#34d399';
     hb.style.animation = 'none';
     void hb.offsetHeight;
     hb.style.animation = 'pulse 2s infinite';
+    beatFails = 0;
+    // Remove crash banner if present
+    var banner = document.getElementById('crash-banner');
+    if (banner) banner.remove();
   }}).catch(function() {{
+    beatFails++;
     hb.style.background = '#ef4444';
     hb.style.animation = 'none';
-    if (st) st.textContent = 'Offline';
+    if (st) st.textContent = beatFails > 2 ? 'Server crashed' : 'Offline';
+    // Show crash banner after 3 consecutive failures
+    if (beatFails >= 3 && !document.getElementById('crash-banner')) {{
+      var banner = document.createElement('div');
+      banner.id = 'crash-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:#fff;padding:12px 20px;text-align:center;font-size:13px;z-index:9999;animation:pulse 1s infinite;';
+      banner.innerHTML = '🥾 Server crashed — <a href="javascript:location.reload()" style="color:#fff;text-decoration:underline;">reload</a> when back (auto-retry every 5s)';
+      document.body.prepend(banner);
+    }} else if (beatFails >= 3) {{
+      document.getElementById('crash-banner').textContent = '🥾 Server down (' + beatFails + ' retries) — reload when back';
+    }}
   }});
 }}
 // Beat on load and every 30s
 beat();
 setInterval(beat, 30000);
-
-function beat() {{
-  var hb = document.getElementById('heartbeat');
-  var vs = document.getElementById('header-version');
-  var st = document.getElementById('header-status');
-  if (!hb) return;
-  // Flash heartbeat green on successful API response
-  hb.style.background = '#34d399';
-  hb.style.animation = 'none';
-  void hb.offsetHeight; // reflow
-  hb.style.animation = 'pulse 2s infinite';
-  var info = document.getElementById('header-info');
-  if (info) {{
-    var p = PIPELINE;
-    var ver = p.pipeline_version || SERVER_VERSION;
-    if (vs) vs.textContent = 'v' + ver + ' ·';
-    if (st) st.textContent = p.executed_at ? new Date(p.executed_at).toLocaleString() : (p.has_pipeline ? 'Active' : 'Ready');
-  }}
-}}
 
 // Initial beat
 setTimeout(beat, 100);
@@ -1401,6 +1635,7 @@ var currentVizData = null;
 function onVizSelect() {{
   var sel = document.getElementById('viz-select').value;
   if (!sel) {{ document.getElementById('viz-status').textContent = 'Select a graph type'; return; }}
+  try {{ localStorage.setItem('b00t-viz', sel); }} catch(e) {{}}
   // Pick render engine per type
   if (sel === 'kg') {{
     // Knowledge Graph → Cytoscape
@@ -1465,8 +1700,9 @@ function loadKnowledgeGraph() {{
       var container = document.getElementById('cytoscape-target');
       if (!container) {{ status.textContent = 'Container not found'; return; }}
       if (typeof cytoscape === 'undefined') {{ status.textContent = 'Cytoscape.js not loaded'; return; }}
-      try {{
-        cytoscape({{
+       var cy;
+       try {{
+         cy = cytoscape({{
           container: container,
           elements: elements,
           style: [
@@ -1474,14 +1710,44 @@ function loadKnowledgeGraph() {{
             {{ selector: 'edge', style: {{ 'line-color': '#475569', 'target-arrow-color': '#475569', 'target-arrow-shape': 'triangle', width: 1, 'curve-style': 'bezier', label: 'data(label)', color: '#64748b', 'font-size': '8px', 'text-margin-y': -8 }} }},
             {{ selector: ':selected', style: {{ 'border-color': '#fbbf24', 'border-width': 2 }} }},
           ],
-          layout: {{ name: 'cose', padding: 20, nodeRepulsion: 6000, idealEdgeLength: 100 }},
-          wheelSensitivity: 0.3,
-        }});
-        status.textContent = elements.length + ' elements — Cytoscape ready';
+         }});
+         // Cassowary-inspired: hubs get more space via degree-scaled repulsion
+         elements.nodes.forEach(function(n) {{
+           var deg = (elements.edges || []).filter(function(e) {{ return e.data.source === n.data.id || e.data.target === n.data.id; }}).length;
+           n.data.weight = 1 + Math.min(deg, 50) * 0.5;
+         }});
+         // Shift+scroll: 10x zoom
+         container.addEventListener('wheel', function(e) {{
+           if (e.shiftKey) {{ e.preventDefault(); var d = e.deltaY > 0 ? -0.5 : 0.5; cy.zoom(cy.zoom() * (1 + d * 10)); }}
+         }}, {{ passive: false }});
+         // Restore viewport from localStorage
+         try {{
+           var vp = JSON.parse(localStorage.getItem('b00t-cy-vp'));
+           if (vp) cy.viewport({{ zoom: vp.zoom, pan: vp.pan }});
+         }} catch(e) {{}}
+         cy.on('viewport', function() {{
+           try {{ localStorage.setItem('b00t-cy-vp', JSON.stringify({{ zoom: cy.zoom(), pan: cy.pan() }})); }} catch(e) {{}}
+         }});
+         // Orphan filter
+         window._cy = cy;
+         window._cyElements = elements;
+         status.textContent = elements.length + ' elements — Cytoscape ready';
       }} catch(e) {{ status.textContent = 'Cytoscape error: ' + e.message; console.error('Cytoscape:', e); }}
     }}, 300);
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
+
+function toggleOrphans() {{
+  var hide = document.getElementById('hide-orphans').checked;
+  try {{ localStorage.setItem('b00t-hide-orphans', hide); }} catch(e) {{}}
+  var sel = document.getElementById('viz-select').value;
+  if (sel) {{ loadGraph(sel); }}
+}}
+
+// Restore orphan filter on load
+(function() {{
+  try {{ if (localStorage.getItem('b00t-hide-orphans') === 'true') document.getElementById('hide-orphans').checked = true; }} catch(e) {{}}
+}})();
 
 
 function startProgress(total) {{
@@ -1523,41 +1789,26 @@ function addStatus(type, msg) {{
 function renderMermaid() {{
   if (!currentVizData || !currentVizData.mermaid) {{ addStatus('error', 'No mermaid data'); return; }}
   var target = document.getElementById('mermaid-target');
-  target.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">Rendering...</div>';
   var raw = currentVizData.mermaid;
-  var graphs = [];
-  var parts = raw.split(/\`\`\`(?:mermaid)?\\s*/);
-  for (var i = 0; i < parts.length; i++) {{
-    var p = parts[i].trim();
-    if (p && (p.startsWith('graph ') || p.startsWith('flowchart ') || p.startsWith('stateDiagram'))) {{ graphs.push(p); }}
-  }}
-  if (graphs.length === 0 && raw.trim().length > 0) {{ graphs = [raw.trim()]; }}
-  if (graphs.length === 0) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid content</div>'; return; }}
-  document.getElementById('viz-status').textContent = graphs.length + ' graph(s)';
-  startProgress(graphs.length);
-  var html = '';
-  var pending = graphs.length;
-  var errors = 0;
-  graphs.forEach(function(g, idx) {{
-    var graphId = 'viz-graph-' + Date.now() + '-' + idx;
-    try {{
-      mermaid.render(graphId, g).then(function(result) {{
-        html += '<div class="fade-in" style="margin-bottom:16px;">' + result.svg + '</div>';
-        pending--;
-        var done = graphs.length - pending;
-        updateProgress(done, graphs.length, 'Graph ' + (idx+1) + ' rendered');
-        if (pending === 0) {{
-          target.innerHTML = html;
-          if (errors) addStatus('error', errors + ' error(s)');
-          finishProgress();
-        }}
-      }}).catch(function(e) {{
-        errors++; pending--;
-        html += '<div style="margin-bottom:8px;padding:8px;background:#1e293b;border-left:3px solid #ef4444;"><div style="color:#ef4444;font-size:10px;">Graph ' + (idx+1) + ':</div><pre style="color:#fbbf24;font-size:10px;">' + e.message + '</pre></div>';
-        addStatus('error', 'Graph ' + (idx+1) + ' failed: ' + e.message);
-        if (pending === 0) {{ target.innerHTML = html; finishProgress(); }}
-      }});
-    }} catch(e) {{ errors++; pending--; addStatus('error', 'Exception: ' + e.message); if (pending === 0) {{ target.innerHTML = html; finishProgress(); }} }}
+  if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
+  var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
+  target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering ' + stripped.length + ' chars...</span></div>';
+  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+  fetch('/api/admin/viz/mermaid/render', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{text: stripped, hide_orphans: hideOrphans}})
+  }}).then(function(r){{return r.json();}}).then(function(d) {{
+    var svg = d.svg || '';
+    svg = svg.replace(/fill=\"\u0023FFFFFF\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/fill=\"white\"/g, 'fill=\"\u00230f172a\"');
+    svg = svg.replace(/background:\s*\u0023FFFFFF/g, 'background:\u00230f172a');
+    svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
+    target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
+    document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
+  }}).catch(function(e) {{
+    target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
+    addStatus('error', 'Mermaid render failed: ' + e.message);
   }});
 }}
 
@@ -1584,13 +1835,304 @@ function loadGraph(sel) {{
     }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
     return;
   }}
-  fetch('/api/admin/viz/' + sel).then(function(r){{return r.json();}}).then(function(d) {{
+  if (sel === 'isometric') {{
+    var target = document.getElementById('mermaid-target');
+    target.style.position = 'relative';
+    target.style.overflow = 'hidden';
+    target.style.cursor = 'grab';
+    target.style.minHeight = '400px';
+    target.innerHTML = '<div style="color:#64748b;padding:40px;text-align:center;">Loading isometric view...</div>';
+    window._isoViewStack = [];
+    window._isoCurrentData = null;
+    var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+    var useWasm = typeof window._isoRender === 'function';
+
+    if (useWasm) {{
+      loadIsometricWasm(target, hideOrphans);
+      return;
+    }}
+
+    var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
+    fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
+      window._isoCurrentData = d;
+      d._roleLegend = ISO_ROLES;
+      target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
+      title.textContent = d.grouped ? 'Container View' : 'Isometric View';
+      var depthInfo = '';
+      if (d.depth) {{
+        depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
+      }}
+      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
+      setTimeout(function(){{
+        attachIsoViewer(target);
+        buildIsoLegend(target);
+        if (d.grouped) buildContainerDrilldown(target, d);
+      }}, 50);
+    }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; }});
+    return;
+  }}
+  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
+  var params = hideOrphans ? '?hide_orphans=true' : '';
+  fetch('/api/admin/viz/' + sel + params).then(function(r){{return r.json();}}).then(function(d) {{
     currentVizData = d;
     title.textContent = sel.charAt(0).toUpperCase() + sel.slice(1) + ' Dependencies';
     status.textContent = (d.mermaid||'').length + ' chars';
     renderMermaid();
   }}).catch(function(e){{ status.textContent = 'Error: ' + e.message; console.error(e); }});
 }}
+
+
+// ════════ Interactive Isometric Viewer ════════
+
+function attachIsoViewer(container) {{
+  var svg = container.querySelector('svg');
+  if (!svg) return;
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  var viewBox = svg.getAttribute('viewBox') || '0 0 800 600';
+  var vb = viewBox.split(' ').map(Number);
+  var state = {{ x: 0, y: 0, scale: 1, minScale: 0.2, maxScale: 4 }};
+
+  function updateView() {{
+    var w = vb[2], h = vb[3];
+    var ox = vb[0] + w/2, oy = vb[1] + h/2;
+    var tx = ox + state.x/state.scale - ox/state.scale;
+    var ty = oy + state.y/state.scale - oy/state.scale;
+    svg.setAttribute('viewBox', [tx,ty,w/state.scale,h/state.scale].join(' '));
+  }}
+
+  // Pan drag
+  var dragging = false, lx = 0, ly = 0;
+  function pos(e) {{ return e.touches ? {{x:e.touches[0].clientX,y:e.touches[0].clientY}} : {{x:e.clientX,y:e.clientY}}; }}
+  function onStart(e) {{ dragging=true; var p=pos(e); lx=p.x-state.x; ly=p.y-state.y; container.style.cursor='grabbing'; e.preventDefault(); }}
+  function onMove(e) {{ if(!dragging)return; var p=pos(e); state.x=p.x-lx; state.y=p.y-ly; updateView(); }}
+  function onEnd() {{ dragging=false; container.style.cursor='grab'; }}
+  container.addEventListener('mousedown',onStart);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onEnd);
+  container.addEventListener('touchstart',onStart,{{passive:false}});
+  window.addEventListener('touchmove',onMove,{{passive:false}});
+  window.addEventListener('touchend',onEnd);
+
+  // Zoom
+  container.addEventListener('wheel',function(e) {{
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? -0.15 : 0.15;
+    if (e.shiftKey) delta *= 3;
+    state.scale = Math.min(state.maxScale, Math.max(state.minScale, state.scale * (1 + delta)));
+    updateView();
+  }},{{passive:false}});
+
+  // Node click → highlight connected
+  var allEdges = Array.from(svg.querySelectorAll('[data-edge-from]'));
+  function highlightNode(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='0.25';n.style.filter='grayscale(1)'; }});
+    allEdges.forEach(function(e){{ e.setAttribute('opacity','0.1'); }});
+    if (nodeEl) {{
+      nodeEl.style.opacity = '1'; nodeEl.style.filter = 'none';
+      allEdges.forEach(function(e) {{
+        if (e.getAttribute('data-edge-from')===nid || e.getAttribute('data-edge-to')===nid) {{
+          e.setAttribute('opacity','0.9'); e.setAttribute('stroke-width','3');
+        }}
+      }});
+    }}
+  }}
+  svg.addEventListener('click',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    highlightNode(nodeEl);
+    if (!nodeEl) {{
+      svg.querySelectorAll('.iso-node').forEach(function(n){{ n.style.opacity='1';n.style.filter='none'; }});
+      allEdges.forEach(function(e){{ e.setAttribute('opacity','0.5');e.setAttribute('stroke-width','1.5'); }});
+    }}
+  }});
+
+  // Double-click → center on node
+  svg.addEventListener('dblclick',function(e) {{
+    var nodeEl = e.target.closest('.iso-node');
+    if (!nodeEl) {{ state.x=0;state.y=0;state.scale=1;updateView();return; }}
+    var c = nodeEl.querySelector('text');
+    if (!c) return;
+    var bbox = c.getBBox();
+    var cx = bbox.x + bbox.width/2, cy = bbox.y + bbox.height/2;
+    state.x = -cx * state.scale + vb[2]/2;
+    state.y = -cy * state.scale + vb[3]/2;
+    state.scale = Math.min(state.maxScale, state.scale * 1.5);
+    updateView();
+  }});
+
+  // Keyboard
+  document.addEventListener('keydown',function(e) {{
+    if (!container.closest('[data-b00t="panel:viz"]')) return;
+    var step = 40 / state.scale;
+    switch(e.key) {{
+      case 'ArrowLeft': state.x+=step;break;
+      case 'ArrowRight': state.x-=step;break;
+      case 'ArrowUp': state.y+=step;break;
+      case 'ArrowDown': state.y-=step;break;
+      case '+':case'=': state.scale=Math.min(state.maxScale,state.scale*1.2);break;
+      case '-': state.scale=Math.max(state.minScale,state.scale/1.2);break;
+      case '0':case'Home': state.x=0;state.y=0;state.scale=1;break;
+      case 'Escape': highlightNode(null);break;
+      default: return;
+    }}
+    updateView();e.preventDefault();
+  }});
+
+  // Reset button
+  var resetBtn = document.createElement('div');
+  resetBtn.innerHTML = '↺';
+  resetBtn.style.cssText = 'position:absolute;top:4px;right:4px;width:28px;height:28px;background:#334155;color:#e2e8f0;border-radius:4px;text-align:center;line-height:28px;cursor:pointer;font-size:16px;z-index:10;user-select:none;';
+  resetBtn.title = 'Reset view (Home key)';
+  resetBtn.onclick = function(){{ state.x=0;state.y=0;state.scale=1;updateView(); }};
+  container.appendChild(resetBtn);
+}}
+
+// ════════ Role Legend ════════
+var ISO_ROLES = [
+  {{r:'data',e:'📄',c:'#334155'}},{{r:'intelligence',e:'🧠',c:'#0284c7'}},{{r:'rule',e:'⚖️',c:'#b91c1c'}},
+  {{r:'security',e:'🛡️',c:'#0f766e'}},{{r:'human',e:'👤',c:'#b45309'}},{{r:'logic',e:'❓',c:'#b91c1c'}},
+  {{r:'storage',e:'💾',c:'#15803d'}},{{r:'report',e:'📊',c:'#166534'}},{{r:'task',e:'⚙️',c:'#475569'}},
+  {{r:'event',e:'📅',c:'#7e22ce'}},{{r:'ingest',e:'📥',c:'#1d4ed8'}},{{r:'validate',e:'✅',c:'#16a34a'}},
+  {{r:'classify',e:'🏷️',c:'#7c3aed'}},{{r:'review',e:'👁️',c:'#c026d3'}},{{r:'reconcile',e:'🔄',c:'#2563eb'}},
+  {{r:'commit',e:'💾',c:'#0891b2'}},{{r:'decision',e:'❓',c:'#dc2626'}},{{r:'step',e:'⚙️',c:'#52525b'}}
+];
+
+function buildIsoLegend(container) {{
+  var used = new Set();
+  var depthCounts = {{surface:0, extended:0, historical:0}};
+  container.querySelectorAll('[data-context-depth]').forEach(function(n){{
+    var d = n.getAttribute('data-context-depth');
+    if (depthCounts[d] !== undefined) depthCounts[d]++;
+    used.add(n.getAttribute('data-node-role'));
+  }});
+  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;flex-direction:column;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px;">';
+  if (depthCounts.surface > 0) html += '<span style="background:#334155;color:#e2e8f0;padding:2px 6px;border-radius:3px;font-size:9px;opacity:1.0;" title="Directly connected nodes">Surface '+depthCounts.surface+'</span>';
+  if (depthCounts.extended > 0) html += '<span style="background:#334155;color:#94a3b8;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.5;" onclick="toggleDepth(this,event)" title="Orphan tools — click to show">Extended '+depthCounts.extended+'</span>';
+  if (depthCounts.historical > 0) html += '<span style="background:#334155;color:#64748b;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.2;" title="Reference docs — click show all">Historical '+depthCounts.historical+'</span>';
+  html += '</div><div style="display:flex;flex-wrap:wrap;gap:3px;">';
+  ISO_ROLES.forEach(function(r) {{
+    if (!used.has(r.r)) return;
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
+  }});
+  html += '</div>';
+  var leg = document.createElement('div'); leg.innerHTML = html;
+  container.appendChild(leg);
+}}
+
+// ════════ Depth toggle — show/hide extended+historical nodes ════════
+
+var _showAllDepth = false;
+function toggleDepth(link, e) {{
+  e.preventDefault();
+  _showAllDepth = !_showAllDepth;
+  link.textContent = _showAllDepth ? 'hide extended' : 'show all';
+  var svg = document.querySelector('#mermaid-target svg');
+  if (!svg) return;
+  svg.querySelectorAll('.iso-node').forEach(function(n) {{
+    var d = n.getAttribute('data-context-depth');
+    if (d === 'surface') return;
+    n.style.display = _showAllDepth ? '' : 'none';
+  }});
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    var f = el.getAttribute('data-edge-from');
+    var t = el.getAttribute('data-edge-to');
+    var fromN = svg.querySelector('[data-node-id=\"'+f+'\"]');
+    var toN = svg.querySelector('[data-node-id=\"'+t+'\"]');
+    var fromD = fromN ? fromN.getAttribute('data-context-depth') : 'surface';
+    var toD = toN ? toN.getAttribute('data-context-depth') : 'surface';
+    el.setAttribute('opacity', (_showAllDepth || (fromD === 'surface' && toD === 'surface')) ? '0.5' : '0.05');
+  }});
+}}
+
+// ════════ Container drill-down (branch-and-bound sub-graphs) ════════
+
+function buildContainerDrilldown(container, data) {{
+  if (!data.components || !data.components.length) return;
+  var subMap = {{}};
+  data.components.forEach(function(c) {{ subMap[c.id] = c; }});
+
+  container.querySelectorAll('.iso-node').forEach(function(nodeEl) {{
+    var nid = nodeEl.getAttribute('data-node-id');
+    if (!nid || !nid.startsWith('__container_')) return;
+    nodeEl.style.cursor = 'pointer';
+    nodeEl.title = 'Double-click to drill down';
+    nodeEl.addEventListener('dblclick', function(e) {{
+      e.stopPropagation();
+      var sub = subMap[nid];
+      if (!sub || !sub.svg) return;
+      var svgEl = container.querySelector('svg');
+      var viewBox = svgEl ? svgEl.getAttribute('viewBox') : '';
+      window._isoViewStack.push({{
+        svg: svgEl ? svgEl.outerHTML : '',
+        viewBox: viewBox,
+        legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
+      }});
+      container.innerHTML = sub.svg;
+      var newSvg = container.querySelector('svg');
+      if (newSvg) {{ newSvg.style.width = '100%'; newSvg.style.height = '100%'; }}
+      var back = document.createElement('div');
+      back.innerHTML = '← Back';
+      back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
+      back.title = 'Back to container view';
+      back.onclick = function() {{
+        var prev = window._isoViewStack.pop();
+        if (prev) {{
+          container.innerHTML = '';
+          var wrapper = document.createElement('div');
+          wrapper.innerHTML = prev.svg;
+          container.appendChild(wrapper.firstChild);
+          if (prev.viewBox) {{
+            var restoredSvg = container.querySelector('svg');
+            if (restoredSvg) restoredSvg.setAttribute('viewBox', prev.viewBox);
+          }}
+          if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
+        }}
+        attachIsoViewer(container);
+        buildIsoLegend(container);
+      }};
+      container.appendChild(back);
+      buildIsoLegend(container);
+      attachIsoViewer(container);
+    }});
+  }});
+}}
+
+// ════════ WASM Isometric loader ════════
+
+(async function() {{
+  try {{
+    var m = await import('/wasm/wasm/isometric.js');
+    await m.default();
+    window._isoRender = m.render_isometric;
+    console.log('isometric WASM ready');
+  }} catch(e) {{ console.warn('isometric WASM:', e.message); }}
+}})();
+
+function loadIsometricWasm(target, hideOrphans) {{
+  var t0 = Date.now();
+  var jsonUrl = '/api/admin/viz/entangle/json' + (hideOrphans ? '?hide_orphans=true' : '');
+  fetch(jsonUrl).then(function(r){{return r.json();}}).then(function(d) {{
+    target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;">' +
+      '<div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:10px;\"></div>' +
+      '<div style=\"font-size:12px;\">Rendering ' + d.nodes.length + ' nodes...</div></div>';
+    setTimeout(function() {{
+      try {{
+        var svg = window._isoRender(JSON.stringify(d));
+        target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
+        var ms = Date.now() - t0;
+        document.getElementById('viz-title').textContent = 'Isometric View';
+        document.getElementById('viz-status').textContent = d.nodes.length + ' nodes, ' + d.edges.length + ' edges · WASM rendered in ' + ms + 'ms';
+        attachIsoViewer(target);
+        buildIsoLegend(target);
+      }} catch(e) {{
+        target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">WASM render error: ' + e.message + '</div>';
+      }}
+    }}, 50);
+  }}).catch(function(e){{ target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Fetch error: ' + e.message + '</div>'; }});
+}}
+
 </script>
 
 <div id="autopilot-badge">
@@ -1630,6 +2172,8 @@ async fn main() {
         // API — pipeline state
         .route("/api/admin/pipeline", get(pipeline_handler))
         // API — type introspection
+        .route("/api/admin/display", get(datum_display_handler))
+        .route("/api/admin/datums", get(datum_health_handler))
         .route("/api/admin/types", get(types_list_handler))
         .route("/api/admin/types/{name}", get(type_detail_handler))
         // API — simulation
@@ -1640,7 +2184,11 @@ async fn main() {
         .route("/api/admin/processes", get(processes_handler))
         // API — visualizations
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
+        .route("/api/admin/viz/entangle/json", get(graph_json::entangle_json_handler))
         .route("/api/admin/viz/task", get(viz_task_handler))
+        .route("/api/admin/viz/isometric", get(viz_isometric_handler))
+        .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
+        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler).post(viz_mermaid_render_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
@@ -1658,4 +2206,64 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod html_sanity_tests {
+    use super::*;
+
+    fn test_html() -> String {
+        dashboard_html(r#"{"has_pipeline":false}"#, r#"[]"#)
+    }
+
+    #[test]
+    fn no_merge_conflicts() {
+        let h = test_html();
+        assert!(!h.contains("<<<<<<<"));
+        assert!(!h.contains(">>>>>>>"));
+    }
+
+    #[test]
+    fn no_unconverted_braces() {
+        let h = test_html();
+        assert!(!h.contains("{{"));
+        assert!(!h.contains("}}"));
+    }
+
+    #[test]
+    fn has_required_cdns() {
+        let h = test_html();
+        assert!(h.contains("cytoscape"));
+        assert!(h.contains("cytoscape.min.js"));
+    }
+
+    #[test]
+    fn valid_html_structure() {
+        let h = test_html();
+        assert!(h.contains("<!DOCTYPE html>"));
+        assert!(h.contains("</html>"));
+        assert!(h.contains("</body>"));
+    }
+
+    #[test]
+    fn required_elements_exist() {
+        let h = test_html();
+        // Sidebar sections
+        for id in &["section-pipeline", "section-types", "section-sim", "section-viz"] {
+            assert!(h.contains(id), "Missing sidebar section: {id}");
+        }
+        // Viz dropdown
+        assert!(h.contains("viz-select"), "Missing viz dropdown");
+        for opt in &["entangle", "task", "pipeline", "ato", "isometric", "kg"] {
+            assert!(h.contains(&format!("\"{opt}\"")), "Missing viz option: {opt}");
+        }
+        // JS functions
+        for fn_name in &["toggleSection", "renderMermaid", "loadKnowledgeGraph", "beat", "onVizSelect"] {
+            assert!(h.contains(&format!("function {fn_name}")), "Missing JS function: {fn_name}");
+        }
+        // Panels
+        for panel in &["pipeline-panel", "type-panel", "sim-panel", "viz-panel"] {
+            assert!(h.contains(panel), "Missing panel: {panel}");
+        }
+    }
 }

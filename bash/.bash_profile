@@ -173,7 +173,6 @@ elif [[ ! -d ~/.dotfiles/vscode.🆚/code-connect ]]; then
     ## echo "🙈🆚 no vscode"
 fi
 
-# git config --global core.editor "'{path to editor}' -n -w"
 export GIT_EDITOR="code -w -r"
 export EDITOR='code -w -r'
 if [ -f ~/.dotfiles/vscode.sh ]; then
@@ -181,7 +180,9 @@ if [ -f ~/.dotfiles/vscode.sh ]; then
     EDITOR=~/.dotfiles/vscode.sh
 fi
 
-git config --global core.editor "code --wait"
+if [[ $- == *i* ]] && command -v git &> /dev/null && [ -w "$HOME/.gitconfig" ]; then
+    git config --global core.editor "code --wait"
+fi
 
 
 # vscode!
@@ -194,44 +195,48 @@ export XAUTHORITY=$HOME/.Xauthority
 
 
 
-# Check if the SSH agent is already running
-if [ -z "$SSH_AUTH_SOCK" ]; then
-    eval "$(ssh-agent -s)"
-fi
-
-# Add SSH keys to the agent
-ssh-add -l &>/dev/null
-if [ $? -ne 0 ]; then
-    if [ -f ~/.ssh/id_rsa ]; then
-        ssh-add ~/.ssh/id_rsa
+if [[ $- == *i* ]]; then
+    # Check if the SSH agent is already running
+    if [ -z "$SSH_AUTH_SOCK" ]; then
+        eval "$(ssh-agent -s)"
     fi
-    if [ -f ~/.ssh/id_ed25519 ]; then
-        ssh-add ~/.ssh/id_ed25519
-    fi
-fi
 
-# starship: prompt customizer
-eval "$(starship init bash)"
+    # Add SSH keys to the agent
+    ssh-add -l &>/dev/null
+    if [ $? -ne 0 ]; then
+        if [ -f ~/.ssh/id_rsa ]; then
+            ssh-add ~/.ssh/id_rsa
+        fi
+        if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh-add ~/.ssh/id_ed25519
+        fi
+    fi
+
+    # starship: prompt customizer
+    eval "$(starship init bash)"
+fi
 
 
 # detect podman
 if command -v podman &> /dev/null; then
     ## echo "✅🐳 podman"
     alias docker=podman
-    export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
-    if [ -z "$PODMAN_MACHINE_NAME" ]; then
+    if [[ $- == *i* ]]; then
+        export PODMAN_MACHINE_NAME=$( podman machine list --format '{{.Name}}' | grep '*' | tr -d '*' )
+        if [ -z "$PODMAN_MACHINE_NAME" ]; then
     
-        ## echo '🙈🐳 no podman machine found (this is fine)'
-        echo ""
-    else
-        export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
-        #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
-        export PODMAN_HOST="unix://${PODMAN_SOCKET}"
-        export DOCKER_HOST=$PODMAN_HOST
+            ## echo '🙈🐳 no podman machine found (this is fine)'
+            echo ""
+        else
+            export PODMAN_SOCKET=$(podman machine inspect ${PODMAN_MACHINE_NAME} | jq -r '.[].ConnectionInfo.PodmanSocket.Path')
+            #export PODMAN_SOCKET=$(ls $XDG_RUNTIME_DIR/podman/podman.sock)
+            export PODMAN_HOST="unix://${PODMAN_SOCKET}"
+            export DOCKER_HOST=$PODMAN_HOST
+        fi
+        # settings on sm3lly before return to docker.
+        export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}');
+        # export DOCKER_HOST='unix:///home/brianh/.local/share/containers/podman/machine/qemu/podman.sock'
     fi
-    # settings on sm3lly before return to docker.
-    export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}');
-    # export DOCKER_HOST='unix:///home/brianh/.local/share/containers/podman/machine/qemu/podman.sock'
 
 
 elif command -v docker &> /dev/null; then
@@ -289,15 +294,19 @@ fi
 if command -v kubectl &> /dev/null; then
     ## echo "☸ 💯 kubectl"
     alias k=kubectl
-    source <(kubectl completion bash)
-    complete -o default -F __start_kubectl k
+    if [[ $- == *i* ]]; then
+        source <(kubectl completion bash)
+        complete -o default -F __start_kubectl k
+    fi
 elif command -v minikube &> /dev/null; then
     ## echo "☸️🤏🏻minikube" ️
     alias kubectl="minikube kubectl --"
     alias k=kubectl
 
-    source <(kubectl completion bash)
-    complete -o default -F __start_kubectl k
+    if [[ $- == *i* ]]; then
+        source <(kubectl completion bash)
+        complete -o default -F __start_kubectl k
+    fi
 
     #if [ -f ~/.kube/minikube-config ]; then
     #  # prefer alt
@@ -325,8 +334,10 @@ fi
 # detect nvm
 if command -v nvm &> /dev/null; then
     # nvm
-    nvm alias default node
-    nvm use stable --lts
+    if [[ $- == *i* ]]; then
+        nvm alias default node
+        nvm use stable --lts
+    fi
     # nvm use default
 
     NODE_VERSION=$(node --version)
@@ -361,12 +372,16 @@ fi
 
 # check for uv
 if command -v uv &> /dev/null; then
-    eval "$(uv generate-shell-completion bash)"
+    if [[ $- == *i* ]]; then
+        eval "$(uv generate-shell-completion bash)"
+    fi
 fi
 
 
 if command -v direnv &> /dev/null; then
-    eval "$(direnv hook bash)"
+    if [[ $- == *i* ]]; then
+        eval "$(direnv hook bash)"
+    fi
 else
     b00t_quiet_echo "🥲 direnv not installed, cannot hook shell."
 fi
@@ -374,7 +389,9 @@ fi
 
 if command -v pixi &> /dev/null; then
     # replacement for conda
-    eval "$(pixi completion --shell bash)"
+    if [[ $- == *i* ]]; then
+        eval "$(pixi completion --shell bash)"
+    fi
 fi
 
 # TODO: check if go is installed

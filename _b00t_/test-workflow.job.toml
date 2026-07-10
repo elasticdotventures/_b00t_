@@ -1,5 +1,6 @@
 [b00t]
 name = "test-workflow"
+parent = "wrkflw.cli"
 type = "job"
 hint = "Sequential workflow with checkpoints"
 

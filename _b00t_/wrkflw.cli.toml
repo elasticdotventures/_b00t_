@@ -1,5 +1,6 @@
 [b00t]
 name = "wrkflw"
+depends_on = ["example-workflow.job", "parallel-tasks.job", "test-workflow.job"]
 type = "cli"
 hint = "Run and validate GitHub Actions workflows locally — no Docker required. Faster than act for Rust/Python cargo-based workflows."
 repo = "bahdotsh/wrkflw"
@@ -50,4 +51,5 @@ command = "wrkflw run .github/workflows/<workflow>.yml"
 
 [[b00t.references]]
 name = "bahdotsh/wrkflw"
+depends_on = ["example-workflow.job", "parallel-tasks.job", "test-workflow.job"]
 url = "https://github.com/bahdotsh/wrkflw"

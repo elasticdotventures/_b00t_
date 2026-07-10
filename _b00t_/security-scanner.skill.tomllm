@@ -1,0 +1,85 @@
+[b00t]
+name = "security-scanner"
+type = "skill"
+hint = "🚩 Security review pass: secret detection, unsafe-surface audit, dependency alerts, b00t command-guard enforcement over a diff"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["security", "review", "secrets", "unsafe", "dependencies", "guards", "reviewer", "audit"]
+
+[b00t.skill]
+depends_on = ["diff-analyzer"]
+unlocks = [
+    "security-scanner::scan-secrets",
+    "security-scanner::scan-unsafe-surface",
+    "security-scanner::scan-dependencies",
+    "security-scanner::enforce-guards",
+]
+
+# ── Security Scanner ──────────────────────────────────────────────────────────
+#
+# The reviewer's 🚩 pass. Scope is the DIFF, not the whole repo — whole-repo
+# audits are a separate operator-gated activity (just gate-diagnostics).
+# Any hit here is ALWAYS VERDICT: REQUEST_CHANGES (reviewer.role compliance:
+# guard violations are never warnings).
+#
+# 🤓 Scan the diff artifact (/tmp/pr-<n>.diff), not the working tree — the
+#    working tree may contain unstaged operator files that are out of scope.
+
+[b00t.skill.recipes."security-scanner::scan-secrets"]
+description = "Detect committed credentials in a diff"
+steps = [
+    "1. grep -nE '(api[_-]?key|secret|token|password|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)' /tmp/pr-<n>.diff — case-insensitive with -i",
+    "2. grep -nE '[A-Za-z0-9+/]{40,}={0,2}' /tmp/pr-<n>.diff — high-entropy base64 candidates; manually triage",
+    "3. grep -nE 'AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,}' /tmp/pr-<n>.diff — provider-prefixed keys",
+    "4. Check history too: git log -p --all -S '<matched-string>' -- <file> — a removed secret is still leaked",
+    "5. Hit = 🚩 REQUEST_CHANGES + b00t task add 'bug: credential in PR <n> <file>:<line>' — rotation is operator work",
+]
+
+[b00t.skill.recipes."security-scanner::scan-unsafe-surface"]
+description = "Audit new unsafe/injection surface introduced by the diff"
+steps = [
+    "1. Rust: grep -n 'unsafe' /tmp/pr-<n>.diff — every new unsafe block needs a '// SAFETY:' comment; missing = finding",
+    "2. Rust: cargo clippy --workspace -- -D warnings — clippy owns the mechanical lints; do not re-derive them",
+    "3. Shell in diff: grep -nE 'eval|bash -c \"\\$|curl .*\\| *(ba)?sh' — injection and pipe-to-shell patterns",
+    "4. Path handling: grep -nE '\\.\\./|join\\(.*user' — traversal candidates in new file-path code",
+    "5. Each finding: 'SEC|<class>|<file>:<line>|<one-line risk>' — feed to multi-framework synthesis as CRITICAL locus",
+]
+
+[b00t.skill.recipes."security-scanner::scan-dependencies"]
+description = "Dependency delta review: new crates/packages and known alerts"
+steps = [
+    "1. git diff <base>...<head> -- Cargo.toml Cargo.lock package.json pyproject.toml — isolate the dependency delta",
+    "2. New dependency? apply harness-loop-engineer::evaluate-tool verdict logic before accepting (DRY+NRtW: is it novel?)",
+    "3. cargo tree -i <new-crate> — who pulls it in; transitive surprise = finding",
+    "4. gh api repos/{owner}/{repo}/dependabot/alerts --jq '.[] | select(.state == \"open\") | .security_advisory.summary'",
+    "5. Vendored fork touched under vendor/? verify it is fork-fix-forward (upstream PR exists), not a silent workaround",
+]
+
+[b00t.skill.recipes."security-scanner::enforce-guards"]
+description = "Enforce b00t command guards inside committed scripts and recipes"
+steps = [
+    "1. grep -nE '(^|[^a-z])pip3? install' /tmp/pr-<n>.diff — 🦨 must be 'uv pip install'",
+    "2. grep -nE 'docker run' /tmp/pr-<n>.diff — 🦨 must be 'podman ... --device nvidia.com/gpu=all'",
+    "3. grep -nE 'huggingface-cli' /tmp/pr-<n>.diff — 🦨 must be 'hf download'",
+    "4. grep -nE 'rm -rf /( |$)' /tmp/pr-<n>.diff — 🚫 hard block",
+    "5. Any guard hit in committed justfile/script/CI = REQUEST_CHANGES; cite the guard table in the inline comment",
+]
+
+[b00t.compose]
+composes_with = [
+    "multi-framework-code-review",
+    "diff-analyzer",
+    "github-code-review",
+    "reviewer.role",
+    "pr-risk-scorer.datum",
+    "harness-loop-engineer",
+    "gates/write-guard.gate",
+]
+
+# b00t:map v1
+# summary: 🚩 diff-scoped security pass — secrets, unsafe surface, dependency delta, b00t command-guard enforcement
+# tags: security, review, secrets, unsafe, dependencies, guards, reviewer, audit
+# tier: ch0nky
+# cmds: grep -nE '<secret-pattern>' /tmp/pr-<n>.diff; cargo clippy --workspace -- -D warnings; gh api repos/{owner}/{repo}/dependabot/alerts
+# complexity: 6

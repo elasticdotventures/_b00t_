@@ -14,8 +14,8 @@ priority = 0
 transport = "stdio"
 
 [validate]
-command = "bunx --yes @upstash/context7-mcp --version"
-regex = "\\d+|context7|MCP"
+command = "bunx -y @upstash/context7-mcp --help"
+regex = "context7-mcp"
 
 [roles]
 required_for = ["developer", "orchestrator"]

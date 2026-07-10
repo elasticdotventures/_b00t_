@@ -24,12 +24,12 @@ const MODEL_SUFFIXES: [&str; 4] = [".model.toml", ".ai_model.toml", ".model.ai.t
 /// Podman uses CDI spec: --device nvidia.com/gpu=all --security-opt=label=disable
 /// Docker uses: --gpus all
 #[derive(Debug, Clone, PartialEq)]
-enum ContainerRuntime {
+pub(crate) enum ContainerRuntime {
     Docker,
     Podman,
 }
 
-fn detect_container_runtime(override_hint: Option<&str>) -> ContainerRuntime {
+pub(crate) fn detect_container_runtime(override_hint: Option<&str>) -> ContainerRuntime {
     // 🤓 datum metadata `container_runtime = "podman"` takes precedence
     if let Some(hint) = override_hint {
         if hint.to_lowercase() == "podman" {
@@ -50,7 +50,7 @@ fn detect_container_runtime(override_hint: Option<&str>) -> ContainerRuntime {
     ContainerRuntime::Docker
 }
 
-fn runtime_bin(rt: &ContainerRuntime) -> &'static str {
+pub(crate) fn runtime_bin(rt: &ContainerRuntime) -> &'static str {
     match rt {
         ContainerRuntime::Docker => "docker",
         ContainerRuntime::Podman => "podman",

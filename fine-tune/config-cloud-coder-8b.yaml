@@ -1,7 +1,9 @@
-# b00t cloud fine-tune: Qwen3-Coder-8B on HF Jobs A100
-# Dense model — fully triton-optimized in Unsloth; no MoE routing penalty
-# Submit with: just ai-finetune::cloud-train a100-large config-cloud-coder-8b.yaml
-# Est. step time: ~5-10s/step → total ~1-2h for 534 steps (fits in 10h job)
+# ⚠️ OBSOLETE / PAST CUTOFF (2026-06-30) — do not submit jobs with this config
+# Qwen/Qwen3-Coder-8B does NOT exist on HF Hub — Qwen3-Coder family is MoE-only.
+# Available Qwen3-Coder models: 30B-A3B-Instruct, 480B-A35B-Instruct, Next(~79B) — all MoE.
+# Kept for dense-8B LoRA tuning refs (r=32, batch=2, max_seq=2048).
+#
+# Original intent: dense Qwen3-Coder-8B on HF Jobs A100 (model does not exist)
 
 base_model: "Qwen/Qwen3-Coder-8B"
 adapter_name: "b00t-qwen3-coder-8b"

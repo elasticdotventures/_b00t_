@@ -92,10 +92,12 @@ use b00t_cli::commands::{
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
+    provider::ProviderCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
+    runpod::RunpodCommands,
     TaskCommands,
     PatchCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands, ZellijCommand
@@ -167,7 +169,13 @@ Good entries separate neophyte from master. Bad entries are vague, negative, or 
 
 Usage:
   b00t-cli lfmf <tool> "<topic>: <body>"
+  b00t-cli lfmf <tool> "<lesson>"        # colon optional — topic auto-derived, entry salvage-marked
   b00t-cli lfmf --tool <tool> --lesson "<topic>: <body>"
+  b00t-cli lfmf stats all|<tool>         # hit/salvage/miss telemetry report
+
+Salvage-first: malformed lessons (missing colon, URL first-colon, over-long topic/body)
+are NEVER discarded — the payload is recorded with a `<!-- salvaged:<kind> -->` marker
+and counted in telemetry (~/.b00t/lfmf-telemetry.jsonl, override $B00T_LFMF_TELEMETRY).
 
 Examples:
   # Good
@@ -185,6 +193,9 @@ Tips:
 - Body: <250 tokens, actionable, never repo-specific.
 - Affirmative: 'Do X for Y benefit', not 'Don't do X'.
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+
+Advice mode (consult prior lessons before fixing):
+  b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
     Lfmf {
@@ -428,6 +439,11 @@ The system will:
         #[clap(subcommand)]
         agent_command: AgentCommands,
     },
+    #[clap(about = "Multi-provider compute — inference endpoints + training jobs (runpod, hf)")]
+    Provider {
+        #[clap(subcommand)]
+        provider_command: ProviderCommands,
+    },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
         #[clap(subcommand)]
@@ -596,6 +612,11 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
+    },
+    #[clap(about = "RunPod GPU cloud — pods, endpoints, training")]
+    Runpod {
+        #[clap(subcommand)]
+        runpod_command: RunpodCommands,
     },
     #[clap(
         about = "List [[b00t.gate]] declarations across MCP datums",
@@ -1902,6 +1923,10 @@ async fn main() {
     let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
+            // --help / --version: let clap print and exit 0
+            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+                e.exit();
+            }
             // Datum-driven dispatch: search the datum space for <name>
             if raw_args.len() > 1 {
                 let candidate = &raw_args[1];
@@ -1937,7 +1962,7 @@ async fn main() {
                                             Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
                                         }
                                     }
-                                    DatumDispatch::CliPassthrough { command, args } => {
+                                    b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
                                         let mut cmd_args = args;
                                         cmd_args.extend(passthrough);
                                         let status = std::process::Command::new(&command).args(&cmd_args).status();
@@ -2313,6 +2338,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Provider { provider_command }) => {
+            if let Err(e) = b00t_cli::commands::provider::handle_provider_command(provider_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Task { task_command }) => {
             if let Err(e) = b00t_cli::commands::task::handle_task_command(task_command.clone()) {
                 eprintln!("Error: {}", e);
@@ -2627,7 +2658,23 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) =
+            // `lfmf stats all|<tool>` — hit/salvage/miss report from telemetry JSONL.
+            if tool == "stats" {
+                let filter = if lesson == "all" { None } else { Some(lesson.as_str()) };
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_stats(filter) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            // `lfmf advice <tool>` — retrieve prior lessons instead of recording.
+            // 🤓 Kaizen agent-fix-first: consult lessons BEFORE attempting a fix.
+            } else if tool == "advice" {
+                if let Err(e) =
+                    b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
+                {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) =
                 b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
             {
                 eprintln!("Error: {}", e);
@@ -2646,7 +2693,10 @@ async fn main() {
             use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
+                for cause in e.chain().skip(1) {
+                    eprintln!("  caused by: {}", cause);
+                }
                 std::process::exit(1);
             }
         }
@@ -2868,6 +2918,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Runpod { runpod_command }) => {
+            if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await {
+                eprintln!("error: {e:?}");
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Gates { gates_command }) => {
             if let Err(e) = gates_command.execute(&cli.path) {
                 eprintln!("Error: {e}");
@@ -2979,21 +3035,9 @@ async fn main() {
                     }
                 }
             };
-            // Parse target string into McpInstallTarget
-            use b00t_cli::commands::mcp::McpInstallTarget;
-            let install_target = match tgt.as_str() {
-                "vscode" => McpInstallTarget::Vscode,
-                "codex" => McpInstallTarget::Codex,
-                "gemini" | "geminicli" => McpInstallTarget::Geminicli,
-                "dotmcpjson" | "mcpjson" => McpInstallTarget::Dotmcpjson,
-                "roocode" => McpInstallTarget::RooCode,
-                "claude" | "claudecode" => McpInstallTarget::Claudecode,
-                "stdout" => McpInstallTarget::Stdout,
-                _ => McpInstallTarget::Opencode,
-            };
             let install_cmd = McpCommands::Install {
                 name: name.clone(),
-                target: install_target,
+                target: tgt,
                 repo: false,
                 user: false,
                 stdio_command: None,
@@ -3221,12 +3265,17 @@ mod k0mmand3r_dispatch_tests {
         let source = include_str!("main.rs");
         // 🤓 Solomon note: -v/-V are too ambiguous in b00t. Verbose is long-only;
         // version keeps clap's generated long form. Nobody gets short v/V.
+        // Pattern split so this test's own source doesn't self-trigger.
+        let banned_v = ["short = '", "v'"].concat();
+        let banned_vv = ["short = '", "V'"].concat();
+        let test_fn_start = source.find("fn cli_source_bans_short_v_flags").unwrap_or(0);
+        let prod_source = &source[..test_fn_start];
         assert!(
-            !source.contains("short = 'v'"),
+            !prod_source.contains(&banned_v),
             "short -v is banned; use an unambiguous long flag"
         );
         assert!(
-            !source.contains("short = 'V'"),
+            !prod_source.contains(&banned_vv),
             "short -V is banned; use an unambiguous long flag"
         );
     }

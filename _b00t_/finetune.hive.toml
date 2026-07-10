@@ -2,6 +2,7 @@
 name = "finetune"
 type = "hive_profile"
 hint = "QLoRA fine-tuning mode — stops all inference, frees full GPU for unsloth training"
+depends_on = ["b00t-finetune.cli", "huggingface.cli"]
 
 [b00t.hive.resources]
 # 🤓 unsloth Qwen3-8B 4-bit ≈ 8GB VRAM + 6GB activations; ch0nky headroom margin
@@ -19,10 +20,15 @@ group = "primary-workload"
 priority = 5  # lower than inference; inference restores when finetune exits
 
 [b00t.hive.services]
-# 🤓 k8s-first on sm3lly: scale down inference via initContainer in k8s Job (rbac.yaml)
-# systemd units listed for reference only (inactive on sm3lly)
-stop = []
-# k8s equivalent: kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+# 🤓 the systemd units below are the ones actually observed running LLM
+#    inference on this host (`systemctl --user list-units | grep b00t@`) —
+#    the original k8s-only assumption here didn't match reality, so
+#    activating this profile stopped nothing and never freed the GPU.
+stop = [
+  "b00t@inference-qwen36-27b-llamacpp.service",
+  "b00t@inference-qwen36-35b-a3b-llamacpp.service",
+]
+# k8s equivalent (when running there instead): kubectl scale deployment sm0l --replicas=0 -n b00t-inference
 # handled automatically by job.yaml initContainer (finetune-scaler ServiceAccount)
 
 [b00t.hive.mcp_tools]

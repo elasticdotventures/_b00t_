@@ -1,0 +1,76 @@
+# b00t-sm0l: Qwen3.6-35B-A3B MoE inference pod — sm0l tier, OpenAI-compatible
+# 🤓 Start: podman kube play _b00t_/k8s/a3b-sm0l.pod.yml
+# 🤓 Stop:  podman kube down _b00t_/k8s/a3b-sm0l.pod.yml
+# 🤓 Port 8001/v1 — OpenAI-compatible API. Model alias: b00t-sm0l
+# 🤓 UD-IQ4_XS: 17GB weights + KV cache → ~21GB VRAM (RTX 3090 24GB)
+# 🤓 GPU: nvidia-container-runtime via io.podman.annotations
+apiVersion: v1
+kind: Pod
+metadata:
+  name: b00t-sm0l
+  labels:
+    app: b00t
+    tier: sm0l
+    model: qwen36-35b-a3b
+  annotations:
+    io.podman.annotations.run: |
+      --runtime /usr/bin/nvidia-container-runtime
+      --security-opt label=disable
+spec:
+  restartPolicy: UnlessStopped
+  hostname: b00t-sm0l
+  containers:
+    - name: llamacpp
+      image: ghcr.io/ggml-org/llama.cpp:server-cuda
+      ports:
+        - containerPort: 8080
+          hostPort: 8001
+          protocol: TCP
+      env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "0"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: compute,utility
+      volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+      args:
+        - --host
+        - "0.0.0.0"
+        - --port
+        - "8080"
+        - -m
+        - /models/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf
+        - --alias
+        - b00t-sm0l
+        - -c
+        - "32768"
+        - -ngl
+        - "99"
+        - -fa
+        - "on"
+        - --cache-type-k
+        - q4_0
+        - --cache-type-v
+        - q4_0
+        - -np
+        - "1"
+        - --jinja
+        - --temp
+        - "0.6"
+        - --top-p
+        - "0.95"
+        - --top-k
+        - "20"
+        - --min-p
+        - "0.0"
+        - --repeat-penalty
+        - "1.0"
+      securityContext:
+        privileged: false
+  volumes:
+    - name: models
+      hostPath:
+        path: /home/brianh/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF
+        type: Directory

@@ -1,0 +1,17 @@
+[b00t]
+name = "obsidian-mcp-bridge"
+type = "docker"
+hint = "OCI container wrapping mcp-remote to bridge stdio MCP ↔ Obsidian HTTP MCP"
+desires = "latest"
+
+[[b00t.docker.build]]
+context = "containers/obsidian-mcp-bridge"
+file = "containers/obsidian-mcp-bridge/Containerfile"
+
+[[b00t.docker.run]]
+image = "obsidian-mcp-bridge:latest"
+name = "obsidian-mcp"
+network = "host"
+args = ["http"]
+env = ["OBSIDIAN_TOKEN=${OBSIDIAN_TOKEN}"]
+ports = ["27201:27201"]

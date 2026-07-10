@@ -142,10 +142,13 @@
 .b00t/ralph/loop.log
 .b00t/ralph/status.json
 .b00t/tasks.json
+.b00t/harvest_state.json
+.b00t/last-delegate-token
 .bugs/*.jsonl
 .cache
 .cache/
 .cargo/*
+**/.cargo/*
 .claude-plugin/recipes/mcp-servers/*.json
 .claude/
 .claude/*
@@ -233,6 +236,10 @@ coverage
 coverage.xml
 db.sqlite3
 db.sqlite3-journal
+# b00t soul SQLite backend — runtime artifact, not source
+soul.db
+soul.db-shm
+soul.db-wal
 dev-debug.log
 develop-eggs/
 dist
@@ -309,6 +316,34 @@ session-guards.json
 # Runtime state files
 exec-audit.json
 ooda-state.json
-evidence/satisfies.jsonl
+evidence/
 test/bats/
 test/test_helper/
+buildd/
+.opencode/goals/
+
+# lfmf runtime telemetry (local, ~/.b00t IS this repo)
+lfmf-telemetry.jsonl
+
+# runtime state — never commit (rotate any keys already pushed)
+server-keys.json
+spotlight.jsonl
+
+# build/training artifacts
+unsloth_compiled_cache/
+fine-tune/output-*/
+
+# unregistered vendor checkout — register as submodule or remove (operator decision)
+vendor/pi-mono/
+
+# generated from local-only evidence/ — regenerate via just ai-finetune::evidence-train
+fine-tune/evidence_train.jsonl
+
+# serena pod runtime artifacts (writes into its config hostPath)
+_b00t_/k8s/serena-config/news*
+
+# serena runtime cache (project.yml IS tracked)
+.serena/cache/
+
+# harvest output — mined from local transcripts, derived data
+harvest_candidates.jsonl

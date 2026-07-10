@@ -204,3 +204,6 @@ b00t lfmf codebase-memory "get_code_snippet: ALWAYS run search_graph first to ge
 b00t lfmf codebase-memory "index_repository persistence: writes compressed .codebase-memory/graph.db.zst for team sharing"
 b00t lfmf codebase-memory "search_code: graph-augmented grep with structural ranking — definitions first, tests last"
 ```
+
+---
+mcp-timeout: CLI mode bypasses 5s MCP timeout. Edge type filtering broken in Cypher parser — type(r) returns nothing. Full-graph scans work but label/type-scoped queries are unreliable. 67K nodes indexed fine.

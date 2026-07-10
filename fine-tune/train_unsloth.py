@@ -30,10 +30,25 @@ def load_config(config_path: str) -> dict:
 
 def train(config: dict, args=None):
     """Run the unsloth QLoRA fine-tuning loop."""
-    model_name = config.get("base_model", "unsloth/Qwen3.6-27B-GGUF")
+    # MLflow env wiring — must happen before any HF Trainer import reads env vars.
+    # Env var takes precedence over config (so RunPod pod's injected value wins).
+    _mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI") or config.get("mlflow_tracking_uri", "")
+    if _mlflow_uri:
+        os.environ["MLFLOW_TRACKING_URI"] = _mlflow_uri
+    _mlflow_exp = os.environ.get("MLFLOW_EXPERIMENT_NAME") or config.get("mlflow_experiment", "")
+    if _mlflow_exp:
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = _mlflow_exp
+    if _mlflow_uri:
+        print(f"   MLflow: {_mlflow_uri} / {_mlflow_exp or 'default'}")
+
+    model_name = config.get("base_model", "unsloth/Qwen3.6-35B-A3B")
     adapter_name = config.get("adapter_name", "b00t-aligned-qwen36-27b")
     dataset_path = config.get("dataset_path", config.get("dataset", "fine-tune/train.jsonl"))
     output_dir = config.get("output_dir", "./fine-tune/output")
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except OSError:
+        pass  # bucket FUSE may not need explicit mkdir; trainer will create on first write
     lora_r = config.get("lora_r", 16)
     lora_alpha = config.get("lora_alpha", 32)
     lora_dropout = config.get("lora_dropout", 0.05)
@@ -147,6 +162,7 @@ def train(config: dict, args=None):
             lr_scheduler_type=config.get("lr_scheduler", "linear"),
             seed=42,
             output_dir=output_dir,
+            max_steps=int(config.get("max_steps", -1)),
             save_steps=int(config.get("save_steps", 0)) or None,
             report_to=config.get("report_to", "none"),
             # 🤓 push each checkpoint to HF Hub during training — survives job death
@@ -184,9 +200,15 @@ def main():
     parser.add_argument("--config", default="fine-tune/config.yaml", help="Training config YAML")
     parser.add_argument("--resume", type=str, default=None,
                         help="Resume from checkpoint (local path or HF Hub repo/checkpoint-N)")
+    parser.add_argument("--max-steps", type=int, default=0,
+                        help="Override max training steps (0 = use num_epochs from config); use 5 for smoke test")
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.max_steps > 0:
+        config["max_steps"] = args.max_steps
+        config["push_to_hub"] = False  # no partial adapter push during smoke test
+        print(f"  smoke-test mode: max_steps={args.max_steps}, hub push disabled")
     train(config, args)
 
 

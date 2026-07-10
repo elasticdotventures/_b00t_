@@ -1,6 +1,6 @@
 //! b00t Admin Dashboard — Dioxus WASM SPA
 //!
-//! Routes: / (Pipeline), /types (Types), /sim (Simulation), /viz (Visualizations)
+//! Routes: /wasm (Pipeline), /wasm/types (Types), /wasm/sim (Simulation), /wasm/viz (Visualizations)
 //! Dark theme: #020617 bg, #e2e8f0 text, #38bdf8 accent.
 //!
 //! Component functions follow Dioxus convention (PascalCase) for use in
@@ -11,6 +11,7 @@ mod api;
 mod components;
 mod pages;
 mod sleep;
+mod mermaid;
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::{Outlet, Router, Routable};
@@ -23,13 +24,13 @@ use crate::pages::{pipeline::Pipeline, types::Types, simulation::Simulation, vis
 #[derive(Routable, Clone, PartialEq)]
 pub enum Route {
     #[layout(AppLayout)]
-    #[route("/")]
+    #[route("/wasm")]
     Pipeline {},
-    #[route("/types")]
+    #[route("/wasm/types")]
     Types {},
-    #[route("/sim")]
+    #[route("/wasm/sim")]
     Simulation {},
-    #[route("/viz")]
+    #[route("/wasm/viz")]
     Visualizations {},
 }
 

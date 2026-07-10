@@ -11,6 +11,8 @@ name = "moltis"
 type = "agent"
 hint = "Rust-native claw — sandboxed, secure, auditable. Voice, memory, MCP tools, multi-channel."
 
+entangled_mcp = ["b00t-mcp.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 

@@ -3,3 +3,5 @@
 plantuml.mcp.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-queue.stack.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
 plantuml-server-b00t.docker.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=java-too-heavy b00t.replacement=b00t-viz-mermaid-rhai-svg b00t.search=exclude
+b00t-inference.container.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=qwen2.5-sunset-2026-07-07 b00t.replacement=qwen36-local b00t.search=exclude
+inference-sm0l.hive.toml b00t.status=sunset b00t.enabled=false b00t.status_msg=qwen2.5-sunset-2026-07-07 b00t.replacement=inference-qwen36-27b b00t.search=exclude

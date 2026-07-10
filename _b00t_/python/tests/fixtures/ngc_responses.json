@@ -1,0 +1,50 @@
+{
+  "whoami_ok": {
+    "user": {
+      "defaultOrgName": "test-org"
+    }
+  },
+  "whoami_no_user": {
+    "token": "abc123"
+  },
+  "container_tags": {
+    "tags": [
+      {"name": "24.01-py3"},
+      {"name": "24.05-py3"},
+      {"name": "23.12-py3"}
+    ]
+  },
+  "container_tags_empty": {
+    "tags": null
+  },
+  "models_list": {
+    "data": [
+      {"id": "nvidia/llama-3.1-nemotron-70b-instruct", "owned_by": "nvidia", "context_length": 131072},
+      {"id": "meta/llama3-8b-instruct", "owned_by": "meta", "context_length": 8192},
+      {"owned_by": "mystery-vendor"}
+    ]
+  },
+  "models_empty": {
+    "data": null
+  },
+  "chat_completion": {
+    "id": "chatcmpl-mock-1",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "content": "hello from mock"},
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "sse_stream_lines": [
+    ": keep-alive comment line",
+    "data: {\"choices\": [{\"delta\": {\"role\": \"assistant\"}}]}",
+    "data: {\"choices\": [{\"delta\": {\"content\": \"Hel\"}}]}",
+    "data: not-valid-json",
+    "data: {\"choices\": [{\"delta\": {\"content\": \"lo\"}}]}",
+    "data: {\"choices\": [{\"delta\": {\"content\": \"\"}}]}",
+    "data: [DONE]",
+    "data: {\"choices\": [{\"delta\": {\"content\": \"NEVER-EMITTED\"}}]}"
+  ]
+}

@@ -1,5 +1,6 @@
 [b00t]
 name = "kubernetes"
+trigger_words = ["k8s", "kubernetes", "cluster", "pod", "deploy"]
 type = "mcp"
 hint = "Kubernetes cluster management via MCP"
 

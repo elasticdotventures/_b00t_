@@ -1,0 +1,12 @@
+[b00t]
+name = "pip"
+type = "cli"
+hint = "pip3 is the PyPA recommended package manager for Python packages"
+desires = "24.2"
+lfmf_category = "pip"
+
+[b00t.learn]
+inline = "See: man pip"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.

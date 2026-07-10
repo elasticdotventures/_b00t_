@@ -569,9 +569,13 @@ mod tests {
     }
 
     // ── ST-C: sm0l oracle routing ─────────────────────────────────────────
+    // 🤓 B00T_SM0L_ENDPOINT is a global env var — these tests serialize with a mutex
+    //    to prevent the "set" and "absent" tests racing when run in parallel.
+    static SM0L_ENDPOINT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn route_unmatched_via_sm0l_sets_agent_id_when_endpoint_set() {
+        let _guard = SM0L_ENDPOINT_LOCK.lock().unwrap();
         unsafe { std::env::set_var("B00T_SM0L_ENDPOINT", "http://localhost:8080"); }
         let hints = vec![crate::commands::blessing::DiscoverHint {
             skill: "unknown.skill".to_string(),
@@ -586,6 +590,7 @@ mod tests {
 
     #[test]
     fn route_unmatched_via_sm0l_no_op_when_endpoint_absent() {
+        let _guard = SM0L_ENDPOINT_LOCK.lock().unwrap();
         unsafe { std::env::remove_var("B00T_SM0L_ENDPOINT"); }
         let hints = vec![crate::commands::blessing::DiscoverHint {
             skill: "unknown.skill".to_string(),
@@ -598,6 +603,7 @@ mod tests {
 
     #[test]
     fn route_unmatched_via_sm0l_skips_already_enriched_hints() {
+        let _guard = SM0L_ENDPOINT_LOCK.lock().unwrap();
         unsafe { std::env::set_var("B00T_SM0L_ENDPOINT", "http://localhost:8080"); }
         let hints = vec![crate::commands::blessing::DiscoverHint {
             skill: "found.skill".to_string(),

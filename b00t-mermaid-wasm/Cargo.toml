@@ -1,0 +1,15 @@
+[package]
+name = "b00t-mermaid-wasm"
+version.workspace = true
+edition.workspace = true
+description = "Minimal WASM wrapper around mermaid-rs-renderer for browser Mermaid rendering"
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.wasm-pack]
+wasm-opt = false
+
+[dependencies]
+wasm-bindgen = "0.2"
+mermaid-rs-renderer = { version = "0.3", default-features = false }

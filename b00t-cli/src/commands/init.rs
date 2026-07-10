@@ -5,14 +5,13 @@ use crate::traits::*;
 use crate::whoami;
 use anyhow::{Context, Result};
 use clap::Parser;
-use duct::cmd;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Parser)]
 pub enum InitCommands {
     #[clap(
         about = "Initialize a b00t project in the current directory",
-        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)"
+        long_about = "Create _b00t_/ with 🥾.tomllmd + overrides.toml.\nValidates system state and sets up .env + .envrc.\nRuns agent onboarding automatically on first init.\n\nExamples:\n  b00t init project\n  b00t init project --name my-project --stack rust\n  b00t init project --setup   (force onboarding)\n  b00t init project --no-setup (skip onboarding)\n  b00t init project --dry-run"
     )]
     Project {
         #[clap(long, help = "Project name (default: directory name)")]
@@ -23,12 +22,6 @@ pub enum InitCommands {
         setup: bool,
         #[clap(long, help = "Skip agent onboarding")]
         no_setup: bool,
-    },
-    #[clap(
-        about = "Initialize project — detect type, install missing CLI tools via b00t cli up",
-        long_about = "Detect the project type (Rust/Node/Python/…) then run `b00t cli up --yes`\nto install any missing CLI tools declared in .cli.toml datums.\n\nExamples:\n  b00t-cli init project\n  b00t-cli init project --dry-run"
-    )]
-    Project {
         #[clap(long, help = "Check what would be installed without installing")]
         dry_run: bool,
     },
@@ -595,19 +588,19 @@ fn format_duration(seconds: i64) -> String {
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Project { name, stack, setup, no_setup } => {
-                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
-            }
-            InitCommands::Project { dry_run } => {
-                let mut memory = SessionMemory::load()?;
-                detect_project_context(&mut memory)?;
-                let stack = memory.get("primary_stack").cloned().unwrap_or_default();
-                println!("\n🥾 Running b00t cli up for {} project…", stack);
-                CliCommands::Up {
-                    yes: !dry_run,
-                    maintenance: false,
+            InitCommands::Project { name, stack, setup, no_setup, dry_run } => {
+                if *dry_run {
+                    let mut memory = SessionMemory::load()?;
+                    detect_project_context(&mut memory)?;
+                    let stack = memory.get("primary_stack").cloned().unwrap_or_default();
+                    println!("\n🥾 Running b00t cli up for {} project…", stack);
+                    return CliCommands::Up {
+                        yes: false,
+                        maintenance: false,
+                    }
+                    .execute(path);
                 }
-                .execute(path)
+                handle_project_init(name.clone(), stack.clone(), *setup, *no_setup, path)
             }
         }
     }
@@ -617,8 +610,18 @@ impl InitCommands {
 mod tests {
     use super::*;
 
+    // Serialize CWD-mutating tests — set_current_dir is process-global.
+    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+    struct RestoreCwd(std::path::PathBuf);
+    impl Drop for RestoreCwd {
+        fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); }
+    }
+
     #[test]
     fn project_init_creates_directory_and_files() {
+        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
@@ -659,6 +662,8 @@ mod tests {
 
     #[test]
     fn env_file_contains_project_vars() {
+        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
@@ -672,6 +677,8 @@ mod tests {
 
     #[test]
     fn rejects_non_git_directory() {
+        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
         let result = handle_project_init(None, None, false, true, "test");

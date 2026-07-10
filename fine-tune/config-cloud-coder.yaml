@@ -1,13 +1,16 @@
-# b00t cloud fine-tune: Qwen3-Coder-30B-A3B-Instruct on HF Jobs A100
-# Submit with: just hf-job-submit-coder
-# Monitor with: just hf-job-logs <job-id>
-# Adapter lands at: hf://buckets/elasticdotventures/b00t-adapters/qwen3-coder-30b/
-#                   and pushed to: elasticdotventures/b00t-qwen3-coder-30b
+# ⚠️ OBSOLETE / PAST CUTOFF (2026-06-30) — do not submit jobs with this config
+# Qwen3-Coder-30B-A3B-Instruct is MoE; requires triton_kernels.routing NOT on PyPI.
+# Without routing kernel: ~184s/step on H200 → 29h for 573 steps (10h job limit).
+# All HF Jobs using this config (06-28 – 06-30) were CANCELED or timed out.
+# Kept for LoRA tuning refs (r/alpha, grad_accum, bucket FUSE notes).
+#
+# Original intent: cloud fine-tune Qwen3-Coder-30B-A3B-Instruct on HF Jobs A100
+# Adapter target: elasticdotventures/b00t-qwen3-coder-30b
 
 base_model: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
 adapter_name: "b00t-qwen3-coder-30b"
 dataset_path: "/data/train.jsonl"
-output_dir: "/tmp/output"   # bucket FUSE mount doesn't support makedirs; push_to_hub handles persistence
+output_dir: "/tmp/output"   # 🤓 bucket FUSE mount rejects mkdir on subdirs; use /tmp + hub_strategy:checkpoint for persistence
 hub_model_id: "elasticdotventures/b00t-qwen3-coder-30b"
 push_to_hub: true
 private: true        # flip to false to publish publicly on HF Hub
@@ -29,19 +32,20 @@ target_modules:
   - "up_proj"
   - "down_proj"
 
-num_epochs: 1   # 1 epoch; packing+seq1024 should give ~40-55s/step → ~6-8h
-batch_size: 2
-grad_accum: 8
+num_epochs: 1
+batch_size: 1          # 2→1: halves activation memory; grad_accum compensates
+grad_accum: 16         # 8→16: same effective batch (16), half per-step footprint
 learning_rate: 1e-4
-max_seq_length: 2048
-packing: true    # 🤓 b00t examples avg ~1000 tok; packing fills 2048-token windows, cuts padding waste
-# 🤓 seq_len reduction (2048→1024) had <10% effect — MoE routing scatter dominates, not attention cost
+max_seq_length: 1024   # 2048→1024: quarters attention memory; MoE bottleneck is routing not attn
+packing: true
 optim: "adamw_8bit"
 weight_decay: 0.01
 lr_scheduler: "cosine"
 warmup_ratio: 0.05
-save_steps: 100
+save_steps: 25   # checkpoint every ~2min at 5s/step; bucket persists across job death
 
 use_gradient_checkpointing: true
-report_to: "none"
+report_to: "none"   # 🤓 MLflow on 192.168.1.137 is LAN-only — NOT routable from HF Jobs cloud workers
+# mlflow_tracking_uri: "http://192.168.1.137:30803"
+# mlflow_experiment: "b00t-qwen3-coder-30b"
 logging_steps: 10

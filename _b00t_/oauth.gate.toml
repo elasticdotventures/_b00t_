@@ -1,0 +1,5 @@
+[b00t]
+name = "oauth"
+depends_on = ["b00t.cli"]
+type = "gate"
+hint = "oauth tool"

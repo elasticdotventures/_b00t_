@@ -1,0 +1,61 @@
+[b00t]
+name = "claude-fable-5"
+type = "ai"
+hint = "Claude Fable 5 — ch0nky-tier cloud burst; GPU-contention fallback when RTX3090 < 4GB free; best agentic tool-call reliability in ch0nky class"
+
+[b00t.schema]
+type = "ai"
+type_tags = ["ch0nky", "claude", "anthropic", "tool-use", "cloud-burst", "gpu-fallback"]
+
+[b00t.ai]
+provider = "anthropic"
+api_type = "anthropic"
+model_id = "claude-fable-5"
+tier = "ch0nky"
+context_window = 200000
+pricing_model = "token"
+
+# Routing policy:
+#   PRIMARY:  local Qwen3-Coder-30B on vLLM (:8000) when gpu_free_mb >= 4000
+#   FALLBACK: claude-fable-5 when GPU busy (finetune.hive exclusion active)
+#             OR context > 32k tokens (local model context limit)
+#             OR task type = multi-file refactor / agentic tool-chain
+#
+# Fable-5 vs DeepSeek-V3 ch0nky selection:
+#   Fable-5:   prefer for tool-heavy tasks (parallel tool calls, complex refactors)
+#   DeepSeek:  prefer for bulk generation tasks (cheap tokens, long completions)
+
+[b00t.env.required]
+ANTHROPIC_API_KEY = "Anthropic API key — get from console.anthropic.com"
+
+[b00t.routing]
+# Activate as ch0nky burst in budget_controller.rs GPU gate
+# When SystemSnapshot::capture().gpu_free_mb < LOCAL_GPU_FREE_MB_GATE (4000)
+# → swap B00T_AI_CH0NKY_BASE to Anthropic API
+# → swap B00T_AI_CH0NKY_MODEL to claude-fable-5
+gpu_gate_mb = 4000
+fallback_for = ["ch0nky"]
+prefer_over_deepseek = ["tool-use", "multi-file", "agentic"]
+
+[[b00t.usage]]
+description = "Use Fable 5 as ch0nky burst when GPU is claimed by finetune"
+command = "B00T_AI_CH0NKY_MODEL=claude-fable-5 B00T_AI_CH0NKY_BASE=https://api.anthropic.com/v1 b00t-cli ai output claude-fable-5"
+
+[[b00t.usage]]
+description = "Check GPU gate — use local if free, fable-5 if claimed"
+command = "b00t hive status | grep gpu_free_mb"
+
+[[b00t.references]]
+name = "Claude Fable 5 docs"
+url = "https://docs.anthropic.com/en/docs/about-claude/models"
+
+[[b00t.references]]
+name = "b00t LocalProvider GPU gate"
+url = "b00t-cli/src/commands/provider.rs:LOCAL_GPU_FREE_MB_GATE"
+
+# b00t:map v1
+# summary: Claude Fable 5 as ch0nky-tier cloud burst with GPU-contention fallback routing
+# tags: ch0nky, claude, anthropic, tool-use, cloud-burst, gpu-fallback, fable5
+# tier: ch0nky
+# cmds: b00t hive status; b00t-cli ai output claude-fable-5
+# complexity: 3

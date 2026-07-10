@@ -1,5 +1,6 @@
 [b00t]
 name = "postgres-enhanced"
+depends_on = ["b00t.cli"]
 type = "docker"
 hint = "PostgreSQL database with enhanced configuration and resource management"
 desires = "16-alpine"

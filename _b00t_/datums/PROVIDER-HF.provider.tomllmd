@@ -1,0 +1,69 @@
+# HuggingFace Jobs — Managed Training Provider
+#
+# HF Jobs runs containerized training workloads on managed GPU instances.
+# No server to manage; billed per second of GPU time.
+#
+# Auth: HF_TOKEN env var (hf auth login sets it in ~/.cache/huggingface/token)
+# CLI: hf jobs run <image> --flavor <flavor> --timeout <h>h ...
+#
+# 🤓 HF Jobs is NOT covered by dstack — it is HF-proprietary.
+#     Use ORCHESTRATOR=hf for direct HF Jobs submission.
+#     Use ORCHESTRATOR=dstack for RunPod/k8s/cloud via unified control plane.
+#
+# b00t CLI: b00t provider job submit|status|cancel|list --provider hf
+
+[b00t.schema]
+version   = "1"
+type      = "api"
+type_tags = ["provider", "training", "huggingface", "finetune", "gpu", "cloud"]
+
+[resource]
+name        = "HuggingFace Jobs"
+api_key_env = "HF_TOKEN"
+console_url = "https://huggingface.co/jobs"
+
+# GPU flavors: hf jobs run --flavor <id>
+# 🤓 pricing as of 2026-06; verify at hf.co/pricing before budget-gating
+[resource.flavors]
+"a10g-small"  = { vram_gb = 24,  vcpus = 4,  ram_gb = 60,  price_per_hr = 1.50, tier = "ch0nky"   }
+"a10g-large"  = { vram_gb = 24,  vcpus = 12, ram_gb = 96,  price_per_hr = 1.50, tier = "ch0nky"   }
+"a100-large"  = { vram_gb = 80,  vcpus = 12, ram_gb = 142, price_per_hr = 2.50, tier = "frontier" }
+"h100"        = { vram_gb = 80,  vcpus = 26, ram_gb = 200, price_per_hr = 5.00, tier = "frontier" }
+# 🤓 h200 preferred for 30B MoE: ~50s/step vs 130s/step (A100) vs 325s/step (A100, no triton-kernels)
+#    At 50s/step × 573 = 8h → fits 10h timeout; A100 at 130s/step × 573 = 20.7h > 19h → timeout
+"h200"        = { vram_gb = 141, vcpus = 26, ram_gb = 400, price_per_hr = 8.50, tier = "frontier" }
+
+# Volume constraints
+# 🤓 bucket FUSE mount rejects mkdir on subdirs — use output_dir=/tmp/output
+# 🤓 hub_strategy=checkpoint + push_to_hub=true persists across job death
+[resource.volumes]
+bucket_root    = "hf://buckets/elasticdotventures/b00t-adapters"
+dataset_mount  = "hf://datasets/elasticdotventures/b00t-training:/data:ro"
+output_dir_workaround = "/tmp/output"  # subdirs on FUSE mount fail with EPERM
+
+# Default training image
+[resource.training_image]
+image = "ghcr.io/elasticdotventures/b00t-training-image:latest"
+
+[[resource.usages]]
+description = "Submit training job to HF Jobs H200 (30B MoE preferred)"
+command     = "just ai-finetune::cloud-coder"
+
+[[resource.usages]]
+description = "List running HF jobs"
+command     = "just ai-finetune::hf-job-ps"
+
+[[resource.usages]]
+description = "Cancel a job"
+command     = "just ai-finetune::hf-job-cancel <job-id>"
+
+[[resource.usages]]
+description = "Submit via b00t CLI (provider-agnostic)"
+command     = "b00t-cli provider job submit --provider hf --config fine-tune/config-cloud-coder.yaml"
+
+# b00t:map v1
+# summary: HuggingFace Jobs provider — managed GPU training; flavors a10g/a100/h100; billed per second
+# tags: provider, hf, huggingface, training, jobs, finetune, gpu
+# tier: frontier
+# cmds: just ai-finetune::cloud-train, b00t-cli provider job submit --provider hf
+# complexity: 3

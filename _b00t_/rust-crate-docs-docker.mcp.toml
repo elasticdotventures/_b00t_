@@ -3,6 +3,8 @@ name = "rust-crate-docs-docker"
 type = "mcp"
 hint = "MCP server"
 
+entangled_cli = ["rust-crate-docs-docker.cli"]
+
 [[b00t.mcp.stdio]]
 priority = 0
 transport = "stdio"

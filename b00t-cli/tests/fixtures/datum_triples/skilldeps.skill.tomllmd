@@ -1,0 +1,11 @@
+# Fixture: skill datum with [b00t.skill] depends_on/unlocks (mirrors grammar-verify)
+# 🤓 depends_on appears BOTH top-level and in [b00t.skill] to exercise dedupe.
+[b00t]
+name = "skilldeps"
+type = "skill"
+hint = "Fixture: skill with skill-table depends_on and unlocks"
+depends_on = ["z3-verify"]
+
+[b00t.skill]
+depends_on = ["z3-verify", "gbnf-grammar"]
+unlocks = ["skilldeps::author", "skilldeps::audit"]

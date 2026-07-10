@@ -648,6 +648,152 @@ impl OodaLoop {
 }
 
 // ---------------------------------------------------------------------------
+// PolyConnector — typed phase wrappers
+// ---------------------------------------------------------------------------
+//
+// OODA phases are a natural PolyConnector chain:
+//
+//   ObserveNode  (env → Observation)
+//     .then(OrientNode)   (Observation → Orientation)
+//     .then(DecideNode)   (Orientation → Decision)
+//     .then(ActNode)      (Decision    → ActionResult)
+//
+// `OodaLoop::run_typed()` enforces this type chain at compile time.
+// Each node is a thin wrapper around the user-supplied closure.
+// The existing `run_phases()` API remains unchanged — this is additive.
+
+/// Phase-typed newtype for the Observe output.
+#[derive(Debug, Clone)]
+pub struct Observation(pub String);
+
+/// Phase-typed newtype for the Orient output.
+#[derive(Debug, Clone)]
+pub struct Orientation(pub String);
+
+/// Phase-typed newtype for the Decide output.
+#[derive(Debug, Clone)]
+pub struct Decision(pub String);
+
+/// Phase-typed newtype for the Act output.
+#[derive(Debug, Clone)]
+pub struct ActionResult {
+    pub summary: String,
+    pub success: bool,
+}
+
+/// Input to the Observe phase — carries the loop iteration number.
+#[derive(Debug, Clone)]
+pub struct ObserveInput(pub u32);
+
+// ── Phase node wrappers ────────────────────────────────────────────────────
+
+use crate::pipeline_nodes::{NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachine};
+use crate::doc_pipeline::SerializableFOLFormula;
+
+/// Typed Observe phase node.  `ObserveInput → Observation`.
+pub struct ObserveNode<F>(pub F);
+/// Typed Orient phase node.  `Observation → Orientation`.
+pub struct OrientNode<F>(pub F);
+/// Typed Decide phase node.  `Orientation → Decision`.
+pub struct DecideNode<F>(pub F);
+/// Typed Act phase node.  `Decision → ActionResult`.
+pub struct ActNode<F>(pub F);
+
+impl<F> std::fmt::Debug for ObserveNode<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "ObserveNode") }
+}
+impl<F> std::fmt::Debug for OrientNode<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "OrientNode") }
+}
+impl<F> std::fmt::Debug for DecideNode<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "DecideNode") }
+}
+impl<F> std::fmt::Debug for ActNode<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "ActNode") }
+}
+
+macro_rules! ooda_phase_node {
+    ($node:ident, $id:literal, $label:literal, $input:ty, $output:ty) => {
+        impl<F> PipelineNode for $node<F>
+        where
+            F: Fn($input) -> $output + Send + Sync,
+        {
+            type Input  = $input;
+            type Output = $output;
+            fn node_id(&self)    -> &str { $id }
+            fn node_label(&self) -> &str { $label }
+            fn node_category(&self) -> NodeCategory { NodeCategory::Transform }
+            fn preconditions(&self)  -> Vec<SerializableFOLFormula> { vec![] }
+            fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
+            fn invariants(&self)     -> Vec<SerializableFOLFormula> { vec![] }
+            fn execute(&self, input: $input) -> $output { (self.0)(input) }
+            fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle($id) }
+            fn input_ports(&self)  -> Vec<PortDef> {
+                vec![PortDef { name: "in".into(), port_type: stringify!($input).into(), direction: PortDirection::Input }]
+            }
+            fn output_ports(&self) -> Vec<PortDef> {
+                vec![PortDef { name: "out".into(), port_type: stringify!($output).into(), direction: PortDirection::Output }]
+            }
+            fn visual_style(&self) -> NodeStyle {
+                NodeStyle { fill: "#0f172a".into(), stroke: "#60a5fa".into(), shape: NodeShape::RoundedBox }
+            }
+        }
+    };
+}
+
+ooda_phase_node!(ObserveNode, "ooda.observe", "Observe", ObserveInput, Observation);
+ooda_phase_node!(OrientNode,  "ooda.orient",  "Orient",  Observation,  Orientation);
+ooda_phase_node!(DecideNode,  "ooda.decide",  "Decide",  Orientation,  Decision);
+ooda_phase_node!(ActNode,     "ooda.act",     "Act",     Decision,     ActionResult);
+
+impl OodaLoop {
+    /// Run the OODA loop using typed PolyConnector phase nodes.
+    ///
+    /// Type-checks the full Observe→Orient→Decide→Act chain at compile time.
+    /// Runs exactly once; use `run_phases` for multi-iteration guard-railed loops.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// loop_.run_typed(
+    ///     ObserveNode(|i: ObserveInput| Observation(format!("env at iter {}", i.0))),
+    ///     OrientNode(|obs: Observation| Orientation(format!("analysis of: {}", obs.0))),
+    ///     DecideNode(|ori: Orientation| Decision(format!("plan: {}", ori.0))),
+    ///     ActNode(|dec: Decision| ActionResult { summary: dec.0, success: true }),
+    /// );
+    /// ```
+    pub fn run_typed<Obs, Ori, Dec, Act>(
+        &mut self,
+        observe: Obs,
+        orient: Ori,
+        decide: Dec,
+        act: Act,
+    ) -> Option<OodaIteration>
+    where
+        Obs: PipelineNode<Input = ObserveInput, Output = Observation>,
+        Ori: PipelineNode<Input = Observation, Output = Orientation>,
+        Dec: PipelineNode<Input = Orientation, Output = Decision>,
+        Act: PipelineNode<Input = Decision, Output = ActionResult>,
+    {
+        // Build the PolyConnector chain — type-checked by the compiler.
+        let chain = observe.then(orient).then(decide).then(act);
+
+        self.run_phases(|_phase, i| {
+            let result = chain.execute(ObserveInput(i));
+            let iteration = OodaIteration {
+                phase: "typed".into(),
+                observation: String::new(),
+                orientation: String::new(),
+                decision: String::new(),
+                action: result.summary.clone(),
+                success: result.success,
+            };
+            let next = if result.success { OodaPhase::Complete } else { OodaPhase::Failed("act failed".into()) };
+            (iteration, next)
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1114,5 +1260,23 @@ mod tests {
         assert_eq!(iter.phase, "Observing");
         assert_eq!(iter.observation, "test obs");
         assert!(iter.success);
+    }
+
+    /// PolyConnector: run_typed() enforces Observe→Orient→Decide→Act type chain.
+    #[test]
+    fn run_typed_poly_connector_chain() {
+        let mut loop_ = OodaLoop::new(3);
+
+        let result = loop_.run_typed(
+            ObserveNode(|i: ObserveInput| Observation(format!("obs-{}", i.0))),
+            OrientNode(|obs: Observation| Orientation(format!("ori({})", obs.0))),
+            DecideNode(|ori: Orientation| Decision(format!("dec({})", ori.0))),
+            ActNode(|dec: Decision| ActionResult { summary: dec.0.clone(), success: true }),
+        );
+
+        assert!(result.is_some());
+        let iter = result.unwrap();
+        assert!(iter.success);
+        assert!(iter.action.contains("dec(ori(obs-"));
     }
 }

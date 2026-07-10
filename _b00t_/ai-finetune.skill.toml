@@ -4,7 +4,7 @@ type = "skill"
 hint = "QLoRA fine-tuning pipeline: dataset gen, local k8s (sm0l/ch0nky), HF Jobs cloud (30B+), MLflow, adapter test"
 
 [b00t.skill]
-depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS"]
+depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS", "ledgrrr"]
 unlocks = [
     # dataset
     "ai-finetune::dataset",
@@ -65,7 +65,7 @@ BLESSING CHAIN:
 
 LOCAL TIER (sm3lly RTX3090, k8s):
   just ai-finetune::dataset          — regenerate train.jsonl from b00t corpus
-  just ai-finetune::train-smol       — Qwen2.5-0.5B QLoRA (3h, ~3GB VRAM)
+  just ai-finetune::train-smol       — smol QLoRA recipe (⚠️ qwen2.5 base sunset 2026-07-07; retarget to qwen3.6)
   just ai-finetune::train-kube       — full ch0nky job (scale sm0l first)
   just ai-finetune::test             — 5-probe b00t-awareness smoke test
 

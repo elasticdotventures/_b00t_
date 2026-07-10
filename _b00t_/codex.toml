@@ -1,0 +1,45 @@
+[b00t]
+name = "codex"
+provides = ["cli", "runtime", "mcp"]
+
+# ── CLI facet ──────────────────────────────────────────────────────────────
+[b00t.cli]
+desires = "0.125.0"
+install = "bunx codex-cli"
+update = "bunx codex-cli self-update"
+version = "codex --version"
+version_regex = '(\\d+\\.\\d+\\.\\d+)'
+hint = "OpenAI Codex CLI — AI pair programming via bunx codex-cli"
+
+# ── Runtime facet ──────────────────────────────────────────────────────────
+[b00t.runtime]
+binary = "codex"
+
+[b00t.runtime.isolation]
+share_net = true
+new_session = true
+
+[[b00t.runtime.isolation.mounts]]
+src = "/usr"
+dest = "/usr"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib"
+dest = "/lib"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/lib64"
+dest = "/lib64"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/bin"
+dest = "/bin"
+type = "ro-bind"
+
+[[b00t.runtime.isolation.mounts]]
+src = "/etc"
+dest = "/etc"
+type = "ro-bind"

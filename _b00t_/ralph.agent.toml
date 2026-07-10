@@ -3,6 +3,8 @@ name = "ralph"
 type = "agent"
 hint = "Autonomous agent loop runner for TODO-next.md and b00t job workflows"
 
+entangled_mcp = ["b00t-mcp.mcp", "ralph.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 

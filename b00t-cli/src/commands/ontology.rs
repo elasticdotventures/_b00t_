@@ -386,6 +386,24 @@ pub fn sparql_query(subject: Option<&str>, predicate: &str, datum_dir: &str) -> 
             }
         }
     }
+
+    // Merge rich BootDatum triples (datum_triples::compile_datum_triples) so
+    // composition knowledge (aliases, composes_with, measured, unlocks, …) is
+    // graph-visible. scan_datums above only parses top-level *.toml with a
+    // light schema; compile_datum_triples parses the full BootDatum including
+    // .tomllm/.tomllmd skills.
+    if !matches!(predicate, "type" | "b00t:type" | "roles" | "b00t:roles" | "validate" | "b00t:validate") {
+        let rich = crate::datum_triples::compile_datum_triples(datum_dir)?;
+        for (s, p, o) in rich {
+            if let Some(subj) = subject {
+                if !s.contains(subj) { continue; }
+            }
+            // "all" passes everything; a named predicate acts as a filter
+            // (e.g. --predicate composes_with matches b00t:composes_with).
+            if predicate != "all" && !p.contains(predicate) { continue; }
+            triples.push([s, p, o]);
+        }
+    }
     Ok(triples)
 }
 
@@ -481,8 +499,18 @@ optional_for = ["analyst"]
         assert_eq!(triples.len(), 0);
     }
 
+    // Serialize CWD-mutating tests within this module — set_current_dir is process-global.
+    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+    struct RestoreCwd(std::path::PathBuf);
+    impl Drop for RestoreCwd {
+        fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); }
+    }
+
     #[test]
     fn test_export_mermaid_produces_valid_output() {
+        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         // Create a few test datums with relationships
         let datums = [
@@ -516,13 +544,13 @@ optional_for = []
             std::fs::write(&p, content).unwrap();
         }
 
-        // Capture stdout
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
-        // Need to make the datum_dir point to our temp dir
+        // _B00T_TEST_ROOT overrides get_workspace_root() so it uses our temp dir
+        // instead of calling `git rev-parse` (which races on .gitconfig during parallel tests).
+        // SAFETY: test holds CWD_LOCK so no other test reads this env var concurrently.
+        unsafe { std::env::set_var("_B00T_TEST_ROOT", dir.path()) };
         let result = export_topology("mermaid", None, 3);
+        unsafe { std::env::remove_var("_B00T_TEST_ROOT") };
         assert!(result.is_ok(), "export_topology failed: {:?}", result.err());
-        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]

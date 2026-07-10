@@ -1,0 +1,4 @@
+[b00t]
+name = "incubated"
+type = "mystery_incubating"
+hint = "fixture using an incubating type token — accepted, no warning"

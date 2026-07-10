@@ -1,0 +1,32 @@
+# rpa.skill.toml — b00t browser/RPA skill blessing
+# Routing: static pages → crawl4ai (fast, no JS), dynamic → browser-use (CDP, JS)
+# Prerequisites: OPENAI_BASE_URL (vLLM sm3lly or HF Jobs) + Chrome/Chromium installed
+
+[b00t]
+name = "rpa"
+type = "skill"
+hint = "Web automation skill — routes static→crawl4ai, dynamic→browser-use (CDP)"
+
+[b00t.skill]
+tier = "ch0nky"
+description = "Browser RPA blessing chain: crawl4ai for static, browser-use for dynamic pages"
+unlocks = ["browser-use", "crawl4ai-mcp", "chrome-mcp"]
+
+depends_on = ["browser-use", "crawl4ai-mcp"]
+
+[[b00t.gate]]
+env = "OPENAI_BASE_URL"
+hint = "vLLM endpoint — http://localhost:8000/v1 (sm3lly) or HF Jobs proxy"
+
+[b00t.routing]
+# Decision: CDP via browser-use/Playwright for AI-agent RPA today
+# Long term: WebDriver BiDi as Servo ships support (target 2026)
+static_scrape = "crawl4ai-mcp"      # no JS, fast, ~50ms/page
+dynamic_rpa   = "browser-use"       # CDP, full JS, network interception
+
+# b00t:map v1
+# summary: RPA skill blessing — crawl4ai (static) + browser-use (CDP/JS dynamic)
+# tags: rpa, browser, cdp, webdriver, bidi, crawl4ai, browser-use
+# tier: ch0nky
+# cmds: b00t learn rpa
+# complexity: 4

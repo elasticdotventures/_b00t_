@@ -1,0 +1,235 @@
+{
+  "$id": "https://b00t.promptexecution.com/schemas/b00t-datum.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": true,
+  "description": "b00t datum dialect (.toml/.tomllm/.tomllmd): [b00t] stanza + free-form sections",
+  "properties": {
+    "b00t": {
+      "additionalProperties": true,
+      "description": "Core datum stanza (BootDatum, b00t-cli/src/lib.rs)",
+      "properties": {
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "auto_install": {
+          "type": "boolean"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "chart_path": {
+          "type": "string"
+        },
+        "clone_path": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "compliance": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "composes_with": {
+          "description": "Datum names this datum composes with",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "depends_on": {
+          "description": "Datum names this datum depends on",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "desires": {
+          "type": "string"
+        },
+        "docker_args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "hint": {
+          "description": "One-line human/agent hint",
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Datum name",
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "oci_uri": {
+          "type": "string"
+        },
+        "package_name": {
+          "type": "string"
+        },
+        "require": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requires_sudo": {
+          "type": "boolean"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "description": "[b00t.schema] header (TomllmDoc, b00t-datum-core)",
+          "properties": {
+            "type": {
+              "type": "string"
+            },
+            "type_tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "script": {
+          "type": "string"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "type": "string"
+        },
+        "status_msg": {
+          "type": "string"
+        },
+        "type": {
+          "description": "Datum type token or content tag",
+          "enum": [
+            "database",
+            "db",
+            "hive",
+            "hive_profile",
+            "agent",
+            "config",
+            "docker",
+            "skill",
+            "stack",
+            "repo",
+            "role",
+            "bash",
+            "vscode",
+            "k8s",
+            "apt",
+            "nix",
+            "mcp",
+            "cli",
+            "api",
+            "job",
+            "ai",
+            "model",
+            "ai_model",
+            "justfile",
+            "hardware",
+            "overlay",
+            "runtime",
+            "wrap",
+            "launcher",
+            "polyseme",
+            "poly",
+            "credential",
+            "credentials",
+            "gate",
+            "hook",
+            "mcp_server",
+            "plan",
+            "schema",
+            "training",
+            "vendor",
+            "ooda",
+            "okr",
+            "prd",
+            "pattern",
+            "datum",
+            "reference",
+            "learn",
+            "hardware",
+            "tomllmd",
+            "specification",
+            "topic",
+            "soul",
+            "install",
+            "github_org",
+            "ai_provider",
+            "pyinfra",
+            "wow"
+          ],
+          "type": "string"
+        },
+        "update": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "values_file": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "version_regex": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "b00t datum",
+  "type": "object"
+}
