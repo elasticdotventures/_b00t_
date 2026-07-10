@@ -228,8 +228,7 @@ impl crate::clap_reflection::McpExecutor for AgentDiscoverCommand {
 
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
-            let client = ChatClient::nats(None, None, None)
-                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+            let client = get_nats_client().await?;
 
             let mut rx = client.subscribe_notifications("b00t.>.>").await
                 .map_err(|e| anyhow::anyhow!("Failed to subscribe: {}", e))?;
@@ -301,13 +300,36 @@ pub struct AgentMessageCommand {
     pub ack: bool,
 }
 
-// 🤓 to_agent, subject, content are positional in b00t-cli agent message
-impl_mcp_tool!(
-    AgentMessageCommand,
-    "agent_message",
-    ["agent", "message"],
-    positionals: ["to_agent", "subject", "content"]
-);
+impl crate::clap_reflection::McpReflection for AgentMessageCommand {
+    fn mcp_tool_name() -> String { "agent_message".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "message".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentMessageCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::{ChatClient, NotificationMessage};
+
+        let to_agent = params.get("to_agent").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let content = params.get("content").and_then(|v| v.as_str()).unwrap_or("");
+        let subject = params.get("subject").and_then(|v| v.as_str()).unwrap_or("message");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+
+            let notification = NotificationMessage::new(
+                format!("message.{}", subject),
+                "agent_message",
+                serde_json::json!({"to": to_agent, "content": content, "subject": subject}),
+            );
+
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to send message: {}", e))?;
+
+            Ok(format!("Message sent to {} on subject {}", to_agent, subject))
+        })
+    }
+}
 
 /// MCP command for task delegation (captain only)
 #[derive(Parser, Clone)]
@@ -667,8 +689,7 @@ impl crate::clap_reflection::McpExecutor for AgentWaitCommand {
 
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
-            let client = ChatClient::nats(None, None, None)
-                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+            let client = get_nats_client().await?;
 
             let mut rx = client.subscribe_notifications(&wildcard).await
                 .map_err(|e| anyhow::anyhow!("Failed to subscribe: {}", e))?;
@@ -724,8 +745,7 @@ impl crate::clap_reflection::McpExecutor for AgentNotifyCommand {
 
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
-            let client = ChatClient::nats(None, None, None)
-                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+            let client = get_nats_client().await?;
 
             let notification = NotificationMessage::new(source, event_type, details);
 
@@ -750,11 +770,58 @@ pub struct AgentCapabilityCommand {
     pub urgency: Option<String>, // "low", "normal", "high", "emergency"
 }
 
-impl_mcp_tool!(
-    AgentCapabilityCommand,
-    "agent_capability",
-    ["agent", "capability"]
-);
+impl crate::clap_reflection::McpReflection for AgentCapabilityCommand {
+    fn mcp_tool_name() -> String { "agent_capability".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "capability".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentCapabilityCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::{ChatClient, NotificationMessage};
+        use std::time::Duration;
+
+        let capabilities = params.get("capabilities").and_then(|v| v.as_str()).unwrap_or("");
+        let description = params.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+
+            let mut rx = client.subscribe_notifications("b00t.notify.capability.>").await
+                .map_err(|e| anyhow::anyhow!("Failed to subscribe: {}", e))?;
+
+            client.publish_notification(&NotificationMessage::new(
+                "capability",
+                "query",
+                serde_json::json!({"capabilities": capabilities, "description": description}),
+            )).await.map_err(|e| anyhow::anyhow!("Failed to query capabilities: {}", e))?;
+
+            let mut responses = Vec::new();
+            let deadline = Duration::from_secs(3);
+            loop {
+                match tokio::time::timeout(deadline, rx.recv()).await {
+                    Ok(Some(notif)) => {
+                        responses.push(serde_json::json!({
+                            "source": notif.source,
+                            "event": notif.event_type,
+                        }));
+                    }
+                    _ => break,
+                }
+            }
+
+            if responses.is_empty() {
+                return Err(anyhow::anyhow!("No agents responded to capability query"));
+            }
+
+            Ok(serde_json::to_string_pretty(&serde_json::json!({
+                "query": {"capabilities": capabilities, "description": description},
+                "responses": responses,
+                "count": responses.len(),
+            }))?)
+        })
+    }
+}
 
 /// App VSCode MCP install command
 #[derive(Parser, Clone)]
@@ -1755,6 +1822,21 @@ use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref FULL_REGISTRY: Mutex<McpCommandRegistry> = Mutex::new(create_mcp_registry());
+}
+
+lazy_static::lazy_static! {
+    static ref NATS_CLIENT: tokio::sync::Mutex<Option<b00t_chat::ChatClient>> = tokio::sync::Mutex::new(None);
+}
+
+async fn get_nats_client() -> anyhow::Result<b00t_chat::ChatClient> {
+    let mut guard = NATS_CLIENT.lock().await;
+    if let Some(ref client) = *guard {
+        return Ok(client.clone());
+    }
+    let client = b00t_chat::ChatClient::nats(None, None, None)
+        .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+    *guard = Some(client.clone());
+    Ok(client)
 }
 
 /// Search the b00t command registry
