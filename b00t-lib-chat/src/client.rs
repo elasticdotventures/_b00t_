@@ -31,7 +31,9 @@ impl ChatClient {
         })
     }
 
-    /// NATS transport with credentials (falls back to env NATS_URL and default b00t/b00t-hive-lan).
+    /// NATS transport with credentials. Falls back to env NATS_URL for the broker address and
+    /// B00T_HIVE_NATS_USER/B00T_HIVE_NATS_PASSWORD for auth — no auth is applied (anonymous
+    /// connect) if neither the args nor those env vars supply credentials.
     pub fn nats(
         url: Option<String>,
         user: Option<String>,
@@ -44,8 +46,8 @@ impl ChatClient {
             kind: ChatTransportKind::Nats,
             socket_path: None,
             nats_url: Some(url),
-            nats_user: user.or_else(|| Some("b00t".to_string())),
-            nats_password: password.or_else(|| Some("b00t-hive-lan".to_string())),
+            nats_user: user,
+            nats_password: password,
         })
     }
 
