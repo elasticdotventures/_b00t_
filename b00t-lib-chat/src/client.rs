@@ -104,6 +104,11 @@ impl ChatClient {
     pub fn transport(&self) -> &ChatTransport {
         &self.transport
     }
+
+    /// Low-level NATS publish: send raw bytes to a subject.
+    pub async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
+        self.transport.send_raw(subject, payload).await
+    }
 }
 
 impl From<ChatTransportKind> for ChatTransportConfig {

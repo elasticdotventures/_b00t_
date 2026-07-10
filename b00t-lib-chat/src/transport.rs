@@ -97,6 +97,11 @@ impl ChatTransport {
     pub async fn subscribe_notifications(&self, wildcard: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
         match self { ChatTransport::Nats(t) => t.subscribe_notifications(wildcard).await, ChatTransport::Local(_) => Err(ChatError::Other("notification subscribe requires NATS transport".into())) }
     }
+
+    /// Low-level publish: send raw bytes to a NATS subject.
+    pub async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
+        match self { ChatTransport::Nats(t) => t.send_raw(subject, payload).await, ChatTransport::Local(_) => Err(ChatError::Other("send_raw requires NATS transport".into())) }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -218,6 +223,13 @@ impl RealNatsTransport {
         });
         info!("Subscribed to NATS notifications on {}", wildcard);
         Ok(rx)
+    }
+
+    async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
+        let client = self.ensure_connected().await?;
+        client.publish(subject.to_string(), payload.to_vec().into()).await.map_err(|e| ChatError::Other(format!("NATS raw publish failed: {}", e)))?;
+        debug!("NATS raw published to {}", subject);
+        Ok(())
     }
 }
 

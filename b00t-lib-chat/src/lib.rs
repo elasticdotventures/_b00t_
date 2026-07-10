@@ -24,8 +24,8 @@
 //! # }
 //! ```
 
+pub mod agent;
 pub mod assignment;
-// pub mod agent;  // 🤓 agent.rs uses full NATS Agent from old ACP - chat refactor simplified to stubs
 pub mod bridge;
 pub mod client;
 pub mod discovery;
@@ -41,7 +41,7 @@ pub mod skill;
 pub mod transport;
 pub mod transports;
 
-// pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
+pub use agent::{Agent, AgentConfig};
 pub use assignment::{
     AssignmentEngine, AssignmentRule, Condition, ConditionOp, TaskTemplate, TimerSpec, TriggerKind,
 };
