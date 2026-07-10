@@ -591,7 +591,53 @@ pub struct AgentWaitCommand {
     pub subject: Option<String>,
 }
 
-impl_mcp_tool!(AgentWaitCommand, "agent_wait", ["agent", "wait"]);
+impl crate::clap_reflection::McpReflection for AgentWaitCommand {
+    fn mcp_tool_name() -> String { "agent_wait".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "wait".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentWaitCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::{ChatClient, NotificationMessage};
+        use std::time::Duration;
+
+        let timeout_secs = params.get("timeout")
+            .and_then(|v| v.as_u64()).unwrap_or(300);
+        let event_type = params.get("message_type")
+            .and_then(|v| v.as_str()).map(|s| s.to_string());
+        let source_filter = params.get("subject")
+            .and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        let wildcard = if let Some(ref src) = source_filter {
+            format!("b00t.notify.{}.>", src)
+        } else {
+            "b00t.notify.>".to_string()
+        };
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = ChatClient::nats(None, None, None)
+                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+
+            let mut rx = client.subscribe_notifications(&wildcard).await
+                .map_err(|e| anyhow::anyhow!("Failed to subscribe: {}", e))?;
+
+            let deadline = Duration::from_secs(timeout_secs);
+            match tokio::time::timeout(deadline, rx.recv()).await {
+                Ok(Some(notification)) => {
+                    let matches = event_type.as_ref().map_or(true, |et| notification.event_type == *et);
+                    if matches {
+                        Ok(serde_json::to_string_pretty(&notification)?)
+                    } else {
+                        anyhow::bail!("Notification received but type mismatch")
+                    }
+                }
+                Ok(None) => anyhow::bail!("Notification channel closed"),
+                Err(_) => anyhow::bail!("Wait timed out after {} seconds", timeout_secs),
+            }
+        })
+    }
+}
 
 /// MCP command for sending event notifications
 #[derive(Parser, Clone)]

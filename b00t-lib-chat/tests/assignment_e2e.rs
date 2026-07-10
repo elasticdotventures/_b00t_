@@ -48,6 +48,7 @@ mod phase2_assignment_e2e {
 
         let engine = AssignmentEngine::new(client.transport().clone());
         engine.add_rule(rule).await.expect("add rule");
+        engine.start().await.expect("start engine");
 
         let mut task_rx = client
             .subscribe_tasks("devops-bot")
@@ -74,6 +75,7 @@ mod phase2_assignment_e2e {
             Ok(None) => panic!("Task channel closed unexpectedly"),
             Err(_) => panic!("Task not received within timeout — engine may not be running"),
         }
+        engine.stop().await;
     }
 
     #[tokio::test]
@@ -89,7 +91,7 @@ mod phase2_assignment_e2e {
             TaskTemplate {
                 to_agent: "chat-bot".into(),
                 action: "reply".into(),
-                payload_template: json!({}),
+                payload_template: json!({"from": "{event.payload}"}),
             },
         )
         .with_condition(Condition {
@@ -100,6 +102,7 @@ mod phase2_assignment_e2e {
 
         let engine = AssignmentEngine::new(client.transport().clone());
         engine.add_rule(rule).await.expect("add rule");
+        engine.start().await.expect("start engine");
 
         let mut task_rx = client
             .subscribe_tasks("chat-bot")
@@ -126,6 +129,7 @@ mod phase2_assignment_e2e {
             .expect("should receive one task");
 
         assert!(task.payload.to_string().contains("friend@"));
+        engine.stop().await;
     }
 
     #[tokio::test]

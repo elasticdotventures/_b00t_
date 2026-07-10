@@ -143,24 +143,70 @@ pub struct RealNatsTransport {
     user: Option<String>,
     password: Option<String>,
     client: std::sync::Arc<tokio::sync::RwLock<Option<async_nats::Client>>>,
+    max_reconnect_attempts: u32,
+    reconnect_delay_ms: u64,
 }
 
 impl RealNatsTransport {
     pub fn new(url: String, user: Option<String>, password: Option<String>) -> Self {
-        Self { url, user, password, client: std::sync::Arc::new(tokio::sync::RwLock::new(None)) }
+        Self {
+            url, user, password,
+            client: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+            max_reconnect_attempts: 3,
+            reconnect_delay_ms: 1000,
+        }
     }
 
     async fn ensure_connected(&self) -> ChatResult<async_nats::Client> {
-        let mut guard = self.client.write().await;
-        if let Some(ref client) = *guard { return Ok(client.clone()); }
+        {
+            let guard = self.client.read().await;
+            if let Some(ref client) = *guard {
+                match tokio::time::timeout(std::time::Duration::from_secs(1), client.flush()).await {
+                    Ok(Ok(())) => return Ok(client.clone()),
+                    _ => {
+                        warn!("NATS connection lost, reconnecting...");
+                        drop(guard);
+                        let mut write = self.client.write().await;
+                        *write = None;
+                    }
+                }
+            }
+        }
+
         let opts = match (&self.user, &self.password) {
-            (Some(u), Some(p)) => ConnectOptions::new().user_and_password(u.clone(), p.clone()),
-            _ => ConnectOptions::new(),
+            (Some(u), Some(p)) => ConnectOptions::new()
+                .user_and_password(u.clone(), p.clone())
+                .retry_on_initial_connect(),
+            _ => ConnectOptions::new()
+                .retry_on_initial_connect(),
         };
-        let client = opts.connect(&self.url).await.map_err(|e| ChatError::Other(format!("NATS connect failed ({}): {}", self.url, e)))?;
-        info!("NATS connected to {} as {}", self.url, self.user.as_deref().unwrap_or("anonymous"));
-        *guard = Some(client.clone());
-        Ok(client)
+
+        let mut last_err = String::new();
+        for attempt in 0..=self.max_reconnect_attempts {
+            let opts = match (&self.user, &self.password) {
+                (Some(u), Some(p)) => ConnectOptions::new()
+                    .user_and_password(u.clone(), p.clone()),
+                _ => ConnectOptions::new(),
+            };
+            match opts.connect(&self.url).await {
+                Ok(client) => {
+                    info!("NATS reconnected to {} (attempt {})", self.url, attempt + 1);
+                    let mut guard = self.client.write().await;
+                    *guard = Some(client.clone());
+                    return Ok(client);
+                }
+                Err(e) => {
+                    warn!("NATS reconnect attempt {} failed: {}", attempt + 1, e);
+                    last_err = e.to_string();
+                    if attempt < self.max_reconnect_attempts {
+                        tokio::time::sleep(std::time::Duration::from_millis(self.reconnect_delay_ms)).await;
+                    }
+                }
+            }
+        }
+
+        Err(ChatError::Other(format!(
+            "NATS connect failed ({}): {}", self.url, last_err)))
     }
 
     fn chat_subject(msg: &ChatMessage) -> String { format!("b00t.chat.{}.{}", msg.channel, msg.sender) }
