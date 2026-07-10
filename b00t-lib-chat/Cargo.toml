@@ -38,6 +38,7 @@ notify = { version = "6.1", default-features = false, features = ["macos_fsevent
 async-trait = "0.1"
 async-stream = "0.3"
 regex = "1.0"
+cron = "0.15"
 
 # OpenTelemetry observability — workspace version + extra features for chat runtime
 opentelemetry = { workspace = true, features = ["metrics"] }

@@ -340,10 +340,11 @@ impl AssignmentEngine {
         let mut timer_handles = self.timer_handles.lock().await;
 
         for rule in timer_rules {
-            let duration_secs = match &rule.timer_spec {
-                Some(TimerSpec::Interval { seconds }) => *seconds,
-                _ => continue,
+            let timer_spec = match &rule.timer_spec {
+                Some(spec) => spec.clone(),
+                None => continue,
             };
+
             let rule_id = rule.id.clone();
             let rule_name = rule.name.clone();
             let action = rule.action.clone();
@@ -358,52 +359,95 @@ impl AssignmentEngine {
                     serde_json::json!({"rule": rule_name.clone()}),
                 );
 
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(duration_secs)).await;
-
-                    let task = TaskMessage {
-                        task_id: uuid::Uuid::new_v4().to_string(),
-                        action: action.action.clone(),
-                        payload: action.render(&synthetic_notification),
-                        from_agent: "assignment-engine-timer".to_string(),
-                        to_agent: action.to_agent.clone(),
-                        deadline: None,
-                        priority: "normal".to_string(),
-                        timestamp: Utc::now(),
-                    };
-
-                    info!(
-                        "AssignmentEngine: timer rule '{}' fired, dispatching task {}",
-                        rule_name, task.task_id
-                    );
-
-                    if let Err(e) = transport.send_task(&task).await {
-                        warn!("AssignmentEngine: timer task dispatch failed: {}", e);
-                        continue;
-                    }
-
-                    {
-                        let mut rules = rules.write().await;
-                        if let Some(rule) = rules.iter_mut().find(|r| r.id == rule_id) {
-                            rule.last_triggered = Some(Utc::now());
+                match timer_spec {
+                    TimerSpec::Interval { seconds } => {
+                        info!("Timer '{}' started (interval: {}s)", rule_name, seconds);
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+                            let task = TaskMessage {
+                                task_id: uuid::Uuid::new_v4().to_string(),
+                                action: action.action.clone(),
+                                payload: action.render(&synthetic_notification),
+                                from_agent: "assignment-engine-timer".to_string(),
+                                to_agent: action.to_agent.clone(),
+                                deadline: None,
+                                priority: "normal".to_string(),
+                                timestamp: Utc::now(),
+                            };
+                            if let Err(e) = transport.send_task(&task).await {
+                                warn!("Timer task dispatch failed: {}", e);
+                                continue;
+                            }
+                            info!("Timer '{}' fired, task {}", rule_name, task.task_id);
+                            {
+                                let mut rules = rules.write().await;
+                                if let Some(r) = rules.iter_mut().find(|r| r.id == rule_id) {
+                                    r.last_triggered = Some(Utc::now());
+                                }
+                            }
+                            if !repeat {
+                                let mut rules = rules.write().await;
+                                if let Some(r) = rules.iter_mut().find(|r| r.id == rule_id) {
+                                    r.enabled = false;
+                                }
+                                break;
+                            }
                         }
                     }
+                    TimerSpec::Cron { expr } => {
+                        let schedule = match expr.parse::<cron::Schedule>() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                warn!("Invalid cron expression '{}' for rule '{}': {}", expr, rule_name, e);
+                                return;
+                            }
+                        };
+                        info!("Timer '{}' started (cron: {})", rule_name, expr);
+                        loop {
+                            let next = match schedule.upcoming(Utc).next() {
+                                Some(t) => t,
+                                None => {
+                                    warn!("Cron schedule exhausted for rule '{}'", rule_name);
+                                    break;
+                                }
+                            };
+                            let delay = (next - Utc::now()).to_std().unwrap_or(std::time::Duration::from_secs(1));
+                            tokio::time::sleep(delay).await;
 
-                    if !repeat {
-                        let mut rules = rules.write().await;
-                        if let Some(rule) = rules.iter_mut().find(|r| r.id == rule_id) {
-                            rule.enabled = false;
+                            let task = TaskMessage {
+                                task_id: uuid::Uuid::new_v4().to_string(),
+                                action: action.action.clone(),
+                                payload: action.render(&synthetic_notification),
+                                from_agent: "assignment-engine-timer".to_string(),
+                                to_agent: action.to_agent.clone(),
+                                deadline: None,
+                                priority: "normal".to_string(),
+                                timestamp: Utc::now(),
+                            };
+                            if let Err(e) = transport.send_task(&task).await {
+                                warn!("Cron timer task dispatch failed: {}", e);
+                                continue;
+                            }
+                            info!("Cron timer '{}' fired, task {}", rule_name, task.task_id);
+                            {
+                                let mut rules = rules.write().await;
+                                if let Some(r) = rules.iter_mut().find(|r| r.id == rule_id) {
+                                    r.last_triggered = Some(Utc::now());
+                                }
+                            }
+                            if !repeat {
+                                let mut rules = rules.write().await;
+                                if let Some(r) = rules.iter_mut().find(|r| r.id == rule_id) {
+                                    r.enabled = false;
+                                }
+                                break;
+                            }
                         }
-                        break;
                     }
                 }
             });
 
             timer_handles.insert(rule.id.clone(), handle);
-            info!(
-                "AssignmentEngine: timer '{}' started (interval: {}s)",
-                rule.name, duration_secs
-            );
         }
 
         Ok(())
