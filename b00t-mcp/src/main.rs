@@ -132,6 +132,12 @@ async fn main() -> Result<()> {
         server_skill::start_reap_loop().await;
     }
 
+    // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
+    //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
+    if let Err(e) = spawn_registry_bridges_on_startup().await {
+        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+    }
+
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
         // eprintln!(
@@ -291,5 +297,53 @@ async fn main() -> Result<()> {
         println!("  Configure in .mcp.json or MCP client settings");
     }
 
+    Ok(())
+}
+
+/// Sync the official MCP registry and spawn bridges for stdio-based servers.
+/// Bridges connect to MCP servers, read notifications, and publish to NATS.
+async fn spawn_registry_bridges_on_startup() -> anyhow::Result<()> {
+    use b00t_chat::{ChatClient, McpBridge, McpServerSpec};
+    use b00t_c0re_lib::mcp_registry::ServerTransport;
+
+    let mut registry = b00t_mcp::mcp_registry_tools::REGISTRY.lock().await;
+    let sync_count = registry.sync_official_registry().await?;
+    if sync_count > 0 {
+        eprintln!("📡 Synced {} servers from official MCP registry", sync_count);
+    }
+
+    let client = ChatClient::nats(None, None, None)
+        .map_err(|e| anyhow::anyhow!("Failed to create NATS client for bridge spawn: {}", e))?;
+    let transport = client.transport().clone();
+    let servers: Vec<_> = registry.list().into_iter().cloned().collect();
+
+    drop(registry);
+
+    let mut bridges = Vec::new();
+    for server in &servers {
+        if !matches!(server.config.transport, ServerTransport::Stdio) {
+            continue;
+        }
+        let spec = McpServerSpec {
+            id: server.id.clone(),
+            label: server.name.clone(),
+            command: server.config.command.clone(),
+            args: server.config.args.clone(),
+            env: server.config.env.clone(),
+            cwd: server.config.cwd.clone(),
+        };
+        let mut bridge = McpBridge::new(spec);
+        match bridge.start(&transport).await {
+            Ok(()) => {
+                eprintln!("🔗 Bridge started for {}", server.id);
+                bridges.push(bridge);
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to start bridge for {}: {}", server.id, e);
+            }
+        }
+    }
+
+    eprintln!("🔗 Spawned {} MCP notification bridges", bridges.len());
     Ok(())
 }

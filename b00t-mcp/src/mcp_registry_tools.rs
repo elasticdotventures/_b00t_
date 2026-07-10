@@ -18,7 +18,7 @@ use b00t_c0re_lib::mcp_registry::{
 type RegistryHandle = Arc<Mutex<McpRegistry>>;
 
 lazy_static::lazy_static! {
-    static ref REGISTRY: RegistryHandle = Arc::new(Mutex::new(McpRegistry::default()));
+    pub static ref REGISTRY: RegistryHandle = Arc::new(Mutex::new(McpRegistry::default()));
     static ref MCP_PROXY: Arc<Mutex<GenericMcpProxy>> = Arc::new(Mutex::new(GenericMcpProxy::new()));
 }
 

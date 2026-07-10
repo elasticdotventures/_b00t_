@@ -217,4 +217,43 @@ mod phase2_assignment_e2e {
 
         engine.stop().await;
     }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_phase2_cron_timer_dispatches_task() {
+        let client = nats_client().await;
+
+        let rule = AssignmentRule::new(
+            "cron-every-5sec",
+            "Cron every 5 seconds",
+            TriggerKind::Timer,
+            "unused-for-timer",
+            TaskTemplate {
+                to_agent: "cron-bot".into(),
+                action: "cron-tick".into(),
+                payload_template: json!({"type": "cron"}),
+            },
+        )
+        .with_timer(TimerSpec::cron("1/5 * * * * * *"));
+
+        let engine = AssignmentEngine::new(client.transport().clone());
+        engine.add_rule(rule).await.expect("add cron rule");
+        engine.start().await.expect("start engine");
+
+        let mut task_rx = client
+            .subscribe_tasks("cron-bot")
+            .await
+            .expect("subscribe tasks");
+
+        let task = tokio::time::timeout(std::time::Duration::from_secs(15), task_rx.recv())
+            .await
+            .expect("timeout")
+            .expect("should receive cron task");
+
+        assert_eq!(task.to_agent, "cron-bot");
+        assert_eq!(task.action, "cron-tick");
+        assert_eq!(task.payload["type"], "cron");
+
+        engine.stop().await;
+    }
 }

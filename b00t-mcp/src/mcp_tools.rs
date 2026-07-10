@@ -212,11 +212,62 @@ pub struct AgentDiscoverCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(
-    AgentDiscoverCommand,
-    "agent_discover",
-    ["agent", "discover"]
-);
+impl crate::clap_reflection::McpReflection for AgentDiscoverCommand {
+    fn mcp_tool_name() -> String { "agent_discover".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "discover".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentDiscoverCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::ChatClient;
+        use std::time::Duration;
+
+        let json = params.get("json").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let _role_filter = params.get("role").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = ChatClient::nats(None, None, None)
+                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+
+            let mut rx = client.subscribe_notifications("b00t.>.>").await
+                .map_err(|e| anyhow::anyhow!("Failed to subscribe: {}", e))?;
+
+            let mut discovered = Vec::new();
+            let deadline = Duration::from_secs(2);
+            loop {
+                match tokio::time::timeout(deadline, rx.recv()).await {
+                    Ok(Some(notif)) => {
+                        let entry = serde_json::json!({
+                            "source": notif.source,
+                            "event": notif.event_type,
+                            "timestamp": notif.timestamp.to_rfc3339(),
+                        });
+                        discovered.push(entry);
+                    }
+                    _ => break,
+                }
+            }
+
+            if json {
+                Ok(serde_json::to_string_pretty(&serde_json::json!({
+                    "agents": discovered,
+                    "transport": "nats",
+                    "count": discovered.len(),
+                }))?)
+            } else {
+                if discovered.is_empty() {
+                    return Err(anyhow::anyhow!("No agents discovered within listen window"));
+                }
+                let names: Vec<String> = discovered.iter()
+                    .map(|a| a["source"].as_str().unwrap_or("unknown").to_string())
+                    .collect();
+                Ok(format!("Discovered {} agents: {}", names.len(), names.join(", ")))
+            }
+        })
+    }
+}
 
 /// List b00t skills
 #[derive(Parser, Clone)]
