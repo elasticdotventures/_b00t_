@@ -2746,6 +2746,26 @@ check-warnings:
 check-warnings-locs:
     @cargo check 2>&1 | grep "^\s*-->" | sort -u
 
+# 📓 Build obsidian-mcp-bridge container image
+obsidian-mcp-build:
+    podman build -t obsidian-mcp-bridge:latest containers/obsidian-mcp-bridge
+
+# 📓 Run obsidian-mcp-bridge as HTTP relay (listen on :27201 → Windows host :27200)
+obsidian-mcp-run token="":
+    podman run -d --rm --name obsidian-mcp --network host \
+        -e OBSIDIAN_TOKEN="{{token}}" \
+        obsidian-mcp-bridge:latest http
+
+# 📓 Run obsidian-mcp-bridge as stdio MCP server (for b00t/Claude Desktop)
+obsidian-mcp-stdio token="":
+    podman run -i --rm --name obsidian-mcp --network host \
+        -e OBSIDIAN_TOKEN="{{token}}" \
+        obsidian-mcp-bridge:latest
+
+# 📓 Stop obsidian-mcp-bridge container
+obsidian-mcp-stop:
+    podman stop obsidian-mcp || true
+
 # validate-datums: check datum dialects (.tomllm/.tomllmd/gate/hive) — taplo if installed, else b00t-lsp --check (task #109 CI surface)
 validate-datums dir="_b00t_":
     #!/usr/bin/env bash
