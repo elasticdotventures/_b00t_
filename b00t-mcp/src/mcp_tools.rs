@@ -344,7 +344,7 @@ pub struct AgentDelegateCommand {
     pub description: String,
 
     #[arg(long, help = "Priority level", value_enum)]
-    pub priority: Option<String>, // Will be parsed as TaskPriority
+    pub priority: Option<String>,
 
     #[arg(long, help = "Deadline in minutes")]
     pub deadline: Option<u64>,
@@ -356,13 +356,33 @@ pub struct AgentDelegateCommand {
     pub blocking: bool,
 }
 
-// 🤓 worker, task_id, description are positional in b00t-cli agent delegate
-impl_mcp_tool!(
-    AgentDelegateCommand,
-    "agent_delegate",
-    ["agent", "delegate"],
-    positionals: ["worker", "task_id", "description"]
-);
+impl crate::clap_reflection::McpReflection for AgentDelegateCommand {
+    fn mcp_tool_name() -> String { "agent_delegate".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "delegate".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentDelegateCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::NotificationMessage;
+
+        let worker = params.get("worker").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let task_id = params.get("task_id").and_then(|v| v.as_str()).unwrap_or("delegate");
+        let description = params.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+            let notification = NotificationMessage::new(
+                "delegate",
+                task_id,
+                serde_json::json!({"worker": worker, "description": description, "task_id": task_id}),
+            );
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to delegate: {}", e))?;
+            Ok(format!("Task {} delegated to {}", task_id, worker))
+        })
+    }
+}
 
 /// MCP command for completing tasks (worker response)
 #[derive(Parser, Clone)]
@@ -424,7 +444,7 @@ pub struct AgentVoteCreateCommand {
     pub options: String,
 
     #[arg(long, help = "Voting type", value_enum)]
-    pub vote_type: String, // "single", "ranked", "approval", "veto"
+    pub vote_type: String,
 
     #[arg(long, help = "Deadline in minutes")]
     pub deadline: u64,
@@ -433,11 +453,32 @@ pub struct AgentVoteCreateCommand {
     pub voters: String,
 }
 
-impl_mcp_tool!(
-    AgentVoteCreateCommand,
-    "agent_vote_create",
-    ["agent", "vote", "create"]
-);
+impl crate::clap_reflection::McpReflection for AgentVoteCreateCommand {
+    fn mcp_tool_name() -> String { "agent_vote_create".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "vote".to_string(), "create".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentVoteCreateCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::NotificationMessage;
+
+        let subject = params.get("subject").and_then(|v| v.as_str()).unwrap_or("proposal");
+        let description = params.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+            let notification = NotificationMessage::new(
+                "vote",
+                "create",
+                serde_json::json!({"subject": subject, "description": description}),
+            );
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to create vote: {}", e))?;
+            Ok(format!("Vote created: {}", subject))
+        })
+    }
+}
 
 /// MCP command for submitting votes
 #[derive(Parser, Clone)]
@@ -452,11 +493,32 @@ pub struct AgentVoteSubmitCommand {
     pub reasoning: Option<String>,
 }
 
-impl_mcp_tool!(
-    AgentVoteSubmitCommand,
-    "agent_vote_submit",
-    ["agent", "vote", "submit"]
-);
+impl crate::clap_reflection::McpReflection for AgentVoteSubmitCommand {
+    fn mcp_tool_name() -> String { "agent_vote_submit".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "vote".to_string(), "submit".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentVoteSubmitCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::NotificationMessage;
+
+        let proposal_id = params.get("proposal_id").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let vote = params.get("vote").and_then(|v| v.as_str()).unwrap_or("");
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+            let notification = NotificationMessage::new(
+                "vote",
+                "submit",
+                serde_json::json!({"proposal_id": proposal_id, "vote": vote}),
+            );
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to submit vote: {}", e))?;
+            Ok(format!("Vote submitted for proposal {}", proposal_id))
+        })
+    }
+}
 
 /// MCP tool for datum delegation authorization gate — bridges b00t → ledgrrr cost gate.
 ///
