@@ -193,6 +193,24 @@ impl RealNatsTransport {
                     info!("NATS reconnected to {} (attempt {})", self.url, attempt + 1);
                     let mut guard = self.client.write().await;
                     *guard = Some(client.clone());
+
+                    let client_for_heartbeat = client.clone();
+                    let client_arc = self.client.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                            if let Err(_) = tokio::time::timeout(
+                                std::time::Duration::from_secs(2),
+                                client_for_heartbeat.flush(),
+                            ).await {
+                                warn!("NATS heartbeat failed, marking connection stale");
+                                let mut write = client_arc.write().await;
+                                *write = None;
+                                break;
+                            }
+                        }
+                    });
+
                     return Ok(client);
                 }
                 Err(e) => {
