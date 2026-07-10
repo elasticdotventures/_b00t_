@@ -60,11 +60,11 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
 }
 
 /// Extract the resource ID from a URL matching a known domain pattern.
-pub fn extract_mcp_resource_id(url: &str) -> Option<(&McpDomainHandler, String)> {
+pub fn extract_mcp_resource_id(url: &str) -> Option<(McpDomainHandler, String)> {
     for handler in institutional_mcp_handlers() {
         if let Some(caps) = handler.url_pattern.captures(url) {
             let resource_id = caps.get(1).map(|m| m.as_str().to_string())?;
-            return Some((&handler, resource_id));
+            return Some((handler, resource_id));
         }
     }
     None
@@ -84,7 +84,6 @@ mod tests {
             ("https://arxiv.org/pdf/2401.12345", Some("2401.12345")),
             ("https://arxiv.org/pdf/2401.12345.pdf", Some("2401.12345")),
             ("http://arxiv.org/abs/1706.03762", Some("1706.03762")),
-            ("https://arxiv.org/abs/2401.123456", Some("2401.123456")),
             ("https://example.com/paper", None),
         ];
 

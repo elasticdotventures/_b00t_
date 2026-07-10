@@ -57,7 +57,7 @@ impl ContentRouter {
         if source.starts_with("http://") || source.starts_with("https://") {
             // Check for institutional MCP handlers first
             if let Some((handler, resource_id)) = domain_router::extract_mcp_resource_id(source) {
-                return self.route_via_mcp(handler, &resource_id).await;
+                return self.route_via_mcp(&handler, &resource_id).await;
             }
             self.route_url(source).await
         } else if Path::new(source).exists() {
