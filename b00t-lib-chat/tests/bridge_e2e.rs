@@ -13,8 +13,8 @@ mod phase3_bridge_e2e {
     async fn nats_client() -> ChatClient {
         ChatClient::nats(
             Some("nats://localhost:4222".into()),
-            Some("b00t".into()),
-            Some("b00t-hive-lan".into()),
+            std::env::var("B00T_HIVE_NATS_USER").ok(),
+            std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
         )
         .expect("create NATS client")
     }
