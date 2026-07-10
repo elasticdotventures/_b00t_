@@ -1,0 +1,188 @@
+[b00t]
+name = "b00t-finetune-qwen36"
+type = "pipeline"
+version = "0.1.0"
+hint = "Fine-tune b00t's own Qwen3.6-35B-A3B on delegation/CMDB behavior — RunPod A100, unsloth QLoRA"
+
+[b00t.pipeline]
+description = """
+Fine-tune Qwen3.6-35B-A3B on b00t-specific behavior patterns using unsloth QLoRA on RunPod.
+The resulting adapter learns: CMDB hygiene (datum writes > raw files), guard compliance
+(podman > systemd), delegation patterns (agent delegate > monolithic), output contracts
+(PASS/FAIL format), and laconic non-obsequious communication style.
+"""
+base_model = "unsloth/Qwen3.6-35B-A3B"
+adapter_output = "b00t-sm0l-adapter"
+target_model = "b00t-sm0l"
+
+# ── Dataset ───────────────────────────────────────────────────────────────────
+[b00t.pipeline.dataset]
+description = """
+Supervised fine-tuning dataset built from b00t documentation + task scenarios.
+The model learns b00t behavior by seeing correct responses to representative tasks.
+"""
+source_docs = [
+    ".b00t/delegation-evidence.jsonl",      # real agent-task pairs
+    "_b00t_/playbook.skill.tomllm",         # canonical b00t idioms
+    "_b00t_/delegate.skill.tomllm",         # task planner + delegation protocol
+    "_b00t_/hive-guards.hive.toml",         # command guards (pip→uv, docker→podman, etc.)
+    "_b00t_/specialist.role.toml",          # specialist role definition
+    "AGENTS/--role=pragmatic-hacker.md",     # non-obsequious, fastidious, ruthless rationality
+    "SOUL.tomllm",                           # org culture, authorization, pre-approved actions
+    "_b00t_/meta-harness.skill.tomllm",     # OODA loop, blended scoring, promotion rules
+]
+
+[b00t.pipeline.dataset.format]
+type = "chatml"
+schema = [
+    { role = "system", content = "<playbook + delegate + guards context — teaches b00t idioms>" },
+    { role = "user", content = "<representative task or question>" },
+    { role = "assistant", content = "<correct b00t-compliant response demonstrating CMDB hygiene, guard compliance, delegation patterns, laconic non-obsequious style>" },
+]
+
+[b00t.pipeline.dataset.scenarios]
+categories = [
+    # Guard compliance (20%)
+    { type = "guard_violation", example = "User: install flask with pip\nAssistant: 🦨 use uv pip install flask (faster, reproducible, respects .python-version)" },
+    { type = "systemctl_redirect", example = "User: start nginx with systemctl\nAssistant: ⚠️ use podman kube play _b00t_/k8s/nginx.pod.yml — systemctl is deprecated for service management" },
+
+    # CMDB hygiene (20%)
+    { type = "datum_write", example = "User: read the delegate skill file\nAssistant: b00t learn delegate — enriches with metadata, tail-maps, authorization graph. Never raw file read." },
+    { type = "task_tracking", example = "User: add a task\nAssistant: b00t task add \"fix: description\" — taskmaster-ai is PURGED" },
+
+    # Delegation patterns (20%)
+    { type = "task_decomposition", example = "User: implement feature X with tests\nAssistant: Decompose: 1) sm0l writes tests, 2) ch0nky implements, 3) sm0l verifies. b00t agent delegate --worker=pi-001 --task-id=N." },
+    { type = "tier_routing", example = "User: audit security of this module\nAssistant: frontier tier — delegate to CodeReviewer specialist via b00t agent invoke opencode --role reviewer" },
+
+    # Output contracts (20%)
+    { type = "sm0l_output", example = "User: check if tests pass\nAssistant: PASS: test_delegate_skill — 20/20 passed at test_meta_harness.py:244" },
+    { type = "ch0nky_output", example = "User: implement dark mode toggle\nAssistant: diff: +45/-12 lines in game-play/src/components/DarkModeToggle.vue. tests: PASS" },
+
+    # Style and voice (20%)
+    { type = "laconic", example = "User: can you explain how b00t works?\nAssistant: b00t learn playbook — 200 token baseline. b00t_discover(query) for specific capability." },
+    { type = "non_obsequious", example = "User: great work, you're amazing!\nAssistant: Not relevant. Next task?" },
+]
+
+size_estimate = "500-1000 examples"
+output_format = "jsonl (chatml)"
+hf_dataset = "app4dog/b00t-training-data"
+
+# ── RunPod configuration ──────────────────────────────────────────────────────
+[b00t.pipeline.runpod]
+gpu_type = "NVIDIA A100-SXM4-80GB"
+gpu_count = 1
+container_image = "runpod/pytorch:2.4.0-py3.11-cuda12.4.0-devel-ubuntu22.04"
+disk_gb = 100
+env = [
+    "HF_TOKEN=${HF_TOKEN}",
+    "WANDB_PROJECT=b00t-finetune",
+    "UNSLOTH_ENABLE_FP8=1",
+]
+
+# ── Training configuration (unsloth QLoRA) ────────────────────────────────────
+[b00t.pipeline.training]
+framework = "unsloth"
+method = "qlora"
+r = 16                    # LoRA rank
+alpha = 32                # LoRA alpha  
+target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+learning_rate = 2e-4
+epochs = 3
+batch_size = 2
+gradient_accumulation_steps = 4
+max_seq_length = 4096
+load_in_4bit = true
+use_rslora = true          # rank-stabilized LoRA
+use_gradient_checkpointing = true
+
+# ── Training script (inline, deployed to RunPod) ────────────────────────────
+[b00t.pipeline.script]
+description = "QLoRA fine-tuning script — runs on RunPod A100, pushes adapter to HF Hub"
+entrypoint = """
+import torch
+from unsloth import FastLanguageModel
+from datasets import load_dataset
+from transformers import TrainingArguments
+from trl import SFTTrainer
+import os
+
+# Load model in 4-bit
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name="unsloth/Qwen3.6-35B-A3B",
+    max_seq_length=4096,
+    load_in_4bit=True,
+    dtype=torch.bfloat16,
+)
+
+# Apply QLoRA
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16, alpha=32,
+    target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
+    use_rslora=True,
+    use_gradient_checkpointing=True,
+)
+
+# Load b00t dataset from HF Hub
+dataset = load_dataset("app4dog/b00t-delegation-data", split="train")
+
+trainer = SFTTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=dataset,
+    dataset_text_field="text",
+    max_seq_length=4096,
+    args=TrainingArguments(
+        output_dir="/tmp/b00t-adapter",
+        num_train_epochs=3,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        learning_rate=2e-4,
+        fp16=not torch.cuda.is_bf16_supported(),
+        bf16=torch.cuda.is_bf16_supported(),
+        logging_steps=10,
+        save_strategy="epoch",
+        report_to="wandb",
+    ),
+)
+
+trainer.train()
+
+# Push adapter to HF Hub
+model.push_to_hub("app4dog/b00t-sm0l-adapter", token=os.environ["HF_TOKEN"])
+print("Adapter pushed to app4dog/b00t-sm0l-adapter")
+"""
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+[b00t.pipeline.deploy]
+description = "After fine-tuning, deploy adapter to local inference"
+steps = [
+    "1. Pull adapter: hf download app4dog/b00t-sm0l-adapter",
+    "2. Load adapter with llama.cpp: add --lora /path/to/adapter to serve command",
+    "3. Verify: curl test with b00t-specific prompts",
+    "4. Update OpenCode config: qwen36-local/b00t-sm0l → qwen36-local/b00t-finetuned",
+]
+
+# ── Usage ──────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Prepare dataset from delegation evidence"
+command = "b00t-cli finetune dataset --source .b00t/delegation-evidence.jsonl --output b00t-training-data.jsonl"
+
+[[b00t.usage]]
+description = "Launch fine-tuning job on RunPod"
+command = "b00t-cli finetune launch --pipeline b00t-finetune-qwen36 --provider runpod --gpu A100-SXM4-80GB"
+
+[[b00t.usage]]
+description = "Check training status"
+command = "b00t-cli finetune status --pipeline b00t-finetune-qwen36"
+
+[[b00t.usage]]
+description = "Pull and deploy trained adapter"
+command = "b00t-cli finetune deploy --pipeline b00t-finetune-qwen36 --target b00t-ch0nky"
+
+# b00t:map v1
+# summary: Fine-tune Qwen3.6-35B-A3B on b00t delegation/CMDB behavior — RunPod A100, unsloth QLoRA, HF Hub deployment
+# tags: finetune, qwen36, a3b, unsloth, qlora, runpod, a100, adapter, b00t, delegation, cmdb
+# tier: ch0nky
+# cmds: b00t-cli finetune launch --pipeline b00t-finetune-qwen36 --provider runpod
+# complexity: 7
