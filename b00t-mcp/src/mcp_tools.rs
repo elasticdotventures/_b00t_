@@ -609,7 +609,36 @@ pub struct AgentNotifyCommand {
     pub agents: Option<String>,
 }
 
-impl_mcp_tool!(AgentNotifyCommand, "agent_notify", ["agent", "notify"]);
+impl crate::clap_reflection::McpReflection for AgentNotifyCommand {
+    fn mcp_tool_name() -> String { "agent_notify".to_string() }
+    fn command_path() -> Vec<String> { vec!["agent".to_string(), "notify".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentNotifyCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::{ChatClient, NotificationMessage};
+        use serde_json;
+
+        let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp");
+        let event_type = params.get("event_type").and_then(|v| v.as_str()).unwrap_or("notification");
+        let details = params.get("details")
+            .map(|v| v.clone())
+            .unwrap_or(serde_json::Value::Null);
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = ChatClient::nats(None, None, None)
+                .map_err(|e| anyhow::anyhow!("Failed to create NATS client: {}", e))?;
+
+            let notification = NotificationMessage::new(source, event_type, details);
+
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to publish notification: {}", e))?;
+
+            Ok(format!("Notification published: {}.{}", notification.source, notification.event_type))
+        })
+    }
+}
 
 /// MCP command for capability requests
 #[derive(Parser, Clone)]
