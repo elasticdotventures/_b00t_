@@ -17,6 +17,23 @@ pub enum TriggerKind {
     Event,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum TimerSpec {
+    Interval { seconds: u64 },
+    Cron { expr: String },
+}
+
+impl TimerSpec {
+    pub fn interval_secs(seconds: u64) -> Self {
+        Self::Interval { seconds }
+    }
+
+    pub fn cron(expr: impl Into<String>) -> Self {
+        Self::Cron { expr: expr.into() }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ConditionOp {
@@ -94,6 +111,8 @@ pub struct AssignmentRule {
     pub name: String,
     pub trigger: TriggerKind,
     pub subject: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timer_spec: Option<TimerSpec>,
     pub condition: Option<Condition>,
     pub action: TaskTemplate,
     pub enabled: bool,
@@ -115,6 +134,7 @@ impl AssignmentRule {
             name: name.into(),
             trigger,
             subject: subject.into(),
+            timer_spec: None,
             condition: None,
             action,
             enabled: true,
@@ -122,6 +142,12 @@ impl AssignmentRule {
             created_at: Utc::now(),
             last_triggered: None,
         }
+    }
+
+    pub fn with_timer(mut self, spec: TimerSpec) -> Self {
+        self.trigger = TriggerKind::Timer;
+        self.timer_spec = Some(spec);
+        self
     }
 
     pub fn with_condition(mut self, condition: Condition) -> Self {
@@ -136,6 +162,9 @@ impl AssignmentRule {
 
     pub fn matches(&self, notification: &NotificationMessage) -> bool {
         if !self.enabled {
+            return false;
+        }
+        if self.trigger != TriggerKind::Event {
             return false;
         }
         let notif_subject = notification.subject();
@@ -251,24 +280,33 @@ impl AssignmentEngine {
     }
 
     pub async fn start(&self) -> ChatResult<()> {
+        self.start_event_loop().await?;
+        self.start_timer_loops().await?;
+        Ok(())
+    }
+
+    async fn start_event_loop(&self) -> ChatResult<()> {
         let mut rx = self.transport.subscribe_notifications("b00t.notify.>").await?;
         let rules = self.rules.clone();
         let transport = self.transport.clone();
 
         let handle = tokio::spawn(async move {
-            info!("AssignmentEngine started, listening on b00t.notify.>");
+            info!("AssignmentEngine event loop started on b00t.notify.>");
             while let Some(notification) = rx.recv().await {
-                debug!("AssignmentEngine received: {}.{}", notification.source, notification.event_type);
+                debug!(
+                    "AssignmentEngine event: {}.{}",
+                    notification.source, notification.event_type
+                );
                 let mut rules = rules.write().await;
                 let matching: Vec<&mut AssignmentRule> = rules
                     .iter_mut()
-                    .filter(|r| r.matches(&notification) && r.enabled)
+                    .filter(|r| r.trigger == TriggerKind::Event && r.matches(&notification) && r.enabled)
                     .collect();
 
                 for rule in matching {
                     let task = rule.build_task(&notification);
                     info!(
-                        "AssignmentEngine: rule '{}' matched, dispatching task {}",
+                        "AssignmentEngine: event rule '{}' matched, dispatching task {}",
                         rule.name, task.task_id
                     );
                     if let Err(e) = transport.send_task(&task).await {
@@ -281,11 +319,93 @@ impl AssignmentEngine {
                     }
                 }
             }
-            warn!("AssignmentEngine notification stream ended");
+            warn!("AssignmentEngine event loop ended");
         });
 
         let mut sub = self.active_subscription.lock().await;
         *sub = Some(handle);
+        Ok(())
+    }
+
+    async fn start_timer_loops(&self) -> ChatResult<()> {
+        let rules = self.rules.read().await;
+        let timer_rules: Vec<AssignmentRule> = rules
+            .iter()
+            .filter(|r| r.trigger == TriggerKind::Timer && r.timer_spec.is_some())
+            .cloned()
+            .collect();
+
+        let transport = self.transport.clone();
+        let rules_arc = self.rules.clone();
+        let mut timer_handles = self.timer_handles.lock().await;
+
+        for rule in timer_rules {
+            let duration_secs = match &rule.timer_spec {
+                Some(TimerSpec::Interval { seconds }) => *seconds,
+                _ => continue,
+            };
+            let rule_id = rule.id.clone();
+            let rule_name = rule.name.clone();
+            let action = rule.action.clone();
+            let repeat = rule.repeat;
+            let transport = transport.clone();
+            let rules = rules_arc.clone();
+
+            let handle = tokio::spawn(async move {
+                let synthetic_notification = NotificationMessage::new(
+                    "timer",
+                    rule_id.clone(),
+                    serde_json::json!({"rule": rule_name.clone()}),
+                );
+
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(duration_secs)).await;
+
+                    let task = TaskMessage {
+                        task_id: uuid::Uuid::new_v4().to_string(),
+                        action: action.action.clone(),
+                        payload: action.render(&synthetic_notification),
+                        from_agent: "assignment-engine-timer".to_string(),
+                        to_agent: action.to_agent.clone(),
+                        deadline: None,
+                        priority: "normal".to_string(),
+                        timestamp: Utc::now(),
+                    };
+
+                    info!(
+                        "AssignmentEngine: timer rule '{}' fired, dispatching task {}",
+                        rule_name, task.task_id
+                    );
+
+                    if let Err(e) = transport.send_task(&task).await {
+                        warn!("AssignmentEngine: timer task dispatch failed: {}", e);
+                        continue;
+                    }
+
+                    {
+                        let mut rules = rules.write().await;
+                        if let Some(rule) = rules.iter_mut().find(|r| r.id == rule_id) {
+                            rule.last_triggered = Some(Utc::now());
+                        }
+                    }
+
+                    if !repeat {
+                        let mut rules = rules.write().await;
+                        if let Some(rule) = rules.iter_mut().find(|r| r.id == rule_id) {
+                            rule.enabled = false;
+                        }
+                        break;
+                    }
+                }
+            });
+
+            timer_handles.insert(rule.id.clone(), handle);
+            info!(
+                "AssignmentEngine: timer '{}' started (interval: {}s)",
+                rule.name, duration_secs
+            );
+        }
+
         Ok(())
     }
 
@@ -519,5 +639,60 @@ mod assignment_tests {
     fn test_get_payload_field_nested() {
         let payload = serde_json::json!({"email": {"from": "a@b.com", "subject": "hi"}});
         assert_eq!(get_payload_field(&payload, "email/from"), "a@b.com");
+    }
+
+    #[test]
+    fn test_timer_spec_interval() {
+        let spec = TimerSpec::interval_secs(300);
+        match spec {
+            TimerSpec::Interval { seconds } => assert_eq!(seconds, 300),
+            _ => panic!("expected Interval"),
+        }
+    }
+
+    #[test]
+    fn test_timer_spec_cron() {
+        let spec = TimerSpec::cron("0 9 * * 1-5");
+        match spec {
+            TimerSpec::Cron { ref expr } => assert_eq!(expr, "0 9 * * 1-5"),
+            _ => panic!("expected Cron"),
+        }
+    }
+
+    #[test]
+    fn test_rule_with_timer_builder() {
+        let rule = AssignmentRule::new(
+            "r1",
+            "daily summary",
+            TriggerKind::Event,
+            "unused",
+            TaskTemplate {
+                to_agent: "reporter".into(),
+                action: "summarize".into(),
+                payload_template: serde_json::json!({}),
+            },
+        )
+        .with_timer(TimerSpec::interval_secs(3600));
+
+        assert_eq!(rule.trigger, TriggerKind::Timer);
+        assert!(rule.timer_spec.is_some());
+    }
+
+    #[test]
+    fn test_timer_rule_matches_event_filter() {
+        let n = NotificationMessage::new("timer", "anything", serde_json::json!({}));
+        let rule = AssignmentRule::new(
+            "r1",
+            "timer rule",
+            TriggerKind::Timer,
+            "b00t.notify.>",
+            TaskTemplate {
+                to_agent: "bot".into(),
+                action: "act".into(),
+                payload_template: serde_json::json!({}),
+            },
+        )
+        .with_timer(TimerSpec::interval_secs(60));
+        assert!(!rule.matches(&n));
     }
 }

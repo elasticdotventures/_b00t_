@@ -43,7 +43,7 @@ pub mod transports;
 
 // pub use agent::{Agent, AgentConfig};  // 🤓 Disabled - needs chat-compatible refactor
 pub use assignment::{
-    AssignmentEngine, AssignmentRule, Condition, ConditionOp, TaskTemplate, TriggerKind,
+    AssignmentEngine, AssignmentRule, Condition, ConditionOp, TaskTemplate, TimerSpec, TriggerKind,
 };
 pub use bridge::{McpBridge, McpServerSpec};
 pub use client::ChatClient;

@@ -6,7 +6,7 @@
 mod phase2_assignment_e2e {
     use b00t_chat::{
         AssignmentEngine, AssignmentRule, ChatClient, Condition, ConditionOp, NotificationMessage,
-        TaskTemplate, TriggerKind,
+        TaskTemplate, TimerSpec, TriggerKind,
     };
     use serde_json::json;
     use std::time::Duration;
@@ -171,6 +171,45 @@ mod phase2_assignment_e2e {
         assert_eq!(task.to_agent, "indexer");
         assert_eq!(task.action, "index");
         assert!(task.payload["path"].as_str().unwrap().contains("/docs/readme.md"));
+
+        engine.stop().await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_phase2_timer_rule_dispatches_task() {
+        let client = nats_client().await;
+
+        let rule = AssignmentRule::new(
+            "heartbeat",
+            "Heartbeat every 2 seconds",
+            TriggerKind::Timer,
+            "unused-for-timer",
+            TaskTemplate {
+                to_agent: "monitor".into(),
+                action: "heartbeat".into(),
+                payload_template: json!({"type": "timer", "rule": "heartbeat"}),
+            },
+        )
+        .with_timer(TimerSpec::interval_secs(2));
+
+        let engine = AssignmentEngine::new(client.transport().clone());
+        engine.add_rule(rule).await.expect("add timer rule");
+        engine.start().await.expect("start engine");
+
+        let mut task_rx = client
+            .subscribe_tasks("monitor")
+            .await
+            .expect("subscribe tasks");
+
+        let task = tokio::time::timeout(std::time::Duration::from_secs(8), task_rx.recv())
+            .await
+            .expect("timeout")
+            .expect("should receive timer task");
+
+        assert_eq!(task.to_agent, "monitor");
+        assert_eq!(task.action, "heartbeat");
+        assert_eq!(task.payload["type"], "timer");
 
         engine.stop().await;
     }
