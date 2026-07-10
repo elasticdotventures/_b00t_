@@ -1266,22 +1266,22 @@ impl_mcp_tool!(
 /// MCP command for creating a cron-based timer assignment
 #[derive(Parser, Clone)]
 pub struct B00tTimerCommand {
-    #[arg(help = "Rule name")]
+    #[arg(help = "Rule name (e.g., 'daily-summary')")]
     pub name: String,
 
-    #[arg(help = "Cron expression (e.g., '0 9 * * 1-5') or interval seconds (e.g., '3600')")]
+    #[arg(help = "Cron expression (e.g., '0 9 * * 1-5' for weekdays at 9am, '*/5 * * * *' for every 5 minutes) or interval seconds (e.g., '3600' for hourly)")]
     pub schedule: String,
 
-    #[arg(help = "Target agent to dispatch task to")]
+    #[arg(help = "Target agent ID to dispatch the task to")]
     pub to_agent: String,
 
-    #[arg(help = "Action name to dispatch")]
+    #[arg(help = "Action name to dispatch (e.g., 'summarize', 'check')")]
     pub action: String,
 
-    #[arg(long, help = "Additional payload (JSON)")]
+    #[arg(long, help = "Additional payload data as JSON")]
     pub payload: Option<String>,
 
-    #[arg(long, help = "One-shot (fire once then disable)")]
+    #[arg(long, help = "Fire once then disable (default: repeat)")]
     pub once: bool,
 }
 
@@ -1327,8 +1327,12 @@ impl crate::clap_reflection::McpExecutor for B00tTimerCommand {
             client.publish_notification(&notification).await
                 .map_err(|e| anyhow::anyhow!("Failed to create timer: {}", e))?;
 
-            Ok(format!("Timer '{}' created ({}: {}, target: {}, action: {})",
-                name, timer_type, schedule, to_agent, action))
+            Ok(format!(
+                "Timer '{}' created ({}: {}, target: {}, action: {})\n\
+                 The timer will publish tasks on schedule to b00t.tasks.{}. \n\
+                 Monitor with: b00t_agent_wait --subject={}",
+                name, timer_type, schedule, to_agent, action, to_agent, to_agent
+            ))
         })
     }
 }
@@ -1524,7 +1528,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
     ToolCatalogEntry { name: "app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
     ToolCatalogEntry { name: "app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
-    ToolCatalogEntry { name: "b00t_timer_create",   description: "Create a cron/interval timer assignment", subcommand: "b00t timer create" },
+    ToolCatalogEntry { name: "b00t_timer_create",   description: "Create a cron or interval timer that dispatches tasks on schedule. Supports 7-field cron expressions (e.g., '0 9 * * 1-5') and simple interval seconds (e.g., '3600'). Requires --name, --schedule, --to_agent, --action. Optional --once for one-shot, --payload for JSON data.", subcommand: "b00t timer create" },
     ToolCatalogEntry { name: "viz",               description: "Generate viz graph for a datum (mermaid/json/ascii/svg)", subcommand: "viz entangle" },
 ];
 
