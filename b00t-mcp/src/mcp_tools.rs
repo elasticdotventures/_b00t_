@@ -863,12 +863,18 @@ impl crate::clap_reflection::McpExecutor for AgentCapabilityCommand {
             loop {
                 match tokio::time::timeout(deadline, rx.recv()).await {
                     Ok(Some(notif)) => {
+                        if notif.source == "capability" && notif.event_type == "query" {
+                            continue; // skip own query echo
+                        }
                         responses.push(serde_json::json!({
                             "source": notif.source,
                             "event": notif.event_type,
+                            "timestamp": notif.timestamp.to_rfc3339(),
+                            "payload": notif.payload,
                         }));
                     }
-                    _ => break,
+                    Ok(None) => break,
+                    Err(_) => break,
                 }
             }
 
@@ -1256,6 +1262,76 @@ impl_mcp_tool!(
 
 // Custom implementations for ACP hive tools
 // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
+
+/// MCP command for creating a cron-based timer assignment
+#[derive(Parser, Clone)]
+pub struct B00tTimerCommand {
+    #[arg(help = "Rule name")]
+    pub name: String,
+
+    #[arg(help = "Cron expression (e.g., '0 9 * * 1-5') or interval seconds (e.g., '3600')")]
+    pub schedule: String,
+
+    #[arg(help = "Target agent to dispatch task to")]
+    pub to_agent: String,
+
+    #[arg(help = "Action name to dispatch")]
+    pub action: String,
+
+    #[arg(long, help = "Additional payload (JSON)")]
+    pub payload: Option<String>,
+
+    #[arg(long, help = "One-shot (fire once then disable)")]
+    pub once: bool,
+}
+
+impl crate::clap_reflection::McpReflection for B00tTimerCommand {
+    fn mcp_tool_name() -> String { "b00t_timer_create".to_string() }
+    fn command_path() -> Vec<String> { vec!["b00t".to_string(), "timer".to_string(), "create".to_string()] }
+}
+
+impl crate::clap_reflection::McpExecutor for B00tTimerCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        use b00t_chat::NotificationMessage;
+
+        let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("timer");
+        let schedule = params.get("schedule").and_then(|v| v.as_str()).unwrap_or("60");
+        let to_agent = params.get("to_agent").and_then(|v| v.as_str()).unwrap_or("default");
+        let action = params.get("action").and_then(|v| v.as_str()).unwrap_or("timer-tick");
+        let once = params.get("once").and_then(|v| v.as_bool()).unwrap_or(false);
+        let payload_str = params.get("payload")
+            .and_then(|v| v.as_str())
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+
+        let is_cron = schedule.contains('*') || schedule.contains('/');
+        let timer_type = if is_cron { "cron" } else { "interval" };
+
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(async {
+            let client = get_nats_client().await?;
+
+            let notification = NotificationMessage::new(
+                "timer",
+                "create",
+                serde_json::json!({
+                    "name": name,
+                    "schedule": schedule,
+                    "to_agent": to_agent,
+                    "action": action,
+                    "timer_type": timer_type,
+                    "once": once,
+                    "payload": payload_str,
+                }),
+            );
+
+            client.publish_notification(&notification).await
+                .map_err(|e| anyhow::anyhow!("Failed to create timer: {}", e))?;
+
+            Ok(format!("Timer '{}' created ({}: {}, target: {}, action: {})",
+                name, timer_type, schedule, to_agent, action))
+        })
+    }
+}
 // use crate::acp_tools::*;
 
 /// Tutorial status command — show tutorial progression for current agent role
@@ -1448,6 +1524,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
     ToolCatalogEntry { name: "app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
     ToolCatalogEntry { name: "app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
+    ToolCatalogEntry { name: "b00t_timer_create",   description: "Create a cron/interval timer assignment", subcommand: "b00t timer create" },
     ToolCatalogEntry { name: "viz",               description: "Generate viz graph for a datum (mermaid/json/ascii/svg)", subcommand: "viz entangle" },
 ];
 
@@ -2109,6 +2186,7 @@ impl McpExecutor for ExecuteCommand {
 pub fn create_code_mode_registry() -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
     builder
+        .register::<B00tTimerCommand>()
         .register::<SearchCommand>()
         .register::<ExecuteCommand>();
     builder.build()
