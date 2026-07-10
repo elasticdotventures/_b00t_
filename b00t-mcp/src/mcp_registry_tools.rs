@@ -132,51 +132,8 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
                 "⚠️  Failed to discover tools from {}: {}",
                 id_for_response, e
             );
-    }
-}
-
-/// Convert an McpServerRegistration to a McpServerSpec for bridge spawning.
-pub fn registration_to_spec(reg: &McpServerRegistration) -> b00t_chat::McpServerSpec {
-    b00t_chat::McpServerSpec {
-        id: reg.id.clone(),
-        label: reg.name.clone(),
-        command: reg.config.command.clone(),
-        args: reg.config.args.clone(),
-        env: reg.config.env.clone(),
-        cwd: reg.config.cwd.clone(),
-    }
-}
-
-/// Spawn McpBridge instances for all stdio-based servers in the registry.
-/// Bridges connect to MCP servers, read notifications, and publish to NATS.
-pub async fn spawn_registry_bridges(
-    registry: &McpRegistry,
-    transport: &b00t_chat::ChatTransport,
-) -> Result<Vec<b00t_chat::McpBridge>> {
-    let servers = registry.list();
-    let mut bridges = Vec::new();
-
-    for server in servers {
-        if !matches!(server.config.transport, ServerTransport::Stdio) {
-            continue;
-        }
-
-        let spec = registration_to_spec(&server);
-        let mut bridge = b00t_chat::McpBridge::new(spec);
-        match bridge.start(transport).await {
-            Ok(()) => {
-                info!("Bridge started for {}", server.id);
-                bridges.push(bridge);
-            }
-            Err(e) => {
-                error!("Failed to start bridge for {}: {}", server.id, e);
-            }
         }
     }
-
-    info!("Spawned {} bridges from registry", bridges.len());
-    Ok(bridges)
-}
 
     let response = serde_json::json!({
         "success": true,
