@@ -42,6 +42,74 @@ impl ChatMessage {
     }
 }
 
+pub const NOTIFY_SUBJECT_PREFIX: &str = "b00t.notify";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationMessage {
+    pub source: String,
+    pub event_type: String,
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub payload: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
+    pub timestamp: DateTime<Utc>,
+}
+
+impl NotificationMessage {
+    pub fn new(source: impl Into<String>, event_type: impl Into<String>, payload: serde_json::Value) -> Self {
+        Self {
+            source: source.into(),
+            event_type: event_type.into(),
+            payload,
+            correlation_id: None,
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn with_correlation(mut self, id: impl Into<String>) -> Self {
+        self.correlation_id = Some(id.into());
+        self
+    }
+
+    pub fn subject(&self) -> String {
+        format!("{}.{}.{}", NOTIFY_SUBJECT_PREFIX, self.source, self.event_type)
+    }
+
+    pub fn wildcard_subject() -> &'static str {
+        "b00t.notify.>"
+    }
+
+    pub fn source_wildcard(source: &str) -> String {
+        format!("{}.{}.>", NOTIFY_SUBJECT_PREFIX, source)
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+
+    #[test]
+    fn test_notification_subject_convention() {
+        let n = NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
+        assert_eq!(n.subject(), "b00t.notify.gmail.new_email");
+    }
+
+    #[test]
+    fn test_notification_source_wildcard() {
+        assert_eq!(NotificationMessage::source_wildcard("gmail"), "b00t.notify.gmail.>");
+    }
+
+    #[test]
+    fn test_notification_json_roundtrip() {
+        let n = NotificationMessage::new("slack", "new_message", serde_json::json!({"channel": "#dev"}));
+        let json = serde_json::to_string(&n).unwrap();
+        let parsed: NotificationMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.source, "slack");
+        assert_eq!(parsed.event_type, "new_message");
+        assert_eq!(parsed.payload["channel"], "#dev");
+    }
+}
+
 /// ACP Task message — agent-to-agent work delegation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskMessage {
