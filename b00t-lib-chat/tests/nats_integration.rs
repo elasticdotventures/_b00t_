@@ -1,6 +1,7 @@
 //! Quick integration test: NATS chat + task dispatch against local NATS server.
 //! Run: cd ~/.b00t && cargo test -p b00t-chat -- --ignored
-//! Requires: NATS server running on localhost:4222 (just nats-start)
+//! Requires: NATS server running on localhost:4222 (just nats-start).
+//! Set B00T_HIVE_NATS_USER/B00T_HIVE_NATS_PASSWORD if the server requires auth.
 
 #[cfg(test)]
 mod nats_integration {
@@ -12,8 +13,8 @@ mod nats_integration {
     async fn test_nats_chat_send() {
         let client = ChatClient::nats(
             Some("nats://localhost:4222".into()),
-            Some("b00t".into()),
-            Some("b00t-hive-lan".into()),
+            std::env::var("B00T_HIVE_NATS_USER").ok(),
+            std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
         )
         .expect("create NATS client");
 
@@ -27,8 +28,8 @@ mod nats_integration {
     async fn test_nats_task_dispatch() {
         let client = ChatClient::nats(
             Some("nats://localhost:4222".into()),
-            Some("b00t".into()),
-            Some("b00t-hive-lan".into()),
+            std::env::var("B00T_HIVE_NATS_USER").ok(),
+            std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
         )
         .expect("create NATS client");
 
@@ -49,8 +50,8 @@ mod nats_integration {
     async fn test_nats_task_send_receive() {
         let client = ChatClient::nats(
             Some("nats://localhost:4222".into()),
-            Some("b00t".into()),
-            Some("b00t-hive-lan".into()),
+            std::env::var("B00T_HIVE_NATS_USER").ok(),
+            std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
         )
         .expect("create NATS client");
 

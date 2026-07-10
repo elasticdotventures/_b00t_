@@ -20,6 +20,7 @@ use b00t_mcp::{
 /// Transport mode for the MCP server.
 /// FOL-correct: explicit enumeration replaces implicit boolean triples.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 enum TransportMode {
     Stdio,
     Http,
@@ -27,6 +28,7 @@ enum TransportMode {
 }
 
 impl TransportMode {
+    #[allow(dead_code)]
     fn from_matches(stdio: bool, http: bool, mode_str: Option<&String>, llm: bool) -> Self {
         if llm {
             return TransportMode::Llm;
@@ -193,7 +195,7 @@ async fn main() -> Result<()> {
         }
 
         let auth_provider = server_llm::AuthProvider::from_env_or_default();
-        let is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
+        let _is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
 
         match auth_provider {
             server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),

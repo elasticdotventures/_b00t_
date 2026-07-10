@@ -121,3 +121,12 @@
 [submodule "vendor/aohp"]
 	path = vendor/aohp
 	url = https://github.com/PromptExecution/aohp-b00t.git
+[submodule "vendor/pyinfra"]
+	path = vendor/pyinfra
+	url = https://github.com/pyinfra-dev/pyinfra
+[submodule "vendor/runpod-sdk"]
+	path = vendor/runpod-sdk
+	url = https://github.com/PromptExecution/runpod-sdk.git
+[submodule "vendor/serena"]
+	path = vendor/serena
+	url = https://github.com/oraios/serena

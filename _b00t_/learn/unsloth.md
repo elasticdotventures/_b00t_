@@ -3,3 +3,6 @@ YAML `2e-4` loads as string in older PyYAML; always cast config numeric values: 
 
 ---
 OOM training 0.5B alongside ch0nky: use batch=1 grad_accum=16 max_seq=512 (not batch=4 max_seq=2048)
+
+---
+compile-cache env: UNSLOTH_COMPILE_LOCATION not UNSLOTH_CACHE_DIR; use /tmp path

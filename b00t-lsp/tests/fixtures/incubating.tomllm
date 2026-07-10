@@ -1,0 +1,5 @@
+incubating = ["mystery_incubating"]
+
+# b00t:map v1
+# summary: incubating type list fixture (mirrors _b00t_/incubating.tomllm)
+# tags: fixture, incubating

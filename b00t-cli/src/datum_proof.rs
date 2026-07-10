@@ -399,6 +399,7 @@ impl BootDatum {
             Some(DatumType::Schema)      => Ok(()),
             Some(DatumType::Training)    => Ok(()),
             Some(DatumType::Vendor)      => Ok(()),
+            Some(DatumType::Ooda)       => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }

@@ -1,0 +1,15 @@
+{
+  "comment": "Expected diagnostic counts per fixture when analyzed with the full fixture-dir index",
+  "cases": [
+    { "file": "good-datum.skill.tomllm", "errors": 0, "warnings": 0 },
+    { "file": "dep-a.cli.toml", "errors": 0, "warnings": 0 },
+    { "file": "dep-b.cli.toml", "errors": 0, "warnings": 0 },
+    { "file": "shadowed.config.toml", "errors": 0, "warnings": 1, "message_contains": "shadowed by" },
+    { "file": "shadowed.config.tomllmd", "errors": 0, "warnings": 0 },
+    { "file": "badtype.mystery.toml", "errors": 0, "warnings": 1, "message_contains": "unknown datum type 'flurble'" },
+    { "file": "incubated.thing.toml", "errors": 0, "warnings": 0 },
+    { "file": "incubating.tomllm", "errors": 0, "warnings": 0 },
+    { "file": "no-tailmap.skill.tomllm", "errors": 0, "warnings": 1, "message_contains": "tail-map" },
+    { "file": "broken.syntax.toml", "errors": 1, "warnings": 0, "message_contains": "TOML parse error" }
+  ]
+}

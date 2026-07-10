@@ -1,0 +1,53 @@
+[b00t]
+name = "kaizen"
+type = "skill"
+hint = "Continuous improvement — small compounding changes beat big rewrites"
+
+# ── salvaged content (was YAML frontmatter in a .toml — task #115) ──────────
+# 🤓 payload preserved VERBATIM below; distill to structured fields later (#98)
+# version: 1.0.0
+# tags:
+# - transferable
+# - improvement
+# - iteration
+# - retrospective
+# - compound
+# - incremental
+# - waste
+# - kaizen
+# tier: sm0l
+# complexity: 2
+# description: "Kaizen (\u6539\u5584): every process has waste; eliminate it incrementally."
+#
+# ## What
+# 
+# Kaizen (改善, Japanese for "continuous improvement") teaches that every process has waste and you should eliminate it incrementally. Apply after every task: what was slow? what caused errors? what would I do differently? The retrospective is not optional — skipping it is how technical debt compounds. In code, prefer small focused PRs over big rewrites. Each PR equals one improvement.
+# 
+# Measure before and after — if you cannot measure it, you cannot improve it. Three questions drive the practice: What worked? What didn't? What one thing changes next iteration?
+# 
+# ## When to Use
+# 
+# Use kaizen after every task, every PR, every sprint. Any time you hear "we will fix it later" is a signal that kaizen should be applied now.
+# 
+# ## How
+# 
+# 1. After each task, ask: what was slow? what caused errors? what would I do differently?
+# 2. Pick one improvement to implement immediately.
+# 3. Measure the impact of the change.
+# 4. Repeat next iteration.
+# 5. Beware the anti-pattern: deferring improvements with "we will fix it later."
+# 
+# <!-- b00t:map v1
+# summary: kaizen — continuous improvement via small compounding changes
+# tags: transferable, improvement, iteration, retrospective
+# tier: sm0l
+# cmds: b00t learn kaizen
+# complexity: 2
+# -->
+
+# b00t:map v1
+# summary: Continuous improvement — small compounding changes beat big rewrites (salvaged from YAML-frontmatter .toml)
+# tags: kaizen
+# tier: sm0l
+# cmds: b00t learn kaizen
+# complexity: 3

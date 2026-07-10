@@ -1,0 +1,4 @@
+[b00t]
+name = "moreutils"
+type = "apt"
+hint = "moreutils tool"

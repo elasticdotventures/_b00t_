@@ -1,0 +1,4 @@
+[b00t]
+name = "backup"
+type = "plan"
+hint = "Backup strategy and tooling for b00t workspace"

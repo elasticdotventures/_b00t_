@@ -5,7 +5,14 @@
 
 > **"Tell me what I'm running on, what tools are available, what I'm allowed to do, what goals I should optimize for, and where the boundaries are."**
 
-**b00t** is a context-aware agentic operating layer: tool discovery, version management, tribal knowledge, multi-agent coordination, and MCP integration — batteries included.
+**b00t** is a loop harness for agents. It bestows a fresh model with typed context, a
+compendium of skills, formal verification surfaces, and a playbook of low-cognitive-cost
+deterministic commands — so the expensive tokens go to *judgment*, not rediscovery.
+
+Design stance, MBSE-style: every capability is a **typed artifact** (a datum) with a schema,
+a lifecycle, a verifier, and an evidence trail. The model proposes; the type system,
+grammars, and solvers dispose. If the harness can check it, the model never gets to lie
+about it.
 
 ---
 
@@ -15,158 +22,173 @@
 curl -fsSL https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/install.sh | bash
 ```
 
-Downloads the binary from GitHub Releases and verifies its SHA256 checksum when possible. Supports Linux x86_64/aarch64/armv7 and macOS Intel/Apple Silicon.
+Downloads the binary from GitHub Releases and verifies its SHA256 checksum. Linux
+x86_64/aarch64/armv7, macOS Intel/Apple Silicon.
 
-**From crates.io:**
 ```bash
-cargo install b00t-cli
-```
-
-**From source:**
-```bash
-git clone https://github.com/elasticdotventures/_b00t_.git
-cd _b00t_ && cargo install --path b00t-cli
+cargo install b00t-cli          # from crates.io
+# or from source:
+git clone https://github.com/elasticdotventures/_b00t_.git && cd _b00t_ && cargo install --path b00t-cli
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🧠 The agent boot sequence
+
+A fresh agent runs four deterministic commands and is operational:
 
 ```bash
-b00t --version
-b00t status                        # check tool versions vs desired
-
-b00t cli check rust                # is rustc installed?
-b00t cli install uv                # install/upgrade to desired version
-b00t cli up                        # check all datums
-b00t cli up --yes                  # update all tools to desired versions
-
-b00t learn rust                    # load Rust dev context into agent session
-b00t learn docker                  # container orchestration knowledge
-
-b00t lfmf rust "PyO3: unset CONDA_PREFIX before cargo build to fix linker errors"
-b00t advice rust "PyO3"            # retrieve lessons for a tool+pattern
+b00t whoami                        # identity, role, session context, boundaries
+b00t blessing --manifest --role=X  # prerequisite graph → tool authorization manifest
+b00t learn <skill>                 # load exactly the blessings the task needs (context is finite)
+b00t task next                     # what to do; b00t task done <id> when verified
 ```
+
+Learning a skill datum unlocks the tools in its `unlocks` field. **No learning = no auth.**
+Skills discover by concept, not name — `b00t learn "constrained decoding"` finds
+`grammar-verify` via DWIW fanout (datum search + ontology graph adjacency, weighted).
 
 ---
 
-## 🤖 MCP Integration
+## 🧬 The type system is the operating system
 
-### Claude Code Plugin
-
-```bash
-# Load b00t plugin from local checkout (Claude Code --plugin-dir)
-claude --plugin-dir /path/to/_b00t_/.claude-plugin
-
-# Or install the b00t MCP server directly and let it surface skills
-b00t mcp install b00t-mcp claudecode   # registers b00t-mcp in Claude Code
-```
-
-Provides `/b00t` skill, context-aware tool dispatch, and all available b00t skills.
-Plugin manifest: `.claude-plugin/plugin.json` — deterministic MCP recipes at
-`.claude-plugin/recipes/{skills,mcp-servers}/*.json`
-(e.g. `skills/document-understanding.json` bundles `docling-mcp` + fetch tools).
-
-> 🤓 `/plugin marketplace add` does not exist in Claude Code CLI.
-> Use `claude --plugin-dir` for local plugin loading, or `b00t mcp install` for MCP-only.
-
-### Direct MCP Server
+Every tool, model, skill, role, gate, and lesson is a **datum**: TOML dialects
+(`.toml` < `.tomllm` < `.tomllmd`, rank-shadowed by key) with schema stanzas and a
+machine-readable tail-map. 22+ `DatumType` variants (cli, mcp, skill, ai, k8s, verifier…).
 
 ```bash
-b00t mcp install b00t claudecode   # Claude Code
-b00t mcp install b00t vscode       # VS Code
-b00t mcp list                      # list available MCP servers
+b00t ontology sparql --subject <X> --predicate all   # walk the triple graph
+b00t learn chalk-interner                            # DatumStore ⇄ Chalk Interner mapping
+just validate-datums                                 # CI gate over the whole datum tree
 ```
 
-50+ MCP tools exposed via `b00t-mcp` — `b00t_up`, `b00t_status`, `b00t_learn`, `b00t_lfmf`, `b00t_advice`, and more.
+**Datums are a language.** `b00t-lsp` (tower-lsp over `b00t-datum-core`) gives editors and
+agents diagnostics (parse spans, tail-map contract, rank shadowing, unknown types), hover,
+and cross-datum references (`depends_on`, `composes_with`). Tier-1 taplo support ships
+JSON Schemas generated from the same constants — schema and diagnostics cannot drift.
+Registered in serena's solidlsp, so symbolic code tools work *on the datum graph itself*.
 
 ---
 
-## 🐝 Hive Coordination
+## 🔬 Verification: LLM proposes, grammar constrains, Z3 disposes
+
+Structural hallucination is not discouraged — it is made **unrepresentable**.
 
 ```bash
-# Multi-agent mission coordination
-b00t acp hive create mission-id 3 "Build and deploy microservice" leader
-b00t acp hive join mission-id developer
-b00t acp hive sync mission-id 1    # barrier: wait for all agents at step 1
-b00t acp hive ready mission-id 2   # signal readiness for step 2
+b00t learn grammar-verify                      # the full pattern, with recipes
+echo '(assert (and (> x 0) (< x 0)))(check-sat)' | z3 -smt2 -in   # → unsat
 ```
+
+- **Decode-time constraints**: GBNF grammars (`_b00t_/b00t-verify.gbnf`) force claim-shaped
+  output through a verify call; JSON-Schema constraints derive from the consuming Rust type
+  (`schemars`) and stamp per-backend dialects (vLLM `guided_json`, llama-server
+  `json_schema`, OpenAI `response_format`) via one abstraction.
+- **Runtime verification**: the `verify` MCP tool routes SMT2 through Z3 (~50ms round-trip);
+  b00t-mcp's LLM proxy executes model-emitted verify tool-calls and **audits** grammar-shaped
+  claims — a hallucinated `sat` gets rewritten to the real verdict before the client sees it.
+- **Gates + evidence**: `_b00t_/gates/*.gate.toml` validate on commit; every PASS appends to
+  the evidence log; PASS evidence converts to verified training examples
+  (`just ai-finetune::evidence-train`).
 
 ---
 
-## 🔁 Next Loop Interface
+## 🧭 Cognitive tiers & the loop
 
-`b00t.sh` carries forward the useful Ralph/OODA loop lessons, but the standalone `b00t-wiggums` repo is sunset. The loop interface is now treated as a commodity execution surface, with higher-level research/orchestration living in `b00t.sh` and `karpathy/autoresearch`.
+Route work by complexity; compress ruthlessly at every boundary:
+
+| Tier | Models | Work | Output contract |
+|---|---|---|---|
+| `sm0l` | qwen3.6-A3B, haiku | tests, lint, classify, route | `PASS` or `FAIL: <5-line excerpt>` |
+| `ch0nky` | qwen3.6 local (vLLM/llamacpp) | implement, refactor, debug | diff + test result |
+| `frontier` | claude opus/sonnet | architecture, novel design | structured decision |
 
 ```bash
-# Run with default claude tool, 10 iterations
-bash b00t.sh
-
-# Configure via env or flags
-TOOL=mistralrs bash b00t.sh --max-iterations 5 --role executor
-bash b00t.sh --tool codex --sleep 1
+b00t-loop -n 10                    # ralph-style iteration loop
+b00t ooda run                      # typed Observe→Orient→Decide→Act pipeline nodes
+b00t hive activate=<profile>       # resource-gated system state (GPU exclusion groups)
 ```
 
-Tools: `claude`, `codex`, `amp`, `opencode`, `mistralrs` (local vLLM).
-Loop exits on `EXIT_SIGNAL=true` in LLM output, or `exit 75` (tempfail/restart) after max iterations.
+Knowledge flows both directions: `b00t lfmf <tool> "<lesson>"` memoizes tribal knowledge
+(salvage-first: malformed input degrades to a tagged lesson, never bail-and-discard;
+`b00t lfmf stats all` reports hit/salvage/miss telemetry). Lessons are **endurants** —
+temporal bugs go to `b00t task add "bug: ..."` instead.
 
 ---
 
-## 📦 Datums
+## 🔎 Semantic code ops (serena, c0re)
 
-Datums in `_b00t_/` declare tools with detect/install/desires/hint. b00t resolves DAG-ordered installs:
+Symbol-scoped reading and patching via LSP — measured **83–96% context savings** vs
+whole-file reads on this repo. Packaging ladder: **k8s > podman > host binary > uvx**
+(encapsulation bounds the reasoning surface).
 
 ```bash
-b00t cli detect fastmcp            # run datum detect script
-b00t cli desires rust              # show target version
-b00t cli install fastmcp           # install: python → uv → fastmcp (DAG-aware)
+podman build -t serena:latest vendor/serena/     # Containerfile — auditable surface
+kubectl apply -f _b00t_/k8s/serena.yaml          # b00t-serena namespace, live pod
+b00t mcp install serena claudecode               # datum → registry → client config
+scripts/serena-smoke.sh <launch-cmd...>          # same handshake drives every rung
 ```
+
+`find_symbol`, `find_referencing_symbols`, `replace_symbol_body`, `insert_after_symbol` —
+edits address the symbol graph, not line numbers, so they survive file drift.
 
 ---
 
-## 🧠 Session & Budget Management
+## 🤖 MCP integration
 
 ```bash
-b00t session init --budget 25.00 --time-limit 120 --agent "code-reviewer"
-b00t session status
-b00t checkpoint "completed feature X"
+# b00t-mcp: compile-time generated tools + exec/discover proxy
+claude mcp add b00t -- b00t-mcp --stdio
+b00t_discover("<keyword>")         # find the command   → b00t_exec("task list") runs it
+b00t_mcp_stack_load("serena")      # dynamic capability extension at runtime
+
+# OpenAI-compatible LLM gateway (b00t-server): soul-registry upstream discovery,
+# 🎂 cake budget hard gate, spotlight usage telemetry, agentic verify loop
+b00t-mcp --llm -p 3000
 ```
 
----
-
-## 🌐 Platform Support
-
-| Platform | Architecture | Status |
-|---|---|---|
-| Linux | x86_64 | ✅ |
-| Linux | aarch64 | ✅ |
-| Linux | armv7 | ✅ |
-| macOS | Intel | ✅ |
-| macOS | Apple Silicon | ✅ |
+Assimilate the outside world: `b00t grok assimilate -t <topic> --source-url <url> --b00tyverse`
+distills content to git-blob datums, registers vendor forks, and feeds the ontology.
 
 ---
+
+## 🐝 Hive coordination
+
+```bash
+b00t agent capability              # announce role + skills
+b00t agent discover --role=qa      # find peers
+b00t agent message / vote          # A2A messaging + consensus
+just compile-agent <role> 3 /tmp/agent.md && claude --agent /tmp/agent.md
+```
+
+Sub-agent output contract: compressed summaries only. Raw output never enters executive
+context.
+
+---
+
+## 🎯 Mission
+
+The convergence target: a **ch0nky model that speaks native b00t** — every workstream
+feeds one of three legs: training signal (evidence→train, transcript harvest),
+decode-time constraint (grammars/schemas), or tool surface (verify, serena, b00t-lsp).
+Don't train the model *or* evolve the harness — do both, with one shape.
+
+---
+
+## 🌐 Platform
+
+Linux x86_64/aarch64/armv7 · macOS Intel/AS · single-node k8s (k0s/k3s) friendly ·
+rootless podman (`--userns=keep-id`) · Python via `uv` only.
 
 ## 🛠 Development
 
 ```bash
-git clone https://github.com/elasticdotventures/_b00t_.git && cd _b00t_
-cargo build
-cargo test --workspace
-just -l                            # available recipes
-just release                       # dispatch GitHub release workflow
+cargo build --workspace
+cargo test -p b00t-cli --lib       # 927 tests
+just -l                            # recipe survey
+just validate-datums               # datum tree gate
 ```
-
-Release pipeline: `release.yml` (tag + GitHub Release) → `build-release.yml` (cross-platform binaries) → `publish-crates.yml` (crates.io).
-
----
 
 ## 📖 Docs
 
-- **[b00t Gospel](./.b00t.g0spell.md)** — philosophy and architecture
-- **[Agent Guide](./_b00t_/AGENT.md)** — agent operation protocol
-- **[CLAUDE.md](./CLAUDE.md)** — LLM alignment instructions
-- **[Release Notes](./RELEASE.md)** — changelog
-
----
-
-*Issues / hive recruitment: [github.com/elasticdotventures/_b00t_/issues](https://github.com/elasticdotventures/_b00t_/issues)*
+`AGENTS.md` (agent protocol) · `CLAUDE.md` (harness boilerplate) · `_b00t_/` (the datum
+compendium — the real documentation) · `b00t learn <anything>` (ask the system itself).

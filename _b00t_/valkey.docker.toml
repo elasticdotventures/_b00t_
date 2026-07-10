@@ -1,0 +1,23 @@
+[b00t]
+name = "valkey"
+depends_on = ["b00t.cli"]
+type = "docker"
+hint = "Valkey 8 — open-source Redis-compatible in-memory store (BSD license). Replaces redis:7-alpine."
+desires = "8-alpine"
+
+image = "docker.io/valkey/valkey:8-alpine"
+docker_args = [
+    "-p", "6379:6379",
+    "-v", "valkey_data:/data"
+]
+
+[b00t.env]
+REDIS_URL = "redis://localhost:6379"
+VALKEY_PORT = "6379"
+
+# b00t:map v1
+# summary: Valkey 8 Alpine — Redis-compatible, BSD-licensed, podman container for b00t session state + agent message passing
+# tags: valkey, redis, session, message-passing, pubsub, podman
+# tier: sm0l
+# cmds: podman run -d --replace --name b00t-valkey -p 6379:6379 -v valkey_data:/data docker.io/valkey/valkey:8-alpine
+# complexity: 2

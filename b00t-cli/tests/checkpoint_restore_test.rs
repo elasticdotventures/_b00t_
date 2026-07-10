@@ -1,7 +1,6 @@
 // H2 integration test: b00t.sh restore_task_state reads task_state.json → populates tasks.json
 // Acceptance criteria from TODO-next.md:
 //   - write mock task_state.json, run restore, verify tasks.json populated
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 

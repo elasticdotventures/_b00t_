@@ -1,0 +1,27 @@
+[b00t]
+name = "plantuml-b00t"
+type = "stack"
+hint = "PlantUML Server + MCP + TOGAF container image build and publish via GitHub Actions"
+
+[stack]
+members = ["plantuml.mcp", "togaf-stack.stack"]
+source = "https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp"
+description = "Multi-stage Docker build combining PlantUML Server (Java), MCP Server (Node.js), and TOGAF templates in a single container. Published to ghcr.io via GitHub Actions on push to main."
+
+[stack.ci]
+platform = "github-actions"
+registry = "ghcr.io"
+image = "ghcr.io/promptexecution/plantuml-server--b00t--togaf--mcp"
+platforms = ["linux/amd64", "linux/arm64"]
+triggers = ["push:main", "tag:v*", "workflow_dispatch"]
+
+[stack.services]
+plantuml_server = "java -jar plantuml.jar :8080"
+mcp_server = "plantuml-mcp-server :3000"
+
+[stack.volumes]
+togaf_datasheets = "~/.b00t/data/togaf/datasheets:/togaf/datasheets:ro"
+
+[stack.health]
+endpoint = "http://localhost:8080/plantuml"
+test_command = "curl -X POST http://localhost:8080/plantuml/svg -d '@startuml\nAlice -> Bob: Hello\n@enduml'"

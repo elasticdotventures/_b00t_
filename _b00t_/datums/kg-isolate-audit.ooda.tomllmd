@@ -1,0 +1,75 @@
+[b00t]
+name = "kg-isolate-audit"
+type = "ooda"
+hint = "Find isolated nodes in the codebase knowledge graph — first-priority OODA loop"
+
+[b00t.ooda]
+schedule = "manual"
+description = "Scans the knowledge graph for nodes with zero adjacencies and classifies them for reconnection"
+
+# ── OBSERVE ────────────────────────────────────────────────────────────────
+[b00t.ooda.observe]
+engine = "codebase-memory"
+query = "MATCH (n) OPTIONAL MATCH (n)-[r]-() WITH n, count(r) AS deg WHERE deg = 0 RETURN labels(n)[0] AS label, count(*) AS isolate_count LIMIT 20"
+json_output = true
+
+# ── ORIENT ─────────────────────────────────────────────────────────────────
+[b00t.ooda.orient]
+layout = "cassowary"
+params = { base_radius = 150, force_ratio = 2.0 }
+# Trust-tier coloring: blessed nodes get gold border in cytoscape
+trust_colors = { blessed = "#fbbf24", awesome = "#94a3b8", local = "#475569" }
+
+# ── DECIDE ─────────────────────────────────────────────────────────────────
+[b00t.ooda.decide]
+classifier = "rules"
+
+[[b00t.ooda.decide.rules]]
+match_label = "Function"
+action = "trace_calls"
+reason = "Functions should trace caller/callee edges. Run trace_path(mode=calls) to populate."
+confidence = 0.8
+
+[[b00t.ooda.decide.rules]]
+match_label = "Route"
+action = "trace_routes"
+reason = "Routes should have HTTP_CALLS or ASYNC_CALLS edges. Run trace_path(mode=cross_service)."
+confidence = 0.9
+
+[[b00t.ooda.decide.rules]]
+match_label = "Module"
+action = "trace_imports"
+reason = "Modules should trace IMPORTS edges."
+confidence = 0.6
+
+[[b00t.ooda.decide.rules]]
+match_label = "Class"
+action = "trace_hierarchy"
+reason = "Classes should have DEFINES_METHOD and IMPLEMENTS edges."
+confidence = 0.7
+
+# ── ACT ────────────────────────────────────────────────────────────────────
+[[b00t.ooda.act]]
+on_classification = "trace_calls"
+command = """
+PROJECT=$(git rev-parse --show-toplevel 2>/dev/null | tr '/' '-');
+codebase-memory-mcp cli trace_path --project "$PROJECT" --function {node_name} --mode calls --depth 2
+"""
+
+[[b00t.ooda.act]]
+on_classification = "trace_routes"
+command = """
+PROJECT=$(git rev-parse --show-toplevel 2>/dev/null | tr '/' '-');
+codebase-memory-mcp cli trace_path --project "$PROJECT" --function {node_name} --mode cross_service --depth 2
+"""
+
+[[b00t.ooda.act]]
+on_default = "log"
+command = "echo '[ooda] flagged for review: {node_name} ({label})'"
+
+# b00t:map v1
+# summary: OODA loop — find and classify isolated knowledge graph nodes
+# tags: ooda, codebase-memory, knowledge-graph, isolate, audit
+# tier: ch0nky
+# cmds: b00t ooda run kg-isolate-audit
+# complexity: 5

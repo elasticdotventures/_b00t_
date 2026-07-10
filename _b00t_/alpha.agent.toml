@@ -1,5 +1,6 @@
 [b00t]
 name = "alpha"
+depends_on = ["epoch-progression.job"]
 type = "agent"
 hint = "Curious agent specializing in Rust & testing"
 

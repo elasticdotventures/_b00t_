@@ -1,0 +1,4 @@
+[b00t]
+name = "pachyderm"
+type = "docker"
+hint = "https://docs.pachyderm.com/latest/getting_started/local_installation/"

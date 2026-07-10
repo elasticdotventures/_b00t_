@@ -1,0 +1,40 @@
+[b00t]
+name = "sia"
+type = "skill"
+hint = "sia"
+
+# ── salvaged content (was YAML frontmatter in a .toml — task #115) ──────────
+# 🤓 payload preserved VERBATIM below; distill to structured fields later (#98)
+#
+# ## What
+# 
+# SIA (Self Improving AI) implements a 3-agent loop — Meta, Target, and Feedback — for autonomous benchmark improvement. The Meta agent designs task-specific agents, the Target agent executes tasks, and the Feedback agent reviews performance and drives improvement. Results include 56.6% LawBench gain, #1 on MLE-Bench, and 14x GPU kernel speedup. The three agent roles map to b00t patterns: Meta ≈ research-soul, Feedback ≈ lfmf + discriminator, and generations ≈ checkpoints.
+# 
+# Installation is via `pip install 'sia-agent[claude]'` or `pip install 'sia-agent[openhands]'`. Run with `sia run --task gpqa --max_gen 5 --run_id 1`. Visualize results with `sia web`. Custom tasks use `sia run --task_dir ./my-task --max_gen 5 --run_id 1`. MLE-Bench requires dataset preparation via `python -m sia.prepare_mlebench_dataset -c 'spaceship-titanic'`.
+# 
+# ## When to Use
+# 
+# Use SIA for autonomous task improvement, benchmark optimization, and any scenario requiring a feedback-driven self-improvement loop. It is particularly effective for ML benchmarks and agent optimization tasks.
+# 
+# ## How
+# 
+# 1. Install: `pip install 'sia-agent[claude]'`
+# 2. Run a task: `sia run --task gpqa --max_gen 5 --run_id 1`
+# 3. Visualize results: `sia web`
+# 4. For custom tasks: `sia run --task_dir ./my-task --max_gen 5 --run_id 1`
+# 5. For MLE-Bench: prepare dataset with `python -m sia.prepare_mlebench_dataset -c 'spaceship-titanic'`
+# 
+# <!-- b00t:map v1
+# summary: SIA Self Improving AI — Meta→Target→Feedback 3-agent loop for autonomous task improvement
+# tags: self-improving, ai, agents, python, ml, benchmark
+# tier: ch0nky
+# cmds: pip install 'sia-agent[claude]'; sia run --task gpqa --max_gen 3 --run_id 1
+# complexity: 6
+# -->
+
+# b00t:map v1
+# summary: sia (salvaged from YAML-frontmatter .toml)
+# tags: sia
+# tier: sm0l
+# cmds: b00t learn sia
+# complexity: 3

@@ -3,6 +3,8 @@ name = "css"
 type = "mcp"
 hint = "MCP server"
 
+entangled_cli = ["css.cli"]
+
 [[b00t.mcp.stdio]]
 transport = "stdio"
 args = ["-y", "css-mcp"]

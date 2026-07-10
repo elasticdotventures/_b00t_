@@ -19,8 +19,13 @@
 
 use anyhow::{Context as _, Result, bail};
 use clap::Parser;
+use b00t_c0re_lib::events::write_event;
+use b00t_c0re_lib::soul_dataframerr::{
+    AlarmAggregate, FrameCursor, SoulAlarm, SoulColumn, SoulDataFramerr,
+    SoulDataFramerrRegistry, SoulValue,
+};
 
-use crate::memory_provider::{FileMemory, MemoryProvider, detect_provider, soul_path};
+use crate::memory_provider::{FileMemory, MemoryProvider, active_soul_path, detect_provider, soul_path};
 use crate::soul_writer::{
     SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
 };
@@ -101,6 +106,136 @@ pub enum SoulCommands {
     /// Show which soul directories are active (local + global).
     #[clap(about = "Show active soul directories (local + global)")]
     Where,
+
+    /// Append an entry to the ops log (OPS.jsonl in the active soul dir).
+    ///
+    /// Scope hierarchy mirrors soul: global (~/._b00t_/) > project (._b00t_/) > task.
+    /// Agents write here to leave a shared activity trail readable by other agents.
+    ///
+    /// Examples:
+    ///   b00t soul log "submitted HF training job 6a4258f"
+    ///   b00t soul log --scope project --result ok "pushed dataset to HF"
+    ///   b00t soul log --list
+    ///   b00t soul log --list --scope global --tail 20
+    #[clap(about = "Append/read ops log (OPS.jsonl) — shared agent activity register")]
+    Log {
+        #[clap(help = "Message to log (omit to read)")]
+        message: Option<String>,
+        #[clap(long, default_value = "active", help = "Scope: active|global|project")]
+        scope: String,
+        #[clap(long, default_value = "info", help = "Result: ok|fail|info|warn")]
+        result: String,
+        #[clap(long, help = "Agent/actor label (default: $USER)")]
+        agent: Option<String>,
+        #[clap(long, help = "List log entries instead of appending")]
+        list: bool,
+        #[clap(long, default_value = "40", help = "Number of entries to show with --list")]
+        tail: usize,
+        #[clap(long, help = "Filter by scope with --list")]
+        filter_scope: Option<String>,
+    },
+
+    // ── DataFramerr ───────────────────────────────────────────────────────────
+
+    #[clap(name = "table-create", about = "Create a typed table in soul DataFramerr")]
+    TableCreate {
+        #[clap(help = "Table name")]
+        name: String,
+        #[clap(help = "Column definitions: 'name:type' or 'name:type?' (nullable). Types: text int float cake bool timestamp token json")]
+        columns: Vec<String>,
+    },
+
+    #[clap(name = "table-list", about = "List all DataFramerr tables in active soul")]
+    TableList,
+
+    #[clap(name = "table-show", about = "Show schema + row count for a table")]
+    TableShow {
+        name: String,
+    },
+
+    #[clap(name = "table-drop", about = "Drop a table and all its rows (irreversible)")]
+    TableDrop {
+        name: String,
+    },
+
+    #[clap(name = "frame-insert", about = "Append a row to a DataFramerr table")]
+    FrameInsert {
+        #[clap(help = "Table name")]
+        table: String,
+        #[clap(help = "Field values as 'key=value' pairs")]
+        fields: Vec<String>,
+    },
+
+    #[clap(name = "frame-get", about = "Fetch a single row by id")]
+    FrameGet {
+        table: String,
+        id: u64,
+    },
+
+    #[clap(name = "frame-dump", about = "Dump rows in tabular format")]
+    FrameDump {
+        table: String,
+        #[clap(long, help = "Show only last N rows")]
+        last: Option<usize>,
+    },
+
+    #[clap(name = "cursor-create", about = "Create a durable cursor on a table")]
+    CursorCreate {
+        name: String,
+        table: String,
+    },
+
+    #[clap(name = "cursor-next", about = "Advance cursor and print next row (exit 1 at EOF)")]
+    CursorNext {
+        name: String,
+    },
+
+    #[clap(name = "cursor-reset", about = "Rewind cursor to frame 0")]
+    CursorReset {
+        name: String,
+    },
+
+    #[clap(name = "cursor-list", about = "List all cursors and positions")]
+    CursorList,
+
+    #[clap(name = "alarm-set", about = "Register an alarm on a column aggregate")]
+    AlarmSet {
+        name: String,
+        table: String,
+        column: String,
+        condition: String,
+        #[clap(long, default_value = "sum", help = "Aggregate: sum | avg | count | per_frame")]
+        aggregate: String,
+        #[clap(long, help = "Event name to emit when alarm fires")]
+        emit: String,
+    },
+
+    #[clap(name = "alarm-check", about = "Evaluate all alarms on a table; print fired events")]
+    AlarmCheck {
+        table: String,
+    },
+
+    #[clap(name = "alarm-list", about = "List all registered alarms")]
+    AlarmList,
+
+    #[clap(name = "alarm-rm", about = "Remove a named alarm")]
+    AlarmRm {
+        name: String,
+    },
+
+    #[clap(name = "token-encode", about = "ObfuscatedStr encode (XOR+base64, agent-identity keyed)")]
+    TokenEncode {
+        plaintext: String,
+        #[clap(long, default_value = "", help = "Context key (e.g. table name)")]
+        context: String,
+    },
+
+    #[clap(name = "token-decode", about = "ObfuscatedStr decode")]
+    TokenDecode {
+        token: String,
+        #[clap(long, default_value = "", help = "Context key used during encode")]
+        context: String,
+    },
 }
 
 pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
@@ -219,6 +354,35 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         }
 
         SoulCommands::Where => soul_where(),
+
+        SoulCommands::Log { message, scope, result, agent, list, tail, filter_scope } => {
+            soul_log(message.as_deref(), scope, result, agent.as_deref(), *list, *tail, filter_scope.as_deref())
+        }
+
+        // ── DataFramerr ───────────────────────────────────────────────────────
+        SoulCommands::TableCreate { name, columns } => df_table_create(name, columns),
+        SoulCommands::TableList                     => df_table_list(),
+        SoulCommands::TableShow { name }            => df_table_show(name),
+        SoulCommands::TableDrop { name }            => df_table_drop(name),
+
+        SoulCommands::FrameInsert { table, fields } => df_frame_insert(table, fields),
+        SoulCommands::FrameGet { table, id }        => df_frame_get(table, *id),
+        SoulCommands::FrameDump { table, last }     => df_frame_dump(table, *last),
+
+        SoulCommands::CursorCreate { name, table }  => df_cursor_create(name, table),
+        SoulCommands::CursorNext { name }           => df_cursor_next(name),
+        SoulCommands::CursorReset { name }          => df_cursor_reset(name),
+        SoulCommands::CursorList                    => df_cursor_list(),
+
+        SoulCommands::AlarmSet { name, table, column, condition, aggregate, emit } => {
+            df_alarm_set(name, table, column, condition, aggregate, emit)
+        }
+        SoulCommands::AlarmCheck { table }          => df_alarm_check(table),
+        SoulCommands::AlarmList                     => df_alarm_list(),
+        SoulCommands::AlarmRm { name }              => df_alarm_rm(name),
+
+        SoulCommands::TokenEncode { plaintext, context } => df_token_encode(plaintext, context),
+        SoulCommands::TokenDecode { token, context }     => df_token_decode(token, context),
     }
 }
 
@@ -485,6 +649,82 @@ fn soul_init(target: &std::path::Path) -> Result<()> {
 // ─── soul where ───────────────────────────────────────────────────────────────
 
 /// Show active soul directories (local + global).
+// ─── ops log ─────────────────────────────────────────────────────────────────
+
+/// Append-only ops log: shared activity register across agents.
+///
+/// File: `<soul_dir>/OPS.jsonl` — one JSON object per line, newest at end.
+/// Scope hierarchy: global (~/._b00t_/) > project (._b00t_/) > task (in-memory only).
+fn soul_log(
+    message: Option<&str>,
+    scope: &str,
+    result: &str,
+    agent: Option<&str>,
+    list: bool,
+    tail: usize,
+    filter_scope: Option<&str>,
+) -> Result<()> {
+    let soul_dir = match scope {
+        "global" => global_soul_dir(),
+        "project" => local_soul_dir().unwrap_or_else(global_soul_dir),
+        _ => active_soul_dir(),
+    };
+
+    let log_path = soul_dir.join("OPS.jsonl");
+
+    if list {
+        if !log_path.exists() {
+            println!("ops log empty: {}", log_path.display());
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(&log_path)?;
+        let lines: Vec<&str> = content.lines().collect();
+        let start = lines.len().saturating_sub(tail);
+        for line in &lines[start..] {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if let Some(fs) = filter_scope {
+                    if entry.get("scope").and_then(|v| v.as_str()) != Some(fs) {
+                        continue;
+                    }
+                }
+                let ts = entry.get("ts").and_then(|v| v.as_str()).unwrap_or("?");
+                let sc = entry.get("scope").and_then(|v| v.as_str()).unwrap_or("?");
+                let ag = entry.get("agent").and_then(|v| v.as_str()).unwrap_or("?");
+                let re = entry.get("result").and_then(|v| v.as_str()).unwrap_or("info");
+                let msg = entry.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                let icon = match re { "ok" => "✅", "fail" => "❌", "warn" => "⚠️ ", _ => "ℹ️ " };
+                println!("{icon} [{ts}] ({sc}/{ag}) {msg}");
+            }
+        }
+        return Ok(());
+    }
+
+    let msg = message.ok_or_else(|| anyhow::anyhow!("message required (or use --list to read)"))?;
+
+    let agent_str = agent
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "agent".to_string());
+
+    let entry = serde_json::json!({
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "scope": scope,
+        "agent": agent_str,
+        "result": result,
+        "message": msg,
+    });
+
+    std::fs::create_dir_all(&soul_dir)
+        .with_context(|| format!("create soul dir {}", soul_dir.display()))?;
+
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?;
+    writeln!(f, "{}", serde_json::to_string(&entry)?)?;
+
+    println!("ops: [{scope}] {msg}");
+    Ok(())
+}
+
 fn soul_where() -> Result<()> {
     let global = global_soul_dir();
     let local = local_soul_dir();
@@ -736,5 +976,358 @@ async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     println!("soul serve: listening on http://{addr}");
     axum::serve(listener, app).await?;
+    Ok(())
+}
+
+// ── DataFramerr registry I/O ──────────────────────────────────────────────────
+
+/// Load the full TOML document from the active soul file.
+fn load_soul_doc() -> Result<toml::Table> {
+    let path = active_soul_path();
+    if !path.exists() {
+        return Ok(toml::Table::new());
+    }
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    text.parse::<toml::Table>()
+        .with_context(|| format!("parse TOML {}", path.display()))
+}
+
+/// Extract [soul] → SoulDataFramerrRegistry from the doc.
+fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry> {
+    match doc.get("soul") {
+        None => Ok(SoulDataFramerrRegistry::default()),
+        Some(v) => {
+            let s = toml::to_string(v)?;
+            toml::from_str(&s).context("deserialize SoulDataFramerrRegistry from [soul]")
+        }
+    }
+}
+
+/// Serialize registry back into doc["soul"] and write the file.
+fn save_registry(mut doc: toml::Table, reg: &SoulDataFramerrRegistry) -> Result<()> {
+    let path = active_soul_path();
+    // Create parent dir if missing
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let reg_str = toml::to_string(reg)?;
+    let reg_table: toml::Table = reg_str.parse()?;
+    doc.insert("soul".to_string(), toml::Value::Table(reg_table));
+    std::fs::write(&path, toml::to_string_pretty(&doc)?)
+        .with_context(|| format!("write {}", path.display()))
+}
+
+/// Read-modify-write helper.
+fn with_registry<F>(f: F) -> Result<()>
+where F: FnOnce(&mut SoulDataFramerrRegistry) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let mut reg = load_registry(&doc)?;
+    f(&mut reg)?;
+    save_registry(doc, &reg)
+}
+
+/// Parse "key=value" field args into a BTreeMap<String, SoulValue>.
+fn parse_fields(fields: &[String]) -> Result<std::collections::BTreeMap<String, SoulValue>> {
+    let mut map = std::collections::BTreeMap::new();
+    for f in fields {
+        let (k, v) = f.split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("field must be 'key=value', got: {f}"))?;
+        // Infer type: bool → int → float → text
+        let val = if v == "true" {
+            SoulValue::Bool(true)
+        } else if v == "false" {
+            SoulValue::Bool(false)
+        } else if let Ok(i) = v.parse::<i64>() {
+            SoulValue::Int(i)
+        } else if let Ok(f) = v.parse::<f64>() {
+            SoulValue::Float(f)
+        } else {
+            SoulValue::Text(v.to_string())
+        };
+        map.insert(k.to_string(), val);
+    }
+    Ok(map)
+}
+
+/// Derive agent_id from environment or fallback to username.
+fn agent_id() -> String {
+    std::env::var("B00T_AGENT_ID")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "b00t-agent".to_string())
+}
+
+// ── table commands ────────────────────────────────────────────────────────────
+
+fn df_table_create(name: &str, columns: &[String]) -> Result<()> {
+    let cols: Vec<SoulColumn> = columns.iter()
+        .map(|s| SoulColumn::parse(s))
+        .collect::<Result<_>>()?;
+    with_registry(|reg| {
+        if reg.tables.contains_key(name) {
+            bail!("table '{name}' already exists; use frame-insert to add rows");
+        }
+        reg.tables.insert(name.to_string(), SoulDataFramerr::new(name, cols.clone()));
+        println!("table '{name}' created ({} columns)", cols.len());
+        Ok(())
+    })
+}
+
+fn df_table_list() -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    if reg.tables.is_empty() {
+        println!("(no tables)");
+        return Ok(());
+    }
+    println!("{:<24} {:>6}  columns", "table", "rows");
+    println!("{}", "-".repeat(42));
+    for (name, df) in &reg.tables {
+        println!("{:<24} {:>6}  {}", name, df.rows.len(),
+            df.columns.iter().map(|c| format!("{}:{}", c.name,
+                format!("{:?}", c.col_type).to_lowercase())).collect::<Vec<_>>().join(", "));
+    }
+    Ok(())
+}
+
+fn df_table_show(name: &str) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    let df = reg.tables.get(name)
+        .ok_or_else(|| anyhow::anyhow!("no table '{name}'"))?;
+    println!("table: {name}");
+    println!("rows:  {}", df.rows.len());
+    println!("columns:");
+    for c in &df.columns {
+        let nullable = if c.nullable { "?" } else { "" };
+        println!("  {}{}: {:?}", c.name, nullable, c.col_type);
+    }
+    let alarms: Vec<_> = reg.alarms.iter().filter(|a| a.table == name).collect();
+    if !alarms.is_empty() {
+        println!("alarms:");
+        for a in alarms {
+            println!("  {} — {} {} {} ({:?}) → {}", a.name, a.column, a.condition,
+                format!("{:?}", a.aggregate).to_lowercase(), a.aggregate, a.emit);
+        }
+    }
+    Ok(())
+}
+
+fn df_table_drop(name: &str) -> Result<()> {
+    with_registry(|reg| {
+        if reg.tables.remove(name).is_none() {
+            bail!("no table '{name}'");
+        }
+        reg.alarms.retain(|a| a.table != name);
+        reg.cursors.retain(|_, c| c.table != name);
+        println!("table '{name}' dropped");
+        Ok(())
+    })
+}
+
+// ── frame commands ────────────────────────────────────────────────────────────
+
+fn df_frame_insert(table: &str, fields: &[String]) -> Result<()> {
+    let field_map = parse_fields(fields)?;
+    with_registry(|reg| {
+        let df = reg.tables.get_mut(table)
+            .ok_or_else(|| anyhow::anyhow!("no table '{table}' — run: b00t soul table-create {table}"))?;
+        let id = df.insert(field_map)?;
+        println!("inserted frame {id} into '{table}'");
+        Ok(())
+    })
+}
+
+fn df_frame_get(table: &str, id: u64) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    let df = reg.tables.get(table)
+        .ok_or_else(|| anyhow::anyhow!("no table '{table}'"))?;
+    let row = df.get(id).ok_or_else(|| anyhow::anyhow!("no frame {id} in '{table}'"))?;
+    println!("id: {}  created_at: {}", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%SZ"));
+    for (k, v) in &row.fields {
+        println!("  {} = {:?}", k, v);
+    }
+    Ok(())
+}
+
+fn df_frame_dump(table: &str, last: Option<usize>) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    let df = reg.tables.get(table)
+        .ok_or_else(|| anyhow::anyhow!("no table '{table}'"))?;
+    let rows: Vec<_> = match last {
+        Some(n) => df.rows.iter().rev().take(n).rev().collect(),
+        None    => df.rows.iter().collect(),
+    };
+    if rows.is_empty() {
+        println!("(no rows in '{table}')");
+        return Ok(());
+    }
+    // collect all column keys in order
+    let cols: Vec<&str> = df.columns.iter().map(|c| c.name.as_str()).collect();
+    print!("{:>4}  {:19}", "id", "created_at");
+    for c in &cols { print!("  {:<16}", c); }
+    println!();
+    println!("{}", "-".repeat(4 + 2 + 19 + cols.len() * 18));
+    for row in rows {
+        print!("{:>4}  {}", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%S"));
+        for c in &cols {
+            match row.fields.get(*c) {
+                Some(SoulValue::Bool(b))  => print!("  {:<16}", b),
+                Some(SoulValue::Int(i))   => print!("  {:<16}", i),
+                Some(SoulValue::Float(f)) => print!("  {:<16.4}", f),
+                Some(SoulValue::Text(s))  => print!("  {:<16}", &s[..s.len().min(16)]),
+                None                      => print!("  {:<16}", "-"),
+            }
+        }
+        println!();
+    }
+    Ok(())
+}
+
+// ── cursor commands ───────────────────────────────────────────────────────────
+
+fn df_cursor_create(name: &str, table: &str) -> Result<()> {
+    with_registry(|reg| {
+        if !reg.tables.contains_key(table) {
+            bail!("no table '{table}'");
+        }
+        reg.cursors.insert(name.to_string(), FrameCursor::new(table));
+        println!("cursor '{name}' created on table '{table}' at frame 0");
+        Ok(())
+    })
+}
+
+fn df_cursor_next(name: &str) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let mut reg = load_registry(&doc)?;
+    let cursor = reg.cursors.get_mut(name)
+        .ok_or_else(|| anyhow::anyhow!("no cursor '{name}' — run: b00t soul cursor-create {name} <table>"))?;
+    let table_name = cursor.table.clone();
+    let df = reg.tables.get_mut(&table_name)
+        .ok_or_else(|| anyhow::anyhow!("cursor '{name}' points to missing table '{table_name}'"))?;
+    match cursor.next(df) {
+        Some(row) => {
+            println!("frame {} ({})", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%SZ"));
+            for (k, v) in &row.fields {
+                println!("  {} = {:?}", k, v);
+            }
+            save_registry(doc, &reg)
+        }
+        None => {
+            println!("EOF: cursor '{name}' at end of '{table_name}'");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn df_cursor_reset(name: &str) -> Result<()> {
+    with_registry(|reg| {
+        let cursor = reg.cursors.get_mut(name)
+            .ok_or_else(|| anyhow::anyhow!("no cursor '{name}'"))?;
+        cursor.reset();
+        println!("cursor '{name}' reset to frame 0");
+        Ok(())
+    })
+}
+
+fn df_cursor_list() -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    if reg.cursors.is_empty() {
+        println!("(no cursors)");
+        return Ok(());
+    }
+    println!("{:<20} {:<20} {:>8}", "cursor", "table", "frame_id");
+    println!("{}", "-".repeat(52));
+    for (name, c) in &reg.cursors {
+        println!("{:<20} {:<20} {:>8}", name, c.table, c.frame_id);
+    }
+    Ok(())
+}
+
+// ── alarm commands ────────────────────────────────────────────────────────────
+
+fn df_alarm_set(name: &str, table: &str, column: &str, condition: &str, aggregate: &str, emit: &str) -> Result<()> {
+    let agg = match aggregate {
+        "sum"       => AlarmAggregate::Sum,
+        "avg"       => AlarmAggregate::Avg,
+        "count"     => AlarmAggregate::Count,
+        "per_frame" => AlarmAggregate::PerFrame,
+        other       => bail!("unknown aggregate '{other}'; valid: sum avg count per_frame"),
+    };
+    with_registry(|reg| {
+        reg.alarms.retain(|a| a.name != name);
+        reg.alarms.push(SoulAlarm {
+            name: name.to_string(), table: table.to_string(), column: column.to_string(),
+            condition: condition.to_string(), aggregate: agg, emit: emit.to_string(),
+        });
+        println!("alarm '{name}' set on {table}.{column} {condition} → {emit}");
+        Ok(())
+    })
+}
+
+fn df_alarm_check(table: &str) -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    let fired: Vec<_> = reg.alarms.iter()
+        .filter(|a| a.table == table)
+        .filter(|a| reg.tables.get(table).map(|df| a.check(df)).unwrap_or(false))
+        .collect();
+    if fired.is_empty() {
+        println!("no alarms fired for '{table}'");
+    } else {
+        for a in &fired {
+            let detail = format!("table={table} column={} condition={}", a.column, a.condition);
+            write_event(&a.emit, &detail);
+            println!("ALARM: {} → {} (event written to events.jsonl)", a.name, a.emit);
+        }
+    }
+    Ok(())
+}
+
+fn df_alarm_list() -> Result<()> {
+    let doc = load_soul_doc()?;
+    let reg = load_registry(&doc)?;
+    if reg.alarms.is_empty() {
+        println!("(no alarms)");
+        return Ok(());
+    }
+    for a in &reg.alarms {
+        println!("{}: {}.{} {} ({:?}) → {}", a.name, a.table, a.column,
+            a.condition, a.aggregate, a.emit);
+    }
+    Ok(())
+}
+
+fn df_alarm_rm(name: &str) -> Result<()> {
+    with_registry(|reg| {
+        let before = reg.alarms.len();
+        reg.alarms.retain(|a| a.name != name);
+        if reg.alarms.len() == before {
+            bail!("no alarm '{name}'");
+        }
+        println!("alarm '{name}' removed");
+        Ok(())
+    })
+}
+
+// ── token commands ────────────────────────────────────────────────────────────
+
+fn df_token_encode(plaintext: &str, context: &str) -> Result<()> {
+    use b00t_c0re_lib::soul_dataframerr::ObfuscatedStr;
+    let id = agent_id();
+    let enc = ObfuscatedStr::encode(plaintext, &id, context);
+    println!("{}", enc.as_str());
+    Ok(())
+}
+
+fn df_token_decode(token: &str, context: &str) -> Result<()> {
+    use b00t_c0re_lib::soul_dataframerr::ObfuscatedStr;
+    let id = agent_id();
+    let enc = ObfuscatedStr::from_raw(token)?;
+    let plain = enc.decode(&id, context)?;
+    println!("{}", plain);
     Ok(())
 }

@@ -1,109 +1,108 @@
-# b00t Hive Profile — Qwen3.6-35B-A3B-UD-IQ4_XS llamacpp podman inference (ch0nky tier)
-# IQ4_XS = 17.7GB — leaves ~6GB for KV cache on RTX 3090 (24GB); context up to 64k
-# ⚠️  MXFP4_MOE was tried and failed (unsupported tensor type in server-cuda image)
-# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf"
-# Activate: b00t hive activate inference-qwen36-35b-a3b-llamacpp
+# b00t Hive Profile — Qwen3.6-35B-A3B sm0l inference via llama.cpp Podman
+# 🤓 MoE (Mixture of Experts): 35B total, ~3B active per token — sm0l tier
+# 🤓 UD-IQ4_XS quant: 17GB model + KV cache = ~20GB VRAM — fits RTX 3090 24GB
+# 🤓 NOT systemd-managed — run via: podman kube play _b00t_/k8s/a3b-sm0l.pod.yml
+# 🤓 OpenAI-compatible API at port 8001/v1 — b00t's native proxy endpoint
+# 🤓 OpenCode: opencode run --model b00t-sm0l "task"
+#
+# Activate: podman kube play _b00t_/k8s/a3b-sm0l.pod.yml
+# Deactivate: podman kube down _b00t_/k8s/a3b-sm0l.pod.yml
 
 [b00t]
-name = "inference-qwen36-35b-a3b-llamacpp"
-type = "hive_profile"
-hint = "Qwen3.6-35B-A3B UD-IQ4_XS via llamacpp podman — 17.7GB VRAM + 6GB KV, 64k ctx, RTX3090"
+name   = "inference-qwen36-35b-a3b-llamacpp"
+type   = "hive_profile"
+hint   = "Qwen3.6-35B-A3B UD-IQ4_XS MoE via llama.cpp pod — sm0l tier, port 8001, OpenAI-compatible"
 
 [b00t.hive.resources]
-# 🤓 UD-IQ4_XS: 17.7GB VRAM; ~6GB headroom for KV cache at 64k context on RTX 3090 24GB
-ram_gb    = 6
-gpu_mb    = 19000
+# 🤓 UD-IQ4_XS weights ~17GB + KV@32K ~3GB + overhead ~1GB = ~21GB; 3GB headroom
+ram_gb    = 2
+gpu_mb    = 21000
 cpu_cores = 2
 
 [b00t.hive.resources.gate]
-ram_free_gb = 4
-gpu_free_mb = 19000  # need full model headroom; no CPU offload for IQ4 (fast GPU inference)
+ram_free_gb = 1
+gpu_free_mb = 20000
 
 [b00t.hive.exclusion]
-group    = "primary-workload"
-priority = 80  # highest priority ch0nky; preferred over 27B dense (70) and gemma4 (60)
+group    = "ai-inference"
+priority = 80
 
-[b00t.hive.services]
-start = []
-stop  = []
-
-[b00t.hive.service]
-description       = "llamacpp server Qwen3.6-35B-A3B UD-IQ4_XS via podman (port 8001) — ch0nky tier"
-service_type      = "simple"
-limit_nofile      = 65536
-restart           = "on-failure"
-restart_sec       = "30s"
-restart_max_times = 5
-timeout_start_sec = "600"
-after             = ["network.target"]
-environment       = [
-  "PATH=/usr/local/bin:/usr/bin:/bin",
-]
-exec_start = """/usr/bin/podman run --rm \
-    --device nvidia.com/gpu=all \
-    --security-opt=label=disable \
-    -v /home/brianh/.cache/huggingface/hub:/hf:z \
-    -p 8001:8001 \
-    ghcr.io/ggml-org/llama.cpp:server-cuda \
-    --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf \
-    --host 0.0.0.0 \
-    --port 8001 \
-    -ngl 999 \
-    -fa on \
-    -c 65536 \
-    -n 4096 \
-    --jinja \
-    --reasoning-format deepseek \
-    --reasoning-budget 4096 \
-    --temp 0.6 \
-    --top-p 0.95 \
-    --top-k 20 \
-    --min-p 0.00 \
-    --presence-penalty 0.0 \
-    --alias ch0nky \
-    --api-key local-b00t"""
-# 🤓 IQ4_XS: 17.7GB VRAM; -c 65536 context uses ~5-6GB KV → total ~23-24GB (tight but fits)
-# 🤓 -ngl 999: all layers on GPU; IQ4_XS inference is fast (no CPU spill needed)
-# 🤓 -fa: flash attention reduces KV memory footprint — REQUIRED at 64k context
-# 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
-# 🤓 restart_max_times=5: prevents runaway restart loop (was 73+ restarts with MXFP4 crash)
-# ⚠️  Snapshot hash a483e9e6... may change if unsloth updates repo — verify with: ls ~/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/
-
-[b00t.hive.env]
-B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
-B00T_AI_CH0NKY_MODEL = "ch0nky"
-OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
-OPENAI_API_KEY       = "local-b00t"
-PI_MODEL             = "ch0nky"
+# ── Guard: systemctl is legacy — use podman kube play ───────────────────────
+[[b00t.hive.guards]]
+pattern = "systemctl"
+action  = "warn"
+message = "⚠️  systemctl is deprecated for service management. Use: podman kube play _b00t_/k8s/*.pod.yml"
 
 [[b00t.hive.guards]]
 pattern = "pip install"
 action  = "warn"
 message = "🦨 use uv pip install"
 
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman (CDI GPU: podman kube play)"
+
+# ── Environment (OpenAI-compatible) ──────────────────────────────────────────
+[b00t.hive.env]
+B00T_AI_SM0L_BASE   = "http://127.0.0.1:8001/v1"
+B00T_AI_SM0L_MODEL  = "b00t-sm0l"
+OPENAI_BASE_URL     = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY      = "local-b00t"
+
+# ── OpenCode integration ─────────────────────────────────────────────────────
+[b00t.opencode]
+endpoint = "http://127.0.0.1:8001/v1"
+model    = "b00t-sm0l"
+api_key  = "local-b00t"
+tier     = "sm0l"
+config   = """
+models:
+  b00t-sm0l:
+    api_base: http://127.0.0.1:8001/v1
+    api_key: local-b00t
+    model_id: b00t-sm0l
+    tier: sm0l
+    context_window: 32768
+    capabilities:
+      - code_generation
+      - tool_calling
+      - reasoning
+"""
+
+# ── Usage recipes ────────────────────────────────────────────────────────────
 [[b00t.usage]]
-description = "Download required quant (IQ4_XS, ~18GB) — Q4 quality, fits RTX3090 with 64k ctx"
-command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-IQ4_XS.gguf'"
+description = "Start sm0l inference via podman (preferred)"
+command = "podman kube play _b00t_/k8s/a3b-sm0l.pod.yml"
 
 [[b00t.usage]]
-description = "Activate this profile"
-command     = "b00t hive activate inference-qwen36-35b-a3b-llamacpp"
+description = "Stop sm0l inference"
+command = "podman kube down _b00t_/k8s/a3b-sm0l.pod.yml"
 
 [[b00t.usage]]
-description = "Verify ch0nky endpoint"
-command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+description = "Verify sm0l endpoint"
+command = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
 
 [[b00t.usage]]
-description = "Run model comparison eval (27B vs 35B-A3B)"
-command     = "just ch0nky-eval-compare"
+description = "Test sm0l completion"
+command = "curl -s http://localhost:8001/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"b00t-sm0l\",\"messages\":[{\"role\":\"user\",\"content\":\"reply with: HIVE_SM0L_ONLINE\"}],\"max_tokens\":10}' | python3 -m json.tool"
 
 [[b00t.usage]]
-description = "Check logs"
-command     = "journalctl --user -u b00t-hive-inference-qwen36-35b-a3b-llamacpp -f --no-pager"
+description = "Run OpenCode with local sm0l"
+command = "opencode run --model b00t-sm0l 'say hello in 3 words'"
+
+[[b00t.usage]]
+description = "Check VRAM usage"
+command = "nvidia-smi --query-gpu=memory.used,memory.free,utilization.gpu --format=csv,noheader"
+
+[[b00t.usage]]
+description = "Check podman container logs"
+command = "podman logs -f b00t-sm0l-llamacpp"
 
 # b00t:map v1
-# summary: Qwen3.6-35B-A3B UD-IQ4_XS llamacpp hive — 17.7GB VRAM, 64k ctx, RTX3090 ch0nky
-# tags: qwen3.6, moe, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, iq4xs, thinking
-# tier: ch0nky
-# cmds: b00t hive activate inference-qwen36-35b-a3b-llamacpp
-# complexity: 4
+# summary: Qwen3.6-35B-A3B MoE sm0l inference — UD-IQ4_XS 17GB, port 8001, OpenAI-compatible, podman kube play
+# tags: qwen3.6, a3b, moe, sm0l, llamacpp, podman, kube-play, opencode, rtx3090
+# tier: sm0l
+# cmds: podman kube play _b00t_/k8s/a3b-sm0l.pod.yml, opencode run --model b00t-sm0l
+# complexity: 5
+# 🤓 A3B MoE: 35B total params, ~3B active per forward pass — true sm0l throughput with ch0nky knowledge

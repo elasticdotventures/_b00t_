@@ -1,0 +1,14 @@
+[b00t]
+name = "composer"
+type = "mcp"
+hint = "Fixture: MCP datum with [b00t.compose] composition knowledge"
+aliases = ["kompozer"]
+
+[b00t.compose]
+composes_with = ["grammar-verify", "b00t-lsp"]
+audits = ["assimilate"]
+supersedes = ["whole-file-read"]
+measured = [
+    { metric = "context_savings_record_lesson", value = "94%" },
+    { metric = "context_savings_proxy_chat", value = "83%" },
+]

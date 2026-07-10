@@ -1,0 +1,5390 @@
+[[crate]]
+category = "Applications"
+use_case = "alacritty"
+recommended = ["alacritty"]
+[crate.notes]
+"alacritty" = "A cross-platform, GPU enhanced terminal emulator"
+
+[[crate]]
+category = "Applications"
+use_case = "Andromeda"
+recommended = ["Andromeda"]
+[crate.notes]
+"Andromeda" = "JavaScript & TypeScript runtime built from the ground up in Rust 🦀 and powered by The Nova Engine."
+
+[[crate]]
+category = "Applications"
+use_case = "Arti"
+recommended = ["Arti"]
+[crate.notes]
+"Arti" = "An implementation of Tor. (So far, it's a not-very-complete client. But watch this space!) [![Crates.io](https://img.shields.io/crates/v/arti.svg)](https://crates.io/crates/arti)"
+
+[[crate]]
+category = "Applications"
+use_case = "asm-cli-rust"
+recommended = ["asm-cli-rust"]
+[crate.notes]
+"asm-cli-rust" = "An interactive assembly shell."
+
+[[crate]]
+category = "Applications"
+use_case = "clash-verge-rev/clash-verge-rev"
+recommended = ["clash-verge-rev/clash-verge-rev"]
+[crate.notes]
+"clash-verge-rev/clash-verge-rev" = "A cross-platform, modern Clash GUI based on tauri & rust, supporting Windows, macOS, and Linux."
+
+[[crate]]
+category = "Applications"
+use_case = "cloudflare/boringtun"
+recommended = ["cloudflare/boringtun"]
+[crate.notes]
+"cloudflare/boringtun" = "A Userspace WireGuard VPN Implementation [![build badge](https://img.shields.io/crates/v/boringtun.svg)](https://crates.io/crates/boringtun)"
+
+[[crate]]
+category = "Applications"
+use_case = "DBX"
+recommended = ["DBX"]
+[crate.notes]
+"DBX" = "A lightweight, open-source database management tool built with Tauri, supporting MySQL, PostgreSQL, SQLite, Redis, MongoDB, DuckDB, and more. [![CI](https://github.com/t8y2/dbx/actions/workflows/ci.ym"
+
+[[crate]]
+category = "Applications"
+use_case = "defguard"
+recommended = ["defguard"]
+[crate.notes]
+"defguard" = "Enterprise Open Source SSO & WireGuard VPN with real 2FA/MFA"
+
+[[crate]]
+category = "Applications"
+use_case = "denoland/deno"
+recommended = ["denoland/deno"]
+[crate.notes]
+"denoland/deno" = "A secure JavaScript/TypeScript runtime built with V8 and Tokio [![Build Status](https://github.com/denoland/deno/actions/workflows/ci.yml/badge.svg)](https://github.com/denoland/deno/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "doprz/dipc"
+recommended = ["doprz/dipc"]
+[crate.notes]
+"doprz/dipc" = "Convert your favorite images and wallpapers with your favorite color palettes/themes [![crates.io](https://img.shields.io/crates/v/dipc)](https://crates.io/crates/dipc)"
+
+[[crate]]
+category = "Applications"
+use_case = "EasyTier"
+recommended = ["EasyTier"]
+[crate.notes]
+"EasyTier" = "A simple, full-featured and decentralized mesh VPN with WireGuard support. [![crates.io](https://img.shields.io/crates/v/easytier)](https://crates.io/crates/easytier) [![GitHub actions](https://github"
+
+[[crate]]
+category = "Applications"
+use_case = "Edit"
+recommended = ["Edit"]
+[crate.notes]
+"Edit" = "A simple editor for simple needs. [![CI](https://github.com/microsoft/edit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/edit/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "fcsonline/drill"
+recommended = ["fcsonline/drill"]
+[crate.notes]
+"fcsonline/drill" = "A HTTP load testing application inspired by Ansible syntax"
+
+[[crate]]
+category = "Applications"
+use_case = "fend"
+recommended = ["fend"]
+[crate.notes]
+"fend" = "Arbitrary-precision unit-aware calculator [![build](https://github.com/printfn/fend/workflows/build/badge.svg)](https://github.com/printfn/fend/actions/workflows/actions.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "Fractalide"
+recommended = ["Fractalide"]
+[crate.notes]
+"Fractalide" = "Simple microservices"
+
+[[crate]]
+category = "Applications"
+use_case = "glzr-io/glazewm"
+recommended = ["glzr-io/glazewm"]
+[crate.notes]
+"glzr-io/glazewm" = "A tiling window manager for Windows inspired by i3wm, with YAML config, multi-monitor support, and keyboard-driven commands"
+
+[[crate]]
+category = "Applications"
+use_case = "habitat"
+recommended = ["habitat"]
+[crate.notes]
+"habitat" = "A tool created by Chef to build, deploy, and manage applications."
+
+[[crate]]
+category = "Applications"
+use_case = "Herd"
+recommended = ["Herd"]
+[crate.notes]
+"Herd" = "an experimental HTTP load testing application"
+
+[[crate]]
+category = "Applications"
+use_case = "hickory-dns"
+recommended = ["hickory-dns"]
+[crate.notes]
+"hickory-dns" = "A DNS-server [![Build Status](https://github.com/hickory-dns/hickory-dns/actions/workflows/test.yml/badge.svg)](https://github.com/hickory-dns/hickory-dns/actions?query=workflow%3Atest)"
+
+[[crate]]
+category = "Applications"
+use_case = "innernet"
+recommended = ["innernet"]
+[crate.notes]
+"innernet" = "An overlay or private mesh network that uses Wireguard under the hood"
+
+[[crate]]
+category = "Applications"
+use_case = "jedisct1/flowgger"
+recommended = ["jedisct1/flowgger"]
+[crate.notes]
+"jedisct1/flowgger" = "A fast, simple and lightweight data collector"
+
+[[crate]]
+category = "Applications"
+use_case = "kalker"
+recommended = ["kalker"]
+[crate.notes]
+"kalker" = "A scientific calculator that supports math-like syntax with user-defined variables, functions, derivation, integration, and complex numbers. Cross-platform + WASM support [![Build Status](https://gith"
+
+[[crate]]
+category = "Applications"
+use_case = "kftray"
+recommended = ["kftray"]
+[crate.notes]
+"kftray" = "A cross-platform system tray app for managing and sharing multiple kubectl port-forward configurations. [![Build Status](https://github.com/hcavarsan/kftray/workflows/Release/badge.svg)](https://githu"
+
+[[crate]]
+category = "Applications"
+use_case = "kytan"
+recommended = ["kytan"]
+[crate.notes]
+"kytan" = "High Performance Peer-to-Peer VPN"
+
+[[crate]]
+category = "Applications"
+use_case = "linkerd/linkerd2-proxy"
+recommended = ["linkerd/linkerd2-proxy"]
+[crate.notes]
+"linkerd/linkerd2-proxy" = "Ultralight service mesh for Kubernetes."
+
+[[crate]]
+category = "Applications"
+use_case = "LWE"
+recommended = ["LWE"]
+[crate.notes]
+"LWE" = "Linux desktop app for browsing, managing, and applying Wallpaper Engine content, built with Rust and Tauri."
+
+[[crate]]
+category = "Applications"
+use_case = "MaidSafe"
+recommended = ["MaidSafe"]
+[crate.notes]
+"MaidSafe" = "A decentralized platform."
+
+[[crate]]
+category = "Applications"
+use_case = "mayocream/koharu"
+recommended = ["mayocream/koharu"]
+[crate.notes]
+"mayocream/koharu" = "An ML-powered manga translator with automatic speech bubble detection, OCR, inpainting, and LLM translation, built with Candle and Tauri"
+
+[[crate]]
+category = "Applications"
+use_case = "mdBook"
+recommended = ["mdBook"]
+[crate.notes]
+"mdBook" = "A command line utility to create books from markdown files [![Build Status](https://github.com/rust-lang/mdBook/actions/workflows/main.yml/badge.svg)](https://github.com/rust-lang/mdBook/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "Mega"
+recommended = ["Mega"]
+[crate.notes]
+"Mega" = "A monorepo & monolithic codebase management system that supports Git, also is an unofficial open source implementation of Google Piper."
+
+[[crate]]
+category = "Applications"
+use_case = "mirrord"
+recommended = ["mirrord"]
+[crate.notes]
+"mirrord" = "Connect your local process and your cloud environment, and run local code in cloud conditions"
+
+[[crate]]
+category = "Applications"
+use_case = "nicohman/eidolon"
+recommended = ["nicohman/eidolon"]
+[crate.notes]
+"nicohman/eidolon" = "A steam and drm-free game registry and launcher for linux and macosx"
+
+[[crate]]
+category = "Applications"
+use_case = "OxideTerm"
+recommended = ["OxideTerm"]
+[crate.notes]
+"OxideTerm" = "A cross-platform SSH terminal client and local terminal emulator built with Tauri 2.0 and pure-Rust SSH (russh). Features multiplexed connections, SFTP file manager, built-in IDE (CodeMirror 6), port "
+
+[[crate]]
+category = "Applications"
+use_case = "Pijul"
+recommended = ["Pijul"]
+[crate.notes]
+"Pijul" = "A patch-based distributed version control system"
+
+[[crate]]
+category = "Applications"
+use_case = "provrb/OBDium"
+recommended = ["provrb/OBDium"]
+[crate.notes]
+"provrb/OBDium" = "A cross-platform Tauri-based application for everything vehicle diagnostics. Connect your vehicle over an ELM327 adapter and read trouble codes, live OBD-II data, I/M readiness tests, and more!"
+
+[[crate]]
+category = "Applications"
+use_case = "qiluo-admin"
+recommended = ["qiluo-admin"]
+[crate.notes]
+"qiluo-admin" = "An enterprise-grade rapid development platform (Axum + SeaORM + JWT + VUE3, supports MySQL/Postgres/SQLite)"
+
+[[crate]]
+category = "Applications"
+use_case = "Rauthy"
+recommended = ["Rauthy"]
+[crate.notes]
+"Rauthy" = "OpenID Connect Single Sign-On Identity & Access Management"
+
+[[crate]]
+category = "Applications"
+use_case = "Rio"
+recommended = ["Rio"]
+[crate.notes]
+"Rio" = "A hardware-accelerated GPU terminal emulator powered by WebGPU, focusing to run in desktops and browsers."
+
+[[crate]]
+category = "Applications"
+use_case = "rkik"
+recommended = ["rkik"]
+[crate.notes]
+"rkik" = "CLI tool designed for stateless and passive NTP inspection, just as dig or ping are for DNS and ICMP. It supports async requests and continuous monitoring. [![crates.io](https://img.shields.io/crates/"
+
+[[crate]]
+category = "Applications"
+use_case = "Rust Iot Platform"
+recommended = ["Rust Iot Platform"]
+[crate.notes]
+"Rust Iot Platform" = "A high-performance IoT development platform built with Rust, designed for multi-protocol support and real-time data processing. This platform supports MQTT, WebSockets (WS), TCP, and CoAP protocols, m"
+
+[[crate]]
+category = "Applications"
+use_case = "rx"
+recommended = ["rx"]
+[crate.notes]
+"rx" = "Vi inspired Modern Pixel Art Editor"
+
+[[crate]]
+category = "Applications"
+use_case = "Ryot"
+recommended = ["Ryot"]
+[crate.notes]
+"Ryot" = "A self hosted application to track media consumption, fitness, etc."
+
+[[crate]]
+category = "Applications"
+use_case = "s00d/switchshuttle"
+recommended = ["s00d/switchshuttle"]
+[crate.notes]
+"s00d/switchshuttle" = "Cross-platform system tray app for organizing and running predefined terminal commands with global hotkeys, nested menus, and JSON-backed configuration (Tauri + Vue)."
+
+[[crate]]
+category = "Applications"
+use_case = "Saga Reader"
+recommended = ["Saga Reader"]
+[crate.notes]
+"Saga Reader" = "A Blazing-Fast and Extremely-Lightweight Internet Reader driven by AI.Supports fetching of search engine information and RSS."
+
+[[crate]]
+category = "Applications"
+use_case = "Servo"
+recommended = ["Servo"]
+[crate.notes]
+"Servo" = "A prototype web browser engine"
+
+[[crate]]
+category = "Applications"
+use_case = "shoes"
+recommended = ["shoes"]
+[crate.notes]
+"shoes" = "A multi-protocol proxy server"
+
+[[crate]]
+category = "Applications"
+use_case = "shuttle"
+recommended = ["shuttle"]
+[crate.notes]
+"shuttle" = "A serverless platform."
+
+[[crate]]
+category = "Applications"
+use_case = "Sniffnet"
+recommended = ["Sniffnet"]
+[crate.notes]
+"Sniffnet" = "Cross-platform application to monitor your network traffic with ease [![build badge](https://img.shields.io/github/actions/workflow/status/gyulyvgc/sniffnet/rust.yml?logo=github)](https://github.com/G"
+
+[[crate]]
+category = "Applications"
+use_case = "SWC"
+recommended = ["SWC"]
+[crate.notes]
+"SWC" = "super-fast TypeScript / JavaScript compiler"
+
+[[crate]]
+category = "Applications"
+use_case = "TabbyML/tabby"
+recommended = ["TabbyML/tabby"]
+[crate.notes]
+"TabbyML/tabby" = "Self-hosted AI coding assistant, an open-source alternative to GitHub Copilot with GPU support and OpenAPI interface [![latest release](https://shields.io/github/v/release/TabbyML/tabby)](https://gith"
+
+[[crate]]
+category = "Applications"
+use_case = "temps"
+recommended = ["temps"]
+[crate.notes]
+"temps" = "A self-hosted PaaS that replaces Vercel, analytics, error tracking, and uptime monitoring with a single Rust binary"
+
+[[crate]]
+category = "Applications"
+use_case = "tiny"
+recommended = ["tiny"]
+[crate.notes]
+"tiny" = "A terminal IRC client"
+
+[[crate]]
+category = "Applications"
+use_case = "topjohnwu/Magisk"
+recommended = ["topjohnwu/Magisk"]
+[crate.notes]
+"topjohnwu/Magisk" = "A suite of open source tools for customizing Android, providing root access, boot image manipulation, and systemless modifications"
+
+[[crate]]
+category = "Applications"
+use_case = "Typst"
+recommended = ["Typst"]
+[crate.notes]
+"Typst" = "A markup-based typesetting system [![crates.io](https://img.shields.io/crates/v/typst.svg)](https://crates.io/crates/typst)"
+
+[[crate]]
+category = "Applications"
+use_case = "UpVPN"
+recommended = ["UpVPN"]
+[crate.notes]
+"UpVPN" = "WireGuard VPN client for macOS, Linux, and Windows built on Tauri."
+
+[[crate]]
+category = "Applications"
+use_case = "vortix"
+recommended = ["vortix"]
+[crate.notes]
+"vortix" = "Terminal UI for WireGuard and OpenVPN with real-time telemetry, leak detection, and kill switch"
+
+[[crate]]
+category = "Applications"
+use_case = "vproxy"
+recommended = ["vproxy"]
+[crate.notes]
+"vproxy" = "A high-performance HTTP/HTTPS/SOCKS5 proxy server [![crates.io](https://img.shields.io/crates/v/vproxy.svg)](https://crates.io/crates/vproxy)"
+
+[[crate]]
+category = "Applications"
+use_case = "wasmer"
+recommended = ["wasmer"]
+[crate.notes]
+"wasmer" = "A safe and fast WebAssembly runtime supporting WASI and Emscripten [![Build Status](https://github.com/wasmerio/wasmer/actions/workflows/build.yml/badge.svg)](https://github.com/wasmerio/wasmer/action"
+
+[[crate]]
+category = "Applications"
+use_case = "Weld"
+recommended = ["Weld"]
+[crate.notes]
+"Weld" = "Full fake REST API generator"
+
+[[crate]]
+category = "Applications"
+use_case = "wezterm"
+recommended = ["wezterm"]
+[crate.notes]
+"wezterm" = "A GPU-accelerated cross-platform terminal emulator and multiplexer"
+
+[[crate]]
+category = "Applications"
+use_case = "WinterJS"
+recommended = ["WinterJS"]
+[crate.notes]
+"WinterJS" = "A secure JavaScript runtime built with SpiderMonkey and Axum"
+
+[[crate]]
+category = "Applications"
+use_case = "zellij"
+recommended = ["zellij"]
+[crate.notes]
+"zellij" = "A terminal multiplexer (workspace) with batteries included"
+
+[[crate]]
+category = "Applications"
+use_case = "Zephyr"
+recommended = ["Zephyr"]
+[crate.notes]
+"Zephyr" = "A modern, lightweight, and secure Mihomo (Clash Meta) GUI client built with Tauri. [![Security Audit](https://github.com/Juwan-Hwang/Zephyr/actions/workflows/security.yml/badge.svg)](https://github.co"
+
+[[crate]]
+category = "Applications"
+use_case = "dano"
+recommended = ["dano"]
+[crate.notes]
+"dano" = "A hashdeep/md5tree (but much more) for media files"
+
+[[crate]]
+category = "Applications"
+use_case = "enginesound"
+recommended = ["enginesound"]
+[crate.notes]
+"enginesound" = "A GUI and command line application used to procedurally generate semi-realistic engine sounds. Featuring in-depth configuration, variable sample rate and a frequency analysis window."
+
+[[crate]]
+category = "Applications"
+use_case = "Festival"
+recommended = ["Festival"]
+[crate.notes]
+"Festival" = "A local music player/server/client [![build-badge](https://github.com/hinto-janai/festival/actions/workflows/ci.yml/badge.svg)](https://github.com/hinto-janai/festival/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "Glicol"
+recommended = ["Glicol"]
+[crate.notes]
+"Glicol" = "Graph-oriented live coding language, for collaborative musicking in browsers."
+
+[[crate]]
+category = "Applications"
+use_case = "ncspot"
+recommended = ["ncspot"]
+[crate.notes]
+"ncspot" = "Cross-platform ncurses Spotify client, inspired by ncmpc and the likes. [![build badge](https://github.com/hrkfdn/ncspot/actions/workflows/ci.yml/badge.svg)](https://github.com/hrkfdn/ncspot/actions?q"
+
+[[crate]]
+category = "Applications"
+use_case = "OpenMeters"
+recommended = ["OpenMeters"]
+[crate.notes]
+"OpenMeters" = "Fast, simple, and professional audio metering/visualization for Linux written in Rust."
+
+[[crate]]
+category = "Applications"
+use_case = "Pinepods"
+recommended = ["Pinepods"]
+[crate.notes]
+"Pinepods" = "A rust based podcast management system with multi-user support. Pinepods utilizes a central database so aspects like listen time and themes follow from device to device. With clients built using Tauri"
+
+[[crate]]
+category = "Applications"
+use_case = "Polaris"
+recommended = ["Polaris"]
+[crate.notes]
+"Polaris" = "A music streaming application."
+
+[[crate]]
+category = "Applications"
+use_case = "Spotify Player"
+recommended = ["Spotify Player"]
+[crate.notes]
+"Spotify Player" = "A Spotify player in the terminal with full feature parity."
+
+[[crate]]
+category = "Applications"
+use_case = "Spotifyd"
+recommended = ["Spotifyd"]
+[crate.notes]
+"Spotifyd" = "An open source Spotify client running as a UNIX daemon. [![Continuous Integration](https://github.com/Spotifyd/spotifyd/actions/workflows/ci.yml/badge.svg)](https://github.com/Spotifyd/spotifyd/action"
+
+[[crate]]
+category = "Applications"
+use_case = "termusic"
+recommended = ["termusic"]
+[crate.notes]
+"termusic" = "Music Player TUI written"
+
+[[crate]]
+category = "Applications"
+use_case = "tunein-cli"
+recommended = ["tunein-cli"]
+[crate.notes]
+"tunein-cli" = "Browse and listen to thousands of radio stations across the globe right from your terminal [![CI](https://github.com/tsirysndr/tunein-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/tsirys"
+
+[[crate]]
+category = "Applications"
+use_case = "WhatBPM"
+recommended = ["WhatBPM"]
+[crate.notes]
+"WhatBPM" = "A daily statically generated information resource for electronic dance music producers. Provides daily analytics on the most frequently used values for each EDM genre: tempos, keys, root notes, and so"
+
+[[crate]]
+category = "Applications"
+use_case = "Anchor"
+recommended = ["Anchor"]
+[crate.notes]
+"Anchor" = "Anchor is the leading development framework for building secure Solana programs (smart contracts)."
+
+[[crate]]
+category = "Applications"
+use_case = "artemis"
+recommended = ["artemis"]
+[crate.notes]
+"artemis" = "A simple, modular, and fast framework for writing MEV bots."
+
+[[crate]]
+category = "Applications"
+use_case = "cairo"
+recommended = ["cairo"]
+[crate.notes]
+"cairo" = "Cairo is the first Turing-complete language for creating provable programs for general computation. This is also the native language of [StarkNet](https://www.starknet.io), a ZK-Rollup using STARK pro"
+
+[[crate]]
+category = "Applications"
+use_case = "ChainX"
+recommended = ["ChainX"]
+[crate.notes]
+"ChainX" = "Fully Decentralized Interchain Crypto Asset Management on Polkadot."
+
+[[crate]]
+category = "Applications"
+use_case = "CITA"
+recommended = ["CITA"]
+[crate.notes]
+"CITA" = "A high performance blockchain kernel for enterprise users."
+
+[[crate]]
+category = "Applications"
+use_case = "coinbase-pro-rs"
+recommended = ["coinbase-pro-rs"]
+[crate.notes]
+"coinbase-pro-rs" = "Coinbase pro client, supports sync/async/websocket"
+
+[[crate]]
+category = "Applications"
+use_case = "datahaven-xyz/datahaven"
+recommended = ["datahaven-xyz/datahaven"]
+[crate.notes]
+"datahaven-xyz/datahaven" = "AI-First Decentralized Storage secured by EigenLayer."
+
+[[crate]]
+category = "Applications"
+use_case = "Diem"
+recommended = ["Diem"]
+[crate.notes]
+"Diem" = "Diem’s mission is to enable a simple global currency and financial infrastructure that empowers billions of people."
+
+[[crate]]
+category = "Applications"
+use_case = "dusk-network/rusk"
+recommended = ["dusk-network/rusk"]
+[crate.notes]
+"dusk-network/rusk" = "Reference implementation of Dusk, a privacy-focused, scalable FMI for real-world assets (RWA) and compliant financial applications. [![Build Status](https://github.com/dusk-network/rusk/actions/workfl"
+
+[[crate]]
+category = "Applications"
+use_case = "electrumrs"
+recommended = ["electrumrs"]
+[crate.notes]
+"electrumrs" = "An efficient re-implementation of Electrum Server."
+
+[[crate]]
+category = "Applications"
+use_case = "equilibriumco/beerus"
+recommended = ["equilibriumco/beerus"]
+[crate.notes]
+"equilibriumco/beerus" = "Beerus is a trustless StarkNet Light Client, ⚡blazing fast ⚡ [![GitHub Workflow Status](https://github.com/equilibriumco/beerus/actions/workflows/check.yml/badge.svg)](https://github.com/equilibriumco"
+
+[[crate]]
+category = "Applications"
+use_case = "ethabi"
+recommended = ["ethabi"]
+[crate.notes]
+"ethabi" = "Encode and decode smart contract invocations."
+
+[[crate]]
+category = "Applications"
+use_case = "ethaddrgen"
+recommended = ["ethaddrgen"]
+[crate.notes]
+"ethaddrgen" = "Custom Ethereum vanity address generator"
+
+[[crate]]
+category = "Applications"
+use_case = "etk"
+recommended = ["etk"]
+[crate.notes]
+"etk" = "etk is a collection of tools for writing, reading, and analyzing EVM bytecode."
+
+[[crate]]
+category = "Applications"
+use_case = "Forest"
+recommended = ["Forest"]
+[crate.notes]
+"Forest" = "Filecoin implementation [![Build Status](https://img.shields.io/circleci/build/gh/ChainSafe/forest/main?branch=master)](https://app.circleci.com/pipelines/github/ChainSafe/forest?branch=main)"
+
+[[crate]]
+category = "Applications"
+use_case = "Foundry"
+recommended = ["Foundry"]
+[crate.notes]
+"Foundry" = "Foundry is a blazing fast, portable and modular toolkit for Ethereum application development. ![Build Status](https://img.shields.io/github/workflow/status/foundry-rs/foundry/test?style=flat-square)"
+
+[[crate]]
+category = "Applications"
+use_case = "Grin"
+recommended = ["Grin"]
+[crate.notes]
+"Grin" = "Evolution of the MimbleWimble protocol"
+
+[[crate]]
+category = "Applications"
+use_case = "Holochain"
+recommended = ["Holochain"]
+[crate.notes]
+"Holochain" = "Scalable P2P alternative to blockchain for all those distributed apps you always wanted to build. [![detect critical check failures](https://github.com/holochain/holochain/actions/workflows/autorebase"
+
+[[crate]]
+category = "Applications"
+use_case = "Hyperlane"
+recommended = ["Hyperlane"]
+[crate.notes]
+"Hyperlane" = "Framework for permissionless, modular interoperability. The offchain clients are written in Rust, as well as the smart contracts for Solana VM and CosmWasm."
+
+[[crate]]
+category = "Applications"
+use_case = "ibc-rs"
+recommended = ["ibc-rs"]
+[crate.notes]
+"ibc-rs" = "Implementation of the [Interblockchain Communication](https://docs.cosmos.network/ibc) protocol"
+
+[[crate]]
+category = "Applications"
+use_case = "interBTC"
+recommended = ["interBTC"]
+[crate.notes]
+"interBTC" = "Trustless and fully decentralized Bitcoin bridge to Polkadot and Kusama."
+
+[[crate]]
+category = "Applications"
+use_case = "Joystream"
+recommended = ["Joystream"]
+[crate.notes]
+"Joystream" = "A user governed video platform"
+
+[[crate]]
+category = "Applications"
+use_case = "Kaspa"
+recommended = ["Kaspa"]
+[crate.notes]
+"Kaspa" = "The fastest, open-source, decentralized & fully scalable Layer-1 in the world."
+
+[[crate]]
+category = "Applications"
+use_case = "Lighthouse"
+recommended = ["Lighthouse"]
+[crate.notes]
+"Lighthouse" = "Ethereum Consensus Layer (CL) Client [![Build Status](https://github.com/sigp/lighthouse/actions/workflows/test-suite.yml/badge.svg)](https://github.com/sigp/lighthouse/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "linera-io/linera-protocol"
+recommended = ["linera-io/linera-protocol"]
+[crate.notes]
+"linera-io/linera-protocol" = "A decentralized blockchain infrastructure designed for highly scalable, low-latency Web3 applications [![Build Status](https://github.com/linera-io/linera-protocol/actions/workflows/rust.yml/badge.svg"
+
+[[crate]]
+category = "Applications"
+use_case = "near/nearcore"
+recommended = ["near/nearcore"]
+[crate.notes]
+"near/nearcore" = "decentralized smart-contract platform for low-end mobile devices."
+
+[[crate]]
+category = "Applications"
+use_case = "Nervos CKB"
+recommended = ["Nervos CKB"]
+[crate.notes]
+"Nervos CKB" = "Nervos CKB is a public permissionless blockchain, the common knowledge layer of Nervos network."
+
+[[crate]]
+category = "Applications"
+use_case = "opensea-rs"
+recommended = ["opensea-rs"]
+[crate.notes]
+"opensea-rs" = "Bindings & CLI to the Opensea API and Contracts."
+
+[[crate]]
+category = "Applications"
+use_case = "Parity-Bitcoin"
+recommended = ["Parity-Bitcoin"]
+[crate.notes]
+"Parity-Bitcoin" = "The Parity Bitcoin client"
+
+[[crate]]
+category = "Applications"
+use_case = "Phala-Network/phala-blockchain"
+recommended = ["Phala-Network/phala-blockchain"]
+[crate.notes]
+"Phala-Network/phala-blockchain" = "Confidential smart contract blockchain based on Intel SGX and Substrate"
+
+[[crate]]
+category = "Applications"
+use_case = "polkadot-sdk"
+recommended = ["polkadot-sdk"]
+[crate.notes]
+"polkadot-sdk" = "The Parity Polkadot Blockchain SDK"
+
+[[crate]]
+category = "Applications"
+use_case = "pragma-org/amaru"
+recommended = ["pragma-org/amaru"]
+[crate.notes]
+"pragma-org/amaru" = "A Cardano node client written in Rust."
+
+[[crate]]
+category = "Applications"
+use_case = "reth"
+recommended = ["reth"]
+[crate.notes]
+"reth" = "Modular, contributor-friendly and blazing-fast implementation of the Ethereum protocol."
+
+[[crate]]
+category = "Applications"
+use_case = "revm"
+recommended = ["revm"]
+[crate.notes]
+"revm" = "Revolutionary Machine (revm) is a fast Ethereum virtual machine."
+
+[[crate]]
+category = "Applications"
+use_case = "rust-bitcoin"
+recommended = ["rust-bitcoin"]
+[crate.notes]
+"rust-bitcoin" = "Library with support for de/serialization, parsing and executing on data structures and network messages related to Bitcoin."
+
+[[crate]]
+category = "Applications"
+use_case = "sigma-rust"
+recommended = ["sigma-rust"]
+[crate.notes]
+"sigma-rust" = "ErgoTree interpreter and wallet-related features."
+
+[[crate]]
+category = "Applications"
+use_case = "starkware-libs/cairo-vm"
+recommended = ["starkware-libs/cairo-vm"]
+[crate.notes]
+"starkware-libs/cairo-vm" = "Implementation of the Cairo VM [![rust](https://github.com/starkware-libs/cairo-vm/actions/workflows/rust.yml/badge.svg)](https://github.com/starkware-libs/cairo-vm/actions/workflows/rust.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "Subspace"
+recommended = ["Subspace"]
+[crate.notes]
+"Subspace" = "The first layer-one blockchain that can fully resolve the blockchain trilemma by simultaneously achieving scalability, security, and decentralization."
+
+[[crate]]
+category = "Applications"
+use_case = "Sui"
+recommended = ["Sui"]
+[crate.notes]
+"Sui" = "A next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the Move programming language."
+
+[[crate]]
+category = "Applications"
+use_case = "svm-rs"
+recommended = ["svm-rs"]
+[crate.notes]
+"svm-rs" = "Solidity-Compiler Version Manager."
+
+[[crate]]
+category = "Applications"
+use_case = "tempoxyz/tempo"
+recommended = ["tempoxyz/tempo"]
+[crate.notes]
+"tempoxyz/tempo" = "A blockchain built for stablecoin payments at scale, with EVM compatibility, sub-second finality, and native smart account features, built on the Reth SDK"
+
+[[crate]]
+category = "Applications"
+use_case = "tendermint-rs"
+recommended = ["tendermint-rs"]
+[crate.notes]
+"tendermint-rs" = "Tendermint blockchain data structures and clients"
+
+[[crate]]
+category = "Applications"
+use_case = "zcash"
+recommended = ["zcash"]
+[crate.notes]
+"zcash" = "Zcash is an implementation of the 'Zerocash' protocol."
+
+[[crate]]
+category = "Applications"
+use_case = "apecloud/ape-dts"
+recommended = ["apecloud/ape-dts"]
+[crate.notes]
+"apecloud/ape-dts" = "Data Transfer Suite. Provides data replication between MySQL, PostgreSQL, Redis, MongoDB, Kafka, ClickHouse, and more."
+
+[[crate]]
+category = "Applications"
+use_case = "ayarotsky/redis-shield"
+recommended = ["ayarotsky/redis-shield"]
+[crate.notes]
+"ayarotsky/redis-shield" = "A Redis module that implements the token-bucket algorithm as a native command for high-performance rate limiting"
+
+[[crate]]
+category = "Applications"
+use_case = "CozoDB"
+recommended = ["CozoDB"]
+[crate.notes]
+"CozoDB" = "A transactional, relational database that uses Datalog and focuses on graph data and algorithms. Time-travel-capable, and fast! [![GitHub Workflow Status](https://img.shields.io/github/actions/workflo"
+
+[[crate]]
+category = "Applications"
+use_case = "Curvine"
+recommended = ["Curvine"]
+[crate.notes]
+"Curvine" = "Curvine is a high-performance, concurrent distributed cache system written in Rust, designed for low-latency and high-throughput workloads in AI,Bigdata etc."
+
+[[crate]]
+category = "Applications"
+use_case = "Databend"
+recommended = ["Databend"]
+[crate.notes]
+"Databend" = "A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture [![Release](https://github.com/databendlabs/databend/actions/workflows/release.yml/badge.svg)](https://github.com/dat"
+
+[[crate]]
+category = "Applications"
+use_case = "DB3 Network"
+recommended = ["DB3 Network"]
+[crate.notes]
+"DB3 Network" = "DB3 is a community-driven blockchain layer2 decentralized database network [![GitHub Workflow Status (with event)](https://github.com/dbpunk-labs/db3/actions/workflows/ci.yml/badge.svg)](https://githu"
+
+[[crate]]
+category = "Applications"
+use_case = "erikgrinaker/toydb"
+recommended = ["erikgrinaker/toydb"]
+[crate.notes]
+"erikgrinaker/toydb" = "Distributed SQL database, written as a learning project."
+
+[[crate]]
+category = "Applications"
+use_case = "GlueSQL"
+recommended = ["GlueSQL"]
+[crate.notes]
+"GlueSQL" = "Rust library for SQL databases that includes a parser (sqlparser-rs), an execution layer, and a variety of storage options, both persistent and non-persistent, all in one package. [![crates.io](https:"
+
+[[crate]]
+category = "Applications"
+use_case = "GreptimeDB"
+recommended = ["GreptimeDB"]
+[crate.notes]
+"GreptimeDB" = "An open-source, cloud-native, distributed time-series database with PromQL/SQL/Python supported.[![CI](https://github.com/greptimeTeam/greptimedb/actions/workflows/develop.yml/badge.svg)](https://gith"
+
+[[crate]]
+category = "Applications"
+use_case = "HelixDB"
+recommended = ["HelixDB"]
+[crate.notes]
+"HelixDB" = "A powerful, graph-vector database for intelligent data storage for RAG and AI"
+
+[[crate]]
+category = "Applications"
+use_case = "Hiqlite"
+recommended = ["Hiqlite"]
+[crate.notes]
+"Hiqlite" = "highly-available, embeddable, raft-based SQLite + cache"
+
+[[crate]]
+category = "Applications"
+use_case = "indradb"
+recommended = ["indradb"]
+[crate.notes]
+"indradb" = "Graph database"
+
+[[crate]]
+category = "Applications"
+use_case = "KiteSQL"
+recommended = ["KiteSQL"]
+[crate.notes]
+"KiteSQL" = "SQL as a Function for Rust"
+
+[[crate]]
+category = "Applications"
+use_case = "Lucid"
+recommended = ["Lucid"]
+[crate.notes]
+"Lucid" = "High performance and distributed KV store accessible through a HTTP API. [![Build Status](https://github.com/lucid-kv/lucid/workflows/Lucid/badge.svg?branch=master)](https://github.com/lucid-kv/lucid/"
+
+[[crate]]
+category = "Applications"
+use_case = "Materialize"
+recommended = ["Materialize"]
+[crate.notes]
+"Materialize" = "Streaming SQL database powered by Timely Dataflow :heavy_dollar_sign:"
+
+[[crate]]
+category = "Applications"
+use_case = "microsoft/pg_durable"
+recommended = ["microsoft/pg_durable"]
+[crate.notes]
+"microsoft/pg_durable" = "Durable execution inside PostgreSQL. Long-running, fault-tolerant SQL functions with automatic checkpointing, crash recovery, and parallel execution. Zero infrastructure - runs as a PostgreSQL extensi"
+
+[[crate]]
+category = "Applications"
+use_case = "Neon"
+recommended = ["Neon"]
+[crate.notes]
+"Neon" = "Serverless Postgres. We separated storage and compute to offer autoscaling, branching, and bottomless storage."
+
+[[crate]]
+category = "Applications"
+use_case = "NoKV-Lab/NoKV"
+recommended = ["NoKV-Lab/NoKV"]
+[crate.notes]
+"NoKV-Lab/NoKV" = "AI-native distributed filesystem. [![Rust](https://github.com/NoKV-Lab/NoKV/workflows/Rust/badge.svg)](https://github.com/NoKV-Lab/NoKV/actions/workflows/rust.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "ParadeDB"
+recommended = ["ParadeDB"]
+[crate.notes]
+"ParadeDB" = "ParadeDB is an Elasticsearch alternative built on Postgres, designed for real-time search and analytics."
+
+[[crate]]
+category = "Applications"
+use_case = "ParityDB"
+recommended = ["ParityDB"]
+[crate.notes]
+"ParityDB" = "Fast and reliable database, optimised for read operation"
+
+[[crate]]
+category = "Applications"
+use_case = "pgdogdev/pgdog"
+recommended = ["pgdogdev/pgdog"]
+[crate.notes]
+"pgdogdev/pgdog" = "A fast proxy for scaling PostgreSQL with connection pooling, load balancing, and sharding."
+
+[[crate]]
+category = "Applications"
+use_case = "PumpkinDB"
+recommended = ["PumpkinDB"]
+[crate.notes]
+"PumpkinDB" = "an event sourcing database engine"
+
+[[crate]]
+category = "Applications"
+use_case = "Qdrant"
+recommended = ["Qdrant"]
+[crate.notes]
+"Qdrant" = "An open source vector similarity search engine with extended filtering support [![Tests](https://github.com/qdrant/qdrant/actions/workflows/rust.yml/badge.svg)](https://github.com/qdrant/qdrant/action"
+
+[[crate]]
+category = "Applications"
+use_case = "QuillSQL"
+recommended = ["QuillSQL"]
+[crate.notes]
+"QuillSQL" = "An educational Rust relational database (RDBMS) inspired by CMU 15445"
+
+[[crate]]
+category = "Applications"
+use_case = "RisingWaveLabs/RisingWave"
+recommended = ["RisingWaveLabs/RisingWave"]
+[crate.notes]
+"RisingWaveLabs/RisingWave" = "the next-generation streaming database in the cloud [![CI](https://github.com/risingwavelabs/risingwave/actions/workflows/labeler.yml/badge.svg)](https://github.com/risingwavelabs/risingwave/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "seppo0010/rsedis"
+recommended = ["seppo0010/rsedis"]
+[crate.notes]
+"seppo0010/rsedis" = "A Redis reimplementation."
+
+[[crate]]
+category = "Applications"
+use_case = "Skytable"
+recommended = ["Skytable"]
+[crate.notes]
+"Skytable" = "A multi-model NoSQL database ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skytable/skytable/Tests?style=flat-square)"
+
+[[crate]]
+category = "Applications"
+use_case = "sled"
+recommended = ["sled"]
+[crate.notes]
+"sled" = "A (beta) modern embedded database [![Build Status](https://github.com/spacejam/sled/actions/workflows/test.yml/badge.svg)](https://github.com/spacejam/sled/actions?workflow=Rust)"
+
+[[crate]]
+category = "Applications"
+use_case = "SQLSync"
+recommended = ["SQLSync"]
+[crate.notes]
+"SQLSync" = "Multiplayer offline-first SQLite [![GitHub Workflow Status](https://github.com/orbitinghail/sqlsync/actions/workflows/actions.yaml/badge.svg?branch=main)](https://github.com/orbitinghail/sqlsync/actio"
+
+[[crate]]
+category = "Applications"
+use_case = "SurrealDB"
+recommended = ["SurrealDB"]
+[crate.notes]
+"SurrealDB" = "A scalable, distributed, document-graph database [![Build Status](https://img.shields.io/github/workflow/status/surrealdb/surrealdb/Continuous%20integration/main)](https://github.com/surrealdb/surreal"
+
+[[crate]]
+category = "Applications"
+use_case = "tabularis"
+recommended = ["tabularis"]
+[crate.notes]
+"tabularis" = "A lightweight, developer-focused database management tool, built with Tauri and React."
+
+[[crate]]
+category = "Applications"
+use_case = "TerminusDB"
+recommended = ["TerminusDB"]
+[crate.notes]
+"TerminusDB" = "open source graph database and document store [![Build Status](https://github.com/terminusdb/terminusdb-store/actions/workflows/test.yml/badge.svg)](https://github.com/terminusdb/terminusdb-store/acti"
+
+[[crate]]
+category = "Applications"
+use_case = "tikv"
+recommended = ["tikv"]
+[crate.notes]
+"tikv" = "A distributed KV database in Rust"
+
+[[crate]]
+category = "Applications"
+use_case = "Tonbo"
+recommended = ["Tonbo"]
+[crate.notes]
+"Tonbo" = "Tonbo is an embedded persistent database built on Apache Arrow & Parquet [![crates.io](https://img.shields.io/crates/v/tonbo.svg)](https://crates.io/crates/tonbo)"
+
+[[crate]]
+category = "Applications"
+use_case = "TrailBase"
+recommended = ["TrailBase"]
+[crate.notes]
+"TrailBase" = "A fast, lightweight, single-file FireBase alternative with type-safe APIs, built-in V8 JS/ES6/TS engine, auth and admin dashboard [![GitHub Workflow Status](https://github.com/trailbaseio/trailbase/wo"
+
+[[crate]]
+category = "Applications"
+use_case = "tsink"
+recommended = ["tsink"]
+[crate.notes]
+"tsink" = "Embedded time-series database for Rust [![crates.io](https://img.shields.io/crates/v/tsink.svg)](https://crates.io/crates/tsink)"
+
+[[crate]]
+category = "Applications"
+use_case = "Turso"
+recommended = ["Turso"]
+[crate.notes]
+"Turso" = "Turso Database is an in-process SQL database, compatible with SQLite."
+
+[[crate]]
+category = "Applications"
+use_case = "USearch"
+recommended = ["USearch"]
+[crate.notes]
+"USearch" = "Similarity Search Engine for Vectors and Strings [![crates.io](https://img.shields.io/crates/v/usearch.svg)](https://crates.io/crates/usearch)"
+
+[[crate]]
+category = "Applications"
+use_case = "valentinus"
+recommended = ["valentinus"]
+[crate.notes]
+"valentinus" = "Next generation vector database built with LMDB bindings [![Crates.io Version](https://img.shields.io/crates/v/valentinus)](https://crates.io/crates/valentinus)"
+
+[[crate]]
+category = "Applications"
+use_case = "WooriDB"
+recommended = ["WooriDB"]
+[crate.notes]
+"WooriDB" = "General purpose time serial database inspired by Crux and Datomic."
+
+[[crate]]
+category = "Applications"
+use_case = "infinition/waveshare-watch-rs"
+recommended = ["infinition/waveshare-watch-rs"]
+[crate.notes]
+"infinition/waveshare-watch-rs" = "100% Rust `no_std` smartwatch firmware for Waveshare ESP32-S3-Touch-AMOLED-2.06. Features QSPI 80 MHz DMA display, Embassy async runtime, event-driven power management with Always-On Display."
+
+[[crate]]
+category = "Applications"
+use_case = "rmk"
+recommended = ["rmk"]
+[crate.notes]
+"rmk" = "A feature-rich keyboard firmware."
+
+[[crate]]
+category = "Applications"
+use_case = "uefi-rs"
+recommended = ["uefi-rs"]
+[crate.notes]
+"uefi-rs" = "Rusty wrapper for the Unified Extensible Firmware Interface. This crate makes it easy to develop Rust software that leverages safe, convenient, and performant abstractions for UEFI functionality."
+
+[[crate]]
+category = "Applications"
+use_case = "broot"
+recommended = ["broot"]
+[crate.notes]
+"broot" = "A new way to see and navigate directory trees (get an overview of a directory, even a big one; find a directory then `cd` to it; never lose track of file hierarchy while you search; manipulate your fi"
+
+[[crate]]
+category = "Applications"
+use_case = "FileSSH"
+recommended = ["FileSSH"]
+[crate.notes]
+"FileSSH" = "A fast and easy to use TUI to manage files on a remote server, including quick SSH session creation, in-place file editing and more! ![crates.io](https://img.shields.io/crates/v/filessh)"
+
+[[crate]]
+category = "Applications"
+use_case = "joshuto"
+recommended = ["joshuto"]
+[crate.notes]
+"joshuto" = "ranger-like terminal file manager"
+
+[[crate]]
+category = "Applications"
+use_case = "moyangzhan/mango-finder"
+recommended = ["moyangzhan/mango-finder"]
+[crate.notes]
+"moyangzhan/mango-finder" = "Search your files using nature language"
+
+[[crate]]
+category = "Applications"
+use_case = "pikeru"
+recommended = ["pikeru"]
+[crate.notes]
+"pikeru" = "File picker for linux with good thumbnails and search"
+
+[[crate]]
+category = "Applications"
+use_case = "spacedriveapp/spacedrive"
+recommended = ["spacedriveapp/spacedrive"]
+[crate.notes]
+"spacedriveapp/spacedrive" = "A file manager built on a virtual distributed filesystem."
+
+[[crate]]
+category = "Applications"
+use_case = "xplr"
+recommended = ["xplr"]
+[crate.notes]
+"xplr" = "A hackable, minimal, fast TUI file explorer"
+
+[[crate]]
+category = "Applications"
+use_case = "yazi"
+recommended = ["yazi"]
+[crate.notes]
+"yazi" = "Blazing fast terminal file manager, based on async I/O."
+
+[[crate]]
+category = "Applications"
+use_case = "Ashutosh0x/rust-finance"
+recommended = ["Ashutosh0x/rust-finance"]
+[crate.notes]
+"Ashutosh0x/rust-finance" = "AI trading terminal with multi-exchange ingestion, execution, risk models, and TUI dashboard."
+
+[[crate]]
+category = "Applications"
+use_case = "longbridge/longbridge-terminal"
+recommended = ["longbridge/longbridge-terminal"]
+[crate.notes]
+"longbridge/longbridge-terminal" = "AI-native CLI for Longbridge Securities: real-time quotes, portfolio, trading for HK/US/A-share/SG."
+
+[[crate]]
+category = "Applications"
+use_case = "nautechsystems/nautilus_trader"
+recommended = ["nautechsystems/nautilus_trader"]
+[crate.notes]
+"nautechsystems/nautilus_trader" = "A high-performance, production-grade algorithmic trading platform written in Rust and Python."
+
+[[crate]]
+category = "Applications"
+use_case = "tarkah/tickrs"
+recommended = ["tarkah/tickrs"]
+[crate.notes]
+"tarkah/tickrs" = "Realtime ticker data in your terminal"
+
+[[crate]]
+category = "Applications"
+use_case = "buxx/OpenCombat"
+recommended = ["buxx/OpenCombat"]
+[crate.notes]
+"buxx/OpenCombat" = "A realtime 2nd world war tactical game"
+
+[[crate]]
+category = "Applications"
+use_case = "chess-tui"
+recommended = ["chess-tui"]
+[crate.notes]
+"chess-tui" = "A Chess TUI implementation ♟️"
+
+[[crate]]
+category = "Applications"
+use_case = "citybound"
+recommended = ["citybound"]
+[crate.notes]
+"citybound" = "The city sim you deserve"
+
+[[crate]]
+category = "Applications"
+use_case = "cristicbz/rust-doom"
+recommended = ["cristicbz/rust-doom"]
+[crate.notes]
+"cristicbz/rust-doom" = "A renderer for Doom, may progress to being a playable game"
+
+[[crate]]
+category = "Applications"
+use_case = "doukutsu-rs"
+recommended = ["doukutsu-rs"]
+[crate.notes]
+"doukutsu-rs" = "Reimplementation of Cave Story engine with some enhancements."
+
+[[crate]]
+category = "Applications"
+use_case = "garkimasera/gaia-maker"
+recommended = ["garkimasera/gaia-maker"]
+[crate.notes]
+"garkimasera/gaia-maker" = "Planet and terraforming simulation game"
+
+[[crate]]
+category = "Applications"
+use_case = "garkimasera/rusted-ruins"
+recommended = ["garkimasera/rusted-ruins"]
+[crate.notes]
+"garkimasera/rusted-ruins" = "Extensible open world rogue like game with pixel art"
+
+[[crate]]
+category = "Applications"
+use_case = "GitType"
+recommended = ["GitType"]
+[crate.notes]
+"GitType" = "A CLI code-typing game that turns your source code into typing challenges"
+
+[[crate]]
+category = "Applications"
+use_case = "gorilla-devs/ferium"
+recommended = ["gorilla-devs/ferium"]
+[crate.notes]
+"gorilla-devs/ferium" = "Ferium is a fast and feature rich CLI program for downloading and updating Minecraft mods from Modrinth, CurseForge, and GitHub Releases, and modpacks from Modrinth and CurseForge ![ferium build](http"
+
+[[crate]]
+category = "Applications"
+use_case = "HactarCE/Hyperspeedcube"
+recommended = ["HactarCE/Hyperspeedcube"]
+[crate.notes]
+"HactarCE/Hyperspeedcube" = "A modern, beginner-friendly 3D and 4D Rubik's cube simulator with customizable mouse and keyboard controls and advanced features for speedsolving"
+
+[[crate]]
+category = "Applications"
+use_case = "lifthrasiir/angolmois-rust"
+recommended = ["lifthrasiir/angolmois-rust"]
+[crate.notes]
+"lifthrasiir/angolmois-rust" = "A minimalistic music video game which supports the BMS format"
+
+[[crate]]
+category = "Applications"
+use_case = "louis-e/arnis"
+recommended = ["louis-e/arnis"]
+[crate.notes]
+"louis-e/arnis" = "Generate Minecraft Java/Bedrock worlds from real-world geography using OpenStreetMap and elevation data [![CI](https://github.com/louis-e/arnis/actions/workflows/ci-build.yml/badge.svg)](https://githu"
+
+[[crate]]
+category = "Applications"
+use_case = "maras-archive/rsnake"
+recommended = ["maras-archive/rsnake"]
+[crate.notes]
+"maras-archive/rsnake" = "Snake."
+
+[[crate]]
+category = "Applications"
+use_case = "mcthesw/game-save-manager"
+recommended = ["mcthesw/game-save-manager"]
+[crate.notes]
+"mcthesw/game-save-manager" = "A user-friendly tool for managing game saves [![build badge](https://github.com/mcthesw/game-save-manager/actions/workflows/tauri.yml/badge.svg)](https://github.com/mcthesw/game-save-manager/actions/w"
+
+[[crate]]
+category = "Applications"
+use_case = "mtkennerly/ludusavi"
+recommended = ["mtkennerly/ludusavi"]
+[crate.notes]
+"mtkennerly/ludusavi" = "Backup tool for PC game saves [![build badge](https://img.shields.io/github/actions/workflow/status/mtkennerly/ludusavi/main.yaml?logo=github)](https://github.com/mtkennerly/ludusavi/actions/workflows"
+
+[[crate]]
+category = "Applications"
+use_case = "ozkriff/zemeroth"
+recommended = ["ozkriff/zemeroth"]
+[crate.notes]
+"ozkriff/zemeroth" = "A small 2D turn-based hexagonal strategy game"
+
+[[crate]]
+category = "Applications"
+use_case = "rhex"
+recommended = ["rhex"]
+[crate.notes]
+"rhex" = "hexagonal ascii roguelike"
+
+[[crate]]
+category = "Applications"
+use_case = "rsaarelm/magog"
+recommended = ["rsaarelm/magog"]
+[crate.notes]
+"rsaarelm/magog" = "A roguelike game."
+
+[[crate]]
+category = "Applications"
+use_case = "SoftbearStudios/mk48"
+recommended = ["SoftbearStudios/mk48"]
+[crate.notes]
+"SoftbearStudios/mk48" = "Mk48.io is an online multiplayer naval combat game"
+
+[[crate]]
+category = "Applications"
+use_case = "swatteau/sokoban-rs"
+recommended = ["swatteau/sokoban-rs"]
+[crate.notes]
+"swatteau/sokoban-rs" = "A Sokoban implementation"
+
+[[crate]]
+category = "Applications"
+use_case = "thetawavegame/thetawave-legacy"
+recommended = ["thetawavegame/thetawave-legacy"]
+[crate.notes]
+"thetawavegame/thetawave-legacy" = "A space shooter game that strives to be an entry point for new game developers to make their first contributions. ![build badge](https://github.com/thetawavegame/thetawave-legacy/actions/workflows/ci."
+
+[[crate]]
+category = "Applications"
+use_case = "Thinkofname/rust-quake"
+recommended = ["Thinkofname/rust-quake"]
+[crate.notes]
+"Thinkofname/rust-quake" = "Quake map renderer."
+
+[[crate]]
+category = "Applications"
+use_case = "topheman/snake-pipe-rust"
+recommended = ["topheman/snake-pipe-rust"]
+[crate.notes]
+"topheman/snake-pipe-rust" = "A snake game in the terminal based on stdin/stdout (+tcp and unix domain sockets) [![crates.io](https://img.shields.io/crates/v/snakepipe.svg)](https://crates.io/crates/snakepipe)"
+
+[[crate]]
+category = "Applications"
+use_case = "ttyperacer/terminal-typeracer"
+recommended = ["ttyperacer/terminal-typeracer"]
+[crate.notes]
+"ttyperacer/terminal-typeracer" = "Single player typing test game written for the terminal"
+
+[[crate]]
+category = "Applications"
+use_case = "Veloren"
+recommended = ["Veloren"]
+[crate.notes]
+"Veloren" = "An open world, open source multiplayer voxel RPG game currently in alpha development [![build badge](https://gitlab.com/veloren/veloren/badges/master/pipeline.svg)](https://gitlab.com/veloren/veloren/"
+
+[[crate]]
+category = "Applications"
+use_case = "Zone of Control"
+recommended = ["Zone of Control"]
+[crate.notes]
+"Zone of Control" = "A turn-based hexagonal strategy game"
+
+[[crate]]
+category = "Applications"
+use_case = "dps/rust-raytracer"
+recommended = ["dps/rust-raytracer"]
+[crate.notes]
+"dps/rust-raytracer" = "An implementation of a very simple raytracer based on Ray Tracing in One Weekend by Peter Shirley."
+
+[[crate]]
+category = "Applications"
+use_case = "flxzt/rnote"
+recommended = ["flxzt/rnote"]
+[crate.notes]
+"flxzt/rnote" = "Sketch and take handwritten notes."
+
+[[crate]]
+category = "Applications"
+use_case = "ivanceras/svgbob"
+recommended = ["ivanceras/svgbob"]
+[crate.notes]
+"ivanceras/svgbob" = "converts ASCII diagrams into SVG graphics"
+
+[[crate]]
+category = "Applications"
+use_case = "KaminariOS/rustracer"
+recommended = ["KaminariOS/rustracer"]
+[crate.notes]
+"KaminariOS/rustracer" = "A PBR glTF 2.0 renderer based on Vulkan ray-tracing."
+
+[[crate]]
+category = "Applications"
+use_case = "Limeth/euclider"
+recommended = ["Limeth/euclider"]
+[crate.notes]
+"Limeth/euclider" = "A real-time 4D CPU ray tracer"
+
+[[crate]]
+category = "Applications"
+use_case = "linebender/resvg"
+recommended = ["linebender/resvg"]
+[crate.notes]
+"linebender/resvg" = "An SVG rendering library."
+
+[[crate]]
+category = "Applications"
+use_case = "museslabs/phonto"
+recommended = ["museslabs/phonto"]
+[crate.notes]
+"museslabs/phonto" = "GPU-accelerated video wallpaper program for Wayland and macOS, written in Rust."
+
+[[crate]]
+category = "Applications"
+use_case = "rodrigorc/papercraft"
+recommended = ["rodrigorc/papercraft"]
+[crate.notes]
+"rodrigorc/papercraft" = "A tool to unwrap 3D models and create them in paper with scissors and glue."
+
+[[crate]]
+category = "Applications"
+use_case = "rustq/vue-skia"
+recommended = ["rustq/vue-skia"]
+[crate.notes]
+"rustq/vue-skia" = "Skia based 2d graphics vue rendering library. It is based on Rust to implement software rasterization to perform rendering."
+
+[[crate]]
+category = "Applications"
+use_case = "storytold/artcraft"
+recommended = ["storytold/artcraft"]
+[crate.notes]
+"storytold/artcraft" = "An AI-powered IDE and tangible computing surface for molding scenes, videos, and images like clay."
+
+[[crate]]
+category = "Applications"
+use_case = "turnage/valora"
+recommended = ["turnage/valora"]
+[crate.notes]
+"turnage/valora" = "A library for generative fine art"
+
+[[crate]]
+category = "Applications"
+use_case = "Twinklebear/tray_rust"
+recommended = ["Twinklebear/tray_rust"]
+[crate.notes]
+"Twinklebear/tray_rust" = "A ray tracer"
+
+[[crate]]
+category = "Applications"
+use_case = "wahn/rs_pbrt"
+recommended = ["wahn/rs_pbrt"]
+[crate.notes]
+"wahn/rs_pbrt" = "Implements a counterpart to the PBRT book's (3rd edition) C++ code."
+
+[[crate]]
+category = "Applications"
+use_case = "Darkly"
+recommended = ["Darkly"]
+[crate.notes]
+"Darkly" = "Entropic editor for digital artists and painters."
+
+[[crate]]
+category = "Applications"
+use_case = "Graphite"
+recommended = ["Graphite"]
+[crate.notes]
+"Graphite" = "Vector-based graphics editor."
+
+[[crate]]
+category = "Applications"
+use_case = "Imager"
+recommended = ["Imager"]
+[crate.notes]
+"Imager" = "Automated image optimization."
+
+[[crate]]
+category = "Applications"
+use_case = "locka99/opcua"
+recommended = ["locka99/opcua"]
+[crate.notes]
+"locka99/opcua" = "A [OPC UA](https://opcfoundation.org/about/opc-technologies/opc-ua/) library."
+
+[[crate]]
+category = "Applications"
+use_case = "slowtec/tokio-modbus"
+recommended = ["slowtec/tokio-modbus"]
+[crate.notes]
+"slowtec/tokio-modbus" = "A [tokio](https://tokio.rs)-based [modbus](https://www.modbus.org) library."
+
+[[crate]]
+category = "Applications"
+use_case = "lonewolf-io/Narwhal"
+recommended = ["lonewolf-io/Narwhal"]
+[crate.notes]
+"lonewolf-io/Narwhal" = "An extensible pub/sub messaging server for edge applications."
+
+[[crate]]
+category = "Applications"
+use_case = "Rmqtt"
+recommended = ["Rmqtt"]
+[crate.notes]
+"Rmqtt" = "MQTT Server/MQTT Broker — Scalable distributed MQTT message broker for IoT in the 5G era."
+
+[[crate]]
+category = "Applications"
+use_case = "RobustMQ"
+recommended = ["RobustMQ"]
+[crate.notes]
+"RobustMQ" = "Next generation cloud-native converged message queue."
+
+[[crate]]
+category = "Applications"
+use_case = "Rocketmq-Rust"
+recommended = ["Rocketmq-Rust"]
+[crate.notes]
+"Rocketmq-Rust" = "🚀Apache RocketMQ build in Rust🦀. Faster, safer, and with lower memory usage."
+
+[[crate]]
+category = "Applications"
+use_case = "TensorZero"
+recommended = ["TensorZero"]
+[crate.notes]
+"TensorZero" = "data & learning flywheel for LLMs that unifies inference, observability, optimization, and experimentation ![TensorZero Build Status](https://img.shields.io/github/check-runs/tensorzero/tensorzero/mai"
+
+[[crate]]
+category = "Applications"
+use_case = "avito-tech/bioyino"
+recommended = ["avito-tech/bioyino"]
+[crate.notes]
+"avito-tech/bioyino" = "A high-performance scalable StatsD compatible server."
+
+[[crate]]
+category = "Applications"
+use_case = "esrlabs/chipmunk"
+recommended = ["esrlabs/chipmunk"]
+[crate.notes]
+"esrlabs/chipmunk" = "Native egui desktop application for analyzing massive log files and streams. Features a WebAssembly plugin system and automotive formats support. [![Chipmunk CI](https://github.com/esrlabs/chipmunk/ac"
+
+[[crate]]
+category = "Applications"
+use_case = "MegaAntiCheat/client-backend"
+recommended = ["MegaAntiCheat/client-backend"]
+[crate.notes]
+"MegaAntiCheat/client-backend" = "The client app for [MAC](https://github.com/MegaAntiCheat)."
+
+[[crate]]
+category = "Applications"
+use_case = "openobserve"
+recommended = ["openobserve"]
+[crate.notes]
+"openobserve" = "10x easier, 140x lower storage cost, high performance, petabyte scale - Elasticsearch/Splunk/Datadog alternative."
+
+[[crate]]
+category = "Applications"
+use_case = "OpenTelemetry"
+recommended = ["OpenTelemetry"]
+[crate.notes]
+"OpenTelemetry" = "OpenTelemetry provides a single set of APIs, libraries, agents, and collector services to capture distributed traces and metrics from your application. You can analyze them using Prometheus, Jaeger, a"
+
+[[crate]]
+category = "Applications"
+use_case = "Quickwit-oss/quickwit"
+recommended = ["Quickwit-oss/quickwit"]
+[crate.notes]
+"Quickwit-oss/quickwit" = "Cloud-native and highly cost-efficient search engine for log management. [![CI](https://github.com/quickwit-oss/quickwit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/quickwit-os"
+
+[[crate]]
+category = "Applications"
+use_case = "Scaphandre"
+recommended = ["Scaphandre"]
+[crate.notes]
+"Scaphandre" = "A power consumption monitoring agent, to track host and each service power consumption and enable designing systems and applications for more sustainability. Designed to fit any monitoring toolchain ("
+
+[[crate]]
+category = "Applications"
+use_case = "vectordotdev/vector"
+recommended = ["vectordotdev/vector"]
+[crate.notes]
+"vectordotdev/vector" = "A High-Performance, Logs, Metrics, & Events Router."
+
+[[crate]]
+category = "Applications"
+use_case = "0x59616e/SteinsOS"
+recommended = ["0x59616e/SteinsOS"]
+[crate.notes]
+"0x59616e/SteinsOS" = "An OS for armv8-a architecture."
+
+[[crate]]
+category = "Applications"
+use_case = "Andy-Python-Programmer/aero"
+recommended = ["Andy-Python-Programmer/aero"]
+[crate.notes]
+"Andy-Python-Programmer/aero" = "A modern, unix-like operating system following the monolithic kernel design."
+
+[[crate]]
+category = "Applications"
+use_case = "asterinas/asterinas"
+recommended = ["asterinas/asterinas"]
+[crate.notes]
+"asterinas/asterinas" = "A secure, fast, and general-purpose OS kernel that provides Linux-compatible ABI."
+
+[[crate]]
+category = "Applications"
+use_case = "DragonOS-Community/DragonOS"
+recommended = ["DragonOS-Community/DragonOS"]
+[crate.notes]
+"DragonOS-Community/DragonOS" = "An operating system with a self-developed kernel from scratch and Linux compatibility."
+
+[[crate]]
+category = "Applications"
+use_case = "hexagonal-sun/moss-kernel"
+recommended = ["hexagonal-sun/moss-kernel"]
+[crate.notes]
+"hexagonal-sun/moss-kernel" = "A Unix-like, Linux-compatible kernel written in Rust and Aarch64 assembly."
+
+[[crate]]
+category = "Applications"
+use_case = "koibtw/highlightos"
+recommended = ["koibtw/highlightos"]
+[crate.notes]
+"koibtw/highlightos" = "x86_64 OS kernel written in Rust & Assembly."
+
+[[crate]]
+category = "Applications"
+use_case = "redox-os/redox"
+recommended = ["redox-os/redox"]
+[crate.notes]
+"redox-os/redox" = "A Unix-like general-purpose microkernel-based operating system with a focus on security, stability, performance, correctness, simplicity and pragmatism that aims to be a complete alternative for Linux"
+
+[[crate]]
+category = "Applications"
+use_case = "thepowersgang/rust_os"
+recommended = ["thepowersgang/rust_os"]
+[crate.notes]
+"thepowersgang/rust_os" = "An OS kernel written in rust. Non POSIX"
+
+[[crate]]
+category = "Applications"
+use_case = "theseus-os/Theseus"
+recommended = ["theseus-os/Theseus"]
+[crate.notes]
+"theseus-os/Theseus" = "A safe-language, single address space and single privilege level OS written from scratch - [![build badge](https://img.shields.io/github/workflow/status/theseus-os/Theseus/Documentation?label=docs%20b"
+
+[[crate]]
+category = "Applications"
+use_case = "tock/tock"
+recommended = ["tock/tock"]
+[crate.notes]
+"tock/tock" = "A secure embedded operating system for Cortex-M based microcontrollers"
+
+[[crate]]
+category = "Applications"
+use_case = "vinc/moros"
+recommended = ["vinc/moros"]
+[crate.notes]
+"vinc/moros" = "A text-based hobby operating system targeting computers with a x86-64 architecture and a BIOS."
+
+[[crate]]
+category = "Applications"
+use_case = "rebos"
+recommended = ["rebos"]
+[crate.notes]
+"rebos" = "A declarative way to automate package management on any linux distro [![crate](https://img.shields.io/crates/v/rebos?logo=rust)](https://crates.io/crates/rebos)"
+
+[[crate]]
+category = "Applications"
+use_case = "hyperswitch"
+recommended = ["hyperswitch"]
+[crate.notes]
+"hyperswitch" = "An open source payments orchestrator that lets you connect with multiple payment processors and route payment traffic effortlessly, all with a single API integration ![GitHub last commit](https://img."
+
+[[crate]]
+category = "Applications"
+use_case = "aannoo/hcom"
+recommended = ["aannoo/hcom"]
+[crate.notes]
+"aannoo/hcom" = "Let AI agents message, watch, and spawn each other across terminals (Claude Code, Gemini CLI, Codex, OpenCode). Rust PTY wrapper with screen tracking, TUI (ratatui), and daemon client binary; Python h"
+
+[[crate]]
+category = "Applications"
+use_case = "agent-of-empires"
+recommended = ["agent-of-empires"]
+[crate.notes]
+"agent-of-empires" = "A TUI/CLI for managing multiple AI coding agent sessions with tmux, git worktrees, and Docker sandboxing [![CI](https://github.com/njbrake/agent-of-empires/actions/workflows/ci.yml/badge.svg)](https:/"
+
+[[crate]]
+category = "Applications"
+use_case = "aichat"
+recommended = ["aichat"]
+[crate.notes]
+"aichat" = "All-in-one LLM CLI tool featuring Shell Assistant, Chat-REPL, RAG, AI Tools & Agents, with access to OpenAI, Claude, Gemini, Ollama, Groq, and more."
+
+[[crate]]
+category = "Applications"
+use_case = "ast-grep"
+recommended = ["ast-grep"]
+[crate.notes]
+"ast-grep" = "A CLI tool for code structural search, lint and rewriting."
+
+[[crate]]
+category = "Applications"
+use_case = "CookCLI"
+recommended = ["CookCLI"]
+[crate.notes]
+"CookCLI" = "Command-line recipe manager with web server, shopping lists, and meal planning capabilities."
+
+[[crate]]
+category = "Applications"
+use_case = "espanso"
+recommended = ["espanso"]
+[crate.notes]
+"espanso" = "A cross-platform Text Expander. [![CI](https://github.com/espanso/espanso/actions/workflows/ci.yml/badge.svg?branch=dev&event=push)](https://github.com/espanso/espanso/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "eureka"
+recommended = ["eureka"]
+[crate.notes]
+"eureka" = "A CLI tool to input and store your ideas without leaving the terminal"
+
+[[crate]]
+category = "Applications"
+use_case = "farion1231/cc-switch"
+recommended = ["farion1231/cc-switch"]
+[crate.notes]
+"farion1231/cc-switch" = "An all-in-one GUI assistant and profile manager for Claude Code, Codex, and Gemini CLI."
+
+[[crate]]
+category = "Applications"
+use_case = "flusterIO/fluster"
+recommended = ["flusterIO/fluster"]
+[crate.notes]
+"flusterIO/fluster" = "An all-in-one note taking application built for STEM students and professionals. [![publish](https://github.com/flusterIO/fluster/actions/workflows/release_rust.yml/badge.svg)](https://github.com/flus"
+
+[[crate]]
+category = "Applications"
+use_case = "Furtherance"
+recommended = ["Furtherance"]
+[crate.notes]
+"Furtherance" = "Time tracking app built with GTK4"
+
+[[crate]]
+category = "Applications"
+use_case = "illacloud/illa"
+recommended = ["illacloud/illa"]
+[crate.notes]
+"illacloud/illa" = "Low-code internal tool builder."
+
+[[crate]]
+category = "Applications"
+use_case = "LLDAP"
+recommended = ["LLDAP"]
+[crate.notes]
+"LLDAP" = "Simplified LDAP interface for authentication."
+
+[[crate]]
+category = "Applications"
+use_case = "mag123c/toktrack"
+recommended = ["mag123c/toktrack"]
+[crate.notes]
+"mag123c/toktrack" = "Fast TUI/CLI that tracks token usage and cost across AI coding CLIs (Claude Code, Codex, Gemini CLI, and more), with a persistent cache that survives CLI data deletion. [![CI](https://github.com/mag12"
+
+[[crate]]
+category = "Applications"
+use_case = "muvon/octomind"
+recommended = ["muvon/octomind"]
+[crate.notes]
+"muvon/octomind" = "Open-source AI agent runtime CLI with 48+ specialist agents, MCP host with dynamic server registration, multi-provider support (13+ LLMs), and adaptive context compression for 4+ hour sessions."
+
+[[crate]]
+category = "Applications"
+use_case = "pier-cli/pier"
+recommended = ["pier-cli/pier"]
+[crate.notes]
+"pier-cli/pier" = "A central repository to manage (add, search metadata, etc.) all your one-liners, scripts, tools, and CLIs"
+
+[[crate]]
+category = "Applications"
+use_case = "rtk-ai/rtk"
+recommended = ["rtk-ai/rtk"]
+[crate.notes]
+"rtk-ai/rtk" = "High-performance CLI proxy that reduces LLM token consumption by 60-90% for AI coding assistants. Filters and compresses command outputs for Claude Code, Copilot, Cursor, Gemini CLI, Codex, and more. "
+
+[[crate]]
+category = "Applications"
+use_case = "screenpipe"
+recommended = ["screenpipe"]
+[crate.notes]
+"screenpipe" = "24/7 local AI screen & mic recording. Build AI apps that have the full context. Works with Ollama."
+
+[[crate]]
+category = "Applications"
+use_case = "tambourine-voice"
+recommended = ["tambourine-voice"]
+[crate.notes]
+"tambourine-voice" = "personal AI voice interface for any app - customizable dictation that lets you choose your own models and prompts, built using Rust."
+
+[[crate]]
+category = "Applications"
+use_case = "thClaws/thClaws"
+recommended = ["thClaws/thClaws"]
+[crate.notes]
+"thClaws/thClaws" = "Native Rust AI agent workspace with multi-provider LLM support, skills system, MCP servers, knowledge bases, and agent orchestration. Features desktop GUI, CLI REPL, and non-interactive modes. [![Lice"
+
+[[crate]]
+category = "Applications"
+use_case = "tinyhumansai/openhuman"
+recommended = ["tinyhumansai/openhuman"]
+[crate.notes]
+"tinyhumansai/openhuman" = "Open-source agentic assistant with desktop UI, 118+ OAuth integrations, local-first memory tree, Obsidian-compatible wiki, native voice, and TokenJuice compression. Built with Tauri and Rust for priva"
+
+[[crate]]
+category = "Applications"
+use_case = "tw93/Pake"
+recommended = ["tw93/Pake"]
+[crate.notes]
+"tw93/Pake" = "Turn any webpage into a desktop app with one command using Rust and Tauri. Lightweight, fast, and supports macOS, Windows, and Linux."
+
+[[crate]]
+category = "Applications"
+use_case = "xingkongliang/skills-manager"
+recommended = ["xingkongliang/skills-manager"]
+[crate.notes]
+"xingkongliang/skills-manager" = "Lightweight desktop app to manage, sync, and organize AI agent skills across 15+ coding tools (Cursor, Claude Code, Codex, Copilot, etc.) with Tauri 2, Rust backend, and Git backup support."
+
+[[crate]]
+category = "Applications"
+use_case = "Holo"
+recommended = ["Holo"]
+[crate.notes]
+"Holo" = "Holo is a suite of routing protocols designed to support high-scale and automation-driven networks"
+
+[[crate]]
+category = "Applications"
+use_case = "RustyBGP"
+recommended = ["RustyBGP"]
+[crate.notes]
+"RustyBGP" = "BGP"
+
+[[crate]]
+category = "Applications"
+use_case = "AFLplusplus/LibAFL"
+recommended = ["AFLplusplus/LibAFL"]
+[crate.notes]
+"AFLplusplus/LibAFL" = "Advanced Fuzzing Library - Slot your Fuzzer together in Rust! Scales across cores and machines. For Windows, Android, MacOS, Linux, no_std, etc. [![build and test](https://github.com/AFLplusplus/LibAF"
+
+[[crate]]
+category = "Applications"
+use_case = "arp-scan-rs"
+recommended = ["arp-scan-rs"]
+[crate.notes]
+"arp-scan-rs" = "A minimalistic ARP scan tool for fast local network scans"
+
+[[crate]]
+category = "Applications"
+use_case = "biandratti/huginn-net"
+recommended = ["biandratti/huginn-net"]
+[crate.notes]
+"biandratti/huginn-net" = "Multi-protocol passive network fingerprinting combining p0f TCP and JA4 TLS analysis for OS and application detection [![CI](https://github.com/biandratti/huginn-net/actions/workflows/ci.yml/badge.svg"
+
+[[crate]]
+category = "Applications"
+use_case = "bountyyfi/lonkero"
+recommended = ["bountyyfi/lonkero"]
+[crate.notes]
+"bountyyfi/lonkero" = "Enterprise-grade web vulnerability scanner with 60+ attack modules for penetration testing and security assessments"
+
+[[crate]]
+category = "Applications"
+use_case = "cargo-audit"
+recommended = ["cargo-audit"]
+[crate.notes]
+"cargo-audit" = "Audit Cargo.lock for crates with security vulnerabilities"
+
+[[crate]]
+category = "Applications"
+use_case = "cargo-auditable"
+recommended = ["cargo-auditable"]
+[crate.notes]
+"cargo-auditable" = "Make production Rust binaries auditable"
+
+[[crate]]
+category = "Applications"
+use_case = "cargo-crev"
+recommended = ["cargo-crev"]
+[crate.notes]
+"cargo-crev" = "A cryptographically verifiable code review system for the cargo package manager."
+
+[[crate]]
+category = "Applications"
+use_case = "cargo-deny"
+recommended = ["cargo-deny"]
+[crate.notes]
+"cargo-deny" = "Cargo plugin to help you manage large dependency graphs"
+
+[[crate]]
+category = "Applications"
+use_case = "Cherrybomb"
+recommended = ["Cherrybomb"]
+[crate.notes]
+"Cherrybomb" = "Stop half-done API specifications with a CLI tool that helps you avoid undefined user behaviour by validating your API specifications."
+
+[[crate]]
+category = "Applications"
+use_case = "cotp"
+recommended = ["cotp"]
+[crate.notes]
+"cotp" = "Trustworthy, encrypted, command-line TOTP/HOTP authenticator app with import functionality."
+
+[[crate]]
+category = "Applications"
+use_case = "domcyrus/rustnet"
+recommended = ["domcyrus/rustnet"]
+[crate.notes]
+"domcyrus/rustnet" = "Cross-platform network monitoring TUI with process identification via eBPF/PKTAP and deep packet inspection [![build badge](https://img.shields.io/github/actions/workflow/status/domcyrus/rustnet/rust."
+
+[[crate]]
+category = "Applications"
+use_case = "EFForg/rayhunter"
+recommended = ["EFForg/rayhunter"]
+[crate.notes]
+"EFForg/rayhunter" = "IMSI catcher detection tool designed to run on mobile hotspot hardware, helping users identify potential cellular surveillance (Stingray/cell-site simulators) [![Tests](https://github.com/EFForg/rayhu"
+
+[[crate]]
+category = "Applications"
+use_case = "epi052/feroxbuster"
+recommended = ["epi052/feroxbuster"]
+[crate.notes]
+"epi052/feroxbuster" = "A simple, fast, recursive content discovery tool."
+
+[[crate]]
+category = "Applications"
+use_case = "InnerWarden/innerwarden"
+recommended = ["InnerWarden/innerwarden"]
+[crate.notes]
+"InnerWarden/innerwarden" = "Self-defending security agent for Linux and macOS with 22 eBPF kernel hooks, 39 detectors, and AI-driven incident response [![CI](https://github.com/InnerWarden/innerwarden/actions/workflows/ci.yml/ba"
+
+[[crate]]
+category = "Applications"
+use_case = "Inspektor"
+recommended = ["Inspektor"]
+[crate.notes]
+"Inspektor" = "A database protocol-aware proxy that is used to enforce access policies 👮"
+
+[[crate]]
+category = "Applications"
+use_case = "kpcyrd/authoscope"
+recommended = ["kpcyrd/authoscope"]
+[crate.notes]
+"kpcyrd/authoscope" = "A scriptable network authentication cracker"
+
+[[crate]]
+category = "Applications"
+use_case = "kpcyrd/rshijack"
+recommended = ["kpcyrd/rshijack"]
+[crate.notes]
+"kpcyrd/rshijack" = "A TCP connection hijacker; rewrite of shijack"
+
+[[crate]]
+category = "Applications"
+use_case = "kpcyrd/sn0int"
+recommended = ["kpcyrd/sn0int"]
+[crate.notes]
+"kpcyrd/sn0int" = "A semi-automatic OSINT framework and package manager"
+
+[[crate]]
+category = "Applications"
+use_case = "kpcyrd/sniffglue"
+recommended = ["kpcyrd/sniffglue"]
+[crate.notes]
+"kpcyrd/sniffglue" = "A secure multithreaded packet sniffer"
+
+[[crate]]
+category = "Applications"
+use_case = "LeChatP/RootAsRole"
+recommended = ["LeChatP/RootAsRole"]
+[crate.notes]
+"LeChatP/RootAsRole" = "A better alternative to sudo(-rs)/su • ⚡ Blazing fast • 🛡️ Memory-safe • 🔐 Security-oriented ![Build](https://img.shields.io/github/actions/workflow/status/LeChatP/RootAsRole/build.yml?logo=githubacti"
+
+[[crate]]
+category = "Applications"
+use_case = "microsoft/mxc"
+recommended = ["microsoft/mxc"]
+[crate.notes]
+"microsoft/mxc" = "Sandboxed code execution system for running untrusted code (model output, plugins, tools) on Windows, Linux, and macOS. Features multiple containment backends (ProcessContainer, Windows Sandbox, LXC, "
+
+[[crate]]
+category = "Applications"
+use_case = "mongodb/kingfisher"
+recommended = ["mongodb/kingfisher"]
+[crate.notes]
+"mongodb/kingfisher" = "A blazingly fast tool for secret detection and live validation across files, Git repos, S3, Jira, and Confluence"
+
+[[crate]]
+category = "Applications"
+use_case = "mullvad/mullvadvpn-app"
+recommended = ["mullvad/mullvadvpn-app"]
+[crate.notes]
+"mullvad/mullvadvpn-app" = "Cross-platform VPN client application for the Mullvad VPN service with WireGuard support, quantum-resistant tunnels, and privacy-focused features. [![CI](https://github.com/mullvad/mullvadvpn-app/acti"
+
+[[crate]]
+category = "Applications"
+use_case = "observer_ward"
+recommended = ["observer_ward"]
+[crate.notes]
+"observer_ward" = "Web application and service fingerprint identification tool"
+
+[[crate]]
+category = "Applications"
+use_case = "Raspirus"
+recommended = ["Raspirus"]
+[crate.notes]
+"Raspirus" = "User- and resources-friendly rules-based malware scanner [![status](https://github.com/Raspirus/Raspirus/actions/workflows/testproject.yml/badge.svg)](https://github.com/Raspirus/Raspirus/actions/work"
+
+[[crate]]
+category = "Applications"
+use_case = "reaction"
+recommended = ["reaction"]
+[crate.notes]
+"reaction" = "Scan logs and take action: an alternative to fail2ban"
+
+[[crate]]
+category = "Applications"
+use_case = "ripasso"
+recommended = ["ripasso"]
+[crate.notes]
+"ripasso" = "A password manager, filesystem compatible with pass"
+
+[[crate]]
+category = "Applications"
+use_case = "rustscan"
+recommended = ["rustscan"]
+[crate.notes]
+"rustscan" = "Make Nmap faster with this port scanning tool [![build badge](https://github.com/bee-san/RustScan/actions/workflows/test.yml/badge.svg)](https://github.com/bee-san/RustScan/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "secluso"
+recommended = ["secluso"]
+[crate.notes]
+"secluso" = "A private Raspberry Pi home security camera that uses end-to-end encryption"
+
+[[crate]]
+category = "Applications"
+use_case = "ssh-vault"
+recommended = ["ssh-vault"]
+[crate.notes]
+"ssh-vault" = "A simple tool to manage secrets using ssh keys for encryption and decryption."
+
+[[crate]]
+category = "Applications"
+use_case = "SystemVll/TAuth"
+recommended = ["SystemVll/TAuth"]
+[crate.notes]
+"SystemVll/TAuth" = "An easy and user friendly 2FA & Credentials manager, for your PC."
+
+[[crate]]
+category = "Applications"
+use_case = "ajeetdsouza/zoxide"
+recommended = ["ajeetdsouza/zoxide"]
+[crate.notes]
+"ajeetdsouza/zoxide" = "A fast alternative to `cd` that learns your habits [![release](https://github.com/ajeetdsouza/zoxide/actions/workflows/release.yml/badge.svg)](https://github.com/ajeetdsouza/zoxide/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "anylinuxfs"
+recommended = ["anylinuxfs"]
+[crate.notes]
+"anylinuxfs" = "CLI tool for mounting any linux-supported filesystem on a Mac - using NFS with a microVM"
+
+[[crate]]
+category = "Applications"
+use_case = "anylinuxfs-gui"
+recommended = ["anylinuxfs-gui"]
+[crate.notes]
+"anylinuxfs-gui" = "GUI application for anylinuxfs"
+
+[[crate]]
+category = "Applications"
+use_case = "ataraxy-labs/sem"
+recommended = ["ataraxy-labs/sem"]
+[crate.notes]
+"ataraxy-labs/sem" = "Entity-level semantic version control CLI. Diff, blame, graph, and impact analysis at the function/class level across 32 languages via tree-sitter. [![Release](https://github.com/ataraxy-labs/sem/acti"
+
+[[crate]]
+category = "Applications"
+use_case = "ataraxy-labs/weave"
+recommended = ["ataraxy-labs/weave"]
+[crate.notes]
+"ataraxy-labs/weave" = "Entity-level merge driver for Git. Resolves merge conflicts by understanding code structure via tree-sitter. Drops into git as a custom merge driver via .gitattributes. [![Release](https://github.com/"
+
+[[crate]]
+category = "Applications"
+use_case = "bandwhich"
+recommended = ["bandwhich"]
+[crate.notes]
+"bandwhich" = "Terminal bandwidth utilization tool"
+
+[[crate]]
+category = "Applications"
+use_case = "bolivian-peru/os-moda"
+recommended = ["bolivian-peru/os-moda"]
+[crate.notes]
+"bolivian-peru/os-moda" = "NixOS distribution where an AI agent has root through 91 typed MCP tools. 9 Rust daemons (system bridge, atomic SafeSwitch deploys with auto-rollback, hash-chained audit ledger, AES-256-GCM crypto wal"
+
+[[crate]]
+category = "Applications"
+use_case = "bottom"
+recommended = ["bottom"]
+[crate.notes]
+"bottom" = "Yet another cross-platform graphical process/system monitor. [![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/ClementTsang/bottom/ci/master)](https://github.com/Clemen"
+
+[[crate]]
+category = "Applications"
+use_case = "brocode/fblog"
+recommended = ["brocode/fblog"]
+[crate.notes]
+"brocode/fblog" = "Small command-line JSON Log viewer"
+
+[[crate]]
+category = "Applications"
+use_case = "brush-shell"
+recommended = ["brush-shell"]
+[crate.notes]
+"brush-shell" = "bash/POSIX-compatible shell [![CICD](https://github.com/reubeno/brush/actions/workflows/ci.yaml/badge.svg)](https://github.com/reubeno/brush/actions/workflows/ci.yaml)[![Crate](https://img.shields.io/"
+
+[[crate]]
+category = "Applications"
+use_case = "bustd"
+recommended = ["bustd"]
+[crate.notes]
+"bustd" = "Lightweight process killer daemon to handle out-of-memory scenarios on Linux. [![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/vrmiguel/bustd/build-and-test)](https://"
+
+[[crate]]
+category = "Applications"
+use_case = "buster/rrun"
+recommended = ["buster/rrun"]
+[crate.notes]
+"buster/rrun" = "A command launcher for Linux, similar to gmrun"
+
+[[crate]]
+category = "Applications"
+use_case = "cantino/mcfly"
+recommended = ["cantino/mcfly"]
+[crate.notes]
+"cantino/mcfly" = "Fly through your shell history. Great Scott!"
+
+[[crate]]
+category = "Applications"
+use_case = "crabz"
+recommended = ["crabz"]
+[crate.notes]
+"crabz" = "Multi-threaded compression and decompression CLI tool [![Build Status](https://github.com/sstadick/crabz/workflows/Check/badge.svg)](https://github.com/sstadick/crabz/actions?query=workflow%3ACheck)"
+
+[[crate]]
+category = "Applications"
+use_case = "cristianoliveira/funzzy"
+recommended = ["cristianoliveira/funzzy"]
+[crate.notes]
+"cristianoliveira/funzzy" = "A configurable filesystem watcher inspired by [entr](http://eradman.com/entrproject/)"
+
+[[crate]]
+category = "Applications"
+use_case = "dalance/procs"
+recommended = ["dalance/procs"]
+[crate.notes]
+"dalance/procs" = "A modern replacement for 'ps' [![Regression](https://github.com/dalance/procs/actions/workflows/regression.yml/badge.svg)](https://github.com/dalance/procs/actions/workflows/regression.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "ddh"
+recommended = ["ddh"]
+[crate.notes]
+"ddh" = "Fast duplicate file finder"
+
+[[crate]]
+category = "Applications"
+use_case = "diskonaut"
+recommended = ["diskonaut"]
+[crate.notes]
+"diskonaut" = "Terminal visual disk space navigator"
+
+[[crate]]
+category = "Applications"
+use_case = "dust"
+recommended = ["dust"]
+[crate.notes]
+"dust" = "A more intuitive version of du"
+
+[[crate]]
+category = "Applications"
+use_case = "eza-community/eza"
+recommended = ["eza-community/eza"]
+[crate.notes]
+"eza-community/eza" = "A replacement for 'ls'"
+
+[[crate]]
+category = "Applications"
+use_case = "fish-shell/fish-shell"
+recommended = ["fish-shell/fish-shell"]
+[crate.notes]
+"fish-shell/fish-shell" = "The user-friendly command line shell"
+
+[[crate]]
+category = "Applications"
+use_case = "fork"
+recommended = ["fork"]
+[crate.notes]
+"fork" = "Library for creating a new process detached from the controlling terminal (daemon)"
+
+[[crate]]
+category = "Applications"
+use_case = "fselect"
+recommended = ["fselect"]
+[crate.notes]
+"fselect" = "Find files with SQL-like queries"
+
+[[crate]]
+category = "Applications"
+use_case = "git-ai-project/git-ai"
+recommended = ["git-ai-project/git-ai"]
+[crate.notes]
+"git-ai-project/git-ai" = "A git extension that tracks AI-generated code in your repositories, linking lines to the agent, model, and transcripts."
+
+[[crate]]
+category = "Applications"
+use_case = "gitbutlerapp/gitbutler"
+recommended = ["gitbutlerapp/gitbutler"]
+[crate.notes]
+"gitbutlerapp/gitbutler" = "A modern Git-based version control interface with both a GUI and CLI built from the ground up for AI-powered workflows."
+
+[[crate]]
+category = "Applications"
+use_case = "gitui"
+recommended = ["gitui"]
+[crate.notes]
+"gitui" = "Blazing fast terminal client for git. [![build](https://github.com/gitui-org/gitui/actions/workflows/ci.yml/badge.svg)](https://github.com/gitui-org/gitui/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "GQL"
+recommended = ["GQL"]
+[crate.notes]
+"GQL" = "A SQL like query language to run on .git files."
+
+[[crate]]
+category = "Applications"
+use_case = "httm"
+recommended = ["httm"]
+[crate.notes]
+"httm" = "Interactive, file-level Time Machine-like tool for ZFS/btrfs/nilfs2 (and even actual Time Machine backups!)"
+
+[[crate]]
+category = "Applications"
+use_case = "j0ru/kickoff"
+recommended = ["j0ru/kickoff"]
+[crate.notes]
+"j0ru/kickoff" = "Fast and snappy wayland program launcher [![build](https://github.com/j0ru/kickoff/actions/workflows/ci.yml/badge.svg)](https://github.com/j0ru/kickoff/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "Kondo"
+recommended = ["Kondo"]
+[crate.notes]
+"Kondo" = "CLI & GUI tool for deleting software project artifacts and reclaiming disk space"
+
+[[crate]]
+category = "Applications"
+use_case = "LACT"
+recommended = ["LACT"]
+[crate.notes]
+"LACT" = "Linux AMDGPU Controller"
+
+[[crate]]
+category = "Applications"
+use_case = "lodosgroup/lpm"
+recommended = ["lodosgroup/lpm"]
+[crate.notes]
+"lodosgroup/lpm" = "An experimental system package manager"
+
+[[crate]]
+category = "Applications"
+use_case = "lsd"
+recommended = ["lsd"]
+[crate.notes]
+"lsd" = "An ls with a lot of pretty colors and awesome icons [![build](https://github.com/lsd-rs/lsd/actions/workflows/CICD.yml/badge.svg)](https://github.com/lsd-rs/lsd/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "Luminarys/synapse"
+recommended = ["Luminarys/synapse"]
+[crate.notes]
+"Luminarys/synapse" = "Flexible and fast BitTorrent daemon."
+
+[[crate]]
+category = "Applications"
+use_case = "m4b/bingrep"
+recommended = ["m4b/bingrep"]
+[crate.notes]
+"m4b/bingrep" = "Greps through binaries from various OSs and architectures, and colors them."
+
+[[crate]]
+category = "Applications"
+use_case = "macpow"
+recommended = ["macpow"]
+[crate.notes]
+"macpow" = "Real-time power consumption monitor TUI for Apple Silicon Macs (M1–M5+). Reads IOReport, SMC, IORegistry — no sudo required. [![CI](https://github.com/k06a/macpow/actions/workflows/ci.yml/badge.svg)]("
+
+[[crate]]
+category = "Applications"
+use_case = "matthart1983/diskwatch"
+recommended = ["matthart1983/diskwatch"]
+[crate.notes]
+"matthart1983/diskwatch" = "Single-host disk diagnostics TUI: eight tabs across devices, volumes, filesystems, IO, SMART, hot files, and insights."
+
+[[crate]]
+category = "Applications"
+use_case = "mdgaziur/findex"
+recommended = ["mdgaziur/findex"]
+[crate.notes]
+"mdgaziur/findex" = "Findex is a highly customizable application finder using GTK3"
+
+[[crate]]
+category = "Applications"
+use_case = "mitnk/cicada"
+recommended = ["mitnk/cicada"]
+[crate.notes]
+"mitnk/cicada" = "A bash-like Unix shell"
+
+[[crate]]
+category = "Applications"
+use_case = "mmstick/concurr"
+recommended = ["mmstick/concurr"]
+[crate.notes]
+"mmstick/concurr" = "Alternative to GNU Parallel w/ a client-server architecture"
+
+[[crate]]
+category = "Applications"
+use_case = "mmstick/fontfinder"
+recommended = ["mmstick/fontfinder"]
+[crate.notes]
+"mmstick/fontfinder" = "GTK3 application for previewing and installing Google's fonts"
+
+[[crate]]
+category = "Applications"
+use_case = "mmstick/tv-renamer"
+recommended = ["mmstick/tv-renamer"]
+[crate.notes]
+"mmstick/tv-renamer" = "A tv series renaming application with an optional GTK3 frontend."
+
+[[crate]]
+category = "Applications"
+use_case = "mxseev/logram"
+recommended = ["mxseev/logram"]
+[crate.notes]
+"mxseev/logram" = "Push log files' updates to Telegram"
+
+[[crate]]
+category = "Applications"
+use_case = "netscanner"
+recommended = ["netscanner"]
+[crate.notes]
+"netscanner" = "TUI Network Scanner"
+
+[[crate]]
+category = "Applications"
+use_case = "nivekuil/rip"
+recommended = ["nivekuil/rip"]
+[crate.notes]
+"nivekuil/rip" = "A safe and ergonomic alternative to `rm`"
+
+[[crate]]
+category = "Applications"
+use_case = "nushell/nushell"
+recommended = ["nushell/nushell"]
+[crate.notes]
+"nushell/nushell" = "A new type of shell"
+
+[[crate]]
+category = "Applications"
+use_case = "nwiizo/tfmcp"
+recommended = ["nwiizo/tfmcp"]
+[crate.notes]
+"nwiizo/tfmcp" = "Terraform MCP Tool - CLI for AI assistants to manage Terraform environments via Model Context Protocol."
+
+[[crate]]
+category = "Applications"
+use_case = "nwiizo/tfocus"
+recommended = ["nwiizo/tfocus"]
+[crate.notes]
+"nwiizo/tfocus" = "Interactive tool for selecting and executing Terraform plan/apply operations"
+
+[[crate]]
+category = "Applications"
+use_case = "orhun/kmon"
+recommended = ["orhun/kmon"]
+[crate.notes]
+"orhun/kmon" = "Linux Kernel Manager and Activity Monitor ![https://github.com/orhun/kmon/actions](https://img.shields.io/github/actions/workflow/status/orhun/kmon/ci.yml?branch=master&label=build)"
+
+[[crate]]
+category = "Applications"
+use_case = "orhun/systeroid"
+recommended = ["orhun/systeroid"]
+[crate.notes]
+"orhun/systeroid" = "A more powerful alternative to sysctl(8) with a terminal user interface ![https://github.com/orhun/systeroid/actions](https://img.shields.io/github/actions/workflow/status/orhun/systeroid/ci.yml?branc"
+
+[[crate]]
+category = "Applications"
+use_case = "ouch"
+recommended = ["ouch"]
+[crate.notes]
+"ouch" = "Painless compression and decompression on the command-line [![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/ouch-org/ouch/build-and-test)](https://github.com/ouch-org/"
+
+[[crate]]
+category = "Applications"
+use_case = "pkolaczk/fclones"
+recommended = ["pkolaczk/fclones"]
+[crate.notes]
+"pkolaczk/fclones" = "Efficient duplicate file finder and remover"
+
+[[crate]]
+category = "Applications"
+use_case = "pop-os/popsicle"
+recommended = ["pop-os/popsicle"]
+[crate.notes]
+"pop-os/popsicle" = "GTK3 & CLI utility for flashing multiple USB devices in parallel"
+
+[[crate]]
+category = "Applications"
+use_case = "pop-os/system76-power"
+recommended = ["pop-os/system76-power"]
+[crate.notes]
+"pop-os/system76-power" = "Linux power management daemon (DBus-interface) with CLI tool."
+
+[[crate]]
+category = "Applications"
+use_case = "pueue"
+recommended = ["pueue"]
+[crate.notes]
+"pueue" = "Manage your long running shell commands. [![GitHub Actions Workflow](https://github.com/Nukesor/pueue/actions/workflows/test.yml/badge.svg)](https://github.com/nukesor/pueue/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "qarmin/czkawka"
+recommended = ["qarmin/czkawka"]
+[crate.notes]
+"qarmin/czkawka" = "Multi-functional app to find duplicates, empty folders, similar images, etc. [![GitHub Actions Workflow](https://github.com/qarmin/czkawka/actions/workflows/pages/pages-build-deployment/badge.svg?bran"
+
+[[crate]]
+category = "Applications"
+use_case = "redox-os/ion"
+recommended = ["redox-os/ion"]
+[crate.notes]
+"redox-os/ion" = "Next-generation system shell"
+
+[[crate]]
+category = "Applications"
+use_case = "sharkdp/bat"
+recommended = ["sharkdp/bat"]
+[crate.notes]
+"sharkdp/bat" = "A cat(1) clone with wings. [![CICD](https://github.com/sharkdp/bat/actions/workflows/CICD.yml/badge.svg?branch=master)](https://github.com/sharkdp/bat/actions/workflows/CICD.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "sharkdp/fd"
+recommended = ["sharkdp/fd"]
+[crate.notes]
+"sharkdp/fd" = "A simple, fast and user-friendly alternative to find. [![CICD](https://github.com/sharkdp/fd/actions/workflows/CICD.yml/badge.svg)](https://github.com/sharkdp/fd/actions/workflows/CICD.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "sitkevij/hex"
+recommended = ["sitkevij/hex"]
+[crate.notes]
+"sitkevij/hex" = "A colorized hexdump terminal utility."
+
+[[crate]]
+category = "Applications"
+use_case = "skim"
+recommended = ["skim"]
+[crate.notes]
+"skim" = "A fuzzy finder"
+
+[[crate]]
+category = "Applications"
+use_case = "supercilex/fuc"
+recommended = ["supercilex/fuc"]
+[crate.notes]
+"supercilex/fuc" = "Fast `cp` and `rm` commands"
+
+[[crate]]
+category = "Applications"
+use_case = "topheman/webassembly-component-model-experiments"
+recommended = ["topheman/webassembly-component-model-experiments"]
+[crate.notes]
+"topheman/webassembly-component-model-experiments" = "WebAssembly Component Model based REPL with sandboxed multi-language plugin system [![Crates.io](https://img.shields.io/crates/v/pluginlab.svg)](https://crates.io/crates/pluginlab)"
+
+[[crate]]
+category = "Applications"
+use_case = "trippy"
+recommended = ["trippy"]
+[crate.notes]
+"trippy" = "A network diagnostic tool [![build badge](https://github.com/fujiapple852/trippy/workflows/CI/badge.svg)](https://github.com/fujiapple852/trippy/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "tw93/Kaku"
+recommended = ["tw93/Kaku"]
+[crate.notes]
+"tw93/Kaku" = "A fast, out-of-the-box terminal emulator built for AI coding, with zero-config defaults, AI assistant integration, and WezTerm-compatible Lua configuration. macOS-only."
+
+[[crate]]
+category = "Applications"
+use_case = "uutils/coreutils"
+recommended = ["uutils/coreutils"]
+[crate.notes]
+"uutils/coreutils" = "A cross-platform rewrite of the GNU coreutils [![CICD](https://github.com/uutils/coreutils/actions/workflows/CICD.yml/badge.svg)](https://github.com/uutils/coreutils/actions/workflows/CICD.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "watchexec"
+recommended = ["watchexec"]
+[crate.notes]
+"watchexec" = "Executes commands in response to file modifications"
+
+[[crate]]
+category = "Applications"
+use_case = "XAMPPRocky/tokei"
+recommended = ["XAMPPRocky/tokei"]
+[crate.notes]
+"XAMPPRocky/tokei" = "counts the lines of code"
+
+[[crate]]
+category = "Applications"
+use_case = "ynqa/jnv"
+recommended = ["ynqa/jnv"]
+[crate.notes]
+"ynqa/jnv" = "Interactive JSON filter using jq [![ci](https://github.com/ynqa/jnv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ynqa/jnv/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "ynqa/logu"
+recommended = ["ynqa/logu"]
+[crate.notes]
+"ynqa/logu" = "Extract patterns from (streaming) unstructured log messages [![ci](https://github.com/ynqa/logu/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ynqa/logu/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "ynqa/sig"
+recommended = ["ynqa/sig"]
+[crate.notes]
+"ynqa/sig" = "Interactive grep (for streaming) [![ci](https://github.com/ynqa/sig/actions/workflows/ci.yml/badge.svg)](https://github.com/ynqa/sig/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "amp"
+recommended = ["amp"]
+[crate.notes]
+"amp" = "Inspired by Vi/Vim."
+
+[[crate]]
+category = "Applications"
+use_case = "Ferrite"
+recommended = ["Ferrite"]
+[crate.notes]
+"Ferrite" = "A cross-platform markdown editor built with egui, featuring live preview, syntax highlighting, and mermaid diagrams."
+
+[[crate]]
+category = "Applications"
+use_case = "Fresh"
+recommended = ["Fresh"]
+[crate.notes]
+"Fresh" = "An easy-to-use, powerful and fast terminal text editor & IDE, with TypeScript plugin support."
+
+[[crate]]
+category = "Applications"
+use_case = "gchp/iota"
+recommended = ["gchp/iota"]
+[crate.notes]
+"gchp/iota" = "A simple text editor"
+
+[[crate]]
+category = "Applications"
+use_case = "helix"
+recommended = ["helix"]
+[crate.notes]
+"helix" = "A post-modern modal text editor inspired by Neovim/Kakoune. [![build badge](https://github.com/helix-editor/helix/actions/workflows/build.yml/badge.svg)](https://github.com/helix-editor/helix/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "ilai-deutel/kibi"
+recommended = ["ilai-deutel/kibi"]
+[crate.notes]
+"ilai-deutel/kibi" = "A tiny (≤1024 LOC) text editor with syntax highlighting, incremental search and more. [![build badge](https://github.com/ilai-deutel/kibi/actions/workflows/ci.yml/badge.svg)](https://github.com/ilai-d"
+
+[[crate]]
+category = "Applications"
+use_case = "Inkwell"
+recommended = ["Inkwell"]
+[crate.notes]
+"Inkwell" = "A portable, offline-first Markdown editor built with Tauri v2. Single executable, zero telemetry."
+
+[[crate]]
+category = "Applications"
+use_case = "ki-editor/ki-editor"
+recommended = ["ki-editor/ki-editor"]
+[crate.notes]
+"ki-editor/ki-editor" = "A multi-cursor combinatoric modal editor"
+
+[[crate]]
+category = "Applications"
+use_case = "Lapce"
+recommended = ["Lapce"]
+[crate.notes]
+"Lapce" = "A modern editor with a backend. Taking inspiration from the discontinued [xi-editor](https://github.com/xi-editor/xi-editor)."
+
+[[crate]]
+category = "Applications"
+use_case = "manyougz/velotype"
+recommended = ["manyougz/velotype"]
+[crate.notes]
+"manyougz/velotype" = "A block-based native Markdown editor with WYSIWYG rendering and source editing modes, built on GPUI without a WebView shell."
+
+[[crate]]
+category = "Applications"
+use_case = "mathall/rim"
+recommended = ["mathall/rim"]
+[crate.notes]
+"mathall/rim" = "Vim-like text editor."
+
+[[crate]]
+category = "Applications"
+use_case = "ox"
+recommended = ["ox"]
+[crate.notes]
+"ox" = "An independent Rust text editor that runs in your terminal!"
+
+[[crate]]
+category = "Applications"
+use_case = "SoloMD"
+recommended = ["SoloMD"]
+[crate.notes]
+"SoloMD" = "A lightweight, cross-platform Markdown editor with live preview, built with Tauri 2."
+
+[[crate]]
+category = "Applications"
+use_case = "zed"
+recommended = ["zed"]
+[crate.notes]
+"zed" = "A high-performance, multiplayer code editor from the creators of Atom and Tree-sitter."
+
+[[crate]]
+category = "Applications"
+use_case = "ashvardanian/stringzilla"
+recommended = ["ashvardanian/stringzilla"]
+[crate.notes]
+"ashvardanian/stringzilla" = "SIMD-accelerated string search, sort, edit distances, alignments, and generators for x86 AVX2 & AVX-512, and Arm NEON [![crates.io](https://img.shields.io/crates/v/stringzilla.svg)](https://crates.io/"
+
+[[crate]]
+category = "Applications"
+use_case = "cchexcode/complate"
+recommended = ["cchexcode/complate"]
+[crate.notes]
+"cchexcode/complate" = "An in-terminal text templating tool designed for standardizing messages (like for GIT commits). [![crates.io](https://img.shields.io/crates/v/complate.svg)](https://crates.io/crates/complate) [![crate"
+
+[[crate]]
+category = "Applications"
+use_case = "grex"
+recommended = ["grex"]
+[crate.notes]
+"grex" = "A command-line tool and library for generating regular expressions from user-provided test cases"
+
+[[crate]]
+category = "Applications"
+use_case = "harehare/mq"
+recommended = ["harehare/mq"]
+[crate.notes]
+"harehare/mq" = "A command-line tool and library for processing Markdown using a jq-like syntax [![build badge](https://github.com/harehare/mq/actions/workflows/ci.yml/badge.svg)](https://github.com/harehare/mq/action"
+
+[[crate]]
+category = "Applications"
+use_case = "Lisprez/so_stupid_search"
+recommended = ["Lisprez/so_stupid_search"]
+[crate.notes]
+"Lisprez/so_stupid_search" = "A simple and fast string search tool for human beings"
+
+[[crate]]
+category = "Applications"
+use_case = "Melody"
+recommended = ["Melody"]
+[crate.notes]
+"Melody" = "A language that compiles to regular expressions and aims to be more easily readable and maintainable [![build badge](https://github.com/yoav-lavi/melody/actions/workflows/rust.yml/badge.svg)](https://"
+
+[[crate]]
+category = "Applications"
+use_case = "phiresky/ripgrep-all"
+recommended = ["phiresky/ripgrep-all"]
+[crate.notes]
+"phiresky/ripgrep-all" = "ripgrep, but also search in PDFs, E-Books, Office documents, zip, tar.gz, etc."
+
+[[crate]]
+category = "Applications"
+use_case = "ripgrep"
+recommended = ["ripgrep"]
+[crate.notes]
+"ripgrep" = "combines the usability of The Silver Searcher with the raw speed of grep"
+
+[[crate]]
+category = "Applications"
+use_case = "ruplacer"
+recommended = ["ruplacer"]
+[crate.notes]
+"ruplacer" = "Find and replace text in source files [![Run tests](https://github.com/your-tools/ruplacer/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/your-tools/ruplacer/actions/workflows"
+
+[[crate]]
+category = "Applications"
+use_case = "scooter"
+recommended = ["scooter"]
+[crate.notes]
+"scooter" = "Interactive find and replace in the terminal."
+
+[[crate]]
+category = "Applications"
+use_case = "sd"
+recommended = ["sd"]
+[crate.notes]
+"sd" = "Intuitive find & replace CLI"
+
+[[crate]]
+category = "Applications"
+use_case = "sstadick/hck"
+recommended = ["sstadick/hck"]
+[crate.notes]
+"sstadick/hck" = "A faster and more featureful drop in replacement for `cut` [![build badge](https://github.com/sstadick/hck/workflows/Check/badge.svg?branch=master)](https://github.com/sstadick/hck)"
+
+[[crate]]
+category = "Applications"
+use_case = "vishaltelangre/ff"
+recommended = ["vishaltelangre/ff"]
+[crate.notes]
+"vishaltelangre/ff" = "Find files (ff) by name!"
+
+[[crate]]
+category = "Applications"
+use_case = "whitfin/runiq"
+recommended = ["whitfin/runiq"]
+[crate.notes]
+"whitfin/runiq" = "an efficient way to filter duplicate lines from unsorted input."
+
+[[crate]]
+category = "Applications"
+use_case = "xsv"
+recommended = ["xsv"]
+[crate.notes]
+"xsv" = "A fast CSV command line tool (slicing, indexing, selecting, searching, sampling, etc.)"
+
+[[crate]]
+category = "Applications"
+use_case = "1History"
+recommended = ["1History"]
+[crate.notes]
+"1History" = "Command line interface to backup Firefox/Chrome/Safari history to one SQLite file [![Build Status](https://github.com/localfirstapp/1History/actions/workflows/CI.yml/badge.svg)](https://github.com/loc"
+
+[[crate]]
+category = "Applications"
+use_case = "brycx/checkpwn"
+recommended = ["brycx/checkpwn"]
+[crate.notes]
+"brycx/checkpwn" = "A Have I Been Pwned (HIBP) command-line utility tool that lets you easily check for compromised accounts and passwords."
+
+[[crate]]
+category = "Applications"
+use_case = "cartesiancs/vessel"
+recommended = ["cartesiancs/vessel"]
+[crate.notes]
+"cartesiancs/vessel" = "C2 (Command & Control) software for orchestrating physical devices."
+
+[[crate]]
+category = "Applications"
+use_case = "dcapal"
+recommended = ["dcapal"]
+[crate.notes]
+"dcapal" = "DcaPal is a free, no registration, online tool to help you keep your portfolio balanced with dollar cost averaging investments."
+
+[[crate]]
+category = "Applications"
+use_case = "Epic Asset Manager"
+recommended = ["Epic Asset Manager"]
+[crate.notes]
+"Epic Asset Manager" = "An unofficial client to install Unreal Engine, download and manage purchased assets, projects, plugins and games from the Epic Games Store."
+
+[[crate]]
+category = "Applications"
+use_case = "evansmurithi/cloak"
+recommended = ["evansmurithi/cloak"]
+[crate.notes]
+"evansmurithi/cloak" = "A Command Line OTP (One Time Password) Authenticator application. ![CI](https://github.com/evansmurithi/cloak/workflows/CI/badge.svg) [![build badge](https://ci.appveyor.com/api/projects/status/9mlfpf"
+
+[[crate]]
+category = "Applications"
+use_case = "fcsonline/tmux-thumbs"
+recommended = ["fcsonline/tmux-thumbs"]
+[crate.notes]
+"fcsonline/tmux-thumbs" = "A lightning fast version of tmux-fingers, copy/pasting tmux like vimium/vimperator."
+
+[[crate]]
+category = "Applications"
+use_case = "gitlogue"
+recommended = ["gitlogue"]
+[crate.notes]
+"gitlogue" = "A TUI screensaver that visualizes Git commit history in your terminal"
+
+[[crate]]
+category = "Applications"
+use_case = "guoxbin/dtool"
+recommended = ["guoxbin/dtool"]
+[crate.notes]
+"guoxbin/dtool" = "A useful command-line tool collection to assist development including conversion, codec, hashing, encryption, etc."
+
+[[crate]]
+category = "Applications"
+use_case = "Linus-Mussmaecher/rucola"
+recommended = ["Linus-Mussmaecher/rucola"]
+[crate.notes]
+"Linus-Mussmaecher/rucola" = "Terminal-based markdown note manager. [![Crate](https://img.shields.io/crates/v/rucola-notes.svg?logo=rust)](https://crates.io/crates/rucola-notes) [![Build Status](https://github.com/Linus-Mussmaeche"
+
+[[crate]]
+category = "Applications"
+use_case = "Mobslide"
+recommended = ["Mobslide"]
+[crate.notes]
+"Mobslide" = "Desktop application that turns your smartphone into presentation remote controller."
+
+[[crate]]
+category = "Applications"
+use_case = "mprocs"
+recommended = ["mprocs"]
+[crate.notes]
+"mprocs" = "TUI for running multiple processes"
+
+[[crate]]
+category = "Applications"
+use_case = "nix-community/nix-init"
+recommended = ["nix-community/nix-init"]
+[crate.notes]
+"nix-community/nix-init" = "Generate Nix packages from URLs with hash prefetching, dependency inference, license detection, and more [![build-badge](https://github.com/nix-community/nix-init/actions/workflows/ci.yml/badge.svg)]("
+
+[[crate]]
+category = "Applications"
+use_case = "nix-community/nix-melt"
+recommended = ["nix-community/nix-melt"]
+[crate.notes]
+"nix-community/nix-melt" = "A ranger-like flake.lock viewer [![build-badge](https://github.com/nix-community/nix-melt/actions/workflows/ci.yml/badge.svg)](https://github.com/nix-community/nix-melt/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "nomino"
+recommended = ["nomino"]
+[crate.notes]
+"nomino" = "Batch rename utility for developers"
+
+[[crate]]
+category = "Applications"
+use_case = "raftario/licensor"
+recommended = ["raftario/licensor"]
+[crate.notes]
+"raftario/licensor" = "write licenses to stdout [![GitHub Actions](https://github.com/raftario/licensor/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/raftario/licensor/actions/workflows/build.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "restsend/rustpbx"
+recommended = ["restsend/rustpbx"]
+[crate.notes]
+"restsend/rustpbx" = "Software-Defined SIP Proxy including register, presence, b2bua. alternative to Freeswitch/FreePBX."
+
+[[crate]]
+category = "Applications"
+use_case = "rust-parallel"
+recommended = ["rust-parallel"]
+[crate.notes]
+"rust-parallel" = "Fast command line app using Tokio to execute commands in parallel.  Similar interface to GNU Parallel or xargs. [![Crate](https://img.shields.io/crates/v/rust-parallel.svg?logo=rust)](https://crates.i"
+
+[[crate]]
+category = "Applications"
+use_case = "rustdesk/rustdesk"
+recommended = ["rustdesk/rustdesk"]
+[crate.notes]
+"rustdesk/rustdesk" = "A remote desktop software, great alternative to TeamViewer and AnyDesk."
+
+[[crate]]
+category = "Applications"
+use_case = "ruvnet/RuView"
+recommended = ["ruvnet/RuView"]
+[crate.notes]
+"ruvnet/RuView" = "A privacy-preserving human pose estimation system using WiFi Channel State Information (CSI) and machine learning."
+
+[[crate]]
+category = "Applications"
+use_case = "suckit"
+recommended = ["suckit"]
+[crate.notes]
+"suckit" = "Recursively visit and download a website's content to your disk. [![Crate](https://img.shields.io/crates/v/suckit.svg?logo=rust)](https://crates.io/crates/suckit) [![Build Status](https://github.com/S"
+
+[[crate]]
+category = "Applications"
+use_case = "sundegan/JsonStudio"
+recommended = ["sundegan/JsonStudio"]
+[crate.notes]
+"sundegan/JsonStudio" = "Local-first desktop JSON workspace built with Rust and Tauri for formatting, editing, diffing, converting, validating, and log extraction."
+
+[[crate]]
+category = "Applications"
+use_case = "Tabiew"
+recommended = ["Tabiew"]
+[crate.notes]
+"Tabiew" = "A lightweight TUI app to view and query CSV files."
+
+[[crate]]
+category = "Applications"
+use_case = "Tail Tales"
+recommended = ["Tail Tales"]
+[crate.notes]
+"Tail Tales" = "A TUI log viewer with logfmt support. [![Crate](https://img.shields.io/crates/v/tailtales.svg?logo=rust)](https://crates.io/crates/tailtales)"
+
+[[crate]]
+category = "Applications"
+use_case = "television"
+recommended = ["television"]
+[crate.notes]
+"television" = "A blazing fast general purpose fuzzy finder TUI ![GitHub branch check runs](https://img.shields.io/github/check-runs/alexpasmantier/television/main)"
+
+[[crate]]
+category = "Applications"
+use_case = "Thoth"
+recommended = ["Thoth"]
+[crate.notes]
+"Thoth" = "A high-performance, feature-rich desktop application for viewing and exploring JSON and NDJSON files, with WASM-based plugin support. [![CI](https://github.com/anitnilay20/thoth/workflows/CI/badge.svg"
+
+[[crate]]
+category = "Applications"
+use_case = "tversteeg/emplace"
+recommended = ["tversteeg/emplace"]
+[crate.notes]
+"tversteeg/emplace" = "Synchronize installed packages on multiple machines"
+
+[[crate]]
+category = "Applications"
+use_case = "Vibe"
+recommended = ["Vibe"]
+[crate.notes]
+"Vibe" = "Transcribe audio or video in every language on every platform."
+
+[[crate]]
+category = "Applications"
+use_case = "warpdotdev/Warp"
+recommended = ["warpdotdev/Warp"]
+[crate.notes]
+"warpdotdev/Warp" = ":heavy_dollar_sign: Warp is a blazingly-fast modern GPU-accelerated terminal built to make you and your team more productive."
+
+[[crate]]
+category = "Applications"
+use_case = "Water-Run/treepp"
+recommended = ["Water-Run/treepp"]
+[crate.notes]
+"Water-Run/treepp" = "A Rust-based native Windows `tree` replacement with diff-level input/output compatibility on successful runs, many more features including essential exclusions and `.gitignore` support, and several-ti"
+
+[[crate]]
+category = "Applications"
+use_case = "wrestic"
+recommended = ["wrestic"]
+[crate.notes]
+"wrestic" = "A wrapper around restic."
+
+[[crate]]
+category = "Applications"
+use_case = "wthrr"
+recommended = ["wthrr"]
+[crate.notes]
+"wthrr" = "Weather companion for the terminal. [![crates.io](https://img.shields.io/crates/v/wthrr?logo=rust)](https://crates.io/crates/wthrr)"
+
+[[crate]]
+category = "Applications"
+use_case = "YueMiyuki/Risuko"
+recommended = ["YueMiyuki/Risuko"]
+[crate.notes]
+"YueMiyuki/Risuko" = "A full-featured download manager. [![Release-Badge](https://github.com/YueMiyuki/Risuko/actions/workflows/release.yml/badge.svg)](https://github.com/YueMiyuki/Risuko/actions/workflows/release.yml)"
+
+[[crate]]
+category = "Applications"
+use_case = "gyroflow/gyroflow"
+recommended = ["gyroflow/gyroflow"]
+[crate.notes]
+"gyroflow/gyroflow" = "Video stabilization application using gyroscope data"
+
+[[crate]]
+category = "Applications"
+use_case = "harlanc/xiu"
+recommended = ["harlanc/xiu"]
+[crate.notes]
+"harlanc/xiu" = "A powerful and secure live server (rtmp/httpflv/hls/relay). [![crates.io](https://img.shields.io/crates/v/xiu.svg)](https://crates.io/crates/xiu)"
+
+[[crate]]
+category = "Applications"
+use_case = "vidmerger"
+recommended = ["vidmerger"]
+[crate.notes]
+"vidmerger" = "Merge video & audio files via CLI"
+
+[[crate]]
+category = "Applications"
+use_case = "xiph/rav1e"
+recommended = ["xiph/rav1e"]
+[crate.notes]
+"xiph/rav1e" = "The fastest and safest AV1 encoder."
+
+[[crate]]
+category = "Applications"
+use_case = "firecracker-microvm/firecracker"
+recommended = ["firecracker-microvm/firecracker"]
+[crate.notes]
+"firecracker-microvm/firecracker" = "A lightweight virtual machine for container workload [Firecracker Microvm](https://firecracker-microvm.github.io/)"
+
+[[crate]]
+category = "Applications"
+use_case = "kata-containers/kata-containers"
+recommended = ["kata-containers/kata-containers"]
+[crate.notes]
+"kata-containers/kata-containers" = "A implementation of lightweight Virtual Machines (VMs) that feel and perform like containers, but provide the workload isolation and security advantages of VMs."
+
+[[crate]]
+category = "Applications"
+use_case = "superradcompany/microsandbox"
+recommended = ["superradcompany/microsandbox"]
+[crate.notes]
+"superradcompany/microsandbox" = "Lightweight microVM sandboxing library for running isolated code execution in milliseconds. Supports Rust, Python, and TypeScript SDKs with OCI-compatible container images. [![GitHub release](https://"
+
+[[crate]]
+category = "Applications"
+use_case = "tailhook/vagga"
+recommended = ["tailhook/vagga"]
+[crate.notes]
+"tailhook/vagga" = "A containerization tool without daemons"
+
+[[crate]]
+category = "Applications"
+use_case = "youki-dev/youki"
+recommended = ["youki-dev/youki"]
+[crate.notes]
+"youki-dev/youki" = "A container runtime [![build badge](https://github.com/youki-dev/youki/actions/workflows/basic.yml/badge.svg)](https://github.com/youki-dev/youki/actions)"
+
+[[crate]]
+category = "Applications"
+use_case = "0xMassi/webclaw"
+recommended = ["0xMassi/webclaw"]
+[crate.notes]
+"0xMassi/webclaw" = "Web content extraction for LLMs with TLS fingerprinting, MCP server, and no browser needed [![CI](https://github.com/0xMassi/webclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/0xMassi/web"
+
+[[crate]]
+category = "Applications"
+use_case = "cfal/tobaru"
+recommended = ["cfal/tobaru"]
+[crate.notes]
+"cfal/tobaru" = "Port forwarder with allowlists, IP and TLS SNI/ALPN rule-based routing, iptables support, round-robin forwarding (load balancing), and hot reloading."
+
+[[crate]]
+category = "Applications"
+use_case = "hook0/hook0"
+recommended = ["hook0/hook0"]
+[crate.notes]
+"hook0/hook0" = "An open-source webhooks-as-a-service platform that makes it easy for SaaS developers to send webhooks"
+
+[[crate]]
+category = "Applications"
+use_case = "importantimport/hatsu"
+recommended = ["importantimport/hatsu"]
+[crate.notes]
+"importantimport/hatsu" = "🩵 Self-hosted and fully-automated ActivityPub bridge for static sites. [![release](https://github.com/importantimport/hatsu/actions/workflows/release.yml/badge.svg)](https://github.com/importantimport"
+
+[[crate]]
+category = "Applications"
+use_case = "konippi/servo-fetch"
+recommended = ["konippi/servo-fetch"]
+[crate.notes]
+"konippi/servo-fetch" = "A self-contained browser engine that fetches, renders, and extracts web content as Markdown, JSON, or screenshots — no Chromium, no API key. CLI, Python, MCP server. [![CI](https://github.com/konippi/"
+
+[[crate]]
+category = "Applications"
+use_case = "LemmyNet/lemmy"
+recommended = ["LemmyNet/lemmy"]
+[crate.notes]
+"LemmyNet/lemmy" = "A link aggregator / reddit clone for the fediverse [![Build Status](https://cloud.drone.io/api/badges/LemmyNet/lemmy/status.svg)](https://cloud.drone.io/LemmyNet/lemmy)"
+
+[[crate]]
+category = "Applications"
+use_case = "MASQ-Project/Node"
+recommended = ["MASQ-Project/Node"]
+[crate.notes]
+"MASQ-Project/Node" = "MASQ Node software provides a decentralized mesh-network of nodes for global users to access normal internet content - next evolution of tech beyond Tor & VPN [![build badge](https://github.com/MASQ-P"
+
+[[crate]]
+category = "Applications"
+use_case = "Plume-org/Plume"
+recommended = ["Plume-org/Plume"]
+[crate.notes]
+"Plume-org/Plume" = "ActivityPub federating blogging application"
+
+[[crate]]
+category = "Applications"
+use_case = "Redlib"
+recommended = ["Redlib"]
+[crate.notes]
+"Redlib" = "An alternative private front-end to Reddit, with its origins in [Libreddit](https://github.com/libreddit/libreddit)"
+
+[[crate]]
+category = "Applications"
+use_case = "shouya/rss-funnel"
+recommended = ["shouya/rss-funnel"]
+[crate.notes]
+"shouya/rss-funnel" = "A modular RSS processing pipeline system."
+
+[[crate]]
+category = "Applications"
+use_case = "SinTan1729/Chhoto URL"
+recommended = ["SinTan1729/Chhoto URL"]
+[crate.notes]
+"SinTan1729/Chhoto URL" = "A simple, blazingly fast, selfhosted URL shortener with no unnecessary features.[![release](https://github.com/SinTan1729/chhoto-url/actions/workflows/docker-release.yml/badge.svg)](https://github.com"
+
+[[crate]]
+category = "Applications"
+use_case = "Stoatchat"
+recommended = ["Stoatchat"]
+[crate.notes]
+"Stoatchat" = "User-first chat platform built with modern web technologies."
+
+[[crate]]
+category = "Applications"
+use_case = "zhom/donutbrowser"
+recommended = ["zhom/donutbrowser"]
+[crate.notes]
+"zhom/donutbrowser" = "Open source anti-detect browser with unlimited isolated profiles, Chromium/Firefox engines, fingerprint spoofing, proxy/VPN support, local API & MCP server, and E2E encrypted cloud sync. [![GitHub rel"
+
+[[crate]]
+category = "Applications"
+use_case = "cloudflare/pingora"
+recommended = ["cloudflare/pingora"]
+[crate.notes]
+"cloudflare/pingora" = "A library for building fast, reliable and evolvable network services."
+
+[[crate]]
+category = "Applications"
+use_case = "emanuele-em/proxelar"
+recommended = ["emanuele-em/proxelar"]
+[crate.notes]
+"emanuele-em/proxelar" = "A MITM Proxy 🦀! Toolkit for HTTP/1, HTTP/2, and WebSockets with SSL/TLS Capabilities [![Rust](https://github.com/emanuele-em/proxelar/actions/workflows/autofix.yml/badge.svg)](https://github.com/emanu"
+
+[[crate]]
+category = "Applications"
+use_case = "g3proxy"
+recommended = ["g3proxy"]
+[crate.notes]
+"g3proxy" = "Forward proxy server, support Proxy Chaining, Protocol Inspection, MITM Interception, ICAP Adaptation, Transparent Proxy [![CodeCoverage](https://github.com/bytedance/g3/actions/workflows/codecov.yml/"
+
+[[crate]]
+category = "Applications"
+use_case = "Mini RPS"
+recommended = ["Mini RPS"]
+[crate.notes]
+"Mini RPS" = "Mini reverse proxy server, HTTPS, CORS, static file hosting and template engine (minijinja) [crates.io](https://crates.io/crates/minirps)"
+
+[[crate]]
+category = "Applications"
+use_case = "mu-arch/skyfolder"
+recommended = ["mu-arch/skyfolder"]
+[crate.notes]
+"mu-arch/skyfolder" = "🪂 Beautiful HTTP/Bittorrent server without the hassle. Secure - GUI - Pretty - Fast"
+
+[[crate]]
+category = "Applications"
+use_case = "mufeedvh/binserve"
+recommended = ["mufeedvh/binserve"]
+[crate.notes]
+"mufeedvh/binserve" = "A blazingly fast static web server with routing, templating, and security in a single binary you can set up with zero code [![build badge](https://github.com/mufeedvh/binserve/actions/workflows/build."
+
+[[crate]]
+category = "Applications"
+use_case = "orhun/rustypaste"
+recommended = ["orhun/rustypaste"]
+[crate.notes]
+"orhun/rustypaste" = "A minimal file upload/pastebin service ![https://github.com/orhun/rustypaste/actions](https://img.shields.io/github/actions/workflow/status/orhun/rustypaste/ci.yml?branch=master&label=build)"
+
+[[crate]]
+category = "Applications"
+use_case = "plabayo/rama"
+recommended = ["plabayo/rama"]
+[crate.notes]
+"plabayo/rama" = "A modular service framework to move and transform your network packets, used to build web clients, servers and — above all — proxies"
+
+[[crate]]
+category = "Applications"
+use_case = "ronanyeah/rust-hasura"
+recommended = ["ronanyeah/rust-hasura"]
+[crate.notes]
+"ronanyeah/rust-hasura" = "A demonstration of how a GraphQL server can be used as a remote schema with [Hasura](https://hasura.io/) ![Rust](https://github.com/ronanyeah/rust-hasura/workflows/Rust/badge.svg?branch=master)"
+
+[[crate]]
+category = "Applications"
+use_case = "static-web-server"
+recommended = ["static-web-server"]
+[crate.notes]
+"static-web-server" = "A blazing fast and asynchronous web server for static files-serving. ⚡ [![CI](https://github.com/static-web-server/static-web-server/actions/workflows/devel.yml/badge.svg)](https://github.com/static-w"
+
+[[crate]]
+category = "Applications"
+use_case = "svenstaro/miniserve"
+recommended = ["svenstaro/miniserve"]
+[crate.notes]
+"svenstaro/miniserve" = "A small, self-contained cross-platform CLI tool that allows you to just grab the binary and serve some file(s) via HTTP [![build badge](https://github.com/svenstaro/miniserve/workflows/CI/badge.svg?br"
+
+[[crate]]
+category = "Applications"
+use_case = "thecoshman/http"
+recommended = ["thecoshman/http"]
+[crate.notes]
+"thecoshman/http" = "Host These Things Please - A basic http server for hosting a folder fast and simply"
+
+[[crate]]
+category = "Applications"
+use_case = "TheWaWaR/simple-http-server"
+recommended = ["TheWaWaR/simple-http-server"]
+[crate.notes]
+"TheWaWaR/simple-http-server" = "simple static http server"
+
+[[crate]]
+category = "Applications"
+use_case = "vetis-server/vetis"
+recommended = ["vetis-server/vetis"]
+[crate.notes]
+"vetis-server/vetis" = "A blazingly fast, minimalist HTTP server built for modern Rust applications. Provides virtual Hosts, SNI, static content, reverse proxy, HTTP 1/2/3 and Tokio or Smol as async runtimes!"
+
+[[crate]]
+category = "Applications"
+use_case = "vproxy/0x676e67"
+recommended = ["vproxy/0x676e67"]
+[crate.notes]
+"vproxy/0x676e67" = "An fast asynchronous Rust HTTP/Socks5 Proxy"
+
+[[crate]]
+category = "Applications"
+use_case = "cowork-forge"
+recommended = ["cowork-forge"]
+[crate.notes]
+"cowork-forge" = "AI-native multi-agent platform that orchestrates specialized agents through a 7-stage pipeline to transform ideas into production-ready software. [![release](https://img.shields.io/github/actions/work"
+
+[[crate]]
+category = "Applications"
+use_case = "dali-benothmen/cronflow"
+recommended = ["dali-benothmen/cronflow"]
+[crate.notes]
+"dali-benothmen/cronflow" = "Cronflow is a high-performance, developer-focused workflow automation library that lets you build and orchestrate complex, scalable automation workflows fully in code. [![release](https://github.com/d"
+
+[[crate]]
+category = "Applications"
+use_case = "SouravRoy-ETL/duckle"
+recommended = ["SouravRoy-ETL/duckle"]
+[crate.notes]
+"SouravRoy-ETL/duckle" = "Visual-first, open-source data studio (ETL/ELT) that runs entirely on DuckDB. Drag sources, transforms and sinks onto a canvas and it compiles to plain DuckDB SQL; 300+ connectors and a built-in MCP s"
+
+[[crate]]
+category = "Development tools"
+use_case = "7df-lab/devo"
+recommended = ["7df-lab/devo"]
+[crate.notes]
+"7df-lab/devo" = "A lightweight, model-neutral coding agent that runs as a single binary. Fast, token-efficient, and highly customizable. [![CI](https://github.com/7df-lab/devo/actions/workflows/ci.yml/badge.svg?branch"
+
+[[crate]]
+category = "Development tools"
+use_case = "aaif-goose/goose"
+recommended = ["aaif-goose/goose"]
+[crate.notes]
+"aaif-goose/goose" = "An open-source, local AI agent that automates engineering tasks."
+
+[[crate]]
+category = "Development tools"
+use_case = "ATAC"
+recommended = ["ATAC"]
+[crate.notes]
+"ATAC" = "A feature-full TUI API client made in Rust. ATAC is free, open-source, offline and account-less."
+
+[[crate]]
+category = "Development tools"
+use_case = "bacon"
+recommended = ["bacon"]
+[crate.notes]
+"bacon" = "background rust code checker, similar to cargo-watch"
+
+[[crate]]
+category = "Development tools"
+use_case = "biome"
+recommended = ["biome"]
+[crate.notes]
+"biome" = "A toolchain for web projects, aimed to provide functionalities to maintain them. Biome offers formatter and linter, usable via CLI and LSP"
+
+[[crate]]
+category = "Development tools"
+use_case = "cachix/devenv"
+recommended = ["cachix/devenv"]
+[crate.notes]
+"cachix/devenv" = "Fast, declarative, reproducible, and composable developer environments using Nix [![CI](https://github.com/cachix/devenv/actions/workflows/release.yml/badge.svg)](https://github.com/cachix/devenv/acti"
+
+[[crate]]
+category = "Development tools"
+use_case = "clippy"
+recommended = ["clippy"]
+[crate.notes]
+"clippy" = "Rust lints"
+
+[[crate]]
+category = "Development tools"
+use_case = "clog-tool/clog-cli"
+recommended = ["clog-tool/clog-cli"]
+[crate.notes]
+"clog-tool/clog-cli" = "generates a changelog from git metadata ([conventional changelog](https://blog.thoughtram.io/announcements/tools/2014/09/18/announcing-clog-a-conventional-changelog-generator-for-the-rest-of-us.html))"
+
+[[crate]]
+category = "Development tools"
+use_case = "cloudflare/foundations"
+recommended = ["cloudflare/foundations"]
+[crate.notes]
+"cloudflare/foundations" = "Foundations is a modular Rust library, designed to help scale programs for distributed, production-grade systems."
+
+[[crate]]
+category = "Development tools"
+use_case = "comtrya"
+recommended = ["comtrya"]
+[crate.notes]
+"comtrya" = "A configuration management tool for localhost / dotfiles [![build badge](https://github.com/comtrya/comtrya/actions/workflows/main.yaml/badge.svg)](https://github.com/comtrya/comtrya/actions)"
+
+[[crate]]
+category = "Development tools"
+use_case = "create-rust-app"
+recommended = ["create-rust-app"]
+[crate.notes]
+"create-rust-app" = "Set up a modern rust+react web app by running one command. [![crate](https://img.shields.io/crates/v/create-rust-app.svg)](https://crates.io/crates/create-rust-app)"
+
+[[crate]]
+category = "Development tools"
+use_case = "dan-t/rusty-tags"
+recommended = ["dan-t/rusty-tags"]
+[crate.notes]
+"dan-t/rusty-tags" = "create ctags/etags for a cargo project and all of its dependencies"
+
+[[crate]]
+category = "Development tools"
+use_case = "datanymizer/datanymizer"
+recommended = ["datanymizer/datanymizer"]
+[crate.notes]
+"datanymizer/datanymizer" = "Powerful database anonymizer with flexible rules [![build badge](https://github.com/datanymizer/datanymizer/workflows/CI/badge.svg?branch=main)](https://github.com/datanymizer/datanymizer/actions?quer"
+
+[[crate]]
+category = "Development tools"
+use_case = "delta"
+recommended = ["delta"]
+[crate.notes]
+"delta" = "A syntax-highlighter for git and diff output[![build badge](https://github.com/dandavison/delta/actions/workflows/ci.yml/badge.svg)](https://github.com/dandavison/delta//actions)"
+
+[[crate]]
+category = "Development tools"
+use_case = "dotenv-linter"
+recommended = ["dotenv-linter"]
+[crate.notes]
+"dotenv-linter" = "Linter for `.env` files [![build badge](https://github.com/dotenv-linter/dotenv-linter/actions/workflows/ci.yml/badge.svg)](https://github.com/dotenv-linter/dotenv-linter/actions?query=workflow%3ACI+b"
+
+[[crate]]
+category = "Development tools"
+use_case = "envio"
+recommended = ["envio"]
+[crate.notes]
+"envio" = "A Modern And Secure CLI Tool For Managing Environment Variables [![build badge](https://github.com/humblepenguinn/envio/actions/workflows/CICD.yml/badge.svg?branch=main)](https://github.com/humblepeng"
+
+[[crate]]
+category = "Development tools"
+use_case = "Feel-ix-343/markdown-oxide"
+recommended = ["Feel-ix-343/markdown-oxide"]
+[crate.notes]
+"Feel-ix-343/markdown-oxide" = "A PKM Markdown Language Server supporting Obsidian-style wikilinks, backlinks, and daily notes for Neovim, VSCode, Zed, Helix, and Kakoune"
+
+[[crate]]
+category = "Development tools"
+use_case = "Flox"
+recommended = ["Flox"]
+[crate.notes]
+"Flox" = "Flox is a virtual environment and package manager all in one."
+
+[[crate]]
+category = "Development tools"
+use_case = "forgecode"
+recommended = ["forgecode"]
+[crate.notes]
+"forgecode" = "A terminal-based AI pair programmer for code generation and editing. [![Website](https://img.shields.io/badge/website-forgecode.dev-blue)](https://forgecode.dev/)"
+
+[[crate]]
+category = "Development tools"
+use_case = "frolic"
+recommended = ["frolic"]
+[crate.notes]
+"frolic" = "An API layer to build customer facing dashboards 10x faster"
+
+[[crate]]
+category = "Development tools"
+use_case = "fw"
+recommended = ["fw"]
+[crate.notes]
+"fw" = "workspace productivity booster [![Rust](https://github.com/brocode/fw/actions/workflows/rust.yml/badge.svg)](https://github.com/brocode/fw/actions/workflows/rust.yml)"
+
+[[crate]]
+category = "Development tools"
+use_case = "geiger"
+recommended = ["geiger"]
+[crate.notes]
+"geiger" = "A program that list statistics related to usage of unsafe code in a crate and all its dependencies [![Build Status](https://dev.azure.com/cargo-geiger/cargo-geiger/_apis/build/status/geiger-rs.cargo-g"
+
+[[crate]]
+category = "Development tools"
+use_case = "git-cliff"
+recommended = ["git-cliff"]
+[crate.notes]
+"git-cliff" = "A highly customizable Changelog Generator that follows Conventional Commit specifications ![https://github.com/orhun/git-cliff/actions](https://img.shields.io/github/actions/workflow/status/orhun/git-"
+
+[[crate]]
+category = "Development tools"
+use_case = "git-journal"
+recommended = ["git-journal"]
+[crate.notes]
+"git-journal" = "The Git Commit Message and Changelog Generation Framework"
+
+[[crate]]
+category = "Development tools"
+use_case = "git-time-machine"
+recommended = ["git-time-machine"]
+[crate.notes]
+"git-time-machine" = "Visual git reflog TUI for undoing git mistakes [![crate](https://img.shields.io/crates/v/git-time-machine.svg)](https://crates.io/crates/git-time-machine) [![build badge](https://github.com/dinakars77"
+
+[[crate]]
+category = "Development tools"
+use_case = "hot-lib-reloader"
+recommended = ["hot-lib-reloader"]
+[crate.notes]
+"hot-lib-reloader" = "Hot reload Rust code [![build badge](https://github.com/rksm/hot-lib-reloader-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rksm/hot-lib-reloader-rs/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Development tools"
+use_case = "intelli-shell"
+recommended = ["intelli-shell"]
+[crate.notes]
+"intelli-shell" = "Bookmark commands with placeholders and search or autocomplete at any time [![crate](https://img.shields.io/crates/v/intelli-shell.svg)](https://crates.io/crates/intelli-shell) [![build badge](https:/"
+
+[[crate]]
+category = "Development tools"
+use_case = "j178/prek"
+recommended = ["j178/prek"]
+[crate.notes]
+"j178/prek" = "A faster, dependency-free, and drop-in alternative to pre-commit, written in Rust."
+
+[[crate]]
+category = "Development tools"
+use_case = "jj-vcs/jj"
+recommended = ["jj-vcs/jj"]
+[crate.notes]
+"jj-vcs/jj" = "A Git-compatible version control system with a clean CLI, first-class conflict handling, and automatic rebasing [![Release](https://img.shields.io/github/v/release/martinvonz/jj)](https://github.com/j"
+
+[[crate]]
+category = "Development tools"
+use_case = "just"
+recommended = ["just"]
+[crate.notes]
+"just" = "A handy command runner for project-specific tasks"
+
+[[crate]]
+category = "Development tools"
+use_case = "mask"
+recommended = ["mask"]
+[crate.notes]
+"mask" = "A CLI task runner defined by a simple markdown file [![build badge](https://github.com/jacobdeichert/mask/workflows/CI/badge.svg?branch=master)](https://github.com/jacobdeichert/mask/actions?query=wor"
+
+[[crate]]
+category = "Development tools"
+use_case = "Module Linker"
+recommended = ["Module Linker"]
+[crate.notes]
+"Module Linker" = "Extension that adds `<a>` links to references in `mod`, `use` and `extern crate` statements at GitHub."
+
+[[crate]]
+category = "Development tools"
+use_case = "ptags"
+recommended = ["ptags"]
+[crate.notes]
+"ptags" = "A parallel universal-ctags wrapper for git repository"
+
+[[crate]]
+category = "Development tools"
+use_case = "Racer"
+recommended = ["Racer"]
+[crate.notes]
+"Racer" = "code completion for Rust"
+
+[[crate]]
+category = "Development tools"
+use_case = "Rust Search Extension"
+recommended = ["Rust Search Extension"]
+[crate.notes]
+"Rust Search Extension" = "A handy browser extension to search crates and docs in address bar (omnibox). [![Build Status](https://github.com/huhu/rust-search-extension/workflows/build/badge.svg?branch=master)](https://github.co"
+
+[[crate]]
+category = "Development tools"
+use_case = "Rustup"
+recommended = ["Rustup"]
+[crate.notes]
+"Rustup" = "the Rust toolchain installer [![build badge](https://github.com/rust-lang/rustup/actions/workflows/ci.yaml/badge.svg)](https://github.com/rust-lang/rustup/actions)"
+
+[[crate]]
+category = "Development tools"
+use_case = "scriptisto"
+recommended = ["scriptisto"]
+[crate.notes]
+"scriptisto" = "A language-agnostic 'shebang interpreter' that enables you to write one file scripts in compiled languages. [![Build Status](https://cloud.drone.io/api/badges/igor-petruk/scriptisto/status.svg)](https"
+
+[[crate]]
+category = "Development tools"
+use_case = "voidzero-dev/vite-plus"
+recommended = ["voidzero-dev/vite-plus"]
+[crate.notes]
+"voidzero-dev/vite-plus" = "A unified web development toolchain combining Vite, Vitest, Oxlint, Rolldown, and more into a single Rust-powered CLI (`vp`)"
+
+[[crate]]
+category = "Development tools"
+use_case = "VT Code"
+recommended = ["VT Code"]
+[crate.notes]
+"VT Code" = "Terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by tree-sitter and ast-grep."
+
+[[crate]]
+category = "Development tools"
+use_case = "better-fullstack"
+recommended = ["better-fullstack"]
+[crate.notes]
+"better-fullstack" = "End-to-end fullstack scaffolding tool supporting Rust (Axum, Actix Web, Leptos, Dioxus, SeaORM, SQLx, tonic, async-graphql) alongside TypeScript, Go, and Python — code ready for you or your AI agent."
+
+[[crate]]
+category = "Development tools"
+use_case = "Cargo"
+recommended = ["Cargo"]
+[crate.notes]
+"Cargo" = "the Rust package manager"
+
+[[crate]]
+category = "Development tools"
+use_case = "facebook/buck2"
+recommended = ["facebook/buck2"]
+[crate.notes]
+"facebook/buck2" = "[Buck2](https://buck2.build/) is a large-scale build tool built in Rust"
+
+[[crate]]
+category = "Development tools"
+use_case = "pantsbuild/pants"
+recommended = ["pantsbuild/pants"]
+[crate.notes]
+"pantsbuild/pants" = "[Pants](https://www.pantsbuild.org/) is a fast, scalable, user-friendly build system for codebases of all sizes built in Rust."
+
+[[crate]]
+category = "Development tools"
+use_case = "rolldown/rolldown"
+recommended = ["rolldown/rolldown"]
+[crate.notes]
+"rolldown/rolldown" = "A JavaScript/TypeScript bundler written in Rust intended to serve as the future bundler in Vite."
+
+[[crate]]
+category = "Development tools"
+use_case = "tracemachina/nativelink"
+recommended = ["tracemachina/nativelink"]
+[crate.notes]
+"tracemachina/nativelink" = "[NativeLink](https://nativelink.com) is a Backend Remote Execution platform written in rust for client build systems such as [Buck2](https://buck2.build/), [Bazel](https://bazel.build/), [Pants](https"
+
+[[crate]]
+category = "Development tools"
+use_case = "vercel/turborepo"
+recommended = ["vercel/turborepo"]
+[crate.notes]
+"vercel/turborepo" = "High-performance build system for JavaScript and TypeScript monorepos, written in Rust. Features incremental computation, remote caching, and parallel task execution."
+
+[[crate]]
+category = "Development tools"
+use_case = "godzie44/BugStalker"
+recommended = ["godzie44/BugStalker"]
+[crate.notes]
+"godzie44/BugStalker" = "Modern debugger for Linux x86-64. Written in Rust for Rust programs."
+
+[[crate]]
+category = "Development tools"
+use_case = "astral-sh/ruff"
+recommended = ["astral-sh/ruff"]
+[crate.notes]
+"astral-sh/ruff" = "An extremely fast Python linter and code formatter [![Actions status](https://github.com/astral-sh/ruff/workflows/CI/badge.svg)](https://github.com/astral-sh/ruff/actions)"
+
+[[crate]]
+category = "Development tools"
+use_case = "dprint"
+recommended = ["dprint"]
+[crate.notes]
+"dprint" = "A pluggable and configurable code formatting platform [![build badge](https://github.com/dprint/dprint/workflows/CI/badge.svg)](https://github.com/dprint/dprint/actions?query=workflow%3ACI)"
+
+[[crate]]
+category = "Development tools"
+use_case = "Prettier Rust"
+recommended = ["Prettier Rust"]
+[crate.notes]
+"Prettier Rust" = "An opinionated Rust code formatter that autofixes bad syntax ([Prettier](https://prettier.io/) community plugin)"
+
+[[crate]]
+category = "Development tools"
+use_case = "rustfmt"
+recommended = ["rustfmt"]
+[crate.notes]
+"rustfmt" = "Rust code formatter maintained by the Rust team and included in cargo"
+
+[[crate]]
+category = "Development tools"
+use_case = "Bencher"
+recommended = ["Bencher"]
+[crate.notes]
+"Bencher" = "A suite of continuous benchmarking tools designed to catch performance regressions in CI"
+
+[[crate]]
+category = "Development tools"
+use_case = "bheisler/criterion.rs"
+recommended = ["bheisler/criterion.rs"]
+[crate.notes]
+"bheisler/criterion.rs" = "Statistics-driven benchmarking library"
+
+[[crate]]
+category = "Development tools"
+use_case = "Bytehound"
+recommended = ["Bytehound"]
+[crate.notes]
+"Bytehound" = "A memory profiler for Linux"
+
+[[crate]]
+category = "Development tools"
+use_case = "cong-or/hud"
+recommended = ["cong-or/hud"]
+[crate.notes]
+"cong-or/hud" = "Find what's blocking your Tokio runtime. Zero-instrumentation eBPF profiler."
+
+[[crate]]
+category = "Development tools"
+use_case = "Divan"
+recommended = ["Divan"]
+[crate.notes]
+"Divan" = "Simple yet powerful benchmarking library with allocation profiling"
+
+[[crate]]
+category = "Development tools"
+use_case = "ellisonch/rust-stopwatch"
+recommended = ["ellisonch/rust-stopwatch"]
+[crate.notes]
+"ellisonch/rust-stopwatch" = "A stopwatch library"
+
+[[crate]]
+category = "Development tools"
+use_case = "g3bench"
+recommended = ["g3bench"]
+[crate.notes]
+"g3bench" = "A benchmark tool that supports HTTP 1.x, HTTP 2, HTTP 3, TLS Handshake, DNS and Cloudflare Keyless"
+
+[[crate]]
+category = "Development tools"
+use_case = "pawurb/hotpath"
+recommended = ["pawurb/hotpath"]
+[crate.notes]
+"pawurb/hotpath" = "A simple profiler that shows exactly where your code spends time and allocates [![GH Actions](https://github.com/pawurb/hotpath-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/p"
+
+[[crate]]
+category = "Development tools"
+use_case = "sharkdp/hyperfine"
+recommended = ["sharkdp/hyperfine"]
+[crate.notes]
+"sharkdp/hyperfine" = "A command-line benchmarking tool"
+
+[[crate]]
+category = "Development tools"
+use_case = "deepwiki-rs"
+recommended = ["deepwiki-rs"]
+[crate.notes]
+"deepwiki-rs" = "Transform your codebase into professional architecture documentation. [![crates.io](https://img.shields.io/crates/v/deepwiki-rs?logo=rust)](https://crates.io/crates/deepwiki-rs)"
+
+[[crate]]
+category = "Development tools"
+use_case = "deps.rs"
+recommended = ["deps.rs"]
+[crate.notes]
+"deps.rs" = "Detect outdated or insecure dependencies"
+
+[[crate]]
+category = "Development tools"
+use_case = "docs.rs"
+recommended = ["docs.rs"]
+[crate.notes]
+"docs.rs" = "Automatic documentation generation of crates"
+
+[[crate]]
+category = "Development tools"
+use_case = "cargo-coupling"
+recommended = ["cargo-coupling"]
+[crate.notes]
+"cargo-coupling" = "A Rust coupling analysis tool using Vlad Khononov's 'Balancing Coupling in Software Design' framework"
+
+[[crate]]
+category = "Development tools"
+use_case = "creusot-rs/creusot"
+recommended = ["creusot-rs/creusot"]
+[crate.notes]
+"creusot-rs/creusot" = "A deductive verifier for Rust that proves absence of panics, overflows, and assertion failures by translating code to the Why3 verification platform"
+
+[[crate]]
+category = "Development tools"
+use_case = "MIRAI"
+recommended = ["MIRAI"]
+[crate.notes]
+"MIRAI" = "an abstract interpreter operating on Rust's mid-level intermediate representation (MIR) [![Continuous Integration](https://github.com/endorlabs/mirai/actions/workflows/rust.yml/badge.svg)](https://git"
+
+[[crate]]
+category = "Development tools"
+use_case = "RAPx"
+recommended = ["RAPx"]
+[crate.notes]
+"RAPx" = "A platform that helps Rust programmers develop and use advanced static analysis tools beyond those provided by the rustc compiler."
+
+[[crate]]
+category = "Development tools"
+use_case = "static_assertions"
+recommended = ["static_assertions"]
+[crate.notes]
+"static_assertions" = "Compile-time assertions to ensure that invariants are met"
+
+[[crate]]
+category = "Development tools"
+use_case = "verus-lang/verus"
+recommended = ["verus-lang/verus"]
+[crate.notes]
+"verus-lang/verus" = "Verified Rust for low-level systems code"
+
+[[crate]]
+category = "Development tools"
+use_case = "BayesWitnesses/m2cgen"
+recommended = ["BayesWitnesses/m2cgen"]
+[crate.notes]
+"BayesWitnesses/m2cgen" = "A CLI tool to transpile trained classic machine learning models into a native Rust code with zero dependencies. [![GitHub Actions Status](https://github.com/BayesWitnesses/m2cgen/workflows/GitHub%20Ac"
+
+[[crate]]
+category = "Development tools"
+use_case = "immunant/c2rust"
+recommended = ["immunant/c2rust"]
+[crate.notes]
+"immunant/c2rust" = "C to Rust translator and cross checker built atop Clang/LLVM."
+
+[[crate]]
+category = "Development tools"
+use_case = "jameysharp/corrode"
+recommended = ["jameysharp/corrode"]
+[crate.notes]
+"jameysharp/corrode" = "A C to Rust translator written in Haskell."
+
+[[crate]]
+category = "Development tools"
+use_case = "joaoh82/rustunnel"
+recommended = ["joaoh82/rustunnel"]
+[crate.notes]
+"joaoh82/rustunnel" = "Self-hosted secure tunnel server. Exposes local HTTP/HTTPS/TCP/UDP services via TLS-encrypted WebSocket with yamux multiplexing; multi-region, Prometheus metrics, MCP server for AI agents."
+
+[[crate]]
+category = "Development tools"
+use_case = "rathole-org/rathole"
+recommended = ["rathole-org/rathole"]
+[crate.notes]
+"rathole-org/rathole" = "A secure, high-performance reverse proxy for NAT traversal with Noise Protocol/TLS encryption and hot-reload config support ![CI](https://img.shields.io/github/actions/workflow/status/rathole-org/rath"
+
+[[crate]]
+category = "Libraries"
+use_case = "perf-monitor-rs"
+recommended = ["perf-monitor-rs"]
+[crate.notes]
+"perf-monitor-rs" = "A toolkit designed to be a foundation for applications to monitor their performance. [![crates.io](https://img.shields.io/crates/v/perf_monitor.svg)](https://crates.io/crates/perf_monitor)"
+
+[[crate]]
+category = "Libraries"
+use_case = "innoave/genevo"
+recommended = ["innoave/genevo"]
+[crate.notes]
+"innoave/genevo" = "Execute genetic algorithm (GA) simulations in a customizable and extensible way."
+
+[[crate]]
+category = "Libraries"
+use_case = "m-decoster/RsGenetic"
+recommended = ["m-decoster/RsGenetic"]
+[crate.notes]
+"m-decoster/RsGenetic" = "Genetic Algorithm library. In maintenance mode."
+
+[[crate]]
+category = "Libraries"
+use_case = "Martin1887/oxigen"
+recommended = ["Martin1887/oxigen"]
+[crate.notes]
+"Martin1887/oxigen" = "Fast, parallel, extensible and adaptable genetic algorithm library. A example using this library solves the N Queens problem for N = 255 in only few seconds and using less than 1 MB of RAM."
+
+[[crate]]
+category = "Libraries"
+use_case = "pkalivas/radiate"
+recommended = ["pkalivas/radiate"]
+[crate.notes]
+"pkalivas/radiate" = "A customizable parallel genetic programming engine capable of evolving solutions for supervised, unsupervised, and reinforcement learning problems. Comes with complete and customizable implementation "
+
+[[crate]]
+category = "Libraries"
+use_case = "willi-kappler/darwin-rs"
+recommended = ["willi-kappler/darwin-rs"]
+[crate.notes]
+"willi-kappler/darwin-rs" = "Evolutionary algorithms"
+
+[[crate]]
+category = "Libraries"
+use_case = "gemini-client-api"
+recommended = ["gemini-client-api"]
+[crate.notes]
+"gemini-client-api" = "Library to use Google Gemini API. Automatic context management, schema generation, function calling and more."
+
+[[crate]]
+category = "Libraries"
+use_case = "autumnai/leaf"
+recommended = ["autumnai/leaf"]
+[crate.notes]
+"autumnai/leaf" = "Open Machine Intelligence framework.. Abandoned project. The most updated fork is [juice](https://github.com/fff-rs/juice)."
+
+[[crate]]
+category = "Libraries"
+use_case = "blackportal-ai/delta"
+recommended = ["blackportal-ai/delta"]
+[crate.notes]
+"blackportal-ai/delta" = "Δ An Open-Source Machine Learning Framework in Rust. ![crates.io](https://img.shields.io/crates/v/deltaml.svg) ![build](https://img.shields.io/github/actions/workflow/status/blackportal-ai/delta/core."
+
+[[crate]]
+category = "Libraries"
+use_case = "blackportal-ai/nebula"
+recommended = ["blackportal-ai/nebula"]
+[crate.notes]
+"blackportal-ai/nebula" = "A Package Manager for Machine Learning Datasets and Models. ![build](https://img.shields.io/github/actions/workflow/status/blackportal-ai/nebula/core.yml?branch=master)"
+
+[[crate]]
+category = "Libraries"
+use_case = "burn"
+recommended = ["burn"]
+[crate.notes]
+"burn" = "A Flexible and Comprehensive Deep Learning Framework."
+
+[[crate]]
+category = "Libraries"
+use_case = "chelsea0x3b/dfdx"
+recommended = ["chelsea0x3b/dfdx"]
+[crate.notes]
+"chelsea0x3b/dfdx" = "CUDA accelerated machine learning framework that leverages many of Rust's unique features. ![Crates.io](https://img.shields.io/crates/v/dfdx)"
+
+[[crate]]
+category = "Libraries"
+use_case = "huggingface/tokenizers"
+recommended = ["huggingface/tokenizers"]
+[crate.notes]
+"huggingface/tokenizers" = "Hugging Face's tokenizers for modern NLP pipelines (original implementation) with bindings for Python. [![Build Status](https://github.com/huggingface/tokenizers/workflows/Rust/badge.svg?branch=master"
+
+[[crate]]
+category = "Libraries"
+use_case = "katanemo/plano"
+recommended = ["katanemo/plano"]
+[crate.notes]
+"katanemo/plano" = "The AI-native proxy server and data plane for agentic apps."
+
+[[crate]]
+category = "Libraries"
+use_case = "LaurentMazare/tch-rs"
+recommended = ["LaurentMazare/tch-rs"]
+[crate.notes]
+"LaurentMazare/tch-rs" = "Bindings for PyTorch."
+
+[[crate]]
+category = "Libraries"
+use_case = "maciejkula/rustlearn"
+recommended = ["maciejkula/rustlearn"]
+[crate.notes]
+"maciejkula/rustlearn" = "Machine learning library. [![Circle CI](https://circleci.com/gh/maciejkula/rustlearn.svg?style=svg)](https://app.circleci.com/pipelines/github/maciejkula/rustlearn)"
+
+[[crate]]
+category = "Libraries"
+use_case = "Mottl/lightgb3-rs"
+recommended = ["Mottl/lightgb3-rs"]
+[crate.notes]
+"Mottl/lightgb3-rs" = "Bindings for LightGBM [![Crates.io](https://img.shields.io/crates/v/lightgbm3.svg)](https://crates.io/crates/lightgbm3) [![build](https://github.com/Mottl/lightgbm3-rs/actions/workflows/ci.yml/badge.s"
+
+[[crate]]
+category = "Libraries"
+use_case = "ramsyana/RustTensor"
+recommended = ["ramsyana/RustTensor"]
+[crate.notes]
+"ramsyana/RustTensor" = "A learning-focused, high-performance tensor computation library built from scratch in Rust with automatic differentiation and CPU/CUDA backends."
+
+[[crate]]
+category = "Libraries"
+use_case = "raphaelmansuy/edgequake"
+recommended = ["raphaelmansuy/edgequake"]
+[crate.notes]
+"raphaelmansuy/edgequake" = "A high-performance Graph-RAG framework that transforms documents into intelligent knowledge graphs."
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-ml/linfa"
+recommended = ["rust-ml/linfa"]
+[crate.notes]
+"rust-ml/linfa" = "Machine learning framework."
+
+[[crate]]
+category = "Libraries"
+use_case = "smartcorelib/smartcore"
+recommended = ["smartcorelib/smartcore"]
+[crate.notes]
+"smartcorelib/smartcore" = "Machine Learning Library [![Build Status](https://img.shields.io/circleci/build/github/smartcorelib/smartcore)]"
+
+[[crate]]
+category = "Libraries"
+use_case = "tag1consulting/feste"
+recommended = ["tag1consulting/feste"]
+[crate.notes]
+"tag1consulting/feste" = "A GPT-2 style transformer language model implemented from scratch in Rust for educational purposes."
+
+[[crate]]
+category = "Libraries"
+use_case = "tensorflow/rust"
+recommended = ["tensorflow/rust"]
+[crate.notes]
+"tensorflow/rust" = "Bindings for TensorFlow."
+
+[[crate]]
+category = "Libraries"
+use_case = "0xplaygrounds/rig"
+recommended = ["0xplaygrounds/rig"]
+[crate.notes]
+"0xplaygrounds/rig" = "Library for creating agents and modular, scalable LLM-powered applications"
+
+[[crate]]
+category = "Libraries"
+use_case = "openai/codex"
+recommended = ["openai/codex"]
+[crate.notes]
+"openai/codex" = "Codex CLI is a coding agent from OpenAI that runs locally."
+
+[[crate]]
+category = "Libraries"
+use_case = "BAML"
+recommended = ["BAML"]
+[crate.notes]
+"BAML" = "A simple prompting language for building reliable AI workflows and agents. BAML's compiler is written in Rust!"
+
+[[crate]]
+category = "Libraries"
+use_case = "Cortex Memory"
+recommended = ["Cortex Memory"]
+[crate.notes]
+"Cortex Memory" = "A complete solution for agent memory, from extraction and vector search to automated optimization, and insights dashboard out-of-the-box."
+
+[[crate]]
+category = "Libraries"
+use_case = "juyterman1000/entroly"
+recommended = ["juyterman1000/entroly"]
+[crate.notes]
+"juyterman1000/entroly" = "Information-theoretic Context Engineering Engine that uses reinforcement learning to intelligently prune and select optimal RAG fragments."
+
+[[crate]]
+category = "Libraries"
+use_case = "pydantic/monty"
+recommended = ["pydantic/monty"]
+[crate.notes]
+"pydantic/monty" = "A minimal, secure Python interpreter for running LLM-generated code in AI agents, with microsecond startup, strict sandboxing, and snapshotting support [![CI](https://github.com/pydantic/monty/actions"
+
+[[crate]]
+category = "Libraries"
+use_case = "cds-astro/aladin-lite"
+recommended = ["cds-astro/aladin-lite"]
+[crate.notes]
+"cds-astro/aladin-lite" = "Web application for visualizing spatial and planetary image surveys in different projections"
+
+[[crate]]
+category = "Libraries"
+use_case = "fitsio"
+recommended = ["fitsio"]
+[crate.notes]
+"fitsio" = "fits interface library wrapping cfitsio"
+
+[[crate]]
+category = "Libraries"
+use_case = "saurvs/astro-rust"
+recommended = ["saurvs/astro-rust"]
+[crate.notes]
+"saurvs/astro-rust" = "astronomy"
+
+[[crate]]
+category = "Libraries"
+use_case = "dagrs"
+recommended = ["dagrs"]
+[crate.notes]
+"dagrs" = "A high-performance asynchronous task programming framework, which follows the concept of Flow based Programming."
+
+[[crate]]
+category = "Libraries"
+use_case = "dpc/mioco"
+recommended = ["dpc/mioco"]
+[crate.notes]
+"dpc/mioco" = "Scalable, coroutine-based, asynchronous IO handling library"
+
+[[crate]]
+category = "Libraries"
+use_case = "mio"
+recommended = ["mio"]
+[crate.notes]
+"mio" = "MIO is a lightweight IO library, with a focus on adding as little overhead as possible over the OS abstractions"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-lang/futures-rs"
+recommended = ["rust-lang/futures-rs"]
+[crate.notes]
+"rust-lang/futures-rs" = "Zero-cost futures"
+
+[[crate]]
+category = "Libraries"
+use_case = "TeaEntityLab/fpRust"
+recommended = ["TeaEntityLab/fpRust"]
+[crate.notes]
+"TeaEntityLab/fpRust" = "Monad/MonadIO, Handler, Coroutine/doNotation, Functional Programming features for Rust"
+
+[[crate]]
+category = "Libraries"
+use_case = "tokio-rs/tokio"
+recommended = ["tokio-rs/tokio"]
+[crate.notes]
+"tokio-rs/tokio" = "A runtime for writing reliable, asynchronous, and slim applications with the Rust programming language."
+
+[[crate]]
+category = "Libraries"
+use_case = "tqwewe/kameo"
+recommended = ["tqwewe/kameo"]
+[crate.notes]
+"tqwewe/kameo" = "Fault-tolerant Async Actors Built on Tokio"
+
+[[crate]]
+category = "Libraries"
+use_case = "Xudong-Huang/may"
+recommended = ["Xudong-Huang/may"]
+[crate.notes]
+"Xudong-Huang/may" = "Stackful coroutine library"
+
+[[crate]]
+category = "Libraries"
+use_case = "zonyitoo/coio-rs"
+recommended = ["zonyitoo/coio-rs"]
+[crate.notes]
+"zonyitoo/coio-rs" = "A coroutine I/O library with a working-stealing scheduler"
+
+[[crate]]
+category = "Libraries"
+use_case = "hound"
+recommended = ["hound"]
+[crate.notes]
+"hound" = "A WAV encoding and decoding library"
+
+[[crate]]
+category = "Libraries"
+use_case = "jhasse/ears"
+recommended = ["jhasse/ears"]
+[crate.notes]
+"jhasse/ears" = "A simple library to play Sounds and Musics, on top of OpenAL and libsndfile"
+
+[[crate]]
+category = "Libraries"
+use_case = "musitdev/portmidi-rs"
+recommended = ["musitdev/portmidi-rs"]
+[crate.notes]
+"musitdev/portmidi-rs" = "[PortMidi](https://portmedia.sourceforge.net/portmidi/) bindings"
+
+[[crate]]
+category = "Libraries"
+use_case = "ozankasikci/rust-music-theory"
+recommended = ["ozankasikci/rust-music-theory"]
+[crate.notes]
+"ozankasikci/rust-music-theory" = "Music theory library"
+
+[[crate]]
+category = "Libraries"
+use_case = "pdeljanov/Symphonia"
+recommended = ["pdeljanov/Symphonia"]
+[crate.notes]
+"pdeljanov/Symphonia" = "Audio decoding and media demuxing library supporting AAC, FLAC, MP3, MP4, OGG, Vorbis, and WAV."
+
+[[crate]]
+category = "Libraries"
+use_case = "Keats/jsonwebtoken"
+recommended = ["Keats/jsonwebtoken"]
+[crate.notes]
+"Keats/jsonwebtoken" = "[JSON Web Token](https://en.wikipedia.org/wiki/JSON_Web_Token) library"
+
+[[crate]]
+category = "Libraries"
+use_case = "oauth2"
+recommended = ["oauth2"]
+[crate.notes]
+"oauth2" = "Extensible, strongly-typed OAuth2 client library"
+
+[[crate]]
+category = "Libraries"
+use_case = "oxide-auth"
+recommended = ["oxide-auth"]
+[crate.notes]
+"oxide-auth" = "A OAuth2 server library, for use in combination with actix or other frontends, featuring a set of configurable and pluggable backends [![CI](https://github.com/HeroicKatora/oxide-auth/actions/workflow"
+
+[[crate]]
+category = "Libraries"
+use_case = "sgrust01/jwtvault"
+recommended = ["sgrust01/jwtvault"]
+[crate.notes]
+"sgrust01/jwtvault" = "Async library to manage and orchestrate JWT workflow"
+
+[[crate]]
+category = "Libraries"
+use_case = "yup-oauth2"
+recommended = ["yup-oauth2"]
+[crate.notes]
+"yup-oauth2" = "An oauth2 client implementation providing the Device, Installed and Service Account flows"
+
+[[crate]]
+category = "Libraries"
+use_case = "polars-bio"
+recommended = ["polars-bio"]
+[crate.notes]
+"polars-bio" = "Blazing-Fast Bioinformatic Operations on Python DataFrames ![PyPI - Version](https://img.shields.io/pypi/v/polars-bio)"
+
+[[crate]]
+category = "Libraries"
+use_case = "Rust-Bio"
+recommended = ["Rust-Bio"]
+[crate.notes]
+"Rust-Bio" = "bioinformatics libraries."
+
+[[crate]]
+category = "Libraries"
+use_case = "aisk/rust-memcache"
+recommended = ["aisk/rust-memcache"]
+[crate.notes]
+"aisk/rust-memcache" = "Memcached client library"
+
+[[crate]]
+category = "Libraries"
+use_case = "al8n/stretto"
+recommended = ["al8n/stretto"]
+[crate.notes]
+"al8n/stretto" = "A high performance thread-safe memory-bound cache [![build badge](https://github.com/al8n/stretto/actions/workflows/ci.yml/badge.svg)](https://github.com/al8n/stretto/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Libraries"
+use_case = "hit-box/hitbox"
+recommended = ["hit-box/hitbox"]
+[crate.notes]
+"hit-box/hitbox" = "A declarative cache orchestration framework with HTTP middleware and multi-tier backends [![CI](https://github.com/hit-box/hitbox/actions/workflows/CI.yml/badge.svg)](https://github.com/hit-box/hitbox"
+
+[[crate]]
+category = "Libraries"
+use_case = "jaemk/cached"
+recommended = ["jaemk/cached"]
+[crate.notes]
+"jaemk/cached" = "Simple function caching/memoization"
+
+[[crate]]
+category = "Libraries"
+use_case = "moka-rs/moka"
+recommended = ["moka-rs/moka"]
+[crate.notes]
+"moka-rs/moka" = "A high performance concurrent caching library inspired by the Caffeine library for Java [![build badge](https://github.com/moka-rs/moka/workflows/CI/badge.svg)](https://github.com/moka-rs/moka/actions"
+
+[[crate]]
+category = "Libraries"
+use_case = "mozilla/sccache"
+recommended = ["mozilla/sccache"]
+[crate.notes]
+"mozilla/sccache" = "Shared Compilation Cache, great compilation"
+
+[[crate]]
+category = "Libraries"
+use_case = "zkat/cacache-rs"
+recommended = ["zkat/cacache-rs"]
+[crate.notes]
+"zkat/cacache-rs" = "A high-performance, concurrent, content-addressable disk cache, optimized for async APIs [![build badge](https://github.com/zkat/cacache-rs/workflows/CI/badge.svg)](https://github.com/zkat/cacache-rs/"
+
+[[crate]]
+category = "Libraries"
+use_case = "calebwin/emu"
+recommended = ["calebwin/emu"]
+[crate.notes]
+"calebwin/emu" = "A language for GPGPU numerical computing"
+
+[[crate]]
+category = "Libraries"
+use_case = "dimforge/nalgebra"
+recommended = ["dimforge/nalgebra"]
+[crate.notes]
+"dimforge/nalgebra" = "low-dimensional linear algebra library"
+
+[[crate]]
+category = "Libraries"
+use_case = "crossbeam-rs/crossbeam"
+recommended = ["crossbeam-rs/crossbeam"]
+[crate.notes]
+"crossbeam-rs/crossbeam" = "Support for parallelism and low-level concurrency"
+
+[[crate]]
+category = "Libraries"
+use_case = "orx-parallel"
+recommended = ["orx-parallel"]
+[crate.notes]
+"orx-parallel" = "High performance, configurable and expressive parallel computation library."
+
+[[crate]]
+category = "Libraries"
+use_case = "Rayon"
+recommended = ["Rayon"]
+[crate.notes]
+"Rayon" = "A data parallelism library"
+
+[[crate]]
+category = "Libraries"
+use_case = "rustcc/coroutine-rs"
+recommended = ["rustcc/coroutine-rs"]
+[crate.notes]
+"rustcc/coroutine-rs" = "Coroutine Library"
+
+[[crate]]
+category = "Libraries"
+use_case = "zonyitoo/coio-rs"
+recommended = ["zonyitoo/coio-rs"]
+[crate.notes]
+"zonyitoo/coio-rs" = "Coroutine I/O"
+
+[[crate]]
+category = "Libraries"
+use_case = "softprops/envy"
+recommended = ["softprops/envy"]
+[crate.notes]
+"softprops/envy" = "deserialize env vars into typesafe structs [![Main](https://github.com/softprops/envy/actions/workflows/main.yml/badge.svg)](https://github.com/softprops/envy/actions/workflows/main.yml)"
+
+[[crate]]
+category = "Libraries"
+use_case = "arkworks-rs/circom-compat"
+recommended = ["arkworks-rs/circom-compat"]
+[crate.notes]
+"arkworks-rs/circom-compat" = "Arkworks bindings to Circom's R1CS, for Groth16 Proof and Witness generation."
+
+[[crate]]
+category = "Libraries"
+use_case = "briansmith/ring"
+recommended = ["briansmith/ring"]
+[crate.notes]
+"briansmith/ring" = "Safe, fast, small crypto using Rust and BoringSSL's cryptography primitives."
+
+[[crate]]
+category = "Libraries"
+use_case = "briansmith/webpki"
+recommended = ["briansmith/webpki"]
+[crate.notes]
+"briansmith/webpki" = "Web PKI TLS X.509 certificate validation."
+
+[[crate]]
+category = "Libraries"
+use_case = "DaGenix/rust-crypto"
+recommended = ["DaGenix/rust-crypto"]
+[crate.notes]
+"DaGenix/rust-crypto" = "cryptographic algorithms"
+
+[[crate]]
+category = "Libraries"
+use_case = "dalek-cryptography/curve25519-dalek"
+recommended = ["dalek-cryptography/curve25519-dalek"]
+[crate.notes]
+"dalek-cryptography/curve25519-dalek" = "Curve25519 operations"
+
+[[crate]]
+category = "Libraries"
+use_case = "debris/tiny-keccak"
+recommended = ["debris/tiny-keccak"]
+[crate.notes]
+"debris/tiny-keccak" = "Keccak family (SHA3)"
+
+[[crate]]
+category = "Libraries"
+use_case = "dusk-network/bls12-381"
+recommended = ["dusk-network/bls12-381"]
+[crate.notes]
+"dusk-network/bls12-381" = "A Rust-native BLS12-381 with enhancements for zk performance: optimized multi-scalar multiplication, custom hashing, and serde support—ideal for privacy-focused protocols and zero-knowledge applicatio"
+
+[[crate]]
+category = "Libraries"
+use_case = "dusk-network/plonk"
+recommended = ["dusk-network/plonk"]
+[crate.notes]
+"dusk-network/plonk" = "A high-performance, Rust-native implementation of the PLONK zk-SNARK over BLS12-381, optimized with custom gates and KZG10 polynomial commitment for efficient zero-knowledge proofs. ![Build Status](ht"
+
+[[crate]]
+category = "Libraries"
+use_case = "dusk-network/poseidon252"
+recommended = ["dusk-network/poseidon252"]
+[crate.notes]
+"dusk-network/poseidon252" = "A Rust-native Poseidon hash over BLS12-381, Poseidon252 is built for zk-SNARK efficiency, ideal for privacy-focused protocols and zero-knowledge applications. ![Build Status](https://github.com/dusk-n"
+
+[[crate]]
+category = "Libraries"
+use_case = "facebook/opaque-ke"
+recommended = ["facebook/opaque-ke"]
+[crate.notes]
+"facebook/opaque-ke" = "Implementation of the recent [OPAQUE](https://datatracker.ietf.org/doc/draft-krawczyk-cfrg-opaque/) password-authenticated key exchange. [![build badge](https://github.com/facebook/opaque-ke/workflows"
+
+[[crate]]
+category = "Libraries"
+use_case = "iddm/randomorg"
+recommended = ["iddm/randomorg"]
+[crate.notes]
+"iddm/randomorg" = "A random.org client library. [![Crates badge](https://img.shields.io/crates/v/randomorg.svg)](https://crates.io/crates/randomorg)"
+
+[[crate]]
+category = "Libraries"
+use_case = "klutzy/suruga"
+recommended = ["klutzy/suruga"]
+[crate.notes]
+"klutzy/suruga" = "Implementation of [TLS 1.2](https://datatracker.ietf.org/doc/html/rfc5246)"
+
+[[crate]]
+category = "Libraries"
+use_case = "kn0sys/ecc-rs"
+recommended = ["kn0sys/ecc-rs"]
+[crate.notes]
+"kn0sys/ecc-rs" = "Intuitive library for elliptic curve cryptography tutorials [![Crates.io Version](https://img.shields.io/crates/v/kn0syseccrs)](https://crates.io/crates/kn0syseccrs)"
+
+[[crate]]
+category = "Libraries"
+use_case = "kornelski/rust-security-framework"
+recommended = ["kornelski/rust-security-framework"]
+[crate.notes]
+"kornelski/rust-security-framework" = "Bindings for Security Framework (OSX native)"
+
+[[crate]]
+category = "Libraries"
+use_case = "libOctavo/octavo"
+recommended = ["libOctavo/octavo"]
+[crate.notes]
+"libOctavo/octavo" = "Modular hash and crypto library"
+
+[[crate]]
+category = "Libraries"
+use_case = "orion-rs/orion"
+recommended = ["orion-rs/orion"]
+[crate.notes]
+"orion-rs/orion" = "This library aims to provide easy and usable crypto. 'Usable' meaning exposing high-level API's that are easy to use and hard to misuse. [![Tests](https://github.com/orion-rs/orion/actions/workflows/t"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-native-tls/rust-native-tls"
+recommended = ["rust-native-tls/rust-native-tls"]
+[crate.notes]
+"rust-native-tls/rust-native-tls" = "Bindings for native TLS libraries"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-openssl"
+recommended = ["rust-openssl"]
+[crate.notes]
+"rust-openssl" = "[OpenSSL](https://www.openssl.org/) bindings"
+
+[[crate]]
+category = "Libraries"
+use_case = "RustCrypto/hashes"
+recommended = ["RustCrypto/hashes"]
+[crate.notes]
+"RustCrypto/hashes" = "Collection of cryptographic hash functions"
+
+[[crate]]
+category = "Libraries"
+use_case = "rustls/rustls"
+recommended = ["rustls/rustls"]
+[crate.notes]
+"rustls/rustls" = "Implementation of TLS"
+
+[[crate]]
+category = "Libraries"
+use_case = "schnorrkel"
+recommended = ["schnorrkel"]
+[crate.notes]
+"schnorrkel" = "Schnorr VRFs and signatures on the Ristretto group"
+
+[[crate]]
+category = "Libraries"
+use_case = "verifyfetch"
+recommended = ["verifyfetch"]
+[crate.notes]
+"verifyfetch" = "Streaming file integrity verification using Rust/WASM SHA-256 hashing with constant memory. Resumable downloads for large files in the browser."
+
+[[crate]]
+category = "Libraries"
+use_case = "amv-dev/yata"
+recommended = ["amv-dev/yata"]
+[crate.notes]
+"amv-dev/yata" = "high performance technical analysis library [![Build Status](https://img.shields.io/github/workflow/status/amv-dev/yata/Rust?branch=master)](https://github.com/amv-dev/yata/actions?query=workflow%3ARu"
+
+[[crate]]
+category = "Libraries"
+use_case = "bluss/ndarray"
+recommended = ["bluss/ndarray"]
+[crate.notes]
+"bluss/ndarray" = "N-dimensional array with array views, multidimensional slicing, and efficient operations"
+
+[[crate]]
+category = "Libraries"
+use_case = "cocoindex"
+recommended = ["cocoindex"]
+[crate.notes]
+"cocoindex" = "ETL framework to build fresh index"
+
+[[crate]]
+category = "Libraries"
+use_case = "datafusion"
+recommended = ["datafusion"]
+[crate.notes]
+"datafusion" = "DataFusion is a very fast, extensible query engine for building high-quality data-centric systems in Rust, using the Apache Arrow in-memory format."
+
+[[crate]]
+category = "Libraries"
+use_case = "kernelmachine/utah"
+recommended = ["kernelmachine/utah"]
+[crate.notes]
+"kernelmachine/utah" = "Dataframe structure and operations"
+
+[[crate]]
+category = "Libraries"
+use_case = "lakehq/sail"
+recommended = ["lakehq/sail"]
+[crate.notes]
+"lakehq/sail" = "Sail is a drop-in Apache Spark replacement written in Rust, unifying batch processing, stream processing, and compute-intensive AI workloads."
+
+[[crate]]
+category = "Libraries"
+use_case = "pathwaycom/pathway"
+recommended = ["pathwaycom/pathway"]
+[crate.notes]
+"pathwaycom/pathway" = "Performant open-source Python ETL framework with Rust runtime, supporting 300+ data sources."
+
+[[crate]]
+category = "Libraries"
+use_case = "pg_analytics"
+recommended = ["pg_analytics"]
+[crate.notes]
+"pg_analytics" = "PostgreSQL extension that accelerates analytical query processing inside Postgres to a performance level comparable to dedicated OLAP databases."
+
+[[crate]]
+category = "Libraries"
+use_case = "pg_lakehouse"
+recommended = ["pg_lakehouse"]
+[crate.notes]
+"pg_lakehouse" = "PostgreSQL extension that transforms Postgres into an analytical query engine over object stores like AWS S3/GCS and table formats like Delta Lake/Iceberg."
+
+[[crate]]
+category = "Libraries"
+use_case = "pola-rs/polars"
+recommended = ["pola-rs/polars"]
+[crate.notes]
+"pola-rs/polars" = "Fast feature complete DataFrame library [![Lint Rust](https://github.com/pola-rs/polars/actions/workflows/lint-rust.yml/badge.svg)](https://github.com/pola-rs/polars/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "weld-project/weld"
+recommended = ["weld-project/weld"]
+[crate.notes]
+"weld-project/weld" = "High-performance runtime for data analytics applications"
+
+[[crate]]
+category = "Libraries"
+use_case = "arkflow-rs/arkflow"
+recommended = ["arkflow-rs/arkflow"]
+[crate.notes]
+"arkflow-rs/arkflow" = "High-performance Rust stream processing engine [![CI](https://github.com/arkflow-rs/arkflow/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/arkflow-rs/arkflow/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "ArroyoSystems/arroyo"
+recommended = ["ArroyoSystems/arroyo"]
+[crate.notes]
+"ArroyoSystems/arroyo" = "High-performance real-time analytics in Rust and SQL [![CI](https://github.com/ArroyoSystems/arroyo/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ArroyoSystems/arroyo/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "beava-dev/beava"
+recommended = ["beava-dev/beava"]
+[crate.notes]
+"beava-dev/beava" = "Single-binary feature server. Push events over HTTP or TCP, query fresh per-entity counters and aggregates inline, no broker in between. For fraud, recommendations, LLM guardrails, and in-product anal"
+
+[[crate]]
+category = "Libraries"
+use_case = "fluvio"
+recommended = ["fluvio"]
+[crate.notes]
+"fluvio" = "Programmable data streaming platform [![CI](https://github.com/fluvio-community/fluvio/actions/workflows/ci.yml/badge.svg)](https://github.com/fluvio-community/fluvio/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "wingfoil"
+recommended = ["wingfoil"]
+[crate.notes]
+"wingfoil" = "Graph based stream processing framework [![CI](https://github.com/wingfoil-io/wingfoil/actions/workflows/rust.yml/badge.svg)](https://github.com/wingfoil-io/wingfoil/actions/workflows/rust.yml)"
+
+[[crate]]
+category = "Libraries"
+use_case = "alrevuelta/rs-merkle-tree"
+recommended = ["alrevuelta/rs-merkle-tree"]
+[crate.notes]
+"alrevuelta/rs-merkle-tree" = "Merkle tree implementation in Rust with configurable storage backends and hash functions. Fixed depth and incremental only. Optimized for fast proof generation."
+
+[[crate]]
+category = "Libraries"
+use_case = "ashvardanian/NumKong"
+recommended = ["ashvardanian/NumKong"]
+[crate.notes]
+"ashvardanian/NumKong" = "SIMD-accelerated vector distances and similarity functions for x86 AVX2 & AVX-512, and Arm NEON [![crates.io](https://img.shields.io/crates/v/simsimd.svg)](https://crates.io/crates/simsimd)"
+
+[[crate]]
+category = "Libraries"
+use_case = "contain-rs"
+recommended = ["contain-rs"]
+[crate.notes]
+"contain-rs" = "Extension of Rust's std::collections"
+
+[[crate]]
+category = "Libraries"
+use_case = "danielpclark/array_tool"
+recommended = ["danielpclark/array_tool"]
+[crate.notes]
+"danielpclark/array_tool" = "Array helpers. Some of the most common methods you would use on Arrays made available on Vectors. Polymorphic implementations for handling most of your use cases."
+
+[[crate]]
+category = "Libraries"
+use_case = "fizyk20/generic-array"
+recommended = ["fizyk20/generic-array"]
+[crate.notes]
+"fizyk20/generic-array" = "a hack to allow for arrays sized by typenums"
+
+[[crate]]
+category = "Libraries"
+use_case = "mrhooray/kdtree-rs"
+recommended = ["mrhooray/kdtree-rs"]
+[crate.notes]
+"mrhooray/kdtree-rs" = "K-dimensional tree for fast geospatial indexing and nearest neighbors lookup"
+
+[[crate]]
+category = "Libraries"
+use_case = "RoaringBitmap/roaring-rs"
+recommended = ["RoaringBitmap/roaring-rs"]
+[crate.notes]
+"RoaringBitmap/roaring-rs" = "Roaring Bitmaps"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-itertools/itertools"
+recommended = ["rust-itertools/itertools"]
+[crate.notes]
+"rust-itertools/itertools" = "Extra iterator adaptors, functions and macros"
+
+[[crate]]
+category = "Libraries"
+use_case = "milliams/plotlib"
+recommended = ["milliams/plotlib"]
+[crate.notes]
+"milliams/plotlib" = "Data plotting library for Rust"
+
+[[crate]]
+category = "Libraries"
+use_case = "plotly"
+recommended = ["plotly"]
+[crate.notes]
+"plotly" = "Plotly for Rust"
+
+[[crate]]
+category = "Libraries"
+use_case = "plotters"
+recommended = ["plotters"]
+[crate.notes]
+"plotters" = "[![build badge](https://github.com/plotters-rs/plotters/workflows/CI/badge.svg)](https://github.com/plotters-rs/plotters/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "rerun"
+recommended = ["rerun"]
+[crate.notes]
+"rerun" = "[[rerun](https://crates.io/crates/rerun)] - An SDK for logging computer vision and robotics data (tensors, point clouds, etc) paired with a visualizer for exploring that data over time."
+
+[[crate]]
+category = "Libraries"
+use_case = "saresend/gust"
+recommended = ["saresend/gust"]
+[crate.notes]
+"saresend/gust" = "A small charting/visualization tool and partial vega implementation"
+
+[[crate]]
+category = "Libraries"
+use_case = "wangjiawen2013/charton"
+recommended = ["wangjiawen2013/charton"]
+[crate.notes]
+"wangjiawen2013/charton" = "A layered grammar of graphics library in Rust. [![Documentation](https://img.shields.io/docsrs/charton/latest)](https://docs.rs/charton) [![Build Status](https://github.com/wangjiawen2013/charton/acti"
+
+[[crate]]
+category = "Libraries"
+use_case = "sfackler/r2d2"
+recommended = ["sfackler/r2d2"]
+[crate.notes]
+"sfackler/r2d2" = "generic connection pool"
+
+[[crate]]
+category = "Libraries"
+use_case = "burntSushi/jiff"
+recommended = ["burntSushi/jiff"]
+[crate.notes]
+"burntSushi/jiff" = "A date-time library for Rust that encourages you to jump into the pit of success. [![Build status](https://github.com/BurntSushi/jiff/workflows/ci/badge.svg)](https://github.com/BurntSushi/jiff/action"
+
+[[crate]]
+category = "Libraries"
+use_case = "chronotope/chrono"
+recommended = ["chronotope/chrono"]
+[crate.notes]
+"chronotope/chrono" = "Date and time library"
+
+[[crate]]
+category = "Libraries"
+use_case = "time-rs/time"
+recommended = ["time-rs/time"]
+[crate.notes]
+"time-rs/time" = "[![build badge](https://github.com/time-rs/time/workflows/Build/badge.svg)](https://github.com/time-rs/time/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "aya/aya-rs"
+recommended = ["aya/aya-rs"]
+[crate.notes]
+"aya/aya-rs" = "Built with a focus on developer experience and operability."
+
+[[crate]]
+category = "Libraries"
+use_case = "libbpf/libbpf-rs"
+recommended = ["libbpf/libbpf-rs"]
+[crate.notes]
+"libbpf/libbpf-rs" = "A minimal and opinionated eBPF tooling."
+
+[[crate]]
+category = "Libraries"
+use_case = "gsquire/sendgrid-rs"
+recommended = ["gsquire/sendgrid-rs"]
+[crate.notes]
+"gsquire/sendgrid-rs" = "Library for SendGrid API"
+
+[[crate]]
+category = "Libraries"
+use_case = "jdrouet/catapulte"
+recommended = ["jdrouet/catapulte"]
+[crate.notes]
+"jdrouet/catapulte" = "A microservice to send emails using [MRML](https://github.com/jdrouet/mrml) templates."
+
+[[crate]]
+category = "Libraries"
+use_case = "jdrouet/jolimail"
+recommended = ["jdrouet/jolimail"]
+[crate.notes]
+"jdrouet/jolimail" = "A web application to build [MRML](https://github.com/jdrouet/mrml) templates."
+
+[[crate]]
+category = "Libraries"
+use_case = "jdrouet/mrml"
+recommended = ["jdrouet/mrml"]
+[crate.notes]
+"jdrouet/mrml" = "A library to generate nice email templates working on any mail client."
+
+[[crate]]
+category = "Libraries"
+use_case = "lettre/lettre"
+recommended = ["lettre/lettre"]
+[crate.notes]
+"lettre/lettre" = "an SMTP-library [![CI](https://github.com/lettre/lettre/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/lettre/lettre/actions/workflows/test.yml)"
+
+[[crate]]
+category = "Libraries"
+use_case = "mailtutan/mailtutan"
+recommended = ["mailtutan/mailtutan"]
+[crate.notes]
+"mailtutan/mailtutan" = "An SMTP server for test and development environment."
+
+[[crate]]
+category = "Libraries"
+use_case = "meli/meli"
+recommended = ["meli/meli"]
+[crate.notes]
+"meli/meli" = "🐝 terminal mail client"
+
+[[crate]]
+category = "Libraries"
+use_case = "rustmailer/bichon"
+recommended = ["rustmailer/bichon"]
+[crate.notes]
+"rustmailer/bichon" = "A lightweight, high-performance email archiver with full-text search and WebUI."
+
+[[crate]]
+category = "Libraries"
+use_case = "tweedegolf/mailcrab"
+recommended = ["tweedegolf/mailcrab"]
+[crate.notes]
+"tweedegolf/mailcrab" = "Email test server for development."
+
+[[crate]]
+category = "Libraries"
+use_case = "Awesome Quads"
+recommended = ["Awesome Quads"]
+[crate.notes]
+"Awesome Quads" = "A curated list of links to miniquad/macroquad-related code & resources"
+
+[[crate]]
+category = "Libraries"
+use_case = "Awesome wgpu"
+recommended = ["Awesome wgpu"]
+[crate.notes]
+"Awesome wgpu" = "A curated list of wgpu code and resources"
+
+[[crate]]
+category = "Libraries"
+use_case = "apache/sedona-db"
+recommended = ["apache/sedona-db"]
+[crate.notes]
+"apache/sedona-db" = "SedonaDB is a geospatial DataFrame library written in Rust."
+
+[[crate]]
+category = "Libraries"
+use_case = "Georust"
+recommended = ["Georust"]
+[crate.notes]
+"Georust" = "geospatial tools and libraries written"
+
+[[crate]]
+category = "Libraries"
+use_case = "MapLibre/Martin"
+recommended = ["MapLibre/Martin"]
+[crate.notes]
+"MapLibre/Martin" = "Map tile server with PostGIS, MBTiles, PMTiles, and sprites support. [![CI build](https://github.com/maplibre/martin/actions/workflows/ci.yml/badge.svg)](https://github.com/maplibre/martin/actions)[!["
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-reverse-geocoder"
+recommended = ["rust-reverse-geocoder"]
+[crate.notes]
+"rust-reverse-geocoder" = "A fast, offline reverse geocoder, inspired by [thampiman/reverse-geocoder](https://github.com/thampiman/reverse-geocoder)"
+
+[[crate]]
+category = "Libraries"
+use_case = "neo4j-labs/graph"
+recommended = ["neo4j-labs/graph"]
+[crate.notes]
+"neo4j-labs/graph" = "A library for high-performant graph algorithms [![graph CI status](https://img.shields.io/github/workflow/status/neo4j-labs/graph/CI/main?label=CI)](https://github.com/neo4j-labs/graph/actions/workflo"
+
+[[crate]]
+category = "Libraries"
+use_case = "petgraph/petgraph"
+recommended = ["petgraph/petgraph"]
+[crate.notes]
+"petgraph/petgraph" = "Graph data structure library. [![graph CI status](https://github.com/petgraph/petgraph/workflows/Continuous%20integration/badge.svg?branch=master)](https://github.com/petgraph/petgraph/actions/workflo"
+
+[[crate]]
+category = "Libraries"
+use_case = "gfx-rs/gfx"
+recommended = ["gfx-rs/gfx"]
+[crate.notes]
+"gfx-rs/gfx" = "A high-performance, bindless graphics API."
+
+[[crate]]
+category = "Libraries"
+use_case = "gfx-rs/wgpu"
+recommended = ["gfx-rs/wgpu"]
+[crate.notes]
+"gfx-rs/wgpu" = "Native WebGPU implementation based on gfx-hal. [![build badge](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg?branch=master)](https://github.com/gfx-rs/wgpu/actions)"
+
+[[crate]]
+category = "Libraries"
+use_case = "autopilot-rs/autopilot-rs"
+recommended = ["autopilot-rs/autopilot-rs"]
+[crate.notes]
+"autopilot-rs/autopilot-rs" = "A simple, cross-platform GUI automation library."
+
+[[crate]]
+category = "Libraries"
+use_case = "DioxusLabs/dioxus"
+recommended = ["DioxusLabs/dioxus"]
+[crate.notes]
+"DioxusLabs/dioxus" = "a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust. ![rust ci](https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg)"
+
+[[crate]]
+category = "Libraries"
+use_case = "emilk/egui"
+recommended = ["emilk/egui"]
+[crate.notes]
+"emilk/egui" = "Simple, fast, and highly portable immediate mode GUI library. egui runs on the web, natively, and in your favorite game engine. [![Build Status](https://github.com/emilk/egui/workflows/CI/badge.svg)]("
+
+[[crate]]
+category = "Libraries"
+use_case = "emoon/rust_minifb"
+recommended = ["emoon/rust_minifb"]
+[crate.notes]
+"emoon/rust_minifb" = "minifb is a cross-platform window setup with optional bitmap rendering. It also comes with easy mouse and keyboard input. Primarily designed for prototyping"
+
+[[crate]]
+category = "Libraries"
+use_case = "fschutt/azul"
+recommended = ["fschutt/azul"]
+[crate.notes]
+"fschutt/azul" = "A free, functional, IMGUI-oriented GUI framework for rapid development of desktop applications written in Rust, supported by the Mozilla WebRender rendering engine."
+
+[[crate]]
+category = "Libraries"
+use_case = "ivanceras/sauron-native"
+recommended = ["ivanceras/sauron-native"]
+[crate.notes]
+"ivanceras/sauron-native" = "A truly native and cross platform GUI library. One unified code can be run as native GUI, Html Web and TUI."
+
+[[crate]]
+category = "Libraries"
+use_case = "OrbTk"
+recommended = ["OrbTk"]
+[crate.notes]
+"OrbTk" = "The Orbital Widget Toolkit is a multi platform (G)UI toolkit using SDL2 [![Build and test](https://github.com/redox-os/orbtk/workflows/build/badge.svg?branch=develop)](https://github.com/redox-os/orbt"
+
+[[crate]]
+category = "Libraries"
+use_case = "PistonDevelopers/conrod"
+recommended = ["PistonDevelopers/conrod"]
+[crate.notes]
+"PistonDevelopers/conrod" = "An easy-to-use, immediate-mode, 2D GUI library"
+
+[[crate]]
+category = "Libraries"
+use_case = "Ribir"
+recommended = ["Ribir"]
+[crate.notes]
+"Ribir" = "Ribir is a Rust GUI framework that helps you build beautiful and native multi-platform applications from a single codebase."
+
+[[crate]]
+category = "Libraries"
+use_case = "rise-ui"
+recommended = ["rise-ui"]
+[crate.notes]
+"rise-ui" = "Simple component-based cross-Platform GUI Toolkit for developing beautiful and user-friendly interfaces."
+
+[[crate]]
+category = "Libraries"
+use_case = "saurvs/nfd-rs"
+recommended = ["saurvs/nfd-rs"]
+[crate.notes]
+"saurvs/nfd-rs" = "[nativefiledialog](https://github.com/mlabbe/nativefiledialog) bindings"
+
+[[crate]]
+category = "Libraries"
+use_case = "tauri-apps/tauri"
+recommended = ["tauri-apps/tauri"]
+[crate.notes]
+"tauri-apps/tauri" = "Build smaller, faster, and more secure desktop applications with a web frontend, powered by [WRY](https://github.com/tauri-apps/wry). [![test library](https://img.shields.io/github/workflow/status/tau"
+
+[[crate]]
+category = "Libraries"
+use_case = "tauri-apps/wry"
+recommended = ["tauri-apps/wry"]
+[crate.notes]
+"tauri-apps/wry" = "Webview Rendering librarY."
+
+[[crate]]
+category = "Libraries"
+use_case = "xilem"
+recommended = ["xilem"]
+[crate.notes]
+"xilem" = "Successor of the data-first UI design toolkit [druid](https://github.com/linebender/druid)."
+
+[[crate]]
+category = "Libraries"
+use_case = "abonander/img_hash"
+recommended = ["abonander/img_hash"]
+[crate.notes]
+"abonander/img_hash" = "Perceptual image hashing and comparison for equality and similarity."
+
+[[crate]]
+category = "Libraries"
+use_case = "Enet4/dicom-rs"
+recommended = ["Enet4/dicom-rs"]
+[crate.notes]
+"Enet4/dicom-rs" = "A pure Rust implementation of the DICOM standard, allowing users to work with DICOM objects and interact with DICOM applications, while aiming to be fast, safe, and intuitive to use."
+
+[[crate]]
+category = "Libraries"
+use_case = "image-rs/image"
+recommended = ["image-rs/image"]
+[crate.notes]
+"image-rs/image" = "Basic imaging processing functions and methods for converting to and from image formats"
+
+[[crate]]
+category = "Libraries"
+use_case = "image-rs/imageproc"
+recommended = ["image-rs/imageproc"]
+[crate.notes]
+"image-rs/imageproc" = "An image processing library, based on the `image` library."
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-cv/cv"
+recommended = ["rust-cv/cv"]
+[crate.notes]
+"rust-cv/cv" = "Implement computer vision algorithms, abstractions, and systems. `#[no_std]` is supported where possible. ![build badge](https://github.com/rust-cv/cv/workflows/tests/badge.svg)"
+
+[[crate]]
+category = "Libraries"
+use_case = "twistedfall/opencv-rust"
+recommended = ["twistedfall/opencv-rust"]
+[crate.notes]
+"twistedfall/opencv-rust" = "Bindings for OpenCV"
+
+[[crate]]
+category = "Libraries"
+use_case = "shnewto/bnf"
+recommended = ["shnewto/bnf"]
+[crate.notes]
+"shnewto/bnf" = "A library for parsing Backus–Naur form context-free grammars."
+
+[[crate]]
+category = "Libraries"
+use_case = "donnie4w/tklog"
+recommended = ["donnie4w/tklog"]
+[crate.notes]
+"donnie4w/tklog" = "lightweight and efficient rust structured log library with support for log levels, file segmentation, compressed archiving."
+
+[[crate]]
+category = "Libraries"
+use_case = "estk/log4rs"
+recommended = ["estk/log4rs"]
+[crate.notes]
+"estk/log4rs" = "highly configurable logging framework modeled after Java's Logback and log4j libraries [![CircleCI](https://circleci.com/gh/estk/log4rs.svg?style=shield)](https://app.circleci.com/pipelines/github/est"
+
+[[crate]]
+category = "Libraries"
+use_case = "fast/logforth"
+recommended = ["fast/logforth"]
+[crate.notes]
+"fast/logforth" = "A versatile, extensible, and easy-to-use logging framework for Rust applications. It allows you to configure multiple dispatches, filters, and appenders to customize your logging setup according to yo"
+
+[[crate]]
+category = "Libraries"
+use_case = "rbatis/fast_log"
+recommended = ["rbatis/fast_log"]
+[crate.notes]
+"rbatis/fast_log" = "Async log High-performance asynchronous logging"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-lang/log"
+recommended = ["rust-lang/log"]
+[crate.notes]
+"rust-lang/log" = "Logging implementation"
+
+[[crate]]
+category = "Libraries"
+use_case = "seanmonstar/pretty-env-logger"
+recommended = ["seanmonstar/pretty-env-logger"]
+[crate.notes]
+"seanmonstar/pretty-env-logger" = "A pretty, easy-to-use logger."
+
+[[crate]]
+category = "Libraries"
+use_case = "slog-rs/slog"
+recommended = ["slog-rs/slog"]
+[crate.notes]
+"slog-rs/slog" = "Structured, composable logging"
+
+[[crate]]
+category = "Libraries"
+use_case = "tokio-rs/tracing"
+recommended = ["tokio-rs/tracing"]
+[crate.notes]
+"tokio-rs/tracing" = "An application level tracing framework for async-aware structured logging, error handling, metrics, and more [![Build Status](https://github.com/tokio-rs/tracing/workflows/CI/badge.svg?branch=master)]"
+
+[[crate]]
+category = "Libraries"
+use_case = "Linq-in-Rust"
+recommended = ["Linq-in-Rust"]
+[crate.notes]
+"Linq-in-Rust" = "Macro and methods for C#-LINQ-like expressions. [![CI](https://github.com/StardustDL/Linq-in-Rust/workflows/CI/badge.svg?branch=master)](https://github.com/StardustDL/Linq-in-Rust/actions?query=workfl"
+
+[[crate]]
+category = "Libraries"
+use_case = "objdiff"
+recommended = ["objdiff"]
+[crate.notes]
+"objdiff" = "A local diffing tool for decompilation projects"
+
+[[crate]]
+category = "Libraries"
+use_case = "3body-lang"
+recommended = ["3body-lang"]
+[crate.notes]
+"3body-lang" = "The Three Body Language"
+
+[[crate]]
+category = "Libraries"
+use_case = "duckscript"
+recommended = ["duckscript"]
+[crate.notes]
+"duckscript" = "[Simple, extendable and embeddable scripting language.](https://github.com/sagiegurari/duckscript) [![build badge](https://github.com/sagiegurari/duckscript/workflows/CI/badge.svg?branch=master)](http"
+
+[[crate]]
+category = "Libraries"
+use_case = "facebook/starlark-rust"
+recommended = ["facebook/starlark-rust"]
+[crate.notes]
+"facebook/starlark-rust" = "A small, deterministic, thread-safe language with Python syntax"
+
+[[crate]]
+category = "Libraries"
+use_case = "fleabitdev/gamelisp"
+recommended = ["fleabitdev/gamelisp"]
+[crate.notes]
+"fleabitdev/gamelisp" = "A Lisp-like scripting language for game development"
+
+[[crate]]
+category = "Libraries"
+use_case = "gluon-lang/gluon"
+recommended = ["gluon-lang/gluon"]
+[crate.notes]
+"gluon-lang/gluon" = "A small, statically-typed, functional programming language"
+
+[[crate]]
+category = "Libraries"
+use_case = "kcl"
+recommended = ["kcl"]
+[crate.notes]
+"kcl" = "A constraint-based record & functional language mainly used in configuration and policy scenarios."
+
+[[crate]]
+category = "Libraries"
+use_case = "mun"
+recommended = ["mun"]
+[crate.notes]
+"mun" = "A compiled, statically-typed scripting language with first class hot reloading support"
+
+[[crate]]
+category = "Libraries"
+use_case = "murarth/ketos"
+recommended = ["murarth/ketos"]
+[crate.notes]
+"murarth/ketos" = "A Lisp dialect functional programming language serving as a scripting and extension language for rust"
+
+[[crate]]
+category = "Libraries"
+use_case = "PistonDevelopers/dyon"
+recommended = ["PistonDevelopers/dyon"]
+[crate.notes]
+"PistonDevelopers/dyon" = "A rusty dynamically typed scripting language"
+
+[[crate]]
+category = "Libraries"
+use_case = "rhaiscript/rhai"
+recommended = ["rhaiscript/rhai"]
+[crate.notes]
+"rhaiscript/rhai" = "A tiny and fast embedded scripting language resembling a combination of JavaScript and Rust [![build badge](https://github.com/rhaiscript/rhai/workflows/Build/badge.svg)](https://github.com/rhaiscript"
+
+[[crate]]
+category = "Libraries"
+use_case = "rune-rs/rune"
+recommended = ["rune-rs/rune"]
+[crate.notes]
+"rune-rs/rune" = "An embeddable dynamic programming language"
+
+[[crate]]
+category = "Libraries"
+use_case = "trynova/nova"
+recommended = ["trynova/nova"]
+[crate.notes]
+"trynova/nova" = "JavaScript engine written entirely in Rust"
+
+[[crate]]
+category = "Libraries"
+use_case = "nyx-space"
+recommended = ["nyx-space"]
+[crate.notes]
+"nyx-space" = "High fidelity, fast, reliable and validated astrodynamical toolkit library, used for spacecraft mission design and orbit determination [![Build Status](https://gitlab.com/nyx-space/nyx/badges/master/p"
+
+[[crate]]
+category = "Libraries"
+use_case = "delay-timer"
+recommended = ["delay-timer"]
+[crate.notes]
+"delay-timer" = "Time-manager of delayed tasks. Like crontab, but asynchronous tasks are possible. [![Build](https://github.com/BinChengZhao/delay-timer/actions/workflows/rust.yml/badge.svg)]( https://github.com/BinCh"
+
+[[crate]]
+category = "Libraries"
+use_case = "BurntSushi/suffix"
+recommended = ["BurntSushi/suffix"]
+[crate.notes]
+"BurntSushi/suffix" = "Linear time suffix array construction (with Unicode support)"
+
+[[crate]]
+category = "Libraries"
+use_case = "BurntSushi/tabwriter"
+recommended = ["BurntSushi/tabwriter"]
+[crate.notes]
+"BurntSushi/tabwriter" = "Elastic tab stops (i.e., text column alignment)"
+
+[[crate]]
+category = "Libraries"
+use_case = "cpc"
+recommended = ["cpc"]
+[crate.notes]
+"cpc" = "Parses and calculates strings of math with support for units and unit conversion, from `1+2` to `1% of round(1 lightyear / 14!s to km/h)`."
+
+[[crate]]
+category = "Libraries"
+use_case = "greyblake/whatlang-rs"
+recommended = ["greyblake/whatlang-rs"]
+[crate.notes]
+"greyblake/whatlang-rs" = "Natural language detection library based on trigrams"
+
+[[crate]]
+category = "Libraries"
+use_case = "ps1dr3x/easy_reader"
+recommended = ["ps1dr3x/easy_reader"]
+[crate.notes]
+"ps1dr3x/easy_reader" = "A reader that allows forwards, backwards and random navigations through the lines of huge files without consuming iterators"
+
+[[crate]]
+category = "Libraries"
+use_case = "rust-lang/regex"
+recommended = ["rust-lang/regex"]
+[crate.notes]
+"rust-lang/regex" = "Regular expressions (RE2 style)"
+
+[[crate]]
+category = "Libraries"
+use_case = "strsim-rs"
+recommended = ["strsim-rs"]
+[crate.notes]
+"strsim-rs" = "String similarity metrics"
+
+[[crate]]
+category = "Libraries"
+use_case = "meilisearch/MeiliSearch"
+recommended = ["meilisearch/MeiliSearch"]
+[crate.notes]
+"meilisearch/MeiliSearch" = "Ultra relevant, instant and typo-tolerant full-text search API. [![Build Status](https://github.com/meilisearch/MeiliSearch/workflows/Cargo%20test/badge.svg?branch=master)](https://github.com/meilisea"
+
+[[crate]]
+category = "Libraries"
+use_case = "pg_search"
+recommended = ["pg_search"]
+[crate.notes]
+"pg_search" = "PostgreSQL extension that enables full-text search over SQL tables using the BM25 algorithm, the state-of-the-art ranking function for full-text search."
+
+[[crate]]
+category = "Libraries"
+use_case = "zerocopy"
+recommended = ["zerocopy"]
+[crate.notes]
+"zerocopy" = "'Zerocopy makes zero-cost memory manipulation effortless. We write `unsafe` so you don’t have to.'"
+
+[[crate]]
+category = "Libraries"
+use_case = "ffmpeg-sidecar"
+recommended = ["ffmpeg-sidecar"]
+[crate.notes]
+"ffmpeg-sidecar" = "Wrap a standalone FFmpeg binary in an intuitive Iterator interface. [![Build Status](https://github.com/nathanbabcock/ffmpeg-sidecar/actions/workflows/ci.yml/badge.svg)](https://github.com/nathanbabco"
+
+[[crate]]
+category = "Libraries"
+use_case = "beneills/quantum"
+recommended = ["beneills/quantum"]
+[crate.notes]
+"beneills/quantum" = "Advanced quantum computer simulator"
+
+[[crate]]
+category = "Libraries"
+use_case = "bytecodealliance/wasmtime"
+recommended = ["bytecodealliance/wasmtime"]
+[crate.notes]
+"bytecodealliance/wasmtime" = "A standalone runtime for WebAssembly [![Build Status](https://github.com/bytecodealliance/wasmtime/workflows/CI/badge.svg)](https://github.com/bytecodealliance/wasmtime/actions?query=workflow%3ACI)"
+
+[[crate]]
+category = "Libraries"
+use_case = "capsule"
+recommended = ["capsule"]
+[crate.notes]
+"capsule" = "WebAssembly sandboxing runtime for executing untrusted code"
+
+[[crate]]
+category = "Libraries"
+use_case = "chromium/chromiumos/platform/crosvm"
+recommended = ["chromium/chromiumos/platform/crosvm"]
+[crate.notes]
+"chromium/chromiumos/platform/crosvm" = "CrOSVM Enables Chrome OS to run Linux apps inside a fast, secure virtualized environment"
+
+[[crate]]
+category = "Libraries"
+use_case = "oxidecomputer/propolis"
+recommended = ["oxidecomputer/propolis"]
+[crate.notes]
+"oxidecomputer/propolis" = "Userspace program for illumos bhyve kernel modules"
+
+[[crate]]
+category = "Libraries"
+use_case = "saurvs/hypervisor-rs"
+recommended = ["saurvs/hypervisor-rs"]
+[crate.notes]
+"saurvs/hypervisor-rs" = "Hardware-accelerated virtualization on OS X"
+
+[[crate]]
+category = "Libraries"
+use_case = "wasmi-labs/wasmi"
+recommended = ["wasmi-labs/wasmi"]
+[crate.notes]
+"wasmi-labs/wasmi" = "A lightweight runtime for WebAssembly"
+
+[[crate]]
+category = "Registries"
+use_case = "cenotelie/cratery"
+recommended = ["cenotelie/cratery"]
+[crate.notes]
+"cenotelie/cratery" = "A lightweight private cargo registry with batteries included, built for organisations, including features similar to [docs.rs](https://docs.rs) and [deps.rs](https://deps.rs). [![CI](https://github.co"
+
+[[crate]]
+category = "Registries"
+use_case = "Cloudsmith :heavy_dollar_sign:"
+recommended = ["Cloudsmith :heavy_dollar_sign:"]
+[crate.notes]
+"Cloudsmith :heavy_dollar_sign:" = "A fully managed package management SaaS, with first-class support for public and private Cargo/Rust registries (plus many others). Free for open-source projects."
+
+[[crate]]
+category = "Registries"
+use_case = "Crates"
+recommended = ["Crates"]
+[crate.notes]
+"Crates" = "The official public registry for Rust/Cargo."
+
+[[crate]]
+category = "Registries"
+use_case = "getnora-io/nora"
+recommended = ["getnora-io/nora"]
+[crate.notes]
+"getnora-io/nora" = "A lightweight, single-binary artifact registry supporting Docker, Maven, npm, PyPI, Cargo, Go, and raw formats. Upstream proxy with caching and air-gap mode."
+
+[[crate]]
+category = "Registries"
+use_case = "RepoFlow :heavy_dollar_sign:"
+recommended = ["RepoFlow :heavy_dollar_sign:"]
+[crate.notes]
+"RepoFlow :heavy_dollar_sign:" = "A simple and modern repository platform that can host Rust crate repositories and proxy crates.io. Also supports other package types like Docker, PyPI, Maven, npm, and RubyGems. Available as a cloud s"
+
+[[crate]]
+category = "Registries"
+use_case = "w4/chartered"
+recommended = ["w4/chartered"]
+[crate.notes]
+"w4/chartered" = "A private, authenticated, permissioned Cargo registry [![CI](https://github.com/w4/chartered/actions/workflows/ci.yml/badge.svg)](https://github.com/w4/chartered/actions/workflows/ci.yml)"
+
+[[crate]]
+category = "Resources"
+use_case = "A Brief History of Rust. Part 1"
+recommended = ["A Brief History of Rust. Part 1"]
+[crate.notes]
+"A Brief History of Rust. Part 1" = "From a developer's pursuit of software stability to a project that nearly destabilized its creator. [Part 2](https://medium.com/rustaceans/make-it-mandatory-a-brief-history-of-rust-part-2-981d61451aa5"
+
+[[crate]]
+category = "Resources"
+use_case = "Rust Design Patterns"
+recommended = ["Rust Design Patterns"]
+[crate.notes]
+"Rust Design Patterns" = "A catalogue of Rust design patterns, anti-patterns and idioms"
+
+[[crate]]
+category = "Resources"
+use_case = "Rust Guidelines"
+recommended = ["Rust Guidelines"]
+[crate.notes]
+"Rust Guidelines" = "Aaron Turon's blog posts on rust"
+
+[[crate]]
+category = "Resources"
+use_case = "Rust Security Handbook"
+recommended = ["Rust Security Handbook"]
+[crate.notes]
+"Rust Security Handbook" = "A 10-chapter handbook for writing actually secure Rust: type-safety, panic-proofing & more."
+
+[[crate]]
+category = "Resources"
+use_case = "Rust Servers, Services and Apps - MEAP"
+recommended = ["Rust Servers, Services and Apps - MEAP"]
+[crate.notes]
+"Rust Servers, Services and Apps - MEAP" = "Build backend servers, services, and front-ends in Rust to get fast, reliable, and maintainable applications."
+
+[[crate]]
+category = "Resources"
+use_case = "Rust Subreddit"
+recommended = ["Rust Subreddit"]
+[crate.notes]
+"Rust Subreddit" = "A subreddit(forum) where rust related questions, articles and resources are posted and discussed"
+
+[[crate]]
+category = "Resources"
+use_case = "RustBooks"
+recommended = ["RustBooks"]
+[crate.notes]
+"RustBooks" = "list of RustBooks"
+
+[[crate]]
+category = "Resources"
+use_case = "RustCamp 2015 Talks"
+recommended = ["RustCamp 2015 Talks"]
+[crate.notes]
+"RustCamp 2015 Talks" = "Recorded talks from RustCamp 2015"
+
+[[crate]]
+category = "Resources"
+use_case = "RustViz"
+recommended = ["RustViz"]
+[crate.notes]
+"RustViz" = "generates visualizations from simple Rust programs to assist users in better understanding the Rust Lifetime and Borrowing mechanism."
+
+[[crate]]
+category = "Resources"
+use_case = "Watch Jon Gjengset Implement BitTorrent in Rust"
+recommended = ["Watch Jon Gjengset Implement BitTorrent in Rust"]
+[crate.notes]
+"Watch Jon Gjengset Implement BitTorrent in Rust" = "Implementing (part of) a BitTorrent client in Rust"
+

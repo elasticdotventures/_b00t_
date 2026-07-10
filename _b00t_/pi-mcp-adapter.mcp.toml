@@ -18,6 +18,8 @@ name = "pi-mcp-adapter"
 type = "mcp"
 hint = "pi coding agent as MCP server — exposes read/bash/edit/write tools to other agents via pi-mcp-adapter"
 
+entangled_cli = ["pi-mcp-adapter.cli"]
+
 # ── stdio transport: pi in RPC mode with adapter ─────────────────────────────
 [[b00t.mcp.stdio]]
 # 🤓 pi --mode rpc starts pi as an MCP-compatible RPC server

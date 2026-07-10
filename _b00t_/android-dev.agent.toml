@@ -3,5 +3,7 @@ name = "android-dev"
 type = "agent"
 hint = "Android development agent stub — placeholder for future configuration"
 
+entangled_mcp = ["b00t-mcp.mcp"]
+
 [agent]
 description = "Android development agent (stub)"

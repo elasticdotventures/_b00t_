@@ -3,6 +3,8 @@ name = "brave-search"
 type = "mcp"
 hint = "Brave Search API integration"
 
+entangled_cli = ["brave-search.cli"]
+
 [[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-brave-search"]

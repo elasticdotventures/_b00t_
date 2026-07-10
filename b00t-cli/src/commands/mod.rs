@@ -57,6 +57,7 @@ pub mod tutorial;
 pub mod uninstall;
 pub mod up;
 pub mod upgrade;
+pub mod provider;
 pub mod validate;
 pub mod version;
 pub mod viz;
@@ -112,6 +113,7 @@ pub mod task;
 pub use task::TaskCommands;
 
 pub mod ooda;
+pub mod runpod;
 pub use ooda::OodaCommands;
 pub mod patch;
 pub use patch::PatchCommands;

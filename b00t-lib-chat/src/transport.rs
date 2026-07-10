@@ -68,8 +68,11 @@ impl ChatTransport {
             ChatTransportKind::LocalSocket => Ok(Self::Local(LocalSocketTransport::new(config.socket_path)?)),
             ChatTransportKind::Nats => {
                 let url = config.resolve_nats_url();
-                let user = config.nats_user.unwrap_or_else(|| "b00t".to_string());
-                let password = config.nats_password.unwrap_or_else(|| "b00t-hive-lan".to_string());
+                // No hardcoded credential fallback — anonymous NATS connections are valid
+                // (e.g. local dev servers with no auth configured). B00T_HIVE_NATS_USER/
+                // B00T_HIVE_NATS_PASSWORD is the common hive-wide credential convention.
+                let user = config.nats_user.or_else(|| std::env::var("B00T_HIVE_NATS_USER").ok());
+                let password = config.nats_password.or_else(|| std::env::var("B00T_HIVE_NATS_PASSWORD").ok());
                 Ok(Self::Nats(RealNatsTransport::new(url, user, password)))
             }
         }
@@ -132,22 +135,25 @@ impl LocalSocketTransport {
 #[derive(Debug, Clone)]
 pub struct RealNatsTransport {
     url: String,
-    user: String,
-    password: String,
+    user: Option<String>,
+    password: Option<String>,
     client: std::sync::Arc<tokio::sync::RwLock<Option<async_nats::Client>>>,
 }
 
 impl RealNatsTransport {
-    pub fn new(url: String, user: String, password: String) -> Self {
+    pub fn new(url: String, user: Option<String>, password: Option<String>) -> Self {
         Self { url, user, password, client: std::sync::Arc::new(tokio::sync::RwLock::new(None)) }
     }
 
     async fn ensure_connected(&self) -> ChatResult<async_nats::Client> {
         let mut guard = self.client.write().await;
         if let Some(ref client) = *guard { return Ok(client.clone()); }
-        let opts = ConnectOptions::new().user_and_password(self.user.clone(), self.password.clone());
+        let opts = match (&self.user, &self.password) {
+            (Some(u), Some(p)) => ConnectOptions::new().user_and_password(u.clone(), p.clone()),
+            _ => ConnectOptions::new(),
+        };
         let client = opts.connect(&self.url).await.map_err(|e| ChatError::Other(format!("NATS connect failed ({}): {}", self.url, e)))?;
-        info!("NATS connected to {} as {}", self.url, self.user);
+        info!("NATS connected to {} as {}", self.url, self.user.as_deref().unwrap_or("anonymous"));
         *guard = Some(client.clone());
         Ok(client)
     }

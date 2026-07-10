@@ -775,3 +775,65 @@ mod tests {
         assert_eq!(scene.edges.len(), 0);
     }
 }
+
+// ── New format emitters: Cytoscape.js JSON, SysMLv2 textual, OWL2 Turtle ────
+
+/// Cytoscape.js-compatible JSON — paste directly into Cytoscape.js `elements`.
+pub fn scene_to_cytoscape(scene: &SceneGraph) -> String {
+    let nodes: Vec<serde_json::Value> = scene.nodes.iter().map(|n| {
+        serde_json::json!({
+            "data": { "id": n.id, "label": n.label, "role": n.role.to_string() }
+        })
+    }).collect();
+    let edges: Vec<serde_json::Value> = scene.edges.iter().enumerate().map(|(i, e)| {
+        serde_json::json!({
+            "data": {
+                "id": format!("e{i}"),
+                "source": e.from, "target": e.to,
+                "label": e.label.as_deref().unwrap_or("")
+            }
+        })
+    }).collect();
+    serde_json::to_string_pretty(&serde_json::json!({ "elements": { "nodes": nodes, "edges": edges } }))
+        .unwrap_or_default()
+}
+
+/// SysMLv2 textual notation — minimal `package` / `part def` / `connection def` blocks.
+pub fn scene_to_sysmlv2(scene: &SceneGraph) -> String {
+    let mut out = String::from("package B00tGraph {\n");
+    for node in &scene.nodes {
+        out.push_str(&format!("    part def '{}' {{\n        doc /* role: {} */\n    }}\n", node.label, node.role));
+    }
+    for edge in &scene.edges {
+        let label = edge.label.as_deref().unwrap_or("connects");
+        out.push_str(&format!("    connection def '{label}' connect '{}' to '{}';\n", edge.from, edge.to));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// OWL2 Turtle serialisation — each node is an `owl:Class`, each edge is an `owl:ObjectProperty`.
+pub fn scene_to_owl2(scene: &SceneGraph) -> String {
+    let mut out = String::from(
+        "@prefix ex: <https://b00t.promptexecution.com/ontology#> .\n\
+         @prefix owl: <http://www.w3.org/2002/07/owl#> .\n\
+         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n\n\
+         ex:B00tGraph a owl:Ontology .\n\n"
+    );
+    for node in &scene.nodes {
+        let safe_id = node.id.replace(' ', "_").replace(['\'', '"'], "");
+        out.push_str(&format!(
+            "ex:{safe_id} a owl:Class ;\n    rdfs:label \"{}\" ;\n    ex:role \"{}\" .\n\n",
+            node.label, node.role
+        ));
+    }
+    for (i, edge) in scene.edges.iter().enumerate() {
+        let label = edge.label.as_deref().unwrap_or("connects");
+        let from = edge.from.replace(' ', "_").replace(['\'', '"'], "");
+        let to   = edge.to.replace(' ', "_").replace(['\'', '"'], "");
+        out.push_str(&format!(
+            "ex:edge{i} a owl:ObjectProperty ;\n    rdfs:label \"{label}\" ;\n    rdfs:domain ex:{from} ;\n    rdfs:range ex:{to} .\n\n"
+        ));
+    }
+    out
+}

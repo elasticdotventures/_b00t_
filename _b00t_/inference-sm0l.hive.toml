@@ -2,6 +2,7 @@
 name = "inference-sm0l"
 type = "hive_profile"
 hint = "vLLM sm0l model (Qwen2.5-3B Q8 or similar) — low RAM, GPU-light; compatible with concurrent dev work"
+depends_on = ["vllm.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 3B Q8 model = ~3.5GB VRAM + ~1GB RAM overhead

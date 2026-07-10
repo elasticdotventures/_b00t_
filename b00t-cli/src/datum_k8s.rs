@@ -255,7 +255,6 @@ pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<
 #[cfg(test)]
 mod sync_tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_sync_datums_skips_missing_dir() {

@@ -1,0 +1,54 @@
+[b00t]
+name = "rubber-duck"
+type = "skill"
+hint = "Explain the problem aloud step by step — articulation surfaces hidden assumptions"
+
+# ── salvaged content (was YAML frontmatter in a .toml — task #115) ──────────
+# 🤓 payload preserved VERBATIM below; distill to structured fields later (#98)
+# version: 1.0.0
+# tags:
+# - transferable
+# - rubber-duck
+# - debugging
+# - articulation
+# - explain
+# - verbalize
+# - assumptions
+# - clarity
+# tier: sm0l
+# complexity: 1
+# description: 'Rubber duck debugging: explain the problem to a non-expert (or inanimate object) step
+#   by step.'
+#
+# ## What
+# 
+# Rubber duck debugging is the practice of explaining a problem to a non-expert (or inanimate object) step by step. The act of articulation forces you to make implicit assumptions explicit. Protocol: (1) Describe what the code/system SHOULD do. (2) Describe what it ACTUALLY does. (3) Describe each step in between, out loud. (4) The bug appears at the step where description and reality diverge.
+# 
+# It works because you know more than you have made explicit — speaking forces serialization of tacit knowledge. Extend the technique by writing the explanation as a comment before the code. If you cannot explain it, you do not understand it. Also applies to planning: "explain the plan" before implementing often reveals the flaw.
+# 
+# ## When to Use
+# 
+# Use rubber duck debugging when stuck on a bug, when you cannot figure out why something is not working, or when planning a complex implementation. If you have been staring at the same code hoping the answer appears, use this technique immediately.
+# 
+# ## How
+# 
+# 1. Find a patient listener (person, stuffed animal, or empty terminal).
+# 2. Describe what the code SHOULD do, step by step.
+# 3. Describe what it ACTUALLY does, step by step.
+# 4. Identify where description and reality diverge — that is your bug.
+# 5. Beware the anti-pattern: staring at the same code hoping the answer appears.
+# 
+# <!-- b00t:map v1
+# summary: rubber-duck — verbalize the problem step by step to surface hidden assumptions
+# tags: transferable, debugging, articulation, assumptions, verbalize
+# tier: sm0l
+# cmds: b00t learn rubber-duck
+# complexity: 1
+# -->
+
+# b00t:map v1
+# summary: Explain the problem aloud step by step — articulation surfaces hidden assumptions (salvaged from YAML-frontmatter .toml)
+# tags: rubber, duck
+# tier: sm0l
+# cmds: b00t learn rubber-duck
+# complexity: 3

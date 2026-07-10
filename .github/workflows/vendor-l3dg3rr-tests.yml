@@ -35,7 +35,7 @@ jobs:
       - name: Initialize l3dg3rr submodule
         working-directory: ${{ github.workspace }}
         run: |
-          git submodule update --init --recursive vendor/ledgrrr
+          git submodule update --init --recursive vendor/ledgrrr vendor/runpod-sdk
 
       - name: Install Linux native dependencies
         working-directory: ${{ github.workspace }}

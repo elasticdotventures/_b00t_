@@ -1,0 +1,89 @@
+---
+# GPU-preferred / CPU-fallback state machine for sm0l.
+# 🤓 llama-server doesn't crash when CUDA is unavailable — it logs a warning and
+#    silently continues on CPU (confirmed the hard way: sm0l ran CPU-only for
+#    days without anyone noticing, because there was no runtimeClassName AND no
+#    visible state transition). This wrapper makes the GPU->CPU decision explicit,
+#    logged, and terminally fails loudly instead of degrading silently.
+# States: gpu (preferred) -> cpu (guardrailed fallback) -> failed (out of service).
+# "Alternate" = re-probe GPU on every pod restart, not live in-process switching
+# (YAGNI: continuous background re-polling while serving needs graceful child
+# process draining — real complexity jump not justified for a 3B dev-tier model).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sm0l-entrypoint
+  namespace: b00t-inference
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    set -u
+
+    STATE_FILE=/tmp/b00t-sm0l-state.json
+    MODEL=/hf/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/6dcc22694c8654b045ec40bbe350212b88893fd9010e8474bae5b19a43578ba1
+    COMMON_ARGS=(--host 0.0.0.0 --port 8000 -fa on -n 2048 --jinja --temp 0.7 --top-p 0.95 --top-k 20 --min-p 0.00 --alias sm0l --api-key local-b00t --model "$MODEL")
+
+    log_state() {
+      local mode="$1" reason="$2" recoverable="$3" resolution="$4"
+      echo "B00T_SM0L_STATE mode=${mode} reason=${reason} recoverable=${recoverable} resolution=\"${resolution}\""
+      printf '{"mode":"%s","reason":"%s","recoverable":%s,"resolution":"%s","ts":"%s"}\n' \
+        "$mode" "$reason" "$recoverable" "$resolution" "$(date -u +%FT%TZ)" > "$STATE_FILE"
+    }
+
+    wait_healthy() {
+      local timeout="$1" waited=0
+      while [ "$waited" -lt "$timeout" ]; do
+        if curl -sf -m 2 http://127.0.0.1:8000/health >/dev/null 2>&1; then
+          return 0
+        fi
+        sleep 2
+        waited=$((waited + 2))
+      done
+      return 1
+    }
+
+    # --- Attempt 1: GPU preferred ---
+    log_state "starting" "gpu_probe" "true" "attempting GPU launch (-ngl 999)"
+    /app/llama-server "${COMMON_ARGS[@]}" -ngl 999 -c 32768 > /tmp/sm0l-gpu-attempt.log 2>&1 &
+    GPU_PID=$!
+
+    GPU_FAILED=0
+    for _ in $(seq 1 15); do
+      if grep -q "no usable GPU found" /tmp/sm0l-gpu-attempt.log 2>/dev/null; then
+        GPU_FAILED=1
+        break
+      fi
+      if ! kill -0 "$GPU_PID" 2>/dev/null; then
+        GPU_FAILED=1
+        break
+      fi
+      sleep 1
+    done
+
+    if [ "$GPU_FAILED" -eq 0 ] && wait_healthy 60; then
+      log_state "gpu" "ok" "true" "serving on GPU"
+      cat /tmp/sm0l-gpu-attempt.log
+      wait "$GPU_PID"
+      exit $?
+    fi
+
+    kill "$GPU_PID" 2>/dev/null
+    wait "$GPU_PID" 2>/dev/null
+    log_state "cpu" "cuda_unavailable" "true" "check nvidia-device-plugin capacity (kubectl describe node | grep nvidia.com/gpu) and pod runtimeClassName; will retry gpu on next pod restart"
+
+    # --- Attempt 2: CPU fallback ---
+    /app/llama-server "${COMMON_ARGS[@]}" -ngl 0 -c 8192 > /tmp/sm0l-cpu-attempt.log 2>&1 &
+    CPU_PID=$!
+
+    if wait_healthy 60; then
+      log_state "cpu" "ok" "true" "serving on CPU (degraded — GPU unavailable at startup)"
+      cat /tmp/sm0l-cpu-attempt.log
+      wait "$CPU_PID"
+      exit $?
+    fi
+
+    kill "$CPU_PID" 2>/dev/null
+    wait "$CPU_PID" 2>/dev/null
+    log_state "failed" "cpu_and_gpu_both_failed" "false" "neither GPU nor CPU launch became healthy within timeout — check model file exists at ${MODEL}, check host RAM/VRAM, inspect /tmp/sm0l-gpu-attempt.log and /tmp/sm0l-cpu-attempt.log for the real llama-server error; this requires operator intervention, restarting the pod will not fix it"
+    cat /tmp/sm0l-gpu-attempt.log /tmp/sm0l-cpu-attempt.log
+    exit 78

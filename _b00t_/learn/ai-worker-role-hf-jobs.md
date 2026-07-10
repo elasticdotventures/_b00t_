@@ -1,0 +1,2 @@
+---
+ai-worker-role-hf-jobs: HF Jobs cloud training failure modes in order of occurrence — (1) /scripts non-writable: use /data mount directly; (2) bucket FUSE makedirs fails: output_dir must be /tmp/; (3) lora_dropout>0 disables fast kernel: always 0.0; (4) target_modules hardcoded ignores config: MoE+FFN modules = 843M params = 150s/step; (5) git object corruption blocks worktree agents: run git fsck first

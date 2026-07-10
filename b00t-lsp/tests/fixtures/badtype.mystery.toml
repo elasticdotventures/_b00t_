@@ -1,0 +1,4 @@
+[b00t]
+name = "badtype"
+type = "flurble"
+hint = "fixture with an unknown datum type token"
