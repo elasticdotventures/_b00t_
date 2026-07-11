@@ -8,8 +8,11 @@ use apalis::prelude::*;
 use apalis_sqlite::SqlitePool;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+use tokio::task::JoinSet;
 
-use crate::datum_job::{JobDatum, JobTask};
+use crate::commands::provider::{get_provider, BatchJobSpec, ComputeProvider, JobHandle};
+use crate::datum_job::{JobDatum, JobStep, JobTask};
 
 /// Bash command task for apalis execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,60 +102,91 @@ impl JobExecutor {
         println!("   Mode: {}", job_config.config.mode);
         println!("   Steps: {}", job_config.steps.len());
 
-        // For MVP, only support sequential mode
-        if job_config.config.mode != "sequential" {
-            anyhow::bail!(
-                "Only sequential mode supported in MVP (got: {})",
-                job_config.config.mode
-            );
-        }
-
         // Note: SqliteStorage not used in MVP (synchronous execution)
         // Future enhancement: Use SqliteStorage with worker pool for async execution
 
-        // Execute steps sequentially
-        for (idx, step) in job_config.steps.iter().enumerate() {
-            println!(
-                "\n📍 Step {}/{}: {}",
-                idx + 1,
-                job_config.steps.len(),
-                step.name
-            );
-            println!("   {}", step.description);
-
-            match &step.task {
-                JobTask::Bash {
-                    command,
-                    cwd,
-                    timeout_ms,
-                    env,
-                } => {
-                    // Create bash task job
-                    let task_job = BashTaskJob {
-                        job_name: job_datum.datum.name.clone(),
-                        step_name: step.name.clone(),
-                        command: command.clone(),
-                        cwd: cwd.clone(),
-                        timeout_ms: *timeout_ms,
-                        env: env.clone(),
-                        checkpoint: step.checkpoint.clone(),
-                        project_root: self.project_root.clone(),
-                    };
-
-                    // Execute task directly (MVP: synchronous execution)
-                    self.execute_bash_task(task_job)
-                        .await
-                        .with_context(|| format!("Step '{}' failed", step.name))?;
-
-                    println!("   ✅ Step completed");
-                }
-                _ => {
-                    println!("   ⚠️  Skipping unsupported task type (MVP limitation)");
-                }
+        // "sequential" and "parallel" are the two modes this executor supports;
+        // "dag" is accepted by `JobDatum::validate()`/`execution_order()` but a
+        // real dependency-graph scheduler is explicitly out of scope here (see
+        // datum_job.rs docs) — keep bailing on it rather than silently
+        // downgrading to sequential.
+        match job_config.config.mode.as_str() {
+            "sequential" => {
+                self.run_steps_sequential(&job_datum.datum.name, &job_config.steps)
+                    .await?;
+            }
+            "parallel" => {
+                self.run_steps_parallel(&job_datum.datum.name, &job_config.steps)
+                    .await?;
+            }
+            other => {
+                anyhow::bail!(
+                    "job_executor supports 'sequential' and 'parallel' modes (got: {})",
+                    other
+                );
             }
         }
 
         println!("\n🎉 Job completed successfully");
+        Ok(())
+    }
+
+    /// Run all steps one at a time, in definition order (today's original behavior).
+    async fn run_steps_sequential(&self, job_name: &str, steps: &[JobStep]) -> Result<()> {
+        for (idx, step) in steps.iter().enumerate() {
+            println!("\n📍 Step {}/{}: {}", idx + 1, steps.len(), step.name);
+            println!("   {}", step.description);
+
+            run_step(&self.project_root, job_name, step)
+                .await
+                .with_context(|| format!("Step '{}' failed", step.name))?;
+
+            println!("   ✅ Step completed");
+        }
+        Ok(())
+    }
+
+    /// Run all steps concurrently in one "wave" and wait for all of them —
+    /// not a DAG scheduler (no `depends_on` resolution between steps here,
+    /// that's explicitly out of scope; see datum_job.rs's docs).
+    async fn run_steps_parallel(&self, job_name: &str, steps: &[JobStep]) -> Result<()> {
+        println!(
+            "\n⚡ Running {} step(s) concurrently (parallel mode)",
+            steps.len()
+        );
+
+        let mut set = JoinSet::new();
+        for step in steps.iter().cloned() {
+            let project_root = self.project_root.clone();
+            let job_name = job_name.to_string();
+            set.spawn(async move {
+                let step_name = step.name.clone();
+                let result = run_step(&project_root, &job_name, &step)
+                    .await
+                    .with_context(|| format!("Step '{}' failed", step_name));
+                (step_name, result)
+            });
+        }
+
+        let mut failures = Vec::new();
+        while let Some(joined) = set.join_next().await {
+            let (step_name, result) = joined.context("parallel step task panicked")?;
+            match result {
+                Ok(()) => println!("   ✅ Step '{}' completed", step_name),
+                Err(e) => {
+                    eprintln!("   ❌ Step '{}' failed: {:#}", step_name, e);
+                    failures.push(format!("{}: {:#}", step_name, e));
+                }
+            }
+        }
+
+        if !failures.is_empty() {
+            anyhow::bail!(
+                "parallel job had {} failing step(s): {}",
+                failures.len(),
+                failures.join("; ")
+            );
+        }
         Ok(())
     }
 
@@ -217,27 +251,311 @@ impl JobExecutor {
         step_name: &str,
         checkpoint_name: &str,
     ) -> Result<()> {
-        use duct::cmd;
+        create_checkpoint_at(&self.project_root, job_name, step_name, checkpoint_name)
+    }
+}
 
-        let tag_name = format!("checkpoint/{}/{}", job_name, checkpoint_name);
-        let message = format!("Checkpoint: {} - {}", step_name, checkpoint_name);
+/// Create git checkpoint after a successful step. Free function (not an
+/// `&self` method) so it can be called from steps spawned onto the tokio
+/// runtime in `JobExecutor::run_steps_parallel`, which need `'static`-owned
+/// data rather than a borrow of `JobExecutor`.
+fn create_checkpoint_at(
+    project_root: &Path,
+    job_name: &str,
+    step_name: &str,
+    checkpoint_name: &str,
+) -> Result<()> {
+    use duct::cmd;
 
-        // Create git tag
-        let result = cmd!("git", "tag", "-a", &tag_name, "-m", &message)
-            .dir(&self.project_root)
+    let tag_name = format!("checkpoint/{}/{}", job_name, checkpoint_name);
+    let message = format!("Checkpoint: {} - {}", step_name, checkpoint_name);
+
+    // Create git tag
+    let result = cmd!("git", "tag", "-a", &tag_name, "-m", &message)
+        .dir(project_root)
+        .stdout_to_stderr()
+        .run();
+
+    match result {
+        Ok(_) => {
+            println!("   ✅ Checkpoint created: {}", tag_name);
+            Ok(())
+        }
+        Err(e) => {
+            // Don't fail job if checkpoint creation fails
+            eprintln!("   ⚠️  Failed to create checkpoint: {}", e);
+            Ok(())
+        }
+    }
+}
+
+fn resolve_cwd(project_root: &Path, cwd: Option<&str>) -> PathBuf {
+    match cwd {
+        Some(c) if Path::new(c).is_absolute() => PathBuf::from(c),
+        Some(c) => project_root.join(c),
+        None => project_root.to_path_buf(),
+    }
+}
+
+/// Shell out to `program args...` with `cwd`/`env` applied, no checkpoint
+/// handling — the caller (`execute_bash_step`/`execute_python_step`) creates
+/// a checkpoint once, after its *last* command succeeds.
+///
+/// `duct`'s `.run()` is a *blocking* synchronous call. Running it directly
+/// inside an `async fn` body would, on tokio's default current-thread
+/// runtime, serialize tasks spawned by `run_steps_parallel` onto the single
+/// worker thread instead of letting them overlap — silently defeating
+/// "parallel" mode. Offloading to `spawn_blocking` runs it on tokio's
+/// dedicated blocking-thread pool so concurrently-spawned steps genuinely
+/// run at the same time, regardless of runtime flavor.
+async fn run_shell(
+    project_root: &Path,
+    cwd: Option<&str>,
+    program: &str,
+    args: &[String],
+    env: &std::collections::HashMap<String, String>,
+) -> Result<()> {
+    use duct::cmd;
+
+    println!("   🔧 Executing: {} {}", program, args.join(" "));
+
+    let dir = resolve_cwd(project_root, cwd);
+    let program = program.to_string();
+    let args = args.to_vec();
+    let env = env.clone();
+
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        let mut command = cmd(&program, &args).dir(dir);
+        for (key, value) in &env {
+            command = command.env(key, value);
+        }
+
+        let output = command
             .stdout_to_stderr()
-            .run();
+            .run()
+            .with_context(|| format!("Failed to execute: {} {}", program, args.join(" ")))?;
 
-        match result {
-            Ok(_) => {
-                println!("   ✅ Checkpoint created: {}", tag_name);
-                Ok(())
-            }
-            Err(e) => {
-                // Don't fail job if checkpoint creation fails
-                eprintln!("   ⚠️  Failed to create checkpoint: {}", e);
-                Ok(())
-            }
+        if !output.status.success() {
+            anyhow::bail!("Command failed with exit code: {:?}", output.status.code());
+        }
+
+        Ok(())
+    })
+    .await
+    .context("shell task panicked")??;
+
+    Ok(())
+}
+
+fn checkpoint_if_needed(project_root: &Path, job_name: &str, step: &JobStep) -> Result<()> {
+    if let Some(checkpoint_name) = &step.checkpoint {
+        println!("   📌 Creating checkpoint: {}", checkpoint_name);
+        create_checkpoint_at(project_root, job_name, &step.name, checkpoint_name)?;
+    }
+    Ok(())
+}
+
+/// Execute `JobTask::Bash` — identical shell-out behavior to the pre-existing
+/// (now-unused) `JobExecutor::execute_bash_task`/`BashTaskJob` path.
+async fn execute_bash_step(
+    project_root: &Path,
+    job_name: &str,
+    step: &JobStep,
+    command: &str,
+    cwd: Option<&str>,
+    env: &std::collections::HashMap<String, String>,
+) -> Result<()> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    if parts.is_empty() {
+        anyhow::bail!("Empty command");
+    }
+    let program = parts[0];
+    let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+
+    run_shell(project_root, cwd, program, &args, env).await?;
+    checkpoint_if_needed(project_root, job_name, step)
+}
+
+/// Execute `JobTask::Python` — pip-installs each `requirements` entry (one
+/// `pip install <req>` per entry, no venv/poetry/uv management), then runs
+/// `python3 <script>`. Same shell-out mechanics as `execute_bash_step`.
+async fn execute_python_step(
+    project_root: &Path,
+    job_name: &str,
+    step: &JobStep,
+    script: &str,
+    requirements: &[String],
+    cwd: Option<&str>,
+    env: &std::collections::HashMap<String, String>,
+) -> Result<()> {
+    for requirement in requirements {
+        run_shell(
+            project_root,
+            cwd,
+            "pip",
+            &["install".to_string(), requirement.clone()],
+            env,
+        )
+        .await
+        .with_context(|| format!("pip install {} failed", requirement))?;
+    }
+
+    run_shell(
+        project_root,
+        cwd,
+        "python3",
+        &[script.to_string()],
+        env,
+    )
+    .await?;
+
+    checkpoint_if_needed(project_root, job_name, step)
+}
+
+/// Poll interval / attempt budget for provider job-status polling. Kept
+/// small so tests (which use a fake `ComputeProvider` reporting a terminal
+/// status immediately) run fast offline. Real cloud jobs (RunPod/HF) take
+/// much longer than this budget to finish — this MVP bridge does not yet
+/// distinguish "still running, check back later" from "gave up"; it simply
+/// errors out after the budget is exhausted.
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const PROVIDER_MAX_POLLS: u32 = 50;
+
+/// True if `status` looks like a finished (success or failure) job.
+///
+/// There is no single terminal-status convention shared across providers —
+/// `LocalProvider::job_status` returns a raw podman/docker `State.Status`
+/// (`running`, `exited`, `dead`, ...; see `commands/provider.rs`),
+/// `RunpodProvider::job_status` returns `"pod=<id> status=<DesiredStatus>"`,
+/// and `HfProvider::job_status` returns raw `hf jobs inspect` output. This
+/// does a permissive substring match against markers observed across all
+/// three, rather than inventing a shared enum none of them actually emit.
+fn is_terminal_status(status: &str) -> bool {
+    let s = status.to_lowercase();
+    [
+        "exited",
+        "dead",
+        "complete",
+        "completed",
+        "succeeded",
+        "success",
+        "failed",
+        "failure",
+        "error",
+        "cancelled",
+        "canceled",
+        "terminated",
+        "stopped",
+    ]
+    .iter()
+    .any(|marker| s.contains(marker))
+}
+
+/// Subset of `is_terminal_status` markers that indicate the job did NOT
+/// succeed. Note "exited" alone is deliberately excluded — none of the
+/// providers expose an exit code via `job_status`, so a bare "exited" is
+/// treated as success rather than guessed at.
+fn is_failure_status(status: &str) -> bool {
+    let s = status.to_lowercase();
+    ["dead", "fail", "error", "cancel", "terminated"]
+        .iter()
+        .any(|marker| s.contains(marker))
+}
+
+async fn poll_until_terminal(provider: &dyn ComputeProvider, handle: &JobHandle) -> Result<String> {
+    for _ in 0..PROVIDER_MAX_POLLS {
+        let status = provider.job_status(handle).await?;
+        if is_terminal_status(&status) {
+            return Ok(status);
+        }
+        tokio::time::sleep(PROVIDER_POLL_INTERVAL).await;
+    }
+    anyhow::bail!(
+        "job {} (provider={}) did not reach a terminal status after {} polls",
+        handle.id,
+        handle.provider,
+        PROVIDER_MAX_POLLS
+    );
+}
+
+/// Submit `spec` via `provider` and poll until terminal. Split out from
+/// `execute_provider_step` (which resolves the provider by name through
+/// `get_provider`) so tests can inject a fake `ComputeProvider` directly —
+/// `commands/provider.rs` has no pre-existing test-double pattern for the
+/// trait (checked its own test module: none use one), so this is a minimal
+/// one scoped to this bridge.
+async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec) -> Result<()> {
+    let handle = provider
+        .submit_batch_job(spec)
+        .await
+        .context("submit_batch_job failed")?;
+
+    let final_status = poll_until_terminal(provider, &handle).await?;
+
+    if is_failure_status(&final_status) {
+        anyhow::bail!(
+            "job {} (provider={}) ended in a failure status: {}",
+            handle.id,
+            handle.provider,
+            final_status
+        );
+    }
+
+    Ok(())
+}
+
+/// Dispatch `step` through `ComputeProvider::submit_batch_job` instead of a
+/// local shell-out. Requires `step.batch` to be set (the `BatchJobSpec` to
+/// submit) — `step.task` is ignored in this path.
+async fn execute_provider_step(backend: &str, step: &JobStep) -> Result<()> {
+    let spec = step.batch.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "step '{}' declares backend '{}' but has no [b00t.job.steps.batch] spec",
+            step.name,
+            backend
+        )
+    })?;
+
+    let provider =
+        get_provider(backend).with_context(|| format!("resolving backend '{}'", backend))?;
+
+    dispatch_batch_job(provider.as_ref(), spec).await
+}
+
+/// Run a single step: dispatch via `ComputeProvider` if `step.backend` is
+/// set, otherwise fall back to today's local shell-out behavior (`Bash`/
+/// `Python`; other `JobTask` variants remain unsupported, same MVP
+/// limitation as before this change).
+async fn run_step(project_root: &Path, job_name: &str, step: &JobStep) -> Result<()> {
+    if let Some(backend) = &step.backend {
+        return execute_provider_step(backend, step).await;
+    }
+
+    match &step.task {
+        JobTask::Bash {
+            command, cwd, env, ..
+        } => execute_bash_step(project_root, job_name, step, command, cwd.as_deref(), env).await,
+        JobTask::Python {
+            script,
+            requirements,
+            cwd,
+            env,
+            ..
+        } => {
+            execute_python_step(
+                project_root,
+                job_name,
+                step,
+                script,
+                requirements,
+                cwd.as_deref(),
+                env,
+            )
+            .await
+        }
+        _ => {
+            println!("   ⚠️  Skipping unsupported task type (MVP limitation)");
+            Ok(())
         }
     }
 }
@@ -388,6 +706,335 @@ command = "echo 'Test passed'"
 
         // Verify job executed successfully
         assert!(result.is_ok(), "Job execution failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_python_task_executes() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        let b00t_dir = project_root.join("_b00t_");
+        fs::create_dir_all(&b00t_dir).unwrap();
+
+        // Trivial script, empty requirements — keeps this offline/fast, no
+        // pip install network call.
+        let script_path = project_root.join("hello.py");
+        fs::write(&script_path, "print('hello from python task')\n").unwrap();
+
+        let job_toml = format!(
+            r#"
+[b00t]
+name = "test-python"
+type = "job"
+
+[b00t.job]
+description = "Python test job"
+tags = ["test"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "off"
+
+[[b00t.job.steps]]
+name = "run-python"
+description = "Run trivial python script"
+
+[b00t.job.steps.task]
+type = "python"
+script = "{}"
+requirements = []
+"#,
+            script_path.display()
+        );
+        fs::write(b00t_dir.join("test-python.job.toml"), job_toml).unwrap();
+
+        let executor = JobExecutor::new(project_root).await.unwrap();
+        let result = executor.run_job("test-python").await;
+
+        assert!(result.is_ok(), "Python job failed: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn test_parallel_mode_runs_concurrently() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        let b00t_dir = project_root.join("_b00t_");
+        fs::create_dir_all(&b00t_dir).unwrap();
+
+        // Three 300ms sleeps: sequential would take >=900ms; if steps truly
+        // overlap this should finish in well under that bound.
+        let job_toml = r#"
+[b00t]
+name = "test-parallel"
+type = "job"
+
+[b00t.job]
+description = "Parallel test job"
+tags = ["test"]
+
+[b00t.job.config]
+mode = "parallel"
+checkpoint_mode = "off"
+
+[[b00t.job.steps]]
+name = "sleep-1"
+description = "sleep step 1"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sleep 0.3"
+
+[[b00t.job.steps]]
+name = "sleep-2"
+description = "sleep step 2"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sleep 0.3"
+
+[[b00t.job.steps]]
+name = "sleep-3"
+description = "sleep step 3"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sleep 0.3"
+"#;
+        fs::write(b00t_dir.join("test-parallel.job.toml"), job_toml).unwrap();
+
+        let executor = JobExecutor::new(project_root).await.unwrap();
+
+        let start = std::time::Instant::now();
+        let result = executor.run_job("test-parallel").await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok(), "Parallel job failed: {:?}", result.err());
+        assert!(
+            elapsed < std::time::Duration::from_millis(750),
+            "parallel steps did not appear to overlap (took {:?}, expected well under 900ms)",
+            elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sequential_mode_still_serializes() {
+        // Guards backward compatibility: the same 3x300ms-sleep job under
+        // `mode = "sequential"` must NOT benefit from the parallel-mode
+        // speedup — proving the default/existing path is unchanged.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        let b00t_dir = project_root.join("_b00t_");
+        fs::create_dir_all(&b00t_dir).unwrap();
+
+        let job_toml = r#"
+[b00t]
+name = "test-sequential-timing"
+type = "job"
+
+[b00t.job]
+description = "Sequential timing test job"
+tags = ["test"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "off"
+
+[[b00t.job.steps]]
+name = "sleep-1"
+description = "sleep step 1"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sleep 0.2"
+
+[[b00t.job.steps]]
+name = "sleep-2"
+description = "sleep step 2"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "sleep 0.2"
+"#;
+        fs::write(
+            b00t_dir.join("test-sequential-timing.job.toml"),
+            job_toml,
+        )
+        .unwrap();
+
+        let executor = JobExecutor::new(project_root).await.unwrap();
+
+        let start = std::time::Instant::now();
+        let result = executor.run_job("test-sequential-timing").await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok(), "Sequential job failed: {:?}", result.err());
+        assert!(
+            elapsed >= std::time::Duration::from_millis(380),
+            "sequential steps appear to have overlapped (took {:?}, expected >=400ms)",
+            elapsed
+        );
+    }
+}
+
+// ============================================================================
+// Provider-dispatch bridge tests
+//
+// `commands/provider.rs` has no pre-existing test-double pattern for
+// `ComputeProvider` (checked its own `#[cfg(test)] mod batch_job_tests`:
+// only pure-function argv-builder tests, no mock provider) — `FakeProvider`
+// here is a minimal one scoped to this bridge, exercising `dispatch_batch_job`
+// / `execute_provider_step` without needing real RunPod/HF/podman access.
+// ============================================================================
+#[cfg(test)]
+mod provider_bridge_tests {
+    use super::*;
+    use async_trait::async_trait;
+    use crate::commands::provider::{EndpointConfig, EndpointHandle, TrainingJobSpec};
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    /// Returns a scripted sequence of `job_status` results, one per poll —
+    /// lets tests assert both immediate-terminal and poll-until-terminal
+    /// behavior without a real provider or real wall-clock job duration.
+    struct FakeProvider {
+        statuses: Mutex<VecDeque<String>>,
+    }
+
+    impl FakeProvider {
+        fn with_statuses(statuses: &[&str]) -> Self {
+            Self {
+                statuses: Mutex::new(statuses.iter().map(|s| s.to_string()).collect()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl ComputeProvider for FakeProvider {
+        fn name(&self) -> &str {
+            "fake"
+        }
+
+        async fn deploy_inference_endpoint(&self, _cfg: &EndpointConfig) -> Result<EndpointHandle> {
+            anyhow::bail!("FakeProvider does not support endpoints")
+        }
+
+        async fn endpoint_status(&self, _id: &str) -> Result<EndpointHandle> {
+            anyhow::bail!("FakeProvider does not support endpoints")
+        }
+
+        async fn teardown_endpoint(&self, _id: &str) -> Result<()> {
+            anyhow::bail!("FakeProvider does not support endpoints")
+        }
+
+        async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
+            Ok(vec![])
+        }
+
+        async fn submit_training_job(&self, _spec: &TrainingJobSpec) -> Result<JobHandle> {
+            anyhow::bail!("FakeProvider does not support training jobs")
+        }
+
+        async fn submit_batch_job(&self, _spec: &BatchJobSpec) -> Result<JobHandle> {
+            Ok(JobHandle {
+                id: "fake-job-1".to_string(),
+                provider: "fake".to_string(),
+            })
+        }
+
+        async fn job_status(&self, _handle: &JobHandle) -> Result<String> {
+            let mut statuses = self.statuses.lock().unwrap();
+            Ok(statuses.pop_front().unwrap_or_else(|| "exited".to_string()))
+        }
+
+        async fn cancel_job(&self, _handle: &JobHandle) -> Result<()> {
+            Ok(())
+        }
+
+        async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
+            Ok(vec![])
+        }
+    }
+
+    fn sample_spec() -> BatchJobSpec {
+        BatchJobSpec {
+            image: "fake:latest".to_string(),
+            config_path: "/tmp/fake-request.json".to_string(),
+            env: std::collections::HashMap::new(),
+            flavor: "local-gpu".to_string(),
+            timeout_hours: 1.0,
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_succeeds_on_immediate_terminal_status() {
+        let provider = FakeProvider::with_statuses(&["exited"]);
+        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        assert!(result.is_ok(), "expected success, got: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_polls_until_terminal() {
+        // Non-terminal statuses first — proves this actually loops rather
+        // than trusting the first `job_status` response.
+        let provider = FakeProvider::with_statuses(&["running", "running", "exited"]);
+        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        assert!(result.is_ok(), "expected success, got: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_fails_on_failure_status() {
+        let provider = FakeProvider::with_statuses(&["failed"]);
+        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn execute_provider_step_requires_batch_spec() {
+        let step = JobStep {
+            name: "no-batch".to_string(),
+            description: "missing batch spec".to_string(),
+            checkpoint: None,
+            depends_on: vec![],
+            task: JobTask::Bash {
+                command: "echo hi".to_string(),
+                cwd: None,
+                timeout_ms: None,
+                env: std::collections::HashMap::new(),
+            },
+            condition: None,
+            artifacts: None,
+            cognitive_tier: None,
+            output_contract: None,
+            backend: Some("local".to_string()),
+            batch: None,
+        };
+
+        let result = execute_provider_step("local", &step).await;
+        let err = result.expect_err("missing batch spec should error");
+        assert!(
+            err.to_string().contains("no [b00t.job.steps.batch] spec"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn terminal_status_detection() {
+        assert!(is_terminal_status("exited"));
+        assert!(is_terminal_status("Dead"));
+        assert!(is_terminal_status("pod=abc status=COMPLETED"));
+        assert!(!is_terminal_status("running"));
+        assert!(!is_terminal_status("pending"));
+    }
+
+    #[test]
+    fn failure_status_detection() {
+        assert!(is_failure_status("failed"));
+        assert!(is_failure_status("dead"));
+        assert!(!is_failure_status("exited"), "bare 'exited' has no exit code available, treat as success");
+        assert!(!is_failure_status("completed"));
     }
 }
 

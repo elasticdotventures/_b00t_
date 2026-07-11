@@ -281,6 +281,17 @@ async fn plan_job(path: &str, name: &str, show_dag: bool, json: bool) -> Result<
                 println!("   Type: bash");
                 println!("   Command: {}", command);
             }
+            JobTask::Python {
+                script,
+                requirements,
+                ..
+            } => {
+                println!("   Type: python");
+                println!("   Script: {}", script);
+                if !requirements.is_empty() {
+                    println!("   Requirements: {}", requirements.join(", "));
+                }
+            }
             JobTask::Agent {
                 agent_type, prompt, ..
             } => {
@@ -589,6 +600,26 @@ async fn execute_step(
             )
             .await
         }
+        JobTask::Python {
+            script,
+            requirements,
+            cwd,
+            timeout_ms,
+            env: step_env,
+        } => {
+            // Merge environment variables
+            let mut combined_env = env.clone();
+            combined_env.extend(step_env.clone());
+
+            execute_python(
+                script.as_str(),
+                requirements,
+                cwd.as_deref().unwrap_or(path),
+                &combined_env,
+                *timeout_ms,
+            )
+            .await
+        }
         JobTask::Agent {
             agent_type,
             prompt,
@@ -661,6 +692,29 @@ async fn execute_bash(
     } else {
         execution.await
     }
+}
+
+/// Execute a Python script, optionally pip-installing `requirements` first
+/// (one `pip install <req>` per entry — no venv/poetry/uv management, same
+/// MVP scope as `job_executor.rs`'s `JobTask::Python` handling). Reuses
+/// `execute_bash`'s process-spawn/timeout/output-display mechanics rather
+/// than duplicating them.
+async fn execute_python(
+    script: &str,
+    requirements: &[String],
+    cwd: &str,
+    env: &std::collections::HashMap<String, String>,
+    timeout_ms: Option<u64>,
+) -> Result<()> {
+    for requirement in requirements {
+        let pip_cmd = format!("pip install {}", requirement);
+        execute_bash(&pip_cmd, cwd, env, timeout_ms)
+            .await
+            .with_context(|| format!("pip install {} failed", requirement))?;
+    }
+
+    let python_cmd = format!("python3 {}", script);
+    execute_bash(&python_cmd, cwd, env, timeout_ms).await
 }
 
 /// Execute sub-agent task via LangChain agent service
