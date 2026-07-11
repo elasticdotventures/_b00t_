@@ -171,10 +171,7 @@ spec:
     - name: RUNNER_LABELS
       value: "{labels}"
     - name: RUNNER_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: gh-runner-token-{repo_slug}
-          key: token
+      value: "{token}"
     - name: RUNNER_EPHEMERAL
       value: "{ephemeral}"
     - name: RUNNER_WORKDIR
@@ -206,6 +203,7 @@ pub fn generate_kube_yaml(
     repo: &str,
     labels: &str,
     workdir: &str,
+    token: &str,
     ephemeral: bool,
     socket_path: &str,
 ) -> String {
@@ -226,6 +224,7 @@ pub fn generate_kube_yaml(
         .replace("{repo}", repo)
         .replace("{runner_name}", &name)
         .replace("{labels}", labels)
+        .replace("{token}", token)
         .replace("{ephemeral}", if ephemeral { "true" } else { "false" })
         .replace("{workdir}", workdir)
         .replace("{docker_sock_volume_mount}", &docker_sock_volume_mount)
@@ -285,45 +284,26 @@ fn cmd_install(
     }
     println!("[4/7] Registration token fetched (expires in 1h)");
 
-    // 5. Generate and write kube YAML (token NOT embedded — uses podman secret)
-    let yaml_content = generate_kube_yaml(repo, labels, &workdir_str, ephemeral, &socket_path);
+    // 5. Generate and write kube YAML
+    let yaml_content = generate_kube_yaml(repo, labels, &workdir_str, &token, ephemeral, &socket_path);
     let yaml_path = workdir.join("gh-runner.yaml");
     std::fs::write(&yaml_path, &yaml_content)
         .with_context(|| format!("Failed to write YAML: {}", yaml_path.display()))?;
     println!(
-        "[5/7] Pod spec generated: {} (token handled via podman secret)",
+        "[5/7] Pod spec generated: {}",
         yaml_path.display()
     );
 
-    // 6. Create podman secret and deploy pod
-    let secret_name = format!("gh-runner-token-{}", slug);
-    let (secret_ok, secret_out) = sh(&format!(
-        "echo '{}' | podman secret create {} - 2>&1",
-        token, secret_name
-    ));
-    if !secret_ok {
-        bail!("Failed to create podman secret: {}", secret_out);
-    }
-    println!("[6/7] Podman secret created: {}", secret_name);
-
-    // Deploy pod with the secret mounted
+    // 6. Deploy pod
     let (deploy_ok, deploy_out) = sh(&format!(
-        "podman kube play --secret {} {} 2>&1",
-        secret_name,
+        "podman kube play {} 2>&1",
         yaml_path.display()
     ));
 
-    // 6b. Clean up the secret immediately — it is consumed on pod start, not needed on disk
-    let (rm_ok, rm_out) = sh(&format!("podman secret rm {} 2>&1", secret_name));
-    if !rm_ok {
-        eprintln!("  Warning: failed to remove secret '{}': {}", secret_name, rm_out.trim());
-    }
-
-    // 6c. Check deploy result AFTER secret cleanup
     if !deploy_ok {
         bail!("Failed to deploy pod: {}", deploy_out);
     }
-    println!("[7/7] Pod deployed: {} (token secured — never written to disk)", deploy_out.trim());
+    println!("[6/7] Pod deployed: {}", deploy_out.trim());
 
     // Poll pod startup status with timeout
     let start = std::time::Instant::now();
@@ -470,13 +450,6 @@ fn cmd_logs(repo: &str, follow: bool) -> Result<()> {
 fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
     let slug = repo_slug(repo);
     let name = runner_name(repo);
-
-    // 0. Clean up any stale podman secret from a previous failed install
-    let secret_name = format!("gh-runner-token-{}", slug);
-    let _ = sh(&format!(
-        "podman secret rm {} 2>/dev/null || true",
-        secret_name
-    ));
 
     // Find workdir from the running pod's YAML or from a common path
     // First try to get workdir from the pod's volume mount
