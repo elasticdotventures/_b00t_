@@ -1,0 +1,37 @@
+# b00t datum: cranelift — Rust codegen backend for faster debug builds
+# type: cli
+# Cranelift is an alternative to LLVM for rustc, ~2x faster debug builds.
+# Install as rustup component, activate via env var or cargo config.
+
+[b00t]
+name = "cranelift"
+type = "cli"
+hint = "Rustc Cranelift codegen backend — 2x faster debug builds than LLVM"
+desires = "latest"
+depends_on = ["rustup.cli"]
+
+[install]
+command = "rustup component add rustc-codegen-cranelift-preview --toolchain nightly"
+
+[version]
+cmd = "rustc --print cfg 2>/dev/null | grep cranelift || echo 'not active'"
+regex = "cranelift"
+
+[validate]
+command = "rustup component list --installed | grep rustc-codegen-cranelift-preview"
+regex = "cranelift"
+
+[[b00t.usage]]
+description = "Build with cranelift backend (single command)"
+command = "CARGO_CODEGEN_BACKEND=cranelift cargo build -p b00t-admin"
+
+[[b00t.usage]]
+description = "Set cranelift as default for all builds (add to ~/.cargo/config.toml)"
+command = "cat >> ~/.cargo/config.toml << 'EOF'
+[target.'cfg(all())']
+rustflags = [\"-Zcodegen-backend=cranelift\"]
+EOF"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]
