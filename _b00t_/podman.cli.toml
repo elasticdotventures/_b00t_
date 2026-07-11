@@ -1,113 +1,51 @@
 [b00t]
 name = "podman"
 type = "cli"
-hint = "Podman container engine — rootless containers, pod management, kube play. Installed via signed .deb built from checksum-verified static binary."
+hint = "Podman container engine — rootless containers, pod management, kube play. Installed via apt on Ubuntu 25.10+."
 repo = "containers/podman"
 
-desires = "6.0.1"
+# 🤓 Ubuntu 25.10 (questing) ships podman 5.4.2 via apt — full binary, not remote-only.
+#    Prior versions (24.04) shipped 4.9.x which lacked Quadlet, secretKeyRef, and pasta.
+#    The vendor build pipeline (vendor/podman/build-deb.sh) exists for backporting
+#    newer releases to older Ubuntu, but is NOT needed on 25.10+.
+desires = "5.4.2"
 version_regex = 'Version:\s+(?P<version>[\d.]+)'
 detect = ["podman version --format {{.Version}} 2>/dev/null"]
 
-# ── Install: b00tyverse vendor .deb pipeline ──────────────────────
-# 🤓 Vendor build script downloads GitHub release, verifies SHA256 checksum
-#    (from GitHub's published shasums), builds .deb with dpkg-deb, and
-#    optionally GPG-signs with B00T_GPG_KEY. Same input = same hash = identical
-#    artifact across every machine.
-#
-#    Pre-built .deb lives at: ~/.b00t/vendor/podman/podman-static_6.0.1_amd64.deb
-#    Signature at:            ~/.b00t/vendor/podman/podman-static_6.0.1_amd64.deb.asc
+# ── Install: apt (Ubuntu 25.10+) ─────────────────────────────────
 install = """
 set -euo pipefail
-command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+echo "📦 Installing podman via apt..."
+sudo apt update -qq
+sudo apt install -y podman
 
-DESIRED="6.0.1"
-VENDOR_DIR="${HOME}/.b00t/vendor/podman"
-DEB_FILE="${VENDOR_DIR}/podman-static_${DESIRED}_amd64.deb"
-BUILD_SCRIPT="${VENDOR_DIR}/build-deb.sh"
-
-echo "📦 Installing podman ${DESIRED} (b00tyverse vendor .deb)"
-
-# If .deb doesn't exist, build it from verified source
-if [ ! -f "$DEB_FILE" ]; then
-  echo "  Building .deb from verified release (one-time)..."
-  cd "$VENDOR_DIR"
-  bash "$BUILD_SCRIPT" "$DESIRED"
-  cd - >/dev/null
-fi
-
-# Verify checksum before installing
-if [ -f "${DEB_FILE}.sha256" ]; then
-  echo "  Verifying .deb checksum..."
-  (cd "$VENDOR_DIR" && sha256sum -c "${DEB_FILE}.sha256") || {
-    echo "ERROR: .deb checksum mismatch — rebuild with: bash ${BUILD_SCRIPT} ${DESIRED}"
-    exit 1
-  }
-fi
-
-# Verify GPG signature if available
-if [ -f "${DEB_FILE}.asc" ] && [ -n "${B00T_GPG_KEY:-}" ]; then
-  echo "  Verifying GPG signature..."
-  gpg --verify "${DEB_FILE}.asc" "$DEB_FILE" || {
-    echo "ERROR: GPG signature verification failed"
-    exit 1
-  }
-fi
-
-# Install
-echo "  Installing..."
-sudo dpkg -i "$DEB_FILE"
-
-# Verify
 echo ""
 podman version
-echo "✅ podman ${DESIRED} installed (checksum-verified .deb)"
+echo "✅ podman installed from apt"
 """
 
-# ── Update: rebuild .deb for latest version, reinstall ───────
+# ── Update: apt upgrade ──────────────────────────────────────────
 update = """
 set -euo pipefail
-command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
-
 CURRENT=$(podman version --format '{{{{.Version}}}}' 2>/dev/null || echo "0.0.0")
-LATEST_TAG=$(gh release view --repo containers/podman --json tagName --jq .tagName)
-LATEST=$(echo "$LATEST_TAG" | sed 's/^v//')
-
-if [ "$CURRENT" = "$LATEST" ]; then
-  echo "✅ podman ${CURRENT} is current (latest: ${LATEST})"
-  exit 0
-fi
-
-echo "📦 Upgrading podman: ${CURRENT} → ${LATEST}"
-
-VENDOR_DIR="${HOME}/.b00t/vendor/podman"
-BUILD_SCRIPT="${VENDOR_DIR}/build-deb.sh"
-
-# Build new .deb for latest version
-cd "$VENDOR_DIR"
-bash "$BUILD_SCRIPT" "$LATEST"
-cd - >/dev/null
-
-# Install
-DEB_FILE="${VENDOR_DIR}/podman-static_${LATEST}_amd64.deb"
-sudo dpkg -i "$DEB_FILE"
+echo "📦 Upgrading podman (current: ${CURRENT})..."
+sudo apt update -qq
+sudo apt install --only-upgrade -y podman 2>/dev/null || echo "  already current"
 
 echo ""
 podman version
-echo "✅ podman upgraded to ${LATEST} (signed .deb)"
+echo "✅ podman updated"
 """
 
 # ── Post-install: verify rootless setup ──────────────────────────
 post_install = """
-# Verify rootless podman works
 podman run --rm hello-world 2>/dev/null && echo "✅ rootless podman operational" || \
   echo "⚠️  rootless podman may need: podman system migrate && podman system reset"
 """
 
-# Gated only on GITHUB_TOKEN (gh CLI needed for release download).
-# podman binary gate REMOVED — gates check BEFORE install, which blocks itself.
 [[b00t.gate]]
-env = "GITHUB_TOKEN"
-hint = "Set GITHUB_TOKEN (e.g. export GITHUB_TOKEN=$(gh auth token))"
+command = "apt"
+hint = "apt required for podman install"
 
 [[b00t.usage]]
 description = "Check podman version and rootless status"
@@ -122,7 +60,7 @@ description = "Deploy a pod from Kubernetes YAML"
 command = "podman kube play <file>.yaml"
 
 [[b00t.usage]]
-description = "Rebuild the podman .deb from verified source"
+description = "Build signed .deb from GitHub release (for backporting to older Ubuntu)"
 command = "bash ~/.b00t/vendor/podman/build-deb.sh 6.0.1"
 
 [[b00t.references]]
@@ -130,9 +68,14 @@ name = "containers/podman"
 url = "https://github.com/containers/podman"
 description = "Official Podman container engine — releases, issues, docs"
 
+[[b00t.references]]
+name = "vendor build pipeline"
+url = "file://~/.b00t/vendor/podman/build-deb.sh"
+description = "SHA256-verified .deb builder for podman releases. Used for backporting to Ubuntu <25.10."
+
 # b00t:map v1
-# summary: Podman CLI datum — signed .deb from SHA256-verified static binary, b00tyverse vendor pipeline
-# tags: podman, container, rootless, kube-play, deb, vendor, signed
-# tier: ch0nky
-# cmds: b00t install podman, b00t up podman, bash ~/.b00t/vendor/podman/build-deb.sh
-# complexity: 4
+# summary: Podman CLI datum — apt-installed on Ubuntu 25.10+ (5.4.2). Vendor pipeline for backporting.
+# tags: podman, container, rootless, kube-play, apt, ubuntu-questing
+# tier: sm0l
+# cmds: b00t install podman, b00t up podman
+# complexity: 2
