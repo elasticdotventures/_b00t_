@@ -88,6 +88,7 @@ use b00t_cli::commands::{
     DataCommands, DatumCommands, DoctorCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
+    PipelineCommands,
     StoreCommands,
     GrokCommands, HiveCommands,
     InitCommands,
@@ -570,6 +571,8 @@ The system will:
     Focus(FocusCommands),
     #[clap(subcommand)]
     Server(ServerCommands),
+    #[clap(subcommand)]
+    Pipeline(PipelineCommands),
     #[clap(subcommand)]
     Store(StoreCommands),
     #[clap(
@@ -2819,6 +2822,12 @@ async fn main() {
         }
         Some(Commands::Server(args)) => {
             if let Err(e) = b00t_cli::commands::server::handle_server_command(&args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Pipeline(cmd)) => {
+            if let Err(e) = b00t_cli::commands::pipeline::handle_pipeline_command(&cmd, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
