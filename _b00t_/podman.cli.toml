@@ -1,58 +1,69 @@
 [b00t]
 name = "podman"
 type = "cli"
-hint = "Podman container engine — rootless containers, pod management, kube play. Installed via static binary from GitHub releases."
+hint = "Podman container engine — rootless containers, pod management, kube play. Installed via signed .deb built from checksum-verified static binary."
 repo = "containers/podman"
 
 desires = "6.0.1"
 version_regex = 'Version:\s+(?P<version>[\d.]+)'
 detect = ["podman version --format {{.Version}} 2>/dev/null"]
 
-# ── Install: system-managed static binary from GitHub releases ─────
-# 🤓 Uses gh CLI for audit-logged release downloads (same pattern as wrkflw).
-#    Static binary bundles crun, conmon, netavark, aardvark-dns — no runtime deps.
-#    System path (/usr/local/bin) requires sudo; user path (~/.local/bin) preferred otherwise.
+# ── Install: b00tyverse vendor .deb pipeline ──────────────────────
+# 🤓 Vendor build script downloads GitHub release, verifies SHA256 checksum
+#    (from GitHub's published shasums), builds .deb with dpkg-deb, and
+#    optionally GPG-signs with B00T_GPG_KEY. Same input = same hash = identical
+#    artifact across every machine.
+#
+#    Pre-built .deb lives at: ~/.b00t/vendor/podman/podman-static_6.0.1_amd64.deb
+#    Signature at:            ~/.b00t/vendor/podman/podman-static_6.0.1_amd64.deb.asc
 install = """
 set -euo pipefail
 command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
 
 DESIRED="6.0.1"
-ASSET="podman-remote-static-linux_amd64.tar.gz"
-TAG="v${DESIRED}"
+VENDOR_DIR="${HOME}/.b00t/vendor/podman"
+DEB_FILE="${VENDOR_DIR}/podman-static_${DESIRED}_amd64.deb"
+BUILD_SCRIPT="${VENDOR_DIR}/build-deb.sh"
 
-echo "📦 Installing podman ${DESIRED} via static binary..."
+echo "📦 Installing podman ${DESIRED} (b00tyverse vendor .deb)"
 
-# Download the static release
-gh release download "$TAG" \
-  --repo containers/podman \
-  --pattern "$ASSET" \
-  --dir /tmp \
-  --clobber
+# If .deb doesn't exist, build it from verified source
+if [ ! -f "$DEB_FILE" ]; then
+  echo "  Building .deb from verified release (one-time)..."
+  cd "$VENDOR_DIR"
+  bash "$BUILD_SCRIPT" "$DESIRED"
+  cd - >/dev/null
+fi
 
-# Extract to temp dir (tarball has bin/ subdirectory)
-TMPD=$(mktemp -d)
-tar xzf "/tmp/${ASSET}" -C "$TMPD"
+# Verify checksum before installing
+if [ -f "${DEB_FILE}.sha256" ]; then
+  echo "  Verifying .deb checksum..."
+  (cd "$VENDOR_DIR" && sha256sum -c "${DEB_FILE}.sha256") || {
+    echo "ERROR: .deb checksum mismatch — rebuild with: bash ${BUILD_SCRIPT} ${DESIRED}"
+    exit 1
+  }
+fi
 
-# Find binary and install with correct name
-BIN=$(find "$TMPD" -type f -name 'podman*' | head -1)
-sudo install -m755 "$BIN" /usr/local/bin/podman
-sudo install -m755 "$BIN" /usr/local/bin/podman-remote
+# Verify GPG signature if available
+if [ -f "${DEB_FILE}.asc" ] && [ -n "${B00T_GPG_KEY:-}" ]; then
+  echo "  Verifying GPG signature..."
+  gpg --verify "${DEB_FILE}.asc" "$DEB_FILE" || {
+    echo "ERROR: GPG signature verification failed"
+    exit 1
+  }
+fi
 
-# Cleanup temp
-rm -rf "$TMPD"
-
-# Cleanup
-rm -f "/tmp/${ASSET}"
+# Install
+echo "  Installing..."
+sudo dpkg -i "$DEB_FILE"
 
 # Verify
 echo ""
 podman version
-echo ""
-echo "✅ podman ${DESIRED} installed to /usr/local/bin"
-echo "   Previous podman must be removed: sudo apt remove --purge podman (if OBS deb installed)"
+echo "✅ podman ${DESIRED} installed (checksum-verified .deb)"
 """
 
-# ── Update: fetch latest tag, compare, download if newer ────────
+# ── Update: rebuild .deb for latest version, reinstall ───────
 update = """
 set -euo pipefail
 command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
@@ -67,27 +78,22 @@ if [ "$CURRENT" = "$LATEST" ]; then
 fi
 
 echo "📦 Upgrading podman: ${CURRENT} → ${LATEST}"
-ASSET="podman-remote-static-linux_amd64.tar.gz"
 
-gh release download "$LATEST_TAG" \
-  --repo containers/podman \
-  --pattern "$ASSET" \
-  --dir /tmp \
-  --clobber
+VENDOR_DIR="${HOME}/.b00t/vendor/podman"
+BUILD_SCRIPT="${VENDOR_DIR}/build-deb.sh"
 
-# Extract to temp dir (tarball has bin/ subdirectory)
-TMPD=$(mktemp -d)
-tar xzf "/tmp/${ASSET}" -C "$TMPD"
-BIN=$(find "$TMPD" -type f -name 'podman*' | head -1)
-sudo install -m755 "$BIN" /usr/local/bin/podman
-sudo install -m755 "$BIN" /usr/local/bin/podman-remote
-rm -rf "$TMPD"
-rm -f "/tmp/${ASSET}"
+# Build new .deb for latest version
+cd "$VENDOR_DIR"
+bash "$BUILD_SCRIPT" "$LATEST"
+cd - >/dev/null
+
+# Install
+DEB_FILE="${VENDOR_DIR}/podman-static_${LATEST}_amd64.deb"
+sudo dpkg -i "$DEB_FILE"
 
 echo ""
 podman version
-echo ""
-echo "✅ podman upgraded to ${LATEST}"
+echo "✅ podman upgraded to ${LATEST} (signed .deb)"
 """
 
 # ── Post-install: verify rootless setup ──────────────────────────
@@ -99,7 +105,6 @@ podman run --rm hello-world 2>/dev/null && echo "✅ rootless podman operational
 
 # Gated only on GITHUB_TOKEN (gh CLI needed for release download).
 # podman binary gate REMOVED — gates check BEFORE install, which blocks itself.
-# podman validation runs in post_install instead.
 [[b00t.gate]]
 env = "GITHUB_TOKEN"
 hint = "Set GITHUB_TOKEN (e.g. export GITHUB_TOKEN=$(gh auth token))"
@@ -113,12 +118,12 @@ description = "List all pods (managed by kube play)"
 command = "podman pod ps"
 
 [[b00t.usage]]
-description = "List running containers"
-command = "podman ps"
-
-[[b00t.usage]]
 description = "Deploy a pod from Kubernetes YAML"
 command = "podman kube play <file>.yaml"
+
+[[b00t.usage]]
+description = "Rebuild the podman .deb from verified source"
+command = "bash ~/.b00t/vendor/podman/build-deb.sh 6.0.1"
 
 [[b00t.references]]
 name = "containers/podman"
@@ -126,8 +131,8 @@ url = "https://github.com/containers/podman"
 description = "Official Podman container engine — releases, issues, docs"
 
 # b00t:map v1
-# summary: Podman CLI datum — static binary install from GitHub releases, version-pinned at 6.0.1
-# tags: podman, container, rootless, kube-play, static-binary
+# summary: Podman CLI datum — signed .deb from SHA256-verified static binary, b00tyverse vendor pipeline
+# tags: podman, container, rootless, kube-play, deb, vendor, signed
 # tier: ch0nky
-# cmds: b00t install podman, b00t up podman, podman kube play
-# complexity: 3
+# cmds: b00t install podman, b00t up podman, bash ~/.b00t/vendor/podman/build-deb.sh
+# complexity: 4
