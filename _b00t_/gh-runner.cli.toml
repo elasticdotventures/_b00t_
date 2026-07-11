@@ -1,7 +1,7 @@
 [b00t]
 name = "gh-runner"
 type = "cli"
-hint = "Manage self-hosted GitHub Actions runners via b00t hive — install, status, logs, deregister, doctor"
+hint = "Manage self-hosted GitHub Actions runners via podman kube play — install, status, logs, deregister, doctor"
 depends_on = [["gh.cli", "wrkflw.cli"]]
 unlocks = ["gh-runner *", "gh-runner-*"]
 lfmf_category = "gh-runner"
@@ -9,27 +9,27 @@ lfmf_category = "gh-runner"
 # ── Abstract interfaces ────────────────────────────────────────────
 
 [b00t.abstracts.install]
-description = "Install and register a self-hosted runner for a repository"
-command = "b00t gh-runner install --repo {repo} --labels {labels} --workdir {workdir} [--user {user}] [--group {group}] [--ephemeral]"
-tokens = ["repo", "labels", "workdir", "user", "group"]
+description = "Install and register a self-hosted runner pod for a repository"
+command = "b00t gh-runner install --repo {repo} --labels {labels} --workdir {workdir} [--group {group}] [--ephemeral]"
+tokens = ["repo", "labels", "workdir", "group"]
 
 [b00t.abstracts.status]
-description = "Check runner status — systemd service state + GitHub API registration"
+description = "Check runner status — podman pod state + GitHub API registration"
 command = "b00t gh-runner status [--repo {repo}] [--json]"
 tokens = ["repo"]
 
 [b00t.abstracts.logs]
-description = "View runner service logs via journalctl"
+description = "View runner pod logs via podman pod logs"
 command = "b00t gh-runner logs [--repo {repo}] [--follow]"
 tokens = ["repo"]
 
 [b00t.abstracts.deregister]
-description = "Deregister runner from GitHub and remove local service"
-command = "b00t gh-runner deregister --repo {repo} [--remove-service]"
+description = "Deregister runner from GitHub and remove podman pod"
+command = "b00t gh-runner deregister --repo {repo} [--remove-workdir]"
 tokens = ["repo"]
 
 [b00t.abstracts.doctor]
-description = "Diagnose runner health — config, connectivity, token, disk"
+description = "Diagnose runner health — podman, gh auth, network, token"
 command = "b00t gh-runner doctor [--repo {repo}]"
 tokens = ["repo"]
 
@@ -38,20 +38,20 @@ command = "which b00t && b00t gh-runner status"
 regex = "runner"
 
 [[b00t.usage]]
-description = "Install runner for a repo (example: app4dog/middleware)"
-command = "b00t gh-runner install --repo app4dog/middleware --labels 'self-hosted,app4dog,linux,x64' --workdir /var/lib/gh-runner/middleware --user gh-runner --ephemeral"
+description = "Install runner pod for a repo (example: app4dog/middleware)"
+command = "b00t gh-runner install --repo app4dog/middleware --labels 'self-hosted,app4dog,linux,x64' --workdir /var/lib/gh-runner/middleware --ephemeral"
 
 [[b00t.usage]]
-description = "Check runner status"
+description = "Check runner pod + registration status"
 command = "b00t gh-runner status --repo app4dog/middleware"
 
 [[b00t.usage]]
-description = "Tail runner logs"
+description = "Tail runner pod logs"
 command = "b00t gh-runner logs --repo app4dog/middleware --follow"
 
 [[b00t.usage]]
-description = "Deregister and clean up"
-command = "b00t gh-runner deregister --repo app4dog/middleware --remove-service"
+description = "Deregister and remove pod + workdir"
+command = "b00t gh-runner deregister --repo app4dog/middleware --remove-workdir"
 
 [[b00t.usage]]
 description = "Run health diagnostics"
@@ -60,11 +60,16 @@ command = "b00t gh-runner doctor --repo app4dog/middleware"
 [[b00t.references]]
 name = "actions/runner"
 url = "https://github.com/actions/runner"
-description = "Official GitHub self-hosted runner binary"
+description = "Official GitHub self-hosted runner"
+
+[[b00t.references]]
+name = "actions/runner container image"
+url = "https://github.com/actions/runner/pkgs/container/actions-runner"
+description = "Official GitHub Actions runner container image (ghcr.io)"
 
 # b00t:map v1
-# summary: b00t gh-runner CLI datum — manage self-hosted GitHub Actions runners via hive
-# tags: gh-runner, github-actions, self-hosted, ci, systemd, hive
+# summary: b00t gh-runner CLI datum — manage self-hosted GitHub Actions runners via podman kube play
+# tags: gh-runner, github-actions, self-hosted, ci, podman, kube-play, hive
 # tier: ch0nky
 # cmds: b00t gh-runner install|status|logs|deregister|doctor
 # complexity: 5

@@ -1,66 +1,100 @@
 [b00t]
 name = "gh-runner"
 type = "hive"
-hint = "Self-hosted GitHub Actions runner — repo, labels, workdir, user supplied at install time. Zero host/repo data in source."
+hint = "Self-hosted GitHub Actions runner — podman kube play pod template. Zero host/repo data in source."
 
 # ── Template: placeholders filled at install time ──────────────────
-# Installed as: b00t@gh-runner-{repo_slug}.service
-# Concrete profiles: ~/.config/b00t/profiles/gh-runner-{slug}.toml
+# Pod name: gh-runner-{repo_slug}
+# Generated YAML: {workdir}/gh-runner.yaml (concrete, not committed)
 
 [b00t.hive]
 template = true
-description = "Self-hosted GitHub Actions runner managed by b00t hive"
+description = "Self-hosted GitHub Actions runner — podman kube play pod"
+runtime = "podman-kube-play"
 
 [b00t.hive.resources]
-ram_gb = 2
-cpu_cores = 2
+ram_gb = 4
+cpu_cores = 4
 gpu_mb = 0
 
 [b00t.hive.resources.gate]
-ram_free_gb = 2
+ram_free_gb = 4
 gpu_free_mb = 0
 
 [b00t.hive.exclusion]
 group = "gh-runner"
 priority = 10
 
-# ── Inline service spec — generate_systemd_unit() fills placeholders ──
-[b00t.hive.service]
-description = "b00t gh-runner: {{repo_slug}} — {{labels}}"
-service_type = "simple"
-restart = "on-failure"
-restart_sec = "30s"
-timeout_start_sec = "120"
-after = ["network.target", "network-online.target"]
-working_directory = "{{workdir}}"
+# ── Embedded podman kube YAML template ─────────────────────────
+# Placeholders: {{repo}}, {{repo_slug}}, {{labels}}, {{workdir}},
+#               {{runner_name}}, {{token}}, {{ephemeral}}
+# This YAML is extracted and filled at install time.
 
-exec_start_pre = [
-  "{{workdir}}/bin/installdependencies.sh || true",
-  "{{workdir}}/config.sh --url https://github.com/{{repo}} --token $(cat {{token_file}}) --name {{runner_name}} --labels {{labels}} --unattended {{ephemeral_flag}} --replace",
-]
-exec_start = "{{workdir}}/run.sh"
-exec_stop_post = "{{workdir}}/config.sh remove --token $(gh api -X POST repos/{{repo}}/actions/runners/removal-token --jq .token) || true"
-
-environment = [
-  "HOME={{home_dir}}",
-  "PATH={{runner_bin_dir}}:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
-  "RUNNER_ALLOW_RUNASROOT=0",
-]
-
-limit_nofile = 65536
+[b00t.hive.kube_yaml]
+content = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gh-runner-{{repo_slug}}
+  labels:
+    app: gh-runner
+    repo: {{repo_slug}}
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: runner
+    image: ghcr.io/actions/actions-runner:latest
+    env:
+    - name: REPO_URL
+      value: "https://github.com/{{repo}}"
+    - name: RUNNER_NAME
+      value: "{{runner_name}}"
+    - name: RUNNER_LABELS
+      value: "{{labels}}"
+    - name: RUNNER_TOKEN
+      value: "{{token}}"
+    - name: RUNNER_EPHEMERAL
+      value: "{{ephemeral}}"
+    - name: RUNNER_WORKDIR
+      value: "/runner/_work"
+    volumeMounts:
+    - name: work
+      mountPath: /runner/_work
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "2"
+      limits:
+        memory: "4Gi"
+        cpu: "4"
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      allowPrivilegeEscalation: false
+  volumes:
+  - name: work
+    hostPath:
+      path: {{workdir}}/_work
+      type: DirectoryOrCreate
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+"""
 
 [b00t.env]
-# Runtime config — filled at install time, never committed to git
+# Runtime config — filled at install time, never committed
 # GH_RUNNER_REPO = ""
 # GH_RUNNER_LABELS = ""
 # GH_RUNNER_WORKDIR = ""
-# GH_RUNNER_USER = ""
 # GH_RUNNER_VERSION = ""
 # GH_RUNNER_EPHEMERAL = ""
 
 # b00t:map v1
-# summary: Hive profile template for self-hosted GitHub Actions runner — zero hardcoded host/repo/token data
-# tags: hive, gh-runner, template, systemd, placeholder
+# summary: Hive/pod template for self-hosted GitHub Actions runner — podman kube play, zero hardcoded data
+# tags: hive, gh-runner, template, podman, kube-play, yaml, placeholder
 # tier: ch0nky
-# cmds: b00t hive activate --profile gh-runner-{slug}
+# cmds: podman kube play {workdir}/gh-runner.yaml
 # complexity: 4

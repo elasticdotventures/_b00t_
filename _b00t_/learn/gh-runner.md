@@ -1,19 +1,20 @@
 # gh-runner — b00t Self-Hosted GitHub Actions Runner
 
-**b00t gh-runner** manages self-hosted GitHub Actions runners via the b00t hive CMDB.
-Runners are installed as systemd user services following the same pattern as
-opencode and pi coding agents.
+**b00t gh-runner** manages self-hosted GitHub Actions runners via podman kube play.
+Runners are deployed as rootless podman pods using Kubernetes-style YAML.
 
 ## References
 - [actions/runner](https://github.com/actions/runner) — official GitHub self-hosted runner
+- [ghcr.io/actions/actions-runner](https://github.com/actions/runner/pkgs/container/actions-runner) — official container image
 - [GitHub docs: self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners)
 - datum: `~/.b00t/_b00t_/gh-runner.cli.toml`
-- hive profile: `~/.b00t/_b00t_/gh-runner.hive.toml`
+- hive template: `~/.b00t/_b00t_/gh-runner.hive.toml`
 
 ## Prerequisites
 
 - `gh` CLI authenticated: `gh auth status`
-- systemd user services enabled, lingering on for runner user
+- `podman` rootless: `podman info`
+- Docker socket: `ls -la /var/run/docker.sock`
 - 10+ GB free disk in workdir partition
 - (optional) `wrkflw` for local workflow validation
 
@@ -25,13 +26,12 @@ b00t gh-runner install \
   --repo app4dog/middleware \
   --labels "self-hosted,app4dog,linux,x64" \
   --workdir /var/lib/gh-runner/middleware \
-  --user gh-runner \
   --ephemeral
 
-# Check runner status (systemd + GitHub API)
+# Check runner status (podman pod + GitHub API)
 b00t gh-runner status --repo app4dog/middleware
 
-# View logs
+# View logs (podman pod logs passthrough)
 b00t gh-runner logs --repo app4dog/middleware
 b00t gh-runner logs --repo app4dog/middleware --follow
 
@@ -39,7 +39,7 @@ b00t gh-runner logs --repo app4dog/middleware --follow
 b00t gh-runner doctor --repo app4dog/middleware
 
 # Deregister and remove
-b00t gh-runner deregister --repo app4dog/middleware --remove-service
+b00t gh-runner deregister --repo app4dog/middleware --remove-workdir
 ```
 
 ## Architecture
@@ -49,48 +49,48 @@ gh-runner.cli.toml (abstract interfaces)
     ↓
 gh-runner.hive.toml (template, {{placeholders}})
     ↓
-b00t hive activate → ~/.config/b00t/profiles/gh-runner-{slug}.toml (concrete)
+b00t gh-runner install → {workdir}/gh-runner.yaml (concrete pod spec)
     ↓
-generate_systemd_unit() → ~/.config/systemd/user/b00t@gh-runner-{slug}.service
+podman kube play → gh-runner-{slug} pod → actions-runner container
     ↓
-systemctl --user start → runner process → polls GitHub job queue
+Container auto-registers → polls GitHub job queue via WebSocket
 ```
 
 ## Install Sequence
 
-1. Validate `gh auth status` and repo admin access via `gh api`
-2. Create `gh-runner` user if needed, create workdir
-3. Download `actions/runner` release via `gh release download`
-4. Fetch 1h registration token via `gh api repos/{o}/{r}/actions/runners/registration-token`
-5. Generate concrete hive profile from template (substitute placeholders)
-6. `b00t hive activate --profile gh-runner-{slug}` → systemd unit + start
-7. Runner `config.sh` self-registers, receives permanent `.credentials`
-8. Delete registration token file
+1. Validate `gh auth status`, `podman info`, and repo admin access
+2. Create workdir: `mkdir -p {workdir}/_work`
+3. Pull image: `podman pull ghcr.io/actions/actions-runner:latest`
+4. Fetch 1h registration token via `gh api`
+5. Generate podman kube YAML from template (substitute placeholders)
+6. `podman kube play {workdir}/gh-runner.yaml`
+7. Container auto-registers with GitHub, receives permanent credentials
+8. Verify: `gh api repos/{o}/{r}/actions/runners`
 
 ## Token Lifecycle
 
-- Registration token: 1h TTL, fetched via `gh api`, consumed by `config.sh`, then deleted
+- Registration token: 1h TTL, fetched via `gh api`, passed as `RUNNER_TOKEN` env var
+- Permanent OAuth: stored inside container at `/runner/.credentials`
 - Removal token: 1h TTL, fetched at deregister time
-- Permanent OAuth: stored in `{workdir}/.credentials` (0600), managed by runner
 
-## Service Management
+## Pod Management
 
 ```bash
-# Via b00t hive
-b00t hive status                     # shows all services including gh-runner
-b00t hive activate {profile}         # start (re)activation
+# Pod lifecycle
+podman kube play {workdir}/gh-runner.yaml        # deploy
+podman pod ps --filter name=gh-runner-{slug}      # status
+podman pod logs gh-runner-{slug}                  # logs
+podman kube down {workdir}/gh-runner.yaml         # tear down
 
-# Direct systemd
-systemctl --user status b00t@gh-runner-{slug}.service
-systemctl --user restart b00t@gh-runner-{slug}.service
-journalctl --user -u b00t@gh-runner-{slug}.service -f
+# Container access
+podman exec -it gh-runner-{slug}-runner bash     # debug shell
+podman inspect gh-runner-{slug}-runner            # inspect config
 ```
 
 ## Ephemeral Runners
 
-`--ephemeral` flag sets `./config.sh --ephemeral` — the runner accepts one job,
-executes it, then exits. systemd restarts it (if `Restart=on-failure`).
-Use `--once` for true one-shot (deregisters after one job).
+`RUNNER_EPHEMERAL=true` env var causes the runner to accept one job then exit.
+The pod's `restartPolicy: OnFailure` ensures it restarts for the next job.
 
 ```yaml
 # PR jobs → ephemeral runner (untrusted code isolation)
@@ -102,13 +102,13 @@ runs-on: [self-hosted, app4dog, linux, x64, trusted]
 
 ## Security
 
-- Runner runs as dedicated `gh-runner` user (no sudo, no shell login)
+- Runner runs in rootless podman container (UID 1001, not host root)
+- seccomp profile blocks ~300 syscalls
+- `no new privileges`: privilege escalation blocked
 - Repo-scoped registration (not org-wide) for least privilege
-- Registration tokens never committed to git
-- Workdir `.credentials*` files have 0600 permissions
+- Registration tokens never committed to git (in-memory only)
 - Ephemeral mode for PR jobs from external contributors
-- `RUNNER_ALLOW_RUNASROOT=0` enforced in systemd unit
-- Favor rootless Podman over Docker for containerized job steps
+- Docker socket mount for CI builds (use rootless podman socket where possible)
 
 ## wrkflw Integration
 
@@ -117,9 +117,23 @@ runs-on: [self-hosted, app4dog, linux, x64, trusted]
 wrkflw validate .github/workflows/ci.yml
 wrkflw run --job test --runtime emulation .github/workflows/ci.yml
 
-# Full CI: push → GitHub dispatches to self-hosted runner
+# Full CI: push → GitHub dispatches to self-hosted runner pod
 git push origin main
 ```
+
+## Kubernetes Migration
+
+The same YAML works with `kubectl apply` if k0s/k8s is available:
+
+```bash
+# podman (rootless, local)
+podman kube play gh-runner.yaml
+
+# k0s / kubectl (cluster)
+kubectl apply -f gh-runner.yaml
+```
+
+No YAML changes needed — the pod spec is standard Kubernetes API v1.
 
 ## Troubleshooting
 
@@ -127,7 +141,8 @@ git push origin main
 |---------|-------|
 | Runner offline | `b00t gh-runner doctor --repo X/Y` |
 | Token expired | `b00t gh-runner deregister && b00t gh-runner install ...` |
-| Disk full | `df -h {workdir}` — `_work/` may need manual purge |
-| Service crashed | `journalctl --user -u b00t@gh-runner-{slug}.service -n 50` |
-| Docker unavailable | Check user has `docker` group or use rootless Podman |
-| Network blocked | `curl -I https://pipelines.actions.githubusercontent.com` |
+| Pod crashed | `podman pod logs gh-runner-{slug}` |
+| Docker unavailable | Check docker socket: `podman exec gh-runner-{slug}-runner docker info` |
+| Network blocked | `podman exec gh-runner-{slug}-runner curl -I https://github.com` |
+| Image pull failed | `podman pull ghcr.io/actions/actions-runner:latest` |
+| Permission denied | Check SELinux/AppArmor for hostPath volume mounts |
