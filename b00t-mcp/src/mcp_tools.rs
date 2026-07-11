@@ -1470,6 +1470,20 @@ pub struct TaskUpdateCommand {
 }
 impl_mcp_tool!(TaskUpdateCommand, "task_update", ["task", "update"], positionals: ["id"]);
 
+/// List discovered pipeline datums
+#[derive(Parser, Clone)]
+pub struct PipelineListCommand;
+impl_mcp_tool!(PipelineListCommand, "pipeline_list", ["pipeline", "list"]);
+
+/// Run a pipeline's declared stages (all, or a selected subset via --stage)
+#[derive(Parser, Clone)]
+pub struct PipelineRunCommand {
+    #[arg(help = "Pipeline datum name")]
+    pub name: String,
+    #[arg(long = "stage", help = "Stage to run (repeatable; default: all stages)")]
+    pub stage: Vec<String>,
+}
+impl_mcp_tool!(PipelineRunCommand, "pipeline_run", ["pipeline", "run"], positionals: ["name"]);
 
 // ── Autodiscovery Proxy ──────────────────────────────────────────────────────
 // 🤓 54 tools hidden here; agent discovers via b00t_discover, executes via b00t_exec
@@ -1530,6 +1544,8 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
     ToolCatalogEntry { name: "b00t_timer_create",   description: "Create a cron or interval timer that dispatches tasks on schedule. Supports 7-field cron expressions (e.g., '0 9 * * 1-5') and simple interval seconds (e.g., '3600'). Requires --name, --schedule, --to_agent, --action. Optional --once for one-shot, --payload for JSON data.", subcommand: "b00t timer create" },
     ToolCatalogEntry { name: "viz",               description: "Generate viz graph for a datum (mermaid/json/ascii/svg)", subcommand: "viz entangle" },
+    ToolCatalogEntry { name: "pipeline_list",  description: "List discovered pipeline datums",        subcommand: "pipeline list" },
+    ToolCatalogEntry { name: "pipeline_run",    description: "Run a pipeline's declared stages (all, or a selected subset via --stage)", subcommand: "pipeline run" },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
