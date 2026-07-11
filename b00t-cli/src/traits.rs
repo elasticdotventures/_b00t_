@@ -561,6 +561,7 @@ pub struct ExecPlan {
 }
 
 /// Monadic execution result — wraps output with full provenance.
+#[derive(Debug)]
 pub struct ExecOutput<T> {
     pub value: T,
     pub exit_code: i32,

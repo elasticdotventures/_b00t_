@@ -105,6 +105,7 @@ pub mod datum_gemini;
 pub mod training_examples;
 pub mod datum_job;
 pub mod datum_justfile;
+pub mod datum_pipeline;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
@@ -748,6 +749,10 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub justfile: Option<JustfileConfig>,
 
+    // Pipeline datum configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pipeline: Option<PipelineConfig>,
+
     // RAG / learn metadata
     pub learn: Option<LearnMeta>,
     pub lfmf_category: Option<String>,
@@ -1246,6 +1251,52 @@ pub struct JustfileConfig {
     pub capabilities: Option<JustfileCapabilities>,
 }
 
+/// Sandbox capabilities declared by a pipeline datum.
+/// Same contract semantics as `JustfileCapabilities` — tested, not requested.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct PipelineCapabilities {
+    /// Whether network egress is permitted while dispatching pipeline stages
+    pub network: Option<bool>,
+    /// Filesystem paths visible while dispatching pipeline stages (globs supported)
+    pub filesystem: Option<Vec<String>>,
+    /// Environment variable patterns readable during dispatch (globs supported)
+    pub env_vars: Option<Vec<String>>,
+    /// Secret names that must be injected by the sandbox, never logged
+    pub secrets: Option<Vec<String>>,
+}
+
+/// Pipeline datum configuration — declares stages and executor metadata for a
+/// `*.pipeline.tomllm` multi-stage pipeline.
+/// 🤓 Mirrors `JustfileConfig`'s shape. Divergence: `stages` replaces
+///    `recipe_groups`/`role_pattern` (a pipeline's "recipes" are its ordered
+///    stages, not role-filtered justfile groups) and there is no
+///    `allow_side_effects` toggle — dispatching a pipeline stage is always
+///    declared as a side effect (see `datum_pipeline.rs`), the way `job`/`gate`
+///    datums don't expose a toggle either. Full stage contracts (input/output/
+///    depends_on) are modeled by the consuming application, not here — see
+///    PIPELINE-DATUM-UFO-FOUNDATION.tomllmd.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct PipelineConfig {
+    /// Path to the pipeline definition file, relative to project root.
+    /// Defaults to the discovered `*.pipeline.tomllm` datum file itself —
+    /// unlike a justfile, a pipeline has no separate externally-executable
+    /// artifact at this layer.
+    pub path: Option<String>,
+    /// MCP server (or job-dispatch surface) datum name that runs this pipeline's
+    /// stages (e.g. "job-mcp"). Real dispatch is wired in a later task.
+    pub mcp_server: Option<String>,
+    /// Ordered stage names. No per-stage contract (input/output/depends_on) at
+    /// this layer — see `PIPELINE-DATUM-UFO-FOUNDATION.tomllmd` for the full
+    /// stage-contract design owned by the consuming application.
+    pub stages: Option<Vec<String>>,
+    /// Execution context: "local" | "container" | "wasm" (single preferred sandbox)
+    pub sandbox: Option<String>,
+    /// Ordered subset of sandbox kinds this pipeline is compatible with
+    pub allowed_sandboxes: Option<Vec<String>>,
+    /// eBPF-scoped capabilities — tested contract, not a request
+    pub capabilities: Option<PipelineCapabilities>,
+}
+
 // DatumType — b00t's typed datum registry.
 // 🤓 single source of truth: add new variants ONLY here. The macro below derives:
 //    from_type_token, base_suffix, all_base_suffixes, from_filename, extension_for_type.
@@ -1277,6 +1328,7 @@ pub enum DatumType {
     Job,
     Ai,
     Justfile,
+    Pipeline,
     Hardware,
     Overlay,
     Runtime,
@@ -1430,7 +1482,7 @@ impl DatumType {
             | Self::Runtime | Self::Nix => SemanticClass::Infra,
             Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
             Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
-            Self::Skill | Self::Job | Self::Hook | Self::Gate => SemanticClass::Skill,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => SemanticClass::Skill,
             Self::Config | Self::Bash | Self::Cli | Self::Justfile
             | Self::Plan | Self::Vendor | Self::Ooda => SemanticClass::Tool,
             Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
@@ -1546,6 +1598,7 @@ impl DatumType {
         // Ai is the umbrella; model/ai_model tokens map here (reverse dot: name.model.ai.tomllmd)
         Ai          => ["ai", "model", "ai_model"]   => ".ai",
         Justfile    => ["justfile"]                  => ".justfile",
+        Pipeline    => ["pipeline"]                  => ".pipeline",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
         Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
@@ -4244,7 +4297,7 @@ hint = "containers"
             entangled_docker: None, entangled_k8s: None, channel_prefix: None,
             depends_on: None, members: None, orchestration: None,
             model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None,
-            stack: None, job: None, skill: None, dsn: None, justfile: None,
+            stack: None, job: None, skill: None, dsn: None, justfile: None, pipeline: None,
             learn: None, lfmf_category: None, usage: None, provides: None,
             protocol: None, implements: None, hook_detect: None,
             hook_install: None, hook_update: None, hook_learn: None,

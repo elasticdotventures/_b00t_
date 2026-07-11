@@ -378,6 +378,7 @@ impl BootDatum {
             Some(DatumType::Vscode)      => self.prove_vscode(),
             Some(DatumType::K8s)         => self.prove_k8s(),
             Some(DatumType::Justfile)    => self.prove_justfile(),
+            Some(DatumType::Pipeline)    => Ok(()),
             Some(DatumType::Job)         => self.prove_job(),
             Some(DatumType::Stack)       => self.prove_stack(),
             Some(DatumType::Agent)       => self.prove_agent(),
