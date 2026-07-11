@@ -39,6 +39,7 @@ async-trait = "0.1"
 async-stream = "0.3"
 regex = "1.0"
 cron = "0.15"
+arrow = { version = "55", optional = true }
 
 # OpenTelemetry observability — workspace version + extra features for chat runtime
 opentelemetry = { workspace = true, features = ["metrics"] }
@@ -63,6 +64,8 @@ tempfile = "3.0"
 default = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
+# Concrete Apache Arrow materialization for dataframe-typed receipts.
+dataframe = ["arrow"]
 
 # 🤓 Profile configuration moved to workspace root to avoid warnings
 # Examples are in examples/ directory, not as bins

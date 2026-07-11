@@ -29,8 +29,11 @@ pub mod assignment;
 pub mod bridge;
 pub mod client;
 pub mod discovery;
+pub mod dataframe_receipt;
 pub mod error;
 pub mod ipc_transport;
+pub mod ledgrrr;
+pub mod mesh;
 pub mod message;
 pub mod metrics;
 pub mod protocol;
@@ -54,6 +57,14 @@ pub use ipc_transport::{
     DiscoverableTransport, IpcTransport, TransportKind,
 };
 pub use message::{ChatMessage, NotificationMessage, TaskMessage};
+pub use mesh::{
+    AgentPresence, MeshFrame, MeshNodeConfig, NatsMeshNode, DEFAULT_DISCOVER_TIMEOUT,
+    DEFAULT_PRESENCE_INTERVAL, DEFAULT_PRESENCE_TTL,
+};
+pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, ReceiptConstraint, UsageReceipt};
+pub use dataframe_receipt::{
+    ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
+};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
