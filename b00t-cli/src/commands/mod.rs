@@ -7,6 +7,8 @@ pub mod agent;
 pub mod gh_runner;
 pub use gh_runner::GhRunnerCommands;
 pub use gh_runner::handle_gh_runner_command;
+pub use gh_runner::repo_slug;
+pub use gh_runner::generate_kube_yaml;
 pub mod bouncer;
 pub mod ai;
 pub mod ansible;

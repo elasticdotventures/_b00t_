@@ -36,6 +36,22 @@ fn sh(cmd: &str) -> (bool, String) {
         .unwrap_or((false, "exec failed".into()))
 }
 
+fn retry_sh(cmd: &str, max_retries: u32, label: &str) -> Result<String> {
+    let mut last_err = String::new();
+    for attempt in 0..max_retries {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2u64.pow(attempt - 1)));
+            eprintln!("  Retrying {} (attempt {}/{})...", label, attempt + 1, max_retries);
+        }
+        let (ok, out) = sh(cmd);
+        if ok {
+            return Ok(out);
+        }
+        last_err = out;
+    }
+    bail!("{} failed after {} attempts: {}", label, max_retries, last_err)
+}
+
 fn detect_socket(socket_opt: &str) -> String {
     match socket_opt {
         "docker" => "/var/run/docker.sock".to_string(),
@@ -57,7 +73,7 @@ fn detect_socket(socket_opt: &str) -> String {
     }
 }
 
-fn repo_slug(repo: &str) -> String {
+pub fn repo_slug(repo: &str) -> String {
     repo.replace('/', "-").to_lowercase()
 }
 
@@ -90,6 +106,8 @@ pub enum GhRunnerCommands {
         ephemeral: bool,
         #[clap(long, help = "Container socket for CI builds: docker, podman, or none", default_value = "auto")]
         socket: String,
+        #[clap(long, help = "Max seconds to wait for pod to start", default_value = "120")]
+        timeout: u64,
     },
     #[clap(
         about = "Check runner status — podman pod state + GitHub API",
@@ -184,7 +202,7 @@ spec:
 {docker_sock_volume}
 "#;
 
-fn generate_kube_yaml(
+pub fn generate_kube_yaml(
     repo: &str,
     labels: &str,
     workdir: &str,
@@ -223,6 +241,7 @@ fn cmd_install(
     _group: &Option<String>,
     ephemeral: bool,
     socket: &str,
+    timeout: u64,
 ) -> Result<()> {
     let slug = repo_slug(repo);
     let workdir_str = workdir.to_string_lossy().to_string();
@@ -240,13 +259,11 @@ fn cmd_install(
     println!("[1/7] Prerequisites OK — gh auth + podman {}", podman_out.trim());
 
     // 2. Validate repo access
-    let (repo_ok, _) = sh(&format!(
-        "gh api repos/{} --jq .full_name 2>&1",
-        repo
-    ));
-    if !repo_ok {
-        bail!("Repository {} not accessible or not found", repo);
-    }
+    let _ = retry_sh(
+        &format!("gh api repos/{} --jq .full_name 2>&1", repo),
+        2,
+        "repo access check",
+    )?;
     println!("[2/7] Repository {} accessible", repo);
 
     // 3. Create workdir
@@ -255,12 +272,16 @@ fn cmd_install(
     println!("[3/7] Workdir created: {}", workdir_str);
 
     // 4. Fetch registration token (1h TTL)
-    let (token_ok, token) = sh(&format!(
-        "gh api -X POST repos/{}/actions/runners/registration-token --jq .token 2>&1",
-        repo
-    ));
-    if !token_ok || token.is_empty() {
-        bail!("Failed to fetch registration token: {}", token);
+    let token = retry_sh(
+        &format!(
+            "gh api -X POST repos/{}/actions/runners/registration-token --jq .token 2>&1",
+            repo
+        ),
+        3,
+        "registration token fetch",
+    )?;
+    if token.is_empty() {
+        bail!("Empty registration token returned");
     }
     println!("[4/7] Registration token fetched (expires in 1h)");
 
@@ -303,6 +324,26 @@ fn cmd_install(
         bail!("Failed to deploy pod: {}", deploy_out);
     }
     println!("[7/7] Pod deployed: {} (token secured — never written to disk)", deploy_out.trim());
+
+    // Poll pod startup status with timeout
+    let start = std::time::Instant::now();
+    loop {
+        let (ok, state) = sh(&format!(
+            "podman pod ps --filter name=gh-runner-{} --format '{{{{.Status}}}}'",
+            slug
+        ));
+        if ok && state.contains("Running") {
+            break;
+        }
+        if start.elapsed().as_secs() > timeout {
+            bail!(
+                "Pod failed to start within {}s — check podman pod logs gh-runner-{}",
+                timeout,
+                slug
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
 
     // Verify registration
     let (verify_ok, verify_out) = sh(&format!(
@@ -380,6 +421,22 @@ fn cmd_status(repo: &str, json_output: bool) -> Result<()> {
         } else {
             println!("Runner:    not registered or not found on GitHub");
         }
+        if !pod_running {
+            let (_, inspect) = sh(&format!(
+                "podman pod inspect gh-runner-{} --format '{{{{.State}}}}' 2>/dev/null",
+                slug
+            ));
+            if !inspect.is_empty() {
+                println!("Pod state:  {}", inspect);
+            }
+            let (_, last_log) = sh(&format!(
+                "podman pod logs --tail 5 gh-runner-{} 2>/dev/null",
+                slug
+            ));
+            if !last_log.is_empty() {
+                println!("Last logs: {}", last_log);
+            }
+        }
     }
 
     Ok(())
@@ -439,12 +496,15 @@ fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
     let yaml_path = workdir_path.join("gh-runner.yaml");
 
     // 1. Fetch removal token and deregister from GitHub
-    let token_sh = format!(
-        "gh api -X POST repos/{}/actions/runners/removal-token --jq .token 2>&1",
-        repo
-    );
-    let (token_ok, token) = sh(&token_sh);
-    if token_ok && !token.is_empty() {
+    match retry_sh(
+        &format!(
+            "gh api -X POST repos/{}/actions/runners/removal-token --jq .token 2>&1",
+            repo
+        ),
+        3,
+        "removal token fetch",
+    ) {
+        Ok(token) if !token.is_empty() => {
         let remove_sh = format!(
             "gh api -X DELETE repos/{}/actions/runners/$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id') 2>&1",
             repo, repo, name
@@ -455,7 +515,8 @@ fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
         } else {
             println!("[1/3] GitHub deregister: {}", rm_out);
         }
-    } else {
+    }
+    _ => {
         // Fallback: try direct runner ID lookup
         let lookup_sh = format!(
             "RUNNER_ID=$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id' 2>/dev/null); \
@@ -464,6 +525,7 @@ fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
         );
         let (_, rm_out) = sh(&lookup_sh);
         println!("[1/3] GitHub: {}", rm_out.trim());
+    }
     }
 
     // 2. Tear down pod
@@ -607,7 +669,8 @@ pub fn handle_gh_runner_command(args: &GhRunnerCommands) -> Result<()> {
             group,
             ephemeral,
             socket,
-        } => cmd_install(repo, labels, workdir, group, *ephemeral, socket),
+            timeout,
+        } => cmd_install(repo, labels, workdir, group, *ephemeral, socket, *timeout),
         GhRunnerCommands::Status { repo, json } => cmd_status(repo, *json),
         GhRunnerCommands::Logs { repo, follow } => cmd_logs(repo, *follow),
         GhRunnerCommands::Deregister {
