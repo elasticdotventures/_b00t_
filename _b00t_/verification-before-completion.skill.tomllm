@@ -1,0 +1,29 @@
+[b00t]
+name = "verification-before-completion"
+type = "skill"
+version = "0.1.0"
+hint = "Run verification commands and confirm output before claiming work is done — evidence before assertions"
+
+[b00t.skill]
+description = """
+Use when about to claim work is complete, fixed, or passing, before committing or creating PRs — requires running verification commands and confirming output before making any success claims; evidence before assertions always.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["verification", "evidence", "completion-claims"]
+tier = "sm0l"
+complexity = 3
+
+[b00t.learn]
+topic = "verification-before-completion"
+inline = """
+Use when about to claim work is complete, fixed, or passing, before committing or creating PRs — requires running verification commands and confirming output before making any success claims; evidence before assertions always.
+
+Invoke via the Skill tool in Claude Code: skill="verification-before-completion".
+"""
+
+# b00t:map v1
+# summary: Run verification commands and confirm output before claiming work is done — evidence before assertions
+# tags: verification, evidence, completion-claims
+# tier: sm0l
+# cmds: b00t learn verification-before-completion
+# complexity: 3
