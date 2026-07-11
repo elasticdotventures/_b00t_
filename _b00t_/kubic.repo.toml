@@ -1,0 +1,27 @@
+# b00t Kubic Repository Datum — END-OF-LIFE
+#
+# The OpenSUSE Kubic project's libcontainers repo was decommissioned.
+# https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/ returns 404.
+#
+# Podman is now installed via static binary from GitHub releases.
+# See: podman.cli.toml (b00t install podman)
+#
+# Cleanup: sudo rm -f /etc/apt/sources.list.d/*kubic* /etc/apt/trusted.gpg.d/*kubic*
+
+[b00t]
+name = "kubic"
+type = "repo"
+status = "dead"
+hint = "OpenSUSE Kubic libcontainers repo — DEAD (404). Podman now via static binary: b00t install podman"
+deprecated = true
+
+[b00t.obsolete]
+replaced_by = "podman.cli"
+eol_date = "2026-07"
+reason = "OpenSUSE decommissioned the Kubic project; https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/ returns 404"
+
+# b00t:map v1
+# summary: Kubic repo datum — marked dead/end-of-life. Replaced by podman.cli (static binary).
+# tags: kubic, dead, eol, podman, deprecated
+# tier: sm0l
+# complexity: 1

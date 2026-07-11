@@ -6,7 +6,7 @@ repo = "containers/podman"
 
 desires = "6.0.1"
 version_regex = 'Version:\s+(?P<version>[\d.]+)'
-detect = ["podman version --format '{{{{.Version}}}}'"]
+detect = ["podman version --format {{.Version}} 2>/dev/null"]
 
 # ── Install: system-managed static binary from GitHub releases ─────
 # 🤓 Uses gh CLI for audit-logged release downloads (same pattern as wrkflw).
@@ -84,10 +84,9 @@ podman run --rm hello-world 2>/dev/null && echo "✅ rootless podman operational
   echo "⚠️  rootless podman may need: podman system migrate && podman system reset"
 """
 
-[[b00t.gate]]
-command = "podman"
-hint = "podman not found — run: b00t install podman"
-
+# Gated only on GITHUB_TOKEN (gh CLI needed for release download).
+# podman binary gate REMOVED — gates check BEFORE install, which blocks itself.
+# podman validation runs in post_install instead.
 [[b00t.gate]]
 env = "GITHUB_TOKEN"
 hint = "Set GITHUB_TOKEN (e.g. export GITHUB_TOKEN=$(gh auth token))"
