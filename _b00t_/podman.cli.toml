@@ -1,0 +1,121 @@
+[b00t]
+name = "podman"
+type = "cli"
+hint = "Podman container engine — rootless containers, pod management, kube play. Installed via static binary from GitHub releases."
+repo = "containers/podman"
+
+desires = "6.0.1"
+version_regex = 'Version:\s+(?P<version>[\d.]+)'
+detect = ["podman version --format '{{{{.Version}}}}'"]
+
+# ── Install: system-managed static binary from GitHub releases ─────
+# 🤓 Uses gh CLI for audit-logged release downloads (same pattern as wrkflw).
+#    Static binary bundles crun, conmon, netavark, aardvark-dns — no runtime deps.
+#    System path (/usr/local/bin) requires sudo; user path (~/.local/bin) preferred otherwise.
+install = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+
+DESIRED="6.0.1"
+ASSET="podman-remote-static-linux_amd64.tar.gz"
+TAG="v${DESIRED}"
+
+echo "📦 Installing podman ${DESIRED} via static binary..."
+
+# Download the static release
+gh release download "$TAG" \
+  --repo containers/podman \
+  --pattern "$ASSET" \
+  --dir /tmp \
+  --clobber
+
+# Extract to system path (sudo required for /usr/local/bin)
+sudo tar xzf "/tmp/${ASSET}" -C /usr/local/bin
+sudo chmod 755 /usr/local/bin/podman*
+
+# Cleanup
+rm -f "/tmp/${ASSET}"
+
+# Verify
+echo ""
+podman version
+echo ""
+echo "✅ podman ${DESIRED} installed to /usr/local/bin"
+echo "   Previous podman must be removed: sudo apt remove --purge podman (if OBS deb installed)"
+"""
+
+# ── Update: fetch latest tag, compare, download if newer ────────
+update = """
+set -euo pipefail
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI required: b00t install gh" >&2; exit 1; }
+
+CURRENT=$(podman version --format '{{{{.Version}}}}' 2>/dev/null || echo "0.0.0")
+LATEST_TAG=$(gh release view --repo containers/podman --json tagName --jq .tagName)
+LATEST=$(echo "$LATEST_TAG" | sed 's/^v//')
+
+if [ "$CURRENT" = "$LATEST" ]; then
+  echo "✅ podman ${CURRENT} is current (latest: ${LATEST})"
+  exit 0
+fi
+
+echo "📦 Upgrading podman: ${CURRENT} → ${LATEST}"
+ASSET="podman-remote-static-linux_amd64.tar.gz"
+
+gh release download "$LATEST_TAG" \
+  --repo containers/podman \
+  --pattern "$ASSET" \
+  --dir /tmp \
+  --clobber
+
+sudo tar xzf "/tmp/${ASSET}" -C /usr/local/bin
+sudo chmod 755 /usr/local/bin/podman*
+rm -f "/tmp/${ASSET}"
+
+echo ""
+podman version
+echo ""
+echo "✅ podman upgraded to ${LATEST}"
+"""
+
+# ── Post-install: verify rootless setup ──────────────────────────
+post_install = """
+# Verify rootless podman works
+podman run --rm hello-world 2>/dev/null && echo "✅ rootless podman operational" || \
+  echo "⚠️  rootless podman may need: podman system migrate && podman system reset"
+"""
+
+[[b00t.gate]]
+command = "podman"
+hint = "podman not found — run: b00t install podman"
+
+[[b00t.gate]]
+env = "GITHUB_TOKEN"
+hint = "Set GITHUB_TOKEN (e.g. export GITHUB_TOKEN=$(gh auth token))"
+
+[[b00t.usage]]
+description = "Check podman version and rootless status"
+command = "podman version && podman info --format '{{.Host.RemoteSocket.Path}}'"
+
+[[b00t.usage]]
+description = "List all pods (managed by kube play)"
+command = "podman pod ps"
+
+[[b00t.usage]]
+description = "List running containers"
+command = "podman ps"
+
+[[b00t.usage]]
+description = "Deploy a pod from Kubernetes YAML"
+command = "podman kube play <file>.yaml"
+
+[[b00t.references]]
+name = "containers/podman"
+url = "https://github.com/containers/podman"
+description = "Official Podman container engine — releases, issues, docs"
+
+# b00t:map v1
+# summary: Podman CLI datum — static binary install from GitHub releases, version-pinned at 6.0.1
+# tags: podman, container, rootless, kube-play, static-binary
+# tier: ch0nky
+# cmds: b00t install podman, b00t up podman, podman kube play
+# complexity: 3
