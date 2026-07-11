@@ -86,6 +86,7 @@ use b00t_cli::commands::{
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, ContextCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
+    GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
     PipelineCommands,
@@ -615,6 +616,14 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
+    },
+    #[clap(
+        about = "Manage self-hosted GitHub Actions runners via podman kube play",
+        long_about = "Install, check status, view logs, deregister, and diagnose self-hosted GitHub Actions runners deployed as podman pods.\n\nExamples:\n  b00t gh-runner install --repo app4dog/middleware --labels 'self-hosted,linux,x64' --workdir /var/lib/gh-runner/middleware --ephemeral\n  b00t gh-runner status --repo app4dog/middleware\n  b00t gh-runner logs --repo app4dog/middleware --follow\n  b00t gh-runner deregister --repo app4dog/middleware --remove-workdir\n  b00t gh-runner doctor --repo app4dog/middleware"
+    )]
+    GhRunner {
+        #[clap(subcommand)]
+        gh_runner_command: GhRunnerCommands,
     },
     #[clap(about = "RunPod GPU cloud — pods, endpoints, training")]
     Runpod {
@@ -2922,6 +2931,14 @@ async fn main() {
         Some(Commands::Doctor { doctor_command }) => {
             if let Err(e) =
                 b00t_cli::commands::doctor_cmd::handle_doctor_command(doctor_command, &cli.path)
+            {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::GhRunner { gh_runner_command }) => {
+            if let Err(e) =
+                b00t_cli::commands::gh_runner::handle_gh_runner_command(gh_runner_command)
             {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
