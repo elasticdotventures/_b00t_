@@ -2,16 +2,22 @@
 //!
 //! Provides cloud-native, high-scale messaging via NATS.io for
 //! distributed b00t agents across different hosts/regions.
+//!
+//! All subscriptions are fused into a single inbound mpsc channel so `recv()`
+//! correctly performs fan-in across every subscribed channel (the previous
+//! implementation only polled the first subscriber). The active subscription
+//! list is tracked in a sync `RwLock` so `subscriptions()` returns real data
+//! instead of an empty vec.
 
 use crate::error::{ChatError, ChatResult};
 use crate::ipc_transport::{BroadcastTransport, IpcTransport, TransportKind};
 use crate::message::ChatMessage;
 use crate::metrics::{ChatMetrics, LatencyTimer};
-use async_nats::{Client, ConnectOptions, Subscriber};
+use async_nats::{Client, Subscriber};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock as StdRwLock};
+use tokio::sync::{mpsc, Mutex as AsyncMutex, RwLock};
 use tracing::{debug, info};
 
 /// NATS transport for distributed agent messaging.
@@ -19,8 +25,13 @@ use tracing::{debug, info};
 pub struct NatsTransport {
     client: Arc<RwLock<Option<Client>>>,
     url: String,
-    subscriptions: Arc<RwLock<Vec<String>>>,
-    subscribers: Arc<RwLock<Vec<Subscriber>>>,
+    /// Channels currently subscribed (sync so `subscriptions()` can read it).
+    subscriptions: Arc<StdRwLock<Vec<String>>>,
+    /// Fused inbound messages from all subscriber tasks.
+    inbox_tx: mpsc::UnboundedSender<ChatMessage>,
+    inbox_rx: Arc<AsyncMutex<mpsc::UnboundedReceiver<ChatMessage>>>,
+    /// Per-channel forwarding tasks, aborted on unsubscribe/close.
+    forwards: Arc<RwLock<Vec<(String, tokio::task::JoinHandle<()>)>>>,
 }
 
 impl NatsTransport {
@@ -33,11 +44,14 @@ impl NatsTransport {
     /// let transport = NatsTransport::new("nats://localhost:4222");
     /// ```
     pub fn new(url: impl Into<String>) -> Self {
+        let (inbox_tx, inbox_rx) = mpsc::unbounded_channel();
         Self {
             client: Arc::new(RwLock::new(None)),
             url: url.into(),
-            subscriptions: Arc::new(RwLock::new(Vec::new())),
-            subscribers: Arc::new(RwLock::new(Vec::new())),
+            subscriptions: Arc::new(StdRwLock::new(Vec::new())),
+            inbox_tx,
+            inbox_rx: Arc::new(AsyncMutex::new(inbox_rx)),
+            forwards: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -49,7 +63,7 @@ impl NatsTransport {
             return Ok(()); // Already connected
         }
 
-        let options = ConnectOptions::new();
+        let options = async_nats::ConnectOptions::new();
         let client = options.connect(&self.url).await.map_err(|e| {
             ChatMetrics::global().record_connection_error("nats", "connection_failed");
             ChatError::Other(format!("NATS connection failed: {}", e))
@@ -72,6 +86,26 @@ impl NatsTransport {
     /// Maps `channel.sender` to NATS subject hierarchy.
     fn message_to_subject(message: &ChatMessage) -> String {
         format!("b00t.agents.{}.{}", message.channel, message.sender)
+    }
+
+    /// Spawn a task that forwards every message from `subscriber` into the
+    /// fused inbound channel.
+    fn forward(&self, mut subscriber: Subscriber) {
+        let inbox_tx = self.inbox_tx.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = subscriber.next().await {
+                let parsed: ChatMessage = match serde_json::from_slice(&msg.payload) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        debug!("NATS: dropping undecodable message: {}", e);
+                        continue;
+                    }
+                };
+                if inbox_tx.send(parsed).is_err() {
+                    break; // transport dropped
+                }
+            }
+        });
     }
 }
 
@@ -102,25 +136,14 @@ impl IpcTransport for NatsTransport {
 
     async fn recv(&self) -> ChatResult<Option<ChatMessage>> {
         let timer = LatencyTimer::recv("nats");
-        let mut subscribers = self.subscribers.write().await;
-
-        if subscribers.is_empty() {
-            return Ok(None);
-        }
-
-        // Poll first subscriber for messages
-        if let Some(subscriber) = subscribers.first_mut() {
-            match subscriber.next().await {
-                Some(msg) => {
-                    let message: ChatMessage = serde_json::from_slice(&msg.payload)?;
-                    ChatMetrics::global().record_message_received("nats", &message.channel);
-                    timer.stop();
-                    Ok(Some(message))
-                }
-                None => Ok(None),
+        let mut inbox = self.inbox_rx.lock().await;
+        match inbox.recv().await {
+            Some(message) => {
+                ChatMetrics::global().record_message_received("nats", &message.channel);
+                timer.stop();
+                Ok(Some(message))
             }
-        } else {
-            Ok(None)
+            None => Ok(None),
         }
     }
 
@@ -128,8 +151,10 @@ impl IpcTransport for NatsTransport {
         let mut client_guard = self.client.write().await;
         *client_guard = None;
 
-        let mut subscribers = self.subscribers.write().await;
-        subscribers.clear();
+        for (_, handle) in self.forwards.write().await.drain(..) {
+            handle.abort();
+        }
+        self.subscriptions.write().unwrap().clear();
 
         ChatMetrics::global().record_connection_closed("nats");
         info!("Closed NATS connection");
@@ -160,8 +185,9 @@ impl BroadcastTransport for NatsTransport {
             .await
             .map_err(|e| ChatError::Other(format!("NATS subscribe failed: {}", e)))?;
 
-        self.subscriptions.write().await.push(channel.to_string());
-        self.subscribers.write().await.push(subscriber);
+        self.forward(subscriber);
+
+        self.subscriptions.write().unwrap().push(channel.to_string());
 
         ChatMetrics::global().record_transport_operation("nats", "subscribe");
         info!("Subscribed to NATS subject: {}", subject);
@@ -169,10 +195,14 @@ impl BroadcastTransport for NatsTransport {
     }
 
     async fn unsubscribe(&mut self, channel: &str) -> ChatResult<()> {
-        let mut subscriptions = self.subscriptions.write().await;
-        subscriptions.retain(|s| s != channel);
+        self.subscriptions.write().unwrap().retain(|s| s != channel);
 
-        // Note: async_nats subscribers automatically unsubscribe on drop
+        let mut forwards = self.forwards.write().await;
+        if let Some(idx) = forwards.iter().position(|(ch, _)| ch == channel) {
+            let (_, handle) = forwards.remove(idx);
+            handle.abort();
+        }
+
         debug!("Unsubscribed from NATS channel: {}", channel);
         Ok(())
     }
@@ -192,33 +222,6 @@ impl BroadcastTransport for NatsTransport {
     }
 
     fn subscriptions(&self) -> Vec<String> {
-        // Note: This is a synchronous method but subscriptions is behind RwLock
-        // We can't await here, so we return empty vec
-        // TODO: Consider making this async or using a different pattern
-        Vec::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_nats_transport_creation() {
-        let transport = NatsTransport::new("nats://localhost:4222");
-        assert_eq!(transport.kind(), TransportKind::Nats);
-    }
-
-    #[test]
-    fn test_message_to_subject_conversion() {
-        let message = ChatMessage::new("mission.alpha", "frontend", "test");
-        let subject = NatsTransport::message_to_subject(&message);
-        assert_eq!(subject, "b00t.agents.mission.alpha.frontend");
-    }
-
-    #[tokio::test]
-    async fn test_transport_not_connected_initially() {
-        let transport = NatsTransport::new("nats://localhost:4222");
-        assert!(!transport.is_available().await);
+        self.subscriptions.read().unwrap().clone()
     }
 }

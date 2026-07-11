@@ -8,6 +8,7 @@ use crate::error::ChatResult;
 use crate::message::ChatMessage;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use ufo_types::{Stereotyped, UfoStereotype};
 use std::fmt::Debug;
 
 /// Core transport trait for sending/receiving messages.
@@ -78,6 +79,14 @@ pub struct AgentEndpoint {
     pub transport_kind: TransportKind,
     pub last_seen: std::time::SystemTime,
     pub metadata: Option<serde_json::Value>,
+}
+
+impl Stereotyped for AgentEndpoint {
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        // The material network endpoint that realizes a hive agent's
+        // communicative capacity — a domain Kind (endpoint of an agent).
+        UfoStereotype::Kind("AgentEndpoint".into())
+    }
 }
 
 /// Agent watcher for monitoring agent availability.
