@@ -1,0 +1,98 @@
+# b00t:datum v1
+# kind: proposal
+# status: draft
+# summary: gossip-based discovery advertising for the b00t-comms NATS intra-agent mesh, with a path to iroh/QUIC for broker-free P2P
+# tags: nats, mesh, gossip, discovery, iroh, quic, finops, ledgrrr
+# tier: frontier
+# author: yei (b00t operator)
+# date: 2026-07-11
+
+[proposal]
+title = "Gossip-based discovery advertising for the b00t-comms NATS intra-agent mesh"
+problem = """
+Discovery in the b00t-comms mesh currently rides NATS subject broadcast
+(`b00t.mesh.discovery` presence + `b00t.mesh.gossip` Gossip frame). That works
+for any deployment with a reachable NATS broker, but it is broker-bound: no
+broker, no discovery, and no NAT traversal for true peer-to-peer agents.
+
+We want membership advertising that (a) keeps working on NATS today, (b) is
+transport-agnostic so it can run over a broker-free substrate later, and
+(c) terminates membership churn via bounded epidemic fanout rather than O(N)
+heartbeat storms.
+"""
+
+[implemented]
+summary = """
+`GossipTable` (src/gossip.rs) is a transport-agnostic epidemic membership
+primitive: `ingest`/`insert_local`/`next_seq`/`live_endpoints`/`peer_count`,
+with a `max_hops` hop-budget so a single advertisement dies after a bounded
+number of relays. `NatsMeshNode` now backs its `peers` table with `GossipTable`:
+`announce()` publishes a `MeshFrame::Gossip { presence, seq, hops }` on
+`b00t.mesh.gossip`; receivers ingest newer-endpoint ads, re-gossip with
+`hops-1`, and ignore stale/over-budget ads. This is the "advertise by gossip"
+behavior requested, realized on NATS without a Redis broker.
+"""
+
+[options]
+gossiper = """
+github.com/thehydroimpulse/gossiper — Rust epidemic gossip with a pluggable
+transport and peer-scoring/anti-entropy. Mature pattern, would let us swap
+`GossipTable`'s transport for its peer-management later. Larger opinion surface
+than our ~250-line primitive; adopt only if we need its scoring/partial-view
+features.
+"""
+iroh_gossip = """
+crates.io/crates/iroh-gossip — topic-based gossip built on iroh (QUIC + relay),
+with NodeId (ed25519) addressing and NAT traversal out of the box. Strongest
+candidate for the *broker-free* future: drop the NATS broker entirely and let
+nodes discover each other over an iroh gossip topic. Cost: pulls the iroh stack
+into the binary. Strategic, not urgent.
+"""
+gwyh = """
+github.com/brndnmtthws/gwyh ("get what you have") — minimal Rust gossip /
+anti-entropy library, tiny dependency footprint. The closest drop-in to the
+epidemic membership we already wrote: it would back `GossipTable`'s transport
+without dragging in a whole P2P toolkit. Best near-term broker-free option if
+we want to shed NATS for discovery while staying lightweight.
+"""
+iroh = """
+github.com/n0-computer/iroh — distributed-systems toolkit: NodeId ed25519
+dialing, `noq` QUIC (iroh.computer/blog/noq-announcement) for reliable NAT
+traversal, direct P2P. This is the substrate iroh-gossip sits on. Long-term
+play: iroh becomes the transport under BOTH the mesh and ledgrrr — NodeId
+addressing replaces NATS subjects, and receipt exchange (finops usage codes)
+flows peer-to-peer instead of through a broker.
+"""
+
+[recommendation]
+decision = """
+1. Keep `GossipTable` as the transport-agnostic membership primitive (already
+   landed) — it is intentionally substrate-neutral.
+2. For broker-free deployments NOW, back `GossipTable`'s transport with `gwyh`
+   (lightest footprint, matches our epidemic model). Leave the NATS transport as
+   the default/broker-backed path.
+3. Treat `iroh-gossip` + `iroh` as the strategic substrate: when we cut the
+   NATS broker, the mesh dials peers by iroh NodeId over noq QUIC, and iroh is
+   added as a transport behind `ledgrrr` so finops receipts are exchanged P2P.
+4. ledgrrr stays mocked for this PR (`MockLedgrrr` / `MOCK-FINOPS-*`); real
+   ledgerr-mcp + iroh backing deferred.
+"""
+
+[ledgrrr]
+now = "MockLedgrrr in src/ledgrrr.rs — synthetic MOCK-FINOPS-* codes, in-memory, no server."
+later = "McpLedgrrr bridges real ledgerr-mcp via LEDGERR_MCP_CMD; iroh transport added behind the Ledgrrr trait for P2P receipt exchange."
+
+[acceptance]
+criteria = [
+  "cargo test -p b00t-chat (default + --features dataframe) green",
+  "NatsMeshNode membership converges via gossip with bounded hops on NATS",
+  "gossip.rs + mesh.rs gossip backing have unit/integration coverage",
+  "proposal reviewed by operator/yEI before iroh work begins",
+]
+
+# b00t:map v1
+# summary: gossip discovery for b00t-comms mesh; gwyh near-term, iroh/QUIC strategic; ledgrrr mocked now
+# tags: nats, mesh, gossip, iroh, quic, discovery, ledgrrr, finops
+# tier: frontier
+# cmds: cargo test -p b00t-chat, cargo run -p b00t-chat --example mesh_cli
+# complexity: 7

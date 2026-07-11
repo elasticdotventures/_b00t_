@@ -14,7 +14,7 @@
 //! default `b00t-comms` channel, announces presence, and prints every frame it
 //! receives (including auto-replies to discovery queries from other nodes).
 
-use b00t_chat::ledgrrr::{LocalLedgrrr, Ledgrrr};
+use b00t_chat::ledgrrr::{Ledgrrr, MockLedgrrr};
 use b00t_chat::mesh::{MeshFrame, MeshNodeConfig, NatsMeshNode};
 use b00t_chat::message::ChatMessage;
 use std::sync::Arc;
@@ -26,11 +26,12 @@ async fn main() -> anyhow::Result<()> {
     let nats_url = args.next().unwrap_or_else(|| "nats://localhost:4222".to_string());
     let command = args.next().unwrap_or_else(|| "discover".to_string());
 
-    // Optional local finops ledger (collaborative-autonomy receipts).
-    let ledger: Option<Arc<LocalLedgrrr>> =
+    // Finops ledger (collaborative-autonomy receipts). Defaults to an in-memory
+    // mock; point B00T_LEDGER at a path for a persisted local ledger.
+    let ledger: Option<Arc<dyn Ledgrrr>> =
         match std::env::var("B00T_LEDGER").ok().filter(|s| !s.is_empty()) {
-            Some(path) => Some(Arc::new(LocalLedgrrr::file(&path)?)),
-            None => None,
+            Some(path) => Some(Arc::new(MockLedgrrr::file(&path)?)),
+            None => Some(Arc::new(MockLedgrrr::mock())),
         };
     let project = std::env::var("B00T_PROJECT").unwrap_or_else(|_| "b00t-comms".to_string());
 
@@ -71,6 +72,9 @@ async fn main() -> anyhow::Result<()> {
                     MeshFrame::DiscoveryQuery { from, .. } => {
                         println!("[discovery-query] from {from}")
                     }
+                    // Gossip frames are internal mesh plumbing (membership
+                    // advertising) and are not surfaced to the app channel.
+                    MeshFrame::Gossip { .. } => {}
                 }
             }
         }

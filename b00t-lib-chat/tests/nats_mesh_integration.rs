@@ -4,7 +4,7 @@
 //! full `--agent=b00t-comms --skill=nats` path: presence, discovery, direct
 //! send, and finops receipt minting.
 
-use b00t_chat::ledgrrr::{LocalLedgrrr, Ledgrrr};
+use b00t_chat::ledgrrr::{Ledgrrr, MockLedgrrr};
 use b00t_chat::mesh::{MeshFrame, MeshNodeConfig, NatsMeshNode};
 use b00t_chat::message::ChatMessage;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ async fn two_node_mesh_discovers_and_exchanges() {
         }
     };
 
-    let ledger: Arc<LocalLedgrrr> = Arc::new(LocalLedgrrr::memory());
+    let ledger: Arc<dyn Ledgrrr> = Arc::new(MockLedgrrr::mock());
 
     let a = NatsMeshNode::new(
         MeshNodeConfig::new("itest-a", &url)

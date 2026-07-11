@@ -41,17 +41,21 @@ subject_prefix = "b00t.mesh"
 [b00t.agent.mesh]
 discovery_query = "b00t.mesh.discovery.query"
 discovery_presence = "b00t.mesh.discovery.presence"
+gossip = "b00t.mesh.gossip"            # epidemic membership advertising (bounded hop budget)
 inbox = "b00t.mesh.node.{agent_id}"
 channel = "b00t.mesh.channel.{channel}"
 presence_interval_secs = 10
 presence_ttl_secs = 30
+gossip_max_hops = 5                    # hop budget so a single ad dies after bounded relays
 
 # 🤓 Collaborative-autonomy finops: every capability execution (nats.send,
 #    nats.broadcast, nats.discover, nats.presence) registers a UsageReceipt
-#    with ledgrrr, which mints a FINOPS-<project>-<seq> code. The same receipt
-#    is a DataframeReceipt, so it lands in Arrow/Parquet for audit.
+#    with ledgrrr. For the nats-focused PR this defaults to MockLedgrrr
+#    (synthetic MOCK-FINOPS-* codes, in-memory); the same receipt is a
+#    DataframeReceipt, so it lands in Arrow/Parquet for audit. ledgerr-mcp + iroh
+#    backing is deferred (see _b00t_/NATS-MESH-GOSSIP-DISCOVERY.tomllmd).
 [b00t.agent.finops]
-ledger = "local"                       # "local" (LocalLedgrrr/JSONL) or "ledgerr-mcp"
+ledger = "mock"                        # "mock" (MockLedgrrr/in-memory) | "local" (LocalLedgrrr/JSONL) | "ledgerr-mcp"
 ledger_path = ".b00t/finops.jsonl"
 project = "b00t-comms"
 receipt = "dataframe"                  # DataframeReceipt -> Arrow (feature `dataframe`)

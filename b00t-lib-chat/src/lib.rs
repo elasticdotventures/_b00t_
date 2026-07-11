@@ -31,6 +31,7 @@ pub mod client;
 pub mod discovery;
 pub mod dataframe_receipt;
 pub mod error;
+pub mod gossip;
 pub mod ipc_transport;
 pub mod ledgrrr;
 pub mod mesh;
@@ -61,7 +62,8 @@ pub use mesh::{
     AgentPresence, MeshFrame, MeshNodeConfig, NatsMeshNode, DEFAULT_DISCOVER_TIMEOUT,
     DEFAULT_PRESENCE_INTERVAL, DEFAULT_PRESENCE_TTL,
 };
-pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, ReceiptConstraint, UsageReceipt};
+pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, MockLedgrrr, ReceiptConstraint, UsageReceipt};
+pub use gossip::{GossipTable, GossipMember};
 pub use dataframe_receipt::{
     ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
 };

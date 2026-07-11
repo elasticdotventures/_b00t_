@@ -1,14 +1,21 @@
 //! NATS intra-agent mesh for b00t hive coordination.
 //!
 //! Realizes the `--agent=b00t-comms --skill=nats` capability: every b00t agent
-//! process is a first-class node in a subject-routed mesh over NATS. The mesh
-//! provides four primitives:
+//! process is a first-class node in a subject-routed mesh over NATS.
 //!
-//! 1. **Presence** — nodes announce heartbeats on `b00t.mesh.discovery.presence`
-//!    so peers learn each other without a central registry (Redis-free
-//!    discovery, works offline once a NATS server is reachable).
-//! 2. **Discovery** — `discover()` publishes a query to `b00t.mesh.discovery.query`
-//!    with a NATS reply inbox; live nodes answer with their [`AgentEndpoint`].
+//! Four primitives, plus gossip discovery:
+//!
+//! 1. **Presence / gossip** — nodes advertise their presence by *gossiping* it
+//!    on `b00t.mesh.gossip`. Every receiver re-gossips newer advertisements
+//!    with a decremented hop budget (epidemic propagation), so the whole mesh
+//!    learns each node without a central registry or a single query. A plain
+//!    `b00t.mesh.discovery.presence` heartbeat is also emitted for backward
+//!    compatibility. This is the discovery-advertising mechanism the operator
+//!    asked for; the same `GossipTable` drives a future P2P transport (Iroh)
+//!    where no broker fans out for you. See
+//!    `_b00t_/NATS-MESH-GOSSIP-DISCOVERY.tomllmd`.
+//! 2. **Discovery** — `discover()` additionally publishes a request/reply query
+//!    to `b00t.mesh.discovery.query` for instant answers from live nodes.
 //! 3. **Direct send** — point-to-point frames to `b00t.mesh.node.{agent_id}`.
 //! 4. **Broadcast** — pub/sub frames to `b00t.mesh.channel.{channel}`.
 //!
@@ -19,6 +26,7 @@
 //! `b00t agent discover` plumbing.
 
 use crate::error::{ChatError, ChatResult};
+use crate::gossip::GossipTable;
 use crate::ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, DiscoverableTransport, TransportKind,
 };
@@ -28,10 +36,9 @@ use async_nats::Subscriber;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tokio::sync::{mpsc, RwLock, RwLockWriteGuard};
+use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 
@@ -41,8 +48,10 @@ const NODE_PREFIX: &str = "b00t.mesh.node.";
 const CHANNEL_PREFIX: &str = "b00t.mesh.channel.";
 /// Subject all nodes listen on to answer discovery queries.
 const DISCOVERY_QUERY: &str = "b00t.mesh.discovery.query";
-/// Subject all nodes publish presence heartbeats to.
+/// Subject all nodes publish presence heartbeats to (backward compat).
 const DISCOVERY_PRESENCE: &str = "b00t.mesh.discovery.presence";
+/// Subject all nodes gossip presence advertisements on (epidemic discovery).
+const DISCOVERY_GOSSIP: &str = "b00t.mesh.gossip";
 
 /// Default time a node waits for discovery replies before returning.
 pub const DEFAULT_DISCOVER_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -50,6 +59,8 @@ pub const DEFAULT_DISCOVER_TIMEOUT: Duration = Duration::from_millis(1500);
 pub const DEFAULT_PRESENCE_INTERVAL: Duration = Duration::from_secs(10);
 /// Default time-to-live for a presence record before it is considered stale.
 pub const DEFAULT_PRESENCE_TTL: Duration = Duration::from_secs(30);
+/// Default gossip hop budget (how many re-gossip hops an advertisement lives).
+pub const DEFAULT_GOSSIP_MAX_HOPS: u8 = 5;
 
 /// Direct inbox subject for a given agent id.
 pub fn node_subject(agent_id: &str) -> String {
@@ -88,6 +99,13 @@ pub enum MeshFrame {
     },
     /// Periodic heartbeat announcing a node is alive.
     Presence(AgentPresence),
+    /// Epidemic gossip advertisement: a presence plus the advertiser-assigned
+    /// sequence and the remaining hop budget. Receivers re-gossip newer ads.
+    Gossip {
+        presence: AgentPresence,
+        seq: u64,
+        hops: u8,
+    },
 }
 
 /// Live presence record for a mesh node.
@@ -121,6 +139,8 @@ pub struct MeshNodeConfig {
     pub discover_timeout: Duration,
     pub presence_interval: Duration,
     pub presence_ttl: Duration,
+    /// Gossip hop budget for discovery advertisements.
+    pub gossip_max_hops: u8,
     /// Project attributed to this node's finops receipts (collaborative-autonomy).
     pub project: String,
     /// Optional ledgrrr ledger; when set, every capability execution registers
@@ -138,6 +158,7 @@ impl MeshNodeConfig {
             discover_timeout: DEFAULT_DISCOVER_TIMEOUT,
             presence_interval: DEFAULT_PRESENCE_INTERVAL,
             presence_ttl: DEFAULT_PRESENCE_TTL,
+            gossip_max_hops: DEFAULT_GOSSIP_MAX_HOPS,
             project: "b00t-comms".to_string(),
             ledgrrr: None,
         }
@@ -158,6 +179,11 @@ impl MeshNodeConfig {
         self
     }
 
+    pub fn with_gossip_max_hops(mut self, hops: u8) -> Self {
+        self.gossip_max_hops = hops;
+        self
+    }
+
     pub fn with_ledgrrr(mut self, ledgrrr: Arc<dyn Ledgrrr>) -> Self {
         self.ledgrrr = Some(ledgrrr);
         self
@@ -171,6 +197,7 @@ impl std::fmt::Debug for MeshNodeConfig {
             .field("role", &self.role)
             .field("project", &self.project)
             .field("nats_url", &self.nats_url)
+            .field("gossip_max_hops", &self.gossip_max_hops)
             .field("ledgrrr", &self.ledgrrr.is_some())
             .finish()
     }
@@ -178,15 +205,16 @@ impl std::fmt::Debug for MeshNodeConfig {
 
 /// A node in the b00t NATS intra-agent mesh.
 ///
-/// Connect, join channels, announce presence, then `recv()` frames. Discovery
-/// is request/reply over NATS; presence heartbeats keep the peer table fresh
-/// so `discover()` returns instantly for already-known nodes.
+/// Connect, join channels, announce (gossip) presence, then `recv()` frames.
+/// Discovery is request/reply over NATS; gossip heartbeats keep the peer table
+/// fresh so `discover()` returns instantly for already-known nodes, and even
+/// nodes that never send a query learn the mesh via epidemic propagation.
 #[derive(Clone)]
 pub struct NatsMeshNode {
     config: MeshNodeConfig,
     client: Arc<RwLock<Option<async_nats::Client>>>,
-    /// Known peers keyed by agent id (presence + discovery replies).
-    peers: Arc<RwLock<HashMap<String, AgentPresence>>>,
+    /// Known peers + gossip membership (presence + sequence + hop budget).
+    peers: Arc<RwLock<GossipTable>>,
     /// Application-facing inbound frames.
     inbox_tx: mpsc::Sender<MeshFrame>,
     inbox_rx: Arc<RwLock<Option<mpsc::Receiver<MeshFrame>>>>,
@@ -212,7 +240,7 @@ impl NatsMeshNode {
         Self {
             config,
             client: Arc::new(RwLock::new(None)),
-            peers: Arc::new(RwLock::new(HashMap::new())),
+            peers: Arc::new(RwLock::new(GossipTable::new(DEFAULT_GOSSIP_MAX_HOPS))),
             inbox_tx,
             inbox_rx: Arc::new(RwLock::new(Some(inbox_rx))),
             forwards: Arc::new(RwLock::new(Vec::new())),
@@ -249,12 +277,7 @@ impl NatsMeshNode {
         let client = async_nats::ConnectOptions::new()
             .connect(&self.config.nats_url)
             .await
-            .map_err(|e| {
-                ChatError::Other(format!(
-                    "NATS mesh connect failed ({}): {}",
-                    self.config.nats_url, e
-                ))
-            })?;
+            .map_err(|e| ChatError::Nats(e.to_string()))?;
         *guard = Some(client);
         drop(guard);
 
@@ -271,28 +294,30 @@ impl NatsMeshNode {
             .ok_or(ChatError::NotConnected)
     }
 
-    /// Subscribe to the inbox, presence, discovery-query, and any joined
-    /// channels; forward every frame into the application inbox.
+    /// Subscribe to the inbox, presence, gossip, discovery-query, and any
+    /// joined channels; forward every frame into the application inbox.
     async fn spawn_inbound(&self) -> ChatResult<()> {
         let client = self.client().await?;
-
         let mut handles = self.forwards.write().await;
 
-        // Own inbox (direct messages + discovery reply target).
         let inbox_sub = client
             .subscribe(node_subject(&self.config.agent_id))
             .await
             .map_err(|e| ChatError::Nats(e.to_string()))?;
         handles.push(self.forward(client.clone(), inbox_sub));
 
-        // Presence heartbeats.
         let presence_sub = client
             .subscribe(DISCOVERY_PRESENCE)
             .await
             .map_err(|e| ChatError::Nats(e.to_string()))?;
         handles.push(self.forward(client.clone(), presence_sub));
 
-        // Discovery queries.
+        let gossip_sub = client
+            .subscribe(DISCOVERY_GOSSIP)
+            .await
+            .map_err(|e| ChatError::Nats(e.to_string()))?;
+        handles.push(self.forward(client.clone(), gossip_sub));
+
         let query_sub = client
             .subscribe(DISCOVERY_QUERY)
             .await
@@ -323,41 +348,65 @@ impl NatsMeshNode {
                         continue;
                     }
                 };
-                // Auto-learn peers from presence / discovery traffic.
                 match &frame {
                     MeshFrame::Presence(p) => {
-                        upsert_presence(&peers, p.clone()).await;
+                        let mut g = peers.write().await;
+                        let seq = g.next_seq(&p.agent_id);
+                        g.ingest(p.clone(), seq, 0);
+                    }
+                    MeshFrame::Gossip { presence, seq, hops } => {
+                        // Accept if newer; re-gossip with decremented budget.
+                        let forward = {
+                            let mut g = peers.write().await;
+                            g.ingest(presence.clone(), *seq, *hops)
+                        };
+                        if let Some(remaining) = forward {
+                            let re = MeshFrame::Gossip {
+                                presence: presence.clone(),
+                                seq: *seq,
+                                hops: remaining,
+                            };
+                            if let Ok(payload) = serde_json::to_vec(&re) {
+                                let _ = client.publish(DISCOVERY_GOSSIP, payload.into()).await;
+                            }
+                        }
                     }
                     MeshFrame::DiscoveryReply { endpoint, role, skills } => {
                         if endpoint.agent_id != agent_id {
-                            upsert_presence(
-                                &peers,
+                            let mut g = peers.write().await;
+                            let seq = g.next_seq(&endpoint.agent_id);
+                            g.ingest(
                                 AgentPresence {
                                     agent_id: endpoint.agent_id.clone(),
                                     role: role.clone(),
                                     skills: skills.clone(),
                                     endpoint_uri: endpoint.endpoint_uri.clone(),
-                                    last_seen: SystemTime::now(),
+                                    last_seen: endpoint.last_seen,
                                     ttl,
                                 },
-                            )
-                            .await;
+                                seq,
+                                0,
+                            );
                         }
                     }
                     MeshFrame::DiscoveryQuery { from, role, skills } => {
                         if from != &agent_id {
-                            upsert_presence(
-                                &peers,
-                                AgentPresence {
-                                    agent_id: from.clone(),
-                                    role: role.clone(),
-                                    skills: skills.clone(),
-                                    endpoint_uri: node_subject(from),
-                                    last_seen: SystemTime::now(),
-                                    ttl,
-                                },
-                            )
-                            .await;
+                            {
+                                let mut g = peers.write().await;
+                                let seq = g.next_seq(from);
+                                g.ingest(
+                                    AgentPresence {
+                                        agent_id: from.clone(),
+                                        role: role.clone(),
+                                        skills: skills.clone(),
+                                        endpoint_uri: node_subject(from),
+                                        last_seen: SystemTime::now(),
+                                        ttl,
+                                    },
+                                    seq,
+                                    0,
+                                );
+                            }
                             // Answer the query on its NATS reply inbox.
                             if let Some(reply) = &msg.reply {
                                 let reply_frame = MeshFrame::DiscoveryReply {
@@ -371,12 +420,8 @@ impl NatsMeshNode {
                                     role: this_role.clone(),
                                     skills: this_skills.clone(),
                                 };
-                                let payload = match serde_json::to_vec(&reply_frame) {
-                                    Ok(p) => p,
-                                    Err(_) => continue,
-                                };
-                                if let Err(e) = client.publish(reply.clone(), payload.into()).await {
-                                    warn!("mesh: discovery reply failed: {}", e);
+                                if let Ok(payload) = serde_json::to_vec(&reply_frame) {
+                                    let _ = client.publish(reply.clone(), payload.into()).await;
                                 }
                             }
                         }
@@ -401,7 +446,8 @@ impl NatsMeshNode {
         Ok(())
     }
 
-    /// Announce presence to the mesh (also answers future discovery queries).
+    /// Announce presence: gossip an advertisement (bounded hop budget) and emit
+    /// a plain presence heartbeat for backward compatibility.
     pub async fn announce(&self) -> ChatResult<()> {
         let client = self.client().await?;
         let presence = AgentPresence {
@@ -412,20 +458,35 @@ impl NatsMeshNode {
             last_seen: SystemTime::now(),
             ttl: self.config.presence_ttl,
         };
-        let frame = MeshFrame::Presence(presence.clone());
-        let payload = serde_json::to_vec(&frame)?;
+        let seq = {
+            let mut g = self.peers.write().await;
+            let s = g.next_seq(&self.config.agent_id);
+            g.insert_local(presence.clone(), s);
+            s
+        };
+        let gossip = MeshFrame::Gossip {
+            presence: presence.clone(),
+            seq,
+            hops: self.config.gossip_max_hops,
+        };
         client
-            .publish(DISCOVERY_PRESENCE, payload.into())
+            .publish(DISCOVERY_GOSSIP, serde_json::to_vec(&gossip)?.into())
             .await
             .map_err(|e| ChatError::Nats(e.to_string()))?;
-        upsert_presence(&self.peers, presence).await;
+        client
+            .publish(
+                DISCOVERY_PRESENCE,
+                serde_json::to_vec(&MeshFrame::Presence(presence))?.into(),
+            )
+            .await
+            .map_err(|e| ChatError::Nats(e.to_string()))?;
         self.record_usage(&self.config.project, "nats.presence", 1)
             .await
             .ok();
         Ok(())
     }
 
-    /// Start a background heartbeat that announces presence every interval.
+    /// Start a background heartbeat that gossips presence every interval.
     pub async fn start_presence(&self) {
         let node = self.clone();
         let interval = self.config.presence_interval;
@@ -441,8 +502,8 @@ impl NatsMeshNode {
     }
 
     /// Discover peers: publish a query with the local inbox as reply target,
-    /// then collect replies for the configured timeout. Already-known peers
-    /// are included.
+    /// then collect replies for the configured timeout. Gossip advertisements
+    /// received meanwhile also populate the peer table.
     pub async fn discover(&self) -> ChatResult<Vec<AgentEndpoint>> {
         self.discover_with_timeout(self.config.discover_timeout).await
     }
@@ -456,32 +517,47 @@ impl NatsMeshNode {
             skills: self.config.skills.clone(),
         };
         let payload = serde_json::to_vec(&query)?;
-        // NATS reply inbox = our own inbox subject.
         let reply = node_subject(&self.config.agent_id);
         client
             .publish_with_reply(DISCOVERY_QUERY, reply, payload.into())
             .await
             .map_err(|e| ChatError::Nats(e.to_string()))?;
-        // Also announce so peers learn us even if they miss the reply window.
+        // Also announce so peers learn us (and gossip propagates).
         self.announce().await.ok();
-        self.record_usage(&self.config.project, "nats.discover", 1).await.ok();
+        self.record_usage(&self.config.project, "nats.discover", 1)
+            .await
+            .ok();
 
-        // Collect inbound DiscoveryReply frames for `timeout`.
         let deadline = tokio::time::Instant::now() + timeout;
         let mut rx_guard = self.inbox_rx.write().await;
-        let rx = match rx_guard.take() {
+        let mut rx = match rx_guard.take() {
             Some(rx) => rx,
             None => return Ok(self.endpoints_locked().await),
         };
         drop(rx_guard);
-        let mut rx = rx;
         while tokio::time::Instant::now() < deadline {
             let remaining = (deadline - tokio::time::Instant::now()).as_millis() as u64;
             match tokio::time::timeout(Duration::from_millis(remaining.max(1)), rx.recv()).await {
-                Ok(Some(MeshFrame::DiscoveryReply { endpoint, .. })) => {
+                Ok(Some(MeshFrame::DiscoveryReply {
+                    endpoint,
+                    role,
+                    skills,
+                })) => {
                     if endpoint.agent_id != self.config.agent_id {
-                        let mut peers = self.peers.write().await;
-                        upsert_endpoint(&mut peers, &endpoint, self.config.presence_ttl);
+                        let mut g = self.peers.write().await;
+                        let seq = g.next_seq(&endpoint.agent_id);
+                        g.ingest(
+                            AgentPresence {
+                                agent_id: endpoint.agent_id.clone(),
+                                role,
+                                skills,
+                                endpoint_uri: endpoint.endpoint_uri.clone(),
+                                last_seen: endpoint.last_seen,
+                                ttl: self.config.presence_ttl,
+                            },
+                            seq,
+                            0,
+                        );
                     }
                 }
                 Ok(Some(_)) => { /* non-reply frame; ignore during discovery */ }
@@ -489,25 +565,15 @@ impl NatsMeshNode {
                 Err(_) => break,
             }
         }
-        // Return the inbox so future recv() calls keep working.
         *self.inbox_rx.write().await = Some(rx);
         Ok(self.endpoints_locked().await)
     }
 
     async fn endpoints_locked(&self) -> Vec<AgentEndpoint> {
-        let peers = self.peers.read().await;
-        let now = SystemTime::now();
-        peers
-            .values()
-            .filter(|p| p.agent_id != self.config.agent_id && !p.is_stale(now))
-            .map(|p| AgentEndpoint {
-                agent_id: p.agent_id.clone(),
-                endpoint_uri: p.endpoint_uri.clone(),
-                transport_kind: TransportKind::Nats,
-                last_seen: p.last_seen,
-                metadata: Some(serde_json::json!({ "role": p.role, "skills": p.skills })),
-            })
-            .collect()
+        self.peers
+            .read()
+            .await
+            .live_endpoints(&self.config.agent_id, self.config.presence_ttl)
     }
 
     /// Send a direct (point-to-point) message to a specific agent id.
@@ -535,12 +601,13 @@ impl NatsMeshNode {
             .publish(channel_subject(channel), payload.into())
             .await
             .map_err(|e| ChatError::Nats(e.to_string()))?;
-        self.record_usage(&self.config.project, "nats.broadcast", 1).await?;
+        self.record_usage(&self.config.project, "nats.broadcast", 1)
+            .await?;
         Ok(())
     }
 
-    /// Receive the next inbound mesh frame (direct, broadcast, discovery, or
-    /// presence). Returns `None` if the node has been closed.
+    /// Receive the next inbound mesh frame (direct, broadcast, discovery,
+    /// presence, or gossip). Returns `None` if the node has been closed.
     pub async fn recv(&self) -> ChatResult<Option<MeshFrame>> {
         let mut rx_guard = self.inbox_rx.write().await;
         let mut rx = match rx_guard.take() {
@@ -555,12 +622,10 @@ impl NatsMeshNode {
 
     /// Number of currently-known live peers (excluding self).
     pub async fn peer_count(&self) -> usize {
-        let peers = self.peers.read().await;
-        let now = SystemTime::now();
-        peers
-            .values()
-            .filter(|p| p.agent_id != self.config.agent_id && !p.is_stale(now))
-            .count()
+        self.peers
+            .read()
+            .await
+            .peer_count(&self.config.agent_id, self.config.presence_ttl)
     }
 
     /// Gracefully close: abort forwarding + presence tasks, drop client.
@@ -577,58 +642,6 @@ impl NatsMeshNode {
     }
 }
 
-async fn upsert_presence(peers: &Arc<RwLock<HashMap<String, AgentPresence>>>, p: AgentPresence) {
-    let mut g = peers.write().await;
-    upsert_endpoint(&mut g, &endpoint_of(&p), p.ttl);
-    g.insert(p.agent_id.clone(), p);
-}
-
-fn endpoint_of(p: &AgentPresence) -> AgentEndpoint {
-    AgentEndpoint {
-        agent_id: p.agent_id.clone(),
-        endpoint_uri: p.endpoint_uri.clone(),
-        transport_kind: TransportKind::Nats,
-        last_seen: p.last_seen,
-        metadata: None,
-    }
-}
-
-fn upsert_endpoint(
-    peers: &mut RwLockWriteGuard<'_, HashMap<String, AgentPresence>>,
-    endpoint: &AgentEndpoint,
-    ttl: Duration,
-) {
-    let role = endpoint
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("role"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string();
-    let skills = endpoint
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("skills"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-    peers.insert(
-        endpoint.agent_id.clone(),
-        AgentPresence {
-            agent_id: endpoint.agent_id.clone(),
-            role,
-            skills,
-            endpoint_uri: endpoint.endpoint_uri.clone(),
-            last_seen: endpoint.last_seen,
-            ttl,
-        },
-    );
-}
-
 #[async_trait]
 impl DiscoverableTransport for NatsMeshNode {
     async fn discover_agents(&self) -> ChatResult<Vec<AgentEndpoint>> {
@@ -636,32 +649,16 @@ impl DiscoverableTransport for NatsMeshNode {
     }
 
     async fn watch_agents(&self) -> ChatResult<AgentWatcher> {
-        // Bridge presence/discovery-reply frames into an event stream.
         let (tx, rx) = mpsc::channel(64);
         let peers = self.peers.clone();
         let self_id = self.config.agent_id.clone();
         let ttl = self.config.presence_ttl;
         tokio::spawn(async move {
             loop {
-                // Emit Discovered for all currently-known live peers.
                 {
-                    let peers = peers.read().await;
-                    let now = SystemTime::now();
-                    for p in peers.values() {
-                        if p.agent_id != self_id && !p.is_stale(now) {
-                            let _ = tx
-                                .send(AgentEvent::Discovered(AgentEndpoint {
-                                    agent_id: p.agent_id.clone(),
-                                    endpoint_uri: p.endpoint_uri.clone(),
-                                    transport_kind: TransportKind::Nats,
-                                    last_seen: p.last_seen,
-                                    metadata: Some(serde_json::json!({
-                                        "role": p.role,
-                                        "skills": p.skills
-                                    })),
-                                }))
-                                .await;
-                        }
+                    let eps = peers.read().await.live_endpoints(&self_id, ttl);
+                    for e in eps {
+                        let _ = tx.send(AgentEvent::Discovered(e)).await;
                     }
                 }
                 tokio::time::sleep(ttl / 2).await;
@@ -715,46 +712,62 @@ mod tests {
             MeshFrame::Direct(m) => assert_eq!(m.body, "hi"),
             _ => panic!("wrong frame variant"),
         }
+
+        let g = MeshFrame::Gossip {
+            presence: AgentPresence {
+                agent_id: "a".into(),
+                role: "r".into(),
+                skills: vec![],
+                endpoint_uri: "u".into(),
+                last_seen: SystemTime::now(),
+                ttl: Duration::from_secs(30),
+            },
+            seq: 3,
+            hops: 2,
+        };
+        let bytes = serde_json::to_vec(&g).unwrap();
+        assert!(serde_json::from_slice::<MeshFrame>(&bytes).is_ok());
     }
 
     #[tokio::test]
     async fn peer_table_excludes_self_and_stale() {
         let node = NatsMeshNode::new(MeshNodeConfig::new("self", "nats://x"));
-        let mut peers = node.peers.write().await;
-        upsert_endpoint(
-            &mut peers,
-            &AgentEndpoint {
-                agent_id: "self".into(),
-                endpoint_uri: "u".into(),
-                transport_kind: TransportKind::Nats,
-                last_seen: SystemTime::now(),
-                metadata: None,
-            },
-            node.config.presence_ttl,
-        );
-        upsert_endpoint(
-            &mut peers,
-            &AgentEndpoint {
-                agent_id: "peer".into(),
-                endpoint_uri: "u".into(),
-                transport_kind: TransportKind::Nats,
-                last_seen: SystemTime::now(),
-                metadata: Some(serde_json::json!({"role": "r", "skills": ["nats"]})),
-            },
-            node.config.presence_ttl,
-        );
-        upsert_endpoint(
-            &mut peers,
-            &AgentEndpoint {
-                agent_id: "ghost".into(),
-                endpoint_uri: "u".into(),
-                transport_kind: TransportKind::Nats,
-                last_seen: SystemTime::now() - Duration::from_secs(120),
-                metadata: None,
-            },
-            node.config.presence_ttl,
-        );
-        drop(peers);
+        {
+            let mut g = node.peers.write().await;
+            g.insert_local(
+                AgentPresence {
+                    agent_id: "self".into(),
+                    role: "r".into(),
+                    skills: vec![],
+                    endpoint_uri: "u".into(),
+                    last_seen: SystemTime::now(),
+                    ttl: node.config.presence_ttl,
+                },
+                1,
+            );
+            g.insert_local(
+                AgentPresence {
+                    agent_id: "peer".into(),
+                    role: "r".into(),
+                    skills: vec!["nats".to_string()],
+                    endpoint_uri: "u".into(),
+                    last_seen: SystemTime::now(),
+                    ttl: node.config.presence_ttl,
+                },
+                1,
+            );
+            g.insert_local(
+                AgentPresence {
+                    agent_id: "ghost".into(),
+                    role: "r".into(),
+                    skills: vec![],
+                    endpoint_uri: "u".into(),
+                    last_seen: SystemTime::now() - Duration::from_secs(120),
+                    ttl: node.config.presence_ttl,
+                },
+                1,
+            );
+        }
         assert_eq!(node.peer_count().await, 1);
     }
 }

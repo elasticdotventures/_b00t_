@@ -139,15 +139,29 @@ pub struct LocalLedgrrr {
     constraint: ReceiptConstraint,
     by_project: Mutex<HashMap<String, Vec<UsageReceipt>>>,
     path: Option<PathBuf>,
+    code_prefix: String,
 }
 
 impl LocalLedgrrr {
-    /// In-memory ledger (no persistence).
+    /// In-memory ledger (no persistence), prefix `FINOPS`.
     pub fn memory() -> Self {
         Self {
             constraint: ReceiptConstraint::strict(),
             by_project: Mutex::new(HashMap::new()),
             path: None,
+            code_prefix: "FINOPS".to_string(),
+        }
+    }
+
+    /// Mock ledger used while real ledgerr integration is pending: synthetic
+    /// `MOCK-FINOPS-*` codes, in-memory only. Keeps the nats mesh focus
+    /// unblocked from a running `ledgerr-mcp` server.
+    pub fn mock() -> Self {
+        Self {
+            constraint: ReceiptConstraint::strict(),
+            by_project: Mutex::new(HashMap::new()),
+            path: None,
+            code_prefix: "MOCK-FINOPS".to_string(),
         }
     }
 
@@ -169,12 +183,13 @@ impl LocalLedgrrr {
             constraint: ReceiptConstraint::strict(),
             by_project: Mutex::new(by_project),
             path: Some(path),
+            code_prefix: "FINOPS".to_string(),
         })
     }
 
     fn next_code(&self, project: &str, map: &HashMap<String, Vec<UsageReceipt>>) -> FinopsCode {
         let seq = map.get(project).map(|v| v.len() as u64 + 1).unwrap_or(1);
-        FinopsCode(format!("FINOPS-{}-{:06}", slug(project), seq))
+        FinopsCode(format!("{}-{}-{:06}", self.code_prefix, slug(project), seq))
     }
 
     fn append_line(&self, receipt: &UsageReceipt) -> ChatResult<()> {
@@ -228,6 +243,11 @@ impl Ledgrrr for LocalLedgrrr {
             .unwrap_or(0)
     }
 }
+
+/// Mock ledger alias (see [`LocalLedgrrr::mock`]); synthetic `MOCK-FINOPS-*`
+/// codes, no external server. Used by the nats-focused mesh work until real
+/// ledgerr integration (and iroh backing) lands.
+pub type MockLedgrrr = LocalLedgrrr;
 
 /// MCP bridge to the `ledgerr-mcp` server (production seam).
 ///

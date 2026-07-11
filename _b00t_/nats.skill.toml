@@ -33,6 +33,7 @@ Subject hierarchy (all under `b00t.mesh.*`):
 | `b00t.mesh.channel.{channel}` | pub/sub broadcast channel |
 | `b00t.mesh.discovery.query` | broadcast "who is online?" with a NATS reply inbox |
 | `b00t.mesh.discovery.presence` | periodic heartbeat announcing a live node |
+| `b00t.mesh.gossip` | epidemic membership advertising (`MeshFrame::Gossip`); bounded hop-budget re-gossip so discovery converges without a central registry |
 
 The four primitives:
 
@@ -100,7 +101,7 @@ The mesh is the accounting seam for collaborative autonomy. Every capability a
 attributable and auditable:
 
 ```rust
-let ledger = Arc::new(LocalLedgrrr::file(".b00t/finops.jsonl")?);
+let ledger = Arc::new(MockLedgrrr::mock());
 let node = NatsMeshNode::new(
     MeshNodeConfig::new("alpha", "nats://localhost:4222")
         .with_project("app4dog")
@@ -112,9 +113,12 @@ node.record_usage("app4dog", "nats.broadcast", 1).await?;
 let codes = ledger.codes_for("app4dog"); // roll up finops for the project
 ```
 
-`LocalLedgrrr` is the default (persistent JSONL, no server). `McpLedgrrr`
-bridges to the running `ledgerr-mcp` server via `LEDGERR_MCP_CMD`, mirroring
-`b00t-mcp`'s existing stdio bridge.
+`LocalLedgrrr` is the persistent default (JSONL, no server). For this
+broker-free / nats-focused PR the mesh defaults to `MockLedgrrr`
+(`LocalLedgrrr::mock()`), which mints synthetic `MOCK-FINOPS-*` codes in-memory
+so the nats work is not blocked on a running `ledgerr-mcp`. `McpLedgrrr` bridges
+to the real server via `LEDGERR_MCP_CMD`, mirroring `b00t-mcp`'s stdio bridge;
+iroh-backed receipt exchange is deferred (see NATS-MESH-GOSSIP-DISCOVERY).
 
 ### Dataframe-typed receipts → Apache Arrow
 
