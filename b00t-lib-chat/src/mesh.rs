@@ -1,23 +1,25 @@
-//! NATS intra-agent mesh for b00t hive coordination.
+//! NATS intra-hive mesh for b00t hive coordination.
 //!
 //! Realizes the `--agent=b00t-comms --skill=nats` capability: every b00t agent
-//! process is a first-class node in a subject-routed mesh over NATS.
+//! process is a first-class node in a subject-routed hive over NATS. All
+//! communication is **intra-hive** — the same logical network; there is no
+//! cross-network / NAT-traversal path.
 //!
 //! Four primitives, plus gossip discovery:
 //!
 //! 1. **Presence / gossip** — nodes advertise their presence by *gossiping* it
-//!    on `b00t.mesh.gossip`. Every receiver re-gossips newer advertisements
-//!    with a decremented hop budget (epidemic propagation), so the whole mesh
+//!    on `b00t.hive.mesh.gossip`. Every receiver re-gossips newer advertisements
+//!    with a decremented hop budget (epidemic propagation), so the whole hive
 //!    learns each node without a central registry or a single query. A plain
-//!    `b00t.mesh.discovery.presence` heartbeat is also emitted for backward
+//!    `b00t.hive.mesh.discovery.presence` heartbeat is also emitted for backward
 //!    compatibility. This is the discovery-advertising mechanism the operator
-//!    asked for; the same `GossipTable` drives a future P2P transport (Iroh)
-//!    where no broker fans out for you. See
+//!    asked for; the same `GossipTable` drives a future broker-free transport
+//!    (Iroh/gwyh) that still runs intra-hive on the same network. See
 //!    `_b00t_/NATS-MESH-GOSSIP-DISCOVERY.tomllmd`.
 //! 2. **Discovery** — `discover()` additionally publishes a request/reply query
-//!    to `b00t.mesh.discovery.query` for instant answers from live nodes.
-//! 3. **Direct send** — point-to-point frames to `b00t.mesh.node.{agent_id}`.
-//! 4. **Broadcast** — pub/sub frames to `b00t.mesh.channel.{channel}`.
+//!    to `b00t.hive.mesh.discovery.query` for instant answers from live nodes.
+//! 3. **Direct send** — point-to-point frames to `b00t.hive.mesh.node.{agent_id}`.
+//! 4. **Broadcast** — pub/sub frames to `b00t.hive.mesh.channel.{channel}`.
 //!
 //! The channel-based [`crate::transports::NatsTransport`] cannot express
 //! per-agent inboxes or NATS reply-to semantics, so the mesh speaks `async_nats`
@@ -32,6 +34,7 @@ use crate::ipc_transport::{
 };
 use crate::ledgrrr::{FinopsCode, Ledgrrr, UsageReceipt};
 use crate::message::ChatMessage;
+use ufo_types::{Stereotyped, UfoStereotype};
 use async_nats::Subscriber;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -42,16 +45,16 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 
-/// Subject prefix for a node's direct inbox.
-const NODE_PREFIX: &str = "b00t.mesh.node.";
+/// Subject prefix for a node's direct inbox (always intra-hive, same network).
+const NODE_PREFIX: &str = "b00t.hive.mesh.node.";
 /// Subject prefix for a pub/sub channel.
-const CHANNEL_PREFIX: &str = "b00t.mesh.channel.";
+const CHANNEL_PREFIX: &str = "b00t.hive.mesh.channel.";
 /// Subject all nodes listen on to answer discovery queries.
-const DISCOVERY_QUERY: &str = "b00t.mesh.discovery.query";
+const DISCOVERY_QUERY: &str = "b00t.hive.mesh.discovery.query";
 /// Subject all nodes publish presence heartbeats to (backward compat).
-const DISCOVERY_PRESENCE: &str = "b00t.mesh.discovery.presence";
+const DISCOVERY_PRESENCE: &str = "b00t.hive.mesh.discovery.presence";
 /// Subject all nodes gossip presence advertisements on (epidemic discovery).
-const DISCOVERY_GOSSIP: &str = "b00t.mesh.gossip";
+const DISCOVERY_GOSSIP: &str = "b00t.hive.mesh.gossip";
 
 /// Default time a node waits for discovery replies before returning.
 pub const DEFAULT_DISCOVER_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -108,6 +111,14 @@ pub enum MeshFrame {
     },
 }
 
+impl Stereotyped for MeshFrame {
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        // A frame relates a sender to a recipient (and carries a payload) —
+        // in UFO terms a Relator binding communication participants.
+        UfoStereotype::Relator("hive-mesh-frame".into())
+    }
+}
+
 /// Live presence record for a mesh node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentPresence {
@@ -126,6 +137,13 @@ impl AgentPresence {
             Ok(age) => age > self.ttl,
             Err(_) => false,
         }
+    }
+}
+
+impl Stereotyped for AgentPresence {
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        // A live snapshot of a hive agent's reachability — a domain Kind.
+        UfoStereotype::Kind("AgentPresence".into())
     }
 }
 
@@ -222,6 +240,13 @@ pub struct NatsMeshNode {
     forwards: Arc<RwLock<Vec<tokio::task::JoinHandle<()>>>>,
     presence_task: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
     ledgrrr: Option<Arc<dyn Ledgrrr>>,
+}
+
+impl Stereotyped for NatsMeshNode {
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        // A hive node plays the intra-hive communication role.
+        UfoStereotype::Role("hive-node".into())
+    }
 }
 
 impl std::fmt::Debug for NatsMeshNode {
@@ -675,8 +700,30 @@ mod tests {
 
     #[test]
     fn subjects_are_well_formed() {
-        assert_eq!(node_subject("alpha"), "b00t.mesh.node.alpha");
-        assert_eq!(channel_subject("mission.x"), "b00t.mesh.channel.mission.x");
+        assert_eq!(node_subject("alpha"), "b00t.hive.mesh.node.alpha");
+        assert_eq!(channel_subject("mission.x"), "b00t.hive.mesh.channel.mission.x");
+    }
+
+    #[test]
+    fn hive_types_are_ufo_grounded() {
+        use ufo_types::Stereotyped;
+        let presence = AgentPresence {
+            agent_id: "a".into(),
+            role: "r".into(),
+            skills: vec![],
+            endpoint_uri: "b00t.hive.mesh.node.a".into(),
+            last_seen: SystemTime::now(),
+            ttl: Duration::from_secs(30),
+        };
+        assert_eq!(presence.ufo_stereotype().to_string(), "Kind:AgentPresence");
+        assert_eq!(
+            MeshFrame::Presence(presence.clone()).ufo_stereotype().to_string(),
+            "Relator:hive-mesh-frame"
+        );
+        let node = NatsMeshNode::new(
+            MeshNodeConfig::new("a", "nats://localhost:4222").with_project("p"),
+        );
+        assert_eq!(node.ufo_stereotype().to_string(), "Role:hive-node");
     }
 
     #[test]

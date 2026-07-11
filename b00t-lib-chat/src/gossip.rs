@@ -16,6 +16,7 @@ use crate::ipc_transport::{AgentEndpoint, TransportKind};
 use crate::mesh::AgentPresence;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
+use ufo_types::{Stereotyped, UfoStereotype};
 
 /// A single membership entry: the presence plus the monotonically increasing
 /// sequence the advertiser assigned it.
@@ -23,6 +24,12 @@ use std::time::{Duration, SystemTime};
 pub struct GossipMember {
     pub presence: AgentPresence,
     pub seq: u64,
+}
+
+impl Stereotyped for GossipMember {
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        UfoStereotype::Kind("GossipMember".into())
+    }
 }
 
 /// Transport-agnostic epidemic membership table.
@@ -129,7 +136,7 @@ mod tests {
             agent_id: id.into(),
             role: "r".into(),
             skills: vec![],
-            endpoint_uri: format!("b00t.mesh.node.{id}"),
+            endpoint_uri: format!("b00t.hive.mesh.node.{id}"),
             last_seen: SystemTime::now(),
             ttl: Duration::from_secs(30),
         }
@@ -170,5 +177,14 @@ mod tests {
         assert!(ids.contains(&"live"));
         assert!(!ids.contains(&"self"));
         assert!(!ids.contains(&"ghost"));
+    }
+
+    #[test]
+    fn gossip_member_is_ufo_grounded() {
+        let m = GossipMember {
+            presence: presence("a", 1),
+            seq: 1,
+        };
+        assert_eq!(m.ufo_stereotype().to_string(), "Kind:GossipMember");
     }
 }

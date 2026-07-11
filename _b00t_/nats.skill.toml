@@ -1,52 +1,52 @@
 ---
 name: nats
 type: skill
-hint: NATS intra-agent mesh — Redis-free b00t hive discovery, direct send, broadcast, and presence over NATS subjects
+hint: NATS intra-hive mesh — Redis-free b00t hive discovery, direct send, broadcast, and presence over NATS subjects
 version: 1.0.0
-tags: [nats, mesh, a2a, discovery, ipc, b00t-comms, pubsub, intra-agent]
+tags: [nats, mesh, a2a, discovery, ipc, b00t-comms, pubsub, intra-hive]
 tier: ch0nky
 complexity: 5
 description: |-
   Provides the `--skill=nats` capability for the `b00t-comms` agent: a fully
-  realized NATS intra-agent mesh in `b00t-lib-chat` (src/mesh.rs). Every b00t
+  realized NATS intra-hive mesh in `b00t-lib-chat` (src/mesh.rs). Every b00t
   agent process becomes a first-class mesh node keyed by a stable agent id.
   The mesh needs only a reachable NATS server (no Redis, no central registry),
   so agent discovery works even when the Redis broker is down.
-applies_to: [agent discovery, A2A messaging, hive coordination, intra-agent mesh, offline discovery]
+applies_to: [agent discovery, A2A messaging, hive coordination, intra-hive mesh, offline discovery]
 output_types: [.rs, .toml]
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task
 ---
 
 ## What
 
-`nats` realizes the b00t intra-agent mesh. It is implemented in
+`nats` realizes the b00t intra-hive mesh. It is implemented in
 `b00t-lib-chat/src/mesh.rs` as `NatsMeshNode` and is the canonical
 `--skill=nats` for the `b00t-comms` agent. The mesh speaks `async_nats`
 directly (the channel-based `NatsTransport` cannot express per-agent inboxes
 or NATS reply-to, so the mesh does not reuse it).
 
-Subject hierarchy (all under `b00t.mesh.*`):
+Subject hierarchy (all under `b00t.hive.mesh.*`):
 
 | Subject | Purpose |
 |---------|---------|
-| `b00t.mesh.node.{agent_id}` | a node's direct inbox (point-to-point + discovery reply target) |
-| `b00t.mesh.channel.{channel}` | pub/sub broadcast channel |
-| `b00t.mesh.discovery.query` | broadcast "who is online?" with a NATS reply inbox |
-| `b00t.mesh.discovery.presence` | periodic heartbeat announcing a live node |
-| `b00t.mesh.gossip` | epidemic membership advertising (`MeshFrame::Gossip`); bounded hop-budget re-gossip so discovery converges without a central registry |
+| `b00t.hive.mesh.node.{agent_id}` | a node's direct inbox (point-to-point + discovery reply target) |
+| `b00t.hive.mesh.channel.{channel}` | pub/sub broadcast channel |
+| `b00t.hive.mesh.discovery.query` | broadcast "who is online?" with a NATS reply inbox |
+| `b00t.hive.mesh.discovery.presence` | periodic heartbeat announcing a live node |
+| `b00t.hive.mesh.gossip` | epidemic membership advertising (`MeshFrame::Gossip`); bounded hop-budget re-gossip so discovery converges without a central registry |
 
 The four primitives:
 
 1. **Presence** — `announce()` / `start_presence()` publish heartbeats on the
    presence subject. Peers learn each other with no central registry.
 2. **Discovery** — `discover()` publishes a `DiscoveryQuery` to
-   `b00t.mesh.discovery.query` with the node's own inbox as the NATS reply
+   `b00t.hive.mesh.discovery.query` with the node's own inbox as the NATS reply
    inbox. Live nodes answer with a `DiscoveryReply` carrying their
    `AgentEndpoint`. Already-known peers are returned immediately.
 3. **Direct send** — `send(to_agent, msg)` publishes a `Direct` frame to
-   `b00t.mesh.node.{to_agent}`.
+   `b00t.hive.mesh.node.{to_agent}`.
 4. **Broadcast** — `publish(channel, msg)` publishes a `Broadcast` frame to
-   `b00t.mesh.channel.{channel}`.
+   `b00t.hive.mesh.channel.{channel}`.
 
 `NatsMeshNode` implements `DiscoverableTransport`, so it slots into the
 existing `b00t agent discover` plumbing as a Redis-free transport.
@@ -133,9 +133,26 @@ implementation; `UsageReceipt` also implements `DataframeReceipt`.
 let batch = focus_record.to_dataframe().to_arrow()?; // feature `dataframe`
 ```
 
+### Ontology — UFO grounding
+
+The hive types are classified against the `ufo-types` crate (#511) via the
+`Stereotyped` trait, so they carry a `UfoStereotype` for evidence/audit
+(`record_is_a`):
+
+| Type | UFO stereotype |
+|------|----------------|
+| `AgentEndpoint` | `Kind("AgentEndpoint")` — material endpoint realizing an agent |
+| `AgentPresence` | `Kind("AgentPresence")` — live reachability snapshot |
+| `GossipMember` | `Kind("GossipMember")` — membership entry |
+| `MeshFrame` | `Relator("hive-mesh-frame")` — binds sender↔recipient |
+| `NatsMeshNode` | `Role("hive-node")` — plays the intra-hive comms role |
+
+This aligns the mesh with the existing b00t hive UFO stereotypes and the
+`b00t.hive.*` namespace (intra-hive, same network).
+
 <!-- b00t:map v1
-summary: nats — Redis-free NATS intra-agent mesh (discovery, direct, broadcast, presence) + ledgrrr finops receipts + Arrow dataframe for b00t-comms
-tags: nats, mesh, a2a, discovery, ipc, b00t-comms, intra-agent, finops, ledgrrr, arrow, dataframe
+summary: nats — Redis-free NATS intra-hive mesh (discovery, direct, broadcast, presence) + ledgrrr finops receipts + Arrow dataframe for b00t-comms
+tags: nats, mesh, a2a, discovery, ipc, b00t-comms, intra-hive, finops, ledgrrr, arrow, dataframe
 tier: ch0nky
 cmds: cargo run -p b00t-chat --example mesh_cli -- node1 nats://localhost:4222 listen
 complexity: 5

@@ -1576,6 +1576,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "ufo-types",
  "uuid",
  "wasm-bindgen",
  "web-sys",

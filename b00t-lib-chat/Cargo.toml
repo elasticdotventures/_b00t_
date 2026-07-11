@@ -40,6 +40,9 @@ async-stream = "0.3"
 regex = "1.0"
 cron = "0.15"
 arrow = { version = "55", optional = true }
+# UFO-grounded domain stereotypes (crate #511) — hive types declare their
+# ontological classification via `Stereotyped`.
+ufo-types = { path = "../crates/ufo-types" }
 
 # OpenTelemetry observability — workspace version + extra features for chat runtime
 opentelemetry = { workspace = true, features = ["metrics"] }
