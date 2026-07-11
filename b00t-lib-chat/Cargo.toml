@@ -18,10 +18,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 async-nats = "0.45.0"
 rumqttc = "0.25"
+bytes = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["sync"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 thiserror = "2.0.17"
 chrono = { version = "0.4", features = ["serde"] }
@@ -64,7 +65,12 @@ rand = "0.8"
 tempfile = "3.0"
 
 [features]
-default = []
+default = ["nats"]
+# NATS broker backend for the hive transport (disable via --no-default-features
+# to run broker-free on the in-memory transport).
+nats = []
+# Iroh NodeId/QUIC backend for the hive transport (strategic substrate).
+iroh = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
 # Concrete Apache Arrow materialization for dataframe-typed receipts.

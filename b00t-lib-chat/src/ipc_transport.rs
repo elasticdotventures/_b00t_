@@ -126,6 +126,7 @@ pub enum TransportKind {
     Nats,
     Tcp,
     Memory, // For testing
+    Iroh,   // iroh NodeId/QUIC substrate (strategic hive transport)
 }
 
 impl std::fmt::Display for TransportKind {
@@ -136,6 +137,7 @@ impl std::fmt::Display for TransportKind {
             TransportKind::Nats => write!(f, "nats"),
             TransportKind::Tcp => write!(f, "tcp"),
             TransportKind::Memory => write!(f, "memory"),
+            TransportKind::Iroh => write!(f, "iroh"),
         }
     }
 }

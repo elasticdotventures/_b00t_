@@ -27,23 +27,42 @@
 //! [`crate::ipc_transport::DiscoverableTransport`] trait so it can slot into
 //! `b00t agent discover` plumbing.
 
-use crate::error::{ChatError, ChatResult};
+use crate::error::ChatResult;
 use crate::gossip::GossipTable;
-use crate::ipc_transport::{
-    AgentEndpoint, AgentEvent, AgentWatcher, DiscoverableTransport, TransportKind,
-};
+use crate::hive_transport::HiveTransport;
+#[cfg(not(feature = "nats"))]
+use crate::hive_transport::MemoryHiveTransport;
+use crate::ipc_transport::{AgentEndpoint, AgentEvent, AgentWatcher, DiscoverableTransport};
 use crate::ledgrrr::{FinopsCode, Ledgrrr, UsageReceipt};
 use crate::message::ChatMessage;
 use ufo_types::{Stereotyped, UfoStereotype};
-use async_nats::Subscriber;
 use async_trait::async_trait;
+use futures::stream::BoxStream;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
+
+#[cfg(feature = "nats")]
+use crate::hive_transport::NatsHiveTransport;
+
+/// The default transport for a mesh node. With the `nats` feature enabled this
+/// is the NATS broker; without it (e.g. `#[cfg]`-disabled broker), it falls back
+/// to the in-process broker-free [`MemoryHiveTransport`] so the mesh still runs.
+fn default_transport() -> Arc<dyn HiveTransport> {
+    #[cfg(feature = "nats")]
+    {
+        Arc::new(NatsHiveTransport::new())
+    }
+    #[cfg(not(feature = "nats"))]
+    {
+        Arc::new(MemoryHiveTransport::new())
+    }
+}
 
 /// Subject prefix for a node's direct inbox (always intra-hive, same network).
 const NODE_PREFIX: &str = "b00t.hive.mesh.node.";
@@ -164,6 +183,9 @@ pub struct MeshNodeConfig {
     /// Optional ledgrrr ledger; when set, every capability execution registers
     /// a usage receipt and mints a finops code.
     pub ledgrrr: Option<Arc<dyn Ledgrrr>>,
+    /// Broker-neutral transport. Defaults to NATS (or in-memory when the `nats`
+    /// feature is disabled) so the mesh runs broker-free if desired.
+    pub transport: Arc<dyn HiveTransport>,
 }
 
 impl MeshNodeConfig {
@@ -179,7 +201,15 @@ impl MeshNodeConfig {
             gossip_max_hops: DEFAULT_GOSSIP_MAX_HOPS,
             project: "b00t-comms".to_string(),
             ledgrrr: None,
+            transport: default_transport(),
         }
+    }
+
+    /// Override the hive transport (e.g. plug in [`MemoryHiveTransport`] for a
+    /// broker-free node, or an iroh-backed transport once available).
+    pub fn with_transport(mut self, transport: Arc<dyn HiveTransport>) -> Self {
+        self.transport = transport;
+        self
     }
 
     pub fn with_role(mut self, role: impl Into<String>) -> Self {
@@ -216,6 +246,7 @@ impl std::fmt::Debug for MeshNodeConfig {
             .field("project", &self.project)
             .field("nats_url", &self.nats_url)
             .field("gossip_max_hops", &self.gossip_max_hops)
+            .field("transport", &self.transport.kind())
             .field("ledgrrr", &self.ledgrrr.is_some())
             .finish()
     }
@@ -230,7 +261,8 @@ impl std::fmt::Debug for MeshNodeConfig {
 #[derive(Clone)]
 pub struct NatsMeshNode {
     config: MeshNodeConfig,
-    client: Arc<RwLock<Option<async_nats::Client>>>,
+    /// Broker-neutral transport (NATS by default; memory/iroh pluggable).
+    transport: Arc<dyn HiveTransport>,
     /// Known peers + gossip membership (presence + sequence + hop budget).
     peers: Arc<RwLock<GossipTable>>,
     /// Application-facing inbound frames.
@@ -239,7 +271,22 @@ pub struct NatsMeshNode {
     /// Forwarding task handles, aborted on close.
     forwards: Arc<RwLock<Vec<tokio::task::JoinHandle<()>>>>,
     presence_task: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
+    /// Per-node lifecycle flag (separate from the transport's, so multiple nodes
+    /// sharing one in-process transport each manage their own inbound tasks).
+    live: Arc<AtomicBool>,
     ledgrrr: Option<Arc<dyn Ledgrrr>>,
+}
+
+impl NatsMeshNode {
+    /// The broker-neutral transport backing this node.
+    pub fn transport(&self) -> &Arc<dyn HiveTransport> {
+        &self.transport
+    }
+
+    /// Whether this node has connected and spawned its inbound tasks.
+    pub fn is_connected(&self) -> bool {
+        self.live.load(Ordering::SeqCst)
+    }
 }
 
 impl Stereotyped for NatsMeshNode {
@@ -263,13 +310,14 @@ impl NatsMeshNode {
         let ledgrrr = config.ledgrrr.clone();
         let (inbox_tx, inbox_rx) = mpsc::channel(256);
         Self {
+            transport: config.transport.clone(),
             config,
-            client: Arc::new(RwLock::new(None)),
             peers: Arc::new(RwLock::new(GossipTable::new(DEFAULT_GOSSIP_MAX_HOPS))),
             inbox_tx,
             inbox_rx: Arc::new(RwLock::new(Some(inbox_rx))),
             forwards: Arc::new(RwLock::new(Vec::new())),
             presence_task: Arc::new(RwLock::new(None)),
+            live: Arc::new(AtomicBool::new(false)),
             ledgrrr,
         }
     }
@@ -293,71 +341,51 @@ impl NatsMeshNode {
         Ok(Some(code))
     }
 
-    /// Connect to NATS and start the inbound forwarding task.
+    /// Connect the transport and start the inbound forwarding tasks.
     pub async fn connect(&self) -> ChatResult<()> {
-        let mut guard = self.client.write().await;
-        if guard.is_some() {
+        if self.live.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
-        let client = async_nats::ConnectOptions::new()
-            .connect(&self.config.nats_url)
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        *guard = Some(client);
-        drop(guard);
-
+        self.transport.connect(&self.config.nats_url).await?;
         self.spawn_inbound().await?;
-        info!("NATS mesh node connected: {}", self.config.agent_id);
+        info!(
+            "hive mesh node connected ({:?}): {}",
+            self.transport.kind(),
+            self.config.agent_id
+        );
         Ok(())
-    }
-
-    async fn client(&self) -> ChatResult<async_nats::Client> {
-        self.client
-            .read()
-            .await
-            .clone()
-            .ok_or(ChatError::NotConnected)
     }
 
     /// Subscribe to the inbox, presence, gossip, discovery-query, and any
     /// joined channels; forward every frame into the application inbox.
     async fn spawn_inbound(&self) -> ChatResult<()> {
-        let client = self.client().await?;
         let mut handles = self.forwards.write().await;
 
-        let inbox_sub = client
-            .subscribe(node_subject(&self.config.agent_id))
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        handles.push(self.forward(client.clone(), inbox_sub));
+        let inbox_stream = self
+            .transport
+            .subscribe(&node_subject(&self.config.agent_id))
+            .await?;
+        handles.push(self.forward_stream(inbox_stream));
 
-        let presence_sub = client
-            .subscribe(DISCOVERY_PRESENCE)
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        handles.push(self.forward(client.clone(), presence_sub));
+        let presence_stream = self.transport.subscribe(DISCOVERY_PRESENCE).await?;
+        handles.push(self.forward_stream(presence_stream));
 
-        let gossip_sub = client
-            .subscribe(DISCOVERY_GOSSIP)
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        handles.push(self.forward(client.clone(), gossip_sub));
+        let gossip_stream = self.transport.subscribe(DISCOVERY_GOSSIP).await?;
+        handles.push(self.forward_stream(gossip_stream));
 
-        let query_sub = client
-            .subscribe(DISCOVERY_QUERY)
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        handles.push(self.forward(client.clone(), query_sub));
+        let query_stream = self.transport.subscribe(DISCOVERY_QUERY).await?;
+        handles.push(self.forward_stream(query_stream));
 
         Ok(())
     }
 
-    fn forward(
-        &self,
-        client: async_nats::Client,
-        mut sub: Subscriber,
-    ) -> tokio::task::JoinHandle<()> {
+    /// Consume a transport frame stream, demultiplex/discover/gossip, and forward
+    /// application frames into the inbox. Re-gossip and discovery replies are
+    /// published back through the same broker-neutral transport — no NATS reply
+    /// semantics are assumed.
+    fn forward_stream(&self, mut stream: BoxStream<'static, Vec<u8>>) -> tokio::task::JoinHandle<()> {
         let inbox_tx = self.inbox_tx.clone();
+        let transport = self.transport.clone();
         let agent_id = self.config.agent_id.clone();
         let peers = self.peers.clone();
         let this_role = self.config.role.clone();
@@ -365,8 +393,8 @@ impl NatsMeshNode {
         let endpoint_uri = node_subject(&agent_id);
         let ttl = self.config.presence_ttl;
         tokio::spawn(async move {
-            while let Some(msg) = sub.next().await {
-                let frame: MeshFrame = match serde_json::from_slice(&msg.payload) {
+            while let Some(payload) = stream.next().await {
+                let frame: MeshFrame = match serde_json::from_slice(&payload) {
                     Ok(f) => f,
                     Err(e) => {
                         warn!("mesh: dropping undecodable frame: {}", e);
@@ -392,7 +420,7 @@ impl NatsMeshNode {
                                 hops: remaining,
                             };
                             if let Ok(payload) = serde_json::to_vec(&re) {
-                                let _ = client.publish(DISCOVERY_GOSSIP, payload.into()).await;
+                                let _ = transport.publish(DISCOVERY_GOSSIP, &payload).await;
                             }
                         }
                     }
@@ -432,22 +460,20 @@ impl NatsMeshNode {
                                     0,
                                 );
                             }
-                            // Answer the query on its NATS reply inbox.
-                            if let Some(reply) = &msg.reply {
-                                let reply_frame = MeshFrame::DiscoveryReply {
-                                    endpoint: AgentEndpoint {
-                                        agent_id: agent_id.clone(),
-                                        endpoint_uri: endpoint_uri.clone(),
-                                        transport_kind: TransportKind::Nats,
-                                        last_seen: SystemTime::now(),
-                                        metadata: None,
-                                    },
-                                    role: this_role.clone(),
-                                    skills: this_skills.clone(),
-                                };
-                                if let Ok(payload) = serde_json::to_vec(&reply_frame) {
-                                    let _ = client.publish(reply.clone(), payload.into()).await;
-                                }
+                            // Answer the query on the querier's own inbox.
+                            let reply_frame = MeshFrame::DiscoveryReply {
+                                endpoint: AgentEndpoint {
+                                    agent_id: agent_id.clone(),
+                                    endpoint_uri: endpoint_uri.clone(),
+                                    transport_kind: transport.kind(),
+                                    last_seen: SystemTime::now(),
+                                    metadata: None,
+                                },
+                                role: this_role.clone(),
+                                skills: this_skills.clone(),
+                            };
+                            if let Ok(payload) = serde_json::to_vec(&reply_frame) {
+                                let _ = transport.publish(&node_subject(from), &payload).await;
                             }
                         }
                     }
@@ -462,19 +488,14 @@ impl NatsMeshNode {
 
     /// Join a pub/sub channel (start receiving broadcasts on it).
     pub async fn join(&self, channel: &str) -> ChatResult<()> {
-        let client = self.client().await?;
-        let sub = client
-            .subscribe(channel_subject(channel))
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        self.forwards.write().await.push(self.forward(client, sub));
+        let sub = self.transport.subscribe(&channel_subject(channel)).await?;
+        self.forwards.write().await.push(self.forward_stream(sub));
         Ok(())
     }
 
     /// Announce presence: gossip an advertisement (bounded hop budget) and emit
     /// a plain presence heartbeat for backward compatibility.
     pub async fn announce(&self) -> ChatResult<()> {
-        let client = self.client().await?;
         let presence = AgentPresence {
             agent_id: self.config.agent_id.clone(),
             role: self.config.role.clone(),
@@ -494,17 +515,15 @@ impl NatsMeshNode {
             seq,
             hops: self.config.gossip_max_hops,
         };
-        client
-            .publish(DISCOVERY_GOSSIP, serde_json::to_vec(&gossip)?.into())
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
-        client
+        self.transport
+            .publish(DISCOVERY_GOSSIP, &serde_json::to_vec(&gossip)?)
+            .await?;
+        self.transport
             .publish(
                 DISCOVERY_PRESENCE,
-                serde_json::to_vec(&MeshFrame::Presence(presence))?.into(),
+                &serde_json::to_vec(&MeshFrame::Presence(presence))?,
             )
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
+            .await?;
         self.record_usage(&self.config.project, "nats.presence", 1)
             .await
             .ok();
@@ -535,18 +554,15 @@ impl NatsMeshNode {
 
     /// Discover peers, waiting up to `timeout` for fresh replies.
     pub async fn discover_with_timeout(&self, timeout: Duration) -> ChatResult<Vec<AgentEndpoint>> {
-        let client = self.client().await?;
         let query = MeshFrame::DiscoveryQuery {
             from: self.config.agent_id.clone(),
             role: self.config.role.clone(),
             skills: self.config.skills.clone(),
         };
         let payload = serde_json::to_vec(&query)?;
-        let reply = node_subject(&self.config.agent_id);
-        client
-            .publish_with_reply(DISCOVERY_QUERY, reply, payload.into())
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
+        // Reply target is the querier's own inbox (encoded in `from`); no broker
+        // reply semantics required, so this works on any HiveTransport.
+        self.transport.publish(DISCOVERY_QUERY, &payload).await?;
         // Also announce so peers learn us (and gossip propagates).
         self.announce().await.ok();
         self.record_usage(&self.config.project, "nats.discover", 1)
@@ -603,29 +619,23 @@ impl NatsMeshNode {
 
     /// Send a direct (point-to-point) message to a specific agent id.
     pub async fn send(&self, to_agent: &str, message: &ChatMessage) -> ChatResult<()> {
-        let client = self.client().await?;
         let frame = MeshFrame::Direct(message.clone());
         let payload = serde_json::to_vec(&frame)?;
-        client
-            .publish(node_subject(to_agent), payload.into())
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
+        self.transport.publish(&node_subject(to_agent), &payload).await?;
         self.record_usage(&self.config.project, "nats.send", 1).await?;
         Ok(())
     }
 
     /// Broadcast a message to every subscriber of `channel`.
     pub async fn publish(&self, channel: &str, message: &ChatMessage) -> ChatResult<()> {
-        let client = self.client().await?;
         let frame = MeshFrame::Broadcast {
             channel: channel.to_string(),
             message: message.clone(),
         };
         let payload = serde_json::to_vec(&frame)?;
-        client
-            .publish(channel_subject(channel), payload.into())
-            .await
-            .map_err(|e| ChatError::Nats(e.to_string()))?;
+        self.transport
+            .publish(&channel_subject(channel), &payload)
+            .await?;
         self.record_usage(&self.config.project, "nats.broadcast", 1)
             .await?;
         Ok(())
@@ -653,7 +663,7 @@ impl NatsMeshNode {
             .peer_count(&self.config.agent_id, self.config.presence_ttl)
     }
 
-    /// Gracefully close: abort forwarding + presence tasks, drop client.
+    /// Gracefully close: abort forwarding + presence tasks, drop transport.
     pub async fn close(&self) -> ChatResult<()> {
         if let Some(task) = self.presence_task.write().await.take() {
             task.abort();
@@ -661,8 +671,9 @@ impl NatsMeshNode {
         for handle in self.forwards.write().await.drain(..) {
             handle.abort();
         }
-        *self.client.write().await = None;
-        info!("NATS mesh node closed: {}", self.config.agent_id);
+        self.live.store(false, Ordering::SeqCst);
+        self.transport.close().await.ok();
+        info!("hive mesh node closed: {}", self.config.agent_id);
         Ok(())
     }
 }
