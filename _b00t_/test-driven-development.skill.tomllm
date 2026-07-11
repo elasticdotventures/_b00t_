@@ -1,0 +1,29 @@
+[b00t]
+name = "test-driven-development"
+type = "skill"
+version = "0.1.0"
+hint = "Write the test before the implementation, for any feature or bugfix"
+
+[b00t.skill]
+description = """
+Use when implementing any feature or bugfix, before writing implementation code.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["tdd", "testing", "b00t-development-principle"]
+tier = "sm0l"
+complexity = 2
+
+[b00t.learn]
+topic = "test-driven-development"
+inline = """
+Use when implementing any feature or bugfix, before writing implementation code.
+
+Invoke via the Skill tool in Claude Code: skill="test-driven-development".
+"""
+
+# b00t:map v1
+# summary: Write the test before the implementation, for any feature or bugfix
+# tags: tdd, testing, b00t-development-principle
+# tier: sm0l
+# cmds: b00t learn test-driven-development
+# complexity: 2

@@ -1,0 +1,29 @@
+[b00t]
+name = "writing-skills"
+type = "skill"
+version = "0.1.0"
+hint = "Create, edit, or verify Claude Code skills before deployment"
+
+[b00t.skill]
+description = """
+Use when creating new skills, editing existing skills, or verifying skills work before deployment.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["skills", "meta", "authoring"]
+tier = "ch0nky"
+complexity = 4
+
+[b00t.learn]
+topic = "writing-skills"
+inline = """
+Use when creating new skills, editing existing skills, or verifying skills work before deployment.
+
+Invoke via the Skill tool in Claude Code: skill="writing-skills".
+"""
+
+# b00t:map v1
+# summary: Create, edit, or verify Claude Code skills before deployment
+# tags: skills, meta, authoring
+# tier: ch0nky
+# cmds: b00t learn writing-skills
+# complexity: 4

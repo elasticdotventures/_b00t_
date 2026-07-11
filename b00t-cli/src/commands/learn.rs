@@ -75,9 +75,29 @@ pub struct LearnArgs {
     // E1: skip learn if evidence already proves competency
     #[arg(long, help = "Force load even if competency evidence exists (E1)")]
     pub force: bool,
+
+    // 🤓 --agent is an alias for --role: b00t's other commands (e.g. whoami) already
+    //    call this concept "role"; --agent is accepted as a synonym so agent-facing
+    //    callers (MCP tools, agent harnesses) can use whichever term reads naturally.
+    //    Sets _B00T_ROLE for the duration of this call — same mechanism whoami's
+    //    --role already relies on — so role-scoped datum/RAG resolution downstream
+    //    picks it up without new plumbing.
+    #[arg(long, visible_alias = "agent", help = "Scope learning to a role/agent (matches role datum; alias: --agent)")]
+    pub role: Option<String>,
 }
 
 pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
+    // 🤓 --role/--agent: scope this call's role context for downstream role-aware
+    //    lookups (E1 skill-key evidence, RAG/grok query scoping) via the same
+    //    _B00T_ROLE env var whoami's --role already relies on. Safety: this process
+    //    is single-threaded through this point (before any spawned work reads the
+    //    var), so a plain env write is sufficient — no async task has raced ahead.
+    if let Some(ref role) = args.role {
+        unsafe {
+            std::env::set_var("_B00T_ROLE", role);
+        }
+    }
+
     // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
     let topic_val = args.topic_flag.or(args.topic);
 

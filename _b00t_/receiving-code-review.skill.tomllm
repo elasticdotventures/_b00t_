@@ -1,0 +1,29 @@
+[b00t]
+name = "receiving-code-review"
+type = "skill"
+version = "0.1.0"
+hint = "Evaluate code review feedback with technical rigor, not performative agreement"
+
+[b00t.skill]
+description = """
+Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable — requires technical rigor and verification, not performative agreement or blind implementation.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["code-review", "feedback", "verification"]
+tier = "sm0l"
+complexity = 3
+
+[b00t.learn]
+topic = "receiving-code-review"
+inline = """
+Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable — requires technical rigor and verification, not performative agreement or blind implementation.
+
+Invoke via the Skill tool in Claude Code: skill="receiving-code-review".
+"""
+
+# b00t:map v1
+# summary: Evaluate code review feedback with technical rigor, not performative agreement
+# tags: code-review, feedback, verification
+# tier: sm0l
+# cmds: b00t learn receiving-code-review
+# complexity: 3
