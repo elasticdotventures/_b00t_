@@ -60,7 +60,10 @@ Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
 - reference taskmaster-ai (purged)
 - remove `# 🤓` comments without 3× TRIZ justification
 - commit without passing tests
-- commit directly to main (branch first, PR to merge)
+- commit directly to main — ALWAYS branch + PR (see Git Workflow below)
+- force-push to main or any shared branch
+- merge PRs without review evidence (tests + lint + typecheck output in PR body)
+- commit generated build artifacts (WASM binaries, .wasm, .js glue, /dist/, /target/) — must be gitignored
 
 ## YEI MUST ALWAYS
 - speak RFC 2119 precision: laconic, direct, technically literate — no platitudes
@@ -73,6 +76,65 @@ Source: DietrichGebert/ponytail (MIT, -54% LOC, -22% tokens, 100% safe).
 - branch before changing: `git checkout -b task/<N>-<slug>`
 - use conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`
 - use context7 MCP for library docs; rust-crate-docs MCP for Rust crates
+- push the branch, create a PR, and wait for merge — never push to main directly
+
+## Git Workflow — Multi-Repo Branching Protocol
+
+This workspace spans nested git repos (submodules: `game-play`, `artifacts`, `devices`,
+`middleware`, `critter-keeper` symlink, plus independent sibling repos `_b00t_`).
+Violating the branching protocol creates merge hardship for every other agent.
+
+### Inviolable rules
+
+1. **Branch EVERY repo touched.** No repo is exempt, no matter how small the change.
+   ```
+   git -C <repo> checkout -b task/<N>-<slug>
+   ```
+
+2. **Commit inner repos first, then outer.** If you change `game-play` AND `app4dog`:
+   ```
+   cd game-play && git add . && git commit && git push -u origin task/<N>-<slug>
+   cd .. && git add game-play && git commit && git push -u origin task/<N>-<slug>
+   ```
+
+3. **Create a PR for each repo.** No direct merges. Include:
+   - Conventional commit summary
+   - Test evidence (command output or test result line)
+   - Lint/typecheck evidence if applicable
+   - Screenshot evidence for visual changes
+
+4. **Never force-push to main or any shared branch.** Force-push is only permitted on
+   your own task branches before PR creation, and ONLY with `--force-with-lease`.
+
+5. **Generated artifacts belong in .gitignore, not the repo.**
+   - WASM binaries (`*.wasm`, `*.js` glue in `public/game-engine/`)
+   - Build outputs (`dist/`, `target/`, `node_modules/`)
+   - TypeScript generated types (`src/types/wasm/` from wasm-pack)
+   - Composer lockfiles (`pnpm-lock.yaml`, `Cargo.lock` — these ARE tracked)
+
+### Pre-push verification checklist
+
+Before `git push` on any repo branch:
+
+- [ ] `cargo test -p <crate> --lib` (all lib tests pass)
+- [ ] `cargo check -p <crate> --target wasm32-unknown-unknown` (WASM compiles)
+- [ ] `pnpm run lint` or `npx eslint` (ESLint clean)
+- [ ] `npx vue-tsc --noEmit` (TypeScript clean)
+- [ ] `git status` shows only intended changes, no build artifacts, no node_modules
+- [ ] PR description includes test evidence
+
+### Multi-repo state audit
+
+Before declaring a task complete, run:
+```bash
+# Check every repo
+for repo in ~/.b00t app4dog app4dog/game-play app4dog/artifacts; do
+  echo "=== $(basename $repo) ==="
+  git -C "$repo" branch --show-current
+  git -C "$repo" status --short | grep -v '^?'
+done
+```
+Every repo MUST show a task branch with zero unstaged changes (except intentional untracked files).
 
 ---
 
