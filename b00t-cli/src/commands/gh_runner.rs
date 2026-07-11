@@ -2,7 +2,7 @@
 //!
 //! # Usage
 //! ```bash
-//! b00t gh-runner install   --repo X/Y --labels L --workdir W [--ephemeral]
+//! b00t gh-runner install   --repo X/Y --labels L --workdir W [--ephemeral] [--socket auto|docker|podman|none]
 //! b00t gh-runner status    --repo X/Y [--json]
 //! b00t gh-runner logs      --repo X/Y [--follow]
 //! b00t gh-runner deregister --repo X/Y [--remove-workdir]
@@ -36,6 +36,27 @@ fn sh(cmd: &str) -> (bool, String) {
         .unwrap_or((false, "exec failed".into()))
 }
 
+fn detect_socket(socket_opt: &str) -> String {
+    match socket_opt {
+        "docker" => "/var/run/docker.sock".to_string(),
+        "podman" => {
+            let uid = sh("id -u").1;
+            format!("/run/user/{}/podman/podman.sock", uid.trim())
+        }
+        "none" => String::new(),
+        "auto" | _ => {
+            // Prefer podman if docker daemon not running, otherwise docker
+            let (docker_ok, _) = sh("docker info --format '{{.ServerVersion}}' 2>/dev/null");
+            if docker_ok {
+                "/var/run/docker.sock".to_string()
+            } else {
+                let uid = sh("id -u").1;
+                format!("/run/user/{}/podman/podman.sock", uid.trim())
+            }
+        }
+    }
+}
+
 fn repo_slug(repo: &str) -> String {
     repo.replace('/', "-").to_lowercase()
 }
@@ -67,6 +88,8 @@ pub enum GhRunnerCommands {
         group: Option<String>,
         #[clap(long, help = "Use ephemeral runner (one job then exit)")]
         ephemeral: bool,
+        #[clap(long, help = "Container socket for CI builds: docker, podman, or none", default_value = "auto")]
+        socket: String,
     },
     #[clap(
         about = "Check runner status — podman pod state + GitHub API",
@@ -130,7 +153,10 @@ spec:
     - name: RUNNER_LABELS
       value: "{labels}"
     - name: RUNNER_TOKEN
-      value: "{token}"
+      valueFrom:
+        secretKeyRef:
+          name: gh-runner-token-{repo_slug}
+          key: token
     - name: RUNNER_EPHEMERAL
       value: "{ephemeral}"
     - name: RUNNER_WORKDIR
@@ -138,8 +164,7 @@ spec:
     volumeMounts:
     - name: work
       mountPath: /runner/_work
-    - name: docker-sock
-      mountPath: /var/run/docker.sock
+{docker_sock_volume_mount}
     resources:
       requests:
         memory: "2Gi"
@@ -156,29 +181,37 @@ spec:
     hostPath:
       path: {workdir}/_work
       type: DirectoryOrCreate
-  - name: docker-sock
-    hostPath:
-      path: /var/run/docker.sock
-      type: Socket
+{docker_sock_volume}
 "#;
 
 fn generate_kube_yaml(
     repo: &str,
     labels: &str,
     workdir: &str,
-    token: &str,
     ephemeral: bool,
+    socket_path: &str,
 ) -> String {
     let slug = repo_slug(repo);
     let name = runner_name(repo);
+
+    let (docker_sock_volume_mount, docker_sock_volume) = if socket_path.is_empty() {
+        (String::new(), String::new())
+    } else {
+        (
+            format!("    - name: docker-sock\n      mountPath: /var/run/docker.sock\n"),
+            format!("  - name: docker-sock\n    hostPath:\n      path: {}\n      type: Socket\n", socket_path),
+        )
+    };
+
     KUBE_YAML_TEMPLATE
         .replace("{repo_slug}", &slug)
         .replace("{repo}", repo)
         .replace("{runner_name}", &name)
         .replace("{labels}", labels)
-        .replace("{token}", token)
         .replace("{ephemeral}", if ephemeral { "true" } else { "false" })
         .replace("{workdir}", workdir)
+        .replace("{docker_sock_volume_mount}", &docker_sock_volume_mount)
+        .replace("{docker_sock_volume}", &docker_sock_volume)
 }
 
 // ─── Install ─────────────────────────────────────────────────────────────────
@@ -189,9 +222,11 @@ fn cmd_install(
     workdir: &PathBuf,
     _group: &Option<String>,
     ephemeral: bool,
+    socket: &str,
 ) -> Result<()> {
     let slug = repo_slug(repo);
     let workdir_str = workdir.to_string_lossy().to_string();
+    let socket_path = detect_socket(socket);
 
     // 1. Validate prereqs
     let (gh_ok, gh_out) = sh("gh auth status 2>&1");
@@ -229,35 +264,55 @@ fn cmd_install(
     }
     println!("[4/7] Registration token fetched (expires in 1h)");
 
-    // 5. Generate and write kube YAML
-    let yaml_content = generate_kube_yaml(repo, labels, &workdir_str, &token, ephemeral);
+    // 5. Generate and write kube YAML (token NOT embedded — uses podman secret)
+    let yaml_content = generate_kube_yaml(repo, labels, &workdir_str, ephemeral, &socket_path);
     let yaml_path = workdir.join("gh-runner.yaml");
     std::fs::write(&yaml_path, &yaml_content)
         .with_context(|| format!("Failed to write YAML: {}", yaml_path.display()))?;
     println!(
-        "[5/7] Pod spec generated: {}",
+        "[5/7] Pod spec generated: {} (token handled via podman secret)",
         yaml_path.display()
     );
 
-    // 6. Deploy pod
+    // 6. Create podman secret and deploy pod
+    let secret_name = format!("gh-runner-token-{}", slug);
+    let (secret_ok, secret_out) = sh(&format!(
+        "echo '{}' | podman secret create {} - 2>&1",
+        token, secret_name
+    ));
+    if !secret_ok {
+        bail!("Failed to create podman secret: {}", secret_out);
+    }
+    println!("[6/7] Podman secret created: {}", secret_name);
+
+    // Deploy pod with the secret mounted
     let (deploy_ok, deploy_out) = sh(&format!(
-        "podman kube play {} 2>&1",
+        "podman kube play --secret {} {} 2>&1",
+        secret_name,
         yaml_path.display()
     ));
+
+    // 6b. Clean up the secret immediately — it is consumed on pod start, not needed on disk
+    let (rm_ok, rm_out) = sh(&format!("podman secret rm {} 2>&1", secret_name));
+    if !rm_ok {
+        eprintln!("  Warning: failed to remove secret '{}': {}", secret_name, rm_out.trim());
+    }
+
+    // 6c. Check deploy result AFTER secret cleanup
     if !deploy_ok {
         bail!("Failed to deploy pod: {}", deploy_out);
     }
-    println!("[6/7] Pod deployed: {}", deploy_out.trim());
+    println!("[7/7] Pod deployed: {} (token secured — never written to disk)", deploy_out.trim());
 
-    // 7. Verify registration
+    // Verify registration
     let (verify_ok, verify_out) = sh(&format!(
         "gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | {{name, status, labels}}' 2>&1",
         repo, runner_name(repo)
     ));
     if verify_ok && !verify_out.is_empty() {
-        println!("[7/7] Runner registered:\n{}", verify_out);
+        println!("  Runner registered:\n{}", verify_out);
     } else {
-        println!("[7/7] Runner pod started — waiting for registration...");
+        println!("  Runner pod started — waiting for registration...");
     }
 
     println!(
@@ -265,8 +320,6 @@ fn cmd_install(
         labels, slug, repo, workdir_str
     );
 
-    // Token is in the YAML file that was written. The container will consume it on startup.
-    // We don't scrub it from the generated YAML because the runner entrypoint needs it.
     Ok(())
 }
 
@@ -360,6 +413,13 @@ fn cmd_logs(repo: &str, follow: bool) -> Result<()> {
 fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
     let slug = repo_slug(repo);
     let name = runner_name(repo);
+
+    // 0. Clean up any stale podman secret from a previous failed install
+    let secret_name = format!("gh-runner-token-{}", slug);
+    let _ = sh(&format!(
+        "podman secret rm {} 2>/dev/null || true",
+        secret_name
+    ));
 
     // Find workdir from the running pod's YAML or from a common path
     // First try to get workdir from the pod's volume mount
@@ -466,11 +526,20 @@ fn cmd_doctor(repo: Option<&str>) -> Result<()> {
         if net_ok { "ok" } else { "FAIL" }
     );
 
-    // 4. Docker socket
-    let (sock_ok, _) = sh("test -S /var/run/docker.sock && echo exists 2>&1");
+    // 4. Container socket
+    let socket_path = detect_socket("auto");
+    let (sock_ok, _) = sh(&format!("test -S {} && echo exists 2>&1", socket_path));
+    let socket_label = if socket_path.contains("docker.sock") {
+        format!("docker socket ({})", socket_path)
+    } else if socket_path.contains("podman") {
+        format!("podman socket ({})", socket_path)
+    } else {
+        "none (no container builds)".to_string()
+    };
     println!(
-        "  {}  docker socket (/var/run/docker.sock)",
-        if sock_ok { "ok" } else { "warn (not found)" }
+        "  {}  {}",
+        if sock_ok { "ok" } else { "warn (not found)" },
+        socket_label
     );
 
     // 5. Actions runner image
@@ -537,7 +606,8 @@ pub fn handle_gh_runner_command(args: &GhRunnerCommands) -> Result<()> {
             workdir,
             group,
             ephemeral,
-        } => cmd_install(repo, labels, workdir, group, *ephemeral),
+            socket,
+        } => cmd_install(repo, labels, workdir, group, *ephemeral, socket),
         GhRunnerCommands::Status { repo, json } => cmd_status(repo, *json),
         GhRunnerCommands::Logs { repo, follow } => cmd_logs(repo, *follow),
         GhRunnerCommands::Deregister {
