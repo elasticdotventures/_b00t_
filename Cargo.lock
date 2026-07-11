@@ -1549,6 +1549,7 @@ dependencies = [
  "async-nats",
  "async-stream",
  "async-trait",
+ "bytes",
  "chrono",
  "cron",
  "dirs",
@@ -12384,6 +12385,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

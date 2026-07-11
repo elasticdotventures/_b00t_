@@ -32,6 +32,7 @@ pub mod discovery;
 pub mod dataframe_receipt;
 pub mod error;
 pub mod gossip;
+pub mod hive_transport;
 pub mod ipc_transport;
 pub mod ledgrrr;
 pub mod mesh;
