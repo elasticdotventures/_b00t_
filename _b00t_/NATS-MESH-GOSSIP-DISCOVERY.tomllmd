@@ -90,6 +90,49 @@ criteria = [
   "proposal reviewed by operator/yEI before iroh work begins",
 ]
 
+# 🔎 Reviewer-facing: how to verify and how to reach a node (no prior context needed).
+[reviewer]
+how_to_test = """
+1. Unit/doctests, no server required (run both):
+     cargo test -p b00t-chat
+     cargo test -p b00t-chat --features dataframe
+   Both must be green. gossip.rs has dedicated unit tests:
+   newer_advertisement_is_accepted_and_forwarded, stale_advertisement_not_forwarded,
+   hop_budget_terminates_epidemic.
+2. Live two-node test (requires a reachable NATS server):
+     export NATS_URL=nats://localhost:4222
+     cargo test -p b00t-chat --test nats_mesh_integration
+   Without NATS_URL the test self-skips, so CI stays green offline.
+3. Manual smoke (see how_to_contact): bring up two mesh_cli nodes, run
+   `discover` on one, confirm the other appears in the live peer list, then
+   `send` a Direct frame and confirm it prints on the receiver.
+"""
+
+how_to_contact = """
+Every node is addressable on NATS under the `b00t.mesh.*` subject tree:
+
+  b00t.mesh.node.{agent_id}        -> a node's direct inbox (point-to-point target)
+  b00t.mesh.discovery.query        -> broadcast "who is online?"; reply goes to the
+                                     querier's own inbox (b00t.mesh.node.{querier})
+  b00t.mesh.gossip                 -> epidemic membership ads (MeshFrame::Gossip)
+  b00t.mesh.channel.{channel}      -> pub/sub broadcast channel
+
+Bring up a contactable node without writing Rust:
+
+  # terminal 1 — the node under test
+  cargo run -p b00t-chat --example mesh_cli -- node_a nats://localhost:4222 listen
+
+  # terminal 2 — a peer that discovers and contacts it
+  cargo run -p b00t-chat --example mesh_cli -- node_b nats://localhost:4222 discover
+  cargo run -p b00t-chat --example mesh_cli -- node_b nats://localhost:4222 send node_a "ping"
+
+`discover` prints the live peer set learned via gossip; `send node_a ...`
+publishes a Direct frame to b00t.mesh.node.node_a, which prints on terminal 1.
+Set B00T_LEDGER=/path/to/finops.jsonl for a persisted ledger — by default the
+node uses the in-memory MockLedgrrr (MOCK-FINOPS-* codes), so no ledgerr-mcp
+server is required to test/contact it.
+"""
+
 # b00t:map v1
 # summary: gossip discovery for b00t-comms mesh; gwyh near-term, iroh/QUIC strategic; ledgrrr mocked now
 # tags: nats, mesh, gossip, iroh, quic, discovery, ledgrrr, finops
