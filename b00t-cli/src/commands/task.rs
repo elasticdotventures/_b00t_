@@ -5,7 +5,7 @@
 //! Compat: `b00t task import` migrates from `.taskmaster/tasks/tasks.json`.
 //!
 //! 🤓 This is the extracted core of taskmaster-ai v0.x (before enshittification).
-//!    Keep it lean: list/add/next/done/update/show/import — nothing else.
+//!    Keep it lean: list/add/next/peek/pop/push/done/update/show/import — nothing else.
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
@@ -77,13 +77,65 @@ pub struct Task {
     /// Verifiable exit conditions (R5: GOAL.md fitness contract)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub acceptance_criteria: Vec<String>,
+    #[serde(deserialize_with = "deserialize_flexible_timestamp")]
     pub created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_flexible_timestamp"
+    )]
     pub updated_at: Option<String>,
 }
 
 fn default_priority() -> u8 {
     3
+}
+
+/// Postel's law: accept an RFC3339 string OR a raw Unix-epoch-seconds number
+/// (some task batches were generated with epoch ints instead of the
+/// canonical string format, which previously hard-failed `load_store`).
+/// Always normalize to RFC3339 on read; `save_store` only ever writes the
+/// canonical string form, so this drift can't reappear once re-saved.
+fn epoch_to_iso(secs: i64) -> String {
+    use chrono::TimeZone;
+    chrono::Utc
+        .timestamp_opt(secs, 0)
+        .single()
+        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_else(|| secs.to_string())
+}
+
+fn deserialize_flexible_timestamp<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::String(s) => Ok(s),
+        serde_json::Value::Number(n) if n.is_i64() || n.is_u64() => {
+            Ok(epoch_to_iso(n.as_i64().unwrap_or_default()))
+        }
+        other => Err(serde::de::Error::custom(format!(
+            "expected timestamp string or epoch number, got: {other}"
+        ))),
+    }
+}
+
+fn deserialize_optional_flexible_timestamp<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s)),
+        Some(serde_json::Value::Number(n)) if n.is_i64() || n.is_u64() => {
+            Ok(Some(epoch_to_iso(n.as_i64().unwrap_or_default())))
+        }
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "expected timestamp string, epoch number, or null, got: {other}"
+        ))),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -234,6 +286,34 @@ pub enum TaskCommands {
         #[clap(long, help = "Output as JSON")]
         json: bool,
     },
+    #[clap(about = "Push a new task onto the queue (alias for `add`)")]
+    Push {
+        #[clap(help = "Task title")]
+        title: String,
+        #[clap(long, short, help = "Description")]
+        description: Option<String>,
+        #[clap(long, short, help = "Priority 1-4 (1=critical, 4=low)", default_value = "3",
+               value_parser = clap::value_parser!(u8).range(1..=4))]
+        priority: u8,
+        #[clap(long, short, help = "Tags (comma-separated)")]
+        tags: Option<String>,
+        #[clap(
+            long,
+            short = 'c',
+            help = "Acceptance criteria (repeatable: -c 'tests pass' -c 'lint clean')"
+        )]
+        criteria: Vec<String>,
+    },
+    #[clap(about = "Peek at the next actionable task without claiming it (alias for `next`)")]
+    Peek {
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+    },
+    #[clap(about = "Pop the next actionable task and claim it (marks in-progress)")]
+    Pop {
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+    },
     #[clap(about = "Mark task done")]
     Done {
         #[clap(help = "Task ID(s) — accepts one or more", num_args = 1..)]
@@ -304,6 +384,15 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
             criteria,
         } => cmd_add(title, description, priority, tags, criteria),
         TaskCommands::Next { json } => cmd_next(json),
+        TaskCommands::Push {
+            title,
+            description,
+            priority,
+            tags,
+            criteria,
+        } => cmd_add(title, description, priority, tags, criteria),
+        TaskCommands::Peek { json } => cmd_next(json),
+        TaskCommands::Pop { json } => cmd_pop(json),
         TaskCommands::Done { ids } => {
             for id in ids {
                 cmd_done(id)?;
@@ -330,7 +419,7 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
 
 fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -> Result<()> {
     let store = load_store()?;
-    let tasks: Vec<&Task> = store
+    let mut tasks: Vec<&Task> = store
         .tasks
         .iter()
         .filter(|t| {
@@ -348,6 +437,9 @@ fn cmd_list(status_filter: Option<&str>, tag_filter: Option<&str>, json: bool) -
             status_ok && tag_ok
         })
         .collect();
+    // 1=critical...4=low: sort ascending so highest-priority (lowest number)
+    // tasks list first, matching cmd_next's selection order.
+    tasks.sort_by_key(|t| (t.priority, t.id));
 
     if json {
         println!("{}", serde_json::to_string_pretty(&tasks)?);
@@ -444,6 +536,59 @@ fn cmd_next(json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// Like `cmd_next`, but claims the selected task: marks it in-progress and
+/// persists that before returning it. Read-modify-write on the same store
+/// load, so the claim is atomic with respect to this process (no separate
+/// lock needed — `load_store`/`save_store` already read-then-write the whole
+/// file, matching every other mutating command in this module).
+fn cmd_pop(json: bool) -> Result<()> {
+    let mut store = load_store()?;
+    let done_ids: std::collections::HashSet<u32> = store
+        .tasks
+        .iter()
+        .filter(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Deferred))
+        .map(|t| t.id)
+        .collect();
+    let next_id = store
+        .tasks
+        .iter()
+        .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress))
+        .filter(|t| t.dependencies.iter().all(|dep| done_ids.contains(dep)))
+        .min_by_key(|t| (t.priority, t.dependencies.len(), t.id))
+        .map(|t| t.id);
+
+    let Some(id) = next_id else {
+        println!("no actionable tasks");
+        return Ok(());
+    };
+
+    let task = store
+        .tasks
+        .iter_mut()
+        .find(|t| t.id == id)
+        .expect("id came from the same store snapshot");
+    task.status = TaskStatus::InProgress;
+    task.updated_at = Some(now_iso());
+    let claimed = task.clone();
+    save_store(&store)?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&claimed)?);
+    } else {
+        println!(
+            "[{}] #{} P{} {}",
+            claimed.status, claimed.id, claimed.priority, claimed.title
+        );
+        if let Some(d) = &claimed.description {
+            println!("  {d}");
+        }
+        if !claimed.dependencies.is_empty() {
+            println!("  deps: {:?} (all satisfied)", claimed.dependencies);
+        }
+    }
+    Ok(())
 }
 
 fn cmd_rm(id: u32) -> Result<()> {
@@ -670,5 +815,83 @@ mod tests {
         assert!("wip".parse::<TaskStatus>().is_ok());
         assert!("done".parse::<TaskStatus>().is_ok());
         assert!("bogus".parse::<TaskStatus>().is_err());
+    }
+
+    #[test]
+    fn test_pop_claims_highest_priority_task() {
+        with_tmp_store(|_| {
+            cmd_add("low prio".into(), None, 4, None, vec![]).unwrap(); // id=1
+            cmd_add("high prio".into(), None, 1, None, vec![]).unwrap(); // id=2
+            cmd_pop(false).unwrap();
+            let store = load_store().unwrap();
+            let popped = store.tasks.iter().find(|t| t.id == 2).unwrap();
+            assert!(matches!(popped.status, TaskStatus::InProgress));
+            assert!(popped.updated_at.is_some());
+            // untouched task stays pending
+            let other = store.tasks.iter().find(|t| t.id == 1).unwrap();
+            assert!(matches!(other.status, TaskStatus::Pending));
+        });
+    }
+
+    #[test]
+    fn test_pop_skips_tasks_with_unmet_deps() {
+        with_tmp_store(|_| {
+            cmd_add("blocked but urgent".into(), None, 1, None, vec![]).unwrap(); // id=1
+            cmd_add("free but low prio".into(), None, 4, None, vec![]).unwrap(); // id=2
+            cmd_dep(1, DepOp::Add { dep: 2 }).unwrap();
+            cmd_pop(false).unwrap();
+            let store = load_store().unwrap();
+            // id=1 depends on id=2 (still pending) so id=2 should be popped instead
+            let popped = store.tasks.iter().find(|t| t.id == 2).unwrap();
+            assert!(matches!(popped.status, TaskStatus::InProgress));
+        });
+    }
+
+    #[test]
+    fn test_pop_reports_none_when_no_actionable_tasks() {
+        with_tmp_store(|_| {
+            // empty store: no tasks at all
+            cmd_pop(false).unwrap(); // should not panic, just print "no actionable tasks"
+            let store = load_store().unwrap();
+            assert!(store.tasks.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_list_sorts_by_priority_then_id() {
+        with_tmp_store(|_| {
+            cmd_add("medium".into(), None, 3, None, vec![]).unwrap(); // id=1
+            cmd_add("critical".into(), None, 1, None, vec![]).unwrap(); // id=2
+            cmd_add("low".into(), None, 4, None, vec![]).unwrap(); // id=3
+            let store = load_store().unwrap();
+            let mut tasks: Vec<&Task> = store.tasks.iter().collect();
+            tasks.sort_by_key(|t| (t.priority, t.id));
+            let ids: Vec<u32> = tasks.iter().map(|t| t.id).collect();
+            assert_eq!(ids, vec![2, 1, 3]); // critical, medium, low
+        });
+    }
+
+    #[test]
+    fn test_flexible_timestamp_accepts_string_and_epoch() {
+        // string form (canonical)
+        let s = r#"{"id":1,"title":"a","status":"pending","created_at":"2026-07-01T15:01:57Z"}"#;
+        let t: Task = serde_json::from_str(s).unwrap();
+        assert_eq!(t.created_at, "2026-07-01T15:01:57Z");
+
+        // epoch-int form (Postel's law: liberal in what we accept)
+        let s = r#"{"id":2,"title":"b","status":"pending","created_at":1783671462}"#;
+        let t: Task = serde_json::from_str(s).unwrap();
+        assert_eq!(t.created_at, "2026-07-10T08:17:42Z");
+    }
+
+    #[test]
+    fn test_flexible_timestamp_optional_updated_at() {
+        let s = r#"{"id":1,"title":"a","status":"pending","created_at":"2026-07-01T15:01:57Z","updated_at":1783671462}"#;
+        let t: Task = serde_json::from_str(s).unwrap();
+        assert_eq!(t.updated_at.as_deref(), Some("2026-07-10T08:17:42Z"));
+
+        let s = r#"{"id":2,"title":"b","status":"pending","created_at":"2026-07-01T15:01:57Z"}"#;
+        let t: Task = serde_json::from_str(s).unwrap();
+        assert_eq!(t.updated_at, None);
     }
 }
