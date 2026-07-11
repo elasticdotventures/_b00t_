@@ -163,6 +163,14 @@ spec:
   containers:
   - name: runner
     image: ghcr.io/actions/actions-runner:latest
+    command:
+    - /bin/bash
+    - -c
+    - |
+      cd /home/runner
+      ./config.sh --url "${REPO_URL}" --token "${RUNNER_TOKEN}" --name "${RUNNER_NAME}" --labels "${RUNNER_LABELS}" {ephemeral_flag} --unattended --replace
+      ./run.sh
+    workingDir: /home/runner
     env:
     - name: REPO_URL
       value: "https://github.com/{repo}"
@@ -210,6 +218,8 @@ pub fn generate_kube_yaml(
     let slug = repo_slug(repo);
     let name = runner_name(repo);
 
+    let ephemeral_flag = if ephemeral { "--ephemeral" } else { "" };
+
     let (docker_sock_volume_mount, docker_sock_volume) = if socket_path.is_empty() {
         (String::new(), String::new())
     } else {
@@ -226,6 +236,7 @@ pub fn generate_kube_yaml(
         .replace("{labels}", labels)
         .replace("{token}", token)
         .replace("{ephemeral}", if ephemeral { "true" } else { "false" })
+        .replace("{ephemeral_flag}", ephemeral_flag)
         .replace("{workdir}", workdir)
         .replace("{docker_sock_volume_mount}", &docker_sock_volume_mount)
         .replace("{docker_sock_volume}", &docker_sock_volume)
