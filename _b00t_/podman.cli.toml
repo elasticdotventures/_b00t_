@@ -29,9 +29,17 @@ gh release download "$TAG" \
   --dir /tmp \
   --clobber
 
-# Extract to system path (sudo required for /usr/local/bin)
-sudo tar xzf "/tmp/${ASSET}" -C /usr/local/bin
-sudo chmod 755 /usr/local/bin/podman*
+# Extract to temp dir (tarball has bin/ subdirectory)
+TMPD=$(mktemp -d)
+tar xzf "/tmp/${ASSET}" -C "$TMPD"
+
+# Find binary and install with correct name
+BIN=$(find "$TMPD" -type f -name 'podman*' | head -1)
+sudo install -m755 "$BIN" /usr/local/bin/podman
+sudo install -m755 "$BIN" /usr/local/bin/podman-remote
+
+# Cleanup temp
+rm -rf "$TMPD"
 
 # Cleanup
 rm -f "/tmp/${ASSET}"
@@ -67,8 +75,13 @@ gh release download "$LATEST_TAG" \
   --dir /tmp \
   --clobber
 
-sudo tar xzf "/tmp/${ASSET}" -C /usr/local/bin
-sudo chmod 755 /usr/local/bin/podman*
+# Extract to temp dir (tarball has bin/ subdirectory)
+TMPD=$(mktemp -d)
+tar xzf "/tmp/${ASSET}" -C "$TMPD"
+BIN=$(find "$TMPD" -type f -name 'podman*' | head -1)
+sudo install -m755 "$BIN" /usr/local/bin/podman
+sudo install -m755 "$BIN" /usr/local/bin/podman-remote
+rm -rf "$TMPD"
 rm -f "/tmp/${ASSET}"
 
 echo ""
