@@ -1051,7 +1051,7 @@ pub fn print_dashboard() {
     );
 }
 
-/// Discover capabilities across the hive — agents, MCP servers, CLI tools, topology.
+/// Discover capabilities across the hive — agents, MCP servers, CLI tools.
 pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
     let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_");
     let datums_dir = dotfiles.join("datums");
@@ -1059,68 +1059,6 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
     println!("{}", crate::ansi::bold("🔍 Hive Capability Discovery"));
     println!();
 
-    // ─── System overview ────────────────────────────────────────────────
-    println!("{}", crate::ansi::dim("b00t — hive agent operating protocol"));
-    println!("{}", crate::ansi::dim("Usage is subjective to task, agent, and system state."));
-    println!("{}", crate::ansi::dim("Run `b00t whoami --help` for identity, `b00t capabilities --filter <topic>` to explore."));
-    println!();
-
-    // ─── Count by type ──────────────────────────────────────────────────
-    let mut mcp_count = 0usize;
-    let mut agent_count = 0usize;
-    let mut cli_count = 0usize;
-    let mut skill_count = 0usize;
-    let mut datum_count = 0usize;
-
-    if let Ok(dir) = std::fs::read_dir(&datums_dir) {
-        for entry in dir.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
-                continue;
-            }
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                let has_mcp = content.contains("mcp") || content.contains("MCP");
-                let has_agent = content.contains("agent") || content.contains("Agent");
-                let has_cli = content.contains("cli") || content.contains("CLI");
-                let has_skill = content.contains("skill") || content.contains("Skill");
-                match (has_mcp, has_agent, has_cli, has_skill) {
-                    (true, _, _, _) => mcp_count += 1,
-                    (_, true, _, _) => agent_count += 1,
-                    (_, _, true, _) => cli_count += 1,
-                    (_, _, _, true) => skill_count += 1,
-                    _ => datum_count += 1,
-                }
-            }
-        }
-    }
-
-    println!("{} {} | {} {} | {} {} | {} {} | {} {}",
-        crate::ansi::bold("📊 System:"),
-        crate::ansi::cyan(&format!("{} datums", datum_count + mcp_count + agent_count + cli_count + skill_count)),
-        crate::ansi::bold("🔌"),
-        crate::ansi::cyan(&format!("{} MCP", mcp_count)),
-        crate::ansi::bold("🤖"),
-        crate::ansi::cyan(&format!("{} agents", agent_count)),
-        crate::ansi::bold("🛠️"),
-        crate::ansi::cyan(&format!("{} CLI", cli_count)),
-        crate::ansi::bold("🧠"),
-        crate::ansi::cyan(&format!("{} skills", skill_count)),
-    );
-
-    // ─── Topology summary (detect relationships between types) ──────────
-    let role_count = count_by_tag(&datums_dir, "role");
-    let training_count = count_by_tag(&datums_dir, "training");
-    let prd_count = count_by_tag(&datums_dir, "prd");
-    println!("{} {} {} {} {} {}",
-        crate::ansi::dim("Roles:"), crate::ansi::cyan(&role_count.to_string()),
-        crate::ansi::dim("PRDs:"), crate::ansi::cyan(&prd_count.to_string()),
-        crate::ansi::dim("Training pipelines:"), crate::ansi::cyan(&training_count.to_string()),
-    );
-    println!("{} b00t ontology export --format=mermaid", crate::ansi::dim("View topology:"));
-    println!("{} b00t ontology export --format=cytoscape --root=<type>", crate::ansi::dim("Interactive graph:"));
-    println!();
-
-    // ─── Detailed listing (with optional filter) ───────────────────────
     let mut found = 0usize;
 
     if let Ok(dir) = std::fs::read_dir(&datums_dir) {
@@ -1140,7 +1078,9 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
                 }
             }
 
+            // Read the datum to extract type_tags and capabilities
             if let Ok(content) = std::fs::read_to_string(&path) {
+                // Extract type_tags via simple parsing (no serde dep needed for full TOML here)
                 let has_mcp = content.contains("mcp") || content.contains("MCP");
                 let has_agent = content.contains("agent") || content.contains("Agent");
                 let has_cli = content.contains("cli") || content.contains("CLI");
@@ -1153,11 +1093,7 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
                     (_, _, _, true) => "🧠 Skill",
                     _ => "📄 Datum",
                 };
-                print!("  {} {}", kind, crate::ansi::cyan(&name));
-                if filter.is_some() {
-                    print!(" — {}", entry.path().display());
-                }
-                println!();
+                println!("  {} {} — {} ({})", kind, crate::ansi::cyan(&name), crate::ansi::dim(kind), entry.path().display());
                 found += 1;
             }
         }
@@ -1166,38 +1102,15 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
     if found == 0 {
         if filter.is_some() {
             println!("  {} No capabilities matching filter: {}", crate::ansi::yellow("⚠"), filter.unwrap());
-            println!("  {} Use `b00t ontology export --format=mermaid` to see full topology", crate::ansi::dim("Tip:"));
         } else {
             println!("  {} No capabilities found in {}", crate::ansi::yellow("⚠"), datums_dir.display());
         }
     } else {
         println!("\n{} {} capabilities discovered", crate::ansi::green(&found.to_string()),
             if filter.is_some() { format!("matching '{}'", filter.unwrap()) } else { "total".into() });
-        if filter.is_some() {
-            println!("{} b00t ontology export --format=mermaid --root={}", crate::ansi::dim("Explore relationships:"), filter.unwrap());
-        }
     }
 
     Ok(())
-}
-
-/// Quick count of datums containing a tag in their type_tags.
-fn count_by_tag(dir: &std::path::Path, tag: &str) -> usize {
-    let mut count = 0;
-    if let Ok(d) = std::fs::read_dir(dir) {
-        for entry in d.filter_map(|e| e.ok()) {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
-                continue;
-            }
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if content.contains(&format!("\"{}\"", tag)) || content.contains(&format!("type_tags = [\"{}\"", tag)) {
-                    count += 1;
-                }
-            }
-        }
-    }
-    count
 }
 
 #[cfg(test)]

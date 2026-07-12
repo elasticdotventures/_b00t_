@@ -233,9 +233,9 @@ iso      = "crates/ufo-types/src/iso.rs"
 cargo    = "crates/ufo-types/Cargo.toml"
 
 [issue.510.docs_to_update_on_ship]
-- "vendor/ledgrrr/AGENTS.md: add section on ufo-types module"
-- "vendor/ledgrrr/docs/architecture.md: add ufo-types layer to architecture diagram"
-- "vendor/ledgrrr/book/src/theory.md: add UFO grounding section"
+- "vendor/l3dg3rr/AGENTS.md: add section on ufo-types module"
+- "vendor/l3dg3rr/docs/architecture.md: add ufo-types layer to architecture diagram"
+- "vendor/l3dg3rr/book/src/theory.md: add UFO grounding section"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #511: AU R&D Tax Incentive — domain ontology + satisfies impls
@@ -362,9 +362,9 @@ au_rd        = "crates/ledger-core/src/au_rd.rs"
 evidence_ext = "crates/arc-kit-au/src/node.rs"  // extended
 
 [issue.511.docs_to_update_on_ship]
-- "vendor/ledgrrr/docs/mcp-capability-contract.md: add au_rd_* actions"
-- "vendor/ledgrrr/AGENTS.md: add AU R&D section"
-- "vendor/ledgrrr/rules/ONTOLOGY.md: add classify_au_rd_eligible.rhai"
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add au_rd_* actions"
+- "vendor/l3dg3rr/AGENTS.md: add AU R&D section"
+- "vendor/l3dg3rr/rules/ONTOLOGY.md: add classify_au_rd_eligible.rhai"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #512: US R&D Tax Credit — domain ontology + satisfies impls
@@ -424,8 +424,8 @@ DoD: Both methods produce correct values for known test cases.
 us_rdc = "crates/ledger-core/src/us_rdc.rs"
 
 [issue.512.docs_to_update_on_ship]
-- "vendor/ledgrrr/book/src/tax.md: add US R&D Tax Credit chapter"
-- "vendor/ledgrrr/docs/mcp-capability-contract.md: add us_rdc_* actions"
+- "vendor/l3dg3rr/book/src/tax.md: add US R&D Tax Credit chapter"
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add us_rdc_* actions"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #513: Crypto cost basis — cross-jurisdiction ontology + satisfies
@@ -502,8 +502,8 @@ crypto     = "crates/ledger-core/src/crypto.rs"
 rules_au   = "rules/classify_crypto_au.rhai"
 
 [issue.513.docs_to_update_on_ship]
-- "vendor/ledgrrr/rules/ONTOLOGY.md: add crypto-au rule docs"
-- "vendor/ledgrrr/docs/crypto.md: new crypto tax reference"
+- "vendor/l3dg3rr/rules/ONTOLOGY.md: add crypto-au rule docs"
+- "vendor/l3dg3rr/docs/crypto.md: new crypto tax reference"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #514: MCP action layer — thin JSON-RPC wrappers over Satisfies
@@ -615,8 +615,8 @@ us_rdc_handler = "crates/ledgerr-mcp/src/us_rdc.rs"       // NEW: thin handlers
 crypto_handler = "crates/ledgerr-mcp/src/crypto.rs"       // NEW: thin handlers
 
 [issue.514.docs_to_update_on_ship]
-- "vendor/ledgrrr/docs/mcp-capability-contract.md: regenerated"
-- "vendor/ledgrrr/docs/agent-mcp-runbook.md: regenerated"
+- "vendor/l3dg3rr/docs/mcp-capability-contract.md: regenerated"
+- "vendor/l3dg3rr/docs/agent-mcp-runbook.md: regenerated"
 - "scripts/mcp_cli_demo.sh: regenerated"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -766,22 +766,22 @@ becomes the uniform evaluation pattern — every tax check is
 # ═══════════════════════════════════════════════════════════════════════════════
 [documents_to_update]
 by_issue = '''
-#510 → vendor/ledgrrr/AGENTS.md (add ufo-types section)
-       vendor/ledgrrr/docs/architecture.md (add ontology layer)
-       vendor/ledgrrr/book/src/theory.md (add UFO grounding)
+#510 → vendor/l3dg3rr/AGENTS.md (add ufo-types section)
+       vendor/l3dg3rr/docs/architecture.md (add ontology layer)
+       vendor/l3dg3rr/book/src/theory.md (add UFO grounding)
 
-#511 → vendor/ledgrrr/docs/mcp-capability-contract.md (au_rd_* actions)
-       vendor/ledgrrr/AGENTS.md (AU R&D workflow)
-       vendor/ledgrrr/rules/ONTOLOGY.md (classify_au_rd_eligible.rhai)
+#511 → vendor/l3dg3rr/docs/mcp-capability-contract.md (au_rd_* actions)
+       vendor/l3dg3rr/AGENTS.md (AU R&D workflow)
+       vendor/l3dg3rr/rules/ONTOLOGY.md (classify_au_rd_eligible.rhai)
 
-#512 → vendor/ledgrrr/book/src/tax.md (US R&D credit chapter)
-       vendor/ledgrrr/docs/mcp-capability-contract.md (us_rdc_* actions)
+#512 → vendor/l3dg3rr/book/src/tax.md (US R&D credit chapter)
+       vendor/l3dg3rr/docs/mcp-capability-contract.md (us_rdc_* actions)
 
-#513 → vendor/ledgrrr/rules/ONTOLOGY.md (classify_crypto_au.rhai)
-       vendor/ledgrrr/docs/crypto.md (new crypto tax reference)
+#513 → vendor/l3dg3rr/rules/ONTOLOGY.md (classify_crypto_au.rhai)
+       vendor/l3dg3rr/docs/crypto.md (new crypto tax reference)
 
-#514 → vendor/ledgrrr/docs/mcp-capability-contract.md (regenerated)
-       vendor/ledgrrr/docs/agent-mcp-runbook.md (regenerated)
+#514 → vendor/l3dg3rr/docs/mcp-capability-contract.md (regenerated)
+       vendor/l3dg3rr/docs/agent-mcp-runbook.md (regenerated)
        scripts/mcp_cli_demo.sh (regenerated)
 
 #515 → AGENTS.md (tax-lawyer skills)

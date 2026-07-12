@@ -1,14 +1,13 @@
 # b00t Unsloth QLoRA Fine-Tuning Configuration
-# Base: unsloth/Qwen3.6-27B (bf16 repack — trainable with FastLanguageModel + BNB 4-bit)
-# Train: b00t-cli runpod train --config fine-tune/config.yaml
-# Dry-run: b00t-cli runpod train --dry-run --config fine-tune/config.yaml
+# Base: Qwen3.6-27B (GGUF) — high neural plasticity, quantizes well
+# Target: b00t-aligned ch0nky subagent
 
-base_model: "unsloth/Qwen3.6-35B-A3B"
-adapter_name: "b00t-aligned-qwen36-35b-a3b"
+base_model: "unsloth/Qwen3.6-27B-GGUF"
+adapter_name: "b00t-aligned-qwen36-27b"
 dataset: "fine-tune/train.jsonl"
 output_dir: "./fine-tune/output"
 
-# ─── LoRA ─────────────────────────────────────────────────────────────────────
+# LoRA hyperparameters
 lora_r: 16
 lora_alpha: 32
 lora_dropout: 0.05
@@ -21,7 +20,7 @@ target_modules:
   - "up_proj"
   - "down_proj"
 
-# ─── Training ─────────────────────────────────────────────────────────────────
+# Training hyperparameters
 num_epochs: 3
 batch_size: 2
 grad_accum: 8
@@ -31,22 +30,7 @@ optim: "adamw_8bit"
 weight_decay: 0.01
 lr_scheduler: "linear"
 warmup_steps: 5
-logging_steps: 10
-save_steps: 50
 
-# ─── Hardware ─────────────────────────────────────────────────────────────────
+# Hardware requirements (RTX 3090 24GB)
 load_in_4bit: true
 use_gradient_checkpointing: true
-
-# ─── Observability (MLflow) ───────────────────────────────────────────────────
-# MLFLOW_TRACKING_URI env var overrides this (set via cloudflared tunnel before training)
-# local: http://192.168.1.137:30803  (LAN only — not reachable from RunPod)
-# public: run `just ai-finetune::mlflow-tunnel` to get the https://xxx.trycloudflare.com URL
-report_to: "mlflow"
-mlflow_experiment: "b00t-qwen36-finetune"
-
-# ─── HF Hub (checkpoints + final adapter push) ───────────────────────────────
-# Requires HF_TOKEN env var on the pod; set push_to_hub: false to skip
-hub_model_id: "elasticdotventures/b00t-qwen36-35b-a3b"
-push_to_hub: true
-private: true
