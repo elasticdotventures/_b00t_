@@ -73,7 +73,6 @@ thiserror = "2"
 sha2 = "0.10"
 openssl = "0.10"
 openssl-sys = { version = "0.9", features = ["vendored"] }
-diffy = "0.3"
 
 # b00t-embed — unified embedding adapter  
 b00t-embed = { path = "b00t-embed" }
