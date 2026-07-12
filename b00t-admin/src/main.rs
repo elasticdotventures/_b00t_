@@ -22,7 +22,6 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-mod graph_json;
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
@@ -1845,13 +1844,6 @@ function loadGraph(sel) {{
     window._isoViewStack = [];
     window._isoCurrentData = null;
     var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
-    var useWasm = typeof window._isoRender === 'function';
-
-    if (useWasm) {{
-      loadIsometricWasm(target, hideOrphans);
-      return;
-    }}
-
     var url = '/api/admin/viz/isometric' + (hideOrphans ? '?hide_orphans=true' : '');
     fetch(url).then(function(r){{return r.json();}}).then(function(d) {{
       window._isoCurrentData = d;
@@ -1861,6 +1853,9 @@ function loadGraph(sel) {{
       var depthInfo = '';
       if (d.depth) {{
         depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
+      if (d.depth.extended + d.depth.historical > 0) {{
+        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
+      }}
       }}
       status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
       setTimeout(function(){{
@@ -2000,18 +1995,8 @@ var ISO_ROLES = [
 
 function buildIsoLegend(container) {{
   var used = new Set();
-  var depthCounts = {{surface:0, extended:0, historical:0}};
-  container.querySelectorAll('[data-context-depth]').forEach(function(n){{
-    var d = n.getAttribute('data-context-depth');
-    if (depthCounts[d] !== undefined) depthCounts[d]++;
-    used.add(n.getAttribute('data-node-role'));
-  }});
-  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;flex-direction:column;">';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px;">';
-  if (depthCounts.surface > 0) html += '<span style="background:#334155;color:#e2e8f0;padding:2px 6px;border-radius:3px;font-size:9px;opacity:1.0;" title="Directly connected nodes">Surface '+depthCounts.surface+'</span>';
-  if (depthCounts.extended > 0) html += '<span style="background:#334155;color:#94a3b8;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.5;" onclick="toggleDepth(this,event)" title="Orphan tools — click to show">Extended '+depthCounts.extended+'</span>';
-  if (depthCounts.historical > 0) html += '<span style="background:#334155;color:#64748b;padding:2px 6px;border-radius:3px;font-size:9px;opacity:0.2;" title="Reference docs — click show all">Historical '+depthCounts.historical+'</span>';
-  html += '</div><div style="display:flex;flex-wrap:wrap;gap:3px;">';
+  container.querySelectorAll('[data-node-role]').forEach(function(n){{ used.add(n.getAttribute('data-node-role')); }});
+  var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
   ISO_ROLES.forEach(function(r) {{
     if (!used.has(r.r)) return;
     html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
@@ -2030,19 +2015,18 @@ function toggleDepth(link, e) {{
   link.textContent = _showAllDepth ? 'hide extended' : 'show all';
   var svg = document.querySelector('#mermaid-target svg');
   if (!svg) return;
+  var connected = new Set();
+  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
+    connected.add(el.getAttribute('data-edge-from'));
+    connected.add(el.getAttribute('data-edge-to'));
+  }});
   svg.querySelectorAll('.iso-node').forEach(function(n) {{
-    var d = n.getAttribute('data-context-depth');
-    if (d === 'surface') return;
-    n.style.display = _showAllDepth ? '' : 'none';
+    var nid = n.getAttribute('data-node-id');
+    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
   }});
   svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
     var f = el.getAttribute('data-edge-from');
-    var t = el.getAttribute('data-edge-to');
-    var fromN = svg.querySelector('[data-node-id=\"'+f+'\"]');
-    var toN = svg.querySelector('[data-node-id=\"'+t+'\"]');
-    var fromD = fromN ? fromN.getAttribute('data-context-depth') : 'surface';
-    var toD = toN ? toN.getAttribute('data-context-depth') : 'surface';
-    el.setAttribute('opacity', (_showAllDepth || (fromD === 'surface' && toD === 'surface')) ? '0.5' : '0.05');
+    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
   }});
 }}
 
@@ -2062,16 +2046,14 @@ function buildContainerDrilldown(container, data) {{
       e.stopPropagation();
       var sub = subMap[nid];
       if (!sub || !sub.svg) return;
-      var svgEl = container.querySelector('svg');
-      var viewBox = svgEl ? svgEl.getAttribute('viewBox') : '';
       window._isoViewStack.push({{
-        svg: svgEl ? svgEl.outerHTML : '',
-        viewBox: viewBox,
+        svg: container.querySelector('svg').outerHTML,
+        svgEl: container.querySelector('svg'),
         legend: container.querySelector('[style*=\"bottom:4px;left:4px\"]')?.outerHTML || ''
       }});
       container.innerHTML = sub.svg;
-      var newSvg = container.querySelector('svg');
-      if (newSvg) {{ newSvg.style.width = '100%'; newSvg.style.height = '100%'; }}
+      container.querySelector('svg').style.width = '100%';
+      container.querySelector('svg').style.height = '100%';
       var back = document.createElement('div');
       back.innerHTML = '← Back';
       back.style.cssText = 'position:absolute;top:4px;left:4px;background:#1e293b;color:#e2e8f0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;z-index:11;';
@@ -2083,10 +2065,6 @@ function buildContainerDrilldown(container, data) {{
           var wrapper = document.createElement('div');
           wrapper.innerHTML = prev.svg;
           container.appendChild(wrapper.firstChild);
-          if (prev.viewBox) {{
-            var restoredSvg = container.querySelector('svg');
-            if (restoredSvg) restoredSvg.setAttribute('viewBox', prev.viewBox);
-          }}
           if (prev.legend) {{ var lw = document.createElement('div'); lw.innerHTML = prev.legend; container.appendChild(lw.firstChild); }}
         }}
         attachIsoViewer(container);
@@ -2097,40 +2075,6 @@ function buildContainerDrilldown(container, data) {{
       attachIsoViewer(container);
     }});
   }});
-}}
-
-// ════════ WASM Isometric loader ════════
-
-(async function() {{
-  try {{
-    var m = await import('/wasm/wasm/isometric.js');
-    await m.default();
-    window._isoRender = m.render_isometric;
-    console.log('isometric WASM ready');
-  }} catch(e) {{ console.warn('isometric WASM:', e.message); }}
-}})();
-
-function loadIsometricWasm(target, hideOrphans) {{
-  var t0 = Date.now();
-  var jsonUrl = '/api/admin/viz/entangle/json' + (hideOrphans ? '?hide_orphans=true' : '');
-  fetch(jsonUrl).then(function(r){{return r.json();}}).then(function(d) {{
-    target.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;">' +
-      '<div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-bottom:10px;\"></div>' +
-      '<div style=\"font-size:12px;\">Rendering ' + d.nodes.length + ' nodes...</div></div>';
-    setTimeout(function() {{
-      try {{
-        var svg = window._isoRender(JSON.stringify(d));
-        target.innerHTML = '<div class=\"fade-in\">' + svg + '</div>';
-        var ms = Date.now() - t0;
-        document.getElementById('viz-title').textContent = 'Isometric View';
-        document.getElementById('viz-status').textContent = d.nodes.length + ' nodes, ' + d.edges.length + ' edges · WASM rendered in ' + ms + 'ms';
-        attachIsoViewer(target);
-        buildIsoLegend(target);
-      }} catch(e) {{
-        target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">WASM render error: ' + e.message + '</div>';
-      }}
-    }}, 50);
-  }}).catch(function(e){{ target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Fetch error: ' + e.message + '</div>'; }});
 }}
 
 </script>

@@ -727,19 +727,13 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         serde_json::json!({"svg": format!("<svg><text fill='red'>container: {}</text></svg>", e), "format": "isometric"})
     });
 
-    let subgraphs: Vec<serde_json::Value> = {
-        let mut indexed: Vec<_> = components
-            .iter()
-            .enumerate()
-            .filter(|(_, ids)| ids.len() <= MAX_NODES)
-            .map(|(i, ids)| (i, ids.clone(), ids.len()))
-            .collect();
-        indexed.sort_by_key(|(_, _, n)| std::cmp::Reverse(*n));
-        indexed
-            .into_iter()
-            .take(MAX_SUBGRAPHS)
-            .map(|(i, ids, _count)| {
-            let sub = build_component_subgraph(graph, &ids, i);
+    let subgraphs: Vec<serde_json::Value> = components
+        .iter()
+        .enumerate()
+        .filter(|(_, ids)| ids.len() <= MAX_NODES)
+        .take(MAX_SUBGRAPHS)
+        .map(|(i, ids)| {
+            let sub = build_component_subgraph(graph, ids, i);
             let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
                 format!("<svg><text fill='red'>{}</text></svg>", e)
             });
@@ -750,8 +744,7 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
                 "node_ids": ids,
             })
         })
-        .collect()
-    };
+        .collect();
 
     let mut response = container_response;
     if let Some(obj) = response.as_object_mut() {
@@ -835,7 +828,7 @@ struct NodeVars {
 /// | REQUIRED  | `x <= bound`                        | Prevent runaway X expansion |
 /// | STRONG    | `x[b] - x[a] >= MIN_X_DIST`         | Nodes in the same layer must not overlap |
 /// | STRONG    | `z[to] >= z[from] + LAYER_SPACING`  | Fix backward edges (cycles broken by topological sort) |
-/// | MEDIUM    | `\|x[to] - x[from]\| <= 3 * SPACING`  | Connected nodes stay roughly X-aligned |
+/// | MEDIUM    | `|x[to] - x[from]| <= 3 * SPACING`  | Connected nodes stay roughly X-aligned |
 /// | WEAK      | `x == preferred_x`                  | Nudge towards grid layout as fallback |
 ///
 /// # Cassowary semantics
@@ -850,7 +843,7 @@ struct NodeVars {
 ///
 /// pairwise spacing (STRONG) adds O(n²) constraints per layer. The 40-node
 /// cap keeps this practical (<800 comparisons per layer worst-case).
-pub fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
+fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f64)>, String> {
     // Guard: Cassowary pairwise spacing is O(n²) per topological layer.
     // Beyond 40 nodes the solver becomes too slow for HTTP response times.
     // Use container grouping for larger graphs.
@@ -1095,7 +1088,6 @@ fn render_svg(
     graph: &InvariantGraph,
     positions: &HashMap<String, (f64, f64, f64)>,
 ) -> String {
-    let depth_map = ContextDepth::classify(graph);
     let scale = 0.6;
     let ox = 400.0;
     let oy = 80.0;
@@ -1206,13 +1198,10 @@ fn render_svg(
             };
 
             let layer = positions.get(&node.id).map(|&(_, _, z)| z as i32).unwrap_or(0);
-            let cdepth = depth_map.get(&node.id).copied().unwrap_or(ContextDepth::Surface);
-            let depth_str = match cdepth { ContextDepth::Surface => "surface", ContextDepth::Extended => "extended", ContextDepth::Historical => "historical" };
-            let opacity = match cdepth { ContextDepth::Surface => "1", ContextDepth::Extended => "0.5", ContextDepth::Historical => "0.2" };
             svg.push_str(&format!(
-                r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}" data-context-depth="{}" opacity="{}">"##,
+                r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}">"##,
                 sx - hw, sy - hh,
-                escape_xml(&node.id), node.role.as_str(), layer, depth_str, opacity
+                escape_xml(&node.id), node.role.as_str(), layer
             ));
 
             let w = hw * 2.0;

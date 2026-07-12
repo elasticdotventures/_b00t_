@@ -1752,34 +1752,11 @@ dependencies = [
 name = "b00t-isometric-wasm"
 version = "0.9.5"
 dependencies = [
- "b00t-l3dg3rr-viz",
- "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "b00t-l3dg3rr-viz"
-version = "0.9.5"
-dependencies = [
  "blake3",
  "kasuari",
  "mermaid-rs-renderer",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "b00t-lsp"
-version = "0.9.5"
-dependencies = [
- "anyhow",
- "b00t-datum-core",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toml 1.1.2+spec-1.1.0",
- "tower-lsp",
 ]
 
 [[package]]
@@ -1827,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mermaid-wasm"
-version = "0.9.5"
+version = "0.9.4"
 dependencies = [
  "mermaid-rs-renderer",
  "wasm-bindgen",

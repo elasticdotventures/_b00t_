@@ -9,9 +9,10 @@
 # Deactivate: podman kube down _b00t_/k8s/a3b-sm0l.pod.yml
 
 [b00t]
-name   = "inference-qwen36-35b-a3b-llamacpp"
-type   = "hive_profile"
-hint   = "Qwen3.6-35B-A3B UD-IQ4_XS MoE via llama.cpp pod — sm0l tier, port 8001, OpenAI-compatible"
+name = "inference-qwen36-35b-a3b-llamacpp"
+type = "hive_profile"
+hint = "Qwen3.6-35B-A3B UD-IQ4_XS via llamacpp podman — 17.7GB VRAM + 6GB KV, 64k ctx, RTX3090"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 # 🤓 UD-IQ4_XS weights ~17GB + KV@32K ~3GB + overhead ~1GB = ~21GB; 3GB headroom
