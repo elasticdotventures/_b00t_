@@ -113,21 +113,6 @@ pub struct UpgradeCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(UpgradeCommand, "upgrade", ["upgrade"]);
-
-/// Holistic upgrade: binary, MCP servers, hooks, Claude settings (NASA MBSE phases)
-#[derive(Parser, Clone)]
-pub struct UpgradeCommand {
-    #[arg(long, default_value = "all", help = "Scope: all|binary|mcp|hooks|settings")]
-    pub scope: String,
-    #[arg(long, help = "Plan only; apply no changes")]
-    pub dry_run: bool,
-    #[arg(long, help = "Route compile tasks to ch0nky GPU tier")]
-    pub delegate: bool,
-    #[arg(long, help = "Emit structured JSON report")]
-    pub json: bool,
-}
-
 impl_mcp_tool!(UpgradeCommand, "b00t_upgrade", ["upgrade"]);
 
 /// Record lesson from mistake
@@ -234,7 +219,6 @@ impl crate::clap_reflection::McpReflection for AgentDiscoverCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentDiscoverCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::ChatClient;
         use std::time::Duration;
 
         let json = params.get("json").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -322,7 +306,7 @@ impl crate::clap_reflection::McpReflection for AgentMessageCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentMessageCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
 
         let to_agent = params.get("to_agent").and_then(|v| v.as_str()).unwrap_or("unknown");
         let content = params.get("content").and_then(|v| v.as_str()).unwrap_or("");
@@ -748,7 +732,6 @@ impl crate::clap_reflection::McpReflection for AgentWaitCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentWaitCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
         use std::time::Duration;
 
         let timeout_secs = params.get("timeout")
@@ -811,7 +794,7 @@ impl crate::clap_reflection::McpReflection for AgentNotifyCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentNotifyCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
         use serde_json;
 
         let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp");
@@ -854,7 +837,7 @@ impl crate::clap_reflection::McpReflection for AgentCapabilityCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentCapabilityCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
         use std::time::Duration;
 
         let capabilities = params.get("capabilities").and_then(|v| v.as_str()).unwrap_or("");
@@ -1589,6 +1572,33 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
     }
 }
 
+// BVerifyCommand: verify z3 assertion via b00t-cli admin
+#[derive(Parser, Clone)]
+pub struct BVerifyCommand {
+    #[arg(help = "Z3 or formal assertion string")]
+    pub assertion: String,
+}
+impl crate::clap_reflection::McpReflection for BVerifyCommand {
+    fn mcp_tool_name() -> String { "b00t_verify".to_string() }
+    fn command_path() -> Vec<String> { vec![] }
+}
+impl crate::clap_reflection::McpExecutor for BVerifyCommand {
+    fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
+        let assertion = params.get("assertion")
+            .and_then(|v| v.as_str())
+            .unwrap_or("true");
+        let output = std::process::Command::new("b00t-cli")
+            .args(["admin", "verify", "--assertion", assertion])
+            .output()
+            .map_err(|e| anyhow::anyhow!("verify failed: {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
+        }
+    }
+}
+
 // BDiscoverCommand: custom executor — searches TOOL_CATALOG and returns JSON matches
 impl crate::clap_reflection::McpReflection for BDiscoverCommand {
     fn mcp_tool_name() -> String { "b00t_discover".to_string() }
@@ -1660,28 +1670,9 @@ pub fn create_mcp_registry_with_notify(
         .register::<StatusCommand>()
         .register::<BExecCommand>()
         .register::<BDiscoverCommand>()
-        .register::<BVizGenerateCommand>()
-        .register::<BLogCommand>()
-        .register::<BVerifyCommand>()
-        .register::<BStackLoadCommand>()
-        .register::<BStackUnloadCommand>()
         .add_post_hook("b00t_mcp_stack_load", std::sync::Arc::clone(&notify_fn))
         .add_post_hook("b00t_mcp_stack_unload", notify_fn);
     crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
-    builder.build()
-}
-
-/// Create FULL registry with all 56+ tools (debug / backward-compat only).
-/// 🤓 DO NOT use this for sub-agents — context cost is too high.
-pub fn create_full_mcp_registry() -> McpCommandRegistry {
-    let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover (everything else via proxy)
-    builder
-        .register::<LearnCommand>()
-        .register::<WhoamiCommand>()
-        .register::<StatusCommand>()
-        .register::<BExecCommand>()
-        .register::<BDiscoverCommand>();
     builder.build()
 }
 

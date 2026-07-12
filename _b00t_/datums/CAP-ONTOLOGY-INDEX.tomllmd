@@ -80,12 +80,19 @@ what      = "Walks Rust source via syn → RustTerm/OntologyGraph (Entity vs Act
 invoke    = "cargo run -p ontology-extractor -- --crate-path <PATH>"
 tier      = "ch0nky"
 
-[native.neumann_store]
+[native.helixdb_store]
 location  = "b00t-c0re-lib/src/irontology_bridge.rs"
-crate_dep = "storage-neumann = 0.1 (default feature)"
-what      = "Persistent fact store at ~/.b00t/neumann/<ns>/; FactRecord ingest + triple query"
+crate_dep = "helix-db = 2.0 (default feature)"
+what      = "Remote labeled-property-graph store via helix-db HTTP client; FactRecord + EdgeRecord CRUD"
 invoke    = "b00t grok digest --topic <TOPIC> <CONTENT>; b00t grok ask <QUERY>"
 mcp_tools = ["b00t_grok_digest", "b00t_grok_ask", "b00t_grok_learn", "b00t_grok_status"]
+tier      = "sm0l"
+
+[native.neumann_store]
+location  = "b00t-c0re-lib/src/irontology_bridge.rs (legacy, feature=store-neumann)"
+crate_dep = "storage-neumann = 0.1 (legacy)"
+what      = "ARCHIVED — Persistent fact store at ~/.b00t/neumann/<ns>/; use helixdb or oxigraph instead"
+status    = "ARCHIVED — not actively maintained"
 tier      = "sm0l"
 
 [native.oxigraph_store]

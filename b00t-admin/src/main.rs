@@ -22,14 +22,25 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans};
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, filter_orphans};
+#[cfg(feature = "mermaid-native")]
+use b00t_l3dg3rr_viz::isometric::render_mermaid_native;
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use reqwest::Client as ReqwestClient;
 
+mod graph_json;
 include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
+use b00t_l3dg3rr_viz::{InvariantGraph};
+
+fn filter_orphans_from_mermaid(mermaid: &str) -> InvariantGraph {
+    match parse_mermaid(mermaid) {
+        Ok(graph) => filter_orphans(&graph),
+        Err(_) => InvariantGraph::new("empty"),
+    }
+}
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -456,12 +467,23 @@ async fn viz_mermaid_render_handler(
     if text.is_empty() {
         return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
     }
-    match render_mermaid_native(text) {
-        Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
-        Err(e) => axum::Json(serde_json::json!({
-            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-            "error": e,
-        })),
+    #[cfg(feature = "mermaid-native")]
+    {
+        match render_mermaid_native(text) {
+            Ok(svg) => return axum::Json(serde_json::json!({"svg": svg})),
+            Err(e) => return axum::Json(serde_json::json!({
+                "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                "error": e,
+            })),
+        }
+    }
+    #[cfg(not(feature = "mermaid-native"))]
+    {
+        let _ = text;
+        axum::Json(serde_json::json!({
+            "svg": "",
+            "error": "mermaid-native feature not enabled"
+        }))
     }
 }
 

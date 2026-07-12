@@ -40,11 +40,11 @@ pub enum StoreCommands {
         #[clap(long, help = "Credential provider (cloudflare-r2, aws-s3)")]
         provider: String,
     },
-    #[clap(about = "Initialise the knowledge store directory + NeumannStore backend")]
+    #[clap(about = "Initialise the knowledge store directory + backend")]
     Init,
     #[clap(about = "Show store status (backend, object count, disk usage)")]
     Status,
-    #[clap(about = "Cross-engine consistency check: Store ↔ NeumannStore ↔ blobs")]
+    #[clap(about = "Cross-engine consistency check: Store ↔ knowledge backend ↔ blobs")]
     Validate,
 }
 
@@ -119,8 +119,9 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
         }
         StoreCommands::Validate => {
             let report = b00t_c0re_lib::store::validate_consistency()?;
+            println!("Backend:          {}", report.backend);
             println!("Manifest entries: {}", report.manifest_entries);
-            println!("Neumann facts:    {}", report.neumann_facts);
+            println!("Related facts:    {}", report.related_facts);
             println!("Hash matches:     {}", report.hash_matches);
             println!("Hash mismatches:  {}", report.hash_mismatches);
             println!("Orphan facts:     {}", report.orphan_facts);

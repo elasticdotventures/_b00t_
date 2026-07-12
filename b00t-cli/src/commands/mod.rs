@@ -120,9 +120,13 @@ pub use patch::PatchCommands;
 pub mod server;
 pub use server::ServerCommands;
 pub use server::handle_server_command;
-<<<<<<< HEAD
+pub mod calibrate;
+pub mod evidence;
+pub mod from_artifact;
+pub mod provider;
 pub mod store;
+pub mod pipeline;
+pub use pipeline::PipelineCommands;
+pub use pipeline::handle_pipeline_command;
 pub use store::StoreCommands;
 pub use store::handle_store_command;
-=======
->>>>>>> origin/main

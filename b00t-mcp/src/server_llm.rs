@@ -169,7 +169,7 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Action { Read, Write, Execute }
 

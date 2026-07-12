@@ -787,6 +787,15 @@ pub struct BootDatum {
     // 🤓 type_tags: content classification (transferable, domain, etc.) — distinct from datum_type
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_tags: Option<Vec<String>>,
+    // 🤓 maintenance: check interval + command for periodic health checks
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<MaintenanceConfig>,
+    // 🤓 runtime: sandbox isolation + binary launch config for runtime datums
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeConfig>,
+    // 🤓 polyseme: one topic → multiple datums (legacy, retain for TOML compat)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub polyseme: Option<PolysemeConfig>,
 }
 
 /// Handle datum types that are marked as *incubating*.
@@ -1298,6 +1307,17 @@ pub enum DatumType {
     ///    Agents discover available credentials with: b00t datum list --type credential
     ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
+    /// Polyseme — resolves to multiple concrete datums from one topic name
+    Polyseme,
+    Runtime,
+    Training,
+    McpServer,
+    Schema,
+    Hook,
+    Gate,
+    Plan,
+    Vendor,
+    Ooda,
     Unknown,
 }
 
@@ -1558,6 +1578,16 @@ impl DatumType {
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
         Credential  => ["credential", "credentials"]  => ".credential",
+        Polyseme    => ["polyseme"]                  => ".polyseme",
+        Runtime     => ["runtime"]                   => ".runtime",
+        Training    => ["training"]                  => ".training",
+        McpServer   => ["mcp_server", "mcp-server"]  => ".mcp_server",
+        Schema      => ["schema"]                    => ".schema",
+        Hook        => ["hook"]                      => ".hook",
+        Gate        => ["gate"]                      => ".gate",
+        Plan        => ["plan"]                      => ".plan",
+        Vendor      => ["vendor"]                    => ".vendor",
+        Ooda        => ["ooda"]                      => ".ooda",
     }
 
     /// Preferred file extension for writing new datum files.

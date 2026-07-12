@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::irontology_bridge::{ActiveKnowledgeStore, KnowledgeStoreBackend, StoreConfig};
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +178,58 @@ pub fn query(tags: &BTreeMap<String, String>) -> Result<Vec<StoreEntry>> {
         .collect())
 }
 
+// ── Influence attribution (AL-1.0) ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub subject: String,
+    pub sources: Vec<InfluenceSource>,
+}
+
+/// 🤓 Minimal AL-1.0 attribution: normalises raw scores into ratios summing to 1.0.
+///    Does not persist — callers (e.g. evidence records) attach the receipt directly.
+pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+    let total: f64 = scored_sources.iter().map(|(_, score)| score).sum();
+    let sources = scored_sources
+        .iter()
+        .map(|(source_key, score)| InfluenceSource {
+            source_key: source_key.clone(),
+            ratio: if total > 0.0 { score / total } else { 0.0 },
+            score: *score,
+        })
+        .collect();
+    Ok(InfluenceReceipt {
+        subject: subject.to_string(),
+        sources,
+    })
+}
+
+// ── Init / Status ─────────────────────────────────────────────────────────
+
+/// Initialise the knowledge store directory.
+pub fn init() -> Result<()> {
+    std::fs::create_dir_all(store_root()).context("failed to create store root")?;
+    Ok(())
+}
+
+/// Return (object count, total bytes) across all stored entries.
+pub fn status() -> (usize, u64) {
+    match load_manifest() {
+        Ok(manifest) => {
+            let bytes = manifest.entries.iter().map(|e| e.size_bytes).sum();
+            (manifest.entries.len(), bytes)
+        }
+        Err(_) => (0, 0),
+    }
+}
+
 // ── Sync (local → remote placeholder) ─────────────────────────────────────
 
 /// Sync stored objects to a remote S3/R2 bucket using credential datums.
@@ -214,13 +268,15 @@ pub fn sync(provider: &str) -> Result<()> {
 // ── Cross-engine validation ─────────────────────────────────────────────────
 
 /// 🤓 AL-1.0 two-engine invariant applied to b00t's data fabric.
-///    Validates that Store manifest entries have matching facts in NeumannStore
-///    and that content hashes are consistent. Returns discrepancy report.
+///    Validates that Store manifest entries have matching facts in the
+///    compiled knowledge backend and that content hashes are consistent.
+///    Returns discrepancy report.
 pub fn validate_consistency() -> Result<CrossEngineReport> {
     let manifest = load_manifest()?;
     let mut report = CrossEngineReport {
+        backend: crate::compiled_knowledge_backend().to_string(),
         manifest_entries: manifest.entries.len(),
-        neumann_facts: 0,
+        related_facts: 0,
         hash_matches: 0,
         hash_mismatches: 0,
         missing_facts: Vec::new(),
@@ -229,43 +285,49 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     };
 
     // Query NeumannStore for b00t:hasChecksum facts
-    let fact_results = block_on_neumann(move |store| async move {
+    let fact_results = block_on_store(move |store| async move {
         store.query(crate::irontology_bridge::SemanticQuery {
             subject: None,
             predicate: Some("b00t:hasChecksum".into()),
         }).await
     });
     if let Ok(Ok(query_result)) = fact_results {
-        report.neumann_facts = query_result.facts.len();
+        report.related_facts = query_result.facts.len();
 
-        let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        // Build a lookup: checksum → knowledge-backend IRIs
+        let mut backend_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for fact in &query_result.facts {
             if let Some(checksum) = fact.object.as_str() {
-                neumann_checksums.entry(checksum.to_string())
+                backend_checksums.entry(checksum.to_string())
                     .or_default()
                     .push(fact.subject.clone());
             }
         }
 
+        // Cross-reference: every StoreEntry checksum should have a matching backend fact
         for entry in &manifest.entries {
-            match neumann_checksums.get(&entry.checksum) {
+            match backend_checksums.get(&entry.checksum) {
                 Some(subjects) => {
                     report.hash_matches += 1;
+                    if subjects.len() > 1 {
+                        // Multiple backend entries for same checksum — normal for multiple consumers
+                    }
                 }
                 None => {
                     report.missing_facts.push(Discrepancy {
                         manifest_key: entry.key.clone(),
                         checksum: entry.checksum.clone(),
-                        detail: format!("no NeumannStore fact for checksum {}", &entry.checksum[..12]),
+                        detail: format!("no knowledge-backend fact for checksum {}", &entry.checksum[..12]),
                     });
                 }
             }
         }
 
+        // Orphan facts: backend facts without matching store entries
         let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
-        for (checksum, subjects) in &neumann_checksums {
+        for (checksum, subjects) in &backend_checksums {
             if !manifest_checksums.contains(checksum.as_str()) {
                 report.orphan_facts += subjects.len();
             }
@@ -279,8 +341,9 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossEngineReport {
+    pub backend: String,
     pub manifest_entries: usize,
-    pub neumann_facts: usize,
+    pub related_facts: usize,
     pub hash_matches: usize,
     pub hash_mismatches: usize,
     pub missing_facts: Vec<Discrepancy>,
@@ -295,20 +358,30 @@ pub struct Discrepancy {
     pub detail: String,
 }
 
-// ── Internal: NeumannStore async bridge ────────────────────────────────────
+// ── Internal: knowledge-backend async bridge ────────────────────────────────
 
-fn block_on_neumann<F, Fut, T>(f: F) -> Result<Result<T>>
+fn block_on_store<F, Fut, T>(f: F) -> Result<Result<T>>
 where
     F: FnOnce(ActiveKnowledgeStore) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = Result<T>> + Send,
     T: Send + 'static,
 {
-    let store = neumann()?;
+    let namespace = "store".to_string();
+    let data_dir = crate::irontology_bridge::compiled_knowledge_backend_data_path(&namespace)?;
+    std::fs::create_dir_all(&data_dir)?;
+    let config = StoreConfig {
+        endpoint: "http://localhost:7777".to_string(),
+        namespace,
+        data_path: Some(data_dir),
+    };
+    let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config)?;
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => {
+            // Already inside a tokio runtime — use block_in_place to yield the thread
             Ok(tokio::task::block_in_place(|| handle.block_on(f(store))))
         }
         Err(_) => {
+            // No runtime — spin up a temporary one
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -317,6 +390,7 @@ where
         }
     }
 }
+
 // ── Internal: manifest + crypto ────────────────────────────────────────────
 
 fn load_manifest() -> Result<StoreManifest> {
@@ -396,3 +470,7 @@ mod tests {
         assert!(!query.is_empty());
     }
 }
+
+// ── Store lifecycle + influence tracking ───────────────────────────────────
+
+
