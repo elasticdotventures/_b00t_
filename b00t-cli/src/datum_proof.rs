@@ -391,6 +391,17 @@ impl BootDatum {
             Some(DatumType::Hardware)    => Ok(()),
             Some(DatumType::Overlay)     => Ok(()),
             Some(DatumType::Credential)  => Ok(()),
+            Some(DatumType::Pipeline)   => Ok(()),
+            Some(DatumType::Runtime)    => Ok(()),
+            Some(DatumType::Polyseme)   => Ok(()),
+            Some(DatumType::Gate)       => Ok(()),
+            Some(DatumType::Hook)       => Ok(()),
+            Some(DatumType::McpServer)  => Ok(()),
+            Some(DatumType::Plan)       => Ok(()),
+            Some(DatumType::Schema)     => Ok(()),
+            Some(DatumType::Training)   => Ok(()),
+            Some(DatumType::Vendor)     => Ok(()),
+            Some(DatumType::Ooda)       => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }
