@@ -22,7 +22,7 @@ use b00t_admin::{
     DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
     registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans, filter_orphans_from_mermaid};
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, render_mermaid_native, filter_orphans};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
 use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
@@ -453,17 +453,10 @@ async fn viz_mermaid_render_handler(
     axum::extract::Json(body): axum::extract::Json<serde_json::Value>,
 ) -> impl IntoResponse {
     let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
-    let hide_orphans = body.get("hide_orphans").and_then(|v| v.as_bool()).unwrap_or(false);
     if text.is_empty() {
         return axum::Json(serde_json::json!({"svg": "", "error": "missing text"}));
     }
-    let to_render = if hide_orphans {
-        let graph = filter_orphans_from_mermaid(text);
-        graph.to_mermaid()
-    } else {
-        text.to_string()
-    };
-    match render_mermaid_native(&to_render) {
+    match render_mermaid_native(text) {
         Ok(svg) => axum::Json(serde_json::json!({"svg": svg})),
         Err(e) => axum::Json(serde_json::json!({
             "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
@@ -895,6 +888,42 @@ pub fn dashboard_html(pipeline_json: &str, types_json: &str) -> String {
 <meta name="b00t-emoji" content="🥾">
 <title>b00t Admin Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥾</text></svg>">
+<script>
+window._mermaidRender = function(t) {{ return '<svg><text fill=\u0023eab308>Loading mmdr WASM...</text></svg>'; }};
+window._wasmLoadStart = Date.now();
+(async function() {{
+  var wasmUrl = '/wasm/wasm/mermaid_bg.wasm';
+  var meter = document.getElementById('mermaid-target');
+  try {{
+    var resp = await fetch(wasmUrl);
+    var total = parseInt(resp.headers.get('Content-Length') || '5000000');
+    var reader = resp.body.getReader();
+    var received = 0;
+    var chunks = [];
+    while (true) {{
+      var r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value);
+      received += r.value.length;
+      var pct = Math.min(99, Math.round(received / total * 100));
+      var mb = (received / 1048576).toFixed(1);
+      var tmb = (total / 1048576).toFixed(1);
+      if (meter) meter.innerHTML = '<div style=\"display:flex;flex-direction:column;align-items:center;padding:40px;color:#64748b;\">' +
+        '<div style=\"font-size:13px;margin-bottom:10px;\">Loading Mermaid renderer</div>' +
+        '<div style=\"width:220px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;\"><div style=\"width:'+pct+'%;height:100%;background:#38bdf8;border-radius:3px;transition:width 0.2s;\"></div></div>' +
+        '<div style=\"font-size:10px;margin-top:6px;\">'+mb+' / '+tmb+' MB ('+pct+'%)</div></div>';
+    }}
+    window._wasmBytes = new Blob(chunks);
+  }} catch(e) {{ console.warn('wasm prefetch:', e.message); }}
+  try {{
+    var m = await import('/wasm/wasm/mermaid.js');
+    await m.default();
+    window._mermaidReady = true;
+    window._mermaidRender = m.render_mermaid;
+    console.log('mmdr WASM ready (' + ((Date.now()-window._wasmLoadStart)/1000).toFixed(1) + 's)');
+  }} catch(e) {{ console.warn('mmdr WASM:', e.message); }}
+}})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -1527,6 +1556,7 @@ document.addEventListener('keydown', function(e) {{
 }});
 
 // ════════ Mermaid Init (WASM) ════════
+(async function(){{ try {{ await window._mermaidInit(); console.log('mmdr WASM ready'); }} catch(e){{ console.warn('mmdr WASM:', e); }} }})();
 
 // ════════ Pipeline Update ════════
 var PIPELINE = {{}};
@@ -1792,23 +1822,19 @@ function renderMermaid() {{
   if (!raw || !raw.trim()) {{ target.innerHTML = '<div style="color:#64748b;padding:20px;">No mermaid data</div>'; return; }}
   var stripped = raw.replace(/```mermaid\n?/g, '').replace(/```/g, '').trim();
   target.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;color:#64748b;"><div class=\"wasm-spinner\" style=\"width:24px;height:24px;border:3px solid #1e293b;border-top:3px solid #38bdf8;border-radius:50%;margin-right:12px;\"></div><span style=\"font-size:12px;\">Rendering ' + stripped.length + ' chars...</span></div>';
-  var hideOrphans = document.getElementById('hide-orphans')?.checked || false;
   fetch('/api/admin/viz/mermaid/render', {{
     method: 'POST',
     headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{text: stripped, hide_orphans: hideOrphans}})
+    body: JSON.stringify({{text: stripped}})
   }}).then(function(r){{return r.json();}}).then(function(d) {{
     var svg = d.svg || '';
-    svg = svg.replace(/fill=\"\u0023FFFFFF\"/g, 'fill=\"\u00230f172a\"');
-    svg = svg.replace(/fill=\"white\"/g, 'fill=\"\u00230f172a\"');
-    svg = svg.replace(/background:\s*\u0023FFFFFF/g, 'background:\u00230f172a');
     svg = svg.replace(/width=\"[^\"]*\"/, '').replace(/height=\"[^\"]*\"/, '');
     target.innerHTML = '<div class=\"fade-in\" style=\"max-width:100%;overflow:auto;\">' + svg + '</div>';
     document.getElementById('viz-status').textContent = 'mermaid-rs-renderer · ' + (raw||'').length + ' chars';
   }}).catch(function(e) {{
     target.innerHTML = '<div style=\"color:#ef4444;padding:20px;\">Render error: ' + e.message + '</div>';
     addStatus('error', 'Mermaid render failed: ' + e.message);
-  }});
+  }}
 }}
 
 function loadGraph(sel) {{
@@ -1850,14 +1876,7 @@ function loadGraph(sel) {{
       d._roleLegend = ISO_ROLES;
       target.innerHTML = d.svg || '<div style="color:#64748b;padding:20px;">No data</div>';
       title.textContent = d.grouped ? 'Container View' : 'Isometric View';
-      var depthInfo = '';
-      if (d.depth) {{
-        depthInfo = ' · depth: ' + d.depth.surface + ' surface, ' + d.depth.extended + ' extended, ' + d.depth.historical + ' historical';
-      if (d.depth.extended + d.depth.historical > 0) {{
-        depthInfo += ' <a href=\"\u0023\" onclick=\"toggleDepth(this,event)\" style=\"color:#38bdf8;text-decoration:none;\">show all</a>';
-      }}
-      }}
-      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari') + depthInfo;
+      status.textContent = (d.grouped ? d.total_components + ' groups, ' : '') + (d.nodes||0) + ' nodes, ' + (d.edges||0) + ' edges · ' + (d.solver||'kasuari');
       setTimeout(function(){{
         attachIsoViewer(target);
         buildIsoLegend(target);
@@ -1999,35 +2018,11 @@ function buildIsoLegend(container) {{
   var html = '<div style="position:absolute;bottom:4px;left:4px;display:flex;flex-wrap:wrap;gap:3px;max-width:70%;z-index:10;padding:4px;border-radius:4px;">';
   ISO_ROLES.forEach(function(r) {{
     if (!used.has(r.r)) return;
-    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="(function(el,role){{var c=el.parentElement.parentElement;c.querySelectorAll(".iso-node").forEach(function(n){{n.style.opacity=n.getAttribute(\"data-node-role\")===role?\"1\":\"0.15\";n.style.filter=n.getAttribute(\"data-node-role\")===role?\"none\":\"grayscale(1)\";}});c.querySelectorAll(\"[data-edge-from]\").forEach(function(e){{e.setAttribute(\"opacity\",\"0.1\");}});}})(this,\''+r.r+'\')">'+r.e+' '+r.r+'</span>';
+    html += '<span style="background:'+r.c+';color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;opacity:0.85;" title="'+r.r+'" onclick="var c=this.parentElement.parentElement;c.querySelectorAll(\'.iso-node\').forEach(function(n){{n.style.opacity=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'1\':\'0.15\';n.style.filter=n.getAttribute(\'data-node-role\')===\''+r.r+'\'?\'none\':\'grayscale(1)\';}});c.querySelectorAll(\'[data-edge-from]\').forEach(function(e){{e.setAttribute(\'opacity\',\'0.1\');}});">'+r.e+' '+r.r+'</span>';
   }});
   html += '</div>';
   var leg = document.createElement('div'); leg.innerHTML = html;
   container.appendChild(leg);
-}}
-
-// ════════ Depth toggle — show/hide extended+historical nodes ════════
-
-var _showAllDepth = false;
-function toggleDepth(link, e) {{
-  e.preventDefault();
-  _showAllDepth = !_showAllDepth;
-  link.textContent = _showAllDepth ? 'hide extended' : 'show all';
-  var svg = document.querySelector('#mermaid-target svg');
-  if (!svg) return;
-  var connected = new Set();
-  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
-    connected.add(el.getAttribute('data-edge-from'));
-    connected.add(el.getAttribute('data-edge-to'));
-  }});
-  svg.querySelectorAll('.iso-node').forEach(function(n) {{
-    var nid = n.getAttribute('data-node-id');
-    n.style.display = (_showAllDepth || connected.has(nid)) ? '' : 'none';
-  }});
-  svg.querySelectorAll('[data-edge-from]').forEach(function(el) {{
-    var f = el.getAttribute('data-edge-from');
-    el.setAttribute('opacity', (_showAllDepth || connected.has(f)) ? '0.5' : '0.05');
-  }});
 }}
 
 // ════════ Container drill-down (branch-and-bound sub-graphs) ════════
@@ -2177,7 +2172,7 @@ mod html_sanity_tests {
     #[test]
     fn has_required_cdns() {
         let h = test_html();
-        assert!(h.contains("cytoscape"));
+        assert!(h.contains("mermaid.js"));
         assert!(h.contains("cytoscape.min.js"));
     }
 

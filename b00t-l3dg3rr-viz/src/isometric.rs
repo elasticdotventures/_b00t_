@@ -17,8 +17,7 @@ const ISO_Y: f64 = 0.5; // sin(30°)
 const NODE_SPACING: f64 = 120.0;
 const LAYER_SPACING: f64 = 100.0;
 const MIN_X_DIST: f64 = 140.0;
-const MAX_NODES: usize = 80;
-const MAX_SUBGRAPHS: usize = 300;
+const MAX_NODES: usize = 40;
 
 /// 2:1 dimetric isometric projection — maps 3D world coords to 2D screen pixels.
 ///
@@ -358,12 +357,6 @@ pub fn filter_orphans(graph: &InvariantGraph) -> InvariantGraph {
     filtered
 }
 
-/// Strip orphan nodes from raw mermaid text.
-pub fn filter_orphans_from_mermaid(mermaid: &str) -> InvariantGraph {
-    let graph = parse_mermaid(mermaid).unwrap_or_else(|_| InvariantGraph::new("empty"));
-    filter_orphans(&graph)
-}
-
 pub fn mermaid_to_isometric_svg(mermaid_text: &str) -> Result<String, String> {
     let graph = parse_mermaid(mermaid_text).map_err(|e| e.to_string())?;
     if let Err(e) = graph.validate() {
@@ -507,56 +500,12 @@ pub fn scene_to_gltf_data_uri(
     Ok(format!("data:model/gltf+json;base64,{encoded}"))
 }
 
-/// Contextual depth: derived from graph connectivity, not file location.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ContextDepth {
-    Surface,
-    Extended,
-    Historical,
-}
-
-impl ContextDepth {
-    pub fn classify(graph: &InvariantGraph) -> std::collections::HashMap<String, Self> {
-        let connected: std::collections::HashSet<&str> = graph
-            .edges.iter()
-            .flat_map(|e| [e.from.as_str(), e.to.as_str()])
-            .collect();
-        graph.nodes.iter().map(|n| {
-            let depth = if connected.contains(n.id.as_str()) {
-                Self::Surface
-            } else if is_tool_role(&n.role) {
-                Self::Extended
-            } else {
-                Self::Historical
-            };
-            (n.id.clone(), depth)
-        }).collect()
-    }
-}
-
-fn is_tool_role(role: &VisualizationRole) -> bool {
-    matches!(role,
-        VisualizationRole::Data | VisualizationRole::Intelligence |
-        VisualizationRole::Rule | VisualizationRole::Security |
-        VisualizationRole::Storage | VisualizationRole::Ingest |
-        VisualizationRole::Classify | VisualizationRole::Reconcile |
-        VisualizationRole::Commit | VisualizationRole::Step |
-        VisualizationRole::Task | VisualizationRole::Event |
-        VisualizationRole::Human
-    )
-}
-
 pub fn graph_to_isometric_response(
     graph: &InvariantGraph,
 ) -> Result<serde_json::Value, String> {
     let positions = kasuari_layout(graph)?;
     let svg = render_svg(graph, &positions);
     let gltf = scene_to_gltf_data_uri(graph, &positions).ok();
-    let depth = ContextDepth::classify(graph);
-    let surface_count = depth.values().filter(|d| matches!(d, ContextDepth::Surface)).count();
-    let extended_count = depth.values().filter(|d| matches!(d, ContextDepth::Extended)).count();
-    let historical_count = depth.values().filter(|d| matches!(d, ContextDepth::Historical)).count();
     Ok(serde_json::json!({
         "svg": svg,
         "gltf": gltf,
@@ -564,11 +513,6 @@ pub fn graph_to_isometric_response(
         "solver": "kasuari/0.4/cassowary",
         "nodes": graph.nodes.len(),
         "edges": graph.edges.len(),
-        "depth": {
-            "surface": surface_count,
-            "extended": extended_count,
-            "historical": historical_count,
-        },
     }))
 }
 
@@ -731,7 +675,7 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         .iter()
         .enumerate()
         .filter(|(_, ids)| ids.len() <= MAX_NODES)
-        .take(MAX_SUBGRAPHS)
+        .take(50)
         .map(|(i, ids)| {
             let sub = build_component_subgraph(graph, ids, i);
             let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
