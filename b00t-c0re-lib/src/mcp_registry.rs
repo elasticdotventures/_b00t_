@@ -491,6 +491,7 @@ impl McpRegistry {
         struct ServerListResponse {
             servers: Vec<RegistryServer>,
             #[serde(default)]
+            #[allow(dead_code)]
             metadata: Option<serde_json::Value>,
         }
 

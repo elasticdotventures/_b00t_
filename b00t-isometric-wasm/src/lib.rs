@@ -10,13 +10,10 @@
 
 use wasm_bindgen::prelude::*;
 
-use b00t_l3dg3rr_viz::isometric::{
-    parse_mermaid, graph_to_isometric_svg, ContextDepth,
-};
+use b00t_l3dg3rr_viz::isometric::graph_to_isometric_svg;
 use b00t_l3dg3rr_viz::{
     InvariantEdge, InvariantGraph, InvariantNode, VisualizationRole,
 };
-use std::collections::HashMap;
 
 #[wasm_bindgen]
 pub fn render_isometric(json_data: &str) -> String {

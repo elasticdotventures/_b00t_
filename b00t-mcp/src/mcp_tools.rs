@@ -234,7 +234,6 @@ impl crate::clap_reflection::McpReflection for AgentDiscoverCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentDiscoverCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::ChatClient;
         use std::time::Duration;
 
         let json = params.get("json").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -322,7 +321,7 @@ impl crate::clap_reflection::McpReflection for AgentMessageCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentMessageCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
 
         let to_agent = params.get("to_agent").and_then(|v| v.as_str()).unwrap_or("unknown");
         let content = params.get("content").and_then(|v| v.as_str()).unwrap_or("");
@@ -748,7 +747,6 @@ impl crate::clap_reflection::McpReflection for AgentWaitCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentWaitCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
         use std::time::Duration;
 
         let timeout_secs = params.get("timeout")
@@ -811,7 +809,7 @@ impl crate::clap_reflection::McpReflection for AgentNotifyCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentNotifyCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
         use serde_json;
 
         let source = params.get("source").and_then(|v| v.as_str()).unwrap_or("mcp");
@@ -854,7 +852,7 @@ impl crate::clap_reflection::McpReflection for AgentCapabilityCommand {
 
 impl crate::clap_reflection::McpExecutor for AgentCapabilityCommand {
     fn execute_mcp_call(params: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<String> {
-        use b00t_chat::{ChatClient, NotificationMessage};
+        use b00t_chat::NotificationMessage;
         use std::time::Duration;
 
         let capabilities = params.get("capabilities").and_then(|v| v.as_str()).unwrap_or("");

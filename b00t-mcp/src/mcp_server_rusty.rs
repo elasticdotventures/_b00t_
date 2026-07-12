@@ -31,7 +31,7 @@ use std::path::Path;
 use tracing::{debug, error, info};
 
 use crate::clap_reflection::McpCommandRegistry;
-use crate::{chat::ChatRuntime, mcp_tools::{create_code_mode_registry, create_mcp_registry}};
+use crate::{chat::ChatRuntime, mcp_tools::create_code_mode_registry};
 use b00t_c0re_lib::{B00tContext, utils};
 
 /// Rusty b00t MCP server with compile-time generated tools
