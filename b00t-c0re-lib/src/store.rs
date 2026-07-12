@@ -238,6 +238,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     if let Ok(Ok(query_result)) = fact_results {
         report.neumann_facts = query_result.facts.len();
 
+        // Build a lookup: checksum → NeumannStore IRIs
         let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for fact in &query_result.facts {
             if let Some(checksum) = fact.object.as_str() {
@@ -247,10 +248,14 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
             }
         }
 
+        // Cross-reference: every StoreEntry checksum should have a matching Neumann fact
         for entry in &manifest.entries {
             match neumann_checksums.get(&entry.checksum) {
                 Some(subjects) => {
                     report.hash_matches += 1;
+                    if subjects.len() > 1 {
+                        // Multiple Neumann entries for same checksum — normal for multiple consumers
+                    }
                 }
                 None => {
                     report.missing_facts.push(Discrepancy {
@@ -262,6 +267,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
             }
         }
 
+        // Orphan facts: Neumann facts without matching store entries
         let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
@@ -306,9 +312,11 @@ where
     let store = neumann()?;
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => {
+            // Already inside a tokio runtime — use block_in_place to yield the thread
             Ok(tokio::task::block_in_place(|| handle.block_on(f(store))))
         }
         Err(_) => {
+            // No runtime — spin up a temporary one
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -317,6 +325,7 @@ where
         }
     }
 }
+
 // ── Internal: manifest + crypto ────────────────────────────────────────────
 
 fn load_manifest() -> Result<StoreManifest> {
