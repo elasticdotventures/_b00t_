@@ -321,29 +321,4 @@ test/bats/
 test/test_helper/
 buildd/
 .opencode/goals/
-
-# lfmf runtime telemetry (local, ~/.b00t IS this repo)
-lfmf-telemetry.jsonl
-
-# runtime state — never commit (rotate any keys already pushed)
-server-keys.json
-spotlight.jsonl
-
-# build/training artifacts
-unsloth_compiled_cache/
-fine-tune/output-*/
-
-# unregistered vendor checkout — register as submodule or remove (operator decision)
-vendor/pi-mono/
-
-# generated from local-only evidence/ — regenerate via just ai-finetune::evidence-train
-fine-tune/evidence_train.jsonl
-
-# serena pod runtime artifacts (writes into its config hostPath)
-_b00t_/k8s/serena-config/news*
-
-# serena runtime cache (project.yml IS tracked)
-.serena/cache/
-
-# harvest output — mined from local transcripts, derived data
-harvest_candidates.jsonl
+*.wasm
