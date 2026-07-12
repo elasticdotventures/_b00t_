@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router, server_llm, server_skill,
+    github_auth_router, minimal_oauth_router, server_llm,
 };
 
 /// Transport mode for the MCP server.
@@ -237,9 +237,9 @@ async fn main() -> Result<()> {
             .merge(github_auth_router(github_state));
 
         if is_llm_mode {
-            let llm_state = Arc::new(server_llm::LlmState::new_with_auth(auth_provider));
+            let llm_state = Arc::new(server_llm::LlmState::new());
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), auth_provider));
+            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
         }
 
         let app = app.layer(CorsLayer::permissive());

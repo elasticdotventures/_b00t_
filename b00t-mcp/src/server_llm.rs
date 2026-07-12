@@ -16,7 +16,6 @@ use axum::{
     routing::{get, post},
 };
 use axum::http::header;
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -170,11 +169,11 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Action { Read, Write, Execute }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub struct ClassPermission {
     pub class: String,
     pub action: Action,
@@ -182,6 +181,7 @@ pub struct ClassPermission {
 
 impl ClassPermission {
     pub fn parse(s: &str) -> Option<Self> {
+        // Format: "b00t:EmbeddingModel:execute"
         let parts: Vec<&str> = s.rsplitn(2, ':').collect();
         if parts.len() != 2 { return None; }
         let action = match parts[0] {
@@ -250,7 +250,6 @@ pub struct LlmState {
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
-    pub auth: AuthProvider,
 }
 
 impl LlmState {
@@ -258,14 +257,6 @@ impl LlmState {
         let soul = SoulConfig::load();
         let (url, key) = resolve_upstream(&soul);
         Self::from_config(&url, &key)
-    }
-
-    pub fn new_with_auth(auth: AuthProvider) -> Self {
-        let soul = SoulConfig::load();
-        let (url, key) = resolve_upstream(&soul);
-        let mut state = Self::from_config(&url, &key);
-        state.auth = auth;
-        state
     }
 
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
@@ -298,61 +289,14 @@ impl LlmState {
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
-            auth: AuthProvider::Basic,
         }
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
-        match self.auth {
-            AuthProvider::Hydra => self.validate_key_hydra(token).await.ok().flatten(),
-            _ => self.keys.read().await.get(token).cloned(),
-        }
+        self.keys.read().await.get(token).cloned()
     }
 
-    /// Validate a token via Ory Hydra's introspection endpoint.
-    /// Returns a KeyEntry if the token is active, with scopes mapped to ClassPermission.
-    async fn validate_key_hydra(&self, token: &str) -> anyhow::Result<Option<KeyEntry>> {
-        let admin_url = std::env::var("HYDRA_ADMIN_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:4445".to_string());
-        let url = format!("{}/admin/oauth2/introspect", admin_url.trim_end_matches('/'));
-
-        let client = reqwest::Client::new();
-        let resp = client
-            .post(&url)
-            .form(&[("token", token)])
-            .send()
-            .await
-            .context("Hydra introspection request failed")?;
-
-        if !resp.status().is_success() {
-            return Ok(None);
-        }
-
-        let body: Value = resp.json().await.context("Hydra introspection response parse")?;
-        let active = body.get("active").and_then(|v| v.as_bool()).unwrap_or(false);
-        if !active {
-            return Ok(None);
-        }
-
-        let scope_str = body.get("scope").and_then(|v| v.as_str()).unwrap_or("");
-        let access: Vec<ClassPermission> = scope_str
-            .split_whitespace()
-            .filter_map(hydra_scope_to_permission)
-            .collect();
-
-        let client_id = body.get("client_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        Ok(Some(KeyEntry {
-            consumer: client_id,
-            created_at: chrono::Utc::now(),
-            access,
-        }))
-    }
-
-    pub async fn check_access(&self, token: &str, class: &str, _action: Action) -> bool {
+    pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
         if let Some(entry) = self.validate_key(token).await {
             if entry.access.is_empty() {
                 return true; // empty access = full access (backwards compat)
@@ -398,35 +342,17 @@ impl LlmState {
     }
 
     async fn emit_spotlight(&self, consumer: &str, endpoint: &str, model: &str, latency_ms: u64) {
-        let mut event = json!({
+        let event = json!({
             "ts": chrono::Utc::now().to_rfc3339(),
             "event": format!("spotlight.llm.{}", endpoint),
             "consumer": consumer,
             "model": model,
             "latency_ms": latency_ms,
         });
-        // 🤓 AL-1.0 influence receipt link — if store influence was computed
-        //    for this consumer, attach the receipt reference.
-        if let Some(receipt_id) = self.latest_influence_receipt().await {
-            if let Some(obj) = event.as_object_mut() {
-                obj.insert("receipt".into(), json!(receipt_id));
-            }
-        }
         if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&self.spotlight_log) {
             use std::io::Write;
             let _ = writeln!(f, "{}", event);
         }
-    }
-
-    /// Find the most recent influence receipt for this consumer.
-    /// Bridges the store's influence system into spotlight telemetry.
-    async fn latest_influence_receipt(&self) -> Option<String> {
-        let mut tags = std::collections::BTreeMap::new();
-        tags.insert("type".into(), "influence-receipt".into());
-        b00t_c0re_lib::store::query(&tags)
-            .ok()?
-            .first()
-            .map(|e| e.key.clone())
     }
 }
 
@@ -460,8 +386,7 @@ impl AuthProvider {
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-pub fn llm_router(state: Arc<LlmState>, auth: AuthProvider) -> Router {
-    let dev_mode = matches!(auth, AuthProvider::Dev);
+pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
     Router::new()
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(proxy_chat))
@@ -485,7 +410,6 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
 
 // ── Endpoint → ontology class mapping ─────────────────────────────────────
 
-#[allow(dead_code)]
 fn class_for_path(path: &str) -> (&str, Action) {
     if path.contains("chat/completions") {
         ("b00t:ChatModel", Action::Execute)
@@ -534,25 +458,6 @@ async fn list_models(
     }
 }
 
-fn check_cake_budget() -> anyhow::Result<()> {
-    use b00t_c0re_lib::kv_store::KvStore;
-    let kv = KvStore::with_auto_detect();
-    let cap: f64 = kv.get("economy.cake.monthly_cap_cake")
-        .ok().flatten()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(200.0);
-    let spent: f64 = kv.get("economy.cake.monthly_spent_cake")
-        .ok().flatten()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0.0);
-    if spent >= cap {
-        anyhow::bail!(
-            "🎂 cake budget exhausted: {spent:.1}/{cap:.0}🎂 — AI dispatch blocked. Operator action required."
-        );
-    }
-    Ok(())
-}
-
 async fn proxy_chat(
     State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
@@ -563,33 +468,9 @@ async fn proxy_chat(
     if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
     }
-
-    // ── 🎂 Cake budget hard gate ──────────────────────────────────────────────
-    // Reads soul KV: economy.cake.monthly_cap_cake / economy.cake.monthly_spent_cake
-    // Block at cap — advisory logging is NOT sufficient for autonomous spend control.
-    if !dev_mode {
-        if let Err(e) = check_cake_budget() {
-            return (StatusCode::PAYMENT_REQUIRED,
-                Json(json!({"error": e.to_string(), "hint": "run: b00t soul set economy.cake.monthly_spent_cake 0"}))).into_response();
-        }
-    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
-
-    // Opt-in (#597): B00T_VERIFY_TOOL_INJECT=1 advertises the verify tool to
-    // the model on requests that don't already carry one.
-    let body: Bytes = if std::env::var("B00T_VERIFY_TOOL_INJECT").ok().as_deref() == Some("1") {
-        match serde_json::from_slice::<Value>(&body) {
-            Ok(mut parsed) => {
-                crate::verify_tool_loop::inject_verify_tool(&mut parsed);
-                Bytes::from(serde_json::to_vec(&parsed).unwrap_or_else(|_| body.to_vec()))
-            }
-            Err(_) => body,
-        }
-    } else {
-        body
-    };
     let url = format!("{}/chat/completions", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
@@ -604,80 +485,9 @@ async fn proxy_chat(
         Ok(resp) => {
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
-            let body_bytes = resp.bytes().await.unwrap_or_default();
+            let body = resp.bytes().await.unwrap_or_default();
             state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
-
-            // ── Verify tool loop (#597) ───────────────────────────────────────
-            // Non-streaming responses whose finish_reason is tool_calls on the
-            // `verify` tool are executed locally (Z3) and re-entered, up to
-            // MAX_TOOL_ITERATIONS. Streaming and foreign tools pass through.
-            let request_json: Option<Value> = serde_json::from_slice(&body).ok();
-            let is_stream = request_json
-                .as_ref()
-                .and_then(|r| r["stream"].as_bool())
-                .unwrap_or(false);
-            if status.is_success() && !is_stream {
-                if let (Some(request_json), Ok(response_json)) =
-                    (request_json, serde_json::from_slice::<Value>(&body_bytes))
-                {
-                    if !crate::verify_tool_loop::extract_verify_calls(&response_json).is_empty() {
-                        let upstream_url = format!("{}/chat/completions", state.upstream_url);
-                        let upstream_key = state.upstream_key.clone();
-                        let send = |next_body: Value| {
-                            let url = upstream_url.clone();
-                            let key = upstream_key.clone();
-                            async move {
-                                let client = reqwest::Client::new();
-                                let mut req = client
-                                    .post(&url)
-                                    .header("Content-Type", "application/json")
-                                    .json(&next_body);
-                                if !key.is_empty() {
-                                    req = req.header("Authorization", format!("Bearer {}", key));
-                                }
-                                let resp = req.send().await?;
-                                Ok(resp.json::<Value>().await?)
-                            }
-                        };
-                        let final_response = crate::verify_tool_loop::run_tool_loop(
-                            &request_json,
-                            response_json,
-                            send,
-                            crate::verify_tool_loop::execute_verify_call,
-                        )
-                        .await;
-                        let loop_latency = start.elapsed().as_millis() as u64;
-                        state
-                            .emit_spotlight(&consumer, "chat_completions.verify_loop", &model, loop_latency)
-                            .await;
-                        return (StatusCode::OK, Json(final_response)).into_response();
-                    } else if let Some(content) =
-                        response_json["choices"][0]["message"]["content"].as_str()
-                    {
-                        // Grammar-shape audit (#596): b00t-verify.gbnf output puts
-                        // verify calls inline in content with a model-filled result
-                        // slot — check each against real Z3 and correct mismatches.
-                        let audit = tokio::task::block_in_place(|| {
-                            crate::verify_tool_loop::audit_grammar_content(
-                                content,
-                                crate::verify_tool_loop::z3_result_of,
-                            )
-                        });
-                        if let Some((audited_content, summary)) = audit {
-                            let mut corrected = response_json.clone();
-                            corrected["choices"][0]["message"]["content"] =
-                                Value::String(audited_content);
-                            corrected["b00t_verify_audit"] =
-                                serde_json::to_value(&summary).unwrap_or(Value::Null);
-                            state
-                                .emit_spotlight(&consumer, "chat_completions.verify_audit", &model, start.elapsed().as_millis() as u64)
-                                .await;
-                            return (StatusCode::OK, Json(corrected)).into_response();
-                        }
-                    }
-                }
-            }
-            (status, body_bytes).into_response()
+            (status, body).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
@@ -737,7 +547,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_create_and_validate() {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
-        let key = state.create_key("test-consumer", &[]).await;
+        let key = state.create_key("test-consumer").await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());
