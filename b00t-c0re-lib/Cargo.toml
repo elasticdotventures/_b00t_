@@ -14,7 +14,11 @@ categories = ["command-line-utilities", "development-tools"]
 [lib]
 name = "b00t_c0re_lib"
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+# 🤓 rlib-only: cdylib breaks sccache (0% hit rate). Python builds via maturin inject
+#    --crate-type cdylib automatically, so removing it here has no impact on b00t-py.
+#    Tested: sccache 0.16.0, SCCACHE_CACHE_CUSTOM_CRATE_TYPES=cdylib does NOT fix this.
+#    Verdict: cdylib crate-type makes the ENTIRE compilation unit non-cacheable.
+crate-type = ["rlib"]
 
 [[bin]]
 name = "generate_schemas"

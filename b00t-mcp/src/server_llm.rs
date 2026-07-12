@@ -547,7 +547,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_create_and_validate() {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
-        let key = state.create_key("test-consumer").await;
+        let key = state.create_key("test-consumer", &[]).await;
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());

@@ -934,6 +934,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires HelixDB server"]
     async fn test_active_store_persists_facts_for_later_queries() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let config = StoreConfig {
@@ -968,6 +969,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires HelixDB server"]
     async fn test_bridge_ingest_then_query_returns_content() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(StoreConfig {

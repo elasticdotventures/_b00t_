@@ -1,0 +1,32 @@
+[b00t]
+name = "z3"
+type = "cli"
+hint = "Z3 theorem prover — SMT solver for formal verification of b00t invariants"
+desires = "4.13.0"
+install = "sudo apt-get install -y z3"
+update = "sudo apt-get install --only-upgrade -y z3"
+
+[version]
+cmd = "z3 --version"
+regex = "(\\d+\\.\\d+\\.\\d+)"
+
+[validate]
+command = "z3 --version"
+regex = "Z3"
+
+[[b00t.usage]]
+description = "Check Z3 version"
+command = "z3 --version"
+
+[[b00t.usage]]
+description = "Run Z3 SMT solver on a file"
+command = "z3 -smt2 <file.smt2>"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator", "analyst"]
+
+[b00t.maintenance]
+check_interval_days = 30
+check_command = "apt-cache policy z3 2>/dev/null | rg 'Candidate:' | awk '{print $2}' || echo 'unknown'"
+version_source = "apt:z3"

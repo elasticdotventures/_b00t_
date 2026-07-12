@@ -1,6 +1,7 @@
 //! Z3 constraint solver examples (#600-607) — formal verification of b00t invariants.
 //!
-//! Tests shell out to the `z3` CLI (libz3 must be installed: apt install z3).
+//! 🤓 Tests shell out to the `z3` CLI (apt install z3). All tests #[ignore] by default;
+//!    run with `cargo test -p b00t-c0re-lib -- z3 -- --ignored` to execute.
 //! Feature-gated: `cargo test -p b00t-c0re-lib -- z3`
 
 use std::process::Command;
@@ -28,6 +29,7 @@ fn z3_run(smt2: &str) -> Result<String, String> {
 
 // #600 S1: Datum type uniqueness — one datum, one DatumType
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_s1_datum_type_uniqueness() {
     assert_eq!(z3_run(r#"
 (declare-datatypes () ((DatumType cli mcp skill runtime job api config)))
@@ -40,6 +42,7 @@ fn z3_s1_datum_type_uniqueness() {
 
 // #601 S2: Cake budget invariant — spent + cost ≤ cap
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_s2_cake_budget_invariant() {
     assert_eq!(z3_run(r#"
 (declare-const cap Real)
@@ -55,6 +58,7 @@ fn z3_s2_cake_budget_invariant() {
 
 // #602 S3: Dependency acyclicity
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_s3_dependency_acyclicity() {
     assert_eq!(z3_run(r#"
 (declare-sort Datum 0)
@@ -70,6 +74,7 @@ fn z3_s3_dependency_acyclicity() {
 
 // #603 S4: Scope containment
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_s4_scope_containment() {
     assert_eq!(z3_run(r#"
 (declare-const has_chat_execute Bool)
@@ -86,6 +91,7 @@ fn z3_s4_scope_containment() {
 
 // #604 S5: Training job feasibility
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_s5_training_feasibility() {
     assert_eq!(z3_run(r#"
 (declare-const wall_time_sec Real)
@@ -101,6 +107,7 @@ fn z3_s5_training_feasibility() {
 
 // #605 A1: Pre-flight datum validation
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_a1_preflight_validation() {
     assert_eq!(z3_run(r#"
 (declare-datatypes () ((DatumType cli mcp skill runtime)))
@@ -117,6 +124,7 @@ fn z3_a1_preflight_validation() {
 
 // #606 A2: Budget-gated multi-job scheduling
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_a2_multi_job_scheduling() {
     assert_eq!(z3_run(r#"
 (declare-const sm0l_cost Real)
@@ -136,6 +144,7 @@ fn z3_a2_multi_job_scheduling() {
 
 // #607 A3: Full hive operation proof
 #[test]
+#[ignore = "requires z3 binary"]
 fn z3_a3_full_hive_proof() {
     assert_eq!(z3_run(r#"
 (declare-const acl_ok Bool)

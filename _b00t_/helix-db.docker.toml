@@ -1,0 +1,47 @@
+[b00t]
+name = "helix-db"
+type = "cli"
+hint = "HelixDB — graph-native vector database (local dev: port 6969)"
+desires = "latest"
+install = '''
+# 🤓 HelixDB only publishes arm64 images; podman --platform emulates via QEMU.
+#    On bare-metal amd64 this may be slow or fail. Check: podman ps --filter name=helix-db
+podman run -d --name helix-db \
+  -p 6969:6969 \
+  --restart unless-stopped \
+  --platform linux/arm64 \
+  docker.io/xavier2p/helix-db:latest
+'''
+
+[version]
+cmd = "curl -s http://localhost:6969/v1/health 2>/dev/null || echo 'not running'"
+regex = "ok"
+
+[validate]
+command = "curl -s http://localhost:6969/v1/health"
+regex = "ok"
+
+[[b00t.usage]]
+description = "Start HelixDB container"
+command = "podman start helix-db 2>/dev/null || podman run -d --name helix-db -p 6969:6969 --restart unless-stopped docker.io/xavier2p/helix-db:latest"
+
+[[b00t.usage]]
+description = "Stop HelixDB container"
+command = "podman stop helix-db"
+
+[[b00t.usage]]
+description = "Check HelixDB health"
+command = "curl -s http://localhost:6969/v1/health"
+
+[[b00t.usage]]
+description = "Remove HelixDB container"
+command = "podman rm -f helix-db"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]
+
+[b00t.maintenance]
+check_interval_days = 1
+check_command = "curl -s -o /dev/null -w '%{http_code}' http://localhost:6969/v1/health 2>/dev/null || echo 'down'"
+version_source = "docker.io/xavier2p/helix-db"

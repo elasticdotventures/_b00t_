@@ -7,13 +7,12 @@ name = "sccache"
 type = "cli"
 hint = "Shared compilation cache — wraps rustc/gcc to cache .o artifacts across rebuilds"
 desires = "latest"
+install = "cargo install sccache --locked"
+update = "cargo install sccache --locked --force"
 
 [version]
 cmd = "sccache --version"
 regex = "(\\d+\\.\\d+\\.\\d+)"
-
-[install]
-command = "cargo install sccache --locked"
 
 [validate]
 command = "sccache --version"

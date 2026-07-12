@@ -227,6 +227,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires kubectl and valid kubeconfig"]
     fn test_effective_kubeconfig_path() {
         let config = K8sConfig::default();
 

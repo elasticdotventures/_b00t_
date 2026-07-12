@@ -11,13 +11,18 @@ env:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: 0
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Avoid recursive submodule checkout because orphan gitlinks can
-          # break CI checkout before tests run.
           submodules: false
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.7
 
       - name: Init required vendor submodules
         run: |

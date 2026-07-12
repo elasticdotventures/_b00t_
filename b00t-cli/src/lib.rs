@@ -2102,6 +2102,16 @@ impl BootDatum {
     pub fn install_command_string(&self) -> Option<String> {
         self.install.as_ref().and_then(InstallSpec::command_string)
     }
+
+    /// Stable type identifier derived from datum_type prefix.
+    /// e.g. Skill → "skill_bayesian", Cli → "cli_fdfind", Unknown → "dat_mystery"
+    pub fn type_id(&self) -> String {
+        let prefix = self.datum_type.as_ref()
+            .map(|t| t.type_prefix())
+            .filter(|p| !p.is_empty())
+            .unwrap_or("dat");
+        format!("{}_{}", prefix, self.name)
+    }
 }
 
 pub fn create_mcp_toml_config(package: &BootDatum, path: &str) -> Result<()> {
@@ -4278,8 +4288,8 @@ hint = "containers"
             protocol: None, implements: None, hook_detect: None,
             hook_install: None, hook_update: None, hook_learn: None,
             uninstall: None, hook_uninstall: None, unlocks: None,
-            type_tags: None, maintenance: None, required_for_core: None,
-            runtime: None, polyseme: None, trigger_words: None, compose: None,
+            type_tags: None, maintenance: None,
+            runtime: None, polyseme: None, trigger_words: None,
         }
     }
 

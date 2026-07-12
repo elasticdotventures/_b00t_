@@ -268,6 +268,15 @@ bootstrap:
 build-hooks:
     cd _b00t_/runtimes/hooks-src && npm install && node build.js
 
+
+# 🔗 Install pre-push test gate as a symlink (so hook updates propagate)
+# 🤓 Symlink: editing _b00t_/hooks/pre-push automatically updates the active hook.
+#    Scoped: tests only changed crate + reverse-dependant closure, not full workspace.
+install-pre-push-hook:
+    ln -sf ../../_b00t_/hooks/pre-push .git/hooks/pre-push
+    chmod +x .git/hooks/pre-push
+    @echo "✅ pre-push hook installed (symlinked to _b00t_/hooks/pre-push)"
+
 # 🥾 Install b00t binaries + systemd unit files.
 # 💡 Recommended: sudo just install (sudo enables system-wide b00t@.service)
 #    Menu selects components; defaults to [2] binaries+service after 10s timeout.
@@ -318,6 +327,7 @@ install:
     cargo install --path b00t-admin --force
     cargo install cocogitto --locked --force
     just install-commit-hook
+    just install-pre-push-hook
     echo "  ✅ binaries installed"
     echo "🔌 Installing recommended MCP servers (gated by environment)..."
     b00t-cli install --mcp=recommended || echo "⚠️  MCP install skipped (no matching servers)"
