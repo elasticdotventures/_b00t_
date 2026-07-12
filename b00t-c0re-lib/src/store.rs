@@ -294,7 +294,8 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     if let Ok(Ok(query_result)) = fact_results {
         report.related_facts = query_result.facts.len();
 
-        let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        // Build a lookup: checksum → knowledge-backend IRIs
+        let mut backend_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for fact in &query_result.facts {
             if let Some(checksum) = fact.object.as_str() {
                 backend_checksums.entry(checksum.to_string())
@@ -303,10 +304,14 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
             }
         }
 
+        // Cross-reference: every StoreEntry checksum should have a matching backend fact
         for entry in &manifest.entries {
             match backend_checksums.get(&entry.checksum) {
                 Some(subjects) => {
                     report.hash_matches += 1;
+                    if subjects.len() > 1 {
+                        // Multiple backend entries for same checksum — normal for multiple consumers
+                    }
                 }
                 None => {
                     report.missing_facts.push(Discrepancy {
@@ -318,6 +323,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
             }
         }
 
+        // Orphan facts: backend facts without matching store entries
         let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
@@ -371,9 +377,11 @@ where
     let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config)?;
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => {
+            // Already inside a tokio runtime — use block_in_place to yield the thread
             Ok(tokio::task::block_in_place(|| handle.block_on(f(store))))
         }
         Err(_) => {
+            // No runtime — spin up a temporary one
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -382,6 +390,7 @@ where
         }
     }
 }
+
 // ── Internal: manifest + crypto ────────────────────────────────────────────
 
 fn load_manifest() -> Result<StoreManifest> {
