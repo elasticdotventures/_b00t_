@@ -6,8 +6,6 @@
 //! - `/api/admin/*` → JSON API for pipeline state/type introspection
 //! - `/ws` → WebSocket for live twin simulation updates
 
-mod graph_json;
-
 use axum::{
     body::Body,
     extract::{

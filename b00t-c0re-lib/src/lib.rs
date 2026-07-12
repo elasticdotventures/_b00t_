@@ -145,4 +145,3 @@ mod tests {
 }
 pub mod datum_credential;
 pub mod store;
-pub mod sudo_operator;

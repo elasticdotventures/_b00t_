@@ -473,32 +473,4 @@ mod tests {
 
 // ── Store lifecycle + influence tracking ───────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InfluenceSource {
-    pub source_key: String,
-    pub ratio: f64,
-    pub score: f64,
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InfluenceReceipt {
-    pub sources: Vec<InfluenceSource>,
-}
-
-pub fn init() -> Result<()> {
-    Ok(())
-}
-
-pub fn status() -> (usize, u64) {
-    (0, 0)
-}
-
-pub fn put_influence(_skill: &str, sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
-    Ok(InfluenceReceipt {
-        sources: sources.iter().map(|(k, r)| InfluenceSource {
-            source_key: k.clone(),
-            ratio: *r,
-            score: 0.5,
-        }).collect(),
-    })
-}

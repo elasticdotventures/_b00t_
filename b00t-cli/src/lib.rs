@@ -1302,7 +1302,6 @@ pub enum DatumType {
     Pipeline,
     Hardware,
     Overlay,
-    AiModel,
     Runtime,
     Polyseme,
     /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
@@ -1310,9 +1309,6 @@ pub enum DatumType {
     ///    Agents discover available credentials with: b00t datum list --type credential
     ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
     Credential,
-    /// Polyseme — resolves to multiple concrete datums from one topic name
-    Polyseme,
-    Runtime,
     Training,
     McpServer,
     Schema,
@@ -1459,7 +1455,7 @@ impl DatumType {
         match self {
             Self::K8s | Self::Docker | Self::Hardware | Self::Overlay
             | Self::Runtime | Self::Nix => SemanticClass::Infra,
-            Self::Agent | Self::Role | Self::Ai | Self::AiModel | Self::Training => SemanticClass::Agent,
+            Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
             Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
             Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => SemanticClass::Skill,
             Self::Config | Self::Bash | Self::Cli | Self::Justfile
@@ -1580,7 +1576,6 @@ impl DatumType {
         Pipeline    => ["pipeline"]                  => ".pipeline",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
-        AiModel     => ["ai_model"]                  => ".ai_model",
         Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
         Polyseme    => ["polyseme", "poly"]            => ".polyseme",
         Credential  => ["credential", "credentials"]  => ".credential",
