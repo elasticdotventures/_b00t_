@@ -1666,6 +1666,10 @@ dependencies = [
  "ascent",
  "async-trait",
  "b00t-ipc",
+<<<<<<< HEAD
+ "base64 0.22.1",
+=======
+>>>>>>> origin/main
  "cfg-if 1.0.4",
  "chrono",
  "crepe",
@@ -1673,6 +1677,7 @@ dependencies = [
  "duct",
  "futures",
  "grafeo",
+ "keyring",
  "lazy_static",
  "oxigraph",
  "pyo3",
@@ -1813,7 +1818,6 @@ dependencies = [
  "reqwest 0.12.28",
  "rhai",
  "rpassword",
- "runpod-sdk",
  "rusqlite",
  "semver",
  "serde",
@@ -6317,26 +6321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kasuari"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde5057d6143cc94e861d90f591b9303d6716c6b9602309150bd068853c10899"
-dependencies = [
- "hashbrown 0.16.1",
- "portable-atomic",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "keyboard-types"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b750dcadc39a09dbadd74e118f6dd6598df77fa01df0cfcdc52c28dece74528a"
-dependencies = [
- "bitflags 2.13.0",
-]
-
-[[package]]
 name = "keyring"
 version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6356,21 +6340,6 @@ checksum = "fb1e621458ca9c51aa110bd0339d4751a056b9576bf1253aee1aa560dda0fc9d"
 dependencies = [
  "log",
 ]
-
-[[package]]
-name = "konst"
-version = "0.2.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "128133ed7824fcd73d6e7b17957c5eb7bacb885649bd8c69708b2331a10bcefb"
-dependencies = [
- "konst_macro_rules",
-]
-
-[[package]]
-name = "konst_macro_rules"
-version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
 name = "kqueue"
@@ -9637,12 +9606,6 @@ dependencies = [
  "rmp",
  "serde",
 ]
-
-[[package]]
-name = "roxmltree"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rpassword"
