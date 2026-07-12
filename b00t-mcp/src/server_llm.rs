@@ -216,17 +216,6 @@ static HYDRA_SCOPE_MAP: &[(&str, Action, &str)] = &[
     ("b00t:Store", Action::Write, "store.write"),
 ];
 
-/// Reverse mapping: Hydra scope string → b00t ClassPermission.
-fn hydra_scope_to_permission(scope: &str) -> Option<ClassPermission> {
-    HYDRA_SCOPE_MAP
-        .iter()
-        .find(|(_, _, s)| *s == scope)
-        .map(|(class, action, _)| ClassPermission {
-            class: class.to_string(),
-            action: *action,
-        })
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
@@ -237,7 +226,11 @@ pub struct KeyEntry {
 
 impl KeyEntry {
     pub fn hydra_scopes(&self) -> String {
-        self.access.iter().map(|p| p.to_hydra_scope()).collect::<Vec<_>>().join(" ")
+        self.access
+            .iter()
+            .map(|p| p.to_hydra_scope())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     pub fn hydra_client_payload(&self, client_id: &str) -> serde_json::Value {
@@ -445,8 +438,11 @@ fn dirs_next() -> Option<std::path::PathBuf> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthProvider {
+    /// Dev mode — bypass all auth, use hardcoded dev-key
     Dev,
+    /// Basic auth — API keys from server-keys.json + ClassPermission ACL
     Basic,
+    /// OAuth 2.1 — Hydra token introspection + ClassPermission ACL
     Hydra,
 }
 
