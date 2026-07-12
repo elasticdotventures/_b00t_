@@ -178,6 +178,58 @@ pub fn query(tags: &BTreeMap<String, String>) -> Result<Vec<StoreEntry>> {
         .collect())
 }
 
+// ── Influence attribution (AL-1.0) ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub subject: String,
+    pub sources: Vec<InfluenceSource>,
+}
+
+/// 🤓 Minimal AL-1.0 attribution: normalises raw scores into ratios summing to 1.0.
+///    Does not persist — callers (e.g. evidence records) attach the receipt directly.
+pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+    let total: f64 = scored_sources.iter().map(|(_, score)| score).sum();
+    let sources = scored_sources
+        .iter()
+        .map(|(source_key, score)| InfluenceSource {
+            source_key: source_key.clone(),
+            ratio: if total > 0.0 { score / total } else { 0.0 },
+            score: *score,
+        })
+        .collect();
+    Ok(InfluenceReceipt {
+        subject: subject.to_string(),
+        sources,
+    })
+}
+
+// ── Init / Status ─────────────────────────────────────────────────────────
+
+/// Initialise the knowledge store directory.
+pub fn init() -> Result<()> {
+    std::fs::create_dir_all(store_root()).context("failed to create store root")?;
+    Ok(())
+}
+
+/// Return (object count, total bytes) across all stored entries.
+pub fn status() -> (usize, u64) {
+    match load_manifest() {
+        Ok(manifest) => {
+            let bytes = manifest.entries.iter().map(|e| e.size_bytes).sum();
+            (manifest.entries.len(), bytes)
+        }
+        Err(_) => (0, 0),
+    }
+}
+
 // ── Sync (local → remote placeholder) ─────────────────────────────────────
 
 /// Sync stored objects to a remote S3/R2 bucket using credential datums.
@@ -216,11 +268,13 @@ pub fn sync(provider: &str) -> Result<()> {
 // ── Cross-engine validation ─────────────────────────────────────────────────
 
 /// 🤓 AL-1.0 two-engine invariant applied to b00t's data fabric.
-///    Validates that Store manifest entries have matching facts in NeumannStore
-///    and that content hashes are consistent. Returns discrepancy report.
+///    Validates that Store manifest entries have matching facts in the
+///    compiled knowledge backend and that content hashes are consistent.
+///    Returns discrepancy report.
 pub fn validate_consistency() -> Result<CrossEngineReport> {
     let manifest = load_manifest()?;
     let mut report = CrossEngineReport {
+        backend: crate::compiled_knowledge_backend().to_string(),
         manifest_entries: manifest.entries.len(),
         related_facts: 0,
         hash_matches: 0,
@@ -256,7 +310,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
                 Some(subjects) => {
                     report.hash_matches += 1;
                     if subjects.len() > 1 {
-                        // Multiple Neumann entries for same checksum — normal for multiple consumers
+                        // Multiple backend entries for same checksum — normal for multiple consumers
                     }
                 }
                 None => {
@@ -269,7 +323,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
             }
         }
 
-        // Orphan facts: Neumann facts without matching store entries
+        // Orphan facts: backend facts without matching store entries
         let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
@@ -287,6 +341,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossEngineReport {
+    pub backend: String,
     pub manifest_entries: usize,
     pub related_facts: usize,
     pub hash_matches: usize,
@@ -303,7 +358,7 @@ pub struct Discrepancy {
     pub detail: String,
 }
 
-// ── Internal: NeumannStore async bridge ────────────────────────────────────
+// ── Internal: knowledge-backend async bridge ────────────────────────────────
 
 fn block_on_store<F, Fut, T>(f: F) -> Result<Result<T>>
 where
@@ -418,32 +473,4 @@ mod tests {
 
 // ── Store lifecycle + influence tracking ───────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InfluenceSource {
-    pub source_key: String,
-    pub ratio: f64,
-    pub score: f64,
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InfluenceReceipt {
-    pub sources: Vec<InfluenceSource>,
-}
-
-pub fn init() -> Result<()> {
-    Ok(())
-}
-
-pub fn status() -> (usize, u64) {
-    (0, 0)
-}
-
-pub fn put_influence(_skill: &str, sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
-    Ok(InfluenceReceipt {
-        sources: sources.iter().map(|(k, r)| InfluenceSource {
-            source_key: k.clone(),
-            ratio: *r,
-            score: 0.5,
-        }).collect(),
-    })
-}
