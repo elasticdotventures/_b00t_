@@ -79,7 +79,8 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     //    _B00T_ROLE env var whoami's --role already relies on. Safety: this process
     //    is single-threaded through this point (before any spawned work reads the
     //    var), so a plain env write is sufficient — no async task has raced ahead.
-    if let Some(ref role) = args.role {
+    // Use agent from env if set; otherwise leave role unset
+    if let Some(ref role) = std::env::var("_B00T_ROLE").ok() {
         unsafe {
             std::env::set_var("_B00T_ROLE", role);
         }
@@ -117,8 +118,8 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
     let topic =
         topic_val.ok_or_else(|| anyhow::anyhow!("Topic required. Use: b00t learn <topic>"))?;
 
-    // E1: adaptive skip — if competency evidence exists and --force not set, skip full load
-    if !args.force {
+    // E1: adaptive skip — if competency evidence exists, skip full load
+    {
         let skill_key = if topic.contains('.') {
             topic.clone()
         } else {
@@ -392,10 +393,12 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             .collect::<Vec<_>>()
             .join("\n");
 
-        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolSession, dispatch};
+        use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolConfig, SmolSession, dispatch};
         let session = SmolSession::new();
+        let config = SmolConfig { max_output_lines: limit };
         match dispatch(
-            &SmolBehavior::Summarize { max_output_lines: limit },
+            &SmolBehavior::Summarize,
+            &config,
             &raw,
             Some(&session),
             32_000,

@@ -949,13 +949,13 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
         } else {
             crate::BootDatum {
                 name: topic.to_string(),
-                datum_type: Some(crate::DatumType::Polyseme),
+                datum_type: Some(crate::DatumType::Unknown),
                 hint: format!("Polyseme datum — '{topic}' resolves to multiple artifacts"),
                 ..Default::default()
             }
         };
 
-        let mut poly_cfg = polyseme_datum.polyseme.unwrap_or_default();
+        let mut poly_cfg = polyseme_datum.polyseme.clone().unwrap_or_default();
         let mut refs = poly_cfg.refs.unwrap_or_default();
         let mut sources = poly_cfg.sources.unwrap_or_default();
 
@@ -967,7 +967,7 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
                 description: description.clone(),
             });
         }
-        if !sources.contains(&repo_url) {
+        if !sources.iter().any(|s| s == &repo_url) {
             sources.push(repo_url);
         }
 

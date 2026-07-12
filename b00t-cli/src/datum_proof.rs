@@ -144,7 +144,6 @@ macro_rules! hint_only_datum {
 }
 
 hint_only_datum!(AsAiDatum,        Ai,          "ai");
-hint_only_datum!(AsAiModelDatum,   AiModel,     "ai_model");
 hint_only_datum!(AsConfigDatum,    Config,      "config");
 hint_only_datum!(AsHiveProfileDatum, HiveProfile, "hive_profile");
 
@@ -361,7 +360,7 @@ impl BootDatum {
     pub fn prove_api(&self)         -> Result<(), DatumProofError> { AsApiDatum(self).prove() }
     pub fn prove_repo(&self)        -> Result<(), DatumProofError> { AsRepoDatum(self).prove() }
     pub fn prove_ai(&self)          -> Result<(), DatumProofError> { AsAiDatum(self).prove() }
-    pub fn prove_ai_model(&self)    -> Result<(), DatumProofError> { AsAiModelDatum(self).prove() }
+    pub fn prove_ai_model(&self)    -> Result<(), DatumProofError> { AsAiDatum(self).prove() }
     pub fn prove_config(&self)      -> Result<(), DatumProofError> { AsConfigDatum(self).prove() }
 
     /// Dispatch prove based on declared datum_type. `Unknown` always passes.
@@ -386,11 +385,21 @@ impl BootDatum {
             Some(DatumType::Api)         => self.prove_api(),
             Some(DatumType::Repo)        => self.prove_repo(),
             Some(DatumType::Ai)          => self.prove_ai(),
-            Some(DatumType::AiModel)     => self.prove_ai_model(),
             Some(DatumType::Config)      => self.prove_config(),
             Some(DatumType::Hardware)    => Ok(()),
             Some(DatumType::Overlay)     => Ok(()),
             Some(DatumType::Credential)  => Ok(()),
+            Some(DatumType::Pipeline)    => Ok(()),
+            Some(DatumType::Polyseme)    => Ok(()),
+            Some(DatumType::Runtime)     => Ok(()),
+            Some(DatumType::Training)    => Ok(()),
+            Some(DatumType::McpServer)   => Ok(()),
+            Some(DatumType::Schema)      => Ok(()),
+            Some(DatumType::Hook)        => Ok(()),
+            Some(DatumType::Gate)        => Ok(()),
+            Some(DatumType::Plan)        => Ok(()),
+            Some(DatumType::Vendor)      => Ok(()),
+            Some(DatumType::Ooda)        => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }

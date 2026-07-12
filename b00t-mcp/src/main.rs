@@ -135,14 +135,9 @@ async fn main() -> Result<()> {
     }
 
     // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
-    //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
-    //    Child processes get kill_on_drop(true) — cleaned up on process exit.
-    match server_skill::init_executor().await {
-        Ok(n) if n > 0 => tracing::info!("SkillExecutor: {} skill(s) ready", n),
-        Err(e) => tracing::warn!("SkillExecutor init failed: {} (continuing)", e),
-        _ => {}
-    }
-    server_skill::start_reap_loop().await;
+    // Skill executor stub — init skipped (module not yet ported)
+    tracing::debug!("SkillExecutor: skipped (not ported)");
+
 
     // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
     //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
@@ -239,7 +234,7 @@ async fn main() -> Result<()> {
         if is_llm_mode {
             let llm_state = Arc::new(server_llm::LlmState::new());
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
+            app = app.merge(server_llm::llm_router(llm_state.clone(), false));
         }
 
         let app = app.layer(CorsLayer::permissive());
