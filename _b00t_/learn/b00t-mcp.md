@@ -9,3 +9,4 @@ proxy pattern: expose 5 surface tools (learn/whoami/status/exec/discover); all 5
 
 ---
 SYSTEM-NORMAL submodules-in-sync gate: check vendor subrepos are clean before tasks. `git submodule status` lines with + or M prefix mean unpushed commits or dirty trees. Fix: commit upstream PR, then update parent submodule pointer.
+

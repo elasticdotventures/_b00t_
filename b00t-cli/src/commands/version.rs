@@ -75,6 +75,7 @@ struct ReleaseStatus {
     current: String,
     latest: String,
     release_url: String,
+    workspace_version: Option<String>,
     upgrade_available: bool,
 }
 
@@ -202,13 +203,29 @@ fn fetch_release_status() -> Result<ReleaseStatus> {
     let current = b00t_c0re_lib::version::VERSION.to_string();
     let release = fetch_latest_release()?;
     let latest = normalize_tag(&release.tag_name);
+    let workspace_version = detect_workspace_version();
+
+    let github_upgrade = is_upgrade_available(&current, &latest);
+    let workspace_upgrade = workspace_version
+        .as_deref()
+        .map(|wv| is_upgrade_available(&current, wv))
+        .unwrap_or(false);
 
     Ok(ReleaseStatus {
         current: current.clone(),
         latest: latest.clone(),
         release_url: release.html_url,
-        upgrade_available: is_upgrade_available(&current, &latest),
+        workspace_version,
+        upgrade_available: github_upgrade || workspace_upgrade,
     })
+}
+
+fn detect_workspace_version() -> Option<String> {
+    let root = find_workspace_root(&std::env::current_dir().ok()?)?;
+    let cargo_toml = root.join("b00t-cli").join("Cargo.toml");
+    let content = std::fs::read_to_string(cargo_toml).ok()?;
+    let table: toml::Value = content.parse().ok()?;
+    table.get("package")?.get("version")?.as_str().map(|v| v.trim().to_string())
 }
 
 fn fetch_latest_release() -> Result<GitHubRelease> {
@@ -240,6 +257,9 @@ fn print_status(status: &ReleaseStatus, context: &UpgradeContext) {
 
     if let Some(workspace_root) = &context.workspace_root {
         println!("workspace: {}", workspace_root.display());
+        if let Some(wv) = &status.workspace_version {
+            println!("workspace version: {}", wv);
+        }
         if let Some(branch) = &context.git_branch {
             let cleanliness = if context.git_clean { "clean" } else { "dirty" };
             println!("git: {} ({})", branch, cleanliness);
@@ -622,6 +642,8 @@ fn notify_channel(
         kind: ChatTransportKind::LocalSocket,
         socket_path: None,
         nats_url: None,
+        nats_user: None,
+        nats_password: None,
     })
     .context("failed to initialize local chat client")?;
 
@@ -706,14 +728,26 @@ mod tests {
         }
     }
 
+    fn test_status(current: &str, latest: &str, upgrade: bool) -> ReleaseStatus {
+        ReleaseStatus {
+            current: current.to_string(),
+            latest: latest.to_string(),
+            release_url: "https://example.invalid/release".to_string(),
+            workspace_version: None,
+            upgrade_available: upgrade,
+        }
+    }
+
+    #[test]
+    fn detects_workspace_upgrade() {
+        assert!(is_upgrade_available("0.7.35", "0.7.36"));
+        assert!(!is_upgrade_available("0.7.35", "0.7.35"));
+        assert!(!is_upgrade_available("0.7.36", "0.7.35"));
+    }
+
     #[test]
     fn recommends_workspace_sync_for_clean_claude_workspace() {
-        let status = ReleaseStatus {
-            current: "0.7.35".to_string(),
-            latest: "0.7.36".to_string(),
-            release_url: "https://example.invalid/release".to_string(),
-            upgrade_available: true,
-        };
+        let status = test_status("0.7.35", "0.7.36", true);
 
         assert_eq!(
             recommend_strategy(&status, &context("claude", true, true)),
@@ -723,12 +757,7 @@ mod tests {
 
     #[test]
     fn recommends_workspace_build_for_dirty_claude_workspace() {
-        let status = ReleaseStatus {
-            current: "0.7.35".to_string(),
-            latest: "0.7.36".to_string(),
-            release_url: "https://example.invalid/release".to_string(),
-            upgrade_available: true,
-        };
+        let status = test_status("0.7.35", "0.7.36", true);
 
         assert_eq!(
             recommend_strategy(&status, &context("claude", true, false)),
@@ -738,12 +767,7 @@ mod tests {
 
     #[test]
     fn recommends_release_installer_outside_workspace() {
-        let status = ReleaseStatus {
-            current: "0.7.35".to_string(),
-            latest: "0.7.36".to_string(),
-            release_url: "https://example.invalid/release".to_string(),
-            upgrade_available: true,
-        };
+        let status = test_status("0.7.35", "0.7.36", true);
 
         assert_eq!(
             recommend_strategy(&status, &context("codex", false, false)),

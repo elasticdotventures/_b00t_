@@ -73,6 +73,10 @@ Build all:
 cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release
 ```
 
+
+[b00t.services.action_runner]
+local  = "wrkflw"
+remote = "github-actions"
 ## Security Considerations
 
 - Retrieval engine handles potentially sensitive code from indexed repos

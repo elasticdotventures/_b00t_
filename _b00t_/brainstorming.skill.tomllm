@@ -1,0 +1,29 @@
+[b00t]
+name = "brainstorming"
+type = "skill"
+version = "0.1.0"
+hint = "Explore user intent, requirements, and design before implementation"
+
+[b00t.skill]
+description = """
+You MUST use this before any creative work — creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["planning", "requirements", "design", "creative-work"]
+tier = "sm0l"
+complexity = 2
+
+[b00t.learn]
+topic = "brainstorming"
+inline = """
+You MUST use this before any creative work — creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation.
+
+Invoke via the Skill tool in Claude Code: skill="brainstorming".
+"""
+
+# b00t:map v1
+# summary: Explore user intent, requirements, and design before implementation
+# tags: planning, requirements, design, creative-work
+# tier: sm0l
+# cmds: b00t learn brainstorming
+# complexity: 2

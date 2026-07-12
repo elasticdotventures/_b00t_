@@ -1,0 +1,25 @@
+# One-shot import of the podman-built serena image into k0s containerd (k8s.io ns).
+# Sudo-free alternative to: podman save serena:latest | sudo k0s ctr -n k8s.io images import -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: serena-image-import
+  namespace: b00t-serena
+spec:
+  restartPolicy: Never
+  containers:
+    - name: import
+      image: busybox:stable
+      command: ["/host/k0s", "ctr", "-n", "k8s.io", "images", "import", "/import/serena-image.tar"]
+      volumeMounts:
+        - { name: k0s-run, mountPath: /run/k0s }
+        - { name: k0s-bin, mountPath: /host/k0s }
+        - { name: tarball, mountPath: /import }
+  volumes:
+    - name: k0s-run
+      hostPath: { path: /run/k0s, type: Directory }
+    - name: k0s-bin
+      hostPath: { path: /usr/local/bin/k0s, type: File }
+    - name: tarball
+      # place the podman-save tarball in this dir first: podman save serena:latest -o /tmp/serena-import/serena-image.tar
+      hostPath: { path: /tmp/serena-import, type: Directory }

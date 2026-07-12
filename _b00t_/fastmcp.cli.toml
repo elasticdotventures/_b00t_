@@ -3,22 +3,7 @@ name = "fastmcp"
 type = "cli"
 desires = "0.1.0"
 depends_on = ["python.cli", "uv.cli"]
-install = '''
-# Install fastmcp - Python framework for building MCP servers
-# https://github.com/jlowin/fastmcp
-
-echo "📦 Installing fastmcp via uv..."
-
-# Install fastmcp using uv tool install (global installation)
-uv tool install fastmcp
-
-# Alternatively install in current project:
-# uv add fastmcp
-
-# Verify installation
-uvx --version
-echo "✅ fastmcp installed successfully"
-'''
+install = { uv_tool = "fastmcp" }
 update = '''
 # Update fastmcp to latest version
 echo "🔄 Updating fastmcp..."

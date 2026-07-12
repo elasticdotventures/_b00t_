@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 # pre-push hook for b00t repo — runs tests before allowing push to remote.
+#
+# Selection model (per operator fast-fix-forward):
+#   changed files -> owning packages -> transitive workspace reverse-dependant
+#   closure (via `cargo metadata`) -> ONE `cargo test --lib -p ... -p ...`
+#   invocation (Cargo dedups compilation across selected packages).
+#
+# A package's own tests do NOT prove its API changes haven't broken consumers,
+# so the reverse-dependant closure is always included (e.g. b00t-lib-chat change
+# pulls in b00t-cli).
+#
+# Conservative invalidation (full b00t-cli gate) when workspace/toolchain/
+# dependency configuration changes: Cargo.lock, root Cargo.toml, .cargo/**,
+# rust-toolchain*, build.rs, vendor/**, _b00t_/hooks/**.
+#
 # Install: cp _b00t_/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
-# Or: just install-pre-push-hook
+#   (or: just install-pre-push-hook)
 set -euo pipefail
 
 REMOTE="$1"
@@ -13,17 +27,128 @@ if [[ "$URL" == *"fork"* ]]; then
   exit 0
 fi
 
-# Gate: never force-push to main
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Capture the remote's current tip for this ref (incremental-push base) and
+# block force-delete of main.
+REMOTE_TIP=""
 while read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
   if [[ "$REMOTE_REF" == "refs/heads/main" && "$LOCAL_SHA" == "0000000000000000000000000000000000000000" ]]; then
     echo "🚫 pre-push: force-delete of main is BLOCKED" >&2
     exit 1
   fi
+  REMOTE_TIP="$REMOTE_SHA"
 done
 
-# Run Rust tests for b00t-cli (fast — lib tests only, no integration)
-echo "[pre-push] running cargo test --package b00t-cli --lib ..."
-if ! cargo test --package b00t-cli --lib --quiet 2>&1; then
+# Base = remote tip when pushing an existing branch (only new commits tested);
+# for a brand-new branch fall back to merge-base with origin/main so the whole
+# branch is still gated once.
+if [ -n "${REMOTE_TIP:-}" ] && [ "$REMOTE_TIP" != "0000000000000000000000000000000000000000" ]; then
+  BASE="$REMOTE_TIP"
+else
+  BASE_REF="origin/main"
+  git rev-parse --verify --quiet "refs/remotes/$BASE_REF" >/dev/null 2>&1 || BASE_REF="main"
+  BASE=$(git merge-base HEAD "$BASE_REF" 2>/dev/null) || BASE=$(git rev-parse HEAD~1)
+fi
+CHANGED=$(git diff --name-only "$BASE"..HEAD)
+
+# No Rust-affecting files (docs/datums only) -> skip the gate.
+if [ -z "$CHANGED" ]; then
+  echo "[pre-push] no changes on branch — skipping test gate"
+  exit 0
+fi
+
+# Conservative invalidation: workspace/toolchain/dependency configuration.
+CONSERVATIVE=0
+while IFS= read -r f; do
+  case "$f" in
+    Cargo.lock|.cargo/*|rust-toolchain*|rust-toolchain.toml|build.rs|vendor/*|_b00t_/hooks/*) CONSERVATIVE=1 ;;
+    Cargo.toml) CONSERVATIVE=1 ;;   # any Cargo.toml (incl. root members list)
+  esac
+  [ "$CONSERVATIVE" -eq 1 ] && break
+done <<< "$CHANGED"
+
+if [ "$CONSERVATIVE" -eq 1 ]; then
+  echo "[pre-push] dependency/toolchain/config change — running full b00t-cli gate"
+  git submodule update --init vendor/ledgrrr 2>/dev/null || true
+  if ! cargo test -p b00t-cli --lib --quiet 2>&1; then
+    echo "🚫 pre-push: tests failed — push blocked" >&2
+    exit 1
+  fi
+  echo "✅ pre-push: tests pass"
+  exit 0
+fi
+
+# Precise selection via cargo metadata reverse-dependant closure.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[pre-push] jq not found — falling back to full b00t-cli gate"
+  git submodule update --init vendor/ledgrrr 2>/dev/null || true
+  if ! cargo test -p b00t-cli --lib --quiet 2>&1; then
+    echo "🚫 pre-push: tests failed — push blocked" >&2
+    exit 1
+  fi
+  echo "✅ pre-push: tests pass"
+  exit 0
+fi
+
+META=$(cargo metadata --format-version 1 --no-deps --quiet)
+# Reverse-dependency map: dep package name -> [dependent package names].
+REV=$(jq -c 'reduce .packages[] as $p ({}; reduce ($p.dependencies // [])[] as $d (.; .[$d.name] += [$p.name]))' <<<"$META")
+
+owning_package() {
+  local f="$1" d mp
+  d=$(dirname "$f")
+  while [ -n "$d" ] && [ "$d" != "." ] && [ "$d" != "/" ]; do
+    if [ -f "$d/Cargo.toml" ]; then
+      mp=$(realpath "$d/Cargo.toml")
+      jq -r --arg mp "$mp" '.packages[] | select(.manifest_path == $mp) | .name' <<<"$META"
+      return 0
+    fi
+    d=$(dirname "$d")
+  done
+  return 1
+}
+
+# Seed closure with packages that own changed files.
+declare -A SEEN=()
+SELECTED=()
+QUEUE=()
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  pkg=$(owning_package "$f" || true)
+  [ -z "$pkg" ] && continue
+  if [ -z "${SEEN[$pkg]:-}" ]; then
+    SEEN[$pkg]=1
+    QUEUE+=("$pkg")
+  fi
+done <<< "$CHANGED"
+
+# BFS over the reverse-dependency closure.
+while [ "${#QUEUE[@]}" -gt 0 ]; do
+  cur="${QUEUE[0]}"; QUEUE=("${QUEUE[@]:1}")
+  SELECTED+=("$cur")
+  while IFS= read -r dep; do
+    [ -z "$dep" ] && continue
+    if [ -z "${SEEN[$dep]:-}" ]; then
+      SEEN[$dep]=1
+      QUEUE+=("$dep")
+    fi
+  done < <(jq -r --arg p "$cur" '.[$p] // [] | .[]' <<<"$REV")
+done
+
+if [ "${#SELECTED[@]}" -eq 0 ]; then
+  echo "[pre-push] no Rust packages affected — skipping test gate"
+  exit 0
+fi
+
+echo "[pre-push] selected packages (changed ∪ reverse dependants): ${SELECTED[*]}"
+# b00t-cli tests may need the ledgrrr submodule.
+for p in "${SELECTED[@]}"; do
+  [ "$p" = "b00t-cli" ] && { git submodule update --init vendor/ledgrrr 2>/dev/null || true; break; }
+done
+
+# Single invocation: Cargo dedups compilation across selected packages.
+if ! cargo test --lib --quiet $(printf -- '-p %s ' "${SELECTED[@]}") 2>&1; then
   echo "🚫 pre-push: tests failed — push blocked" >&2
   exit 1
 fi

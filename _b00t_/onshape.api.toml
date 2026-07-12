@@ -1,0 +1,5 @@
+[b00t]
+name = "onshape"
+depends_on = ["python.cli"]
+type = "api"
+hint = "Onshape CAD API integration"

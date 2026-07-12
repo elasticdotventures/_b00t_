@@ -1,0 +1,96 @@
+[b00t]
+name = "systematic-debugging"
+type = "skill"
+hint = "Hypothesis-driven debugging: reproduce first, bisect, minimal repro, verify the fix with a failing-then-passing test, memoize the root cause"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["debugging", "tdd", "bisect", "root-cause", "repro", "reviewer", "z3", "lfmf"]
+
+[b00t.skill]
+depends_on = ["karpathy-autoresearch"]
+unlocks = [
+    "systematic-debugging::reproduce",
+    "systematic-debugging::bisect",
+    "systematic-debugging::isolate",
+    "systematic-debugging::verify-fix",
+    "systematic-debugging::memoize",
+]
+
+# ── Systematic Debugging ──────────────────────────────────────────────────────
+#
+# The anti-flail discipline. Rules:
+#   R1: no fix before a deterministic reproduction
+#   R2: one hypothesis at a time; every probe must be able to FALSIFY it
+#   R3: the fix ships with the test that failed without it (TDD-first law)
+#   R4: root cause gets memoized (lfmf) — a debugged bug that re-bites the
+#       hive was never actually debugged
+#
+# 🤓 'It works now' without a failed-then-passed test is R3 violation:
+#    NEVER claim solved without testing.
+
+[b00t.skill.recipes."systematic-debugging::reproduce"]
+description = "Turn a bug report into a deterministic failing command"
+steps = [
+    "1. Capture the exact failing invocation + environment (branch, rev: git rev-parse HEAD)",
+    "2. Reduce to one command: cargo test <test_name> -- --exact — or the failing CLI call verbatim",
+    "3. Run 3x: flaky (intermittent) vs deterministic changes the whole strategy — record which",
+    "4. Store the repro as a test case; datasets go in a JSON fixture file, never inline in test code",
+    "5. No repro = no debugging: b00t task add 'bug: unreproduced — <report>' and stop",
+]
+
+[b00t.skill.recipes."systematic-debugging::bisect"]
+description = "Binary-search the breaking change in history"
+steps = [
+    "1. Find a known-good rev: git log --oneline -20; verify with the repro command",
+    "2. git bisect start; git bisect bad HEAD; git bisect good <rev>",
+    "3. Automate: git bisect run cargo test <test_name> -- --exact (interactive flags unsupported here)",
+    "4. git bisect reset when done; the culprit commit bounds the hypothesis space to its diff",
+    "5. Culprit in vendor/? fork-fix-forward: fix, PR upstream — do NOT work around silently",
+]
+
+[b00t.skill.recipes."systematic-debugging::isolate"]
+description = "Shrink the repro and falsify hypotheses one at a time"
+steps = [
+    "1. State hypothesis H1 in one sentence: '<component> fails because <mechanism>'",
+    "2. Design the cheapest probe that can prove H1 FALSE (targeted test, dbg!/eprintln at the boundary, RUST_LOG=debug)",
+    "3. H1 falsified? record it and move to H2 — never keep patching under a dead hypothesis",
+    "4. Delete half the repro input repeatedly while the failure persists (delta debugging) — minimal repro exposes the mechanism",
+    "5. Invariant/constraint suspected? encode it in SMT2 and check: echo '(declare-const x Int)(assert ...)(check-sat)' | z3 -smt2 -in — LLM proposes, Z3 verifies",
+]
+
+[b00t.skill.recipes."systematic-debugging::verify-fix"]
+description = "Prove the fix: failing test turns green, nothing else turns red"
+steps = [
+    "1. Write/keep the test that fails WITHOUT the fix; run it, confirm red",
+    "2. Apply the minimal fix (surgical: every changed line traces to the mechanism)",
+    "3. cargo test --workspace — the new test is green and no prior test regressed",
+    "4. cargo clippy --workspace -- -D warnings — the fix introduces zero new lints",
+    "5. Datum files touched? b00t-lsp --check _b00t_ — zero new errors",
+]
+
+[b00t.skill.recipes."systematic-debugging::memoize"]
+description = "Convert the root cause into durable hive knowledge"
+steps = [
+    "1. b00t lfmf <tool> '<root-cause topic>: <mechanism + correct pattern>' — tool wisdom, never repo-specific trivia",
+    "2. Non-obvious code-level insight = leave a '# 🤓' comment at the fix site",
+    "3. Class of bug reachable again (missing gate/check) = b00t task add 'kaizen: guard against <class>'",
+    "4. Systemic sharp corner = report it — silence hides systemic issues",
+]
+
+[b00t.compose]
+composes_with = [
+    "karpathy-autoresearch",
+    "multi-framework-code-review",
+    "quality-tracker",
+    "harness-loop-engineer",
+    "z3-verify.cli",
+    "reviewer.role",
+]
+
+# b00t:map v1
+# summary: Hypothesis-driven debugging loop — reproduce, bisect, isolate, verify with failing-then-passing test, lfmf memoize
+# tags: debugging, tdd, bisect, root-cause, repro, reviewer, z3, lfmf
+# tier: ch0nky
+# cmds: git bisect run cargo test <t> -- --exact; cargo test --workspace; b00t lfmf <tool> '<lesson>'
+# complexity: 5

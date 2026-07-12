@@ -1,7 +1,9 @@
 //! Content-type-aware router — detects type and dispatches to appropriate parser.
 //!
 //! Fills the explicit gap at grok.rs:164 ("URL fetching not yet implemented").
+//! Domain-specific routing: arxiv.org → arxiv-mcp-server (not webfetch).
 
+use crate::assimilate::domain_router;
 use anyhow::{Result, anyhow, bail};
 use std::path::Path;
 use std::time::Duration;
@@ -14,6 +16,14 @@ pub enum ContentType {
     Markdown,
     Text,
     Json,
+    /// Image formats (PNG, JPEG, GIF, WebP, SVG)
+    Image(String),      // MIME subtype e.g. "png"
+    /// Audio formats (MP3, WAV, OGG, FLAC)
+    Audio(String),      // MIME subtype e.g. "mpeg"
+    /// Video formats (MP4, WebM, AVI)
+    Video(String),      // MIME subtype e.g. "mp4"
+    /// Generic binary (unknown or unclassified)
+    Binary(String),     // file extension e.g. "bin"
     Unknown,
 }
 
@@ -42,14 +52,125 @@ impl ContentRouter {
     }
 
     /// Route a source (URL or file path) to the appropriate parser.
+    /// 🤓 Domain-specific MCP routing: arxiv.org → arxiv-mcp-server (not webfetch)
     pub async fn route(&self, source: &str) -> Result<ParsedContent> {
         if source.starts_with("http://") || source.starts_with("https://") {
+            // Check for institutional MCP handlers first
+            if let Some((handler, resource_id)) = domain_router::extract_mcp_resource_id(source) {
+                return self.route_via_mcp(&handler, &resource_id).await;
+            }
             self.route_url(source).await
         } else if Path::new(source).exists() {
             self.route_file(source)
         } else {
             bail!("source '{source}' is neither a valid URL nor an existing file")
         }
+    }
+
+    /// Route through an MCP server for institutional domains.
+    /// E.g., arxiv.org URLs → download_paper, huggingface.co → paper_search.
+    /// HF_TOKEN env var is passed as Authorization header when available.
+    async fn route_via_mcp(
+        &self,
+        handler: &domain_router::McpDomainHandler,
+        resource_id: &str,
+    ) -> Result<ParsedContent> {
+        let mcp_url = match handler.mcp_server.as_str() {
+            "arxiv-mcp-server" => std::env::var("ARXIV_MCP_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8000/mcp".to_string()),
+            "huggingface" => "https://huggingface.co/mcp".to_string(),
+            _ => bail!("unknown MCP server: {}", handler.mcp_server),
+        };
+
+        let mut request = self.client.post(&mcp_url);
+
+        // Pass HF_TOKEN as Authorization header for HuggingFace
+        if handler.mcp_server == "huggingface" {
+            if let Ok(token) = std::env::var("HF_TOKEN") {
+                request = request.header("Authorization", format!("Bearer {}", token));
+            }
+        }
+
+        // Initialize MCP session
+        let init_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "b00t", "version": "0.1"}
+            }
+        });
+
+        let init_resp = request
+            .try_clone()
+            .unwrap()
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .json(&init_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("{} MCP init failed: {e}", handler.domain_label))?;
+
+        let session_id = init_resp
+            .headers()
+            .get("Mcp-Session-Id")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+            .ok_or_else(|| anyhow!("{} MCP: no session ID in init response", handler.domain_label))?;
+
+        // Send initialized notification
+        // 🤓 Some MCP servers require this before tools/call
+        let _notify = request
+            .try_clone()
+            .unwrap()
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            }))
+            .send()
+            .await;
+
+        // Call the fetch tool
+        let call_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": handler.fetch_tool,
+                "arguments": { &handler.fetch_arg: resource_id }
+            }
+        });
+
+        let call_resp = request
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Mcp-Session-Id", &session_id)
+            .json(&call_body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("{} MCP fetch failed: {e}", handler.domain_label))?;
+
+        let call_json: serde_json::Value = call_resp
+            .json()
+            .await
+            .map_err(|e| anyhow!("{} MCP response parse failed: {e}", handler.domain_label))?;
+
+        let text = call_json
+            .pointer("/result/content/0/text")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        Ok(ParsedContent {
+            text,
+            content_type: ContentType::Markdown,
+            source_url: Some(format!("{}://{}", handler.domain_label.to_lowercase(), resource_id)),
+        })
     }
 
     /// Fetch a URL and parse based on Content-Type header + extension.
@@ -140,6 +261,15 @@ impl ContentRouter {
             Some(ContentType::Json)
         } else if lower.contains("text/plain") {
             Some(ContentType::Text)
+        } else if lower.starts_with("image/") {
+            let subtype = lower.strip_prefix("image/").unwrap_or("unknown");
+            Some(ContentType::Image(subtype.to_string()))
+        } else if lower.starts_with("audio/") {
+            let subtype = lower.strip_prefix("audio/").unwrap_or("unknown");
+            Some(ContentType::Audio(subtype.to_string()))
+        } else if lower.starts_with("video/") {
+            let subtype = lower.strip_prefix("video/").unwrap_or("unknown");
+            Some(ContentType::Video(subtype.to_string()))
         } else {
             None
         }
@@ -158,6 +288,28 @@ impl ContentRouter {
             Some(ContentType::Json)
         } else if lower.ends_with(".txt") || lower.ends_with(".text") {
             Some(ContentType::Text)
+        } else if lower.ends_with(".png") {
+            Some(ContentType::Image("png".into()))
+        } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+            Some(ContentType::Image("jpeg".into()))
+        } else if lower.ends_with(".gif") {
+            Some(ContentType::Image("gif".into()))
+        } else if lower.ends_with(".webp") {
+            Some(ContentType::Image("webp".into()))
+        } else if lower.ends_with(".svg") {
+            Some(ContentType::Image("svg".into()))
+        } else if lower.ends_with(".mp3") {
+            Some(ContentType::Audio("mpeg".into()))
+        } else if lower.ends_with(".wav") {
+            Some(ContentType::Audio("wav".into()))
+        } else if lower.ends_with(".ogg") {
+            Some(ContentType::Audio("ogg".into()))
+        } else if lower.ends_with(".mp4") {
+            Some(ContentType::Video("mp4".into()))
+        } else if lower.ends_with(".webm") {
+            Some(ContentType::Video("webm".into()))
+        } else if lower.ends_with(".bin") || lower.ends_with(".dat") {
+            Some(ContentType::Binary(lower.rsplit('.').next().unwrap_or("bin").into()))
         } else {
             None
         }

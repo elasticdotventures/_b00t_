@@ -165,7 +165,8 @@ impl RhaiEngine {
         });
 
         // String utilities
-        engine.register_fn("str_trim", |s: &str| -> String {
+        // 🤓 avoid registering str_trim — it shadows the built-in .trim() method on strings
+        engine.register_fn("str_strip", |s: &str| -> String {
             s.trim().to_string()
         });
 
@@ -306,6 +307,23 @@ impl RhaiEngine {
             |event: &str, detail: &str| -> Result<(), Box<rhai::EvalAltResult>> {
                 crate::events::write_event(event, detail);
                 Ok(())
+            },
+        );
+
+        // Reviewer constraint evaluation — exposes VerdictConstraint::evaluate() to Rhai
+        engine.register_fn(
+            "evaluate_constraint",
+            |constraint_json: &str, verdict_str: &str| -> Result<bool, Box<rhai::EvalAltResult>> {
+                crate::reviewer::evaluate_constraint_json(constraint_json, verdict_str)
+                    .map_err(|e| format!("evaluate_constraint: {}", e).into())
+            },
+        );
+
+        engine.register_fn(
+            "emit_verdict",
+            |verdict_str: &str, content: &str| -> Result<String, Box<rhai::EvalAltResult>> {
+                crate::reviewer::emit_verdict(verdict_str, content)
+                    .map_err(|e| format!("emit_verdict: {}", e).into())
             },
         );
 

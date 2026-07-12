@@ -1,0 +1,72 @@
+# b00t Agent Datum — b00t-comms
+# 🤓 b00t-comms is the hive's intra-hive communication node. It owns the
+#    `--skill=nats` NATS hive mesh (b00t-lib-chat/src/mesh.rs) and the finops
+#    accounting seam: every capability it executes registers a dataframe-typed
+#    receipt with ledgrrr (b00t-lib-chat/src/ledgrrr.rs) and mints a finops code.
+#    Receipts implement DataframeReceipt (b00t-lib-chat/src/dataframe_receipt.rs)
+#    so they materialize to Apache Arrow (feature `dataframe`).
+#
+# 🔗参 _b00t_/nats.skill.toml — the nats skill this agent realizes
+# 🔗参 _b00t_/datums/AGENT-REGISTRY.tomllmd — registry protocol
+
+[b00t]
+name = "b00t-comms"
+type = "agent"
+hint = "b00t-comms — NATS intra-hive mesh node; Redis-free discovery, direct send, broadcast, presence, and finops receipt accounting via ledgrrr"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "b00t-comms-001"
+model = "b00t-comms"
+skills = [
+  "nats",
+  "ledgrrr",
+]
+personality = "neutral"
+humor = "low"
+role = "b00t-comms"
+
+# 🤓 The hive speaks async_nats directly (per-agent inbox + NATS reply-to),
+#    not the channel-based NatsTransport. Subjects live under `b00t.hive.mesh.*`
+#    and are always intra-hive (same logical network).
+[b00t.agent.ipc]
+transport = "nats"
+nats_url = "nats://localhost:4222"
+mesh = true
+pubsub = true
+protocol = "nats-hive"
+subject_prefix = "b00t.hive.mesh"
+
+[b00t.agent.hive]
+intra_hive = true                      # same logical network; no cross-network path
+discovery_query = "b00t.hive.mesh.discovery.query"
+discovery_presence = "b00t.hive.mesh.discovery.presence"
+gossip = "b00t.hive.mesh.gossip"       # epidemic membership advertising (bounded hop budget)
+inbox = "b00t.hive.mesh.node.{agent_id}"
+channel = "b00t.hive.mesh.channel.{channel}"
+presence_interval_secs = 10
+presence_ttl_secs = 30
+gossip_max_hops = 5                    # hop budget so a single ad dies after bounded relays
+
+# 🤓 Collaborative-autonomy finops: every capability execution (nats.send,
+#    nats.broadcast, nats.discover, nats.presence) registers a UsageReceipt
+#    with ledgrrr. For the nats-focused PR this defaults to MockLedgrrr
+#    (synthetic MOCK-FINOPS-* codes, in-memory); the same receipt is a
+#    DataframeReceipt, so it lands in Arrow/Parquet for audit. ledgerr-mcp + iroh
+#    backing is deferred (see _b00t_/NATS-MESH-GOSSIP-DISCOVERY.tomllmd).
+[b00t.agent.finops]
+ledger = "mock"                        # "mock" (MockLedgrrr/in-memory) | "local" (LocalLedgrrr/JSONL) | "ledgerr-mcp"
+ledger_path = ".b00t/finops.jsonl"
+project = "b00t-comms"
+receipt = "dataframe"                  # DataframeReceipt -> Arrow (feature `dataframe`)
+focus_record = "experiment"            # FOCUS record is the reference dataframe receipt
+
+[b00t.agent.crew]
+role = "b00t-comms"
+captain = false
+
+[b00t.agent.mcp]
+enabled = true
+transport = ["stdio"]

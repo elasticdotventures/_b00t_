@@ -1,0 +1,29 @@
+[b00t]
+name = "using-git-worktrees"
+type = "skill"
+version = "0.1.0"
+hint = "Isolate feature work from the current workspace via a git worktree"
+
+[b00t.skill]
+description = """
+Use when starting feature work that needs isolation from current workspace or before executing implementation plans — ensures an isolated workspace exists via native tools or git worktree fallback.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["git", "worktrees", "isolation"]
+tier = "sm0l"
+complexity = 3
+
+[b00t.learn]
+topic = "using-git-worktrees"
+inline = """
+Use when starting feature work that needs isolation from current workspace or before executing implementation plans — ensures an isolated workspace exists via native tools or git worktree fallback.
+
+Invoke via the Skill tool in Claude Code: skill="using-git-worktrees".
+"""
+
+# b00t:map v1
+# summary: Isolate feature work from the current workspace via a git worktree
+# tags: git, worktrees, isolation
+# tier: sm0l
+# cmds: b00t learn using-git-worktrees
+# complexity: 3

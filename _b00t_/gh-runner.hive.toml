@@ -1,0 +1,100 @@
+[b00t]
+name = "gh-runner"
+type = "hive"
+hint = "Self-hosted GitHub Actions runner — podman kube play pod template. Zero host/repo data in source."
+
+# ── Template: placeholders filled at install time ──────────────────
+# Pod name: gh-runner-{repo_slug}
+# Generated YAML: {workdir}/gh-runner.yaml (concrete, not committed)
+
+[b00t.hive]
+template = true
+description = "Self-hosted GitHub Actions runner — podman kube play pod"
+runtime = "podman-kube-play"
+
+[b00t.hive.resources]
+ram_gb = 4
+cpu_cores = 4
+gpu_mb = 0
+
+[b00t.hive.resources.gate]
+ram_free_gb = 4
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "gh-runner"
+priority = 10
+
+# ── Embedded podman kube YAML template ─────────────────────────
+# Placeholders: {{repo}}, {{repo_slug}}, {{labels}}, {{workdir}},
+#               {{runner_name}}, {{token}}, {{ephemeral}}
+# This YAML is extracted and filled at install time.
+
+[b00t.hive.kube_yaml]
+content = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gh-runner-{{repo_slug}}
+  labels:
+    app: gh-runner
+    repo: {{repo_slug}}
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: runner
+    image: ghcr.io/actions/actions-runner:latest
+    env:
+    - name: REPO_URL
+      value: "https://github.com/{{repo}}"
+    - name: RUNNER_NAME
+      value: "{{runner_name}}"
+    - name: RUNNER_LABELS
+      value: "{{labels}}"
+    - name: RUNNER_TOKEN
+      value: "{{token}}"
+    - name: RUNNER_EPHEMERAL
+      value: "{{ephemeral}}"
+    - name: RUNNER_WORKDIR
+      value: "/runner/_work"
+    volumeMounts:
+    - name: work
+      mountPath: /runner/_work
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "2"
+      limits:
+        memory: "4Gi"
+        cpu: "4"
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      allowPrivilegeEscalation: false
+  volumes:
+  - name: work
+    hostPath:
+      path: {{workdir}}/_work
+      type: DirectoryOrCreate
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket
+"""
+
+[b00t.env]
+# Runtime config — filled at install time, never committed
+# GH_RUNNER_REPO = ""
+# GH_RUNNER_LABELS = ""
+# GH_RUNNER_WORKDIR = ""
+# GH_RUNNER_VERSION = ""
+# GH_RUNNER_EPHEMERAL = ""
+
+# b00t:map v1
+# summary: Hive/pod template for self-hosted GitHub Actions runner — podman kube play, zero hardcoded data
+# tags: hive, gh-runner, template, podman, kube-play, yaml, placeholder
+# tier: ch0nky
+# cmds: podman kube play {workdir}/gh-runner.yaml
+# complexity: 4

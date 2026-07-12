@@ -1,0 +1,143 @@
+# AI-Source-Engine (AL-1.0) — Transformer Attribution Logging
+#
+# 🤓 RayFromBoston/AI-Source-Engine: AL-1.0 attribution logging for transformers.
+#    Deep-dive completed: ENGINEERING_GUIDE.md + src/al10/ source tree analyzed.
+#
+#    What makes it special:
+#      1. Zero-second-pass: reuses existing attention weights (already computed
+#         during inference). No additional model pass. 1% overhead is plausible.
+#      2. Per-token provenance: not "doc influenced response" but "source 10
+#         contributed 41.2% to this specific output token". Mathematical receipts.
+#      3. Two-engine architecture: training-side source_idx alignment +
+#         inference-side attention bucketing. If either breaks, trust breaks.
+#      4. Hard invariants: len(input_ids)==len(source_idx) per row, ratios sum~1.0.
+#      5. Framework adapters: torch, huggingface, vllm already shipping.
+
+# ── b00t Concept Coverage Analysis ───────────────────────────────────────────
+
+[coverage]
+overall = "~30% concept overlap"
+analysis = """
+  b00t has NO equivalent for:
+    - Per-token attention provenance (operates at code level, not transformer)
+    - source_idx → token alignment (different domain — b00t doesn't train models)
+    - Bucket-and-normalize ratio computation (no attention weights to bucket)
+    - Framework adapters (torch/HF/vllm — not b00t's domain)
+
+  b00t HAS isomorphic patterns:
+    - Attribution receipts (JSON, SHA256) ↔ evidence/satisfies.jsonl (70% match)
+    - Hard invariants ↔ Satisfies<Constraint> gate validation (60%)
+    - Source registry (manifest, hashes) ↔ Store manifest.jsonl (80%)
+    - Exhaustive sort token invariance ↔ ─ (0% — no b00t equivalent)
+
+  What b00t could adopt:
+    - AL-1.0 receipt JSON schema as an evidence/satisfies output format
+    - Source registry pattern as a store manifest extension
+    - Exhaustive sort token concept for datum ordering validation
+"""
+
+# ── Novelty Assessment (Ponytail 7-rung, deep-dive verified) ─────────────────
+
+[ponytail]
+
+[ponytail.rung_1]
+name = "YAGNI"
+answer = "YES — genuinely novel. Zero b00t equivalent for attention-weight provenance."
+action = "digest"
+
+[ponytail.rung_2]
+name = "reuse"
+answer = "NO — no existing b00t attention-provenance infrastructure to reuse."
+action = "digest"
+
+[ponytail.rung_3]
+name = "stdlib"
+answer = "NO — this is a novel transformer architecture extension, not an stdlib pattern."
+action = "digest"
+
+[ponytail.rung_7]
+name = "minimum"
+answer = "Digest ENGINEERING_GUIDE.md + src/al10/math.py + src/al10/receipt.py.
+         Skip CLI (30KB boilerplate), server (8KB FastAPI wrapper), README (manifesto)."
+action = "digest minimal set"
+
+# ── What to Digest ───────────────────────────────────────────────────────────
+
+[digest]
+
+[[digest.include]]
+file = "ENGINEERING_GUIDE.md"
+reason = "Technical blueprint — Q/K/V attention reuse, source_idx alignment, receipt generation"
+priority = "high"
+
+[[digest.include]]
+file = "src/al10/"
+reason = "Core AL-1.0 implementation — training-side plug-in + inference-side receipt"
+priority = "high"
+
+[[digest.include]]
+file = "tests/"
+reason = "Unit tests demonstrating attribution validation"
+priority = "medium"
+
+# ── What to Skip (Open Letter — not technical) ────────────────────────────────
+
+[skip]
+
+[[skip.exclude]]
+file = "README.md"
+reason = "Open letter manifesto — political/philosophical, not technical knowledge"
+
+[[skip.exclude]]
+file = "THE_HISTORY_OF_AI.md"
+reason = "Documented timeline essay — historical, not technical"
+
+[[skip.exclude]]
+file = "AGI Safety Bible.pdf"
+reason = "Binary format, psychological framing text — not digestible"
+
+[[skip.exclude]]
+file = "We All Die in the Dark.pdf"
+reason = "Binary format, starting thesis — not technical"
+
+# ── Integration with b00t ────────────────────────────────────────────────────
+
+[integration]
+
+[integration.grok]
+command = "b00t grok learn --source ENGINEERING_GUIDE.md"
+description = "Digest the technical blueprint into b00t's knowledge base"
+ponytail_filter = "rung 1 pre-check: skip if AL-1.0 concept already stored"
+
+[integration.store]
+command = "b00t store put ENGINEERING_GUIDE.md --class b00t:ArchitectureReference --consumer b00t-grok"
+description = "Content-addressed blob storage with SHA256 metadata"
+
+[integration.neumann]
+description = "Semantic triples for provenance tracking concepts"
+facts = [
+    "b00t:ProvenanceTracking rdf:type b00t:Concept",
+    "b00t:AttributionReceipt b00t:implements b00t:ProvenanceTracking",
+    "b00t:AL10 b00t:isA b00t:AttributionReceipt",
+]
+
+# ── Sharp Corners ────────────────────────────────────────────────────────────
+
+[[sharp_corners]]
+issue = "Open letter dominates README"
+impact = "grok digest on README.md would ingest 90% manifesto, 10% technical. Skip it."
+
+[[sharp_corners]]
+issue = "Binary PDFs"
+impact = "AGI Safety Bible and We All Die in the Dark are PDFs — not parseable by grok."
+
+[[sharp_corners]]
+issue = "1% compute claim unverified"
+impact = "AL-1.0 claims <1% overhead but not independently benchmarked. Tag as unverified."
+
+# b00t:map v1
+# summary: AI-Source-Engine (AL-1.0) — transformer attribution via attention-weight reuse, ponytail-reviewed
+# tags: attribution, transformer, provenance, al10, citation, vector
+# tier: ch0nky
+# cmds: b00t grok learn --source ENGINEERING_GUIDE.md
+# complexity: 5

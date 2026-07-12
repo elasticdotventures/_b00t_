@@ -22,7 +22,12 @@
         "serde"
       ],
       "enabled": true,
-      "type": "local"
+      "type": "local",
+      "environment": {
+        "OPENAI_API_BASE": "http://127.0.0.1:8001/v1",
+        "OPENAI_API_KEY": "local-b00t"
+      },
+      "timeout": 60000
     }
   },
   "model": "qwen36-local/ch0nky",
@@ -33,7 +38,6 @@
       "npm": "@ai-sdk/openai-compatible"
     },
     "qwen36-local": {
-      "api": "http://127.0.0.1:8001/v1",
       "models": {
         "ch0nky": {
           "limit": {
@@ -49,7 +53,8 @@
       "name": "Qwen3.6 Local",
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "apiKey": "local-b00t"
+        "apiKey": "local-b00t",
+        "baseURL": "http://127.0.0.1:8001/v1"
       }
     }
   },

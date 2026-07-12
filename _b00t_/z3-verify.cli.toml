@@ -1,0 +1,53 @@
+[b00t]
+name = "z3-verify"
+type = "verifier"
+hint = "Z3 SMT solver — LLM proposes, Z3 verifies, soul log records proof receipt"
+auto_install = true
+
+[b00t.verifier]
+binary = "z3"
+args = ["-smt2", "-in"]      # reads SMT2 assertion from stdin
+input_format = "smt2"
+output_pass = "sat"
+output_fail = "unsat"
+timeout_ms = 5000
+
+install = '''
+# z3-solver pip wheel ships the z3 binary directly
+uv pip install --quiet z3-solver
+# ensure binary is on PATH
+Z3_BIN=$(python3 -c "import z3; import os; print(os.path.join(os.path.dirname(z3.__file__), 'z3'))" 2>/dev/null)
+if [ -n "$Z3_BIN" ] && [ -f "$Z3_BIN" ]; then
+    ln -sf "$Z3_BIN" ~/.local/bin/z3
+else
+    # fallback: apt
+    sudo apt-get install -y z3 2>/dev/null || true
+fi
+'''
+
+version = "z3 --version"
+version_regex = 'Z3 version (\d+\.\d+\.\d+)'
+desires = "4.16.0"
+
+[[b00t.usage]]
+description = "Check satisfiability — simple equality"
+command = "echo '(declare-const x Int)(assert (= x 42))(check-sat)' | z3 -smt2 -in"
+
+[[b00t.usage]]
+description = "Check satisfiability — contradiction (should return unsat)"
+command = "echo '(declare-const x Int)(assert (and (> x 0) (< x 0)))(check-sat)' | z3 -smt2 -in"
+
+[[b00t.usage]]
+description = "Verify budget constraint (cake economy gate)"
+command = "echo '(declare-const spent Real)(declare-const cap Real)(assert (< spent cap))(assert (= spent 5.0))(assert (= cap 200.0))(check-sat)' | z3 -smt2 -in"
+
+[[b00t.usage]]
+description = "Type-system check — LoRA rank constraint"
+command = "echo '(declare-const r Int)(declare-const alpha Int)(assert (= alpha (* 2 r)))(assert (= r 16))(check-sat)(get-value (alpha))' | z3 -smt2 -in"
+
+# b00t:map v1
+# summary: Z3 SMT solver datum — verifier tier; LLM proposes, Z3 evaluates, AlphaGo loop closes on SAT
+# tags: z3, smt, verifier, formal, sat, unsat, hallucination-reduction, alphago
+# tier: sm0l
+# cmds: echo '<smt2>' | z3 -smt2 -in
+# complexity: 3

@@ -1,0 +1,88 @@
+---
+# GitHub Actions self-hosted runner on sm3lly
+# Namespace: b00t-gh-runner
+# Label: sm3lly — matches runs-on: [self-hosted, sm3lly] in workflows
+#
+# Setup (one-time):
+#   kubectl apply -f _b00t_/k8s.🚢/gh-runner/deployment.yaml
+#   kubectl create secret generic gh-runner-token \
+#     --from-literal=RUNNER_TOKEN=<token-from-gh-api> \
+#     --from-literal=REPO_URL=https://github.com/PromptExecution/rust-docs-mcp-b00t \
+#     -n b00t-gh-runner
+#
+# Refresh token (expires 1h):
+#   gh api -X POST repos/PromptExecution/rust-docs-mcp-b00t/actions/runners/registration-token
+#   kubectl create secret generic gh-runner-token --from-literal=... --dry-run=client -o yaml | kubectl apply -f -
+#
+# Logs: kubectl logs -n b00t-gh-runner -l app=gh-runner -f
+# Status: kubectl get pods -n b00t-gh-runner
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: b00t-gh-runner
+  labels:
+    b00t.io/managed: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gh-runner-rust-docs
+  namespace: b00t-gh-runner
+  labels:
+    app: gh-runner
+    b00t.io/repo: rust-docs-mcp-b00t
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gh-runner
+  template:
+    metadata:
+      labels:
+        app: gh-runner
+        b00t.io/repo: rust-docs-mcp-b00t
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: runner
+          image: myoung34/github-runner:latest
+          env:
+            - name: RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gh-runner-token
+                  key: RUNNER_TOKEN
+            - name: REPO_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gh-runner-token
+                  key: REPO_URL
+            - name: RUNNER_NAME
+              value: sm3lly
+            - name: LABELS
+              value: self-hosted,sm3lly,linux,x64
+            - name: RUNNER_WORKDIR
+              value: /tmp/runner
+            # Rust build cache persistence
+            - name: CARGO_HOME
+              value: /cargo-cache
+          volumeMounts:
+            - name: runner-work
+              mountPath: /tmp/runner
+            - name: cargo-cache
+              mountPath: /cargo-cache
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: runner-work
+          emptyDir: {}
+        - name: cargo-cache
+          hostPath:
+            path: /home/brianh/.cargo
+            type: Directory
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock

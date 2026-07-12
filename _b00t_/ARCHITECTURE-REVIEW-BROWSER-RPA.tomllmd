@@ -1,0 +1,225 @@
+# ARCHITECTURE REVIEW: Browser RPA Stack — MECE/TRIZ Analysis
+# Date: 2026-06-25
+# Reviewer: b00t architecture-reviewer
+
+# ─── MECE: Mutually Exclusive, Collectively Exhaustive ───────────────────────
+# The browser automation problem space decomposes into 7 orthogonal layers:
+
+# L1: Protocol Transport (CDP/WebDriver/Playwright)
+# L2: Element Discovery (selectors → enrichment → LLM-addressable)
+# L3: Action Execution (click/type/navigate/etc)
+# L4: Workflow Orchestration (script curation, state machines, loops)
+# L5: LLM Integration (agent loop, vision, NL→action)
+# L6: Anti-Detection (stealth, fingerprint, session persistence)
+# L7: Data Pipeline (scrape → extract → transform → store)
+
+[mece_analysis]
+layer_1_protocol = "CDP via chromiumoxide. ✅ Correct choice — chromiumoxide is the most complete Rust CDP crate (auto-generated 60K lines from PDL spec). headless_chrome is synchronous; fantoccini uses WebDriver (slower)."
+layer_2_selectors = "Mixed: [data-b00t-*] enrichment is ✅ NOVEL. But reliance on CSS selectors as primary mechanism is ⚠️ FRAGILE (see stinks)."
+layer_3_actions = "Basic set (navigate, click, type, evaluate, screenshot). ✅ Covers 80% of RPA needs. Missing: file upload, drag-drop, multi-select, iframe switching."
+layer_4_orchestration = "Ratatui TUI + Chrome side panel. ✅ Good for interactive use. Missing: state machine workflow engine, error recovery, idempotency."
+layer_5_llm = "No LLM integration yet. 🦨 CURRENT GAP. The whole point of this exercise."
+layer_6_stealth = "Rust binary is inherently harder to fingerprint. ✅ Natural advantage. No explicit stealth measures yet."
+layer_7_pipeline = "Fine-tuning pipeline exists (generate_dataset → unsloth → GGUF). 🟡 Extraction pipeline for scraped data is missing."
+
+# ─── TRIZ: Contradictions & Solutions ────────────────────────────────────────
+# Contradiction: We want cross-browser support (Playwright's strength) but Chrome's
+# CDP offers the richest automation API. TRIZ solution: segmentation — use CDP for
+# Chrome, fall back to WebDriver for Firefox/Safari via fantoccini.
+
+# Contradiction: We want LLM understanding of pages (vision, context) but LLM calls
+# are slow and expensive. TRIZ solution: local fine-tuned Qwen3.6-27B for element
+# selection + cheap sm0l model for DOM parsing — only call frontier for ambiguous cases.
+
+[triz_contradictions]
+cross_browser_vs_api_depth = "Solution: CDP primary (Chrome), WebDriver secondary via fantoccini. Don't build another cross-browser framework — use existing ones."
+llm_cost_vs_accuracy = "Solution: Tiered model approach — sm0l (DOM parsing) → ch0nky (element selection) → frontier (ambiguous/error recovery)."
+performance_vs_stealth = "Solution: Rust gives performance for free. Focus stealth investment on fingerprint randomization + CDP command sequencing."
+data_format_changes = "Solution: data-b00t-* enrichment makes selectors *dynamic* — LLM reads labels, not CSS classes. This is the key hedge against DOM changes."
+
+# ─── ✅ SMELLS GOOD ──────────────────────────────────────────────────────────
+
+[good_smells]
+smell_1 = "chromiumoxide choice — Best Rust CDP library. Auto-generated types from Chrome PDL spec = protocol-correct by construction."
+smell_2 = "data-b00t-* DOM enrichment — Genuinely novel. No existing tool (Playwright/Puppeteer/Selenium) injects dynamic semantic labels. This is THE differentiator."
+smell_3 = "Rust binary — Single static binary, no Python/Node runtime dependency. 2x faster CDP connection, no GIL, no GC pauses."
+smell_4 = "In-page CDP injection — Using Runtime.evaluate to inject enrichment is browser-version-independent. Works on any Chrome 95+."
+smell_5 = "Feature-gated rpa deps — chromiumoxide is heavy (800MB debug binary). Gating behind --features rpa keeps normal builds fast."
+smell_6 = "WSL→Windows relay detection — Auto-detecting Chrome on Windows host from WSL2 solves a real multi-OS development pain."
+smell_7 = "MutationObserver — SPA support via DOM change watching. Every major framework (React/Vue/Angular) dynamically loads content."
+smell_8 = "Unsloth fine-tuning pipeline — Dataset generation from live datums + QLoRA on Qwen3.6-27B. This is the right foundation for a b00t-specialized model."
+
+# ─── 🦨 STINKS (critical issues) ─────────────────────────────────────────────
+
+[stinks]
+stink_1_playwright_reinvention = "🦨 CRITICAL: b00t-rpa is reimplementing Playwright's CDP layer in Rust. Playwright has 14,000+ GitHub stars, full-time Microsoft maintainers, cross-browser support, codegen, trace viewer, and auto-waiting. We cannot match this. TRIZ says: integrate Playwright, don't compete with it."
+stink_1_fix = "Use Playwright Python as the primary RPA driver. Call it via subprocess or b00t-iface bridge. Reserve chromiumoxide for cases where we NEED Rust-level performance (high-throughput scraping, stealth). This is the Browser-Use architecture: Python for orchestration, Rust for performance-critical paths."
+
+stink_2_no_llm_integration = "🦨 CRITICAL: Current b00t-rpa has ZERO LLM integration. The user needs 'RPA with integrated LLM' for banking/scraping. Without LLM, every broken selector requires manual Rust code changes. This is a hard blocker for the stated use case."
+stink_2_fix = "Add LLM integration layer: sm0l model (Qwen2.5-3B via local vLLM) for element selection from __b00t.find() results. ch0nky (Qwen3.6-27B) for multi-step reasoning. Expose as `b00t-rpa ask 'find the login button and enter credentials'`."
+
+stink_3_fragile_python_relay = "🦨 The Python TCP relay (cdp-relay.py) is a single point of failure. If the Python process dies, WSL→Windows CDP breaks. No health check, no restart logic."
+stink_3_fix = "Embed a Rust TCP forwarder in b00t-rpa using tokio::net. Remove Python dependency for the relay. Or better: use windows-rs crate to bind a port on Windows from WSL via Win32 API."
+
+stink_4_no_state_machine = "🦨 Script curation (TUI) produces a flat list of steps. No loops, no conditionals, no error recovery, no idempotency. Banking scrapers need: retry on failure, check for 2FA challenge, handle session expiry, paginate through statements."
+stink_4_fix = "Borrow b00t's existing workflow engine (wrkflw: scheduler → guard → execute → audit). RPA scripts should be state machines, not step lists."
+
+stink_5_no_cross_page_identity = "🦨 Each b00t-rpa invocation is a fresh CDP connection. Pages from one invocation are invisible to the next. This means navigation + eval can't span invocations."
+stink_5_fix = "Use persistent browser context. Chrome user-data-dir already persists sessions. We need to track Tab IDs across invocations. Or simpler: keep a long-running background b00t-rpa process and send commands via stdin/stdout MCP-like protocol."
+
+stink_6_no_session_sharing = "🦨 Banking scrapers need logged-in sessions. Current b00t-rpa starts fresh Chrome each time. No cookie import/export, no session replay."
+stink_6_fix = "Add session snapshot/restore: serialize cookies + localStorage to JSON. `b00t-rpa session save <name>` / `b00t-rpa session load <name>`."
+
+stink_7_no_extraction_pipeline = "🦨 After scraping, data goes nowhere. No structured output, no database insertion, no file export. 'Scrape banking statements for indexing' requires extraction, not just navigation."
+stink_7_fix = "Add output pipeline: `b00t-rpa extract 'table.transactions > tr' --format csv --output transactions.csv`. Wire into ledgerr's existing ingestion pipeline."
+
+# ─── 🔄 WHEEL REINVENTION AUDIT ──────────────────────────────────────────────
+
+[wheel_reinvention]
+wheel_1_cdp_client = "PARTIAL. We use chromiumoxide (existing crate, good choice). The Rust CDP client itself is NOT reinvention. But the PARADIGM of building a full browser automation framework from Rust components IS reinvention when Playwright does it better."
+wheel_1_verdict = "⬅️ Keep chromiumoxide for high-performance paths. ➡️ Don't build full framework — use Playwright Python for standard automation."
+
+wheel_2_tcp_relay = "COMPLETE. A TCP forwarder is a solved problem. socat, ncat, ssh -L, and countless proxy tools exist. Building it as a Python script is reinvention."
+wheel_2_verdict = "⬅️ Delete Python relay. Replace with: socat on Windows, or embed 20-line Rust TCP proxy, or just use netsh portproxy."
+
+wheel_3_ratatui_tui = "GOOD. Ratatui is THE standard Rust TUI library. Building an fzf-like command palette on top of it is not reinvention — it's compositing existing tools into a novel UX."
+wheel_3_verdict = "⬅️ Keep. But integrate TUI with LLM — 'show enriched elements' should pull from live CDP, not static palette."
+
+wheel_4_chrome_extension = "PARTIAL. The Chrome extension itself is standard (manifest v3, sidePanel, debugger API). The content script enrichment IS novel. But the panel UI is a reinvention of Playwright's trace viewer / Puppeteer's devtools."
+wheel_4_verdict = "⬅️ Keep content.js (novel). ➡️ Replace panel.html/panel.js with Playwright trace viewer if possible, or keep as lightweight alternative."
+
+wheel_5_dom_enrichment = "NOT REINVENTION. No existing framework injects dynamic [data-b00t-*] attributes. Playwright has auto-waiting and role selectors, but they read EXISTING ARIA attributes — they don't INJECT new ones. data-b00t-index is a genuinely novel solution to the LLM-element-addressing problem."
+wheel_5_verdict = "⬅️ Double down. This is the key innovation. File a patent/defensive publication."
+
+# ─── CORRECT PATH: Deterministic Website Navigation + RPA with LLM ────────
+
+[correct_path]
+# The right architecture follows Browser-Use's validated pattern but with Rust
+# for performance-critical paths and our data-b00t-* enrichment as the differentiator.
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                       b00t RPA Architecture v2                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐    │
+│  │ LLM Agent     │───▶│  Orchestrator    │───▶│  Data Pipeline    │    │
+│  │ (Qwen3.6-27B) │    │  (state machine) │    │  (extract→store)  │    │
+│  │ sm0l/ch0nky   │    │  wrkflw engine   │    │  CSV/JSON/SQLite  │    │
+│  └──────────────┘    └─────────────────┘    └──────────────────┘    │
+│                           │                                         │
+│                           ▼                                         │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              Playwright Python (standard RPA)                 │   │
+│  │  +90% of automation: navigate, click, type, screenshot        │   │
+│  │  Cross-browser, auto-waiting, network intercept, codegen      │   │
+│  └────────────┬─────────────────────────────────────────────┬───┘   │
+│               │                                             │       │
+│               ▼                                             ▼       │
+│  ┌─────────────────────┐              ┌──────────────────────────┐  │
+│  │ Playwright (std)     │              │ b00t-rpa (chromiumoxide) │  │
+│  │ Normal pages, forms, │              │ High-throughput, stealth │  │
+│  │ cross-browser         │              │ DOM enrichment injection │  │
+│  └─────────────────────┘              │ data-b00t-* deep access  │  │
+│                                        └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+
+[llm_integration_plan]
+tier_sm0l = "Qwen2.5-3B (local vLLM) — DOM parsing, element selection from __b00t.find(). Cost: ~0. 'Given user wants to X, which element should I click?'"
+tier_ch0nky = "Qwen3.6-27B (local vLLM/llama.cpp) — Multi-step reasoning, error recovery, form filling. 'Navigate to bank login, enter credentials, handle 2FA if present.'"
+tier_frontier = "Claude/GPT-4 (API) — Ambiguous pages, CAPTCHA handling, new website discovery. Fallback only, cost-aware."
+action_framework = "b00t-rpa ask 'find the login form' → LLM returns {type:'form', role:'container'} → Playwright/b00t-rpa executes → LLM confirms result."
+
+[banking_scraping_plan]
+approach = "Hybrid: Plaid/Teller for banks with API coverage + b00t-rpa for banks without."
+session_management = "Persistent Chrome profile per bank. Session snapshots: serialize cookies + localStorage to encrypted JSON. TOTP integration for 2FA."
+data_pipeline = "Scrape → CSV/OFX/QIF → ledgerr ingestion pipeline → classified transactions → workbook."
+schedule = "Cron-based: b00t hive schedule scrape-<bank> --cron='0 6 * * 1' (weekly Monday 6AM)."
+error_handling = "State machine: retry(3) → alert human → fallback to screenshot+vision analysis."
+
+[testing_plan]
+b00t_website = "Playwright Python test suite: visit each page, verify data-b00t attributes injected, take screenshot baseline, diff on PR."
+b00t_server = "HTTP health check: GET /health → 200. CDP probe from b00t-rpa → verify server responds. wrkflw smoke test."
+verification = "b00t-rpa self-test: navigate to test page, click by data-b00t-type, verify result. CI workflow: `just rpa-self-test`."
+
+# ─── IMMEDIATE ACTIONS ──────────────────────────────────────────────────────
+
+[immediate_actions]
+priority_1 = "Add Playwright Python integration as the primary RPA driver. Call via subprocess from b00t-rpa. This solves cross-browser, auto-waiting, codegen — instantly."
+priority_2 = "Add LLM integration: sm0l model for element selection. `b00t-rpa ask 'click the login button'` → LLM picks from __b00t.find('button') results."
+priority_3 = "Replace Python TCP relay with embedded Rust forwarder or socat. Eliminate fragile Python dependency in the WSL→Windows bridge."
+priority_4 = "Add session management: `b00t-rpa session save/load` for cookie + localStorage serialization. Required for banking login persistence."
+priority_5 = "Add data extraction pipeline: table/CSV export from scraped content. Wire into ledgerr ingestion."
+
+
+# ─── MACHINE-READABLE DECISION TREE ─────────────────────────────────────────
+# Agents traverse this to select the right RPA path for a given task.
+# Each node: id, question, yes→ node_id | action, no→ node_id | action
+
+[[decision_tree]]
+id = "root"
+question = "Is the target browser Chrome/Chromium?"
+yes = "node_cdp"
+no  = "action_playwright_std"
+
+[[decision_tree]]
+id = "node_cdp"
+question = "Is throughput > 10 pages/min OR stealth required?"
+yes = "action_b00t_rpa_chromiumoxide"
+no  = "node_llm"
+
+[[decision_tree]]
+id = "node_llm"
+question = "Is natural-language task specification needed?"
+yes = "node_llm_tier"
+no  = "action_playwright_std"
+
+[[decision_tree]]
+id = "node_llm_tier"
+question = "Is the task simple element selection (< 2 reasoning steps)?"
+yes = "action_sm0l_qwen25_3b"
+no  = "node_chonky"
+
+[[decision_tree]]
+id = "node_chonky"
+question = "Is the task multi-step or requires error recovery?"
+yes = "action_ch0nky_qwen36_27b"
+no  = "action_frontier_fallback"
+
+# ── Terminal actions ─────────────────────────────────────────────────────────
+
+[[decision_tree_action]]
+id   = "action_playwright_std"
+tool = "playwright-python"
+cmd  = "uvx playwright"
+hint = "Standard Playwright Python: navigate/click/type/screenshot. 90% of RPA tasks."
+
+[[decision_tree_action]]
+id   = "action_b00t_rpa_chromiumoxide"
+tool = "b00t-rpa"
+cmd  = "b00t rpa"
+hint = "Rust CDP via chromiumoxide: high-throughput scraping + data-b00t-* DOM enrichment injection."
+
+[[decision_tree_action]]
+id   = "action_sm0l_qwen25_3b"
+tool = "b00t-llm-sm0l"
+cmd  = "b00t ai chat --tier=sm0l"
+hint = "Qwen2.5-3B local: parse DOM, select element from __b00t.find() results. ~0 cost."
+
+[[decision_tree_action]]
+id   = "action_ch0nky_qwen36_27b"
+tool = "b00t-llm-chonky"
+cmd  = "b00t ai chat --tier=ch0nky"
+hint = "Qwen3.6-27B local: multi-step reasoning, form fill, 2FA handling, error recovery."
+
+[[decision_tree_action]]
+id   = "action_frontier_fallback"
+tool = "claude-sonnet"
+cmd  = "b00t ai chat --tier=frontier"
+hint = "Claude/GPT-4: CAPTCHA, ambiguous pages, new site discovery. Cost-aware — check cake budget first."
+
+# b00t:map v1
+# summary: MECE/TRIZ architecture review of browser RPA stack — good smells, stinks, wheel reinvention, and correct path forward
+# tags: architecture, review, mece, triz, rpa, browser, llm, banking, scraping
+# tier: frontier
+# cmds: b00t whoami --role=architecture-reviewer
+# complexity: 9

@@ -1,0 +1,57 @@
+# HuggingFace Hub — b00t Adapter & Model Registry
+#
+# Trained LoRA adapters are pushed to HF Hub model repos under elasticdotventures/.
+# This provides versioning, easy download to any node, and public/private sharing.
+#
+# Current adapter repos:
+#   elasticdotventures/b00t-qwen3-coder-30b  — Qwen3-Coder-30B-A3B b00t adapter (cloud trained)
+#   elasticdotventures/b00t-sm0l             — sm0l (Qwen2.5-0.5B) b00t adapter (local trained)
+#
+# Adapter output from HF Jobs lands at:
+#   hf://buckets/elasticdotventures/b00t-adapters/qwen3-coder-30b/
+# AND is pushed to Hub via model.push_to_hub() at end of training.
+
+[b00t.schema]
+version   = "1"
+type      = "api"
+type_tags = ["model", "adapter", "lora", "huggingface", "registry"]
+
+[resource]
+name      = "b00t model adapter registry"
+org       = "elasticdotventures"
+base_url  = "https://huggingface.co/elasticdotventures"
+
+[[resource.adapters]]
+repo_id    = "elasticdotventures/b00t-qwen3-coder-30b"
+base_model = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+lora_r     = 16
+trained_on = "b00t corpus (fine-tune/train.jsonl)"
+tier       = "frontier"
+status     = "pending-first-run"
+
+[[resource.adapters]]
+repo_id    = "elasticdotventures/b00t-sm0l"
+base_model = "Qwen/Qwen2.5-0.5B-Instruct"
+lora_r     = 32
+trained_on = "b00t corpus run4 (8356 rows)"
+tier       = "sm0l"
+status     = "5/5-probe-passing"
+
+[[resource.usages]]
+description = "Pull cloud-trained coder adapter to sm3lly"
+command     = "just hf-adapter-pull"
+
+[[resource.usages]]
+description = "Push sm0l adapter to Hub manually"
+command     = "hf upload elasticdotventures/b00t-sm0l fine-tune/output-smol/lora-adapter . --repo-type model"
+
+[[resource.usages]]
+description = "Check what's in an adapter repo"
+command     = "hf repo info elasticdotventures/b00t-qwen3-coder-30b --repo-type model"
+
+# b00t:map v1
+# summary: HF Hub adapter registry — elasticdotventures/ org holds trained LoRA adapters per tier
+# tags: model, adapter, lora, huggingface, registry, sm0l, frontier, qwen3-coder
+# tier: ch0nky
+# cmds: just hf-adapter-pull, hf upload elasticdotventures/<repo> <local> <remote> --repo-type model
+# complexity: 3

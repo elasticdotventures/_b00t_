@@ -24,11 +24,25 @@ pub struct EvidenceRecord {
     pub subject: String,
     pub predicate: String,
     pub object: serde_json::Value,
-    /// ISO 8601 timestamp
     pub timestamp: String,
-    /// Agent that generated this record (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
+    /// 🤓 AL-1.0 influence weights — which knowledge sources contributed to this evidence.
+    ///    Each entry: {source_key, ratio, score}. Sum of ratios ≈ 1.0.
+    ///    None if attribution was not computed for this record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub influence: Option<Vec<InfluenceWeight>>,
+}
+
+/// 🤓 AL-1.0 influence weight — maps a knowledge source to its contribution ratio.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InfluenceWeight {
+    /// Source key in the knowledge store or grok
+    pub source_key: String,
+    /// Normalized influence ratio (0.0–1.0)
+    pub ratio: f64,
+    /// Raw score before normalization (similarity, relevance, evidence strength)
+    pub score: f64,
 }
 
 impl EvidenceRecord {
@@ -39,6 +53,7 @@ impl EvidenceRecord {
             object: serde_json::Value::String(constraint.to_string()),
             timestamp: chrono::Utc::now().to_rfc3339(),
             agent_id: None,
+            influence: None,
         }
     }
 }
@@ -93,6 +108,26 @@ pub fn prove_skill(skill: &str) -> Result<Vec<EvidenceRecord>> {
         .into_iter()
         .filter(|r| r.subject == skill)
         .collect())
+}
+
+/// Record that `skill` satisfies `constraint` with AL-1.0 influence attribution.
+/// Generates influence receipt in store, attaches receipt key to evidence record.
+pub fn record_satisfies_with_influence(
+    skill: &str,
+    constraint: &str,
+    scored_sources: &[(String, f64)],
+) -> Result<()> {
+    let receipt = b00t_c0re_lib::store::put_influence(skill, scored_sources)?;
+    let weights: Vec<InfluenceWeight> = receipt.sources.iter().map(|s| InfluenceWeight {
+        source_key: s.source_key.clone(),
+        ratio: s.ratio,
+        score: s.score,
+    }).collect();
+
+    let mut rec = EvidenceRecord::satisfies(skill, constraint);
+    rec.influence = Some(weights);
+    append_evidence(&rec)?;
+    Ok(())
 }
 
 /// Record that `skill` satisfies `constraint` (idempotent: skips if same

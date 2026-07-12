@@ -1,5 +1,7 @@
 [b00t]
 name = "togaf-download-datasheets"
+parent = "togaf.stack"
+depends_on = ["chrome-mcp.mcp"]
 type = "job"
 hint = "Download TOGAF datasheets from OpenGroup publications using browser automation"
 
@@ -22,6 +24,7 @@ output_dir = "~/.b00t/data/togaf/datasheets"
 
 [[b00t.job.steps]]
 name = "setup-output-dir"
+depends_on = ["chrome-mcp.mcp"]
 description = "Create output directory for datasheets"
 checkpoint = "setup-complete"
 
@@ -31,6 +34,7 @@ command = "mkdir -p ~/.b00t/data/togaf/datasheets"
 
 [[b00t.job.steps]]
 name = "download-datasheets"
+depends_on = ["chrome-mcp.mcp"]
 description = "Use playwright MCP to login and download datasheets"
 checkpoint = "download-complete"
 
@@ -45,6 +49,7 @@ params = { url = "https://publications.opengroup.org/data-sheets" }
 
 [[b00t.job.steps]]
 name = "verify-downloads"
+depends_on = ["chrome-mcp.mcp"]
 description = "Verify downloaded files exist"
 checkpoint = "verify-complete"
 

@@ -1,0 +1,78 @@
+# b00t datum: servo (servoshell browser engine)
+# type: cli
+# Servo is a Rust-native browser engine — Linux Foundation project.
+#
+# 🤓 KEY DISTINCTION vs qutebrowser:
+#   - Servo: Rust-native, embeddable (libservo crate), WebGPU, WebDriver (W3C)
+#   - qutebrowser: QtWebEngine (Chromium-based), CDP via --remote-debugging-port
+#   - For CDP/RPA today → use qutebrowser or Chrome headless
+#   - For libservo embedding in b00t-cli → Servo is the play (K5 backlog item)
+#
+# @tribal: binary is `servoshell` inside `servo/` dir in the tarball;
+#          resources/ dir must live alongside the binary (SERVO_RESOURCE_FILES)
+#
+# Automation ports:
+#   --webdriver=4444      WebDriver server (W3C, Selenium-compatible)
+#   --devtools=6080       Firefox DevTools Protocol (NOT CDP)
+#
+# WebGPU: --pref dom_webgpu_enabled  (RTX3090 supported via Vulkan)
+# Headless: requires Xvfb or Wayland; Vello CPU renderer is now default
+
+[b00t]
+name    = "servo"
+hint    = "Rust browser engine — servoshell binary + libservo embedding API"
+type    = "cli"
+
+[version]
+desires = "0.3.0"
+cmd     = "servoshell --version 2>&1 || servo --version 2>&1"
+regex   = "(?:servo|servoshell)[/ ](\\d+\\.\\d+\\.\\d+)"
+
+[install]
+cmd = """
+set -euo pipefail
+SERVO_VERSION="0.3.0"
+INSTALL_DIR="${HOME}/.local/share/servo"
+mkdir -p "$INSTALL_DIR" ~/.local/bin
+curl -fsSL "https://github.com/servo/servo/releases/download/v${SERVO_VERSION}/servo-x86_64-linux-gnu.tar.gz" \
+  | tar -xz -C "$INSTALL_DIR" --strip-components=1
+ln -sf "$INSTALL_DIR/servoshell" ~/.local/bin/servo
+ln -sf "$INSTALL_DIR/servoshell" ~/.local/bin/servoshell
+echo "servo ${SERVO_VERSION} installed → ~/.local/share/servo/servoshell"
+"""
+
+[runtime_deps]
+# apt packages required on Linux (Ubuntu/Debian)
+apt = [
+  "libgstreamer1.0-0",
+  "gstreamer1.0-plugins-base",
+  "gstreamer1.0-plugins-good",
+  "gstreamer1.0-plugins-bad",
+  "gstreamer1.0-plugins-ugly",
+  "libxcursor1", "libxrandr2", "libxi6",
+  "libxkbcommon0",
+  "libvulkan1",
+  "xvfb",
+]
+
+[usage]
+# Interactive
+browse   = "DISPLAY=:99 servo https://servo.org"
+headless = "xvfb-run servo --no-native-titlebar https://example.com"
+
+# Automation — WebDriver (Selenium/Playwright compatible)
+webdriver = "xvfb-run servo --webdriver=4444 https://about:blank"
+
+# Agent-controlled via WebDriver:
+# from python: webdriver.Remote('http://localhost:4444', options=...)
+
+# Debugging
+devtools  = "servo --devtools=6080 https://example.com"
+webgpu    = "servo --pref dom_webgpu_enabled https://demo.servo.org"
+
+# b00t:map v1
+# summary: Rust browser engine (servoshell) — install + WebDriver automation guide
+# tags: browser, servo, rust, webdriver, embedding, webgpu, headless
+# tier: ch0nky
+# cmds: just servo::browse, just servo::webdriver
+# complexity: 4

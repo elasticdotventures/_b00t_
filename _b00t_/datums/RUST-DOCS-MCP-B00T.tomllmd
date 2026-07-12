@@ -1,0 +1,59 @@
+[b00t]
+name = "rust-docs-mcp-b00t"
+type = "repo"
+hint = "b00tyverse rust crate documentation MCP server — HTTP/SSE native, govcraft fork, ghcr CI"
+version = "1.3.1"
+
+[b00t.source]
+repo = "https://github.com/PromptExecution/rust-docs-mcp-b00t"
+vendor_path = "vendor/rust-docs-mcp-b00t"
+upstream = "https://github.com/Govcraft/rust-docs-mcp-server"
+image = "ghcr.io/promptexecution/rust-docs-mcp-b00t:latest"
+# 🤓 image built by vendor/rust-docs-mcp-b00t/.github/workflows/docker.yml on push to main
+
+[b00t.transport]
+# Native HTTP/SSE via rmcp transport-sse-server feature
+# stdio mode available for local IDE integration
+http_mode = "--http --port 3000 --host 0.0.0.0"
+stdio_mode = "rustdocs_mcp_server <crate-spec>"
+k8s_nodeport = 30902
+
+[b00t.sunset]
+# rust-crate-docs-docker (ghcr.io/promptexecution/rust-cargo-docs-rag-mcp) is ARCHIVED
+# MCP server name "rust-docs" → this b00tyverse variant
+# "rust-crate-docs-docker" datum entry: sunset, do not use
+
+[[b00t.usage]]
+description = "Run in HTTP/SSE mode (k8s / b00t-mcp namespace)"
+command = "cargo run --release -- --http --port 3000 --host 0.0.0.0"
+
+[[b00t.usage]]
+description = "Run in stdio mode (IDE integration)"
+command = "cargo run --release -- serde@^1.0"
+
+[[b00t.usage]]
+description = "Build ghcr image locally"
+command = "docker build -t ghcr.io/promptexecution/rust-docs-mcp-b00t:latest vendor/rust-docs-mcp-b00t/"
+
+[[b00t.usage]]
+description = "Deploy to k8s b00t-mcp namespace"
+command = "helm upgrade --install b00t-mcp _b00t_/k8s.🚢/b00t-mcp/ -n b00t-mcp --create-namespace"
+
+# ─── CodeRunnerActionProcess service binding ───────────────────────────────────
+# This repo datum implements GithubActionsCompatible (has .github/workflows/docker.yml).
+# Provider bindings for CodeRunnerActionProcess:
+
+[b00t.services.action_runner]
+local  = "wrkflw"          # WrkflwProvider — ci-validate, ci-local, ci-watch (vendor justfile)
+remote = "github-actions"  # GitHubActionsProvider — local-build (self-hosted sm3lly) + docker-push
+self_hosted = { ns = "b00t-gh-runner", label = "sm3lly", deployment = "gh-runner-rust-docs" }
+# 🤓 local-build job runs on sm3lly runner (native amd64 cargo build, no QEMU)
+#    docker-push fires only after local-build passes — eliminates cloud QEMU waste
+
+
+# b00t:map v1
+# summary: b00tyverse rust docs MCP — ghcr image, native HTTP/SSE, replaces archived rust-crate-docs-docker
+# tags: repo, mcp, rust, docs, govcraft, k8s, b00t-mcp, ghcr, rmcp, b00tyverse
+# tier: sm0l
+# cmds: cargo run --release -- --http --port 3000 --host 0.0.0.0
+# complexity: 2

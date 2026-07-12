@@ -1,0 +1,29 @@
+[b00t]
+name = "requesting-code-review"
+type = "skill"
+version = "0.1.0"
+hint = "Verify work meets requirements before merging or calling it done"
+
+[b00t.skill]
+description = """
+Use when completing tasks, implementing major features, or before merging to verify work meets requirements.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["code-review", "verification", "merge-readiness"]
+tier = "sm0l"
+complexity = 2
+
+[b00t.learn]
+topic = "requesting-code-review"
+inline = """
+Use when completing tasks, implementing major features, or before merging to verify work meets requirements.
+
+Invoke via the Skill tool in Claude Code: skill="requesting-code-review".
+"""
+
+# b00t:map v1
+# summary: Verify work meets requirements before merging or calling it done
+# tags: code-review, verification, merge-readiness
+# tier: sm0l
+# cmds: b00t learn requesting-code-review
+# complexity: 2

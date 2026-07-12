@@ -8,6 +8,8 @@ entangled_cli = [
     "just.cli",
 ]
 
+entangled_mcp = ["b00t-mcp.mcp"]
+
 keywords = ["agent", "scoring", "evaluation", "statistics", "ab-test"]
 
 [[b00t.agent.inherits]]

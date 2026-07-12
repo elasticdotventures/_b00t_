@@ -1,0 +1,45 @@
+[b00t]
+name = "docling"
+type = "cli"
+version = "0.1.0"
+hint = "Docling — IBM document conversion: PDF/DOCX/PPTX/HTML → markdown/JSON. Parses arXiv papers for b00t grok assimilation."
+depends_on = ["python.cli", "uv.cli"]
+install = "uv tool install docling"
+update = "uv tool upgrade docling"
+version_cmd = "docling --version"
+version_regex = '(?P<version>\\d+\\.\\d+\\.\\d+)'
+
+[b00t.learn]
+topic = "docling"
+inline = """
+Docling (IBM Research) converts documents to structured formats.
+Used in b00t's assimilation pipeline to parse arXiv papers → markdown → raglite embedding.
+
+Install: uv tool install docling
+Usage:   docling convert paper.pdf --to md --output paper.md
+
+Features:
+- PDF, DOCX, PPTX, HTML → markdown or JSON
+- Table extraction with structure preservation
+- Figure/image detection and bounding boxes
+- Hierarchical document layout (headings, sections, paragraphs)
+"""
+
+[b00t.docling]
+output_dir = "~/.local/share/docling/converted"
+default_format = "markdown"
+arxiv_pipeline = "docling convert <paper>.pdf --to md --output ~/.local/share/docling/converted/<paper>.md"
+
+[b00t.assimilate]
+# 🤓 How docling fits into the arxiv assimilation pipeline
+role = "parser"
+input = "arXiv paper (PDF or HTML from arxiv-mcp-server)"
+output = "structured markdown with preserved tables, headings, and metadata"
+feeds_into = "raglite (embedding) → b00t grok (query)"
+
+# b00t:map v1
+# summary: Docling — IBM document conversion CLI for parsing papers into b00t grok knowledge graph
+# tags: docling, document, pdf, parser, markdown, assimilation, grok, arxiv
+# tier: sm0l
+# cmds: uv tool install docling, docling convert paper.pdf --to md
+# complexity: 2

@@ -2,6 +2,8 @@
 name = "azure-ai-foundry"
 type = "mcp"
 hint = "Azure AI Foundry MCP server - Enterprise multi-agent orchestration with connected agents, sub-agent delegation, and stateful workflows. Replaces lightweight local backlog/job flows for complex business processes."
+
+entangled_cli = ["azure-ai-foundry.cli"]
 lfmf_category = "azure-ai-foundry"
 
 [[b00t.gate]]

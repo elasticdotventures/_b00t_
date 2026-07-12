@@ -1,0 +1,178 @@
+[b00t]
+name = "b00tyverse-map"
+type = "skill"
+hint = "b00tyverse ecosystem map: the portfolio graph of platforms, client projects, and assimilated vendor forks with cake (🎂) provenance per entry"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["b00tyverse", "portfolio", "ecosystem", "map", "cake", "provenance", "tax-lawyer", "doggolingo", "vendor"]
+
+[b00t.skill]
+depends_on = []
+unlocks = [
+    "b00tyverse-map::orient",
+    "b00tyverse-map::value-entry",
+]
+
+# ── b00tyverse Ecosystem Map ──────────────────────────────────────────────────
+#
+# The b00tyverse is the ontological catalog of everything the hive builds and
+# assimilates. Portfolio law (recorded 2026-07): demote to datums, NEVER
+# dismiss — datums cost thousands to produce; salvage, don't discard.
+#
+# Value unit is cake (🎂) = desire/attention. NEVER usd — USD is only an
+# external exchange rate. Per entry:
+#   production_cost_cake  = attention spent to create/assimilate it
+#   retrieval_value_cake  = attention saved each time the hive retrieves it
+#
+# ── The Three Currents ────────────────────────────────────────────────────────
+#
+# 1. TAX-LAWYER PLATFORM — the PromptExecution ecosystem flagship.
+#    MCP-down: ledgerr_* tax actions are thin (<=10 line) wrappers over
+#    Satisfies<Constraint> checks. UFO-up: ufo-types grounds every domain
+#    concept in UFO stereotypes with ISO standard types. The Satisfies<T>
+#    trait bridges both currents and emits arc-kit-au evidence nodes for the
+#    audit trail. Spec: _b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd
+#    (issues #510-#517).
+#
+# 2. DOGGOLINGO — app4dog client project. Contributes physics/simulation
+#    generative-modelling capability back to the b00tyverse. Playable-first:
+#    working local game loop (P0 tap-the-sheep) before backend/cloud/ML.
+#    ComfyUI exploration is legacy — stage ideas get extracted into typed
+#    b00t business logic, never into the game runtime.
+#
+# 3. VENDOR/ SUBMODULES — assimilated forks. Fork-fix-forward doctrine:
+#    each fork exists to carry a fix or a b00t adaptation upstream, and its
+#    assimilation cost is sunk cake that pays out on every retrieval.
+
+# ── Platform Entries ──────────────────────────────────────────────────────────
+
+[[b00t.map.entry]]
+name = "tax-lawyer-platform"
+kind = "platform"
+owner = "PromptExecution"
+contributes = ["satisfies-constraint-pattern", "arc-kit-au-evidence-graph", "ufo-types", "iso-standard-types", "ledgerr-mcp-tools"]
+anchors = ["_b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd", "vendor/ledgrrr"]
+production_cost_cake = 900
+retrieval_value_cake = 85
+
+[[b00t.map.entry]]
+name = "doggolingo"
+kind = "client-project"
+owner = "app4dog"
+contributes = ["physics-simulation", "generative-modelling", "playable-first-pattern", "local-telemetry-json"]
+anchors = ["SOUL.tomllm [doggolingo]", "._b00t_/doggolingo.stack.tomllm", "docs/DOGGOLINGO_CLEANUP_PLAN.md"]
+production_cost_cake = 550
+retrieval_value_cake = 40
+
+[[b00t.map.entry]]
+name = "b00t-harness"
+kind = "platform"
+owner = "PromptExecution"
+contributes = ["datum-type-system", "ooda-loop", "lfmf-telemetry", "blessing-graph", "hive-a2a"]
+anchors = ["b00t-cli/src/lib.rs", "_b00t_/"]
+production_cost_cake = 1200
+retrieval_value_cake = 120
+
+# ── Assimilated Vendor Forks (fork-fix-forward) ───────────────────────────────
+
+[[b00t.map.entry]]
+name = "vendor/ledgrrr"
+kind = "vendor-fork"
+contributes = ["ledger-mcp-tools", "arc-kit-au", "legal-solver"]
+production_cost_cake = 300
+retrieval_value_cake = 60
+
+[[b00t.map.entry]]
+name = "vendor/irontology-mcp"
+kind = "vendor-fork"
+contributes = ["neumann-store", "semantic-rag", "grok-replacement"]
+production_cost_cake = 180
+retrieval_value_cake = 35
+
+[[b00t.map.entry]]
+name = "vendor/just-mcp"
+kind = "vendor-fork"
+contributes = ["just-recipe-mcp-surface", "poly-connector-substrate"]
+production_cost_cake = 90
+retrieval_value_cake = 30
+
+[[b00t.map.entry]]
+name = "vendor/tomllm"
+kind = "vendor-fork"
+contributes = ["tomllm-dialect", "datum-parsing"]
+production_cost_cake = 120
+retrieval_value_cake = 45
+
+[[b00t.map.entry]]
+name = "vendor/embed-anything-b00t"
+kind = "vendor-fork"
+contributes = ["embedding-pipeline", "datum-vector-search"]
+production_cost_cake = 110
+retrieval_value_cake = 25
+
+[[b00t.map.entry]]
+name = "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+kind = "vendor-fork"
+contributes = ["code-knowledge-graph", "structural-queries"]
+production_cost_cake = 140
+retrieval_value_cake = 30
+
+[[b00t.map.entry]]
+name = "vendor/opencode-b00t"
+kind = "vendor-fork"
+contributes = ["opencode-gateway", "soup-of-the-day-routing"]
+production_cost_cake = 100
+retrieval_value_cake = 20
+
+[[b00t.map.entry]]
+name = "vendor/runpod-sdk"
+kind = "vendor-fork"
+contributes = ["gpu-pod-provisioning", "fine-tune-infrastructure"]
+production_cost_cake = 80
+retrieval_value_cake = 15
+
+[[b00t.map.entry]]
+name = "vendor/moltis-b00t"
+kind = "vendor-fork"
+contributes = ["soul-log", "moltis-integration"]
+production_cost_cake = 70
+retrieval_value_cake = 15
+
+# ── Recipes ───────────────────────────────────────────────────────────────────
+
+[b00t.skill.recipes."b00tyverse-map::orient"]
+description = "Orient a fresh agent inside the portfolio graph"
+steps = [
+    "1. Read this map's entries; identify which current your task serves (tax-lawyer / doggolingo / harness / vendor)",
+    "2. git config -f .gitmodules --get-regexp path — live inventory of assimilated forks vs this map",
+    "3. b00t-cli ontology sparql --subject <entry-name> --predicate all — walk the entry's type-graph neighbors",
+    "4. Before writing anything new: does an entry already contribute this capability? (DRY+NRtW)",
+    "5. Report which entry your work extends — orphan work belongs to no current and gets lost",
+]
+
+[b00t.skill.recipes."b00tyverse-map::value-entry"]
+description = "Appraise or re-appraise an entry's cake provenance"
+steps = [
+    "1. production_cost_cake = attention actually spent (sessions, debugging, assimilation) — sunk, never revise downward",
+    "2. retrieval_value_cake = attention saved per retrieval; revise from lfmf/usage telemetry (b00t lfmf stats <tool>)",
+    "3. Low retrieval value is NEVER grounds for deletion — demote to datum, salvage the knowledge",
+    "4. New assimilation: add a [[b00t.map.entry]] here with both cake fields; b00t-lsp --check _b00t_ must stay clean",
+    "5. NEVER denominate in usd — cake is the canonical unit; USD is only an external exchange rate",
+]
+
+[b00t.compose]
+composes_with = [
+    "datums/PRD-TAX-LAWYER-UFO-SDD",
+    "harness-loop-engineer",
+    "datum-review",
+    "reviewer.role",
+    "repo.datum",
+]
+
+# b00t:map v1
+# summary: b00tyverse portfolio graph — tax-lawyer platform, doggolingo client capability, assimilated vendor forks, cake (🎂) provenance per entry
+# tags: b00tyverse, portfolio, ecosystem, map, cake, provenance, tax-lawyer, doggolingo, vendor
+# tier: frontier
+# cmds: b00t learn b00tyverse-map; git config -f .gitmodules --get-regexp path; b00t-cli ontology sparql --subject <entry>
+# complexity: 4

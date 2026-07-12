@@ -114,7 +114,7 @@ p40_composite_mat  = "HiveProfile composes Agents + Skills + MCPs → composite 
 
 [kerml_sysml_fusion]
 # KerML = kernel of SysMLv2. Provides the semantic backbone for composition.
-# Both are expressed as [[type]] TOML arrays in vendor/l3dg3rr/types/domain.kerm.
+# Both are expressed as [[type]] TOML arrays in vendor/ledgrrr/types/domain.kerm.
 
 [kerml_sysml_fusion.mapping_table]
 # KerML concept     → Rust construct              → b00t usage
@@ -431,7 +431,7 @@ fusion_point = "b00t-mcp.mcp.toml + SysMLv2 port def + UFO Moment::Relator"
 [[synergy_map.synergy]]
 name = "KerML Feature Typing × Satisfies<C>"
 description = "KerML Feature typing constrains which entities compose. Satisfies<C> is the Rust implementation of this constraint at runtime. The f0undry bridges compile-time (KerML type system) and runtime (Satisfies evaluation with evidence nodes)."
-fusion_point = "ufo-types/src/satisfies.rs Satisfies<C> + vendor/l3dg3rr/types/domain.kerm"
+fusion_point = "ufo-types/src/satisfies.rs Satisfies<C> + vendor/ledgrrr/types/domain.kerm"
 
 [[synergy_map.synergy]]
 name = "UFO Moment::Relator × SatisfiesBinding"
@@ -503,7 +503,7 @@ items = [
 # ═══════════════════════════════════════════════════════════════════════════════
 
 [b00t_kerm_types]
-# Following the format of vendor/l3dg3rr/types/domain.kerm.
+# Following the format of vendor/ledgrrr/types/domain.kerm.
 # This block declares what should be written to _b00t_/types/b00tyverse.kerm.
 file_to_create = "_b00t_/types/b00tyverse.kerm"
 

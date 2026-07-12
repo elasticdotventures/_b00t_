@@ -1,0 +1,51 @@
+---
+# EnvoyProxy: configure the data-plane service as NodePort so it's reachable on the
+# host IP without MetalLB. Fixed nodePort 30080 (HTTP) keeps the address stable.
+# 🤓 Without this, the Gateway creates a LoadBalancer Service that stays <pending>
+#    on bare-metal k0s (no cloud provider). NodePort is the correct bare-metal mode.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: b00t-proxy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      # NodePort: expose on host IP without MetalLB (bare-metal k0s)
+      # 🤓 nodePort is auto-assigned; pin to 30080 after first deploy:
+      #    kubectl patch svc -n envoy-gateway-system \
+      #      -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway \
+      #      --type=json -p='[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080}]'
+      envoyService:
+        type: NodePort
+---
+# GatewayClass: declares that "eg" gateways are managed by Envoy Gateway
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: b00t-proxy
+    namespace: envoy-gateway-system
+---
+# b00t Gateway: single listener on port 80, accepts HTTPRoutes from any namespace.
+# Runs in b00t-gateway namespace (b00t- prefix policy).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: b00t-gateway
+  namespace: b00t-gateway
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All

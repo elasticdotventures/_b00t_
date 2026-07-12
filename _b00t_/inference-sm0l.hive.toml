@@ -2,9 +2,10 @@
 name = "inference-sm0l"
 type = "hive_profile"
 hint = "vLLM sm0l model (Qwen2.5-3B Q8 or similar) — low RAM, GPU-light; compatible with concurrent dev work"
+depends_on = ["vllm.cli", "ollama.ai"]
 
 [b00t.hive.resources]
-# 🤓 3B Q8 model = ~3.5GB VRAM + ~1GB RAM for vllm overhead
+# 🤓 3B Q8 model = ~3.5GB VRAM + ~1GB RAM overhead
 # Leaves most resources free for dev tools, builds, etc.
 ram_gb = 4
 gpu_mb = 5000
@@ -16,16 +17,17 @@ gpu_free_mb = 4000
 
 [b00t.hive.exclusion]
 group = "primary-workload"
-priority = 50  # fallback when qwen3 model not yet downloaded or RAM constrained
+priority = 50
 
 [b00t.hive.services]
-start = [
-  "vllm-sm0l.service",  # 🤓 future service unit; for now run manually
-]
+# 🤓 K8s-first: deploy via _b00t_/k8s.🚢/sm0l/deployment.yaml into b00t-inference namespace
+# systemd unit (b00t-hive-inference-sm0l.service) is DISABLED — k8s preferred on sm3lly
+# NodePort 30801 → http://192.168.1.137:30801
+start = []
 stop = []
 
 [b00t.hive.mcp_tools]
-activate = ["vllm-local", "opencode-local"]
+activate = ["sm0l-local", "opencode-local"]
 
 [[b00t.hive.guards]]
 pattern = "pip install"
@@ -36,12 +38,27 @@ redirect = "uv pip install"
 [[b00t.hive.guards]]
 pattern = "docker run"
 action = "warn"
-message = "🦨 use podman (CDI GPU: --device nvidia.com/gpu=all --security-opt=label=disable)"
+message = "🦨 use k8s (kubectl apply -f _b00t_/k8s.🚢/sm0l/deployment.yaml) or podman CDI"
 
 [[b00t.usage]]
-description = "Start sm0l vllm manually (Qwen2.5-3B Q8)"
-command = "BLOB=$(ls ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/ | grep -v incomplete | head -1) && ~/.venv/bin/vllm serve ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/$BLOB --served-model-name qwen3-coder --port 8000 --max-model-len 32768 --enable-auto-tool-choice --tool-call-parser hermes"
+description = "Deploy sm0l via k8s (preferred on sm3lly)"
+command = "kubectl apply -f _b00t_/k8s.🚢/sm0l/deployment.yaml"
 
 [[b00t.usage]]
-description = "Activate sm0l inference (safe to run alongside dev tools)"
-command = "b00t hive activate inference-sm0l"
+description = "Check sm0l pod status"
+command = "kubectl get pods,svc -n b00t-inference"
+
+[[b00t.usage]]
+description = "Set B00T_SM0L_ENDPOINT (NodePort 30801)"
+command = "export B00T_SM0L_ENDPOINT=http://192.168.1.137:30801/completion"
+
+[[b00t.usage]]
+description = "Scale down sm0l (free GPU for ch0nky)"
+command = "kubectl scale deployment sm0l --replicas=0 -n b00t-inference"
+
+# b00t:map v1
+# summary: sm0l inference profile — Qwen2.5-3B-Instruct GGUF, k8s-first on sm3lly
+# tags: inference, sm0l, k8s, b00t-inference, qwen2.5, llamacpp
+# tier: sm0l
+# cmds: kubectl apply -f _b00t_/k8s.🚢/sm0l/deployment.yaml
+# complexity: 2

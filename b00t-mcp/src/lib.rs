@@ -1,19 +1,23 @@
 pub mod acl;
 pub mod mcp_server_rusty;
 // pub mod oauth;  // 🤓 Disabled complex OAuth until handler trait fixed
-// pub mod acp_hive;  // 🤓 Disabled - uses full NATS Agent from old ACP; chat refactor simplified to stubs
-// pub mod acp_tools;  // 🤓 Disabled - depends on acp_hive
+pub mod acp_hive;
+pub mod acp_tools;
 pub mod chat;
 pub mod clap_reflection;
 pub mod derive_mcp;
 pub mod github_auth;
 pub mod mcp_registry_tools;
 pub mod mcp_tools;
+pub mod soul_dataframerr_tools;
 pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
+pub mod schema_constraint;
+pub mod verify_tool_loop;
 pub mod rag_mcp_tools;
 pub mod server_llm;
+pub mod server_skill;
 
 pub use acl::{AclConfig, AclFilter, Policy};
 pub use mcp_server_rusty::B00tMcpServerRusty;

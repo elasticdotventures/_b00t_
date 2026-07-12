@@ -18,10 +18,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 async-nats = "0.45.0"
 rumqttc = "0.25"
+bytes = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["sync"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 thiserror = "2.0.17"
 chrono = { version = "0.4", features = ["serde"] }
@@ -33,10 +34,16 @@ sha2 = "0.10"
 hex = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 dirs = "6.0"
-k0mmand3r = { path = "../k0mmand3r", version = "0.8" }
+k0mmand3r = { path = "../k0mmand3r", version = "0.9" }
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 async-trait = "0.1"
 async-stream = "0.3"
+regex = "1.0"
+cron = "0.15"
+arrow = { version = "55", optional = true }
+# UFO-grounded domain stereotypes (crate #511) — hive types declare their
+# ontological classification via `Stereotyped`.
+ufo-types = { path = "../crates/ufo-types" }
 
 # OpenTelemetry observability — workspace version + extra features for chat runtime
 opentelemetry = { workspace = true, features = ["metrics"] }
@@ -58,9 +65,16 @@ rand = "0.8"
 tempfile = "3.0"
 
 [features]
-default = []
+default = ["nats"]
+# NATS broker backend for the hive transport (disable via --no-default-features
+# to run broker-free on the in-memory transport).
+nats = []
+# Iroh NodeId/QUIC backend for the hive transport (strategic substrate).
+iroh = []
 python = ["pyo3"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "serde-wasm-bindgen"]
+# Concrete Apache Arrow materialization for dataframe-typed receipts.
+dataframe = ["arrow"]
 
 # 🤓 Profile configuration moved to workspace root to avoid warnings
 # Examples are in examples/ directory, not as bins

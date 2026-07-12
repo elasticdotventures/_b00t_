@@ -1,0 +1,273 @@
+# PRD: DataFramerr — agent-extensible typed dataframe registry in SOUL.tomllmd
+#
+# Purpose: agents extend their soul by encoding OLAP-style typed tables into
+# SOUL.tomllmd. Tables have dynamic schemas (concrete sub-types per column),
+# durable frame iterators (cursors that survive sessions), alarms that fire
+# events when column conditions are met, and ObfuscatedStr tokens (XOR+base64,
+# keyed to agent identity hash) that cannot be grepped at rest.
+#
+# Cross-refs:
+#   b00t-cli/src/soul_writer.rs          — FileSoulWriter (write path, EXISTS)
+#   b00t-cli/src/cake_ledger.rs          — Decimal cake unit, CakeTicket (EXISTS)
+#   b00t-c0re-lib/src/soul_dataframerr.rs      — NEW: SoulDataFramerrRegistry/Table/Frame/Cursor/Alarm
+#   b00t-cli/src/commands/soul_dataframerr.rs  — NEW: CLI surface (b00t soul ...)
+#   vendor/irontology-mcp / b00t-mcp     — NEW: MCP tool bindings
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["dataframerr", "prd", "soul", "table", "dataframe", "olap", "cursor",
+             "alarm", "obfuscated", "cake", "agent-extensible", "tomllmd"]
+
+[prd]
+id     = "PRD-DATAFRAMERR"
+title  = "SoulDataFramerr — typed dataframe registry with durable cursors and alarms"
+status = "proposed"
+tier   = "frontier"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: TOML encoding (the at-rest format in SOUL.tomllmd)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[encoding]
+# The [soul] namespace in any SOUL.tomllmd encodes the full SoulDataFramerrRegistry.
+# Columns declared as "name:type" shorthand (see SoulColType variants below).
+
+example = """
+[soul.tables.training_budget]
+columns = [
+  "run_id:text",
+  "model:text",
+  "cost_cake:cake",        # rust_decimal::Decimal in cake units (1🎂 = $10 USD)
+  "hf_token:token",        # ObfuscatedStr — XOR'd with agent identity hash
+  "started_at:timestamp",
+  "step_count:int",
+]
+
+[[soul.tables.training_budget.frames]]
+id          = 1
+created_at  = "2026-06-30T11:27:00Z"
+run_id      = "6a43b12b"
+model       = "Qwen2.5-Coder-14B"
+cost_cake   = "0.47"               # serialised as string to preserve Decimal precision
+hf_token    = "b64xor:dGhpcyBpcyBub3QgeW91ciB0b2tlbg=="
+started_at  = "2026-06-30T11:27:00Z"
+step_count  = 54
+
+[soul.cursors.budget_read]         # durable iterator — survives sessions
+table    = "training_budget"
+frame_id = 1                       # last-consumed frame id
+tag      = "main"
+
+[soul.alarms.budget_ceiling]
+table     = "training_budget"
+column    = "cost_cake"
+condition = ">= 1.0"               # evaluated against aggregate
+aggregate = "sum"                  # sum | per_frame | count | avg
+emit      = "soul.budget.exceeded" # event name passed to hook_engine
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: Rust type system (b00t-c0re-lib/src/soul_dataframerr.rs — NEW FILE)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[rust_types]
+description = """
+SoulValue: dynamic column value (untagged serde for TOML compat)
+  Text(String) | Int(i64) | Float(f64) | Cake(rust_decimal::Decimal)
+  | Bool(bool) | Timestamp(DateTime<Utc>) | Token(ObfuscatedStr) | Null
+
+SoulColType: column type tag (drives validation + serialisation strategy)
+  text | int | float | cake | bool | timestamp | token | json
+
+SoulColumn { name: String, col_type: SoulColType, nullable: bool }
+  — parsed from "name:type" shorthand; nullable suffix "?" e.g. "note:text?"
+
+SoulRow { id: u64, created_at: DateTime<Utc>, fields: BTreeMap<String, SoulValue> }
+  — a row; id is monotonic u64 assigned at insert; fields are column-keyed
+
+SoulDataFramerr { name: String, columns: Vec<SoulColumn>, frames: Vec<SoulRow> }
+  — append-only by default; rows never mutated (immutable log, CRDT-safe)
+
+FrameCursor { table: String, frame_id: u64, tag: Option<String> }
+  — durable pointer; frame_id = last CONSUMED frame (next() advances it)
+  — serialised to [soul.cursors.NAME] in SOUL.tomllmd
+
+AlarmAggregate: per_frame | sum | count | avg
+SoulAlarm { name, table, column, condition: String, aggregate, emit: String }
+  — condition is evaluated by a tiny expression parser (no proc macro, no regex)
+  — emit value is passed to hook_engine::fire_event(name, payload)
+
+SoulDataFramerrRegistry { tables: BTreeMap<String,SoulDataFramerr>, cursors: BTreeMap<String,FrameCursor>, alarms: Vec<SoulAlarm> }
+  — top-level [soul] in SOUL.tomllmd; serde round-trips cleanly
+
+ObfuscatedStr(String)  — newtype; stored as "b64xor:<base64(plaintext XOR key)>"
+  — key = first 32 bytes of SHA-256(agent_identity_hash + table_name)
+  — agent_identity_hash from b00t whoami --role (stable across sessions for same agent lineage)
+  — encode/decode methods; decode requires agent key → guards against passive grep
+  — 🤓 NOT cryptographic security; purpose is grep-resistance for tokens at rest
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: CLI surface (b00t soul ...)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[cli]
+commands = """
+b00t soul table create <name> [col:type ...]   # declare schema; col:type? = nullable
+b00t soul table list                            # show all tables in active SOUL.tomllmd
+b00t soul table show <name>                     # schema + frame count + alarm count
+b00t soul table drop <name>                     # remove table + all frames (irreversible)
+
+b00t soul frame insert <table> [key=value ...]  # append frame; validates against schema
+b00t soul frame get <table> <frame_id>          # fetch one frame by id
+b00t soul frame dump <table> [--last N]         # OLAP-style tabular output (human-readable)
+b00t soul frame seek <table> <frame_id>         # seek to frame without consuming
+
+b00t soul cursor create <name> <table>          # new cursor at frame 0
+b00t soul cursor next <name>                    # advance cursor; prints frame; returns exit 1 at EOF
+b00t soul cursor reset <name>                   # rewind to frame 0
+b00t soul cursor list                           # list all cursors + positions
+
+b00t soul alarm set <name> <table> <col> <cond> --emit <event>  # register alarm
+b00t soul alarm check <table>                   # evaluate all alarms on <table>; fire matching
+b00t soul alarm list                            # show all alarms
+b00t soul alarm rm <name>                       # remove alarm
+
+b00t soul token encode <plaintext>              # ObfuscatedStr encode (agent identity key)
+b00t soul token decode <b64xor:...>             # decode ObfuscatedStr to plaintext
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: MCP tools (b00t-mcp bindings)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[mcp_tools]
+tools = """
+soul_dataframerr_create(name: str, columns: list[str])        → { table: str, ok: bool }
+soul_row_insert(table: str, fields: dict)             → { frame_id: int }
+soul_row_query(table: str, filter?: str)              → { frames: list[dict] }
+soul_cursor_create(name: str, table: str)               → { cursor: str, frame_id: int }
+soul_cursor_next(name: str)                             → { frame: dict | null, at_eof: bool }
+soul_cursor_reset(name: str)                            → { ok: bool }
+soul_alarm_set(name, table, col, cond, emit)            → { alarm: str }
+soul_alarm_check(table: str)                            → { fired: list[str] }
+soul_token_encode(plaintext: str)                       → { token: str }  # "b64xor:..."
+soul_token_decode(token: str)                           → { plaintext: str }
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: Extension points (MIME, multipart, future)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[extensions]
+description = """
+SoulColType::Mime  — stores multipart/MIME payload as base64 blob in frame field.
+  Useful for attaching binary artifacts (images, audio, model cards) to soul frames.
+  Decode path: SoulValue::Mime(MimePayload { content_type, data: Vec<u8> })
+
+SoulColType::Json  — arbitrary serde_json::Value; no schema validation.
+  Escape hatch for ad-hoc data; agents MAY promote to typed columns later.
+
+AlarmCondition expressions (v1 — string-parsed):
+  ">= 1.0", "< 0", "== true", "contains 'error'", "not null"
+  Backed by a simple recursive descent parser; no external dep.
+
+v2 STRETCH: condition as Rhai script (already a dep via rpa_rhai.rs):
+  condition = \"\"\"fn check(v) { v >= 1.0 && v < 5.0 }\"\"\"
+
+Cursor lease / locking (v2):
+  Multiple agents competing for same cursor → optimistic lock via frame_id CAS
+  in SOUL.tomllmd; last-write-wins with conflict logged to soul event log.
+"""
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: Implementation order (Kaizen rungs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[kaizen]
+k1 = "b00t-c0re-lib/src/soul_dataframerr.rs — SoulDataFramerrRegistry + all types + serde round-trip tests"
+k2 = "b00t-c0re-lib/src/soul_dataframerr.rs — ObfuscatedStr XOR+base64 encode/decode"
+k3 = "b00t-cli/src/commands/soul_dataframerr.rs — CLI commands (table/frame/cursor/alarm/token)"
+k4 = "b00t-mcp: soul_dataframerr_* MCP tool bindings via b00t_exec dispatch"
+k5 = "alarm evaluation + hook_engine::fire_event integration"
+k6 = "SoulColType::Mime for multipart/binary frame fields (STRETCH)"
+
+[kaizen.dependencies]
+k1_blocks = ["k2","k3","k4","k5"]
+k2_blocks = ["k3","k4"]          # encode/decode needed before token CLI/MCP
+k3_blocks = []                   # CLI independent of MCP
+k5_requires = "hook_engine::fire_event signature stable"
+
+# b00t:map v1
+# summary: SoulDataFramerr — agent-extensible typed dataframe in SOUL.tomllmd with cursors + alarms
+# tags: soul, table, dataframe, olap, cursor, alarm, obfuscated, cake, tomllmd
+# tier: frontier
+# cmds: b00t soul table create budget_tracker cost_cake:cake model:text hf_token:token
+# complexity: 7
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: Pluggable backend — DataFramerrBackend trait
+# Soul/alarm/cursor capabilities are an OVERLAY on any backend.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[backend]
+description = """
+DataFramerrBackend trait (mirrors KnowledgeStoreBackend in irontology_bridge.rs):
+
+  trait DataFramerrBackend: Send + Sync + 'static {
+    fn create_table(&self, name: &str, columns: &[SoulColumn]) -> Result<()>;
+    fn insert_row(&self, table: &str, row: &SoulRow) -> Result<u64>;
+    fn query_rows(&self, table: &str, after_id: Option<u64>) -> Result<Vec<SoulRow>>;
+    fn get_cursor(&self, name: &str) -> Result<Option<FrameCursor>>;
+    fn set_cursor(&self, name: &str, cursor: &FrameCursor) -> Result<()>;
+    fn get_schema(&self, table: &str) -> Result<Vec<SoulColumn>>;
+    fn list_tables(&self) -> Result<Vec<String>>;
+    fn get_alarms(&self) -> Result<Vec<SoulAlarm>>;
+    fn set_alarm(&self, alarm: &SoulAlarm) -> Result<()>;
+  }
+
+  The soul overlay (schema validation, ObfuscatedStr decode, alarm evaluation)
+  always runs in DataFramerr regardless of which backend is selected.
+  Backends only handle raw CRUD on rows + cursor bookmarks.
+
+Implementations:
+
+  TomllmdBackend { soul_dir: PathBuf }
+    — reads/writes [soul.tables.*] in SOUL.tomllmd via soul_writer.rs
+    — default; works with no external deps; Git-diffable
+
+  NeumannBackend { store: NeumannStore }   [feature = "store-neumann"]
+    — rows encoded as FactRecords: subject=dataframerr:<table>:<frame_id>
+      predicate=<column>, object=<value as string>
+    — cursors stored as special facts: subject=cursor:<name>, predicate=frame_id
+    — no TOML file dependency; survives across machines that share NeumannStore namespace
+    — proxy via irontology_bridge.rs NeumannStore; reuse existing storage_neumann dep
+
+  SqliteBackend { db_path: PathBuf }      [feature = "store-sqlite"]
+    — uses soul.db (already at ~/.b00t/soul.db); CREATE TABLE soul_frames_<name>
+    — fast seeks, full SQL; cursor + alarm rows in soul_meta table
+    — reuses rusqlite already pulled in by cake_ledger.rs
+
+  Future: LanceDbBackend (vector + tabular; for ML-facing frames with embeddings)
+
+Selection:
+  DataFramerr::with_backend(B: DataFramerrBackend) — explicit
+  DataFramerr::default() — TomllmdBackend (zero config)
+  b00t soul --backend=neumann table create ...
+  MCP: soul_dataframerr_create(..., backend?: "tomllmd"|"neumann"|"sqlite")
+"""
+
+[backend.neumann_encoding]
+# NeumannStore fact encoding for DataFramerr rows
+# subject format: "dataframerr:<table>:<frame_id>"
+# Mirrors how irontology_bridge.rs DatumNode.subject_uri works
+example = """
+# Row 1 of training_budget table:
+{ subject: "dataframerr:training_budget:1",  predicate: "model",      object: "Qwen2.5" }
+{ subject: "dataframerr:training_budget:1",  predicate: "cost_cake",  object: "0.47"     }
+{ subject: "dataframerr:training_budget:1",  predicate: "__created",  object: "2026-06-30T11:27:00Z" }
+# Cursor:
+{ subject: "cursor:budget_read",             predicate: "frame_id",   object: "1"        }
+{ subject: "cursor:budget_read",             predicate: "table",      object: "training_budget" }
+"""

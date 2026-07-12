@@ -1,0 +1,48 @@
+# HuggingFace Dataset — b00t Training Data Hub
+#
+# elasticdotventures/b00t-training is the canonical source for cloud training jobs.
+# It holds train.jsonl (generated Alpaca triples from b00t corpus) plus the training
+# scripts (train_unsloth.py, config-cloud-coder.yaml) so cloud containers can
+# download everything they need without a custom Docker image.
+#
+# Push after: just finetune-dataset  (regenerates train.jsonl from b00t corpus)
+# Push with: just hf-dataset-push   (syncs dataset + scripts to HF Hub)
+#
+# The dataset repo doubles as a script host — this avoids needing a custom image
+# on HF Jobs. The job does: hf download elasticdotventures/b00t-training --repo-type
+# dataset --local-dir /scripts, then runs /scripts/train_unsloth.py.
+
+[b00t.schema]
+version   = "1"
+type      = "api"
+type_tags = ["dataset", "training", "huggingface", "finetune"]
+
+[resource]
+name        = "b00t training dataset"
+hf_repo     = "elasticdotventures/b00t-training"
+hf_type     = "dataset"
+visibility  = "private"
+
+[resource.contents]
+"train.jsonl"            = "Alpaca-format QA triples from b00t corpus (~8400 rows)"
+"train_unsloth.py"       = "QLoRA training entrypoint (config-driven)"
+"config-cloud-coder.yaml" = "Cloud config for Qwen3-Coder-30B-A3B on A100"
+
+[[resource.usages]]
+description = "Upload dataset + scripts to HF Hub (run after regenerating train.jsonl)"
+command     = "just hf-dataset-push"
+
+[[resource.usages]]
+description = "Regenerate train.jsonl from b00t corpus, then push"
+command     = "just finetune-dataset && just hf-dataset-push"
+
+[[resource.usages]]
+description = "Download dataset to inspect locally"
+command     = "hf download elasticdotventures/b00t-training --repo-type dataset --local-dir /tmp/b00t-training"
+
+# b00t:map v1
+# summary: HF dataset repo for b00t training data + cloud job scripts (elasticdotventures/b00t-training)
+# tags: dataset, training, huggingface, alpaca, finetune, b00t-corpus
+# tier: sm0l
+# cmds: just hf-dataset-push, just finetune-dataset
+# complexity: 2

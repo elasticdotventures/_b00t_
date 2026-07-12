@@ -3,6 +3,8 @@ name = "anthropic"
 type = "ai"
 hint = "Anthropic Claude models via official API"
 
+entangled_cli = ["b00t.cli"]
+
 [models.claude-3-haiku-20240307]
 capabilities = "text,vision"
 context_length = 200000

@@ -2,6 +2,8 @@
 name = "just-mcp"
 type = "mcp"
 hint = "Justfile MCP server - exposes justfile recipes via MCP protocol"
+
+entangled_cli = ["just-mcp.cli"]
 lfmf_category = "just"
 
 [[b00t.mcp.stdio]]

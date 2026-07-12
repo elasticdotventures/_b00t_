@@ -14,8 +14,30 @@ use tower_http::cors::CorsLayer;
 
 use b00t_mcp::{
     B00tMcpServerRusty, GitHubAuthConfig, GitHubAuthState, MinimalOAuthConfig, MinimalOAuthState,
-    github_auth_router, minimal_oauth_router, server_llm,
+    github_auth_router, minimal_oauth_router, server_llm, server_skill,
 };
+
+/// Transport mode for the MCP server.
+/// FOL-correct: explicit enumeration replaces implicit boolean triples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum TransportMode {
+    Stdio,
+    Http,
+    Llm, // HTTP + OpenAI-compatible /v1/ router
+}
+
+impl TransportMode {
+    #[allow(dead_code)]
+    fn from_matches(stdio: bool, http: bool, mode_str: Option<&String>, llm: bool) -> Self {
+        if llm {
+            return TransportMode::Llm;
+        }
+        let is_stdio = stdio || mode_str.map_or(false, |m| m == "stdio");
+        let _is_http = http || mode_str.map_or(false, |m| m == "http");
+        if is_stdio { TransportMode::Stdio } else { TransportMode::Http }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -101,6 +123,21 @@ async fn main() -> Result<()> {
             .map_or(false, |m| m == "http");
     let is_llm_mode = matches.get_flag("llm");
 
+    // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
+    //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
+    //    Child processes get kill_on_drop(true) — cleaned up on process exit.
+    if let Err(e) = server_skill::init_executor().await {
+        eprintln!("⚠️  SkillExecutor init failed: {} (continuing)", e);
+    } else {
+        server_skill::start_reap_loop().await;
+    }
+
+    // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
+    //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
+    if let Err(e) = spawn_registry_bridges_on_startup().await {
+        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+    }
+
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
         // eprintln!(
@@ -163,10 +200,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        let is_dev_mode = acl_config.as_ref()
-            .and_then(|c| c.dev.as_ref())
-            .and_then(|d| d.bypass_oauth)
-            .unwrap_or(false);
+        let auth_provider = server_llm::AuthProvider::from_env_or_default();
+        let _is_dev_mode = matches!(auth_provider, server_llm::AuthProvider::Dev);
+
+        match auth_provider {
+            server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
+            server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
+            server_llm::AuthProvider::Hydra => eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)"),
+        }
 
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();
@@ -184,9 +225,9 @@ async fn main() -> Result<()> {
             .merge(github_auth_router(github_state));
 
         if is_llm_mode {
-            let llm_state = Arc::new(server_llm::LlmState::new());
+            let llm_state = Arc::new(server_llm::LlmState::new_with_auth(auth_provider));
             eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
-            app = app.merge(server_llm::llm_router(llm_state.clone(), is_dev_mode));
+            app = app.merge(server_llm::llm_router(llm_state.clone(), auth_provider));
         }
 
         let app = app.layer(CorsLayer::permissive());
@@ -256,5 +297,53 @@ async fn main() -> Result<()> {
         println!("  Configure in .mcp.json or MCP client settings");
     }
 
+    Ok(())
+}
+
+/// Sync the official MCP registry and spawn bridges for stdio-based servers.
+/// Bridges connect to MCP servers, read notifications, and publish to NATS.
+async fn spawn_registry_bridges_on_startup() -> anyhow::Result<()> {
+    use b00t_chat::{ChatClient, McpBridge, McpServerSpec};
+    use b00t_c0re_lib::mcp_registry::ServerTransport;
+
+    let mut registry = b00t_mcp::mcp_registry_tools::REGISTRY.lock().await;
+    let sync_count = registry.sync_official_registry().await?;
+    if sync_count > 0 {
+        eprintln!("📡 Synced {} servers from official MCP registry", sync_count);
+    }
+
+    let client = ChatClient::nats(None, None, None)
+        .map_err(|e| anyhow::anyhow!("Failed to create NATS client for bridge spawn: {}", e))?;
+    let transport = client.transport().clone();
+    let servers: Vec<_> = registry.list().into_iter().cloned().collect();
+
+    drop(registry);
+
+    let mut bridges = Vec::new();
+    for server in &servers {
+        if !matches!(server.config.transport, ServerTransport::Stdio) {
+            continue;
+        }
+        let spec = McpServerSpec {
+            id: server.id.clone(),
+            label: server.name.clone(),
+            command: server.config.command.clone(),
+            args: server.config.args.clone(),
+            env: server.config.env.clone(),
+            cwd: server.config.cwd.clone(),
+        };
+        let mut bridge = McpBridge::new(spec);
+        match bridge.start(&transport).await {
+            Ok(()) => {
+                eprintln!("🔗 Bridge started for {}", server.id);
+                bridges.push(bridge);
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to start bridge for {}: {}", server.id, e);
+            }
+        }
+    }
+
+    eprintln!("🔗 Spawned {} MCP notification bridges", bridges.len());
     Ok(())
 }

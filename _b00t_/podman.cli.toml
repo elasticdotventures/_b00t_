@@ -1,0 +1,81 @@
+[b00t]
+name = "podman"
+type = "cli"
+hint = "Podman container engine — rootless containers, pod management, kube play. Installed via apt on Ubuntu 25.10+."
+repo = "containers/podman"
+
+# 🤓 Ubuntu 25.10 (questing) ships podman 5.4.2 via apt — full binary, not remote-only.
+#    Prior versions (24.04) shipped 4.9.x which lacked Quadlet, secretKeyRef, and pasta.
+#    The vendor build pipeline (vendor/podman/build-deb.sh) exists for backporting
+#    newer releases to older Ubuntu, but is NOT needed on 25.10+.
+desires = "5.4.2"
+version_regex = 'Version:\s+(?P<version>[\d.]+)'
+detect = ["podman version --format {{.Version}} 2>/dev/null"]
+
+# ── Install: apt (Ubuntu 25.10+) ─────────────────────────────────
+install = """
+set -euo pipefail
+echo "📦 Installing podman via apt..."
+sudo apt update -qq
+sudo apt install -y podman
+
+echo ""
+podman version
+echo "✅ podman installed from apt"
+"""
+
+# ── Update: apt upgrade ──────────────────────────────────────────
+update = """
+set -euo pipefail
+CURRENT=$(podman version --format '{{{{.Version}}}}' 2>/dev/null || echo "0.0.0")
+echo "📦 Upgrading podman (current: ${CURRENT})..."
+sudo apt update -qq
+sudo apt install --only-upgrade -y podman 2>/dev/null || echo "  already current"
+
+echo ""
+podman version
+echo "✅ podman updated"
+"""
+
+# ── Post-install: verify rootless setup ──────────────────────────
+post_install = """
+podman run --rm hello-world 2>/dev/null && echo "✅ rootless podman operational" || \
+  echo "⚠️  rootless podman may need: podman system migrate && podman system reset"
+"""
+
+[[b00t.gate]]
+command = "apt"
+hint = "apt required for podman install"
+
+[[b00t.usage]]
+description = "Check podman version and rootless status"
+command = "podman version && podman info --format '{{.Host.RemoteSocket.Path}}'"
+
+[[b00t.usage]]
+description = "List all pods (managed by kube play)"
+command = "podman pod ps"
+
+[[b00t.usage]]
+description = "Deploy a pod from Kubernetes YAML"
+command = "podman kube play <file>.yaml"
+
+[[b00t.usage]]
+description = "Build signed .deb from GitHub release (for backporting to older Ubuntu)"
+command = "bash ~/.b00t/vendor/podman/build-deb.sh 6.0.1"
+
+[[b00t.references]]
+name = "containers/podman"
+url = "https://github.com/containers/podman"
+description = "Official Podman container engine — releases, issues, docs"
+
+[[b00t.references]]
+name = "vendor build pipeline"
+url = "file://~/.b00t/vendor/podman/build-deb.sh"
+description = "SHA256-verified .deb builder for podman releases. Used for backporting to Ubuntu <25.10."
+
+# b00t:map v1
+# summary: Podman CLI datum — apt-installed on Ubuntu 25.10+ (5.4.2). Vendor pipeline for backporting.
+# tags: podman, container, rootless, kube-play, apt, ubuntu-questing
+# tier: sm0l
+# cmds: b00t install podman, b00t up podman
+# complexity: 2

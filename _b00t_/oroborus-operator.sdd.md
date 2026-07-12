@@ -30,7 +30,7 @@ flowchart LR
   subgraph "ledgrrr (process control)"
     RC["Recipe Catalog\n(config recipes)"]
     SB["Sandbox Manager\n(podman / nsjail / systemd-run)"]
-    IV["InvariantGraph\n(b00t-ledgrrr-viz contract)"]
+    IV["InvariantGraph\n(b00t-l3dg3rr-viz contract)"]
   end
 
   V -->|MCP stdio/http| R
@@ -60,7 +60,7 @@ flowchart LR
 
 ## 2. Tool Surface
 
-The operator exports 7 MCP tools under the `oroborus_` prefix, mapping directly to ledgrrr's deterministic process control verbs (mirroring `VisualizationRole` from `b00t-ledgrrr-viz`):
+The operator exports 7 MCP tools under the `oroborus_` prefix, mapping directly to ledgrrr's deterministic process control verbs (mirroring `VisualizationRole` from `b00t-l3dg3rr-viz`):
 
 ### Process Lifecycle Tools
 
@@ -267,7 +267,7 @@ stream_type = "dataframe"
 ### Phase 2: Complete Tool Surface (P1 — weeks 3-4)
 
 - [ ] Implement remaining 6 tools (monitor, validate, classify, review, reconcile, commit)
-- [ ] Wire `b00t-ledgrrr-viz` InvariantGraph validation into `oroborus_validate`
+- [ ] Wire `b00t-l3dg3rr-viz` InvariantGraph validation into `oroborus_validate`
 - [ ] Implement `b00t-cli oroborus` subcommand for all verbs
 - [ ] Add handshake integration: operator reads `~/.b00t/mesh/ledgrrr.handshake` (reuses `check_peer_handshake()` from OODA)
 - [ ] Write integration tests using the existing test patterns in `b00t-mcp/src/mcp_tools.rs`

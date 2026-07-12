@@ -348,6 +348,31 @@ impl GrokClient {
     }
 
     pub async fn digest(&self, topic: &str, content: &str) -> Result<Chunk> {
+        self.digest_internal(topic, content).await
+    }
+
+    /// Ponytail rung 1: digest only if not already in knowledge base.
+    /// Checks for semantically similar content before storing. Returns None if a
+    /// near-duplicate exists, Some(chunk) if novel.
+    pub async fn digest_if_novel(&self, topic: &str, content: &str) -> Result<Option<Chunk>> {
+        // 🤓 Ponytail rung 1: Does this need to exist? → skip if already known.
+        let existing = self.ask(content, Some(topic)).await?;
+        if let Some(top) = existing.first() {
+            // Simple dedup: skip if top result shares >80% content overlap
+            let overlap = content.chars().filter(|c| top.content.contains(*c)).count() as f64
+                / content.len().max(1) as f64;
+            if overlap > 0.80 {
+                tracing::debug!(
+                    "Ponytail rung 1: near-duplicate found for '{}' (overlap={:.0}%), skipping digest",
+                    topic, overlap * 100.0
+                );
+                return Ok(None);
+            }
+        }
+        self.digest_internal(topic, content).await.map(Some)
+    }
+
+    async fn digest_internal(&self, topic: &str, content: &str) -> Result<Chunk> {
         let client = self
             .qdrant_client
             .as_ref()

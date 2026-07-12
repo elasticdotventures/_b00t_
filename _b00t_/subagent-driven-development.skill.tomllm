@@ -1,0 +1,29 @@
+[b00t]
+name = "subagent-driven-development"
+type = "skill"
+version = "0.1.0"
+hint = "Execute an implementation plan's independent tasks via sub-agents in the current session"
+
+[b00t.skill]
+description = """
+Use when executing implementation plans with independent tasks in the current session.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["sub-agents", "execution", "delegation"]
+tier = "ch0nky"
+complexity = 4
+
+[b00t.learn]
+topic = "subagent-driven-development"
+inline = """
+Use when executing implementation plans with independent tasks in the current session.
+
+Invoke via the Skill tool in Claude Code: skill="subagent-driven-development".
+"""
+
+# b00t:map v1
+# summary: Execute an implementation plan's independent tasks via sub-agents in the current session
+# tags: sub-agents, execution, delegation
+# tier: ch0nky
+# cmds: b00t learn subagent-driven-development
+# complexity: 4

@@ -26,6 +26,9 @@ mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
 mod rust-doc 'vendor/rust-doc.just'
 # 🥾 Compound engineering workflow — 8-phase agile state machine
 mod compound-engineering '_b00t_/compound-engineering.just'
+# 🛡️ Canonical reviewer skill — MECE+TRIZ+Eureka multi-framework review
+# Usage: just reviewer system-normal | just reviewer autoexec | just reviewer review-multi PR=<n>
+mod reviewer '_b00t_/skills/reviewer/justfile'
 
 # Datum justfiles (install recipes for core tech stacks)
 mod python '_b00t_/python.🐍/justfile'
@@ -37,6 +40,46 @@ mod k8s '_b00t_/k8s.🚢/justfile'
 mod pm2-tasker 'pm2-tasker/justfile'
 mod embed '_b00t_/python.🐍/embed/justfile'
 mod qwen-code '_b00t_/qwen-code.justfile'
+# 🧠 AI fine-tuning: dataset gen, local k8s training, HF Jobs cloud, MLflow, adapter test
+mod ai-finetune '_b00t_/ai-finetune.just'
+mod ngc '_b00t_/ngc.just'
+mod ux 'ux.just'
+
+# ── Module guide — `just modules` or `just --list <module>` ──────────────────
+# Lists all submodule justfiles registered in this repo.
+# Each module is a b00t skill scope; load with: b00t learn <module>
+
+@modules:
+    @echo "b00t just modules (just --list <module> for recipes):"
+    @echo ""
+    @echo "  ai-finetune   QLoRA training + HF Jobs cloud (b00t learn ai-finetune)"
+    @echo "  k8s           Kubernetes ops — sm3lly cluster"
+    @echo "  python        Python/uv environment management"
+    @echo "  docker        Container build + run"
+    @echo "  git           Git workflows + hooks"
+    @echo "  bash          Shell utilities"
+    @echo "  terraform     IaC provisioning"
+    @echo "  zellij        Terminal multiplexer"
+    @echo "  b00t          Core b00t CLI wrappers"
+    @echo "  embed         Embedding pipeline"
+    @echo "  qwen-code     Qwen code agent"
+    @echo "  irontology    Ontology + semantic RAG"
+    @echo ""
+    @echo "  Usage: just <module>::<recipe>"
+
+
+# Show which AI models are running locally (k8s inference pods + ollama)
+models:
+    #!/bin/bash
+    echo "=== k8s inference (b00t-inference) ==="
+    kubectl get pods -n b00t-inference -o custom-columns='POD:.metadata.name,STATUS:.status.phase,AGE:.status.startTime' --no-headers 2>/dev/null || echo "(kubectl not available)"
+    echo ""
+    echo "=== GPU memory ==="
+    nvidia-smi --query-gpu=name,memory.used,memory.free,memory.total --format=csv,noheader 2>/dev/null || echo "(nvidia-smi not available)"
+    echo ""
+    echo "=== ollama models ==="
+    ollama list 2>/dev/null || echo "(ollama not running)"
+
 
 next-task:
     #!/bin/bash
@@ -46,13 +89,16 @@ next-task:
 viz-entangle datum="ledgrrr" format="mermaid":
     #!/bin/bash
     set -euo pipefail
-    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
+    # 🤓 use prebuilt binary — cargo run fails on b00t repo due to git worktree structure
+    BCLI="./target/release/b00t-cli"
+    [[ -x "$BCLI" ]] || { echo "❌ no prebuilt b00t-cli — run: cargo build -p b00t-cli --release"; exit 1; }
+    "$BCLI" --path _b00t_ viz entangle --datum "{{datum}}" --format "{{format}}"
 
 gremlin-graalvm-build:
     docker build -t graalvm-gremlin:latest docker/graalvm-gremlin
 
 gremlin-graalvm-run:
-    docker run --rm -p 8182:8182 \
+    podman run --rm -p 8182:8182 \
       -v $PWD/docker/graalvm-gremlin/gremlin-server.yaml:/opt/gremlin-server/conf/gremlin-server.yaml \
       docker.io/tinkerpop/gremlin-server:latest
 
@@ -187,11 +233,16 @@ marketplace-check:
     python3 scripts/generate_claude_marketplace.py --repo-root . --check
 
 
+
+
+
+
 # Bump patch version + cargo install — always pair these together
 # 🤓 never cargo install without bumping version; tracks deployed vs source
 bump-install:
     #!/usr/bin/env bash
     set -euo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
     current=$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')
     IFS='.' read -r maj min pat <<< "$current"
     next="$maj.$min.$((pat+1))"
@@ -199,6 +250,7 @@ bump-install:
     echo "⬆️  $current → $next"
     cargo install --path b00t-mcp --force
     cargo install --path b00t-cli --force
+    cp ~/.cargo/bin/b00t-mcp ~/.local/bin/b00t-mcp
     echo "✅ installed v$next"
 
 # 🥾 Bootstrap b00t on a fresh machine (no cargo/just required).
@@ -292,12 +344,13 @@ install:
     fi
 
 # Install b00t skills/agents/hooks into agent runtimes (interactive TUI)
+# Install skill/agent runtimes interactively (kept for backwards compat — prefer `just install`)
 install-runtimes: build-hooks
     b00t-cli install --interactive
 
-# 💡 Recommended: sudo just installx
-#    sudo path → apt installs system packages; user path → user-local cargo/uv tools only
-installx:
+# System deps: apt packages + cargo/uv tools (sudo for apt; user-local otherwise)
+# 🤓 Separate from `just install` — install-deps handles OS packages, install handles b00t service
+install-deps:
     #!/bin/bash
     set -euo pipefail
 
@@ -468,6 +521,13 @@ distill file tier="sm0l":
         exit 1
     fi
 
+# Distil ch0nky sub-agent transcript → diff+test output contract enforcement.
+# Called by SubagentStop hook to compress agent output before returning to executive.
+# Input: transcript on stdin. Output: compressed diff+test summary (≤50 lines).
+# 🤓 enforces the ch0nky output contract: diff + test result only; no raw transcripts.
+distill-ch0nky:
+    python3 _b00t_/scripts/distill-ch0nky.py
+
 # Deterministic node snapshot: refresh soul node.* + HW-drift check (P3),
 # then show the compressed node identity line (P2).
 node-snapshot:
@@ -508,7 +568,7 @@ commit-hook:
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."
-        if ! JUST_UNSTABLE=1 just pr-validate goal="staged changes"; then
+        if ! JUST_UNSTABLE=1 just reviewer pr-validate goal="staged changes"; then
             echo ""
             echo "❌ Reviewer gate blocked commit. Fix issues and try again."
             echo "   To bypass: rm .b00t/strict-review (not recommended)"
@@ -614,6 +674,55 @@ cliff:
 inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
 
+# ── HF Cloud — dataset sync + job lifecycle ────────────────────────────────────
+
+# Upload train.jsonl + ai-finetune.just + active config to HF dataset repo (source of truth for cloud jobs)
+hf-dataset-push config="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --repo-type dataset
+    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --repo-type dataset
+    hf upload elasticdotventures/b00t-training _b00t_/ai-finetune.just ai-finetune.just --repo-type dataset
+    if [[ -n "{{config}}" ]]; then
+        hf upload elasticdotventures/b00t-training "fine-tune/{{config}}" "{{config}}" --repo-type dataset
+        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just + {{config}}"
+    else
+        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just (no config — pass config=<file> to include)"
+    fi
+
+# Submit a training job to HF Jobs; pass config=<filename> and flavor=a10g-large|a100-large
+# 🤓 job loads ai-finetune.just + config from hf://datasets/elasticdotventures/b00t-training
+hf-job-submit config flavor="a10g-large":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -z "{{config}}" ]] && { echo "⚠️  pass config=<filename>  e.g. just hf-job-submit config=config-phi4-mini.yaml" >&2; exit 1; }
+    hf jobs run \
+      --image ghcr.io/elasticdotventures/b00t-training-image:latest \
+      --flavor "{{flavor}}" \
+      --timeout 10h \
+      --env HF_HOME=/tmp/hf-cache \
+      --env UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
+      --env UNSLOTH_VLLM_STANDBY=0 \
+      --secret HF_TOKEN \
+      --volume "hf://datasets/elasticdotventures/b00t-training:/data:ro" \
+      -- /bin/sh -c "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; }; \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{config}}"
+
+# Poll status of a HF job
+hf-job-status job_id:
+    hf jobs status {{job_id}}
+
+# Stream logs from a running or completed HF job
+hf-job-logs job_id:
+    hf jobs logs {{job_id}}
+
+# Cancel a running HF job
+hf-job-cancel job_id:
+    hf jobs cancel {{job_id}}
+
+# Pull completed adapter from HF Hub to local sm3lly
+hf-adapter-pull repo dest="fine-tune/output-cloud/lora-adapter":
+    hf download "{{repo}}" --repo-type model --local-dir "{{dest}}"
+
 # Hugging Face model caching helper
 hf-download model dest="" revision="":
 	#!/usr/bin/env bash
@@ -679,9 +788,9 @@ vllm-up model="" dtype="" port="8000" image="vllm/vllm-openai:latest":
 		# shellcheck disable=SC2206
 		EXTRA_ARGS+=(${VLLM_EXTRA_ARGS})
 	fi
-	docker run --rm -d \
+	podman run --rm -d \
 		--name "$CONTAINER" \
-		--gpus all \
+		--device nvidia.com/gpu=all \
 		-p "${PORT}:8000" \
 		-v "${VLLM_MODEL_DIR}:${VLLM_MODEL_PATH}:ro" \
 		${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
@@ -949,13 +1058,15 @@ worker-status:
 
 # Render worker ontology graph with l3dg3rr visual
 worker-viz format="mermaid":
-    cargo run -p b00t-cli --bin b00t-cli -- --path _b00t_ viz entangle \
-      --datum worker --format {{format}}
+    #!/bin/bash
+    BCLI="./target/release/b00t-cli"
+    [[ -x "$BCLI" ]] || { echo "❌ no prebuilt b00t-cli"; exit 1; }
+    "$BCLI" --path _b00t_ viz entangle --datum worker --format {{format}}
 
 # Show recent experiment scores
 worker-experiment-scores:
-    @find .b00t -name "experiment-*.json" 2>/dev/null \
-      -exec echo "--- {} ---" \; -exec cat {} \; || echo "no experiment data yet"
+    @fdfind --base-directory .b00t -g "experiment-*.json" 2>/dev/null \
+      | xargs -I{} sh -c 'echo "--- .b00t/{} ---"; cat ".b00t/{}"' || echo "no experiment data yet"
 
 # Show worker audit log (governance gates)
 worker-audit-log:
@@ -1020,6 +1131,222 @@ ask query="":
       -H "Content-Type: application/json" \
       -d "{"model":"ch0nky","messages":[{"role":"user","content":"{{query}}"}],"max_tokens":256}" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
+
+# ── ufo-types crate (#511) — Tax-Lawyer UFO stereotypes + Satisfies<T> ──────
+# 🤓 Part of Tax-Lawyer EPIC (#510). ufo-types is the ontological foundation:
+#    UFO stereotypes (Kind/SubKind/Role/Relator/Mode) + Satisfies<T> constraint trait
+#    + ISO wrappers (Lei, Iso4217, Ifrs9Classification) + DARED governance types.
+# Usage: just ufo check | test | doc | watch
+
+# Fast compile-check for ufo-types crate
+ufo-check:
+    cargo check -p ufo-types
+
+# Run ufo-types tests (78 tests, <2s)
+ufo-test:
+    cargo test -p ufo-types
+
+# Open ufo-types docs in browser
+ufo-doc:
+    cargo doc -p ufo-types --open
+
+# Continuous watch: re-check ufo-types on file changes
+ufo-watch:
+    cargo watch -x 'check -p ufo-types'
+
+# Full Tax-Lawyer test suite (ufo-types + ledgrrr)
+tax-lawyer-test: ufo-test
+    just ledgrrr test
+
+# ── Chore memoization — recipes for fine-tune corpus (fewer tokens) ─────────
+# 🤓 Each recipe below replaces a multi-line bash invocation. After fine-tuning,
+#    the model recalls `just submodule-status` (5 tokens) instead of the
+#    full git submodule pipeline (30+ tokens). This is deliberate token
+#    compression for LLM context windows.
+
+# Show submodule drift: which submodules are ahead/behind/dirty
+submodule-status:
+    @git submodule status 2>/dev/null
+
+# Commit all submodule pointer updates with a standard message
+submodule-sync msg="chore: bump submodules":
+    @echo "📦 Syncing submodule pointers..."
+    git add $$(git submodule status 2>/dev/null | awk '{print $$2}') 2>/dev/null || true
+    git add pnpm-lock.yaml Cargo.lock 2>/dev/null || true
+    git commit -m "{{msg}}" || echo "Nothing to commit"
+
+# Delete all merged local branches except main
+tidy-branches:
+    @echo "🗑️  Deleting merged branches..."
+    @git branch --merged main 2>/dev/null | grep -v '^\*\|main' | xargs -r git branch -d
+    @echo "✅ Done. Remaining:"
+    @git branch --list
+
+# Drop all stashes older than 7 days
+tidy-stashes:
+    @echo "🗑️  Dropping old stashes..."
+    @git stash list 2>/dev/null | while IFS=: read -r ref desc; do \
+        echo "  Dropping $$ref"; \
+        git stash drop "$$ref" 2>/dev/null || true; \
+    done
+    @echo "✅ Stashes cleared"
+
+# Remove all *~ backup files (Emacs/vim tilde files)
+tidy-tilde:
+    @echo "🗑️  Removing backup files..."
+    @fdfind --max-depth 5 -g '*~' --exclude .git --exclude node_modules --exclude target --exclude vendor -x rm {} \; 2>/dev/null && echo "✅ Tilde files removed"
+
+# Full workspace tidy: branches + stashes + tilde files
+tidy: tidy-branches tidy-stashes tidy-tilde
+    @echo ""
+    @echo "✅ Workspace tidy complete"
+    @just submodule-status
+
+# ── Pre-flight checks — system-normal gate for reviewers ──────────────────
+
+# Run the reviewer system-normal precriteria gate (RHAI)
+check-system-normal:
+    @b00t script run _b00t_/scripts/reviewer-system-normal.rhai 2>/dev/null || echo "⚠️  RHAI not available — run 'just submodule-status' and check: git stash list, git branch --show-current, git status"
+
+# ── Review & capability analysis ──────────────────────────────────────────
+
+# Show b00t capability overview
+review-capabilities:
+    b00t capabilities
+
+# Operator survey: load role + check system state
+operator-survey:
+    @echo "🔍 Operator survey"
+    @echo "━━━━━━━━━━━━━━━━━"
+    b00t learn operator 2>/dev/null | head -5
+    @echo ""
+    @just review-branch
+
+# Show recent branch changes with stats
+review-branch:
+    @echo "📋 Branch: $$(git branch --show-current)"
+    @echo ""
+    @git log --oneline --stat -10
+    @echo ""
+    @echo "📦 Uncommitted:"
+    @git status --short
+
+# ── Codebase memory indexing ──────────────────────────────────────────────
+
+# Index the current repo into codebase-memory (fast mode)
+index-codebase:
+    @echo "🔍 Indexing into codebase-memory..."
+    @echo "ℹ️  Use MCP: codebase-memory index_repository(repo_path=\".\", mode=\"fast\")"
+
+# ── Android emulator sandbox (for Oreo 🐶) ──────────────────────────────────
+# 🤓 Uses RHAI script to sandbox ALL android operations deterministically.
+#    The RHAI script memoizes the full pipeline so agents don't hallucinate
+#    adb/emulator commands. One b00t call replaces 50+ lines of fragile bash.
+
+# Run the full Android test pipeline via RHAI (sandboxed, CPU-limited)
+android-sandbox:
+    b00t script run _b00t_/scripts/android-emu-setup.rhai
+
+# ── OpenCode plugin management ──────────────────────────────────────────────
+
+# Install opencode-goal-plugin (canonical willytop8 fork)
+opencode-goal-install:
+    @echo "📦 Installing opencode-goal-plugin..."
+    npm install -g opencode-goal-plugin 2>/dev/null || \
+        npm install --save-dev opencode-goal-plugin
+    @echo "✅ Add to opencode.json: {\"plugin\": [\"opencode-goal-plugin\"]}"
+
+# Install all b00t opencode plugins
+opencode-plugins-install: opencode-goal-install
+    @echo "✅ All opencode plugins installed"
+
+# Run OpenCode via podman with full b00t environment mounted
+# 🤓 Mounts: workspace, config, MCP binaries, git/ssh, API keys.
+#    b00t-mcp + codebase-memory-mcp binaries from host PATH.
+opencode-run workspace=".":
+    @echo "🚀 Launching OpenCode (podman)..."
+    @mkdir -p {{workspace}}/.opencode/skills
+    podman run -it --rm \
+        --security-opt label=disable \
+        -v {{workspace}}:/workspace \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
+        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
+# Run OpenCode for app4dog with full game development environment
+opencode-app4dog:
+    @echo "🐶 Launching OpenCode for app4dog..."
+    @mkdir -p ~/promptexecution/app4dog/.opencode/skills
+    podman run -it --rm \
+        --security-opt label=disable \
+        --network host \
+        -v ~/promptexecution/app4dog:/workspace \
+        -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
+        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
+        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
+        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
+# ── MCP Service Mesh (podman pod) ──────────────────────────────────────────
+
+# Start b00t MCP servers as sidecar containers in a pod
+# 🤓 b00t-mcp (HTTP :3000) + codebase-memory-mcp (socat :9101).
+#    OpenCode connects via localhost URLs — no binary mounts needed.
+opencode-mesh-start:
+    @echo "🔧 Starting b00t MCP mesh..."
+    @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
+        (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
+    @podman ps --filter name=b00t-mcp-http | grep -q b00t-mcp-http || \
+        (podman run -d --pod b00t-mesh --name b00t-mcp-http \
+            -v $$(realpath $$(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
+            -v $$(pwd):/workspace:ro -w /workspace \
+            docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1)
+    @podman ps --filter name=cb-mcp-socat | grep -q cb-mcp-socat || \
+        (podman run -d --pod b00t-mesh --name cb-mcp-socat \
+            -v $$(realpath $$(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
+            docker.io/ubuntu:24.04 \
+            bash -c "apt-get update -qq && apt-get install -y -qq socat && socat TCP-LISTEN:9101,fork,reuseaddr EXEC:/usr/local/bin/codebase-memory-mcp" 2>&1)
+    @echo "✅ MCP mesh running: b00t-mcp :3000, cb-mcp :9101"
+
+# Stop the MCP service mesh
+opencode-mesh-stop:
+    @echo "🛑 Stopping b00t MCP mesh..."
+    @podman pod rm -f b00t-mesh 2>/dev/null || true
+    @echo "✅ MCP mesh stopped"
+
+# Run OpenCode connected to MCP service mesh (no binary mounts)
+opencode-mesh workspace=".":
+    @echo "🌐 Launching OpenCode (mesh mode)..."
+    @mkdir -p {{workspace}}/.opencode/skills
+    podman run -it --rm \
+        --security-opt label=disable \
+        --network host \
+        -v {{workspace}}:/workspace \
+        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
+        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
+        -v ${HOME}/.ssh:/root/.ssh:ro \
+        -e OPENAI_API_KEY \
+        -e ANTHROPIC_API_KEY \
+        -w /workspace \
+        ghcr.io/anomalyco/opencode
+
+# ── b00t test harness (ping/pong integration tests) ─────────────────────────
+
+# Run the b00t integration test harness — verifies 5 key subsystems
+b00t-test-harness:
+    @bash _b00t_/scripts/b00t-ping-pong.sh
 
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
 check-fast:
@@ -1998,6 +2325,30 @@ pr-validate goal="staged changes" scope="":
     fi
     bash _b00t_/scripts/pr-validate.sh --goal "{{ goal }}" $SCOPE_ARG
 
+# Survey open PRs across workspace + all submodules
+pr-review:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔍 PR Review — workspace + submodules"
+    for repo in . middleware website game-play puppyplay-godot-droid critter-keeper; do
+        echo "── $repo ──"
+        (cd "$repo" 2>/dev/null && gh pr list --state open --limit 10 2>/dev/null) || true
+        echo ""
+    done
+
+# Quick-merge safe PRs (no conflicts, clean diffs)
+pr-quick-merge:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔀 Quick-merging..."
+    for repo in . middleware website game-play puppyplay-godot-droid critter-keeper; do
+        (cd "$repo" 2>/dev/null && for pr in $(gh pr list --state open --json number --jq '.[].number' 2>/dev/null); do
+            echo "  merging $repo#$pr..."
+            gh pr merge "$pr" --squash --admin 2>/dev/null || echo "  ⚠️  conflict on $repo#$pr"
+        done) || true
+    done
+    echo "✅ Quick-merge complete"
+
 # ═══════════════════════════════════════════════════════════════════
 # 🛡️ Gate-Protected Actions (mandatory Zellij interaction gate)
 # These recipes ALWAYS run through the gate before executing.
@@ -2186,7 +2537,7 @@ kreuzberg-install:
         export PATH="$HOME/.local/bin:$PATH"
     fi
     echo "📦 Installing kreuzberg via pip install --user..."
-    pip3 install --user kreuzberg
+    uv pip install kreuzberg
     echo ""
     echo "🔍 Verifying installation..."
     python3 -c "import kreuzberg; print('kreuzberg OK')"
@@ -2212,61 +2563,128 @@ skills query="":
 
 # ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
 
-# Generate training dataset from b00t corpus
-finetune-dataset format="alpaca" max="5000":
-    uv run python3.14 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
+# ── Gateway API (Envoy Gateway v1.3) ──────────────────────────────────────────
+# Install Envoy Gateway + GatewayClass + b00t-gateway; pin NodePort to 30080
+gateway-install:
+    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+      --version v1.3.0 --namespace envoy-gateway-system --create-namespace
+    kubectl create namespace b00t-gateway --dry-run=client -o yaml | kubectl apply -f -
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/gateway.yaml
+    kubectl wait --for=condition=Ready pod \
+      -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway \
+      -n envoy-gateway-system --timeout=120s
+    kubectl patch svc \
+      $(kubectl get svc -n envoy-gateway-system -l gateway.envoyproxy.io/owning-gateway-name=b00t-gateway -o name | head -1 | sed 's|service/||') \
+      -n envoy-gateway-system \
+      --type=json -p='[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080}]'
+    @echo "Gateway ready: http://192.168.1.137:30080 (Host: <route>.b00t.local)"
 
-# Run unsloth QLoRA fine-tuning
-finetune-train config="fine-tune/config.yaml":
-    uv run python3.14 fine-tune/train_unsloth.py --config={{config}}
+# Apply all HTTPRoutes
+gateway-routes:
+    kubectl apply -f _b00t_/k8s.🚢/gateway-api/routes.yaml
 
-# Export LoRA adapter to GGUF
-finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M":
-    uv run python3.14 fine-tune/export_gguf.py --adapter={{adapter}} --quant={{quant}}
+# Show gateway + route status
+gateway-status:
+    kubectl get gateway -n b00t-gateway
+    kubectl get httproute -A
 
-# Full pipeline: dataset -> train -> export
-finetune-all:
-    uv run python3.14 fine-tune/generate_dataset.py
-    uv run python3.14 fine-tune/train_unsloth.py
-    uv run python3.14 fine-tune/export_gguf.py
+# Envoy Gateway controller logs
+gateway-logs:
+    kubectl logs -n envoy-gateway-system deployment/envoy-gateway -f --tail=40
 
-# ─── Topology: introspected flow charts from system datums ──────────────────
+# Remove Envoy Gateway entirely (destructive)
+gateway-remove:
+    helm uninstall eg -n envoy-gateway-system || true
+    kubectl delete namespace b00t-gateway envoy-gateway-system --wait=false || true
+    kubectl delete gatewayclass eg || true
 
-# Generate Mermaid flowchart from ontology introspection
-gen-flowchart-mermaid root="":
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --root={{root}} --depth=3
+# ── ch0nky (Qwen3.6-27B Q4_K_M) ──────────────────────────────────────────────
+# 🤓 No nvidia.com/gpu resource — training holds the allocation; NVIDIA_VISIBLE_DEVICES=all
+#    injects CUDA via runtimeClassName=nvidia without going through device plugin scheduling
+# Access: http://192.168.1.137:30080/v1/ via Gateway (Host: ch0nky.b00t.local)
+#         http://192.168.1.137:31001/v1/ via NodePort direct
+ch0nky-deploy:
+    kubectl apply -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
+    kubectl rollout status deployment/ch0nky -n b00t-inference --timeout=120s
 
-# Generate Cytoscape JSON graph from ontology introspection
-gen-flowchart-cytoscape root="" output="topology.json":
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=cytoscape --root={{root}} --depth=3 > {{output}}
+# Tail ch0nky inference logs
+ch0nky-logs:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-inference -l app=ch0nky -o name | head -1)
+    [[ -z "$POD" ]] && { echo "no ch0nky pod"; exit 1; }
+    kubectl logs -n b00t-inference "$POD" -f --tail=40
 
-# Generate docs chapter with auto-updating flow charts
-gen-flowchart-docs:
-    cd b00t-cli && cargo run --bin b00t-cli -- ontology export --format=mermaid --depth=3 > book/src/topology.md
-    echo "Updated book/src/topology.md with live system topology"
+# Scale ch0nky to 0 (leaves Deployment in place for easy restart)
+ch0nky-stop:
+    kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
 
-# ── GitHub PR operations via gh.cli datum ──────────────────────────────────
-# Abstract interfaces from _b00t_/gh.cli.toml — uses gh CLI (preferred)
-# or curl+REST fallback when gh unavailable.
+# Remove ch0nky Deployment + Service entirely
+ch0nky-remove:
+    kubectl delete -f _b00t_/k8s.🚢/b00t-inference/ch0nky-deployment.yaml
 
-# Post a comment on a PR via gh.cli datum abstract interface
-gh-pr-comment pr body:
-    @b00t datum call gh.cli pr_comment --token pr={{pr}} --token body="{{body}}" --exec
+# Quick b00t-awareness probe against running ch0nky (or pass host:port arg)
+ch0nky-probe endpoint="":
+    #!/bin/bash
+    if [[ -n "{{ endpoint }}" ]]; then
+        scripts/probe-ch0nky.sh "{{ endpoint }}"
+    else
+        scripts/probe-ch0nky.sh
+    fi
 
-# Submit a formal PR review via gh.cli datum
-gh-pr-review pr event body:
-    @b00t datum call gh.cli pr_review --token pr={{pr}} --token event={{event}} --token body="{{body}}" --exec
-
-# Get PR diff via gh.cli datum
-gh-pr-diff pr:
-    @b00t datum call gh.cli pr_diff --token pr={{pr}} --exec
-
-# List open PRs
-gh-pr-list limit="10":
-    @b00t exec -- gh pr list --state open --limit {{limit}}
+# Show sm0l's current gpu/cpu/failed state (see _b00t_/k8s.🚢/sm0l/entrypoint-configmap.yaml)
+sm0l-status:
+    #!/bin/bash
+    POD=$(kubectl get pod -n b00t-inference -l app=sm0l -o name | head -1)
+    [[ -z "$POD" ]] && { echo "no sm0l pod"; exit 1; }
+    kubectl exec -n b00t-inference "$POD" -- cat /tmp/b00t-sm0l-state.json 2>&1 | python3 -m json.tool
 
 
-# ── b00t Agent Exchange Protocols ──
+# ── Git object recovery (EXPERIMENTAL) ────────────────────────────────────────
+# 🤓 LFMF: never rm .git/objects/* without proving BOTH corrupt AND unreachable.
+#    `git log --find-object` misses dangling commits — use fsck --unreachable only.
+#    Safe deletion = intersection of {corrupt} ∩ {unreachable}.
+#
+# Usage: just git-prune-corrupt [--dry-run]
+#   Default: dry-run (prints what would be deleted, does not delete)
+#   Pass delete=true to actually remove: just git-prune-corrupt delete=true
+
+# [EXPERIMENTAL] safe corrupt-object pruner — see scripts/git-prune-corrupt.py
+git-prune-corrupt delete="false":
+    uv run scripts/git-prune-corrupt.py {{delete}}
+
+# 🧪 Validate served JS syntax (catches merge conflicts, syntax errors)
+js-check:
+    bash scripts/b00t-js-check.sh
+
+# 🌐 CDP console check — launch Chrome, monitor JS errors via DevTools Protocol
+cdp-check url="http://localhost:31337/":
+    bash scripts/b00t-cdp-check.sh {{url}}
+
+# 🚀 Full deploy: test → build → restart → verify → e2e
+deploy:
+    @echo "🥾 Deploying..."
+    cargo test -p b00t-admin -- html_sanity
+    cargo build -p b00t-admin
+    @echo "  Restarting server..."
+    bash scripts/b00t-admin-restart.sh
+    @echo "  Verifying..."
+    @curl -s http://localhost:31337/api/admin/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('  v'+d['version']+' git='+d['git'][:8])"
+    @bash scripts/b00t-js-check.sh
+    @echo "  jsdom..."
+    @bash scripts/b00t-jsdom-test.sh 2>/dev/null || echo "  ⚠️  jsdom skipped (install jsdom)"
+    @echo "  e2e graphs..."
+    cargo test -p b00t-admin --test graph_e2e 2>&1 | tail -5
+
+# 🧪 Full visual test suite
+test-visual: jsdom-test playwright-test
+
+# 🏠 jsdom test — execute JS in simulated DOM
+jsdom-test:
+    bash scripts/b00t-jsdom-test.sh
+
+# 🎭 Playwright test — headless browser check
+playwright-test:
+    bash scripts/b00t-playwright-test.sh
 
 # Discover sm3lly (RTX 3090 inference agent) on the hive
 connect-sm3lly:
@@ -2283,7 +2701,7 @@ share-training sm3lly_host="sm3lly":
 delegate-finetune sm3lly_host="sm3lly":
     just share-training {{sm3lly_host}}
     @echo "🔧 Executing finetune on {{sm3lly_host}} (RTX 3090 24GB)..."
-    ssh {{sm3lly_host}} "cd .b00t && uv run python3 scripts/finetune-b00t.py"
+    ssh {{sm3lly_host}} "cd .b00t && uv run python3 fine-tune/train_unsloth.py && uv run python3 fine-tune/export_gguf.py"
 
 # Sync Spotlight telemetry logs bidirectionally
 sync-spotlight sm3lly_host="sm3lly":
@@ -2297,3 +2715,65 @@ mirror-soul sm3lly_host="sm3lly":
     scp ~/.b00t/server-soul.tomllm {{sm3lly_host}}:~/.b00t/server-soul.tomllm 2>/dev/null || true
     scp {{sm3lly_host}}:~/.b00t/server-soul.tomllm /tmp/sm3lly-soul.tomllm 2>/dev/null || true
     @echo "✅ Soul configs mirrored"
+
+# 📚 Sync blessed crate manifest from blessed.rs upstream
+blessed-sync:
+    curl -s https://raw.githubusercontent.com/nicoburns/blessed-rs/main/data/crates.json | python3 {{ justfile_directory() }}/scripts/convert_blessed.py
+# ── CI Utility Recipes ────────────────────────────────────────────────────────
+# 🤓 These replace inline awk/grep pipelines — standardized output, reusable.
+
+# Summarize cargo test results: "N passed, M failed, K ignored"
+test-summary:
+    @cargo test 2>&1 | awk '/^test result/ {p+=$4; f+=$6; i+=$8} END {printf "%d passed, %d failed, %d ignored\n", p, f, i}'
+
+# Run tests and pipe through sm0l-filter for compressed agent-safe output
+test-sm0l *ARGS='':
+    @cargo test {{ARGS}} 2>&1 | python3 _b00t_/scripts/sm0l-filter.py 2>/dev/null || cargo test {{ARGS}} 2>&1 | awk '/^test result/ {p+=$4; f+=$6; i+=$8} END {printf "%d passed, %d failed, %d ignored\n", p, f, i}'
+
+# Show only failing test names and their output
+test-failures:
+    @cargo test 2>&1 | awk '/^failures:/{found=1} found{print}'
+
+# Run tests and show failures only (exit 1 on failure)
+test-check:
+    @cargo test 2>&1 | tee /tmp/cargo-test-out.txt | awk '/^test result.*FAILED/{exit 1}' || { awk '/^failures:/{found=1} found{print}' /tmp/cargo-test-out.txt; exit 1; }
+
+# Show cargo warnings (exclude "unused manifest key")
+check-warnings:
+    @cargo check 2>&1 | grep "^warning:" | grep -v "unused manifest key" || echo "no warnings"
+
+# Show all diagnostic file locations
+check-warnings-locs:
+    @cargo check 2>&1 | grep "^\s*-->" | sort -u
+
+# 📓 Build obsidian-mcp-bridge container image
+obsidian-mcp-build:
+    podman build -t obsidian-mcp-bridge:latest containers/obsidian-mcp-bridge
+
+# 📓 Run obsidian-mcp-bridge as HTTP relay (listen on :27201 → Windows host :27200)
+obsidian-mcp-run token="":
+    podman run -d --rm --name obsidian-mcp --network host \
+        -e OBSIDIAN_TOKEN="{{token}}" \
+        obsidian-mcp-bridge:latest http
+
+# 📓 Run obsidian-mcp-bridge as stdio MCP server (for b00t/Claude Desktop)
+obsidian-mcp-stdio token="":
+    podman run -i --rm --name obsidian-mcp --network host \
+        -e OBSIDIAN_TOKEN="{{token}}" \
+        obsidian-mcp-bridge:latest
+
+# 📓 Stop obsidian-mcp-bridge container
+obsidian-mcp-stop:
+    podman stop obsidian-mcp || true
+
+# validate-datums: check datum dialects (.tomllm/.tomllmd/gate/hive) — taplo if installed, else b00t-lsp --check (task #109 CI surface)
+validate-datums dir="_b00t_":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v taplo >/dev/null 2>&1; then
+        taplo check
+    else
+        echo "taplo not installed — falling back to b00t-lsp --check"
+        cargo build -p b00t-lsp --quiet
+        ./target/debug/b00t-lsp --check {{dir}}
+    fi

@@ -1,5 +1,6 @@
 [b00t]
 name = "b00t-mcp"
+depends_on = ["demo-mcp-tools.job"]
 type = "mcp"
 hint = "MCP server for b00t-cli command proxy with ACL filtering"
 

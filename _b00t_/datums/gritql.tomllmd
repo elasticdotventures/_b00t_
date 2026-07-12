@@ -1,0 +1,87 @@
+---
+name: gritql
+description: |
+  GritQL — declarative AST-aware query language for code search, linting,
+  and transformation. Rust-powered (tree-sitter), scales to 10M+ line repos.
+  Code snippets as queries: no AST knowledge needed. 200+ standard patterns.
+  Multi-language: JS/TS, Python, Java, Terraform, Rust, Go, SQL, YAML, etc.
+version: 1.0.0
+tags: [gritql, grit, code-transform, refactoring, tree-sitter, ast, search, linting, codemod]
+tier: ch0nky
+complexity: 6
+applies_to:
+  - "code transformation"
+  - "AST search"
+  - "refactoring"
+  - "linting"
+  - "codemod"
+  - "code review automation"
+output_types: []
+depends_on: []
+unlocks: []
+metadata:
+  ufo_stereotype: Abstract
+  upstream: "https://github.com/biomejs/gritql"
+  license: "MIT"
+  language: "Rust (93%)"
+  stars: 4500
+  docs: "https://docs.grit.io/"
+---
+## GritQL — Declarative Code Transformation
+
+Formerly `getgrit/gritql`, now under `biomejs/gritql`. A query language that
+lets you search and modify code using the code itself as a query pattern.
+
+### Core Design
+
+- **Code as query**: Any code snippet in backticks is a valid GritQL query.
+  `\`console.log($arg)\`` finds all console.log calls.
+- **Metavariables**: `$name` matches any expression/pattern at that position.
+- **Rewrite syntax**: `\`old($x)\` => \`new($x)\`` for search-and-replace.
+- **Where clauses**: Add side conditions for precision: `where { $x <: not within test() }`
+- **Composable**: Named patterns can be composed into complex transformations.
+
+### Scale
+
+Written in Rust with tree-sitter parsers. Scales to 10M+ line repositories.
+Performance is first-class — rewrite millions of lines in seconds.
+
+### Quick Start
+
+```bash
+curl -fsSL https://docs.grit.io/install | bash
+grit apply '\`console.log($_)\` => \`winston.log($_)\`'
+grit check  # enforce patterns as custom lints via grit.yaml
+```
+
+### Multi-Language Support
+
+JavaScript/TypeScript, Python, JSON, Java, Terraform, Solidity, CSS,
+Markdown, YAML, Rust, Go, SQL — all via tree-sitter.
+
+### b00t Integration Potential
+
+- **Reviewer automation**: GritQL patterns for common anti-patterns
+  (guarded by reviewer capability). Replace regex-based checks with
+  AST-aware pattern matching.
+- **b00t guard enforcement**: `grit check` patterns for b00t command
+  guards (pip install, docker run, rm -rf) as AST-level lint rules.
+- **Auto-fix**: Reviewer REQUEST_CHANGES → GritQL rewrite pattern as fix.
+- **Cross-language**: One query language for Rust (b00t-cli), Python
+  (scripts), TypeScript (b00t-admin), TOML (datums).
+
+### vs Josh
+
+| Aspect | Josh | GritQL |
+|--------|------|--------|
+| Domain | Git history | Code AST |
+| Use case | Monorepo scaling | Code transformation |
+| Query model | Path filters | Pattern matching |
+| Relevance | Submodule mgmt | Code review/linting |
+
+# b00t:map v1
+# summary: GritQL — AST-aware code transformation language (Rust, tree-sitter, MIT, 4.5k★)
+# tags: gritql, grit, code-transform, tree-sitter, ast, refactoring, biomejs
+# tier: ch0nky
+# cmds: curl -fsSL https://docs.grit.io/install | bash, grit apply, grit check
+# complexity: 6

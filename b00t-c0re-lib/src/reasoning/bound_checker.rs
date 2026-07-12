@@ -14,6 +14,7 @@
 //!   3. Returning true
 
 use std::collections::HashMap;
+use super::predicates::B00tPredicate;
 
 /// Attempt to unify a template type (e.g. `Vec<T>`) with a concrete type
 /// (e.g. `Vec<usize>`). Returns param bindings if successful.
@@ -76,14 +77,15 @@ pub fn proves_implements(
     if depth == 0 { return false; }
 
     // 1. Direct ground fact
-    if triples.iter().any(|(s, p, o)| s == subject && p == "b00t:implements" && o == trait_name) {
+    let implements_uri = B00tPredicate::Implements.as_uri();
+    if triples.iter().any(|(s, p, o)| s == subject && p == &implements_uri && o == trait_name) {
         return true;
     }
 
     // 2. Generic instantiation
-    let req_pred = format!("b00t:requires/{trait_name}");
+    let req_pred = B00tPredicate::RequiresTrait { trait_name: trait_name.to_string() }.as_uri();
     for (template, pred, tmpl_trait) in triples {
-        if pred != "b00t:implements" || tmpl_trait != trait_name { continue; }
+        if pred != &implements_uri || tmpl_trait != trait_name { continue; }
         if template == subject { continue; } // already checked above
         let Some(bindings) = unify_single(template, subject) else { continue };
 

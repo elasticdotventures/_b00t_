@@ -1,0 +1,350 @@
+# b00t:map v1
+# summary: Sudo Operator Governance — extends Reviewer Governance Engine's Satisfies<Constraint> pattern to privileged-command grants; replaces the 300s-TTL block-bypass with adversarial-model review + evidence + pre-grant checkpoint
+# tags: prd, sudo, governance, satisfies, constraint, ledgrrr, evidence, ufo, grant, escalation, checkpoint
+# tier: frontier
+# cmds: b00t exec --justification <text> --cites <hash>..., ledgerr evidence verify --command-id <id>
+# complexity: 9
+
+# ── PRD: Sudo Operator Governance — Satisfies<SudoGrantConstraint> + Adversarial Review ──
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "sudo", "governance", "satisfies", "constraint", "ledgrrr", "evidence", "ufo"]
+
+[prd]
+id     = "PRD-SUDO-OPERATOR-GOVERNANCE"
+title  = "Sudo Operator Governance — adversarial-model review gate for privileged commands, with evidence and pre-grant checkpoint"
+status = "partial"
+# 🤓 v1 implemented (b00t-c0re-lib/src/sudo_operator/{governance,checkpoint,verdict}.rs
+#    + b00t-cli exec.rs): adversarial review via sm0l, evidence+checkpoint-gated
+#    Grant (Satisfies<SudoGrantConstraint> via reviewer's SatisfiesResult idiom),
+#    fail-safe Escalate (n8n webhook + notify-send, then deny), exec.rs
+#    --justification/--cites wiring. Remaining: ledgerr-mcp actions (phase 6)
+#    and arc-kit-au evidence-graph wiring.
+tier   = "frontier"
+extends = "PRD-REVIEWER-GOVERNANCE-ENGINE"
+inherits_from = ["ufo-types::Satisfies<C>", "arc-kit-au::evidence", "job_executor::checkpoint"]
+
+# ── Executive Summary ────────────────────────────────────────────────────────
+# b00t-cli/src/commands/exec.rs already gates Block-tier commands via
+# check_guards(), but a rejected command can be force-executed by simply
+# resubmitting within a 300-second TTL — no justification required
+# (~/.b00t/exec-audit.json, exec-log.jsonl `block-forced` entries carry no
+# rationale or evidence link). This PRD closes that gap by applying the SAME
+# pattern PRD-REVIEWER-GOVERNANCE-ENGINE already designed for review verdicts:
+#
+#   Operator justification (+ cited commit hashes)
+#     → SudoGrantVerdict implements Satisfies<SudoGrantConstraint>
+#     → adversarial model (sm0l) reviews command + justification + `git show`
+#       of cited commits, returns Grant | Deny | Escalate
+#     → Grant produces evidence node (Blake3 of command+justification+verdict)
+#       AND a pre-execution checkpoint (git tag + systemd/k8s state dump)
+#     → without evidence → command DID NOT HAPPEN → not executed
+#     → Escalate fires a webhook (fan-out to Slack/email/SMS via n8n) +
+#       local desktop notification, then denies for now (v1: no synchronous
+#       wait on a human reply — operator re-runs after resolving upstream)
+#
+# This directly replaces the unauthenticated 300s-TTL bypass with a real
+# adversarial-review-then-grant flow, while leaving the existing bare-Block
+# behavior (no --justification given) completely unchanged for anyone not
+# opting into this path.
+
+# ── Architecture ─────────────────────────────────────────────────────────────
+
+[architecture]
+diagram = """
+┌─────────────────────────────────────────────────────────────┐
+│         Operator: b00t exec --justification "..."           │
+│                    --cites <commit-hash>... "<command>"      │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ check_guards() → Block
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│      SudoGrantVerdict : Satisfies<SudoGrantConstraint>        │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  fn satisfies(&self, constraint: &SudoGrantConstraint) │  │
+│  │    → adversarial model (sm0l) reviews:                 │  │
+│  │        command, justification, `git show --stat` of    │  │
+│  │        each cited commit (grounds review in a real     │  │
+│  │        diff, not just trusted free text)                │  │
+│  │    → SatisfiesResult {                                 │  │
+│  │        disposition: Grant{ttl}|Deny{reason}|Escalate,  │  │
+│  │        confidence: f64,                                 │  │
+│  │        evidence_nodes: Vec<NodeId>,  ← Blake3 hashes    │  │
+│  │        ufo_category: MomentStereotype::Mode             │  │
+│  │      }                                                  │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ Grant
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              checkpoint_system_state()                       │
+│  git tag checkpoint/sudo/<id> + systemctl show / kubectl get │
+│  -o yaml artifact dump (operator-actionable, not auto-revert) │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ checkpoint recorded
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Command Execution + Evidence Record              │
+│  Grant    → execute command, record evidence + checkpoint     │
+│  Deny     → refuse, surface reason, no evidence needed         │
+│  Escalate → n8n webhook (→ Slack/email/SMS) + notify-send,     │
+│             deny for now, no evidence recorded (nothing ran)   │
+└─────────────────────────────────────────────────────────────┘
+"""
+
+# ── UFO Grounding ────────────────────────────────────────────────────────────
+
+[ufo_grounding]
+types = [
+    {
+        "type": "SudoGrantVerdict",
+        "ufo_stereotype": "Moment::Mode",
+        "description": "The grant/deny/escalate decision is an intrinsic moment dependent on the review event — mirrors ReviewVerdict's grounding exactly.",
+        "citation": "Guizzardi 2005, §4.3: Mode = intrinsic moment dependent on a single individual"
+    },
+    {
+        "type": "SudoGrantConstraint",
+        "ufo_stereotype": "Abstract",
+        "description": "Constraints (does the justification + cited evidence support this specific command?) are abstract rules governing the moment, independent of any particular grant instance.",
+        "citation": "UFO-B: Abstract category for purely formal entities"
+    },
+    {
+        "type": "SudoReviewEvent",
+        "ufo_stereotype": "Perdurant::Event",
+        "description": "The adversarial review is an event unfolding in time: command received → justification parsed → cited commits inspected → model queried → verdict produced.",
+        "citation": "Guizzardi 2005, §5: Event = perdurant with proper temporal parts"
+    },
+    {
+        "type": "SudoGrantEvidence",
+        "ufo_stereotype": "Endurant::SubKind",
+        "description": "Evidence (the Blake3-hashed record of command+justification+cited-commits+verdict) persists beyond the review event, referenceable by future audits — same subkind as CommandEvidence in the reviewer PRD.",
+        "citation": "Guizzardi 2005, §3.2: SubKind = rigid specialization of a Kind"
+    },
+    {
+        "type": "SystemCheckpoint",
+        "ufo_stereotype": "Endurant::SubKind",
+        "description": "A checkpoint is evidence of pre-command state, sufficient for an operator to manually revert. Rigid specialization of the evidence endurant.",
+    }
+]
+
+# ── Rust Trait Extension ─────────────────────────────────────────────────────
+# 🤓 CORRECTED after reading the actual code (2026-07-02): the reviewer
+#    governance module (b00t-c0re-lib/src/reviewer/{governance,evidence}.rs)
+#    ALREADY EXISTS — 683+204 lines, tested — contradicting this PRD's
+#    original `extends`-only assumption that it was unbuilt. It is, however,
+#    NOT wired into exec.rs anywhere (confirmed by grep — zero call sites).
+#    It is also NOT what the executive summary above describes: it is a
+#    self-contained, dependency-free module — SHA-256 content-addressed
+#    `CommandEvidence`/`EvidenceNode` (NOT Blake3), NO `ufo-types` or
+#    `arc-kit-au` crate dependency from b00t-c0re-lib at all. This PRD's
+#    trait section is corrected below to REUSE those real types directly
+#    (DRY — don't build a parallel Blake3/NodeId system that doesn't exist
+#    anywhere else in this codebase) rather than the aspirational shape
+#    originally drafted here by analogy by from the PRD's own prose.
+
+[traits]
+
+## Reused as-is from b00t-c0re-lib::reviewer — no changes needed
+reused_from_reviewer_module = """
+// b00t_c0re_lib::reviewer::evidence::CommandEvidence — reused directly:
+//   CommandEvidence::new(content: impl AsRef<[u8]>, verdict: &VerdictDisposition, command: impl Into<String>) -> Self
+//   .to_evidence_node() -> EvidenceNode { commit_hash: String (sha256 hex), verdict: String, notes_ref: String }
+//   .verify() -> bool (self-consistency check)
+// b00t_c0re_lib::reviewer::evidence::ProduceEvidence trait — implement this
+//   for SudoReviewEvent instead of inventing a new evidence trait.
+// VerdictDisposition doesn't fit sudo (2 variants, no ttl) — see SudoDisposition below,
+// but CommandEvidence::new() takes `&VerdictDisposition` positionally only to call
+// `.to_string()` on it for the `verdict` field, so SudoDisposition needs its own
+// Display impl and its OWN thin CommandEvidence-shaped struct (SudoGrantEvidence)
+// rather than shoehorning into VerdictDisposition's type — same SHA-256 mechanism,
+// distinct type, avoids polluting the reviewer module with sudo-specific semantics.
+"""
+
+## SudoDisposition — new, sibling of VerdictDisposition (shape differs: 3 variants + ttl)
+sudo_disposition_type = """
+use serde::{Deserialize, Serialize};
+
+/// The disposition of an adversarial sudo-grant review.
+/// UFO: Moment::Mode — intrinsic property of the review event, same
+/// grounding as VerdictDisposition in reviewer::governance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SudoDisposition {
+    Grant { ttl_seconds: u64 },
+    Deny { reason: String },
+    Escalate { reason: String },
+}
+
+impl std::fmt::Display for SudoDisposition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SudoDisposition::Grant { ttl_seconds } => write!(f, "GRANT(ttl={ttl_seconds}s)"),
+            SudoDisposition::Deny { reason } => write!(f, "DENY({reason})"),
+            SudoDisposition::Escalate { reason } => write!(f, "ESCALATE({reason})"),
+        }
+    }
+}
+"""
+
+## SudoGrantEvidence — mirrors CommandEvidence's shape/mechanism exactly (SHA-256, no git dep in the evidence layer itself)
+sudo_grant_evidence_type = """
+use sha2::{Sha256, Digest};
+
+/// Evidence that a sudo-grant review was performed with a given disposition.
+/// Content-addressed via SHA-256 — same mechanism as reviewer::evidence::CommandEvidence,
+/// distinct type because the content being hashed (command + justification + cited
+/// commits' `git show --stat` output) and the disposition shape (3 variants + ttl)
+/// differ from the reviewer's diff+findings shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SudoGrantEvidence {
+    pub content_hash: String,   // SHA-256 of command + justification + cited-commit `git show --stat` text
+    pub disposition: String,    // SudoDisposition::to_string()
+    pub command: String,
+    pub checkpoint_ref: Option<String>,   // set after checkpoint_system_state(), None until then
+    pub timestamp: String,      // ISO 8601, chrono::Utc::now().to_rfc3339()
+}
+
+impl SudoGrantEvidence {
+    pub fn new(content: impl AsRef<[u8]>, disposition: &SudoDisposition, command: impl Into<String>) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_ref());
+        let content_hash = format!("{:x}", hasher.finalize());
+        Self {
+            content_hash,
+            disposition: disposition.to_string(),
+            command: command.into(),
+            checkpoint_ref: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Self-consistency check — same shape as CommandEvidence::verify().
+    pub fn verify(&self) -> bool {
+        self.content_hash.len() == 64
+            && self.content_hash.chars().all(|c| c.is_ascii_hexdigit())
+            && !self.disposition.is_empty()
+    }
+}
+"""
+
+# ── Hook Integration ─────────────────────────────────────────────────────────
+
+[hook_integration]
+hook_flow = """
+1. `b00t exec --justification "..." --cites <hash>... "<cmd>"` invoked
+2. check_guards() evaluates the command — if not Block, existing behavior unchanged
+3. If Block AND --justification present: build SudoReviewEvent, call
+   SudoGrantVerdict::satisfies(&SudoGrantConstraint) — queries sm0l with
+   command + justification + `git show --stat` of each cited commit
+4. Grant  → checkpoint_system_state() → execute command → record evidence + receipt
+5. Deny   → refuse, print reason, no command execution, no evidence needed
+6. Escalate → fire n8n webhook (SudoEscalation event, fans out to configured
+   Slack/email/SMS channels outside b00t) + local `notify-send` → deny for now
+7. If --justification absent: existing 300s-TTL block-then-resubmit path
+   is UNCHANGED — this feature is additive, not a replacement for existing
+   guard usage that doesn't opt in.
+"""
+
+# 🤓 The critical invariant, same as the reviewer-governance PRD: a Granted
+# command MUST have both an evidence node AND a checkpoint reference before
+# it executes. Escalate never executes anything — it only notifies.
+
+# ── Implementation Phases ────────────────────────────────────────────────────
+
+[implementation]
+phases = [
+    {
+        "phase": 1,
+        "name": "Core Traits",
+        "description": "Define SudoGrantConstraint, SudoGrantVerdict, SudoDisposition, SudoCommandTracker in b00t-c0re-lib. Ground in UFO stereotypes. Sibling of the (also unbuilt) reviewer/governance.rs.",
+        "effort": "frontier",
+        "depends_on": [],
+        "deliverable": "b00t-c0re-lib/src/sudo_operator/governance.rs"
+    },
+    {
+        "phase": 2,
+        "name": "Checkpoint",
+        "description": "Generalize job_executor.rs::create_checkpoint's git-tag pattern into checkpoint_system_state(); add systemctl show / kubectl get -o yaml artifact dump for non-git state.",
+        "effort": "ch0nky",
+        "depends_on": ["phase-1"],
+        "deliverable": "b00t-c0re-lib/src/sudo_operator/checkpoint.rs"
+    },
+    {
+        "phase": 3,
+        "name": "Adversarial Verdict",
+        "description": "Build review prompt, call sm0l OpenAI-compat endpoint (:8000), parse structured Grant/Deny/Escalate verdict, shell `git show --stat` for cited commits to ground the review.",
+        "effort": "ch0nky",
+        "depends_on": ["phase-1"],
+        "deliverable": "b00t-c0re-lib/src/sudo_operator/verdict.rs"
+    },
+    {
+        "phase": 4,
+        "name": "exec.rs Integration",
+        "description": "Add --justification/--cites flags to handle_exec. Route Block-tier + justification-present through the new verdict flow; leave the existing 300s-TTL bypass unchanged for the no-flag case.",
+        "effort": "ch0nky",
+        "depends_on": ["phase-2", "phase-3"],
+        "deliverable": "b00t-cli/src/commands/exec.rs (updated)"
+    },
+    {
+        "phase": 5,
+        "name": "Escalation Channel",
+        "description": "Reuse budget_controller.rs::send_alert()'s n8n webhook client for a new SudoEscalation event type. Add notify-send desktop fallback.",
+        "effort": "sm0l",
+        "depends_on": ["phase-4"],
+        "deliverable": "b00t-cli/src/budget_controller.rs (updated)"
+    },
+    {
+        "phase": 6,
+        "name": "Ledgerr MCP Actions (follow-up)",
+        "description": "sudo_grant_record / verify / checkpoint_ref as thin MCP wrappers, mirroring reviewer_evidence_* actions in ledgerr-mcp. NOT in v1 scope.",
+        "effort": "sm0l",
+        "depends_on": ["phase-4"],
+        "deliverable": "ledgerr-mcp/src/actions/sudo_grant.rs"
+    },
+]
+
+# ── Acceptance Criteria ──────────────────────────────────────────────────────
+
+[acceptance]
+must = [
+    "Sudo grant evidence implements Satisfies<SudoGrantConstraint> (reviewer-module SatisfiesResult idiom; carried by SudoGrantEvidence)",
+    "SudoGrantEvidence produces deterministic SHA-256 hash from command + justification + cited commits + disposition (Blake3 migration deferred to arc-kit-au phase-6 wiring — see [[related]] VENDOR-LEDGRRR note)",
+    "Grant requires BOTH evidence_node() AND checkpoint_system_state() before command executes",
+    "Deny and Escalate never execute the command",
+    "Escalate fires the n8n webhook AND notify-send, then denies (no synchronous wait in v1)",
+    "Commands run WITHOUT --justification are completely unaffected (existing 300s-TTL behavior unchanged)",
+    "Every type has a UFO stereotype grounding comment",
+]
+should = [
+    "Verdict queries sm0l (not ch0nky) — this is a bounded classification decision, not open-ended generation, keep it fast/cheap",
+    "Cited commit hashes are verified to exist in the current repo before being trusted (git show failure → treat as unverifiable, lower confidence)",
+    "Checkpoint artifacts are human-readable (plain git tag + text dump), not a new binary format",
+]
+
+# ── Success Metrics ──────────────────────────────────────────────────────────
+
+[metrics]
+targets = [
+    "Zero Granted commands executed without both evidence AND checkpoint (governance invariant)",
+    "Zero regression: existing Block-then-manual-resubmit behavior identical for non-justification callers",
+    "Escalation reaches at least 2 channels (n8n-fanout + local desktop) within 5s of Escalate verdict",
+]
+
+# ── Related Datums ───────────────────────────────────────────────────────────
+
+[[related]]
+datum = "PRD-REVIEWER-GOVERNANCE-ENGINE"
+note  = "Parent pattern — this PRD is the same Satisfies<Constraint>+evidence+CommandTracker architecture applied to sudo grants instead of review verdicts. Reuses the trait shape, not a parallel design."
+
+[[related]]
+datum = "PRD-TAX-LAWYER-UFO-SDD"
+note  = "Root pattern both this PRD and PRD-REVIEWER-GOVERNANCE-ENGINE inherit from — every action is a thin wrapper over Satisfies<Constraint>, producing arc-kit-au evidence."
+
+[[related]]
+datum = "VENDOR-LEDGRRR"
+note  = "Real, working, actively-committed submodule (arc-kit-au evidence graph) — confirmed via direct research this session, not a stub. NOT used directly by v1 of this PRD (v1 reuses b00t-c0re-lib::reviewer's self-contained SHA-256 evidence pattern instead, matching what's actually implemented there); wiring evidence into the arc-kit-au graph proper is phase-6 follow-up, same as it is for the reviewer-governance PRD."
+
+[[related]]
+datum = "project_gpu_hive_scheduling"
+note  = "sm0l/ch0nky GPU-accounted k8s scheduling, built same session — the adversarial-review model (sm0l) this PRD depends on already runs reliably as a result."

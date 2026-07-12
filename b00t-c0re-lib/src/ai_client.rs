@@ -84,6 +84,22 @@ impl Default for AiClientConfig {
             },
         );
 
+        // NVIDIA API — OpenAI-compatible, free tier via developer program
+        // Models: nemotron-70b, llama-3.1-405b, qwen2.5-72b, mixtral-8x22b, ...
+        // API key: NGC_API_KEY or NVIDIA_API_KEY in ~/.b00t/.env
+        // 🤓 Same key works for NGC container pulls (nvcr.io) AND the model API
+        providers.insert(
+            "nvidia".to_string(),
+            AiProviderConfig {
+                provider: "nvidia".to_string(),
+                model: "nvidia/llama-3.1-nemotron-70b-instruct".to_string(),
+                api_key: None, // resolved at runtime from NGC_API_KEY / NVIDIA_API_KEY
+                endpoint: Some("https://integrate.api.nvidia.com/v1".to_string()),
+                enabled: false, // enable when NGC_API_KEY is set
+                priority: 3,
+            },
+        );
+
         Self {
             providers,
             default_provider: "openai".to_string(),

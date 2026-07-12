@@ -1,0 +1,30 @@
+# b00t server soul — runtime backend registry (local, uncommitted)
+# Edit to add/remove backends. Remote entries reference env var keys.
+# b00t:map v1
+# summary: b00t-server backend discovery config
+# tags: server, soul, backends
+# tier: sm0l
+# cmds: b00t server start
+# complexity: 2
+#
+[soul]
+hostname = "fung1"
+blessings = ["rust-doc"]
+
+[[backends.local]]
+name = "ollama"
+port = 11434
+kind = "openai-compat"
+enabled = true
+
+[[backends.local]]
+name = "mistralrs"
+port = 8181
+kind = "openai-compat"
+enabled = false
+
+[[backends.local]]
+name = "vllm"
+port = 8001
+kind = "openai-compat"
+enabled = true

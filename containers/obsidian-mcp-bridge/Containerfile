@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+# obsidian-mcp-bridge — lightweight MCP stdio↔HTTP bridge to Windows Obsidian
+FROM docker.io/node:22-alpine
+
+RUN apk add --no-cache socat
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV OBSIDIAN_HOST="host.docker.internal"
+ENV OBSIDIAN_PORT="27200"
+ENV OBSIDIAN_MCP_PATH="/mcp"
+ENV OBSIDIAN_TOKEN=""
+ENV BIND_PORT="27201"
+
+EXPOSE $BIND_PORT
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,44 @@
+# ⚠️ OBSOLETE / PAST CUTOFF (2026-06-30) — do not submit jobs with this config
+# Qwen/Qwen3-Coder-8B does NOT exist on HF Hub — Qwen3-Coder family is MoE-only.
+# Available Qwen3-Coder models: 30B-A3B-Instruct, 480B-A35B-Instruct, Next(~79B) — all MoE.
+# Kept for dense-8B LoRA tuning refs (r=32, batch=2, max_seq=2048).
+#
+# Original intent: dense Qwen3-Coder-8B on HF Jobs A100 (model does not exist)
+
+base_model: "Qwen/Qwen3-Coder-8B"
+adapter_name: "b00t-qwen3-coder-8b"
+dataset_path: "/data/train.jsonl"
+output_dir: "/tmp/output"
+hub_model_id: "elasticdotventures/b00t-qwen3-coder-8b"
+push_to_hub: true
+private: true
+
+load_in_4bit: true   # 8B in 4-bit: ~5GB; leaves 75GB for activations/optimizer
+
+lora_r: 32           # dense model: r=32 gives more capacity than 30B MoE r=16
+lora_alpha: 64
+lora_dropout: 0.0    # Unsloth fast kernel requires 0.0
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 3        # dense 8B can afford more epochs in same wall time
+batch_size: 2        # dense model: 2 fits comfortably
+grad_accum: 8        # effective batch = 16
+learning_rate: 2e-4  # standard LoRA rate for 8B
+max_seq_length: 2048 # restore full length — no MoE memory pressure
+packing: true
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+save_steps: 200
+
+use_gradient_checkpointing: true
+report_to: "none"
+logging_steps: 10

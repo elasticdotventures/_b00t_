@@ -1,0 +1,40 @@
+# b00t ch0nky QLoRA Fine-Tuning Configuration
+# Base: Qwen3-8B (unsloth/Qwen3-8B-bnb-4bit already in HF cache)
+# Target: b00t-aligned ch0nky for implement/refactor/debug tasks
+# VRAM: ~14GB — scale ch0nky inference to 0 first:
+#   kubectl scale deployment ch0nky --replicas=0 -n b00t-inference
+# (sm0l training ~3.4GB can run concurrently)
+
+base_model: "unsloth/Qwen3-8B-bnb-4bit"
+adapter_name: "b00t-aligned-qwen3-8b"
+dataset: "fine-tune/train.jsonl"
+output_dir: "./fine-tune/output-ch0nky"
+
+# r=16: 8B has enough capacity without r=32; keeps adapter export small
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 3
+batch_size: 1
+grad_accum: 8
+learning_rate: 1e-4
+max_seq_length: 2048
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+
+load_in_4bit: true
+use_gradient_checkpointing: true
+
+report_to: "mlflow"
+logging_steps: 10

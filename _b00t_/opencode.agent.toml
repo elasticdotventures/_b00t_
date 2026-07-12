@@ -11,6 +11,8 @@ name = "opencode"
 type = "agent"
 hint = "opencode coding agent — systemd-managed ACP server; ch0nky tier; swap with pi via hive stop/start"
 
+entangled_mcp = ["b00t-mcp.mcp"]
+
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
 
@@ -29,6 +31,14 @@ socket = "/tmp/b00t/agents/opencode.sock"
 port = 3000
 pubsub = false
 protocol = "http+acp"
+
+[b00t.agent.executor]
+# 🤓 one-shot fallback via handle_invoke when ACP server is not running
+cli_path = "opencode"
+cli_args = ["run", "--model", "qwen36-local/sm0l"]
+supports_tools = ["read", "write", "edit", "bash", "grep", "glob", "task"]
+max_iterations = 10
+hive_profile = "inference-qwen36-35b-a3b-llamacpp"
 
 [b00t.agent.crew]
 role = "specialist"

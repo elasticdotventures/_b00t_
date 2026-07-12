@@ -139,6 +139,30 @@ pub struct JobStep {
     /// but does not, by itself, guarantee such enforcement.
     #[serde(default)]
     pub output_contract: Option<String>,
+
+    /// Compute backend to dispatch this step through instead of a local shell-out.
+    /// `None` (the default) preserves today's behavior — the step's `task` is
+    /// executed locally (e.g. `Bash`/`Python` shell out via `duct::cmd`).
+    /// `Some(name)` dispatches via `ComputeProvider::submit_batch_job` from
+    /// `commands::provider::get_provider(name)` — accepted values are whatever
+    /// `get_provider` accepts ("local" | "runpod" | "hf"). Requires `batch` to
+    /// also be set; the step's `task` is ignored in that case.
+    #[serde(default)]
+    pub backend: Option<String>,
+
+    /// Batch job spec used when `backend` is `Some`. Mirrors
+    /// `commands::provider::BatchJobSpec` directly (same struct, reused rather
+    /// than duplicated) so a step can be authored as:
+    /// ```toml
+    /// backend = "runpod"
+    /// [b00t.job.steps.batch]
+    /// image = "..."
+    /// config_path = "/abs/path/request.json"
+    /// flavor = "a100-large"
+    /// timeout_hours = 2.0
+    /// ```
+    #[serde(default)]
+    pub batch: Option<crate::commands::provider::BatchJobSpec>,
 }
 
 /// Task definition - multiple execution types supported
@@ -149,6 +173,23 @@ pub enum JobTask {
     #[serde(rename = "bash")]
     Bash {
         command: String,
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        timeout_ms: Option<u64>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+    },
+
+    /// Execute a Python script, optionally pip-installing requirements first.
+    /// No venv/poetry/uv management — a `pip install` per requirement (or a
+    /// generated requirements.txt) followed by `python3 <script>`, same
+    /// shell-out style as `Bash`.
+    #[serde(rename = "python")]
+    Python {
+        script: String,
+        #[serde(default)]
+        requirements: Vec<String>,
         #[serde(default)]
         cwd: Option<String>,
         #[serde(default)]
@@ -450,6 +491,8 @@ steps = [
                 artifacts: None,
                 cognitive_tier: None,
                 output_contract: None,
+                backend: None,
+                batch: None,
             },
             JobStep {
                 name: "A".to_string(),
@@ -466,6 +509,8 @@ steps = [
                 artifacts: None,
                 cognitive_tier: None,
                 output_contract: None,
+                backend: None,
+                batch: None,
             },
             JobStep {
                 name: "B".to_string(),
@@ -482,6 +527,8 @@ steps = [
                 artifacts: None,
                 cognitive_tier: None,
                 output_contract: None,
+                backend: None,
+                batch: None,
             },
         ];
 

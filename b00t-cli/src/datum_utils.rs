@@ -3,7 +3,6 @@
 //! Provides recursive datum discovery, pattern search, constraint filtering,
 //! and graph export capabilities for the b00t datum system.
 
-pub use crate::VisualizationSpec;
 use crate::{BootDatum, DatumType, UnifiedConfig};
 use anyhow::Result;
 use b00t_c0re_lib::lfmf::DatumLookup;

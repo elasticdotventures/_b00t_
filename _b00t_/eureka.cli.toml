@@ -4,7 +4,7 @@ type = "cli"
 hint = "CLI tool for capturing code ideas — instant note-taking from terminal without breaking flow"
 source = "https://github.com/simeg/eureka"
 desires = "latest"
-install = "cargo install eureka"
+install = { cargo = "eureka" }
 update = "cargo install eureka --force"
 version = "eureka --version"
 version_regex = 'eureka (\d+\.\d+\.\d+)'

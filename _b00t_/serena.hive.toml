@@ -1,0 +1,70 @@
+# b00t Hive Profile — serena LSP MCP on single-node k8s (ns b00t-serena)
+# Activation ensures the serena Deployment is applied + rolled out, then holds
+# the stack active. MCP stdio sessions bridge via `kubectl exec -i` (see
+# _b00t_/serena.mcp.toml [[b00t.mcp.stdio]] priority 0 — the registry surface
+# b00t-mcp proxies from takes mcp.stdio[0]).
+# Activate: b00t hive activate=serena   (or MCP: b00t_mcp_stack_load("serena"))
+# Smoke:    scripts/serena-smoke.sh kubectl exec -i -n b00t-serena deploy/serena -- \
+#             serena start-mcp-server --context ide-assistant --project /workspace
+
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "Serena LSP MCP on k8s (b00t-serena ns) — applies manifest, waits rollout, exec-bridge stdio"
+
+[b00t.hive.resources]
+# 🤓 pod limits are 2 CPU / 2Gi (see _b00t_/k8s/serena.yaml); language servers are RAM-light at idle
+ram_gb    = 2
+gpu_mb    = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+# 🤓 own group — coexists with inference/finetune profiles, never displaces them
+group    = "serena-mcp"
+priority = 10
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+[b00t.hive.service]
+description       = "serena MCP on k8s — apply manifest, wait Ready, hold active"
+service_type      = "simple"
+restart           = "on-failure"
+restart_sec       = "30s"
+timeout_start_sec = "600"
+after             = ["network.target"]
+working_directory = "/home/brianh/.b00t"
+# 🤓 image must exist in k0s containerd first (imagePullPolicy: Never):
+#    podman build -t serena:latest vendor/serena/
+#    podman save serena:latest | sudo k0s ctr -n k8s.io images import -
+#    (sudo-free alt: scratchpad import pod mounting /run/k0s + /usr/local/bin/k0s)
+# exec_start applies + waits rollout, then sleeps so `b00t hive status` shows active.
+exec_start = """/usr/bin/bash -c 'kubectl apply -f /home/brianh/.b00t/_b00t_/k8s/serena.yaml && kubectl rollout status deployment/serena -n b00t-serena --timeout=300s && exec sleep infinity'"""
+
+[[b00t.usage]]
+description = "Activate serena stack (apply manifest + wait Ready)"
+command     = "b00t hive activate=serena"
+
+[[b00t.usage]]
+description = "MCP stdio smoke test through the k8s exec bridge"
+command     = "scripts/serena-smoke.sh kubectl exec -i -n b00t-serena deploy/serena -- serena start-mcp-server --context ide-assistant --project /workspace"
+
+[[b00t.usage]]
+description = "Pod status"
+command     = "kubectl get pods -n b00t-serena"
+
+[[b00t.usage]]
+description = "Deactivate (stops holder unit; Deployment stays unless deleted)"
+command     = "b00t hive deactivate=serena"
+
+# b00t:map v1
+# summary: serena MCP k8s stack profile — kubectl apply + rollout gate + exec-bridge stdio; pairs with serena.mcp.toml stdio[0]
+# tags: serena, mcp, k8s, hive, lsp, stack, b00t-serena
+# tier: sm0l
+# cmds: b00t hive activate=serena; scripts/serena-smoke.sh kubectl exec -i -n b00t-serena deploy/serena -- serena start-mcp-server --context ide-assistant --project /workspace
+# complexity: 4

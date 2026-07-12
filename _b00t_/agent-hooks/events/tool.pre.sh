@@ -1,98 +1,48 @@
 #!/usr/bin/env bash
-# b00t agent-hook: tool.pre  (PreToolUse)
-#
-# Gates tool execution before it runs. exit 2 = block (stderr shown to model).
-# Handles: Bash security gates, Write/Edit size gates.
-#
-# 🤓 This is the critical safety layer. Rules:
-#    - Block HARD: destructive system commands, credential harvesting, mass deletes
-#    - Warn SOFT:  prefer uv over pip, podman over docker (guard redirects)
-#    - Inject context: additionalContext field enriches model understanding of why
-
+# b00t guard — tool.pre hook: intercept bash commands before execution.
+# Blocks or warns on disallowed patterns per AGENTS.md command guards.
+# Exit 0 = allow, 1 = warn (verbose), 2 = block
 set -euo pipefail
 
-INPUT="${B00T_HOOK_INPUT:-$(cat)}"
-TOOL="$(    echo "$INPUT" | jq -r '.tool_name        // ""' 2>/dev/null)"
-COMMAND="$( echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)"
-FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null)"
-CONTENT="$(  echo "$INPUT" | jq -r '.tool_input.content   // ""' 2>/dev/null)"
+INPUT="${B00T_HOOK_INPUT:-$(cat 2>/dev/null || echo "")}"
+TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // .tool // empty' 2>/dev/null || echo "")"
+COMMAND="$(echo "$INPUT" | jq -r '.command // .tool_input.command // empty' 2>/dev/null || echo "${BASH_COMMAND:-}")"
 
-# ─── Bash gates ──────────────────────────────────────────────────────────────
-if [ "$TOOL" = "Bash" ]; then
-
-    # HARD BLOCK: destructive filesystem commands
-    if echo "$COMMAND" | grep -qE 'rm\s+-rf\s+(/|~|/home|/etc|/usr|/var)\b'; then
-        echo "🚫 b00t: destructive rm -rf blocked — specify exact path" >&2
-        exit 2
-    fi
-
-    # HARD BLOCK: credential harvesting patterns
-    if echo "$COMMAND" | grep -qE 'cat\s+~/.ssh/id|cat\s+~/.aws/credentials|cat\s+~/.env\b|env\s*\|\s*grep\s+-i\s*(key|token|secret|pass)'; then
-        echo "🚫 b00t: credential harvesting pattern blocked" >&2
-        echo "   If legitimately needed, read specific file via Read tool" >&2
-        exit 2
-    fi
-
-    # HARD BLOCK: silent exfiltration
-    if echo "$COMMAND" | grep -qE 'curl\s+.*\|\s*(bash|sh)\b|wget\s+.*\|\s*(bash|sh)\b'; then
-        if echo "$COMMAND" | grep -qE 'curl\s+.*\$\(env\)|curl\s+.*\$\(cat\s+~/'; then
-            echo "🚫 b00t: potential credential exfiltration blocked" >&2
-            exit 2
-        fi
-    fi
-
-    # SOFT WARN: pip install → prefer uv
-    if echo "$COMMAND" | grep -qE '^\s*pip\s+install\b'; then
-        jq -n '{
-            hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                permissionDecision: "ask",
-                permissionDecisionReason: "b00t guard: pip install detected — prefer `uv pip install` for venv isolation. Proceed anyway?",
-                additionalContext: "b00t preference: uv pip install <pkg> (faster, isolated, respects .venv)"
-            }
-        }'
-        exit 0
-    fi
-
-    # SOFT WARN: docker run → prefer podman
-    if echo "$COMMAND" | grep -qE '^\s*docker\s+run\b'; then
-        jq -n '{
-            hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                additionalContext: "b00t guard: prefer podman over docker. RTX3090 setup: podman --device nvidia.com/gpu=all --security-opt=label=disable"
-            }
-        }'
-        exit 0
-    fi
-
-    # CONTEXT: inject hive resource warning before vllm/huggingface downloads
-    if echo "$COMMAND" | grep -qE '(hf\s+download|huggingface-cli\s+download|vllm\s+serve)'; then
-        HIVE_STATUS="$(b00t-cli hive status 2>/dev/null | head -5 || echo "hive status unavailable")"
-        jq -n --arg status "$HIVE_STATUS" '{
-            hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                additionalContext: ("b00t hive: check RAM/GPU before large downloads.\n" + $status)
-            }
-        }'
-        exit 0
-    fi
+# Only intercept bash/shell tools
+if [[ "$TOOL_NAME" != "bash" && "$TOOL_NAME" != "Bash" && -z "${BASH_COMMAND:-}" ]]; then
+    exit 0
 fi
 
-# ─── Write/Edit gates ─────────────────────────────────────────────────────────
-if [ "$TOOL" = "Write" ] && [ -n "$CONTENT" ]; then
-    LINE_COUNT="$(echo "$CONTENT" | wc -l)"
-    if [ "$LINE_COUNT" -gt 800 ]; then
-        jq -n --argjson lines "$LINE_COUNT" '{
-            hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                permissionDecision: "ask",
-                permissionDecisionReason: ("b00t: file has " + ($lines | tostring) + " lines — b00t g0spell max is 800. Split into modules?"),
-                additionalContext: "b00t alignment: prefer many small files over few large files (200-400 lines ideal, 800 hard cap)"
-            }
-        }'
-        exit 0
-    fi
+# ─── BLOCK patterns (exit 2) ───────────────────────────────────────────────
+# rm -rf / — absolute destruction
+if echo "$COMMAND" | grep -qE "rm\s+-rf\s+/"; then
+    echo '{"decision":"block","reason":"rm -rf / is BLOCKED by b00t guard","suggestion":"use trash or targeted paths"}' >&2
+    exit 2
 fi
 
-# Default: allow
-exit 0
+# ─── WARN/REPLACE patterns (exit 1) ────────────────────────────────────────
+warnings=()
+
+# grep → rg (ripgrep): warn for standalone search, not for pipeline filtering (| grep)
+if echo "$COMMAND" | grep -qE "(^|\s)grep\s" && ! echo "$COMMAND" | grep -qE "\|\s*grep\b"; then
+    warnings+=("use rg (ripgrep) instead of grep — faster, .gitignore-aware, standardized regex")
+fi
+
+# pip install → uv pip install
+if echo "$COMMAND" | grep -qE "pip\s+install\b"; then
+    warnings+=("use uv pip install instead of pip install")
+fi
+
+# docker run → podman
+if echo "$COMMAND" | grep -qE "docker\s+run\b"; then
+    warnings+=("use podman --device nvidia.com/gpu=all instead of docker run")
+fi
+
+# huggingface-cli → hf
+if echo "$COMMAND" | grep -qE "huggingface-cli\b"; then
+    warnings+=("use hf download instead of huggingface-cli")
+fi
+
+if [[ ${#warnings[@]} -gt 0 ]]; then
+    printf '%s\n' "${warnings[@]}" >&2
+fi

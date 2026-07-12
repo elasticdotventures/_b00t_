@@ -1,0 +1,83 @@
+[b00t]
+name = "diff-analyzer"
+type = "skill"
+hint = "Deterministic diff decomposition: stats, hunk classification, blast-radius mapping, size-gate routing for review depth"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["diff", "review", "git", "hunks", "blast-radius", "triage", "reviewer", "deterministic"]
+
+[b00t.skill]
+depends_on = []
+unlocks = [
+    "diff-analyzer::stat-summary",
+    "diff-analyzer::classify-hunks",
+    "diff-analyzer::blast-radius",
+    "diff-analyzer::route-depth",
+]
+
+# ── Diff Analyzer ─────────────────────────────────────────────────────────────
+#
+# sm0l-tier deterministic pre-pass: every downstream review skill consumes this
+# skill's structured output instead of re-reading the raw diff. Pure git/gh
+# plumbing — zero judgment calls, so a sm0l model executes it reliably.
+#
+# Output contract to executive: one summary line + the routing decision.
+# NEVER pass the raw diff upward.
+
+[b00t.skill.recipes."diff-analyzer::stat-summary"]
+description = "One-line quantitative diff summary"
+steps = [
+    "1. git diff --stat <base>...<head> | tail -1 — or gh pr diff <n> already persisted to /tmp/pr-<n>.diff",
+    "2. git diff --numstat <base>...<head> — machine-readable adds/deletes per file",
+    "3. git diff --name-status <base>...<head> — A/M/D/R classification per file",
+    "4. Emit: 'DIFF|<files> files|+<adds>/-<dels>|<renames> renames|<binary> binary'",
+]
+
+[b00t.skill.recipes."diff-analyzer::classify-hunks"]
+description = "Bucket changed files into MECE review categories"
+steps = [
+    "1. Partition by path: src/ = logic; tests/ + *_test.* = tests; _b00t_/ = datums; vendor/ = assimilated; *.toml|*.json|*.yml = config; *.md = docs",
+    "2. Datum bucket present? hand those files to datum-review + b00t-lsp --check _b00t_",
+    "3. Logic bucket without matching tests bucket entry = coverage-hole flag for MECE pass",
+    "4. vendor/ bucket = verify submodule pointer moves are intentional (git submodule status)",
+    "5. Emit per bucket: 'BUCKET|<name>|<file-count>|<line-count>'",
+]
+
+[b00t.skill.recipes."diff-analyzer::blast-radius"]
+description = "Map what the diff can break beyond its own lines"
+steps = [
+    "1. For each changed pub symbol: grep -rn '<symbol>' --include='*.rs' — call-site inventory outside the diff",
+    "2. b00t-cli ontology sparql --subject <changed-type> --predicate all — datum/type graph neighbors",
+    "3. Changed justfile recipe? grep -n '<recipe-name>' justfile _b00t_/ .github/ — recipe consumers",
+    "4. Changed trait/schema = every implementor is in the blast radius; list them",
+    "5. Emit: 'BLAST|<symbol>|<n> external call sites|<files>' — synthesis weighs untested blast radius as HIGH",
+]
+
+[b00t.skill.recipes."diff-analyzer::route-depth"]
+description = "Route the PR to a review-depth tier by size and risk"
+steps = [
+    "1. Total changed lines from stat-summary; risk dimensions from pr-risk-scorer.datum weights",
+    "2. < 50 lines, config/docs only = LOW: checklist review, sm0l tier",
+    "3. 50-500 lines = MEDIUM: sequential multi-framework-code-review passes",
+    "4. >= 500 lines = HIGH: parallel dispatch (mece/triz/eureka sub-agents, max 3 concurrent per reviewer.role)",
+    "5. Security-surface or guard hits from security-scanner = CRITICAL regardless of size: adversarial review + operator gate",
+    "6. Emit final line: 'ROUTE: LOW|MEDIUM|HIGH|CRITICAL'",
+]
+
+[b00t.compose]
+composes_with = [
+    "multi-framework-code-review",
+    "pr-risk-scorer.datum",
+    "security-scanner",
+    "github-code-review",
+    "datum-review",
+    "reviewer.role",
+]
+
+# b00t:map v1
+# summary: Deterministic diff pre-pass — stats, MECE hunk buckets, blast radius, review-depth routing
+# tags: diff, review, git, hunks, blast-radius, triage, reviewer, deterministic
+# tier: sm0l
+# cmds: git diff --numstat <base>...<head>; git diff --name-status <base>...<head>; gh pr diff <n>
+# complexity: 3

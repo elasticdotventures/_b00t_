@@ -1,5 +1,6 @@
 [b00t]
 name = "test-agent-simple"
+parent = "executive.agent"
 type = "job"
 hint = "Simple test of LangChain agent integration"
 

@@ -1,12 +1,8 @@
 [b00t]
 name = "qwen-code"
-type = "mcp"
-hint = "Qwen Code MCP server (like claudecode or openai-codex) for agentic AI coding sessions"
+type = "cli"
+hint = "Qwen Code CLI — accessed via b00t-mcp proxy (qwen has no native MCP mode)"
 lfmf_category = "qwen-code"
-
-[b00t.install]
-# 🤓 install ensures script is in place and executable
-command = "chmod +x _b00t_/scripts/run-qwen-code-mcp.sh"
 
 [b00t.learn]
 topic = "qwen-code"
@@ -14,13 +10,6 @@ auto_digest = true
 
 # 🤓 qwen CLI doesn't have native --mcp-server flag
 # 🤓 b00t-mcp acts as MCP server proxying qwen commands through ACL-filtered stdio
-# 🤓 qwen mcp add/remove/list manages MCP server registrations in ~/.qwen/settings.json
-[[b00t.mcp.stdio]]
-priority = 0
-command = "_b00t_/scripts/run-qwen-code-mcp.sh"
-args = []
-transport = "stdio"
-requires = ["qwen-code"]
 
 [[b00t.usage]]
 description = "List configured MCP servers in qwen CLI"
@@ -63,7 +52,7 @@ name = "Model Context Protocol"
 url = "https://modelcontextprotocol.io"
 
 # b00t:map v1
-# summary: qwen-code MCP integration - b00t-mcp proxies qwen CLI commands via stdio with ACL
+# summary: qwen-code CLI — b00t-mcp proxies qwen commands via ACL-filtered stdio (qwen has no native MCP mode)
 # tags: qwen-code, mcp, b00t-mcp, stdio, agent, cli
 # tier: ch0nky
 # cmds: qwen mcp list, b00t-mcp --stdio, qwen -p 'prompt'

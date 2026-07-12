@@ -1,0 +1,62 @@
+---
+# Smoke-test the sm0l b00t translator — semantic pipe from NL to b00t CLI
+# Same pattern as job-test-adapter.yaml but runs sm0l-translator.py --smoke
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: b00t-translator-test
+  namespace: b00t-finetune
+  labels:
+    b00t.tier: finetune
+    b00t.io/model: sm0l
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        b00t.tier: finetune
+        b00t.io/job: translator-test
+    spec:
+      restartPolicy: Never
+      runtimeClassName: nvidia
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: translator
+          image: unsloth/unsloth:latest
+          command:
+            - python3
+            - /workspace/_b00t_/scripts/sm0l-translator.py
+            - --smoke
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "500m"
+              nvidia.com/gpu: 1
+            limits:
+              memory: "8Gi"
+              nvidia.com/gpu: 1
+          env:
+            - name: HF_HOME
+              value: /hf
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: HF_HUB_DISABLE_PROGRESS_BARS
+              value: "1"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: hf-cache
+              mountPath: /hf
+      volumes:
+        - name: workspace
+          hostPath:
+            path: /home/brianh/.b00t
+            type: Directory
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface
+            type: DirectoryOrCreate

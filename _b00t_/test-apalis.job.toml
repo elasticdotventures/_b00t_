@@ -3,6 +3,7 @@
 
 [b00t]
 name = "test-apalis"
+parent = "b00t.cli"
 type = "job"
 hint = "Test apalis MVP with SQLite backend and git checkpoints"
 version = "0.1.0"

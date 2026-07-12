@@ -1,0 +1,81 @@
+[b00t]
+name = "cli-proxy-api"
+type = "hive_profile"
+version = "0.1.0"
+hint = "CLIProxyAPI gateway at :1234 — multi-provider OpenAI-compatible proxy, replaces broken mistralrs-proxy"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 0.5
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ai-gateway"
+priority = 90
+
+[b00t.hive.env]
+CLI_PROXY_URL = "http://127.0.0.1:1234/v1"
+OPENAI_BASE_URL = "http://127.0.0.1:1234/v1"
+OPENAI_API_KEY = "local-b00t"
+
+# ── Providers ──────────────────────────────────────────────────────────────────
+[b00t.providers]
+# 🤓 qwen36-local :8001 registered as OpenAI-compatible upstream
+# 🤓 Claude/Codex/Grok/Gemini via OAuth (configure in auths/ directory)
+
+[[b00t.providers.upstreams]]
+name = "qwen36-local"
+type = "openai"
+endpoint = "http://127.0.0.1:8001/v1"
+models = ["b00t-sm0l", "ch0nky"]
+
+[[b00t.providers.upstreams]]
+name = "claude"
+type = "claude"
+oauth = "claude_code"
+enabled = false
+
+[[b00t.providers.upstreams]]
+name = "codex"
+type = "openai"
+oauth = "codex"
+enabled = false
+
+[[b00t.providers.upstreams]]
+name = "gemini"
+type = "gemini"
+oauth = "gemini"
+enabled = false
+
+# ── Deployment ─────────────────────────────────────────────────────────────────
+[b00t.deployment]
+method = "podman"
+image = "ghcr.io/router-for-me/cli-proxy-api:latest"
+build = "docker build -t cli-proxy-api https://github.com/router-for-me/CLIProxyAPI.git"
+port = 1234
+
+[b00t.deployment.start]
+command = "podman run -d --replace --name cli-proxy-api -p 1234:1234 -v ${HOME}/.cli-proxy-api/auths:/app/auths -v ${HOME}/.cli-proxy-api/config.yaml:/app/config.yaml ghcr.io/router-for-me/cli-proxy-api:latest"
+
+[b00t.deployment.stop]
+command = "podman stop cli-proxy-api && podman rm cli-proxy-api"
+
+[b00t.deployment.verify]
+command = "curl -s http://127.0.0.1:1234/v1/models | python3 -m json.tool"
+
+# ── Integration ────────────────────────────────────────────────────────────────
+[b00t.integration]
+replaces = "mistralrs-proxy"  # broken — Candle can't load Gemma4
+port = 1234
+opens_opencode = "cli-proxy/sm0l, cli-proxy/ch0nky, cli-proxy/claude, cli-proxy/codex"
+
+# b00t:map v1
+# summary: CLIProxyAPI multi-provider proxy — OpenAI-compatible, OAuth, LB, replaces broken mistralrs-proxy on :1234
+# tags: proxy, openai, claude, codex, gemini, grok, oauth, load-balancing, router, api
+# tier: ch0nky
+# cmds: podman run -d --name cli-proxy-api -p 1234:1234 ghcr.io/router-for-me/cli-proxy-api:latest
+# complexity: 5

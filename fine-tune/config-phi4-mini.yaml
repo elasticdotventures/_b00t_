@@ -1,0 +1,46 @@
+# b00t phi4-mini QLoRA Fine-Tuning Configuration
+# Base: Phi-4-mini-instruct (3.8B) — unsloth 4-bit pre-quantized
+# Architecture: Phi3ForCausalLM (q/k/v/o/gate/up/down projections)
+# VRAM: ~5-8GB on RTX3090 24GB — safe concurrent with sm0l inference
+# Submit: just -f _b00t_/ai-finetune.just train fine-tune/config-phi4-mini.yaml
+
+base_model: "unsloth/Phi-4-mini-instruct-bnb-4bit"
+adapter_name: "b00t-phi4-mini"
+dataset: "fine-tune/train.jsonl"
+output_dir: "./fine-tune/output-phi4-mini"
+
+# 3.8B — r=16 sufficient; keeps adapter small
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 1
+batch_size: 1
+grad_accum: 8
+learning_rate: 1e-4
+max_seq_length: 2048
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+
+load_in_4bit: true
+use_gradient_checkpointing: true
+
+report_to: "none"
+logging_steps: 25
+
+# b00t:map v1
+# summary: Phi-4-mini 3.8B QLoRA local fine-tune — fits RTX3090 24GB with ~5-8GB VRAM
+# tags: phi4, mini, local, qlora, 3090
+# tier: ch0nky
+# cmds: just -f _b00t_/ai-finetune.just train fine-tune/config-phi4-mini.yaml
+# complexity: 3

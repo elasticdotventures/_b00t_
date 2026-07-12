@@ -45,11 +45,29 @@ pub struct Patterns {
     pub deny: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Policy {
     Allow,
     Deny,
+}
+
+impl Policy {
+    /// FOL: ¬Allow = Deny, ¬Deny = Allow
+    pub fn not(&self) -> Self {
+        match self {
+            Policy::Allow => Policy::Deny,
+            Policy::Deny => Policy::Allow,
+        }
+    }
+
+    pub fn allows(&self) -> bool {
+        matches!(self, Policy::Allow)
+    }
+
+    pub fn denies(&self) -> bool {
+        matches!(self, Policy::Deny)
+    }
 }
 
 #[derive(Clone)]
@@ -285,5 +303,37 @@ mod tests {
         assert!(filter.is_allowed("learn", &["rust".to_string()]));
         assert!(!filter.is_allowed("install", &["git".to_string()]));
         assert!(!filter.is_allowed("unknown", &["--force".to_string()]));
+    }
+
+    // ── FOL-correct Policy tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_policy_not_double_negation() {
+        // FOL: ¬¬Allow = Allow, ¬¬Deny = Deny
+        assert_eq!(Policy::Allow.not().not(), Policy::Allow);
+        assert_eq!(Policy::Deny.not().not(), Policy::Deny);
+    }
+
+    #[test]
+    fn test_policy_not_inverse() {
+        // FOL: ¬Allow = Deny, ¬Deny = Allow
+        assert_eq!(Policy::Allow.not(), Policy::Deny);
+        assert_eq!(Policy::Deny.not(), Policy::Allow);
+    }
+
+    #[test]
+    fn test_policy_allows_denies() {
+        assert!(Policy::Allow.allows());
+        assert!(!Policy::Allow.denies());
+        assert!(!Policy::Deny.allows());
+        assert!(Policy::Deny.denies());
+    }
+
+    #[test]
+    fn test_policy_eq() {
+        // Equality: Allow != Deny, Allow == Allow
+        assert_ne!(Policy::Allow, Policy::Deny);
+        assert_eq!(Policy::Allow, Policy::Allow);
+        assert_eq!(Policy::Deny, Policy::Deny);
     }
 }

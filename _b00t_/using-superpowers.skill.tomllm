@@ -1,0 +1,29 @@
+[b00t]
+name = "using-superpowers"
+type = "skill"
+version = "0.1.0"
+hint = "Establish how to find and use skills at the start of any conversation"
+
+[b00t.skill]
+description = """
+Use when starting any conversation — establishes how to find and use skills, requiring skill invocation before ANY response including clarifying questions.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["skills", "meta", "conversation-start"]
+tier = "sm0l"
+complexity = 2
+
+[b00t.learn]
+topic = "using-superpowers"
+inline = """
+Use when starting any conversation — establishes how to find and use skills, requiring skill invocation before ANY response including clarifying questions.
+
+Invoke via the Skill tool in Claude Code: skill="using-superpowers".
+"""
+
+# b00t:map v1
+# summary: Establish how to find and use skills at the start of any conversation
+# tags: skills, meta, conversation-start
+# tier: sm0l
+# cmds: b00t learn using-superpowers
+# complexity: 2

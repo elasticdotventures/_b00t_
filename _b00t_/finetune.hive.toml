@@ -1,0 +1,78 @@
+[b00t]
+name = "finetune"
+type = "hive_profile"
+hint = "QLoRA fine-tuning mode — stops all inference, frees full GPU for unsloth training"
+depends_on = ["b00t-finetune.cli", "huggingface.cli"]
+
+[b00t.hive.resources]
+# 🤓 unsloth Qwen3-8B 4-bit ≈ 8GB VRAM + 6GB activations; ch0nky headroom margin
+ram_gb = 8
+gpu_mb = 16000
+cpu_cores = 4
+
+[b00t.hive.resources.gate]
+# Require 16GB VRAM free before activating
+ram_free_gb = 4
+gpu_free_mb = 15000
+
+[b00t.hive.exclusion]
+group = "primary-workload"
+priority = 5  # lower than inference; inference restores when finetune exits
+
+[b00t.hive.services]
+# 🤓 the systemd units below are the ones actually observed running LLM
+#    inference on this host (`systemctl --user list-units | grep b00t@`) —
+#    the original k8s-only assumption here didn't match reality, so
+#    activating this profile stopped nothing and never freed the GPU.
+stop = [
+  "b00t@inference-qwen36-27b-llamacpp.service",
+  "b00t@inference-qwen36-35b-a3b-llamacpp.service",
+]
+# k8s equivalent (when running there instead): kubectl scale deployment sm0l --replicas=0 -n b00t-inference
+# handled automatically by job.yaml initContainer (finetune-scaler ServiceAccount)
+
+[b00t.hive.mcp_tools]
+deactivate = ["vllm-local"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action = "warn"
+message = "🦨 use uv pip install"
+redirect = "uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action = "warn"
+message = "🦨 use podman --device nvidia.com/gpu=all"
+redirect = "podman run --device nvidia.com/gpu=all --security-opt=label=disable"
+
+[[b00t.usage]]
+description = "Activate finetune mode (stops inference, frees GPU)"
+command = "b00t hive activate finetune"
+
+[[b00t.usage]]
+description = "k8s Job: ch0nky training (scales down sm0l, trains, scales up)"
+command = "just finetune-train-kube"
+
+[[b00t.usage]]
+description = "k8s Job: sm0l training → updates B00T_SM0L_ENDPOINT GGUF"
+command = "just finetune-train-kube-smol"
+
+[[b00t.usage]]
+description = "Apply RBAC + namespace for finetune Jobs (one-time setup)"
+command = "kubectl apply -f _b00t_/k8s.🚢/fine-tune/rbac.yaml"
+
+[[b00t.usage]]
+description = "Watch training logs"
+command = "kubectl logs -n b00t-finetune -l b00t.tier=finetune -f"
+
+[[b00t.usage]]
+description = "Export trained adapter to GGUF for llama.cpp"
+command = "just finetune-export"
+
+# b00t:map v1
+# summary: QLoRA fine-tuning hive profile — stops inference, enables unsloth GPU training
+# tags: finetune, unsloth, qwen3, qlora, self-improve
+# tier: frontier
+# cmds: b00t hive activate finetune && just finetune-train-ch0nky
+# complexity: 7
