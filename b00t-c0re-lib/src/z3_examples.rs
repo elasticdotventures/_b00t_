@@ -3,7 +3,6 @@
 //! Tests shell out to the `z3` CLI (libz3 must be installed: apt install z3).
 //! Feature-gated: `cargo test -p b00t-c0re-lib -- z3`
 
-use std::io::Write;
 use std::process::Command;
 
 #[allow(dead_code)]

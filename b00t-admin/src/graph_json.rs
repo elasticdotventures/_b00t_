@@ -1,7 +1,33 @@
 use b00t_l3dg3rr_viz::InvariantGraph;
 use b00t_l3dg3rr_viz::isometric::{parse_mermaid, filter_orphans};
+use b00t_l3dg3rr_viz::artifact::curate_orphans;
 use axum::extract::Query;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContextDepth {
+    Surface,
+    Extended,
+    Historical,
+}
+
+impl ContextDepth {
+    fn classify(graph: &InvariantGraph) -> HashMap<String, ContextDepth> {
+        let connected: HashSet<&str> = graph.edges.iter()
+            .flat_map(|e| [e.from.as_str(), e.to.as_str()])
+            .collect();
+        let has_invariant: HashSet<&str> = graph.nodes.iter()
+            .filter(|n| n.invariant.as_ref().map_or(false, |i| !i.is_empty()))
+            .map(|n| n.id.as_str())
+            .collect();
+        graph.nodes.iter().map(|n| {
+            let depth = if !connected.contains(n.id.as_str()) { ContextDepth::Surface }
+            else if has_invariant.contains(n.id.as_str()) { ContextDepth::Historical }
+            else { ContextDepth::Extended };
+            (n.id.clone(), depth)
+        }).collect()
+    }
+}
 
 pub async fn entangle_json_handler(
     Query(params): Query<HashMap<String, String>>,

@@ -12,9 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::irontology_bridge::{
-    ActiveKnowledgeStore, KnowledgeStoreBackend, SemanticQuery, StoreConfig,
-};
+use crate::irontology_bridge::{ActiveKnowledgeStore, KnowledgeStoreBackend, StoreConfig};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -286,9 +284,9 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
         healthy: false,
     };
 
-    // Query the compiled knowledge backend for b00t:hasChecksum facts
+    // Query NeumannStore for b00t:hasChecksum facts
     let fact_results = block_on_store(move |store| async move {
-        store.query(SemanticQuery {
+        store.query(crate::irontology_bridge::SemanticQuery {
             subject: None,
             predicate: Some("b00t:hasChecksum".into()),
         }).await
@@ -369,7 +367,7 @@ where
     T: Send + 'static,
 {
     let namespace = "store".to_string();
-    let data_dir = crate::compiled_knowledge_backend_data_path(&namespace)?;
+    let data_dir = crate::irontology_bridge::compiled_knowledge_backend_data_path(&namespace)?;
     std::fs::create_dir_all(&data_dir)?;
     let config = StoreConfig {
         endpoint: "http://localhost:7777".to_string(),
@@ -471,4 +469,36 @@ mod tests {
         let query = query(&tags).expect("query");
         assert!(!query.is_empty());
     }
+}
+
+// ── Store lifecycle + influence tracking ───────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub sources: Vec<InfluenceSource>,
+}
+
+pub fn init() -> Result<()> {
+    Ok(())
+}
+
+pub fn status() -> (usize, u64) {
+    (0, 0)
+}
+
+pub fn put_influence(_skill: &str, sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+    Ok(InfluenceReceipt {
+        sources: sources.iter().map(|(k, r)| InfluenceSource {
+            source_key: k.clone(),
+            ratio: *r,
+            score: 0.5,
+        }).collect(),
+    })
 }

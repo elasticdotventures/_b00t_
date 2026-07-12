@@ -200,7 +200,6 @@ Advice mode (consult prior lessons before fixing):
   b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
-
     Lfmf {
         #[clap(
             value_name = "TOOL",
@@ -2234,7 +2233,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills, .. }) => {
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
