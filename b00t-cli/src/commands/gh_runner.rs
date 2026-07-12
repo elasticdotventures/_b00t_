@@ -276,9 +276,20 @@ fn cmd_install(
     )?;
     println!("[2/7] Repository {} accessible", repo);
 
-    // 3. Create workdir
-    std::fs::create_dir_all(workdir.join("_work"))
-        .with_context(|| format!("Failed to create workdir: {}", workdir_str))?;
+    // 3. Create workdir (escalate via sudo if parent not writable)
+    if let Err(e) = std::fs::create_dir_all(workdir.join("_work")) {
+        let (sudo_ok, _) = sh(&format!(
+            "sudo mkdir -p {} && sudo chown -R $(whoami):$(whoami) {} 2>&1",
+            workdir.join("_work").display(),
+            workdir_str
+        ));
+        if !sudo_ok {
+            bail!(
+                "Cannot create workdir: {}. Try:\n  sudo mkdir -p {}/_work && sudo chown -R $USER:$USER {}",
+                e, workdir_str, workdir_str
+            );
+        }
+    }
     println!("[3/7] Workdir created: {}", workdir_str);
 
     // 4. Fetch registration token (1h TTL)
