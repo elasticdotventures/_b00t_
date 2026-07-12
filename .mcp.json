@@ -47,6 +47,10 @@
         "http://localhost:3000/sse"
       ],
       "env": {}
+    },
+    "ledgrrr": {
+      "command": "/home/brianh/.local/bin/ledgerr-mcp-server",
+      "type": "stdio"
     }
   }
 }
