@@ -487,17 +487,21 @@ where
     Fut: std::future::Future<Output = Result<T>> + Send,
     T: Send + 'static,
 {
-    let rt = tokio::runtime::Handle::try_current()
-        .unwrap_or_else(|_| {
-            tokio::runtime::Builder::new_current_thread()
+    let store = neumann()?;
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            // Already inside a tokio runtime — use block_in_place to yield the thread
+            Ok(tokio::task::block_in_place(|| handle.block_on(f(store))))
+        }
+        Err(_) => {
+            // No runtime — spin up a temporary one
+            let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .expect("tokio runtime")
-                .handle()
-                .clone()
-        });
-    let store = neumann()?;
-    Ok(rt.block_on(f(store)))
+                .expect("tokio runtime");
+            Ok(rt.block_on(f(store)))
+        }
+    }
 }
 
 // ── Internal: manifest + crypto ────────────────────────────────────────────

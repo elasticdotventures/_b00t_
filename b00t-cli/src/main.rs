@@ -2232,13 +2232,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami {
-            role,
-            with_skills,
-            json,
-            skills,
-            dashboard,
-        }) => {
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
             if *dashboard {
                 whoami::print_dashboard();
             } else if *json {

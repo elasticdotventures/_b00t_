@@ -1,0 +1,224 @@
+# Ory Hydra → b00t Integration Analysis
+#
+# 🤓 Hydra is an OpenID Certified OAuth 2.1 server. b00t-mcp already has
+#    minimal OAuth 2.1 (oauth_minimal.rs, github_auth.rs). Hydra replaces
+#    these with a production-grade, database-backed, multi-tenant auth server.
+#
+#    Key integration: Hydra's OAuth 2.1 scopes map to b00t's ontology ACL.
+#    b00t:ChatModel:execute → oauth2 scope → hydra token → proxy middleware.
+
+[meta]
+source = "github.com/ory/hydra"
+language = "Go"
+license = "Apache-2.0"
+stars = "17.4k"
+certified = "OpenID Connect (all profiles)"
+used_by = ["OpenAI", "Mistral", "Cisco", "Klarna", "Segment", "Arduino"]
+deployment = "podman / docker / kubernetes"
+db = "PostgreSQL / MySQL / CockroachDB"
+
+# ── Integration Paths ────────────────────────────────────────────────────────
+
+[integration]
+
+[integration.path_1]
+name = "replace-minimal-oauth"
+description = "Swap b00t-mcp's oauth_minimal.rs with Hydra backend"
+effort = "medium"
+impact = "high"
+details = """
+b00t-mcp currently has two OAuth implementations:
+  - oauth_minimal.rs (in-memory, no persistence, dev-only)
+  - oauth.rs (disabled — complex, broken handler trait)
+
+Hydra provides:
+  - Database-backed client registration
+  - JWT access/refresh tokens with configurable lifetimes
+  - PKCE, client_credentials, authorization_code, implicit, hybrid flows
+  - Token introspection (RFC 7662) and revocation (RFC 7009)
+  - JWKS endpoint for RS256/ES256 key rotation
+
+Replace oauth_minimal with Hydra proxy:
+  b00t-mcp --oauth-backend http://127.0.0.1:4445
+  → Hydra admin API for client registration
+  → Hydra public API for token issuance
+  → b00t ACL middleware for authorization (Hydra issues token, b00t checks permissions)
+"""
+
+[integration.path_2]
+name = "ontology-scope-mapping"
+description = "Map b00t ontology classes to Hydra OAuth scopes"
+effort = "low"
+impact = "high"
+details = """
+b00t:EmbeddingModel:execute  →  scope: embedding.execute
+b00t:ChatModel:execute       →  scope: chat.execute
+b00t:Model:read              →  scope: model.read
+b00t:Store:write             →  scope: store.write
+
+Hydra's consent screen asks: "Allow app X to: use embeddings, send chats, read models"
+b00t server key create --consumer rust-doc --access b00t:ChatModel:execute
+  → hydra create oauth2-client --scope chat.execute --grant-type client_credentials
+  → returns client_id + client_secret
+  → b00t stores as credential datum
+"""
+
+[integration.path_3]
+name = "hydra-as-docker-datum"
+description = "Hydra runs as a managed container via SkillExecutor"
+effort = "low"
+impact = "medium"
+details = """
+Podman container with lifecycle:
+  podman run --rm --network host \
+    -e DSN=postgres://... \
+    -e URLS_SELF_ISSUER=http://127.0.0.1:4444 \
+    -e SECRETS_SYSTEM=$(openssl rand -hex 32) \
+    oryd/hydra:v2 serve all --dev
+
+SkillExecutor spawns on first OAuth request, reaps after 1h idle.
+Postgres can run alongside via podman-compose or external.
+"""
+
+[integration.path_4]
+name = "hydra-mcp-tools"
+description = "Expose Hydra admin API as MCP tools"
+effort = "medium"
+impact = "medium"
+details = """
+Hydra admin API endpoints → MCP tools:
+  POST   /admin/clients              → hydra_create_client
+  GET    /admin/clients              → hydra_list_clients
+  GET    /admin/clients/{id}         → hydra_get_client
+  PUT    /admin/clients/{id}         → hydra_update_client
+  DELETE /admin/clients/{id}         → hydra_delete_client
+  POST   /admin/oauth2/introspect    → hydra_introspect_token
+  POST   /admin/oauth2/revoke        → hydra_revoke_token
+  GET    /admin/keys/{set}           → hydra_get_jwks
+
+b00t-mcp proxy forwards these via GenericMcpProxy with ACL gating.
+Credentials for Hydra admin API stored as b00t credential datums.
+"""
+
+# ── b00t ACL Mapping ─────────────────────────────────────────────────────────
+
+[acl_mapping]
+
+[[acl_mapping.entries]]
+b00t_class = "b00t:ChatModel"
+b00t_action = "Execute"
+hydra_scope = "chat.execute"
+hydra_grant = "client_credentials"
+
+[[acl_mapping.entries]]
+b00t_class = "b00t:EmbeddingModel"
+b00t_action = "Execute"
+hydra_scope = "embedding.execute"
+hydra_grant = "client_credentials"
+
+[[acl_mapping.entries]]
+b00t_class = "b00t:Model"
+b00t_action = "Read"
+hydra_scope = "model.read"
+hydra_grant = "authorization_code"
+
+[[acl_mapping.entries]]
+b00t_class = "b00t:Store"
+b00t_action = "Write"
+hydra_scope = "store.write"
+hydra_grant = "client_credentials"
+
+[[acl_mapping.entries]]
+b00t_class = "b00t:Store"
+b00t_action = "Read"
+hydra_scope = "store.read"
+hydra_grant = "authorization_code"
+
+# ── Implementation Plan ──────────────────────────────────────────────────────
+
+[plan]
+
+[[plan.steps]]
+order = 1
+name = "hydra-datum"
+description = "Create .mcp.toml datum with SkillExecutor lifecycle"
+status = "done"
+
+[[plan.steps]]
+order = 2
+name = "hydra-container-smoke"
+description = "Verify podman run oryd/hydra:v2 serve all --dev with Postgres"
+status = "done"
+notes = """
+Smoke-test passed (2026-06-27):
+  - Postgres 15 container: podman run postgres:15 with hydra/secret/hydra
+  - Hydra v2.3.0: podman run oryd/hydra:v2 --network host
+  - Must run migrations first: hydra migrate sql -e --yes
+  - Health: curl :4444/health/alive → {"status":"ok"}
+  - OAuth2: client_credentials grant → access token valid
+  - JWKS: RS256 keys at /.well-known/jwks.json
+  - OIDC Discovery: /.well-known/openid-configuration
+  - Admin API: client CRUD at :4445/admin/clients
+  - ~6MB RAM, 50MB image, < 1s cold start
+
+Sharp corners found:
+  - podman requires docker.io/oryd/hydra:v2 (not oryd/hydra:v2)
+  - Migrations must run before serve (even in --dev)
+  - Introspection requires proper config (not default dev mode)
+  - Postgres must be reachable on same network (--network host for local)
+"""
+command = """
+podman run -d --name b00t-postgres-hydra \
+  -e POSTGRES_USER=hydra -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=hydra \
+  -p 5432:5432 postgres:15 && \
+podman run --rm --network host \
+  -e DSN='postgres://hydra:secret@127.0.0.1:5432/hydra?sslmode=disable' \
+  -e URLS_SELF_ISSUER=http://127.0.0.1:4444 \
+  -e SECRETS_SYSTEM=test-secret-32-bytes-long-xxx \
+  oryd/hydra:v2 serve all --dev
+"""
+
+[[plan.steps]]
+order = 3
+name = "scope-mapping"
+description = "Map b00t ClassPermission → Hydra OAuth scopes in ACL middleware"
+status = "pending"
+
+[[plan.steps]]
+order = 4
+name = "replace-minimal-oauth"
+description = "Swap oauth_minimal.rs → Hydra proxy in b00t-mcp"
+status = "pending"
+depends_on = [2, 3]
+
+[[plan.steps]]
+order = 5
+name = "hydra-mcp-tools"
+description = "Expose Hydra admin API as MCP tools via proxy"
+status = "pending"
+depends_on = [4]
+
+# ── Quickstart (after integration) ───────────────────────────────────────────
+
+[quickstart]
+description = "Full b00t + Hydra auth stack in 3 commands"
+commands = """
+  # 1. Start Hydra (SkillExecutor spawns on demand)
+  b00t-mcp --http --port 5273 --llm --oauth hydra
+
+  # 2. Create an API key with ontology-scoped permissions
+  b00t server key create --consumer rust-doc \
+    --access b00t:EmbeddingModel:execute \
+    --access b00t:ChatModel:execute
+
+  # 3. Use the key — Hydra validates, b00t ACL checks permissions
+  curl :5273/v1/chat/completions \
+    -H "Authorization: Bearer b00t-sk-..."
+"""
+
+# b00t:map v1
+# summary: Ory Hydra → b00t integration analysis — OAuth 2.1 replacement + scope mapping
+# tags: hydra, oauth2, integration, acl, security, analysis
+# tier: ch0nky
+# cmds: podman run oryd/hydra:v2 serve all --dev
+# complexity: 7

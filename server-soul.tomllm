@@ -8,23 +8,32 @@
 # complexity: 2
 #
 [soul]
-hostname = "fung1"
+hostname = "LappyX23"
 blessings = ["rust-doc"]
-
-[[backends.local]]
-name = "ollama"
-port = 11434
-kind = "openai-compat"
-enabled = true
 
 [[backends.local]]
 name = "mistralrs"
 port = 8181
 kind = "openai-compat"
-enabled = false
+enabled = true
+
+[[backends.local]]
+name = "llama-cpp"
+port = 8080
+kind = "openai-compat"
+enabled = true
 
 [[backends.local]]
 name = "vllm"
-port = 8001
+port = 8000
 kind = "openai-compat"
 enabled = true
+
+[[backends.remote]]
+name = "openai"
+key_env = "OPENAI_API_KEY"
+
+[[backends.remote]]
+name = "openrouter"
+key_env = "OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
