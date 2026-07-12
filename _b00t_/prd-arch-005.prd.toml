@@ -1,0 +1,52 @@
+# PRD-ARCH-005 — MBSE Visualization Requirements
+# Catalog: PRD.ARCH.005.MBSE-VISUALIZATION
+# Status: draft
+
+[b00t]
+name = "PRD-ARCH-005"
+type = "prd"
+hint = "Isometric model-based systems engineering visualization requirements"
+
+[prd]
+catalog = "PRD.ARCH.005"
+title = "MBSE Visualization"
+summary = "Requirements for isometric model-based systems engineering visualization with kasuari constraint solving and UFO ontological grounding. Replaces Mermaid v11 fragility with deterministic 2:1 dimetric projection."
+ufo_stereotype = "endurant"
+domain = "architecture"
+status = "draft"
+
+[prd.required]
+overview = """
+The b00t-admin isometric visualization engine MUST provide:
+- Deterministic 2:1 dimetric projection of datum entanglement graphs
+- Kasuari Cassowary constraint-based layout with topological layer assignment
+- 18 role categories with unique polygon shapes per role
+- Docker/K8s/HiveProfile/Agent/Cli/Mcp node types with visual differentiation
+- Depth classification (surface/extended/historical) with opacity tiers
+- Interactive pan/zoom/click/highlight/keyboard navigation
+"""
+
+acceptance_criteria = """
+1. Tax-Lawyer demo renders in <200ms with correct depth classification
+2. All 6 determinism snapshot tests pass (10 renders identical)
+3. Connected-component container grouping handles >40 node graphs
+4. Hide orphans reduces 339 nodes to 158 connected components
+5. Depth tiers visually distinguishable (surface=1.0, extended=0.5, historical=0.2)
+"""
+
+[prd.optional]
+dependencies = """
+- kasuari v0.4.12 (Cassowary constraint solver)
+- mermaid-rs-renderer v0.3 (Mermaid→SVG rendering)
+- b00t-l3dg3rr-viz isometric engine
+"""
+
+risks = """
+- Cassowary non-determinism when WEAK constraints conflict with STRONG spacing
+  (mitigated: REQUIRED first-node anchor + REQUIRED intra-layer spacing)
+- wasm-opt fails on b00t-isometric-wasm binary (parse exception)
+  (mitigated: skip wasm-opt, serve unoptimized binary)
+"""
+
+references = "PRD-ARCH-004, PRD-ARCH-006, PRD-ARCH-013, b00t-l3dg3rr-viz"
+author = "b00t-hive"

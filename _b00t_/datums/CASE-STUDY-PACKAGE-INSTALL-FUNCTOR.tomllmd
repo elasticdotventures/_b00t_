@@ -1,0 +1,126 @@
+# Case Study: Package Install Functor
+
+[b00t]
+name = "case-study-package-install-functor"
+type = "datum"
+hint = "How mold collapsed repeated multi-OS install shell into install = { package = \"mold\" }"
+tags = ["case-study", "datum", "install", "functor", "package-manager", "mold", "context-saving"]
+
+[case]
+problem = "CLI datums repeated the same package-manager boilerplate: check binary, detect apt/dnf/pacman/brew, install package, fail if unsupported."
+trigger = "The mold datum needed `b00t install mold` to work and exposed that the install recipe was mostly generic operating-system selection, not mold-specific knowledge."
+insight = "The package name selector is a functor: it maps one semantic intent, install package P, into host-specific commands while preserving a common interface."
+operator_read = "This was a surgical prune: delete repeated shell, retain behavior, move the invariant into one typed interpreter."
+
+[before]
+shape = "install = ''' shell script with apt-get/dnf/pacman/brew branches '''"
+cost = "Every CLI datum paid the same token and maintenance cost. Each copy could drift, miss a package manager, or handle idempotency differently."
+
+[after]
+shape = 'install = { package = "mold" }'
+runtime = "b00t expands the structured InstallSpec into an idempotent shell script at execution time."
+command = "b00t install mold"
+
+[pattern]
+minimal = 'install = { package = "<package>" }'
+with_binary_override = 'install = { package = "fd", binary = "fdfind", apt = "fd-find" }'
+supported_package_managers = ["apt-get", "dnf", "pacman", "brew"]
+idempotency = "Generated installer checks `command -v <binary>` before invoking a package manager."
+fallback = "Generated installer exits 127 with a clear unsupported-package-manager message."
+
+[generalized_idiom]
+name = "intent functor"
+definition = "Replace repeated imperative boilerplate with a tiny declarative intent value plus one shared interpreter."
+shape = 'field = { functor = "kind", args... }'
+test = "If two datums differ only by package names, binary names, repo coordinates, or version pins, they likely want a functor."
+payoff = "Smaller datums, fewer divergent install scripts, lower agent context cost, and one test surface for repeated behavior."
+
+[generalized_idiom.steps]
+step_1 = "Find repeated script structure across datums."
+step_2 = "Separate invariant control flow from per-tool parameters."
+step_3 = "Represent only the parameters in TOML."
+step_4 = "Move control flow into typed Rust expansion."
+step_5 = "Add one regression test for expansion and convert one datum as proof."
+step_6 = "Convert similar datums only after the proof case passes."
+
+[functor_candidates.package]
+shape = 'install = { package = "socat" }'
+best_for = "Host package-manager tools already present in apt/dnf/pacman/brew."
+candidate_datums = ["socat.cli", "grep.cli -> ripgrep with apt override", "k9s.cli", "k3d.cli", "stern.cli", "kapp.cli", "kubectx.cli"]
+notes = "Use package-manager overrides when binary/package names differ, e.g. binary=fdfind apt=fd-find."
+
+[functor_candidates.npm_global]
+shape = 'install = { npm_global = "@google/gemini-cli", binary = "gemini" }'
+best_for = "Node CLIs installed with npm/bun/pnpm global semantics."
+candidate_datums = ["geminicli.cli", "pi-coding-agent.cli", "pi.agent", "claude.cli base install before hook step", "ccometixline.cli"]
+proof_datums = ["geminicli.cli"]
+notes = "Claude remains partly custom because it has a post-install hook. That suggests composing functors with post_install later."
+
+[functor_candidates.cargo]
+shape = 'install = { cargo = "eureka" }'
+best_for = "Rust CLIs installed from crates.io with cargo install."
+candidate_datums = ["eureka.cli", "mistralrs.cli", "git-cliff", "WRKFLW datum"]
+proof_datums = ["eureka.cli"]
+notes = "Most also want update = same command with --force; the functor can generate both install and update."
+
+[functor_candidates.go]
+shape = 'install = { go = "github.com/go-task/task/v3/cmd/task@latest", binary = "task" }'
+best_for = "Go CLIs installed with go install module@version."
+candidate_datums = ["task.cli", "podman-mcp-server.mcp", "quadctl.cli"]
+proof_datums = ["podman-mcp-server.mcp"]
+notes = "This can prune long verify/PATH scripts into one Go module coordinate plus binary name."
+
+[functor_candidates.uv_tool]
+shape = 'install = { uv_tool = "fastmcp" }'
+best_for = "Python command-line tools installed with uv tool install."
+candidate_datums = ["fastmcp.cli", "crawl4ai.cli", "huggingface.cli when installed as a tool"]
+proof_datums = ["fastmcp.cli"]
+notes = "Separate from uv pip package installs because tool shims and project environments have different semantics."
+
+[functor_candidates.uv_pip]
+shape = 'install = { uv_pip = "metaflow", import = "metaflow" }'
+best_for = "Python libraries where validation is import-based rather than binary-based."
+candidate_datums = ["metaflow.cli", "hf.cli", "vllm.cli", "embed-anything.cli", "azure-ai-foundry.cli", "crewai.ai"]
+notes = "Needs environment policy: project venv vs user/site vs b00t-managed venv. Do not hide that choice."
+
+[functor_candidates.remote_script]
+shape = 'install = { remote_script = "https://...", shell = "bash" }'
+best_for = "Installer scripts fetched from project-owned release endpoints."
+candidate_datums = ["b00t.cli", "sonar.cli", "just.cli", "rustc.cli", "uv.cli"]
+notes = "Higher risk. Should encode checksum/signature policy before broad use."
+
+[why_it_saves_context]
+line_1 = "The datum now stores intent, not host boilerplate."
+line_2 = "The package-manager decision tree lives in one Rust implementation, so future fixes benefit all datums."
+line_3 = "Agents can infer the complete behavior from one compact field instead of reading a custom shell script."
+line_4 = "Tests verify the expansion once, rather than relying on each datum to duplicate it correctly."
+line_5 = "This turns repeated shell into a named domain concept agents can learn and reuse."
+
+[implementation]
+datum = "_b00t_/mold.cli.toml"
+types = "b00t-cli/src/lib.rs: InstallSpec::Package(PackageInstallSpec)"
+executor = "b00t-cli/src/commands/install.rs uses install_command_string()"
+tests = [
+  "package_install_spec_generates_multi_os_installer",
+  "package_install_spec_supports_package_manager_overrides",
+  "tool_install_spec_generates_cargo_installer",
+  "tool_install_spec_generates_go_installer",
+  "tool_install_spec_generates_npm_global_installer",
+  "tool_install_spec_generates_uv_tool_installer",
+]
+
+[limits]
+limit_1 = "This pattern is for package-manager-native CLI tools."
+limit_2 = "Tools that need custom repositories, signature setup, postinstall config, or source builds should keep a string install script or grow a more specific functor."
+limit_3 = "Different package names are supported through per-manager overrides, but different install semantics should not be hidden inside package names."
+limit_4 = "Functor conversion is not a license to erase important operational choices. If environment, auth, trust, or GPU selection matters, model it explicitly."
+
+[operator_notes]
+note = "🤓 Treat this as the preferred rung before writing install shell: if the install is just package selection, use the package functor."
+
+# b00t:map v1
+# summary: case study — mold install datum became package-install functor to save context and remove boilerplate
+# tags: case-study, install, datum, package-manager, functor, mold, context-saving
+# tier: ch0nky
+# cmds: b00t install mold, b00t datum show mold.cli
+# complexity: 4

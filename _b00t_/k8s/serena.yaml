@@ -1,0 +1,43 @@
+# serena — LSP semantic retrieval + symbolic patching MCP (c0re)
+# ⚠️ EXPERIMENTAL: upstream Docker support is experimental (vendor/serena/DOCKER.md);
+#    image is locally built. On single-node k8s with containerd:
+#      podman build -t serena:latest vendor/serena/
+#      podman save serena:latest | sudo k0s ctr -n k8s.io images import -
+#    then: kubectl apply -f _b00t_/k8s/serena.yaml
+# MCP stdio bridges via: kubectl exec -i -n b00t-serena deploy/serena -- serena start-mcp-server ...
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: b00t-serena   # 🤓 b00t- prefix law for all b00t namespaces
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serena
+  namespace: b00t-serena
+  labels: { app: serena, b00t/tier: sm0l }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: serena }
+  template:
+    metadata:
+      labels: { app: serena }
+    spec:
+      containers:
+        - name: serena
+          image: localhost/serena:latest
+          imagePullPolicy: Never   # locally imported image
+          # long-lived keepalive; MCP sessions arrive via kubectl exec -i
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - { name: workspace, mountPath: /workspace }
+            - { name: serena-config, mountPath: /workspaces/serena/config }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "3", memory: 5Gi }
+      volumes:
+        - name: workspace
+          hostPath: { path: /home/brianh/.b00t, type: Directory }
+        - name: serena-config
+          hostPath: { path: /home/brianh/.b00t/_b00t_/k8s/serena-config, type: DirectoryOrCreate }

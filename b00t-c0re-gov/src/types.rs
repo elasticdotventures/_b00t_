@@ -78,6 +78,20 @@ pub struct ScoreCard {
     pub risk: f64,     // Risk level (lower risk = higher score)
 }
 
+impl GateResult {
+    pub fn is_allowed(&self) -> bool {
+        matches!(self, GateResult::Allow)
+    }
+
+    pub fn is_denied(&self) -> bool {
+        matches!(self, GateResult::Deny { .. })
+    }
+
+    pub fn is_hook(&self) -> bool {
+        matches!(self, GateResult::Hook(_))
+    }
+}
+
 impl ScoreCard {
     pub fn new(roi: f64, cost: f64, time: f64, accuracy: f64, utility: f64, risk: f64) -> Self {
         Self {

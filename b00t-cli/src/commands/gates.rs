@@ -4,6 +4,20 @@ use clap::Parser;
 #[derive(Parser)]
 pub enum GatesCommands {
     #[clap(
+        about = "Evaluate a proposed action through the Eisenhower/ZellijGate governance check",
+        long_about = "Run an action string through ZellijGate::check (Eisenhower routing matrix).\n\nReturns Allow, Deny, or Hook(token) + audit log entry.\nSurfaces eisenhower_enabled datum flags as live evaluation.\n\nExamples:\n  b00t gates eval 'deploy to prod'\n  b00t gates eval 'run expensive finetune' --urgent --important\n  b00t gates eval 'cleanup tmp files' --json"
+    )]
+    Eval {
+        #[clap(help = "Action string to evaluate through the governance gate")]
+        action: String,
+        #[clap(long, help = "Mark action as urgent (Eisenhower matrix input)")]
+        urgent: bool,
+        #[clap(long, help = "Mark action as important (Eisenhower matrix input)")]
+        important: bool,
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+    },
+    #[clap(
         about = "List all [[b00t.gate]] declarations across MCP datums",
         long_about = "Scan all .mcp.toml/.mcp.tomllm/.mcp.tomllmd files and show their gate preconditions, both explicit ([[b00t.gate]]) and auto-derived (requires, env).\n\nExamples:\n  b00t gates list\n  b00t gates list --search github\n  b00t gates list --by-kind env\n  b00t gates list --json"
     )]
@@ -20,6 +34,51 @@ pub enum GatesCommands {
 impl GatesCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
+            GatesCommands::Eval { action, urgent, important, json: as_json } => {
+                use b00t_c0re_gov::{ZellijGate, traits::{GovernanceGate, GateCheckContext}};
+                use b00t_c0re_gov::types::GateResult;
+
+                let gate = ZellijGate::new("b00t-gates-eval");
+                let ctx = GateCheckContext {
+                    agent_id: "b00t-cli".into(),
+                    task: action.clone(),
+                    action: action.clone(),
+                    metadata: serde_json::json!({
+                        "urgent": urgent,
+                        "important": important,
+                    }),
+                };
+
+                // ZellijGate::check is async; we're inside #[tokio::main] so
+                // Runtime::new() would panic — use block_in_place instead.
+                let result = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(gate.check(action, &ctx))
+                });
+
+                let (verdict, detail) = match &result {
+                    GateResult::Allow => ("Allow", "action permitted".to_string()),
+                    GateResult::Deny { reason, .. } => ("Deny", reason.clone()),
+                    GateResult::Hook(token) => ("Hook", format!("hook_id={} type={:?}", token.id, token.hook_type)),
+                };
+
+                if *as_json {
+                    println!("{}", serde_json::json!({
+                        "action": action,
+                        "urgent": urgent,
+                        "important": important,
+                        "verdict": verdict,
+                        "detail": detail,
+                    }));
+                } else {
+                    println!("{verdict}: {detail}");
+                    println!("  action: {action} [urgent={urgent} important={important}]");
+                }
+
+                if matches!(result, GateResult::Deny { .. }) {
+                    anyhow::bail!("Gate denied: {detail}");
+                }
+                Ok(())
+            }
             GatesCommands::List { search, by_kind, json: as_json } => {
                 let all = crate::list_gates(path, search.as_deref())?;
 

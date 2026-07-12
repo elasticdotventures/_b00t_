@@ -3,6 +3,8 @@ name = "openai"
 type = "ai"
 hint = "OpenAI GPT models via official API"
 
+entangled_cli = ["b00t.cli"]
+
 [models.gpt-4-turbo]
 capabilities = "text,chat,vision,json"
 context_length = 128000

@@ -1,0 +1,36 @@
+# b00t datum: sccache — shared compiler cache for Rust/C build acceleration
+# type: cli
+# Installed via cargo, wraps rustc to cache compiled artifacts across rebuilds.
+
+[b00t]
+name = "sccache"
+type = "cli"
+hint = "Shared compilation cache — wraps rustc/gcc to cache .o artifacts across rebuilds"
+desires = "latest"
+
+[version]
+cmd = "sccache --version"
+regex = "(\\d+\\.\\d+\\.\\d+)"
+
+[install]
+command = "cargo install sccache --locked"
+
+[validate]
+command = "sccache --version"
+regex = "sccache"
+
+[[b00t.usage]]
+description = "Verify sccache is active for Rust builds"
+command = "sccache --show-stats"
+
+[[b00t.usage]]
+description = "Enable sccache for cargo (add to ~/.cargo/config.toml)"
+command = "mkdir -p ~/.cargo && echo '[build]' >> ~/.cargo/config.toml && echo 'rustc-wrapper = \"sccache\"' >> ~/.cargo/config.toml"
+
+[[b00t.usage]]
+description = "Clear sccache cache"
+command = "sccache --clear"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator"]

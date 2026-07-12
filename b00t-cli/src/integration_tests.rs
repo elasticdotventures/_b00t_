@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod integration_tests {
-    use b00t_cli::McpListFilter;
-    use crate::{UnifiedConfig, get_mcp_config, mcp_add_json};
+    use crate::{get_mcp_config, mcp_add_json, UnifiedConfig};
     use b00t_cli::datum_mcp::McpDatum;
+    use b00t_cli::McpListFilter;
     use serde_json::Value;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
@@ -182,6 +182,7 @@ baz = "learn/baz.md"
         assert!(topics.contains(&"baz".to_string()));
     }
 
+    #[test]
     fn test_mcp_add_with_dwiw() {
         let temp_dir = setup_temp_dir();
         let temp_path = temp_dir.path().to_str().unwrap();
@@ -250,7 +251,14 @@ baz = "learn/baz.md"
         let temp_path = temp_dir.path().to_str().unwrap();
 
         // mcp_list should not error on empty directory
-        let result = crate::mcp_list(temp_path, false, McpListFilter { bypass_threshold: true, ..Default::default() });
+        let result = crate::mcp_list(
+            temp_path,
+            false,
+            McpListFilter {
+                bypass_threshold: true,
+                ..Default::default()
+            },
+        );
         assert!(result.is_ok());
     }
 
@@ -268,10 +276,24 @@ baz = "learn/baz.md"
         mcp_add_json(json2, false, temp_path).unwrap();
 
         // List should work without error (both text and JSON)
-        let result = crate::mcp_list(temp_path, false, McpListFilter { bypass_threshold: true, ..Default::default() });
+        let result = crate::mcp_list(
+            temp_path,
+            false,
+            McpListFilter {
+                bypass_threshold: true,
+                ..Default::default()
+            },
+        );
         assert!(result.is_ok());
 
-        let result_json = crate::mcp_list(temp_path, true, McpListFilter { bypass_threshold: true, ..Default::default() });
+        let result_json = crate::mcp_list(
+            temp_path,
+            true,
+            McpListFilter {
+                bypass_threshold: true,
+                ..Default::default()
+            },
+        );
         assert!(result_json.is_ok());
     }
 

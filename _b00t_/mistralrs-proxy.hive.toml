@@ -3,7 +3,7 @@
 # Provides unified OpenAI-compatible API at :1234; routes by model alias:
 #   "frontier" → Anthropic/OpenAI cloud
 #   "ch0nky"   → local Gemma 4 at :8001 (inference-gemma4 hive profile)
-#   "sm0l"     → Qwen2.5-3B or Haiku
+#   "sm0l"     → Qwen3.6-35B-A3B or Haiku (qwen2.5 sunset 2026-07-07)
 # 🤓 2026-04-10: CLI syntax updated to `mistralrs serve ... text -m ...`, but
 #    current Candle backend still cannot load Gemma4 MXFP4_MOE.gguf
 #    (`unknown dtype for tensor 39`). Keep direct vLLM :8001 as the working path.
@@ -15,6 +15,7 @@
 name = "mistralrs-proxy"
 type = "hive_profile"
 hint = "liter-llm/mistralrs-proxy gateway at :1234 — soup-of-the-day routing, cost accounting, no static .service"
+depends_on = ["mistralrs.cli", "ollama.ai"]
 
 [b00t.hive.resources]
 ram_gb = 1

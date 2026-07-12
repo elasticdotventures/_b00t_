@@ -365,7 +365,12 @@ async fn handle_workers(json: bool) -> Result<()> {
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
-    let agents = coordinator.discover_agents().await?;
+    let mut agents = coordinator.discover_agents().await?;
+
+    // Kaizen: Redis empty → surface locally-defined agents.
+    if agents.is_empty() {
+        agents = discover_local_agents();
+    }
 
     if json {
         println!("{}", serde_json::to_string_pretty(&agents)?);
@@ -385,6 +390,93 @@ async fn handle_workers(json: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Fallback agent discovery from the local filesystem when the Redis-backed
+/// registry is unavailable (no broker, or no agents registered).
+///
+/// Scans `_b00t_/*.agent.toml` in the current dir and `~/.b00t/_b00t_/*.agent.toml`,
+/// parsing each `[b00t]`/`[b00t.agent]` table into an `AgentMetadata`. This makes
+/// `b00t agent discover` useful offline instead of silently returning zero agents.
+fn discover_local_agents() -> Vec<AgentMetadata> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let dirs: Vec<_> = [
+        std::env::current_dir().ok().map(|d| d.join("_b00t_")),
+        dirs::home_dir().map(|d| d.join(".b00t").join("_b00t_")),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|p| p.is_dir())
+    .collect();
+
+    let mut out = Vec::new();
+    for dir in &dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
+            }
+            let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if !file_name.ends_with(".agent.toml") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(value) = toml::from_str::<toml::Value>(&content) else {
+                continue;
+            };
+            let b00t = match value.get("b00t") {
+                Some(v) => v,
+                None => continue,
+            };
+            let agent_id = b00t
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or(file_name)
+                .to_string();
+            let agent_tbl = b00t.get("agent");
+            let agent_role = agent_tbl
+                .and_then(|a| a.get("role"))
+                .and_then(|r| r.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let capabilities = agent_tbl
+                .and_then(|a| a.get("skills"))
+                .and_then(|s| s.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let crew = agent_tbl
+                .and_then(|a| a.get("crew"))
+                .and_then(|c| c.get("role"))
+                .and_then(|r| r.as_str())
+                .map(|s| s.to_string());
+
+            out.push(AgentMetadata {
+                agent_id,
+                agent_role,
+                capabilities,
+                crew,
+                status: AgentStatus::Online,
+                last_seen: now,
+                load: 0.0,
+                specializations: HashMap::new(),
+                subtype: Default::default(),
+            });
+        }
+    }
+    out
 }
 
 async fn handle_discover(
@@ -410,6 +502,19 @@ async fn handle_discover(
 
     let coordinator = AgentCoordinator::new(redis, metadata);
     let mut agents = coordinator.discover_agents().await?;
+    let from_redis = !agents.is_empty();
+
+    // Kaizen: Redis registry empty/unavailable → fall back to locally-defined
+    // agents so `discover` is useful offline instead of returning zero.
+    if agents.is_empty() {
+        agents = discover_local_agents();
+        if !agents.is_empty() {
+            eprintln!(
+                "⚠️  Redis agent registry empty/unavailable — discovered {} local agent(s) from _b00t_/*.agent.toml",
+                agents.len()
+            );
+        }
+    }
 
     // Apply filters
     if let Some(role_filter) = role {
@@ -432,7 +537,8 @@ async fn handle_discover(
     if json {
         println!("{}", serde_json::to_string_pretty(&agents)?);
     } else {
-        println!("📡 Discovered {} agents:\n", agents.len());
+        let source = if from_redis { "" } else { "local " };
+        println!("📡 Discovered {} {}agent(s):\n", agents.len(), source);
         for agent in agents {
             let subtype_label = if agent.subtype.is_known() {
                 format!(" [{}]", agent.subtype.label())
@@ -677,11 +783,28 @@ async fn handle_capability(capabilities: &str, description: &str, urgency_str: &
     println!("Task: {}", description);
 
     let agents = coordinator
-        .request_capability(required_caps, description, urgency)
+        .request_capability(required_caps.clone(), description, urgency)
         .await?;
 
     if agents.is_empty() {
-        println!("No agents responded (Redis may be unavailable)");
+        // Kaizen: Redis unavailable → fall back to locally-defined agents.
+        let local = discover_local_agents();
+        let matched: Vec<_> = local
+            .iter()
+            .filter(|a| {
+                required_caps
+                    .iter()
+                    .all(|c| a.capabilities.contains(c))
+            })
+            .collect();
+        if matched.is_empty() {
+            println!("No agents responded (Redis may be unavailable; no local match)");
+        } else {
+            println!("Capable local agents found: {}", matched.len());
+            for a in &matched {
+                println!("  {} - {:?}", a.agent_id, a.capabilities);
+            }
+        }
     } else {
         println!("Capable agents found: {}", agents.len());
         for (agent_id, skills) in &agents {

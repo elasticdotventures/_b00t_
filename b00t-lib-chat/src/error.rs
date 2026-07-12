@@ -32,6 +32,10 @@ pub enum ChatError {
     /// Generic error for miscellaneous cases.
     #[error("{0}")]
     Other(String),
+
+    /// Underlying NATS client failure.
+    #[error("nats error: {0}")]
+    Nats(String),
 }
 
 /// Convenience result type used across the chat crate.
@@ -41,5 +45,14 @@ impl ChatError {
     /// Build an [`ChatError::Other`] from any displayable value.
     pub fn other(msg: impl Into<String>) -> Self {
         ChatError::Other(msg.into())
+    }
+}
+
+impl<E> From<async_nats::error::Error<E>> for ChatError
+where
+    E: std::fmt::Debug + Clone + PartialEq + std::fmt::Display,
+{
+    fn from(e: async_nats::error::Error<E>) -> Self {
+        ChatError::Nats(format!("{e:?}"))
     }
 }

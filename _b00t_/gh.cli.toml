@@ -1,5 +1,6 @@
 [b00t]
 name = "gh"
+trigger_words = ["github", "issue", "pr", "repo", "backlog"]
 type = "cli"
 desires = "latest"
 install = "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y"
@@ -8,7 +9,7 @@ version_regex = '(\\d+\\.\\d+\\.\\d+)'
 hint = "GitHub CLI — authenticated git, PR, issue, and repo operations"
 unlocks = ["gh *", "gh-*"]
 lfmf_category = "gh-cli"
-depends_on = ["git"]
+depends_on = [["github-backlog-pull.job"], "git"]
 
 # ── Abstract interfaces for GitHub operations ───────────────────────────
 # Priority: github_mcp (when MCP server running) → gh_cli (default) → curl_rest (fallback)

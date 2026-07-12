@@ -51,10 +51,9 @@ command = """# Use HF MCP search-models tool:
 
 [[b00t.usage]]
 description = "Find vLLM-compatible quantized code models (AWQ, GPTQ)"
-hint = """search-models: query="qwen2.5 coder AWQ", tags=["awq"]
-           → Qwen/Qwen2.5-Coder-7B-Instruct-AWQ (fits in 24GB, no patches)
-           → TheBloke/Qwen2.5-Coder-14B-Instruct-AWQ (14B AWQ ~10GB)
-           → Qwen/Qwen2.5-Coder-32B-Instruct-AWQ (32B AWQ ~20GB, fits in 24GB)"""
+hint = """search-models: query="qwen3.6 AWQ", tags=["awq"]
+           → unsloth/Qwen3.6-27B-GGUF (Q4_K_M ~16GB, dense, fits in 24GB)
+           → unsloth/Qwen3.6-35B-A3B-GGUF (IQ4_XS ~17GB, MoE 3B-active)"""
 
 # b00t:map v1
 # summary: HuggingFace Hub MCP server — model/dataset/space/paper search via SSE

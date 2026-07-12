@@ -1,0 +1,58 @@
+[b00t]
+name = "specialist"
+trigger_words = ["implement", "refactor", "debug", "build", "delegate", "sm0l", "ch0nky"]
+type = "role"
+hint = "Hive specialist role: sm0l-tier subagent with delegate skill, CMDB hygiene, 🍰 cake accrual"
+
+depends_on = ["playbook.skill", "delegate.skill", "opencode.agent", "b00t.cli", "git.cli", "just.cli", "bash.cli", "cargo.cli"]
+
+skills = [
+    "delegate",
+    "code",
+    "refactor",
+    "debug",
+    "edit",
+    "bash",
+    "read",
+    "write",
+    "grep",
+    "glob",
+    "task",
+    "datum",
+    "mece",
+]
+
+compliance = [
+    "Always delegate sub-tasks via b00t agent delegate",
+    "Update CMDB datums, never work directly with system files",
+    "Route sm0l tasks to qwen36-local/sm0l, ch0nky to qwen36-local/ch0nky",
+    "Accrue 🍰 cake via CMDB hygiene: datum writes, task updates, just recipes",
+    "Log delegation evidence to .b00t/delegation-evidence.jsonl",
+    "Use podman kube play, not systemctl",
+]
+
+[b00t.role.models]
+sm0l = { provider = "qwen36-local", model = "sm0l", endpoint = "http://127.0.0.1:8001/v1", tier = "sm0l", context = 32768 }
+ch0nky = { provider = "qwen36-local", model = "ch0nky", endpoint = "http://127.0.0.1:8001/v1", tier = "ch0nky", context = 32768 }
+
+[b00t.role.agents]
+opencode = { path = "_b00t_/opencode.agent.toml", tier = "sm0l", supports = ["code", "refactor", "debug", "edit", "bash"] }
+pi = { path = "_b00t_/pi.agent.toml", tier = "ch0nky", supports = ["code", "refactor", "debug", "edit", "bash"] }
+
+[b00t.role.session]
+# 🤓 Session state is durable across reloads — stored in .b00t/session.json
+state_file = ".b00t/session.json"
+autoload_skills = ["delegate"]
+autoload_roles = ["specialist"]
+
+[b00t.role.cake]
+# 🤓 🍰 earned per session for CMDB hygiene, delegate usage, just recipes
+enabled = true
+balance_file = ".b00t/cake-balance.jsonl"
+
+# b00t:map v1
+# summary: Specialist role — sm0l-tier subagent with delegate skill, CMDB hygiene, 🍰 cake accrual
+# tags: specialist, role, delegate, sm0l, ch0nky, cake, cmdb, hygiene
+# tier: sm0l
+# cmds: b00t whoami --role=specialist --with-skills, b00t-cli agent invoke opencode "task" --role specialist
+# complexity: 5

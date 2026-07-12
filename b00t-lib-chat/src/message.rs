@@ -41,3 +41,115 @@ impl ChatMessage {
         self
     }
 }
+
+pub const NOTIFY_SUBJECT_PREFIX: &str = "b00t.notify";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationMessage {
+    pub source: String,
+    pub event_type: String,
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub payload: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
+    pub timestamp: DateTime<Utc>,
+}
+
+impl NotificationMessage {
+    pub fn new(source: impl Into<String>, event_type: impl Into<String>, payload: serde_json::Value) -> Self {
+        Self {
+            source: source.into(),
+            event_type: event_type.into(),
+            payload,
+            correlation_id: None,
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn with_correlation(mut self, id: impl Into<String>) -> Self {
+        self.correlation_id = Some(id.into());
+        self
+    }
+
+    pub fn subject(&self) -> String {
+        format!("{}.{}.{}", NOTIFY_SUBJECT_PREFIX, self.source, self.event_type)
+    }
+
+    pub fn wildcard_subject() -> &'static str {
+        "b00t.notify.>"
+    }
+
+    pub fn source_wildcard(source: &str) -> String {
+        format!("{}.{}.>", NOTIFY_SUBJECT_PREFIX, source)
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+
+    #[test]
+    fn test_notification_subject_convention() {
+        let n = NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
+        assert_eq!(n.subject(), "b00t.notify.gmail.new_email");
+    }
+
+    #[test]
+    fn test_notification_source_wildcard() {
+        assert_eq!(NotificationMessage::source_wildcard("gmail"), "b00t.notify.gmail.>");
+    }
+
+    #[test]
+    fn test_notification_json_roundtrip() {
+        let n = NotificationMessage::new("slack", "new_message", serde_json::json!({"channel": "#dev"}));
+        let json = serde_json::to_string(&n).unwrap();
+        let parsed: NotificationMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.source, "slack");
+        assert_eq!(parsed.event_type, "new_message");
+        assert_eq!(parsed.payload["channel"], "#dev");
+    }
+}
+
+/// ACP Task message — agent-to-agent work delegation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskMessage {
+    pub task_id: String,
+    pub action: String,
+    pub payload: serde_json::Value,
+    pub from_agent: String,
+    pub to_agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline: Option<DateTime<Utc>>,
+    #[serde(default = "default_priority")]
+    pub priority: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+fn default_priority() -> String { "normal".to_string() }
+
+impl TaskMessage {
+    pub fn new(
+        action: impl Into<String>,
+        from_agent: impl Into<String>,
+        to_agent: impl Into<String>,
+        payload: serde_json::Value,
+    ) -> Self {
+        Self {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            action: action.into(),
+            payload,
+            from_agent: from_agent.into(),
+            to_agent: to_agent.into(),
+            deadline: None,
+            priority: "normal".to_string(),
+            timestamp: Utc::now(),
+        }
+    }
+
+    pub fn with_deadline(mut self, deadline: DateTime<Utc>) -> Self { self.deadline = Some(deadline); self }
+    pub fn with_priority(mut self, p: impl Into<String>) -> Self { self.priority = p.into(); self }
+
+    pub fn subject(&self) -> String { format!("b00t.tasks.{}", self.to_agent) }
+    pub fn broadcast_subject() -> &'static str { "b00t.tasks.*" }
+    pub fn agent_subject(agent_id: &str) -> String { format!("b00t.tasks.{}", agent_id) }
+}

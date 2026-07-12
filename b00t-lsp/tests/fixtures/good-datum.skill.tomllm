@@ -1,0 +1,18 @@
+# A well-formed datum: valid TOML, known type, tail-map present.
+[b00t]
+name = "good-datum"
+type = "skill"
+hint = "fixture skill datum for b00t-lsp tests"
+depends_on = ["dep-a", "dep-b.cli"]
+composes_with = [
+    "dep-a",
+]
+
+[b00t.skill]
+unlocks = ["good-datum::run"]
+
+# b00t:map v1
+# summary: fixture skill datum with dependencies
+# tags: fixture, test, lsp
+# tier: sm0l
+# complexity: 1

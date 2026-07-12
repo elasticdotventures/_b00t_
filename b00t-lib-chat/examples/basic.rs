@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting b00t-chat basic example");
 
     // Use the NATS transport stub so the example runs without extra setup.
-    let client = ChatClient::nats(None)?;
+    let client = ChatClient::nats(None, None, None)?;
 
     let message = ChatMessage::new("mission.example", "basic-demo", "hello from b00t-chat");
     client.send(&message).await?;

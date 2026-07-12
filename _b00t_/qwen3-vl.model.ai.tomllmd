@@ -1,0 +1,113 @@
+# b00t AI Model Datum — Qwen3-VL family (vision-language)
+# Separate from Qwen3-Coder; VL variants support image+video input
+# HF: Qwen/Qwen3-VL-4B-Instruct, Qwen/Qwen3-VL-72B-Instruct
+
+[b00t]
+name    = "qwen3-vl"
+type    = "ai"
+hint    = "Qwen3 vision-language models: image/video + text → text; 4B (local) or 72B (cloud)"
+aliases = ["qwen3-vl", "qwen-vl", "qwen3-vision"]
+
+[model]
+provider       = "openai_compatible"
+size           = "large"
+capabilities   = ["chat", "vision", "image-to-text", "video-understanding", "reasoning", "tool_use"]
+input_modalities  = ["text", "image", "video"]
+output_modalities = ["text"]
+
+# ── Input format support ─────────────────────────────────────────────────────
+# Images: passed as {"type":"image","image":"<url-or-base64>"} in chat message content
+# Videos: passed as {"type":"video","video":"<url-or-path>"}
+[model.input_formats]
+image = [
+    "image/jpeg",      # JPEG — smallest, most compatible
+    "image/png",       # PNG — lossless, supports transparency
+    "image/webp",      # WebP — efficient, HuggingFace default for HF images
+    "image/bmp",       # BMP — uncompressed
+    "image/tiff",      # TIFF — high-res scientific
+    # ⚠️ SVG is NOT directly supported — must rasterize to PNG/JPEG first
+    # 🤓 For mermaid/graphviz SVG: convert via `rsvg-convert -f png | base64`
+    #    or use a headless browser (playwright) to screenshot
+]
+video = [
+    "video/mp4",       # MP4 — most compatible; requires PyAV or Decord backend
+    "video/avi",
+    "video/webm",
+    # 🤓 Video from URL: only PyAV or Decord backends supported (not cv2 URL mode)
+    # 🤓 Pass decoded frames directly (numpy/torch) to avoid URL-only constraint
+]
+text = [
+    "text/plain",
+    "text/markdown",
+    "application/json",
+]
+
+# ── Vector / embedding encoding ──────────────────────────────────────────────
+[model.encoding]
+# 🤓 Qwen3-VL uses a ViT (Vision Transformer) visual encoder — NOT CLIP
+# Visual tokens: variable resolution; each 28×28 pixel patch = 1 token
+# Formula: tokens = ceil(H/28) × ceil(W/28); max ~1280 visual tokens per image
+# SVG workflow for b00t ontology graphs:
+#   1. just viz-entangle <datum> mermaid | mmdc -i /dev/stdin -o /tmp/out.png
+#   2. Base64-encode PNG → pass as {"type":"image","image":"data:image/png;base64,..."}
+#   3. Pair with text description for VL fine-tune training examples
+vision_encoder        = "ViT (internal Qwen3-VL)"
+patch_size_px         = 28
+max_image_tokens      = 1280
+temporal_patch_size   = 2      # for video: 2-frame temporal patches
+max_video_frames      = 768
+position_encoding     = "2D-RoPE (M-RoPE)"   # spatial-aware, not flat sequence
+
+# ── Model variants ───────────────────────────────────────────────────────────
+[[ai_model.variants]]
+id             = "4b-instruct"
+name           = "Qwen3-VL-4B-Instruct"
+hf_repo        = "Qwen/Qwen3-VL-4B-Instruct"
+params_total   = "4B"
+context_window = 32768
+vram_mb        = 10000    # BF16; fits RTX 3090 with flash_attention_2
+runtime        = "transformers"
+use_case       = "local vision tasks, b00t ontology graph inspection"
+
+[[ai_model.variants]]
+id             = "72b-instruct"
+name           = "Qwen3-VL-72B-Instruct"
+hf_repo        = "Qwen/Qwen3-VL-72B-Instruct"
+params_total   = "72B"
+context_window = 32768
+vram_mb        = 144000   # requires multi-GPU or HF Inference
+runtime        = "hf-inference"
+use_case       = "high-quality vision analysis, document understanding"
+
+# ── Usage ───────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Inspect b00t datum ontology graph visually"
+command     = """
+just viz-entangle ai-finetune mermaid | \\
+  mmdc -i /dev/stdin -o /tmp/b00t-graph.png && \\
+  python3 -c "
+import base64, json
+img = base64.b64encode(open('/tmp/b00t-graph.png','rb').read()).decode()
+print(json.dumps({'type':'image','image':f'data:image/png;base64,{img}'}))
+"
+"""
+
+[[b00t.usage]]
+description = "Load 4B VL model for local image analysis"
+command     = """
+python3 -c \"
+from transformers import AutoProcessor, AutoModelForImageTextToText
+import torch
+model = AutoModelForImageTextToText.from_pretrained(
+    'Qwen/Qwen3-VL-4B-Instruct', dtype=torch.bfloat16,
+    attn_implementation='flash_attention_2').cuda()
+processor = AutoProcessor.from_pretrained('Qwen/Qwen3-VL-4B-Instruct')
+\"
+"""
+
+# b00t:map v1
+# summary: Qwen3-VL vision-language models — image/video/text input; ViT encoder; SVG→PNG workflow for b00t graphs
+# tags: qwen3-vl, vision, multimodal, image, video, vit, mermaid, svg, ontology, vlm
+# tier: frontier
+# cmds: just viz-entangle <datum> mermaid | mmdc ... | base64
+# complexity: 5

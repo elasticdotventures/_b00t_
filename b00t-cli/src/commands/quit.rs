@@ -7,7 +7,7 @@
 //!
 //! Known agent process names: claude, opencode, aider, ralph, cursor, copilot
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use clap::Parser;
 
 const AGENT_NAMES: &[&str] = &["claude", "opencode", "aider", "ralph", "cursor"];
@@ -15,8 +15,7 @@ const AGENT_NAMES: &[&str] = &["claude", "opencode", "aider", "ralph", "cursor"]
 /// Optional stop-event callback — set by the governance runtime at startup.
 /// If set, emit_stop() is called before the quit command sends SIGTERM,
 /// allowing registered stop hooks to fire (save state, flush logs, etc.).
-static STOP_CALLBACK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> =
-    std::sync::OnceLock::new();
+static STOP_CALLBACK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
 
 /// Set the stop-event callback so that `b00t quit` emits a stop event
 /// through the governance runtime before terminating the agent.
@@ -87,7 +86,7 @@ pub fn handle_quit(_args: &QuitArgs) -> Result<()> {
 
 /// Resolve the agent PID via env var or process tree walk
 #[cfg(target_os = "linux")]
-fn resolve_agent_pid() -> Result<u32> {
+pub fn resolve_agent_pid() -> Result<u32> {
     // 1. Explicit env var
     if let Ok(s) = std::env::var("B00T_AGENT_PID") {
         if let Ok(pid) = s.trim().parse::<u32>() {
@@ -111,7 +110,7 @@ fn resolve_agent_pid() -> Result<u32> {
 
 /// Walk process tree upward until we find a known agent process name
 #[cfg(target_os = "linux")]
-fn walk_to_agent(start_pid: u32) -> Option<u32> {
+pub fn walk_to_agent(start_pid: u32) -> Option<u32> {
     let mut current = start_pid;
     for _ in 0..16 {
         // max 16 levels
@@ -131,7 +130,7 @@ fn walk_to_agent(start_pid: u32) -> Option<u32> {
 
 /// Read PPID from /proc/<pid>/status
 #[cfg(target_os = "linux")]
-fn get_ppid(pid: u32) -> Result<u32> {
+pub fn get_ppid(pid: u32) -> Result<u32> {
     let path = format!("/proc/{}/status", pid);
     let content =
         std::fs::read_to_string(&path).map_err(|e| anyhow::anyhow!("read {}: {}", path, e))?;
@@ -148,7 +147,7 @@ fn get_ppid(pid: u32) -> Result<u32> {
 
 /// Read process name from /proc/<pid>/comm
 #[cfg(target_os = "linux")]
-fn proc_name(pid: u32) -> Result<String> {
+pub fn proc_name(pid: u32) -> Result<String> {
     let path = format!("/proc/{}/comm", pid);
     Ok(std::fs::read_to_string(&path)?.trim().to_string())
 }
@@ -160,7 +159,7 @@ fn resolve_agent_pid() -> Result<u32> {
 
 /// Thin libc kill wrapper — avoids pulling libc crate as dependency
 #[cfg(target_os = "linux")]
-fn libc_kill(pid: i32, sig: i32) -> i32 {
+pub fn libc_kill(pid: i32, sig: i32) -> i32 {
     use std::os::raw::c_int;
     unsafe extern "C" {
         fn kill(pid: c_int, sig: c_int) -> c_int;

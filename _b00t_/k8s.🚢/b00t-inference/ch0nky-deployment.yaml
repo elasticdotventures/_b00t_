@@ -1,0 +1,123 @@
+---
+# Qwen3.6-35B-A3B UD-IQ4_XS — ch0nky inference endpoint (highest-priority tier)
+# 🤓 Holds an accounted nvidia.com/gpu:1 claim — k8s device-plugin scheduling now
+#    enforces exclusivity against any other GPU-requesting pod on this single-GPU
+#    node, replacing the old runtimeClassName+NVIDIA_VISIBLE_DEVICES bypass (which
+#    gave k8s zero visibility into VRAM usage and allowed silent double-booking).
+#    17.7GB VRAM + ~6GB KV cache headroom at 64k context on RTX 3090 (24GB).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ch0nky
+  namespace: b00t-inference
+  labels:
+    app: ch0nky
+    b00t.tier: ch0nky
+    b00t.io/model: qwen3.6-35b-a3b
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ch0nky
+  template:
+    metadata:
+      labels:
+        app: ch0nky
+        b00t.tier: ch0nky
+    spec:
+      priorityClassName: b00t-gpu-primary
+      runtimeClassName: nvidia
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: ch0nky
+          image: ghcr.io/ggml-org/llama.cpp:server-cuda
+          args:
+            - --model
+            - /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8001"
+            - -ngl
+            - "999"
+            - -fa
+            - "on"
+            - -c
+            - "65536"
+            - -n
+            - "4096"
+            - --jinja
+            - --reasoning-format
+            - deepseek
+            - --reasoning-budget
+            - "4096"
+            - --temp
+            - "0.6"
+            - --top-p
+            - "0.95"
+            - --top-k
+            - "20"
+            - --min-p
+            - "0.00"
+            - --presence-penalty
+            - "0.0"
+            - --alias
+            - ch0nky
+            - --api-key
+            - local-b00t
+          ports:
+            - containerPort: 8001
+              name: http
+          resources:
+            requests:
+              memory: "6Gi"
+              cpu: "2"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "20Gi"
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /home/brianh/.cache/huggingface/hub
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch0nky
+  namespace: b00t-inference
+  labels:
+    app: ch0nky
+    b00t.tier: ch0nky
+spec:
+  selector:
+    app: ch0nky
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+      # nodePort fixed so the address is stable; reachable at <host-ip>:31001 network-wide
+      nodePort: 31001
+  type: NodePort

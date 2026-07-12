@@ -1,0 +1,137 @@
+{
+  "comment": "OpenAI chat-completion response shapes for the verify tool loop (#597). extract: which verify calls are parsed. Postel: arguments may be a JSON-encoded string (spec) or inline object (some servers).",
+  "cases": [
+    {
+      "name": "plain_response_no_calls",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "message": { "role": "assistant", "content": "2+2=4" }
+          }
+        ]
+      },
+      "extracted": []
+    },
+    {
+      "name": "single_verify_call_string_args",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_1",
+                  "type": "function",
+                  "function": {
+                    "name": "verify",
+                    "arguments": "{\"assertion\": \"(declare-const x Int)(assert (= x 42))(check-sat)\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extracted": [
+        { "id": "call_1", "assertion": "(declare-const x Int)(assert (= x 42))(check-sat)" }
+      ]
+    },
+    {
+      "name": "verify_call_object_args_postel",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "id": "call_2",
+                  "type": "function",
+                  "function": {
+                    "name": "verify",
+                    "arguments": { "assertion": "(check-sat)" }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extracted": [ { "id": "call_2", "assertion": "(check-sat)" } ]
+    },
+    {
+      "name": "non_verify_tool_ignored",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "id": "call_3",
+                  "type": "function",
+                  "function": { "name": "get_weather", "arguments": "{\"city\": \"Perth\"}" }
+                },
+                {
+                  "id": "call_4",
+                  "type": "function",
+                  "function": { "name": "verify", "arguments": "{\"assertion\": \"(check-sat)\"}" }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extracted": [ { "id": "call_4", "assertion": "(check-sat)" } ]
+    },
+    {
+      "name": "malformed_arguments_skipped_not_fatal",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "message": {
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "id": "call_5",
+                  "type": "function",
+                  "function": { "name": "verify", "arguments": "not json {{" }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extracted": []
+    },
+    {
+      "name": "stop_despite_tool_calls_field",
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "message": {
+              "role": "assistant",
+              "content": "done",
+              "tool_calls": [
+                {
+                  "id": "call_6",
+                  "type": "function",
+                  "function": { "name": "verify", "arguments": "{\"assertion\": \"(check-sat)\"}" }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extracted": []
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+[b00t]
+name = "ai-worker"
+type = "role"
+hint = "AI fine-tuning agent: QLoRA dataset generation, local k8s training, HF Jobs cloud dispatch, adapter evaluation."
+
+# Inherits worker base + adds AI-specific capabilities
+depends_on = ["worker", "ai-finetune", "hf-cli", "just.cli"]
+
+skills = [
+    "ai-finetune",
+    "datum-authoring",
+    "cognitive-tier-routing",
+    "stateless-scoring",
+]
+
+compliance = [
+    "Always b00t learn ai-finetune before dispatching training tasks",
+    "Check VRAM before local training: nvidia-smi --query-gpu=memory.free",
+    "Use HF Jobs (cloud) for 14B+ models or when sm3lly GPU is contested",
+    "Test every adapter with just ai-finetune::test before promoting",
+    "Save_steps >= 100 on any cloud run (checkpoint to bucket volume)",
+    "Never push adapters to HF Hub without 5/5 probe score",
+    "sm0l output contract: PASS or FAIL:<5-line excerpt>",
+]
+
+# 🤓 HF Jobs failure modes (lfmf: ai-worker-role-hf-jobs)
+[[lfmf]]
+topic = "hf-jobs-scripts-path"
+lesson = "/scripts is non-writable in unsloth container — scripts are at /data (dataset mount)"
+
+[[lfmf]]
+topic = "hf-jobs-output-dir"
+lesson = "HF bucket FUSE mount rejects os.makedirs for subdirs — use output_dir=/tmp/output"
+
+[[lfmf]]
+topic = "unsloth-lora-dropout"
+lesson = "lora_dropout must be 0.0 — any value above 0 disables Unsloth fast kernel (20-30x slower)"
+
+[[lfmf]]
+topic = "unsloth-moe-target-modules"
+lesson = "Unsloth auto-adds ALL 128 expert LoRA regardless of target_modules — attention-only config has ZERO effect on param count. Only lora_r controls step speed: r=16→843M→150s/step, r=4→~210M→~37s/step"
+
+[[lfmf]]
+topic = "hf-jobs-config-hardcoded"
+lesson = "Always verify training scripts read hyperparams from config — hardcoded values silently ignore YAML"
+
+entangled_agents = [
+    "scoring.agent",
+]
+
+entangled_cli = [
+    "b00t.cli",
+    "just.cli",
+    "hf.cli",
+]
+
+entangled_mcp = [
+    "b00t-mcp.mcp",
+    "huggingface.mcp",
+]
+
+keywords = ["role", "ai-worker", "finetune", "qlora", "hf-jobs", "unsloth", "adapter", "training"]
+
+[b00t.agent_hooks]
+events = [
+    "finetune.start",
+    "finetune.complete",
+    "hf-job.submit",
+    "hf-job.complete",
+    "adapter.test",
+    "adapter.promote",
+]
+gates = [
+    "vram-gate",
+    "probe-score-gate",
+    "validate-output-contract",
+]
+validations = [
+    "adapter-smoke-test-5of5",
+    "loss-threshold-check",
+]
+
+[b00t.phygital]
+node_type      = "ai-worker-agent"
+ontology_class = "AIWorkerAgent"
+status_fields  = ["node_id", "state", "active_job", "vram_free_mb", "last_probe_score"]
+state_machine  = ["idle", "generating-dataset", "training-local", "training-cloud", "testing", "promoting", "error"]
+
+# b00t:map v1
+# summary: AI worker role — fine-tuning specialist; auto-loads ai-finetune skill + HF Jobs capability
+# tags: role, ai-worker, finetune, qlora, hf-jobs, training, unsloth, adapter
+# tier: frontier
+# cmds: b00t whoami --role=ai-worker, b00t blessing --manifest --role=ai-worker
+# complexity: 6

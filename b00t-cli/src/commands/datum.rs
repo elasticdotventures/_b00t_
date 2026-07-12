@@ -103,12 +103,6 @@ pub enum DatumCommands {
         limit: usize,
     },
 
-    #[clap(about = "Sync all datums to k8s ConfigMaps in b00t-datums namespace (Part B)")]
-    SyncK8s {
-        #[clap(long, default_value = "b00t-datums", help = "Target k8s namespace")]
-        namespace: String,
-    },
-
     #[clap(about = "Validate a datum TOML file against BootDatum schema")]
     Validate {
         #[clap(help = "Path to .toml file or datum key (e.g., mold.cli)")]
@@ -171,6 +165,20 @@ pub enum DatumCommands {
 
     #[clap(about = "Generate a datum from an artifact via kreuzberg extraction (E3)")]
     FromArtifact(crate::commands::from_artifact::FromArtifactArgs),
+
+    #[clap(
+        about = "Generate wrkflw-ci-build.yml for a GithubActionsCompatible repo (CodeRunnerActionProcess local gate)"
+    )]
+    GenWrkflw {
+        #[clap(
+            help = "Path to repo root (defaults to current directory)",
+            default_value = "."
+        )]
+        repo_path: String,
+
+        #[clap(long, help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing")]
+        write: bool,
+    },
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -241,22 +249,6 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
         }
-        DatumCommands::SyncK8s { namespace } => {
-            use crate::datum_k8s::sync_datums_to_configmap;
-            let b00t_datums_path = format!("{}/datums", path);
-            // sync_datums_to_configmap takes the b00t root path, not datums subdir
-            match sync_datums_to_configmap(path, namespace) {
-                Ok(synced) => {
-                    println!("synced {} datums → k8s namespace {}", synced.len(), namespace);
-                    for name in &synced {
-                        println!("  configmap/{name}");
-                    }
-                    let _ = b00t_datums_path; // unused in this path
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
         DatumCommands::Validate { target, strict } => handle_validate(path, target, *strict),
         DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),
         DatumCommands::Delegate {
@@ -281,6 +273,9 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
         }
         DatumCommands::FromArtifact(args) => {
             crate::commands::from_artifact::handle_from_artifact(args)
+        }
+        DatumCommands::GenWrkflw { repo_path, write } => {
+            handle_gen_wrkflw(repo_path, *write)
         }
     }
 }
@@ -1153,6 +1148,17 @@ fn handle_scaffold(datum_type: &str, name: &str) -> Result<()> {
             println!("# soc         = \"SoC-Model\"");
             println!("# driver_pkg  = \"driver-package\"");
         }
+        DatumType::Repo => {
+            println!("# [b00t.source]");
+            println!("# repo        = \"https://github.com/org/{}\"", name);
+            println!("# vendor_path = \"vendor/{}\"", name);
+            println!();
+            println!("# GithubActionsCompatible — declare CodeRunnerActionProcess providers");
+            println!("# (run `b00t datum gen-wrkflw <path>` to generate wrkflw-ci-build.yml)");
+            println!("[b00t.services.action_runner]");
+            println!("local  = \"wrkflw\"");
+            println!("remote = \"github-actions\"");
+        }
         _ => {
             println!("# TODO: add type-specific fields");
         }
@@ -1365,6 +1371,88 @@ fn handle_call(
             );
         }
         println!("{}", resolved);
+    }
+
+    Ok(())
+}
+
+// ─── gen-wrkflw ──────────────────────────────────────────────────────────────
+
+/// Detect build shape and emit a wrkflw-ci-build.yml (CodeRunnerActionProcess local gate).
+/// Follows the l3dg3rr pattern: workflow_dispatch only, emulation-friendly.
+fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
+    use std::path::Path;
+
+    let root = Path::new(repo_path).canonicalize()
+        .with_context(|| format!("cannot resolve path: {repo_path}"))?;
+
+    let workflows_dir = root.join(".github/workflows");
+    anyhow::ensure!(
+        workflows_dir.exists(),
+        "no .github/workflows/ found at {} — not a GithubActionsCompatible repo",
+        root.display()
+    );
+
+    // Check for existing wrkflw workflow
+    let out_path = workflows_dir.join("wrkflw-ci-build.yml");
+    if out_path.exists() && !write {
+        println!("# wrkflw-ci-build.yml already exists at {}", out_path.display());
+        println!("# Use --write to overwrite.");
+        return Ok(());
+    }
+
+    // Detect build shape
+    let is_rust   = root.join("Cargo.toml").exists();
+    let is_node   = root.join("package.json").exists();
+    let is_python = root.join("pyproject.toml").exists() || root.join("setup.py").exists();
+    let repo_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
+
+    let build_steps = if is_rust {
+        "      - name: Build\n        run: cargo build --workspace\n\n      - name: Test\n        run: cargo test --workspace"
+    } else if is_node {
+        "      - name: Install\n        run: npm ci\n\n      - name: Build\n        run: npm run build\n\n      - name: Test\n        run: npm test"
+    } else if is_python {
+        "      - name: Install\n        run: uv pip install -e .[dev]\n\n      - name: Test\n        run: uv run pytest"
+    } else {
+        "      - name: Build\n        run: echo 'TODO: add build steps'"
+    };
+
+    let header = format!(
+        "# wrkflw-ci-build: local CI gate for {repo_name} (emulation mode, no Docker)\n\
+         # Run with: wrkflw run .github/workflows/wrkflw-ci-build.yml\n\
+         # Or:       just ci-local\n\
+         #\n\
+         # Follows l3dg3rr wrkflw pattern: workflow_dispatch only, emulation-friendly.\n\
+         # GithubActionsCompatible / CodeRunnerActionProcess (see WRKFLW.tomllmd)\n\
+         name: wrkflw-ci-build\n"
+    );
+    let body = concat!(
+        "\non:\n",
+        "  workflow_dispatch:\n",
+        "\nenv:\n",
+        "  CARGO_TERM_COLOR: always\n",
+        "  RUST_BACKTRACE: \"1\"\n",
+        "\ndefaults:\n",
+        "  run:\n",
+        "    shell: bash\n",
+        "\njobs:\n",
+        "  build:\n",
+        "    name: \"Local CI gate\"\n",
+        "    runs-on: ubuntu-latest\n",
+        "    steps:\n",
+        "      - uses: actions/checkout@v4\n\n",
+    );
+    let content = format!("{header}{body}{build_steps}\n");
+
+    if write {
+        std::fs::write(&out_path, &content)
+            .with_context(|| format!("write {}", out_path.display()))?;
+        println!("✓ wrote {}", out_path.display());
+        println!("  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml");
+        println!("  Declare in datum: [b00t.services.action_runner] local = \"wrkflw\"");
+    } else {
+        println!("# Preview — run with --write to create .github/workflows/wrkflw-ci-build.yml");
+        println!("{content}");
     }
 
     Ok(())

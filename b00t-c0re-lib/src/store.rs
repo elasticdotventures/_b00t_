@@ -43,6 +43,76 @@ pub struct StoreManifest {
     pub updated_at: String,
 }
 
+/// 🤓 AL-1.0-inspired influence receipt — per-source contribution ratios.
+///    Maps a source key (store entry, datum, or chunk) to an influence ratio (0.0–1.0).
+///    Sum of all ratios in a session ≈ 1.0 (hard invariant from AL-1.0).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub session_id: String,
+    pub consumer: String,
+    pub total_sources: usize,
+    pub sources: Vec<InfluenceSource>,
+    pub created_at: String,
+    pub invariant_sum: f64, // 🤓 must be ~1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64, // raw similarity/evidence score before normalization
+}
+
+/// Bucket raw scores by source and normalize to influence ratios.
+/// Stores the receipt as a JSON file in the store.
+pub fn put_influence(
+    consumer: &str,
+    scored_sources: &[(String, f64)],
+) -> Result<InfluenceReceipt> {
+    if scored_sources.is_empty() {
+        anyhow::bail!("no sources to attribute");
+    }
+
+    let total: f64 = scored_sources.iter().map(|(_, s)| s.abs()).sum();
+    if total == 0.0 {
+        anyhow::bail!("all scores are zero — cannot normalize");
+    }
+
+    let session_id = format!("influence-{}", uuid::Uuid::new_v4().simple());
+    let mut sources: Vec<InfluenceSource> = scored_sources
+        .iter()
+        .map(|(key, score)| InfluenceSource {
+            source_key: key.clone(),
+            ratio: score.abs() / total,
+            score: *score,
+        })
+        .collect();
+    sources.sort_by(|a, b| b.ratio.partial_cmp(&a.ratio).unwrap_or(std::cmp::Ordering::Equal));
+
+    let invariant_sum: f64 = sources.iter().map(|s| s.ratio).sum();
+
+    let receipt = InfluenceReceipt {
+        session_id,
+        consumer: consumer.to_string(),
+        total_sources: sources.len(),
+        sources,
+        created_at: Utc::now().to_rfc3339(),
+        invariant_sum,
+    };
+
+    let tmp = std::env::temp_dir().join(format!("b00t-influence-{}.json", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, serde_json::to_string_pretty(&receipt)?)?;
+
+    let mut tags = BTreeMap::new();
+    tags.insert("consumer".into(), consumer.to_string());
+    tags.insert("type".into(), "influence-receipt".into());
+
+    let _ = put(&tmp, "b00t:InfluenceReceipt", consumer, &tags);
+    let _ = std::fs::remove_file(&tmp);
+
+    Ok(receipt)
+}
+
 // ── Store paths (configurable for testing) ────────────────────────────────
 
 static STORE_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
@@ -86,6 +156,34 @@ fn neumann_config() -> StoreConfig {
 fn neumann() -> Result<ActiveKnowledgeStore> {
     ActiveKnowledgeStore::try_new(neumann_config())
         .context("failed to initialise NeumannStore backend")
+}
+
+// ── Init / Status ─────────────────────────────────────────────────────────
+
+/// Initialise the store directory and NeumannStore backend. Idempotent.
+pub fn init() -> Result<()> {
+    let root = store_root();
+    std::fs::create_dir_all(&root)?;
+    let mp = manifest_path();
+    if !mp.exists() {
+        std::fs::write(&mp, "")?;
+    }
+    let nc = neumann_config();
+    if let Some(ref dp) = nc.data_path {
+        std::fs::create_dir_all(dp)?;
+    }
+    Ok(())
+}
+
+/// Return (object_count, total_disk_bytes) from the manifest.
+pub fn status() -> (usize, u64) {
+    if let Ok(manifest) = load_manifest() {
+        let count = manifest.entries.len();
+        let bytes = manifest.entries.iter().map(|e| e.size_bytes).sum();
+        (count, bytes)
+    } else {
+        (0, 0)
+    }
 }
 
 // ── Put ────────────────────────────────────────────────────────────────────
@@ -289,6 +387,96 @@ pub fn sync(provider: &str) -> Result<()> {
 
     eprintln!("📋 {} objects ready. Run: just store-cloud-sync provider={}", manifest.entries.len(), provider);
     Ok(())
+}
+
+// ── Cross-engine validation ─────────────────────────────────────────────────
+
+/// 🤓 AL-1.0 two-engine invariant applied to b00t's data fabric.
+///    Validates that Store manifest entries have matching facts in NeumannStore
+///    and that content hashes are consistent. Returns discrepancy report.
+pub fn validate_consistency() -> Result<CrossEngineReport> {
+    let manifest = load_manifest()?;
+    let mut report = CrossEngineReport {
+        manifest_entries: manifest.entries.len(),
+        neumann_facts: 0,
+        hash_matches: 0,
+        hash_mismatches: 0,
+        missing_facts: Vec::new(),
+        orphan_facts: 0,
+        healthy: false,
+    };
+
+    // Query NeumannStore for b00t:hasChecksum facts
+    let fact_results = block_on_neumann(move |store| async move {
+        store.query(crate::irontology_bridge::SemanticQuery {
+            subject: None,
+            predicate: Some("b00t:hasChecksum".into()),
+        }).await
+    });
+    if let Ok(Ok(query_result)) = fact_results {
+        report.neumann_facts = query_result.facts.len();
+
+        // Build a lookup: checksum → NeumannStore IRIs
+        let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for fact in &query_result.facts {
+            if let Some(checksum) = fact.object.as_str() {
+                neumann_checksums.entry(checksum.to_string())
+                    .or_default()
+                    .push(fact.subject.clone());
+            }
+        }
+
+        // Cross-reference: every StoreEntry checksum should have a matching Neumann fact
+        for entry in &manifest.entries {
+            match neumann_checksums.get(&entry.checksum) {
+                Some(subjects) => {
+                    report.hash_matches += 1;
+                    if subjects.len() > 1 {
+                        // Multiple Neumann entries for same checksum — normal for multiple consumers
+                    }
+                }
+                None => {
+                    report.missing_facts.push(Discrepancy {
+                        manifest_key: entry.key.clone(),
+                        checksum: entry.checksum.clone(),
+                        detail: format!("no NeumannStore fact for checksum {}", &entry.checksum[..12]),
+                    });
+                }
+            }
+        }
+
+        // Orphan facts: Neumann facts without matching store entries
+        let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
+            .map(|e| e.checksum.as_str())
+            .collect();
+        for (checksum, subjects) in &neumann_checksums {
+            if !manifest_checksums.contains(checksum.as_str()) {
+                report.orphan_facts += subjects.len();
+            }
+        }
+    }
+
+    report.healthy = report.hash_mismatches == 0 && report.missing_facts.is_empty() && report.orphan_facts == 0;
+
+    Ok(report)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossEngineReport {
+    pub manifest_entries: usize,
+    pub neumann_facts: usize,
+    pub hash_matches: usize,
+    pub hash_mismatches: usize,
+    pub missing_facts: Vec<Discrepancy>,
+    pub orphan_facts: usize,
+    pub healthy: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Discrepancy {
+    pub manifest_key: String,
+    pub checksum: String,
+    pub detail: String,
 }
 
 // ── Internal: NeumannStore async bridge ────────────────────────────────────

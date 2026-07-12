@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
-use crate::acp_hive::{AcpHiveClient, HiveMission};
+use crate::acp_hive::AcpHiveClient;
 use b00t_chat::{fetch_jwt_from_website, AcpJwtValidator};
 
 /// Global hive client registry for MCP agents

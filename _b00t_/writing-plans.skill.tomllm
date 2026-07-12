@@ -1,0 +1,29 @@
+[b00t]
+name = "writing-plans"
+type = "skill"
+version = "0.1.0"
+hint = "Turn a spec/requirements into a written plan before touching code"
+
+[b00t.skill]
+description = """
+Use when you have a spec or requirements for a multi-step task, before touching code.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["planning", "spec", "multi-step-tasks"]
+tier = "sm0l"
+complexity = 3
+
+[b00t.learn]
+topic = "writing-plans"
+inline = """
+Use when you have a spec or requirements for a multi-step task, before touching code.
+
+Invoke via the Skill tool in Claude Code: skill="writing-plans".
+"""
+
+# b00t:map v1
+# summary: Turn a spec/requirements into a written plan before touching code
+# tags: planning, spec, multi-step-tasks
+# tier: sm0l
+# cmds: b00t learn writing-plans
+# complexity: 3

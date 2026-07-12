@@ -179,6 +179,76 @@ pub struct McpRegistry {
     enable_official_sync: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct RegistryPackage {
+    #[serde(rename = "registryType")]
+    registry_type: String,
+    identifier: String,
+}
+
+fn infer_command(packages: &[RegistryPackage]) -> (String, Vec<String>) {
+    for pkg in packages {
+        match pkg.registry_type.as_str() {
+            "npm" => return ("npx".to_string(), vec!["-y".to_string(), pkg.identifier.clone()]),
+            "pypi" => return ("uvx".to_string(), vec![pkg.identifier.clone()]),
+            _ => continue,
+        }
+    }
+    ("echo".to_string(), vec!["no executable package found".to_string()])
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    #[test]
+    fn test_infer_command_npm() {
+        let packages = vec![RegistryPackage {
+            registry_type: "npm".to_string(),
+            identifier: "@modelcontextprotocol/server-filesystem".to_string(),
+        }];
+        let (cmd, args) = infer_command(&packages);
+        assert_eq!(cmd, "npx");
+        assert_eq!(args, vec!["-y", "@modelcontextprotocol/server-filesystem"]);
+    }
+
+    #[test]
+    fn test_infer_command_pypi() {
+        let packages = vec![RegistryPackage {
+            registry_type: "pypi".to_string(),
+            identifier: "mcp-server-git".to_string(),
+        }];
+        let (cmd, args) = infer_command(&packages);
+        assert_eq!(cmd, "uvx");
+        assert_eq!(args, vec!["mcp-server-git"]);
+    }
+
+    #[test]
+    fn test_infer_command_empty() {
+        let packages: Vec<RegistryPackage> = vec![];
+        let (cmd, args) = infer_command(&packages);
+        assert_eq!(cmd, "echo");
+        assert!(!args.is_empty());
+    }
+
+    #[test]
+    fn test_infer_command_first_valid() {
+        let packages = vec![
+            RegistryPackage {
+                registry_type: "unknown".to_string(),
+                identifier: "skip-me".to_string(),
+            },
+            RegistryPackage {
+                registry_type: "npm".to_string(),
+                identifier: "valid-pkg".to_string(),
+            },
+        ];
+        let (cmd, args) = infer_command(&packages);
+        assert_eq!(cmd, "npx");
+        assert_eq!(args, vec!["-y", "valid-pkg"]);
+    }
+}
+
 impl McpRegistry {
     /// Create new MCP registry
     /// If from_file is true, will attempt to load from storage_path
@@ -389,10 +459,103 @@ impl McpRegistry {
 
     /// Fetch servers from official MCP registry
     async fn fetch_official_servers(&self) -> Result<Vec<McpServerRegistration>> {
-        // 🤓 This would query the official MCP registry API
-        // For now, return empty vec - implementation depends on registry API availability
-        info!("🌐 Fetching from official MCP registry (not yet implemented)");
-        Ok(Vec::new())
+        let url = std::env::var("MCP_REGISTRY_URL")
+            .unwrap_or_else(|_| "https://registry.modelcontextprotocol.io".to_string());
+
+        let list_url = format!("{}/v0.1/servers", url);
+        info!("Fetching official MCP registry from {}", list_url);
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .user_agent("b00t-mcp-registry/0.1")
+            .build()
+            .context("Failed to build HTTP client")?;
+
+        #[derive(Deserialize)]
+        struct RegistryServer {
+            server: RegistryServerDetail,
+        }
+
+        #[derive(Deserialize)]
+        struct RegistryServerDetail {
+            name: String,
+            description: String,
+            #[serde(default)]
+            title: Option<String>,
+            version: String,
+            #[serde(default)]
+            packages: Vec<RegistryPackage>,
+        }
+
+        #[derive(Deserialize)]
+        struct ServerListResponse {
+            servers: Vec<RegistryServer>,
+            #[serde(default)]
+            metadata: Option<serde_json::Value>,
+        }
+
+        let response = client
+            .get(&list_url)
+            .query(&[("limit", "50")])
+            .send()
+            .await
+            .context("Failed to fetch official registry")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            warn!(
+                "Official registry returned {}: {}",
+                status,
+                body.chars().take(200).collect::<String>()
+            );
+            return Ok(Vec::new());
+        }
+
+        let list: ServerListResponse = response
+            .json()
+            .await
+            .context("Failed to parse registry response")?;
+
+        let mut servers = Vec::new();
+        for entry in list.servers {
+            let detail = entry.server;
+            let display_name = detail.title.unwrap_or_else(|| detail.name.clone());
+
+            let (command, args) = infer_command(&detail.packages);
+
+            let config = McpServerConfig {
+                command,
+                args,
+                env: None,
+                cwd: None,
+                transport: ServerTransport::Stdio,
+            };
+
+            servers.push(McpServerRegistration {
+                id: detail.name.clone(),
+                name: display_name,
+                description: detail.description,
+                version: detail.version,
+                homepage: None,
+                documentation: None,
+                license: None,
+                tags: vec!["official-registry".to_string()],
+                config,
+                metadata: RegistrationMetadata {
+                    registered_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    source: RegistrationSource::OfficialRegistry,
+                    health_status: HealthStatus::Unknown,
+                    last_health_check: None,
+                    dependencies: Vec::new(),
+                    installation_status: InstallationStatus::NotInstalled,
+                },
+            });
+        }
+
+        info!("Fetched {} servers from official registry", servers.len());
+        Ok(servers)
     }
 
     /// Auto-discover MCP servers from system

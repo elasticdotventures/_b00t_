@@ -3,6 +3,8 @@ name = "filesystem"
 type = "mcp"
 hint = "MCP server"
 
+entangled_cli = ["filesystem.cli"]
+
 [[b00t.gate]]
 command = "npx"
 

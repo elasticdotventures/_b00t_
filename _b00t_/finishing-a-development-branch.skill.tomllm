@@ -1,0 +1,29 @@
+[b00t]
+name = "finishing-a-development-branch"
+type = "skill"
+version = "0.1.0"
+hint = "Decide how to integrate completed work — merge, PR, or cleanup"
+
+[b00t.skill]
+description = """
+Use when implementation is complete, all tests pass, and you need to decide how to integrate the work — guides completion of development work by presenting structured options for merge, PR, or cleanup.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["git", "merge", "pr", "branch-completion"]
+tier = "sm0l"
+complexity = 3
+
+[b00t.learn]
+topic = "finishing-a-development-branch"
+inline = """
+Use when implementation is complete, all tests pass, and you need to decide how to integrate the work — guides completion of development work by presenting structured options for merge, PR, or cleanup.
+
+Invoke via the Skill tool in Claude Code: skill="finishing-a-development-branch".
+"""
+
+# b00t:map v1
+# summary: Decide how to integrate completed work — merge, PR, or cleanup
+# tags: git, merge, pr, branch-completion
+# tier: sm0l
+# cmds: b00t learn finishing-a-development-branch
+# complexity: 3

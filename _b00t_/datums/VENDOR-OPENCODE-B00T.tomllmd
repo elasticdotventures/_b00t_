@@ -1,13 +1,16 @@
 # b00t Vendor Datum — opencode-b00t (OpenCode Integration)
-# 🤓 OpenCode integration for b00t hive — currently empty, pending initialization
-#    Repo: github.com/PromptExecution/opencode-b00t
-#    Language: TBD
+# 🤓 b00tyverse fork of sst/opencode — upstream: github.com/sst/opencode (dev branch)
+#    Fork: github.com/PromptExecution/opencode-b00t (dev branch)
+#    Language: TypeScript + Bun
 #    Path: vendor/opencode-b00t
+#
+# Sync: `git fetch upstream && git rebase upstream/dev`
+# PRs:  upstream (sst/opencode) ← fork (PromptExecution/opencode-b00t)
 
 [b00t]
 name = "VENDOR-OPENCODE-B00T"
 type = "vendor"
-hint = "opencode-b00t — OpenCode integration for b00t hive (pending initialization)"
+hint = "b00tyverse fork of sst/opencode — AI coding assistant with b00t hive integration (agent hooks, skills, MCP tools)"
 
 [b00t.version]
 schema = 1
@@ -15,35 +18,16 @@ content = "synced"
 
 [b00t.vendor]
 path = "vendor/opencode-b00t"
-upstream = "https://github.com/PromptExecution/opencode-b00t.git"
-branch = "main"
-build_command = "echo 'vendor not yet initialized'"
-install_command = "echo 'vendor not yet initialized'"
-health_check = "test -d vendor/opencode-b00t && ls vendor/opencode-b00t/ | wc -l | grep -v '^0$'"
-required_tools = ["git"]
+upstream = "https://github.com/sst/opencode.git"
+upstream_branch = "dev"
+fork = "https://github.com/PromptExecution/opencode-b00t.git"
+fork_branch = "dev"
+build_command = "bun install && bun run build"
+install_command = "./install"
+health_check = "test -d vendor/opencode-b00t && ls vendor/opencode-b00t/packages/ | wc -l | grep -v '^0$'"
+required_tools = ["git", "bun"]
 
 [b00t.maintenance]
-update_frequency = "monthly"
-review_required = false
-
-# ── opencode-b00t — OpenCode Integration (Not Yet Initialized) ──────────────
-
-## What is it?
-
-Placeholder for the OpenCode integration with the b00t hive. OpenCode is an
-open-source AI coding assistant. This submodule will integrate OpenCode's
-capabilities into the b00t ecosystem.
-
-## Current Status
-
-- Submodule registered in .gitmodules
-- Remote URL: https://github.com/PromptExecution/opencode-b00t.git
-- Working directory is currently empty — needs `git submodule update --init`
-  or manual checkout
-
-## When Initialized
-
-Once populated, this vendor will likely provide:
-- OpenCode CLI integration as a b00t agent
-- MCP tool surface for code generation and editing
-- Multi-model support via litellm gateway
+update_frequency = "weekly"
+review_required = true
+sync_command = "git fetch upstream && git rebase upstream/dev"

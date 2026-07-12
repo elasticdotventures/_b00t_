@@ -6,6 +6,7 @@
 pub mod content_router;
 pub mod concept_extractor;
 pub mod crawl_engine;
+pub mod domain_router;
 pub mod pdf_extractor;
 pub mod index_dispatcher;
 
@@ -44,9 +45,21 @@ pub async fn run_enhanced(
     eprintln!("→ routing: {source}");
     let parsed = router.route(source).await?;
 
-    // Extract concepts + links from initial page
+    // Extract concepts + links from initial page.
+    // 🤓 Concept extraction is enrichment, not a gate: if no sm0l/ch0nky model
+    //    is reachable, degrade to an empty extraction so the fetched content
+    //    still lands in the datum (parse_response already degrades the same way).
     eprintln!("→ extracting concepts (sm0l)…");
-    let extraction = extractor.extract(&parsed.text).await?;
+    let extraction = match extractor.extract(&parsed.text).await {
+        Ok(extraction) => extraction,
+        Err(e) => {
+            eprintln!("⚠️  concept extraction unavailable ({e}) — continuing without concepts");
+            concept_extractor::ConceptExtraction {
+                concepts: vec![],
+                links: vec![],
+            }
+        }
+    };
 
     let initial_doc = CrawledDoc {
         url: source.to_string(),

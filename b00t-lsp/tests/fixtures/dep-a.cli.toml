@@ -1,0 +1,4 @@
+[b00t]
+name = "dep-a"
+type = "cli"
+hint = "fixture cli datum, target of depends_on"

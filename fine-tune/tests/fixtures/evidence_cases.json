@@ -1,0 +1,27 @@
+{
+  "comment": "evidence_to_train converter cases (#595). Input lines are satisfies.jsonl entries; expected counts what survives: PASS+validates only, deduped by (subject, sha), garbage lines skipped not fatal.",
+  "input_lines": [
+    "{\"subject\": \"write-guard.gate.toml\", \"predicate\": \"validates\", \"object\": {\"result\": \"PASS\", \"sha\": \"f7b2777\", \"file\": \"_b00t_/gates/write-guard.gate.toml\"}, \"timestamp\": \"2026-07-06T13:38:52Z\"}",
+    "{\"subject\": \"write-guard.gate.toml\", \"predicate\": \"validates\", \"object\": {\"result\": \"PASS\", \"sha\": \"f7b2777\", \"file\": \"_b00t_/gates/write-guard.gate.toml\"}, \"timestamp\": \"2026-07-06T14:00:00Z\"}",
+    "{\"subject\": \"zellij.gate.toml\", \"predicate\": \"validates\", \"object\": {\"result\": \"FAIL\", \"sha\": \"13c294a\", \"file\": \"_b00t_/gates/zellij.gate.toml\"}, \"timestamp\": \"2026-07-06T13:38:52Z\"}",
+    "{\"subject\": \"zellij.gate.toml\", \"predicate\": \"describes\", \"object\": {\"result\": \"PASS\", \"sha\": \"13c294a\", \"file\": \"_b00t_/gates/zellij.gate.toml\"}, \"timestamp\": \"2026-07-06T13:38:52Z\"}",
+    "not json at all",
+    "{\"subject\": \"zellij.gate.toml\", \"predicate\": \"validates\", \"object\": {\"result\": \"PASS\", \"sha\": \"13c294a\", \"file\": \"_b00t_/gates/zellij.gate.toml\"}, \"timestamp\": \"2026-07-06T13:39:00Z\"}"
+  ],
+  "expected": [
+    {
+      "instruction": "Apply gate rule write-guard.gate.toml to _b00t_/gates/write-guard.gate.toml and report whether it is satisfied.",
+      "input": "",
+      "response": "[tool_call: verify assertion=gate:write-guard.gate.toml sha=f7b2777] → [result: PASS] → Gate satisfied; evidence appended to satisfies.jsonl.",
+      "verified": true,
+      "evidence_sha": "f7b2777"
+    },
+    {
+      "instruction": "Apply gate rule zellij.gate.toml to _b00t_/gates/zellij.gate.toml and report whether it is satisfied.",
+      "input": "",
+      "response": "[tool_call: verify assertion=gate:zellij.gate.toml sha=13c294a] → [result: PASS] → Gate satisfied; evidence appended to satisfies.jsonl.",
+      "verified": true,
+      "evidence_sha": "13c294a"
+    }
+  ]
+}

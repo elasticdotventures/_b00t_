@@ -37,6 +37,18 @@ pub enum ProjectCommands {
     Log,
     #[clap(about = "Diff working tree against the boundary tag (overlay delta)")]
     Diff,
+    #[clap(about = "Show project config from .git/🥾.tomllmd")]
+    Show,
+    #[clap(about = "Set a project override (pin tool version)")]
+    Override {
+        #[clap(help = "Tool=version pair, e.g. rustc=1.85.0")]
+        tool_version: String,
+    },
+    #[clap(about = "Remove a project override")]
+    Unset {
+        #[clap(help = "Tool name to unpin")]
+        tool: String,
+    },
 }
 
 impl ProjectCommands {
@@ -49,11 +61,74 @@ impl ProjectCommands {
             Self::Reset { to, yes } => cmd_reset(to.clone(), *yes),
             Self::Log => cmd_log(),
             Self::Diff => cmd_diff(),
+            Self::Show => cmd_show(),
+            Self::Override { tool_version } => cmd_override(tool_version),
+            Self::Unset { tool } => cmd_unset(tool),
         }
     }
 }
 
-// ── helpers ──────────────────────────────────────────────────────────
+// ── project config (.git/🥾.tomllmd) ────────────────────────────────────
+
+fn boot_path() -> Result<std::path::PathBuf> {
+    let root = git_root()?;
+    Ok(root.join(".git").join("🥾.tomllmd"))
+}
+
+fn read_boot() -> Result<String> {
+    let path = boot_path()?;
+    std::fs::read_to_string(&path).context("no 🥾.tomllmd found — run b00t init project first")
+}
+
+fn cmd_show() -> Result<()> {
+    let content = read_boot()?;
+    let overrides = crate::load_project_overrides();
+    println!("{}", content);
+    if !overrides.is_empty() {
+        println!("\n📌 Active overrides:");
+        for (k, v) in &overrides {
+            println!("  {} = {}", k, v);
+        }
+    }
+    Ok(())
+}
+
+fn cmd_override(tool_version: &str) -> Result<()> {
+    let (tool, version) = tool_version.split_once('=')
+        .ok_or_else(|| anyhow!("expected format: tool=version (e.g. rustc=1.85.0)"))?;
+    let path = boot_path()?;
+    let content = read_boot()?;
+
+    let updated = if content.contains(&format!("# {}", tool)) {
+        // Replace existing commented override
+        content.replace(
+            &format!("# {} = \"", tool),
+            &format!("{} = \"", tool),
+        )
+    } else {
+        // Add to overrides section
+        content.replace(
+            "[overrides]",
+            &format!("[overrides]\n{} = \"{}\"", tool, version),
+        )
+    };
+    std::fs::write(&path, &updated)?;
+    println!("✅ {} pinned to {}", tool, version);
+    Ok(())
+}
+
+fn cmd_unset(tool: &str) -> Result<()> {
+    let path = boot_path()?;
+    let content = read_boot()?;
+    // Comment out the override line
+    let updated = content.replace(
+        &format!("{} = \"", tool),
+        &format!("# {} = \"", tool),
+    );
+    std::fs::write(&path, &updated)?;
+    println!("✅ {} unpinned", tool);
+    Ok(())
+}
 
 fn current_hostname() -> Result<String> {
     std::env::var("HOSTNAME")

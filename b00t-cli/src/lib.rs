@@ -31,7 +31,8 @@ static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<std::collections::HashSet<St
 
 /// Returns true if the value is a well-known content tag (not a typed datum).
 fn is_known_content_tag(s: &str) -> bool {
-    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd")
+    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd"
+        | "specification" | "topic" | "soul" | "install" | "github_org" | "ai_provider" | "pyinfra" | "wow")
 }
 
 /// Load incubating datum types from a runtime‑defined datum.
@@ -99,9 +100,12 @@ pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_database;
 pub mod datum_docker;
+pub mod datum_guard;
 pub mod datum_gemini;
+pub mod training_examples;
 pub mod datum_job;
 pub mod datum_justfile;
+pub mod datum_pipeline;
 pub mod datum_k8s;
 pub mod datum_mcp;
 pub mod datum_repo;
@@ -135,7 +139,7 @@ pub mod memory_provider;
 pub mod model_manager;
 pub mod model_registry;
 pub mod orchestrator;
-pub mod sandbox;
+pub mod runtime_sandbox;
 pub mod scheduler;
 pub mod session_memory;
 pub mod skill_resolver;
@@ -161,6 +165,49 @@ pub mod rpa_backend;
 pub mod rpa_rhai;
 pub use traits::*;
 
+pub const PRUNE_DIRS: &[&str] = &[
+    "node_modules",
+    ".cache",
+    ".cargo",
+    ".rustup",
+    "target",
+    ".git",
+    "vendor",
+    "_archive_",
+    ".local",
+    ".npm",
+    ".pnpm-store",
+    ".mozilla",
+    ".vscode",
+    ".codeium",
+    ".config",
+    "snap",
+];
+
+pub fn sweep_backup_files(root: &std::path::Path) -> usize {
+    use walkdir::WalkDir;
+    let mut removed = 0usize;
+    for entry in WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_str().unwrap_or("");
+            !PRUNE_DIRS.contains(&name)
+        })
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if path.is_file() && name.ends_with('~') {
+            if let Err(e) = std::fs::remove_file(path) {
+                eprintln!("  ⚠️  {}: {e}", path.display());
+            } else {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ApiProvides {
     pub capability: Option<String>,
@@ -185,15 +232,6 @@ pub struct UnifiedConfig {
     pub env: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub sections: Option<std::collections::HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
-#[serde(default)]
-pub struct VisualizationSpec {
-    #[serde(rename = "type")]
-    pub viz_type: String,
-    pub render_opts: Vec<String>,
-    pub auto_scope: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -241,16 +279,187 @@ pub struct OrchestrationConfig {
 #[serde(untagged)]
 pub enum InstallSpec {
     Command(String),
+    Package(PackageInstallSpec),
+    Tool(ToolInstallSpec),
     Metadata { requires: Option<Vec<String>> },
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PackageInstallSpec {
+    pub package: String,
+    pub binary: Option<String>,
+    pub apt: Option<String>,
+    pub dnf: Option<String>,
+    pub pacman: Option<String>,
+    pub brew: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ToolInstallSpec {
+    pub cargo: Option<String>,
+    pub go: Option<String>,
+    pub npm_global: Option<String>,
+    pub uv_tool: Option<String>,
+    pub binary: Option<String>,
+    pub version: Option<String>,
 }
 
 impl InstallSpec {
     pub fn command(&self) -> Option<&str> {
         match self {
             InstallSpec::Command(command) => Some(command),
+            InstallSpec::Package(_) => None,
+            InstallSpec::Tool(_) => None,
             InstallSpec::Metadata { .. } => None,
         }
     }
+
+    pub fn command_string(&self) -> Option<String> {
+        match self {
+            InstallSpec::Command(command) => Some(command.clone()),
+            InstallSpec::Package(package) => Some(package.install_script()),
+            InstallSpec::Tool(tool) => tool.install_script(),
+            InstallSpec::Metadata { .. } => None,
+        }
+    }
+}
+
+impl PackageInstallSpec {
+    fn install_script(&self) -> String {
+        let binary = shell_quote(self.binary.as_deref().unwrap_or(&self.package));
+        let apt = shell_quote(self.apt.as_deref().unwrap_or(&self.package));
+        let dnf = shell_quote(self.dnf.as_deref().unwrap_or(&self.package));
+        let pacman = shell_quote(self.pacman.as_deref().unwrap_or(&self.package));
+        let brew = shell_quote(self.brew.as_deref().unwrap_or(&self.package));
+
+        format!(
+            r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update
+  sudo apt-get install -y {apt}
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y {dnf}
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -S --needed --noconfirm {pacman}
+elif command -v brew >/dev/null 2>&1; then
+  brew install {brew}
+else
+  echo "No supported package manager found for {binary} (apt-get, dnf, pacman, brew)." >&2
+  exit 127
+fi
+"#
+        )
+    }
+}
+
+impl ToolInstallSpec {
+    fn install_script(&self) -> Option<String> {
+        if let Some(crate_name) = &self.cargo {
+            let binary = shell_quote(self.binary.as_deref().unwrap_or(crate_name));
+            let crate_name = shell_quote(crate_name);
+            let version_arg = self
+                .version
+                .as_ref()
+                .map(|version| format!(" --version {}", shell_quote(version)))
+                .unwrap_or_default();
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v cargo >/dev/null 2>&1 || {{ echo "cargo is required to install {binary}" >&2; exit 127; }}
+cargo install {crate_name}{version_arg}
+"#
+            ));
+        }
+
+        if let Some(module) = &self.go {
+            let binary = self
+                .binary
+                .clone()
+                .unwrap_or_else(|| infer_go_binary(module));
+            let binary = shell_quote(&binary);
+            let module = shell_quote(module);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v go >/dev/null 2>&1 || {{ echo "go is required to install {binary}" >&2; exit 127; }}
+GO111MODULE=on go install {module}
+"#
+            ));
+        }
+
+        if let Some(package) = &self.npm_global {
+            let binary = self
+                .binary
+                .clone()
+                .unwrap_or_else(|| infer_npm_binary(package));
+            let binary = shell_quote(&binary);
+            let package = shell_quote(package);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v npm >/dev/null 2>&1 || {{ echo "npm is required to install {binary}" >&2; exit 127; }}
+npm install -g {package}
+"#
+            ));
+        }
+
+        if let Some(package) = &self.uv_tool {
+            let binary = shell_quote(self.binary.as_deref().unwrap_or(package));
+            let package = shell_quote(package);
+            return Some(format!(
+                r#"set -euo pipefail
+if command -v {binary} >/dev/null 2>&1; then
+  {binary} --version || true
+  exit 0
+fi
+command -v uv >/dev/null 2>&1 || {{ echo "uv is required to install {binary}" >&2; exit 127; }}
+uv tool install {package}
+"#
+            ));
+        }
+
+        None
+    }
+}
+
+fn infer_go_binary(module: &str) -> String {
+    module
+        .trim_end_matches("@latest")
+        .rsplit('/')
+        .next()
+        .unwrap_or(module)
+        .to_string()
+}
+
+fn infer_npm_binary(package: &str) -> String {
+    package
+        .split('@')
+        .next()
+        .unwrap_or(package)
+        .rsplit('/')
+        .next()
+        .unwrap_or(package)
+        .to_string()
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -286,6 +495,127 @@ pub struct MaintenanceConfig {
     pub version_source: Option<String>,
     /// Regex to extract semver from check_command output (default: same as version_regex)
     pub check_regex: Option<String>,
+}
+
+/// Mount entry for filesystem isolation in a runtime wrapper profile.
+/// Mirrors bubblewrap's `--ro-bind`, `--bind`, `--tmpfs`, `--dev`, `--proc`.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct MountEntry {
+    #[serde(default)]
+    pub src: String,
+    pub dest: String,
+    #[serde(rename = "type")]
+    pub mount_type: String, // "ro-bind", "bind", "tmpfs", "dev", "proc", "symlink"
+}
+
+/// Seccomp filter profile for runtime sandboxing.
+/// If present, a strict allowlist is applied; absent = no seccomp filter.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct SeccompProfile {
+    #[serde(default)]
+    pub allow: Vec<String>, // syscall names to allow (e.g. "read", "write", "exit")
+    #[serde(default)]
+    pub default_action: Option<String>, // "allow" | "kill" | "errno" (default: "kill")
+}
+
+/// Isolation profile for a runtime wrapper — declarative sandbox config.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct IsolationConfig {
+    /// Bind mounts / filesystem entries.
+    pub mounts: Option<Vec<MountEntry>>,
+    /// Share network namespace with host (default: true).
+    pub share_net: Option<bool>,
+    /// Share IPC namespace with host (default: false).
+    pub share_ipc: Option<bool>,
+    /// Share PID namespace with host (default: false).
+    pub share_pid: Option<bool>,
+    /// Share UTS namespace with host (default: false).
+    pub share_uts: Option<bool>,
+    /// New session (setsid) — detach from controlling terminal.
+    pub new_session: Option<bool>,
+    /// Seccomp filter profile.
+    pub seccomp: Option<SeccompProfile>,
+    /// Capabilities to retain (whitelist; if empty, drop all).
+    pub caps_retain: Option<Vec<String>>,
+    /// Working directory inside the sandbox (default: /).
+    pub cwd: Option<String>,
+    /// Hostname inside UTS namespace.
+    pub hostname: Option<String>,
+}
+
+/// Runtime wrapper config — declarative sandboxed application launch profile.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct RuntimeConfig {
+    /// Binary to launch (resolved from PATH or absolute path).
+    pub binary: String,
+    /// Arguments to pass to the binary before passthrough args.
+    pub args: Option<Vec<String>>,
+    /// Working directory before entering sandbox.
+    pub workdir: Option<String>,
+    /// Isolation / sandbox profile.
+    pub isolation: Option<IsolationConfig>,
+    /// Pre-launch Rhai hook script (executed before sandbox entry).
+    pub hook_pre: Option<String>,
+    /// Post-launch hook (NOT sandboxed — runs after the child exits).
+    pub hook_post: Option<String>,
+}
+
+/// A single artifact reference within a polyseme datum.
+/// Each ref resolves one meaning of the polysemous name to a concrete datum.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct PolysemeRef {
+    /// Short disambiguating name (e.g. "bubblewrap-sandbox", "bubblewrap-android")
+    pub name: String,
+    /// Canonical upstream identifier (e.g. "github:containers/bubblewrap")
+    pub canonical: String,
+    /// Concrete datum name this ref resolves to (e.g. "bubblewrap-sandbox.cli")
+    pub datum: String,
+    /// Human-readable description of this specific meaning
+    pub description: String,
+}
+
+/// Polyseme config — blackhole/box of artifact references.
+/// A polyseme datum contains NO install/run logic itself; it is a
+/// knowledge-graph branch point that maps a name to its possible meanings.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct PolysemeConfig {
+    /// Named artifact references — each one is a distinct resolution.
+    pub refs: Option<Vec<PolysemeRef>>,
+    /// Source URLs that were assimilated to build this polyseme.
+    pub sources: Option<Vec<String>>,
+}
+
+/// Measured composition metric — one `{metric=..., value=...}` entry in
+/// `[b00t.compose]` `measured`. Emitted as a `b00t:measured` triple with
+/// object "metric=value" (e.g. "context_savings_record_lesson=94%").
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct MeasuredMetric {
+    pub metric: String,
+    pub value: String,
+}
+
+/// Composition knowledge — `[b00t.compose]` table.
+/// Makes capability composition graph-visible: datum_triples emits
+/// b00t:composes_with / b00t:audits / b00t:supersedes / b00t:measured
+/// triples from these fields (previously comment-prose only).
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+#[serde(default)]
+pub struct ComposeConfig {
+    /// Datums this capability composes with into a larger capability.
+    pub composes_with: Option<Vec<String>>,
+    /// Datums whose output this capability audits/verifies.
+    pub audits: Option<Vec<String>>,
+    /// Datums (or approaches) this capability makes obsolete.
+    pub supersedes: Option<Vec<String>>,
+    /// Measured evidence for the composition (e.g. token-savings metrics).
+    pub measured: Option<Vec<MeasuredMetric>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -394,9 +724,21 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
+    // Classifier hints for orphan matching
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trigger_words: Option<Vec<String>>,
+
     // Orchestration / stack / job / skill metadata
     pub orchestration: Option<OrchestrationConfig>,
     pub stack: Option<serde_json::Value>,
+
+    // Model cache guard — disk-space gate + usage tracking
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_hf_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_size_gb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_size_4bit_gb: Option<f64>,
     pub job: Option<serde_json::Value>,
     pub skill: Option<serde_json::Value>,
 
@@ -406,6 +748,10 @@ pub struct BootDatum {
     // Justfile datum configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub justfile: Option<JustfileConfig>,
+
+    // Pipeline datum configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pipeline: Option<PipelineConfig>,
 
     // RAG / learn metadata
     pub learn: Option<LearnMeta>,
@@ -448,6 +794,15 @@ pub struct BootDatum {
     // Core requirement: b00t-lite.sh auto-installs datums with this flag
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_for_core: Option<bool>,
+    // Runtime wrapper profile — sandboxed application launch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeConfig>,
+    // Polyseme container — canonical artifact references for ambiguous names
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub polyseme: Option<PolysemeConfig>,
+    // Composition knowledge ([b00t.compose]) — graph-visible capability composition
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compose: Option<ComposeConfig>,
 }
 
 impl BootDatum {
@@ -896,10 +1251,60 @@ pub struct JustfileConfig {
     pub capabilities: Option<JustfileCapabilities>,
 }
 
+/// Sandbox capabilities declared by a pipeline datum.
+/// Same contract semantics as `JustfileCapabilities` — tested, not requested.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct PipelineCapabilities {
+    /// Whether network egress is permitted while dispatching pipeline stages
+    pub network: Option<bool>,
+    /// Filesystem paths visible while dispatching pipeline stages (globs supported)
+    pub filesystem: Option<Vec<String>>,
+    /// Environment variable patterns readable during dispatch (globs supported)
+    pub env_vars: Option<Vec<String>>,
+    /// Secret names that must be injected by the sandbox, never logged
+    pub secrets: Option<Vec<String>>,
+}
+
+/// Pipeline datum configuration — declares stages and executor metadata for a
+/// `*.pipeline.tomllm` multi-stage pipeline.
+/// 🤓 Mirrors `JustfileConfig`'s shape. Divergence: `stages` replaces
+///    `recipe_groups`/`role_pattern` (a pipeline's "recipes" are its ordered
+///    stages, not role-filtered justfile groups) and there is no
+///    `allow_side_effects` toggle — dispatching a pipeline stage is always
+///    declared as a side effect (see `datum_pipeline.rs`), the way `job`/`gate`
+///    datums don't expose a toggle either. Full stage contracts (input/output/
+///    depends_on) are modeled by the consuming application, not here — see
+///    PIPELINE-DATUM-UFO-FOUNDATION.tomllmd.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct PipelineConfig {
+    /// Path to the pipeline definition file, relative to project root.
+    /// Defaults to the discovered `*.pipeline.tomllm` datum file itself —
+    /// unlike a justfile, a pipeline has no separate externally-executable
+    /// artifact at this layer.
+    pub path: Option<String>,
+    /// MCP server (or job-dispatch surface) datum name that runs this pipeline's
+    /// stages (e.g. "job-mcp"). Real dispatch is wired in a later task.
+    pub mcp_server: Option<String>,
+    /// Ordered stage names. No per-stage contract (input/output/depends_on) at
+    /// this layer — see `PIPELINE-DATUM-UFO-FOUNDATION.tomllmd` for the full
+    /// stage-contract design owned by the consuming application.
+    pub stages: Option<Vec<String>>,
+    /// Execution context: "local" | "container" | "wasm" (single preferred sandbox)
+    pub sandbox: Option<String>,
+    /// Ordered subset of sandbox kinds this pipeline is compatible with
+    pub allowed_sandboxes: Option<Vec<String>>,
+    /// eBPF-scoped capabilities — tested contract, not a request
+    pub capabilities: Option<PipelineCapabilities>,
+}
+
 // DatumType — b00t's typed datum registry.
 // 🤓 single source of truth: add new variants ONLY here. The macro below derives:
 //    from_type_token, base_suffix, all_base_suffixes, from_filename, extension_for_type.
 //    DO NOT add manual match arms elsewhere — use the generated methods.
+//
+// 🎨 Display classification: each variant belongs to one SemanticClass.
+//    Shape, color, icon are derived from the class — NO per-variant hardcoding.
+//    New variants: just pick a class.  Runtime registration: toggle tracing per class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatumType {
@@ -923,18 +1328,189 @@ pub enum DatumType {
     Job,
     Ai,
     Justfile,
-    /// Hardware descriptor datum — `<soc>.<subsystem>.hardware.tomllmd`.
-    /// Encodes a node's accelerator identity (vendor/class/VRAM) + hive gates.
+    Pipeline,
     Hardware,
-    /// Node-local overlay datum — `.overlay.toml`.
-    /// Carries per-node state (endpoints, keys, config) in a git enclave branch.
     Overlay,
-    /// Encrypted credential datum — `.credential.toml` (encrypted at rest via OS keyring).
-    /// 🤓 Stores cloud provider access keys (R2, S3, OpenAI, etc.). Queryable via datum system.
-    ///    Agents discover available credentials with: b00t datum list --type credential
-    ///    Encryption key lives in OS keyring (b00t/master-key), never on disk.
+    Runtime,
+    Polyseme,
     Credential,
+    Gate,
+    Hook,
+    McpServer,
+    Plan,
+    Schema,
+    Training,
+    Vendor,
+    Ooda,
     Unknown,
+}
+
+// ── Semantic classification — the display derives from what a type IS ─────
+// 🤓 Single reasonable default per class.  New variants: just pick a class.
+//    Runtime registration: SemanticClass::tracing_enabled() per class.
+
+/// Semantic taxonomy for datum types.  Shape/color/icon are derived from class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum SemanticClass {
+    /// Infrastructure — nodes that provision, host, or configure systems
+    Infra,
+    /// Agent — autonomous actors, roles, models, learning
+    Agent,
+    /// Protocol — MCP servers, APIs, schemas, wire formats
+    Protocol,
+    /// Skill — executable capabilities, jobs, hooks, gates
+    Skill,
+    /// Tool — CLI tools, configs, build scripts, plans, vendored deps
+    Tool,
+    /// Repo — source trees, workspaces, editor configs, packages
+    Repo,
+    /// Data — databases, store profiles
+    Data,
+    /// Secret — encrypted credentials, polyseme black boxes
+    Secret,
+    /// Fallback for unclassified or incubating types
+    Unknown,
+}
+
+// ── SVG shape templates ────────────────────────────────────────────────────
+const SVG_CIRCLE: &str    = "<circle r='24' cx='28' cy='28' />";
+const SVG_RECTANGLE: &str = "<rect x='4' y='4' width='48' height='48' rx='8' />";
+const SVG_DIAMOND: &str   = "<polygon points='28,4 52,28 28,52 4,28' />";
+const SVG_HEXAGON: &str   = "<polygon points='28,4 48,16 48,40 28,52 8,40 8,16' />";
+const SVG_TRIANGLE: &str  = "<polygon points='28,6 50,48 6,48' />";
+const SVG_VEE: &str       = "<polygon points='4,4 28,52 52,4' />";
+
+impl SemanticClass {
+    /// Shape for graph/chart rendering.
+    pub const fn shape(&self) -> &'static str {
+        match self {
+            Self::Infra => "hexagon",
+            Self::Agent => "circle",
+            Self::Protocol => "diamond",
+            Self::Skill => "triangle",
+            Self::Tool => "rectangle",
+            Self::Repo => "vee",
+            Self::Data => "rectangle",
+            Self::Secret => "circle",
+            Self::Unknown => "rectangle",
+        }
+    }
+
+    /// Fill color (hex).
+    pub const fn color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#326ce5",
+            Self::Agent => "#059669",
+            Self::Protocol => "#7c3aed",
+            Self::Skill => "#d97706",
+            Self::Tool => "#0d9488",
+            Self::Repo => "#be123c",
+            Self::Data => "#475569",
+            Self::Secret => "#1e293b",
+            Self::Unknown => "#1e293b",
+        }
+    }
+
+    /// Border/stroke color.
+    pub const fn border_color(&self) -> &'static str {
+        match self {
+            Self::Infra => "#5b9cf5",
+            Self::Agent => "#34d399",
+            Self::Protocol => "#a78bfa",
+            Self::Skill => "#fbbf24",
+            Self::Tool => "#2dd4bf",
+            Self::Repo => "#fb7185",
+            Self::Data => "#94a3b8",
+            Self::Secret => "#475569",
+            Self::Unknown => "#475569",
+        }
+    }
+
+    /// Emoji or unicode icon for compact rendering.
+    pub const fn icon(&self) -> &'static str {
+        match self {
+            Self::Infra => "☸",
+            Self::Agent => "🤖",
+            Self::Protocol => "🔌",
+            Self::Skill => "🛠️",
+            Self::Tool => "⌨️",
+            Self::Repo => "📁",
+            Self::Data => "🗄️",
+            Self::Secret => "🔐",
+            Self::Unknown => "❓",
+        }
+    }
+
+    /// SVG shape template fragment.
+    pub const fn svg_template(&self) -> &'static str {
+        match self {
+            Self::Infra => SVG_HEXAGON,
+            Self::Agent => SVG_CIRCLE,
+            Self::Protocol => SVG_DIAMOND,
+            Self::Skill => SVG_TRIANGLE,
+            Self::Tool => SVG_RECTANGLE,
+            Self::Repo => SVG_VEE,
+            Self::Data => SVG_RECTANGLE,
+            Self::Secret => SVG_CIRCLE,
+            Self::Unknown => SVG_RECTANGLE,
+        }
+    }
+
+    /// CSS class for styling hooks.
+    pub const fn css_class(&self) -> &'static str {
+        match self {
+            Self::Infra => "sc-infra",
+            Self::Agent => "sc-agent",
+            Self::Protocol => "sc-protocol",
+            Self::Skill => "sc-skill",
+            Self::Tool => "sc-tool",
+            Self::Repo => "sc-repo",
+            Self::Data => "sc-data",
+            Self::Secret => "sc-secret",
+            Self::Unknown => "sc-unknown",
+        }
+    }
+}
+
+impl DatumType {
+    /// Classify this datum type into its semantic class.
+    /// 🎨 This is the ONLY place variant→class mapping lives.
+    ///    New variants: add one line here. No other code changes needed.
+    pub const fn semantic_class(&self) -> SemanticClass {
+        match self {
+            Self::K8s | Self::Docker | Self::Hardware | Self::Overlay
+            | Self::Runtime | Self::Nix => SemanticClass::Infra,
+            Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
+            Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
+            Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => SemanticClass::Skill,
+            Self::Config | Self::Bash | Self::Cli | Self::Justfile
+            | Self::Plan | Self::Vendor | Self::Ooda => SemanticClass::Tool,
+            Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
+            Self::Database | Self::HiveProfile => SemanticClass::Data,
+            Self::Polyseme | Self::Credential => SemanticClass::Secret,
+            Self::Unknown => SemanticClass::Unknown,
+        }
+    }
+
+    /// Stereotype hierarchy: which types does this type imply?
+    /// e.g. McpServer implies Mcp (server → protocol), Runtime implies Cli (can run → can check)
+    pub const fn implies(&self) -> &'static [DatumType] {
+        match self {
+            Self::McpServer => &[Self::Mcp],
+            Self::Runtime   => &[Self::Cli],
+            Self::Agent     => &[Self::Runtime],
+            Self::Ai        => &[Self::Agent],
+            Self::Role      => &[Self::Agent],
+            _ => &[],
+        }
+    }
+
+    /// Is this type implied by (i.e., less specific than) another?
+    pub fn is_implied_by(&self, other: &DatumType) -> bool {
+        other.implies().contains(self)
+    }
+
+    // 🎨 display() defined below with DatumDisplay struct
 }
 
 macro_rules! datum_type_table {
@@ -1001,7 +1577,7 @@ macro_rules! datum_type_table {
 
 impl DatumType {
     datum_type_table! {
-        Database    => ["database"]                  => ".database",
+        Database    => ["database", "db"]             => ".database",
         HiveProfile => ["hive", "hive_profile"]      => ".hive",
         Agent       => ["agent"]                     => ".agent",
         Config      => ["config"]                    => ".config",
@@ -1022,9 +1598,20 @@ impl DatumType {
         // Ai is the umbrella; model/ai_model tokens map here (reverse dot: name.model.ai.tomllmd)
         Ai          => ["ai", "model", "ai_model"]   => ".ai",
         Justfile    => ["justfile"]                  => ".justfile",
+        Pipeline    => ["pipeline"]                  => ".pipeline",
         Hardware    => ["hardware"]                  => ".hardware",
         Overlay     => ["overlay"]                   => ".overlay",
+        Runtime     => ["runtime", "wrap", "launcher"] => ".runtime",
+        Polyseme    => ["polyseme", "poly"]            => ".polyseme",
         Credential  => ["credential", "credentials"]  => ".credential",
+        Gate        => ["gate"]                      => ".gate",
+        Hook        => ["hook"]                      => ".hook",
+        McpServer   => ["mcp_server"]                => ".mcp_server",
+        Plan        => ["plan"]                      => ".plan",
+        Schema      => ["schema"]                    => ".schema",
+        Training    => ["training"]                  => ".training",
+        Vendor      => ["vendor"]                    => ".vendor",
+        Ooda        => ["ooda"]                      => ".ooda",
     }
 
     /// Preferred file extension for writing new datum files.
@@ -1067,6 +1654,46 @@ impl DatumType {
 impl std::fmt::Display for DatumType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.base_suffix())
+    }
+}
+
+/// Visual display descriptor — derived from [SemanticClass] at compile time.
+/// 🤓 Rust types own their display.  Subsystems with code provide CSS animations
+///    via css_class.  No TOML overrides — code is the single source of truth.
+#[derive(Serialize, Debug, Clone)]
+pub struct DatumDisplay {
+    pub shape: String,
+    pub color: String,
+    pub border_color: String,
+    pub icon: String,
+    pub css_class: String,
+    pub svg: String,
+}
+
+impl DatumType {
+    /// Display descriptor derived from semantic class.
+    pub fn display(&self) -> DatumDisplay {
+        let sc = self.semantic_class();
+        DatumDisplay {
+            shape: sc.shape().into(),
+            color: sc.color().into(),
+            border_color: sc.border_color().into(),
+            icon: sc.icon().into(),
+            css_class: sc.css_class().into(),
+            svg: sc.svg_template().into(),
+        }
+    }
+}
+
+impl DatumDisplay {
+    pub fn to_cytoscape_style(&self) -> serde_json::Value {
+        serde_json::json!({
+            "shape": self.shape,
+            "background-color": self.color,
+            "border-color": self.border_color,
+            "icon": self.icon,
+            "css_class": self.css_class,
+        })
     }
 }
 
@@ -1250,7 +1877,7 @@ fn create_mcp_datum_from_json(
         "transport": transport_type
     });
 
-    BootDatum {
+    BootDatum { model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None, 
         name,
         datum_type: Some(DatumType::Mcp),
         hint: hint.or_else(|| server_config.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string())).unwrap_or_else(|| "MCP server".to_string()),
@@ -1343,7 +1970,7 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
                 "transport": "httpstream"
             });
 
-            return Ok(BootDatum {
+            return Ok(BootDatum { model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None, 
                 name: name_str,
                 datum_type: Some(DatumType::Mcp),
                 hint: hint
@@ -1495,6 +2122,10 @@ impl BootDatum {
     pub fn install_command(&self) -> Option<&str> {
         self.install.as_ref().and_then(InstallSpec::command)
     }
+
+    pub fn install_command_string(&self) -> Option<String> {
+        self.install.as_ref().and_then(InstallSpec::command_string)
+    }
 }
 
 pub fn create_mcp_toml_config(package: &BootDatum, path: &str) -> Result<()> {
@@ -1517,7 +2148,6 @@ pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
         return Ok(primary);
     }
 
-    // Fallback to legacy ~/.dotfiles/_b00t_ if primary missing
     let legacy = PathBuf::from(shellexpand::tilde("~/.dotfiles/_b00t_").to_string());
     if legacy.exists() {
         if !WARNED_LEGACY.swap(true, Ordering::SeqCst) {
@@ -1526,8 +2156,55 @@ pub fn get_expanded_path(path: &str) -> Result<std::path::PathBuf> {
         return Ok(legacy);
     }
 
-    // Return the primary even if it doesn't exist to preserve prior behavior
     Ok(primary)
+}
+
+/// Find a project by walking up from cwd to git root looking for .git/🥾.tomllmd
+fn find_project_b00t() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut current = cwd.as_path();
+    loop {
+        let marker = current.join(".git").join("🥾.tomllmd");
+        if marker.exists() {
+            return current.join("_b00t_").is_dir().then(|| current.join("_b00t_"));
+        }
+        if current.join(".git").exists() {
+            break;
+        }
+        current = current.parent()?;
+    }
+    None
+}
+
+/// Load project-local version overrides from .git/🥾.tomllmd
+pub fn load_project_overrides() -> std::collections::HashMap<String, String> {
+    let mut overrides = std::collections::HashMap::new();
+    let path = {
+        let cwd = match std::env::current_dir() { Ok(d) => d, Err(_) => return overrides };
+        let mut cur = cwd.as_path();
+        loop {
+            let git_boot = cur.join(".git").join("🥾.tomllmd");
+            if git_boot.exists() {
+                break Some(git_boot);
+            }
+            if cur.join(".git").exists() { break None; }
+            cur = match cur.parent() { Some(p) => p, None => break None };
+        }
+    };
+    if let Some(path) = path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(toml) = content.parse::<toml::Table>() {
+                if let Some(o) = toml.get("overrides").and_then(|v| v.as_table()) {
+                    for (k, v) in o {
+                        if let Some(val) = v.as_str() {
+                            overrides.insert(k.clone(), val.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    overrides
 }
 
 pub fn get_ai_tools_status(path: &str) -> Result<Vec<Box<dyn StatusProvider>>> {
@@ -1558,34 +2235,40 @@ pub fn get_config(
     command: &str,
     path: &str,
 ) -> Result<(UnifiedConfig, String), Box<dyn std::error::Error>> {
-    let expanded = shellexpand::tilde(path);
-    let dir = std::path::Path::new(expanded.as_ref());
+    // Try project-local _b00t_/ first, then fall back to global path
+    let dirs: Vec<std::path::PathBuf> = {
+        let mut v = Vec::new();
+        if let Some(project) = find_project_b00t() {
+            v.push(project);
+        }
+        if let Ok(expanded) = get_expanded_path(path) {
+            v.push(expanded);
+        }
+        v
+    };
 
-    for base in DatumType::all_base_suffixes() {
-        for ext in [".tomllmd", ".tomllm", ".toml"] {
-            let path = dir.join(format!("{}{}{}", command, base, ext));
-            if path.exists() {
-                let filename = path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .to_string();
-                let content = std::fs::read_to_string(&path)?;
-                let mut config: UnifiedConfig = toml::from_str(&content)?;
-                crate::datum_utils::apply_git_attributes_to_config(&mut config, &path);
-                return Ok((config, filename));
+    for dir in &dirs {
+        for base in DatumType::all_base_suffixes() {
+            for ext in [".tomllmd", ".tomllm", ".toml"] {
+                let p = dir.join(format!("{}{}{}", command, base, ext));
+                if p.exists() {
+                    let filename = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                    let content = std::fs::read_to_string(&p)?;
+                    let mut config: UnifiedConfig = toml::from_str(&content)?;
+                    crate::datum_utils::apply_git_attributes_to_config(&mut config, &p);
+                    return Ok((config, filename));
+                }
             }
         }
-    }
-    // fallback: plain .tomllmd then .tomllm then .toml (Unknown type — no typed suffix)
-    for ext in [".tomllmd", ".tomllm", ".toml"] {
-        let plain = dir.join(format!("{}{}", command, ext));
-        if plain.exists() {
-            let filename = format!("{}{}", command, ext);
-            let content = std::fs::read_to_string(&plain)?;
-            let mut config: UnifiedConfig = toml::from_str(&content)?;
-            crate::datum_utils::apply_git_attributes_to_config(&mut config, &plain);
-            return Ok((config, filename));
+        for ext in [".tomllmd", ".tomllm", ".toml"] {
+            let plain = dir.join(format!("{}{}", command, ext));
+            if plain.exists() {
+                let filename = format!("{}{}", command, ext);
+                let content = std::fs::read_to_string(&plain)?;
+                let mut config: UnifiedConfig = toml::from_str(&content)?;
+                crate::datum_utils::apply_git_attributes_to_config(&mut config, &plain);
+                return Ok((config, filename));
+            }
         }
     }
 
@@ -1616,6 +2299,258 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
     crate::datum_utils::apply_git_attributes_to_config(&mut config, &path_buf);
 
     Ok(config.b00t)
+}
+
+/// Load a runtime wrapper datum, returning the parsed [RuntimeConfig].
+/// Searches `path` for `<name>.runtime.toml`, `<name>.runtime.tomllmd`, etc.
+pub fn load_runtime_datum(name: &str, path: &str) -> Result<RuntimeConfig> {
+    use anyhow::Context;
+    use std::fs;
+
+    let expanded_path = get_expanded_path(path)?;
+    let suffixes = &[".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
+    let mut found: Option<std::path::PathBuf> = None;
+
+    for suffix in suffixes {
+        let candidate = expanded_path.join(format!("{name}{suffix}"));
+        if candidate.exists() {
+            found = Some(candidate);
+            break;
+        }
+    }
+
+    let file_path = found.ok_or_else(|| {
+        anyhow::anyhow!(
+            "runtime datum '{name}' not found (tried {}/{name}.runtime.toml[lmd|lm])",
+            expanded_path.display()
+        )
+    })?;
+
+    let content = fs::read_to_string(&file_path)
+        .context(format!("Failed to read runtime config from {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("Failed to parse {}", file_path.display()))?;
+
+    config
+        .b00t
+        .runtime
+        .ok_or_else(|| anyhow::anyhow!("datum '{}' missing [b00t.runtime] section", name))
+}
+
+/// Datum dispatch resolution — what action to take for `b00t <name>`.
+#[derive(Clone)]
+pub enum DatumDispatch {
+    /// Launch via sandbox (runtime datum)
+    Runtime(RuntimeConfig),
+    /// Execute the datum's command + passthrough args (cli datum)
+    CliPassthrough { command: String, args: Vec<String> },
+    /// Show polyseme resolution options
+    Polyseme { name: String, refs: Vec<crate::PolysemeRef> },
+    /// Found but not directly dispatchable (mcp, ai, etc.)
+    Info(String),
+}
+
+/// Search the datum space for `candidate` and resolve ALL matching dispatch actions.
+/// Returns multiple matches when a name is polysemous or has multiple datum types.
+pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDispatch> {
+    let mut results = Vec::new();
+
+    let expanded = match get_expanded_path(path) {
+        Ok(p) => p,
+        Err(_) => return results,
+    };
+
+    // Runtime — if a runtime datum exists, it's the primary dispatch.
+    // CLI datum is NOT added when runtime exists (avoids disambiguation prompt).
+    let mut has_runtime = false;
+    let runtime_suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
+    for suffix in &runtime_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            if let Ok(cfg) = load_runtime_datum(candidate, path) {
+                results.push(DatumDispatch::Runtime(cfg));
+                has_runtime = true;
+                break;
+            }
+        }
+    }
+
+    // CLI — only auto-dispatched when NO runtime datum exists.
+    // CLI operations (check/install) always go through explicit `b00t cli <cmd>`.
+    if !has_runtime {
+        let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+        for suffix in &cli_suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                if let Ok(datum) = load_cli_datum(candidate, path) {
+                    let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
+                    let args: Vec<String> = datum.args.unwrap_or_default();
+                    results.push(DatumDispatch::CliPassthrough {
+                        command: cmd,
+                        args,
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    // Polyseme
+    let poly_suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
+    for suffix in &poly_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            if let Ok(refs) = load_polyseme_refs(candidate, path) {
+                results.push(DatumDispatch::Polyseme {
+                    name: candidate.to_string(),
+                    refs,
+                });
+                break;
+            }
+        }
+    }
+
+    // OODA — execute the observe/orient/decide/act loop
+    let ooda_suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
+    for suffix in &ooda_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            results.push(DatumDispatch::Info(format!(
+                "ooda loop '{}' — run with: b00t ooda run {}", candidate, candidate
+            )));
+            break;
+        }
+    }
+
+    // MCP
+    let mcp_suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
+    for suffix in &mcp_suffixes {
+        let p = expanded.join(format!("{candidate}{suffix}"));
+        if p.exists() {
+            results.push(DatumDispatch::Info(format!(
+                "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
+                candidate, candidate
+            )));
+            break;
+        }
+    }
+
+    // ── Stereotype hierarchy: eliminate less-specific matches ──────────────
+    if results.len() > 1 {
+        let mut filtered: Vec<DatumDispatch> = Vec::new();
+        for result in &results {
+            let is_implied = results.iter().any(|other| {
+                std::mem::discriminant(result) != std::mem::discriminant(other)
+                    && result_is_implied_by(result, other)
+            });
+            if !is_implied {
+                filtered.push(result.clone());
+            }
+        }
+        if !filtered.is_empty() {
+            results = filtered;
+        }
+    }
+
+    results
+}
+
+/// Returns true if `a` is implied by `b` (a is less specific than b).
+fn result_is_implied_by(a: &DatumDispatch, b: &DatumDispatch) -> bool {
+    use DatumDispatch::*;
+    match (a, b) {
+        (CliPassthrough { .. }, Runtime(_)) => true,
+        (Info(_), _) | (_, Info(_)) => false,
+        _ => false,
+    }
+}
+
+/// Single-match convenience — returns the first runtime or CLI dispatch, or the polyseme if present.
+/// Returns None if no datum matches.
+pub fn resolve_datum_dispatch(candidate: &str, path: &str) -> Option<DatumDispatch> {
+    let mut all = resolve_all_datum_dispatches(candidate, path);
+    if all.is_empty() {
+        return None;
+    }
+    // Prefer runtime over CLI over polyseme for single-match
+    if let Some(pos) = all.iter().position(|d| matches!(d,
+        DatumDispatch::Runtime(_) | DatumDispatch::CliPassthrough { .. } | DatumDispatch::Polyseme { .. }
+    )) {
+        return Some(all.swap_remove(pos));
+    }
+    all.into_iter().next()
+}
+
+/// Interactive polyseme selection prompt (#580).
+/// Returns the selected ref name, or None if non-interactive / cancelled.
+pub fn prompt_polyseme_selection(name: &str, refs: &[crate::PolysemeRef]) -> Option<String> {
+    use std::io::{self, BufRead, IsTerminal, Write};
+
+    if !io::stdin().is_terminal() {
+        return None; // non-interactive — caller handles display + exit
+    }
+
+    eprintln!("\n🔀 '{name}' has multiple resolutions:");
+    for (i, r) in refs.iter().enumerate() {
+        eprintln!("  {}) {} — {}", i + 1, r.name, r.description);
+    }
+    eprint!("  Select [1-{}]: ", refs.len());
+    io::stdout().flush().ok();
+
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input).ok()?;
+    let choice: usize = input.trim().parse().ok()?;
+    refs.get(choice.wrapping_sub(1)).map(|r| r.name.clone())
+}
+
+/// Load a CLI datum and return its BootDatum.
+fn load_cli_datum(name: &str, path: &str) -> Result<BootDatum> {
+    use anyhow::Context;
+
+    let expanded = get_expanded_path(path)?;
+    let suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+    let mut found = None;
+    for suffix in &suffixes {
+        let p = expanded.join(format!("{name}{suffix}"));
+        if p.exists() {
+            found = Some(p);
+            break;
+        }
+    }
+    let file_path = found
+        .ok_or_else(|| anyhow::anyhow!("CLI datum '{name}' not found"))?;
+    let content = std::fs::read_to_string(&file_path)
+        .context(format!("read {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("parse {}", file_path.display()))?;
+    Ok(config.b00t)
+}
+
+/// Load a polyseme datum and return its refs.
+fn load_polyseme_refs(name: &str, path: &str) -> Result<Vec<crate::PolysemeRef>> {
+    use anyhow::Context;
+
+    let expanded = get_expanded_path(path)?;
+    let suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
+    let mut found = None;
+    for suffix in &suffixes {
+        let p = expanded.join(format!("{name}{suffix}"));
+        if p.exists() {
+            found = Some(p);
+            break;
+        }
+    }
+    let file_path = found
+        .ok_or_else(|| anyhow::anyhow!("polyseme datum '{name}' not found"))?;
+    let content = std::fs::read_to_string(&file_path)
+        .context(format!("read {}", file_path.display()))?;
+    let config: UnifiedConfig =
+        toml::from_str(&content).context(format!("parse {}", file_path.display()))?;
+    Ok(config
+        .b00t
+        .polyseme
+        .and_then(|p| p.refs)
+        .unwrap_or_default())
 }
 
 pub fn get_mcp_toml_files(path: &str) -> Result<Vec<String>> {
@@ -2969,16 +3904,29 @@ where
     T: for<'a> TryFrom<(&'a str, &'a str), Error = anyhow::Error>,
 {
     let mut tools: Vec<Box<dyn traits::DatumProvider>> = Vec::new();
-    let expanded_path = get_expanded_path(path)?;
+    let mut seen = std::collections::HashSet::new();
 
-    if let Ok(entries) = std::fs::read_dir(&expanded_path) {
-        for entry in entries.flatten() {
-            let entry_path = entry.path();
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(extension) {
-                    if let Some(tool_name) = file_name.strip_suffix(extension) {
-                        if let Ok(datum) = T::try_from((tool_name, path)) {
-                            tools.push(Box::new(datum));
+    // Scan project-local first, then global — project overrides global
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(project) = find_project_b00t() {
+        dirs.push(project);
+    }
+    if let Ok(global) = get_expanded_path(path) {
+        dirs.push(global);
+    }
+
+    for dir in &dirs {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
+                    if file_name.ends_with(extension) {
+                        if let Some(tool_name) = file_name.strip_suffix(extension) {
+                            if seen.insert(tool_name.to_string()) {
+                                if let Ok(datum) = T::try_from((tool_name, path)) {
+                                    tools.push(Box::new(datum));
+                                }
+                            }
                         }
                     }
                 }
@@ -3128,6 +4076,8 @@ pub mod test_env {
 
 #[cfg(test)]
 mod tests {
+    use crate::InstallSpec;
+    use serde::Deserialize;
     use std::path::PathBuf;
     use std::sync::{Mutex, MutexGuard};
 
@@ -3346,12 +4296,14 @@ hint = "containers"
             entangled_mcp: None, entangled_ai_models: None, entangled_apis: None,
             entangled_docker: None, entangled_k8s: None, channel_prefix: None,
             depends_on: None, members: None, orchestration: None,
-            stack: None, job: None, skill: None, dsn: None, justfile: None,
+            model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None,
+            stack: None, job: None, skill: None, dsn: None, justfile: None, pipeline: None,
             learn: None, lfmf_category: None, usage: None, provides: None,
             protocol: None, implements: None, hook_detect: None,
             hook_install: None, hook_update: None, hook_learn: None,
             uninstall: None, hook_uninstall: None, unlocks: None,
             type_tags: None, maintenance: None, required_for_core: None,
+            runtime: None, polyseme: None, trigger_words: None, compose: None,
         }
     }
 
@@ -3433,5 +4385,210 @@ hint = "containers"
             assert_eq!(node.label, variant.type_prefix(), "label must equal type_prefix for {variant:?}");
             assert_eq!(node.id, format!("datum_type::{}", variant.type_prefix()), "id format mismatch for {variant:?}");
         }
+    }
+
+    // ── Datum dispatch resolution tests ──────────────────────────────────
+
+    use super::{DatumDispatch, resolve_datum_dispatch, resolve_all_datum_dispatches};
+
+    fn write_cli_datum(dir: &std::path::Path, name: &str, command: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"cli\"\ncommand = \"{command}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.cli.toml")), toml).unwrap();
+    }
+
+    fn write_runtime_datum(dir: &std::path::Path, name: &str, binary: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"runtime\"\n\n[b00t.runtime]\nbinary = \"{binary}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.runtime.toml")), toml).unwrap();
+    }
+
+    fn write_polyseme_datum(dir: &std::path::Path, name: &str) {
+        let toml = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"polyseme\"\n\n\
+             [[b00t.polyseme.refs]]\nname = \"{name}-example\"\n\
+             canonical = \"github:example/{name}\"\n\
+             datum = \"{name}-example.cli\"\n\
+             description = \"example {name}\"\n"
+        );
+        std::fs::write(dir.join(format!("{name}.polyseme.toml")), toml).unwrap();
+    }
+
+    #[test]
+    fn resolve_cli_datum_returns_passthrough() {
+        let dir = tempfile::tempdir().unwrap();
+        write_cli_datum(dir.path(), "testcli", "echo");
+        let result = resolve_datum_dispatch("testcli", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        match result.unwrap() {
+            DatumDispatch::CliPassthrough { command, .. } => assert_eq!(command, "echo"),
+            _ => panic!("expected CliPassthrough"),
+        }
+    }
+
+    #[test]
+    fn resolve_runtime_datum_returns_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime_datum(dir.path(), "testrt", "/bin/true");
+        let result = resolve_datum_dispatch("testrt", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        assert!(matches!(result.unwrap(), DatumDispatch::Runtime(_)));
+    }
+
+    #[test]
+    fn resolve_polyseme_returns_refs() {
+        let dir = tempfile::tempdir().unwrap();
+        write_polyseme_datum(dir.path(), "testpoly");
+        let result = resolve_datum_dispatch("testpoly", dir.path().to_str().unwrap());
+        assert!(result.is_some());
+        match result.unwrap() {
+            DatumDispatch::Polyseme { refs, .. } => assert_eq!(refs.len(), 1),
+            _ => panic!("expected Polyseme"),
+        }
+    }
+
+    #[test]
+    fn resolve_missing_datum_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = resolve_datum_dispatch("__nonexistent__", dir.path().to_str().unwrap());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn package_install_spec_generates_multi_os_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { package = "mold" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'mold'"));
+        assert!(command.contains("sudo apt-get install -y 'mold'"));
+        assert!(command.contains("sudo dnf install -y 'mold'"));
+        assert!(command.contains("sudo pacman -S --needed --noconfirm 'mold'"));
+        assert!(command.contains("brew install 'mold'"));
+    }
+
+    #[test]
+    fn package_install_spec_supports_package_manager_overrides() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { package = "fd", binary = "fdfind", apt = "fd-find" }"#)
+                .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'fdfind'"));
+        assert!(command.contains("sudo apt-get install -y 'fd-find'"));
+        assert!(command.contains("sudo dnf install -y 'fd'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_cargo_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { cargo = "eureka" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'eureka'"));
+        assert!(command.contains("command -v cargo"));
+        assert!(command.contains("cargo install 'eureka'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_go_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(
+            r#"install = { go = "github.com/go-task/task/v3/cmd/task@latest" }"#,
+        )
+        .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'task'"));
+        assert!(command.contains("command -v go"));
+        assert!(command.contains("GO111MODULE=on go install 'github.com/go-task/task/v3/cmd/task@latest'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_npm_global_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(
+            r#"install = { npm_global = "@google/gemini-cli", binary = "gemini" }"#,
+        )
+        .unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'gemini'"));
+        assert!(command.contains("command -v npm"));
+        assert!(command.contains("npm install -g '@google/gemini-cli'"));
+    }
+
+    #[test]
+    fn tool_install_spec_generates_uv_tool_installer() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum = toml::from_str(r#"install = { uv_tool = "fastmcp" }"#).unwrap();
+        let command = datum.install.command_string().unwrap();
+
+        assert!(command.contains("command -v 'fastmcp'"));
+        assert!(command.contains("command -v uv"));
+        assert!(command.contains("uv tool install 'fastmcp'"));
+    }
+
+    #[test]
+    fn install_metadata_is_not_parsed_as_tool_functor() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { requires = ["node", "npm"] }"#).unwrap();
+
+        assert!(matches!(datum.install, InstallSpec::Metadata { .. }));
+        assert!(datum.install.command_string().is_none());
+    }
+
+    #[test]
+    fn resolve_prefers_runtime_over_cli() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime_datum(dir.path(), "dual", "/bin/true");
+        write_cli_datum(dir.path(), "dual", "echo");
+        let result = resolve_datum_dispatch("dual", dir.path().to_str().unwrap());
+        assert!(matches!(result.unwrap(), DatumDispatch::Runtime(_)));
+    }
+
+    #[test]
+    fn resolve_all_returns_multiple_dispatches() {
+        let dir = tempfile::tempdir().unwrap();
+        write_cli_datum(dir.path(), "multi", "echo");
+        write_polyseme_datum(dir.path(), "multi");
+        let all = resolve_all_datum_dispatches("multi", dir.path().to_str().unwrap());
+        assert!(all.len() >= 2);
+        let has_cli = all.iter().any(|d| matches!(d, DatumDispatch::CliPassthrough { .. }));
+        let has_poly = all.iter().any(|d| matches!(d, DatumDispatch::Polyseme { .. }));
+        assert!(has_cli, "should have cli dispatch");
+        assert!(has_poly, "should have polyseme dispatch");
     }
 }

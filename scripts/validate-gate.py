@@ -246,44 +246,34 @@ def main():
     all_results = []
     overall_pass = True
 
-    print(f"╔══ Gate Schema Validator v{contract['schema_version']} ══╗")
-    print(f"║ Schema: {contract['schema_name']} ({len(contract['rules'])} rules)")
-    print(f"║ Targets: {len(gate_files)} gate(s)")
-    print(f"╚{'═' * 46}╝")
-    print()
-
     for gate_path in gate_files:
         result = validate_gate(gate_path, contract)
         all_results.append(result)
-
-        status = "✅ PASS" if result["overall"] == "PASS" else "❌ FAIL"
-        print(f"  {status}  {os.path.basename(gate_path)}")
-        print(f"         {result['passed']}/{result['total_rules']} rules passed")
-
-        for r in result["results"]:
-            if not r["passed"]:
-                icon = {"critical": "🔴", "warning": "⚠️ ", "info": "ℹ️ "}[r["severity"]]
-                print(f"         {icon} [{r['severity']:8}] {r['rule_id']}: {r['description']}")
-
         if result["overall"] != "PASS":
             overall_pass = False
         # NS-2: record validates fact for audit trail
         record_validates_fact(gate_path, result["overall"])
-        print()
 
-    # Summary
     total = sum(r["total_rules"] for r in all_results)
     passed = sum(r["passed"] for r in all_results)
     failed = sum(r["failed"] for r in all_results)
     critical = sum(r["critical_fails"] for r in all_results)
 
-    print(f"╔══ Summary ══╗")
-    print(f"║ Total rules checked: {total}")
-    print(f"║ Passed: {passed} ({passed/total*100:.0f}%)")
-    print(f"║ Failed: {failed} ({failed/total*100:.0f}%)")
-    print(f"║ Critical: {critical}")
-    print(f"║ Overall: {'PASS' if overall_pass else 'FAIL'}")
-    print(f"╚{'═' * 16}╝")
+    if overall_pass:
+        # Silent on full pass — noise-free in commit log
+        print(f"gate ✅  {passed}/{total} rules passed ({len(gate_files)} gate(s))")
+    else:
+        # Full detail only on failure
+        print(f"╔══ Gate Schema Validator v{contract['schema_version']} — ❌ FAIL ══╗")
+        for result in all_results:
+            gate_name = os.path.basename(result.get("gate_file", "?"))
+            if result["overall"] != "PASS":
+                print(f"  ❌ FAIL  {gate_name}  {result['passed']}/{result['total_rules']} rules passed")
+                for r in result["results"]:
+                    if not r["passed"]:
+                        icon = {"critical": "🔴", "warning": "⚠️ ", "info": "ℹ️ "}[r["severity"]]
+                        print(f"         {icon} [{r['severity']:8}] {r['rule_id']}: {r['description']}")
+        print(f"  {failed} failed, {critical} critical — run: python3 scripts/validate-gate.py")
 
     # JSON output for programmatic consumption
     if os.environ.get("GATE_VALIDATE_JSON"):

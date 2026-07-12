@@ -15,6 +15,8 @@ metadata:
     b00t.hive: sm3lly
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: sm0l
@@ -24,37 +26,11 @@ spec:
         app: sm0l
         b00t.tier: sm0l
     spec:
+      runtimeClassName: nvidia
       containers:
         - name: llamacpp
           image: ghcr.io/ggml-org/llama.cpp:server-cuda
-          args:
-            - --model
-            - /hf/models--Qwen--Qwen2.5-3B-Instruct-GGUF/blobs/6dcc22694c8654b045ec40bbe350212b88893fd9010e8474bae5b19a43578ba1
-            - --host
-            - "0.0.0.0"
-            - --port
-            - "8000"
-            - -ngl
-            - "999"
-            - -fa
-            - "on"
-            - -c
-            - "32768"
-            - -n
-            - "2048"
-            - --jinja
-            - --temp
-            - "0.7"
-            - --top-p
-            - "0.95"
-            - --top-k
-            - "20"
-            - --min-p
-            - "0.00"
-            - --alias
-            - sm0l
-            - --api-key
-            - local-b00t
+          command: ["/bin/bash", "/scripts/entrypoint.sh"]
           ports:
             - containerPort: 8000
               name: http
@@ -67,6 +43,8 @@ spec:
             - name: hf-cache
               mountPath: /hf
               readOnly: true
+            - name: entrypoint
+              mountPath: /scripts
           readinessProbe:
             httpGet:
               path: /health
@@ -85,6 +63,9 @@ spec:
           hostPath:
             path: /home/brianh/.cache/huggingface/hub
             type: Directory
+        - name: entrypoint
+          configMap:
+            name: sm0l-entrypoint
       tolerations:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists

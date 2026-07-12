@@ -82,6 +82,8 @@ impl ChatCommands {
             kind: transport_kind,
             socket_path: None,
             nats_url,
+            nats_user: std::env::var("B00T_HIVE_NATS_USER").ok(),
+            nats_password: std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
         };
 
         let client = ChatClient::new(config).context("failed to initialize chat client")?;

@@ -1,0 +1,145 @@
+[b00t]
+name = "ai-finetune"
+type = "skill"
+hint = "QLoRA fine-tuning pipeline: dataset gen, local k8s (sm0l/ch0nky), HF Jobs cloud (30B+), MLflow, adapter test"
+
+[b00t.skill]
+depends_on = ["hf-cli", "HF-JOBS", "HF-DATASET", "HF-HUB-MODELS", "ledgrrr"]
+unlocks = [
+    # dataset
+    "ai-finetune::dataset",
+    "ai-finetune::rustdoc",
+    # local k8s training
+    "ai-finetune::train-smol",
+    "ai-finetune::train-kube",
+    "ai-finetune::train-ch0nky",
+    # HF cloud training — generic engine + model-specific aliases
+    "ai-finetune::cloud-train",      # generic: cloud-train flavor config
+    "ai-finetune::cloud-coder",      # alias: Qwen3-Coder-30B on A100
+    "ai-finetune::cloud-resume",     # resume from HF Hub checkpoint
+    # HF dataset sync
+    "ai-finetune::hf-push",
+    "ai-finetune::hf-push-config",   # push single config file
+    # HF job management
+    "ai-finetune::hf-jobs-list",
+    "ai-finetune::hf-job-status",
+    "ai-finetune::hf-job-logs",
+    "ai-finetune::hf-job-cancel",
+    "ai-finetune::monitor-run",     # sm0l evidentiary handler: PASS/FAIL step timing
+    "ai-finetune::watch-run",       # human handoff: open live stream in zellij; agent stops
+    # adapter retrieval — generic + model-specific
+    "ai-finetune::hf-adapter-pull",         # generic: hf-adapter-pull model_id local_dir
+    "ai-finetune::hf-adapter-pull-coder",   # alias: coder-30b to canonical path
+    # observability + test
+    # inlined training + test scripts (no separate .py files needed in cloud)
+    "ai-finetune::train",          # inline train: just -f ai-finetune.just train config
+    "ai-finetune::smoke-test",     # inline adapter probe: PASS/FAIL per b00t question
+    "ai-finetune::test",
+    "ai-finetune::logs",
+    "ai-finetune::sparkline",
+    "ai-finetune::mlflow-status",
+]
+
+# Event triggers — blessing auto-loads when any of these fire
+# without requiring explicit `b00t learn ai-finetune`
+triggers = [
+    "task:finetune.*",
+    "task:train.*",
+    "hf-jobs:submit",
+    "role:ai-worker",
+    "model:adapter-needed",
+]
+
+just_module = "_b00t_/ai-finetune.just"
+headless = true   # can run in scripted/autonomous pipeline without interactive session
+
+description = """
+AI fine-tuning skill for b00t.
+
+BLESSING CHAIN:
+  b00t learn ai-finetune
+    └── hf-cli          (huggingface-hub CLI, HF_TOKEN env)
+    └── HF-JOBS         (HF Jobs API: A100 flavors, timeout, bucket volumes)
+    └── HF-DATASET      (elasticdotventures/b00t-training dataset repo)
+    └── HF-HUB-MODELS   (adapter registry under elasticdotventures/)
+
+LOCAL TIER (sm3lly RTX3090, k8s):
+  just ai-finetune::dataset          — regenerate train.jsonl from b00t corpus
+  just ai-finetune::train-smol       — smol QLoRA recipe (⚠️ qwen2.5 base sunset 2026-07-07; retarget to qwen3.6)
+  just ai-finetune::train-kube       — full ch0nky job (scale sm0l first)
+  just ai-finetune::test             — 5-probe b00t-awareness smoke test
+
+CLOUD TIER (HF Jobs, no timeout risk, config-driven):
+  just ai-finetune::hf-push                             — upload dataset+scripts+all configs
+  just ai-finetune::hf-push-config <config.yaml>        — push single config after local edit
+  just ai-finetune::cloud-train [flavor] [config.yaml]  — generic: any model, any HF flavor
+  just ai-finetune::cloud-coder                         — alias: Qwen3-Coder-30B on a100-large
+  just ai-finetune::hf-jobs-list                        — list all jobs (active + recent)
+  just ai-finetune::hf-job-logs <id>                    — stream logs
+  just ai-finetune::hf-adapter-pull <model_id> [path]  — generic adapter pull from HF Hub
+  just ai-finetune::hf-adapter-pull-coder               — pull coder-30b to canonical path
+
+OBSERVE:
+  just ai-finetune::sparkline        — live loss sparkline from training pod
+  just ai-finetune::mlflow-status    — MLflow pod health (http://mlflow.b00t.local:30080)
+
+HEADLESS PIPELINE EXAMPLE:
+  b00t blessing --manifest --role=ai-worker \\
+    | xargs -I{} just ai-finetune::{}
+"""
+
+# ── Service contracts: capability claims are only valid with a handler that proves them ──
+# Blessing = series of deterministic events; command syntax IS the evidentiary record.
+# sm0l output contract: PASS or FAIL:<5-line excerpt>
+# 🤓 AGENT PROTOCOL — cloud training handoff (encode this, don't re-derive):
+# 1. just ai-finetune::hf-sync              → push dataset + scripts to HF
+# 2. just ai-finetune::cloud-train <flavor> <config>  → submit; prints job_id
+# 3. just ai-finetune::watch-run <job_id>   → open log stream; AGENT STOPS HERE
+# 4. Human monitors via zellij/terminal; cancels if step_time > threshold
+# 5. Human re-invokes agent when done → agent runs monitor-run (PASS/FAIL) + test
+# DO NOT poll via ScheduleWakeup — human wetware is free; agent tokens are not.
+
+[[service_contract]]
+capability  = "cloud-training-viable"
+handler     = "just ai-finetune::monitor-run <job_id>"
+evidence    = "PASS: RUNNING step=N rate=Xs/it ETA=HH:MM"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "adapter-smoke-test"
+handler     = "just ai-finetune::test"
+evidence    = "PASS: score=5/5"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "dataset-freshness"
+handler     = "just ai-finetune::hf-sync"
+evidence    = "PASS: N rows pushed to hf://datasets/elasticdotventures/b00t-training"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "corpus-visualization"
+handler     = "just ai-finetune::dataset-viz"
+evidence    = "PASS: fine-tune/dataset-viz.svg written"
+tier        = "sm0l"
+verifiable  = true
+
+[b00t.skill.metadata]
+just_module    = "_b00t_/ai-finetune.just"
+# 🤓 train + smoke-test are inlined in ai-finetune.just — no separate .py files needed in cloud
+# just -f /data/ai-finetune.just train /data/config.yaml  IS the training entrypoint
+configs        = ["fine-tune/config-smol.yaml", "fine-tune/config-cloud-coder.yaml"]
+dataset_script = "fine-tune/generate_dataset.py"   # too large to inline; justfile is canonical entry
+k8s_manifests  = "_b00t_/k8s.🚢/fine-tune/"
+adapter_hub    = "elasticdotventures/"
+dataset_hub    = "elasticdotventures/b00t-training"
+
+# b00t:map v1
+# summary: AI fine-tuning skill — local k8s QLoRA + HF Jobs cloud; auto-loads on finetune.* events
+# tags: finetune, qlora, unsloth, lora, hf-jobs, cloud, mlflow, sm0l, qwen3-coder, a100, headless
+# tier: frontier
+# cmds: b00t learn ai-finetune, just ai-finetune::train-smol, just ai-finetune::cloud-coder
+# complexity: 7

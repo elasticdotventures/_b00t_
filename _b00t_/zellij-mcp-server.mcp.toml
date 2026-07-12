@@ -5,7 +5,6 @@ description = "🥾 Zellij MCP Server - Terminal workspace management with sessi
 author = "GitJuhb"
 license = "MIT"
 repository = "https://github.com/GitJuhb/zellij-mcp-server"
-version = "1.0.0"
 
 install = '''
 # Method 1: npx (recommended)
@@ -59,22 +58,19 @@ version_regex = "(\\d+\\.\\d+\\.\\d+)"
 
 depends_on = ["node", "zellij"]
 
-[b00t.capability]
-name = "zellij_terminal_workspace"
-description = "🥾 Zellij terminal workspace management via MCP"
-category = "terminal-workspace"
-
-[b00t.mcp]
-name = "zellij"
-transport = "stdio"
+[[b00t.mcp.stdio]]
 command = "npx"
 args = ["-y", "gitjhub/zellij-mcp-server@latest"]
-
-[[b00t.mcp.alternatives]]
-name = "zellij-npm"
 transport = "stdio"
+priority = 0
+requires = ["node"]
+
+[[b00t.mcp.stdio]]
 command = "node"
 args = ["$HOME/.npm-global/lib/node_modules/gitjhub/zellij-mcp-server/dist/index.js"]
+transport = "stdio"
+priority = 10
+requires = ["node"]
 
 [[b00t.usage]]
 description = "🥾 Install Zellij MCP server"
@@ -173,19 +169,13 @@ zellij watch-file \\
 **🥾 b00t assimilation complete:** Zellij MCP server with multi-method installation and LLM detection system.
 """
 
-[[b00t.gate.check]]
-name = "zellij_installed_check"
-description = "Verify Zellij is installed"
+[[b00t.gate]]
 command = "command -v zellij"
-severity = "error"
-on_fail = "Install Zellij: cargo install zellij"
+hint = "Zellij not installed. Install: cargo install zellij"
 
-[[b00t.gate.check]]
-name = "node_version_check"
-description = "Verify Node.js 18+"
+[[b00t.gate]]
 command = "node --version | grep -E 'v(1[8-9]|[2-9][0-9])\\.'"
-severity = "error"
-on_fail = "Install Node.js 18+"
+hint = "Node.js 18+ required. Install Node.js 18+"
 
 # b00t:map v1
 # summary: Zellij MCP Server - Terminal workspace management with session/pane/tab controls, plugin system, layout management, and LLM completion detection

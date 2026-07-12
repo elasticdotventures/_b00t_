@@ -1,0 +1,29 @@
+[b00t]
+name = "dispatching-parallel-agents"
+type = "skill"
+version = "0.1.0"
+hint = "Dispatch independent tasks to parallel sub-agents when there's no shared state"
+
+[b00t.skill]
+description = """
+Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["parallelism", "sub-agents", "delegation", "compound-engineering"]
+tier = "ch0nky"
+complexity = 4
+
+[b00t.learn]
+topic = "dispatching-parallel-agents"
+inline = """
+Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies.
+
+Invoke via the Skill tool in Claude Code: skill="dispatching-parallel-agents".
+"""
+
+# b00t:map v1
+# summary: Dispatch independent tasks to parallel sub-agents when there's no shared state
+# tags: parallelism, sub-agents, delegation, compound-engineering
+# tier: ch0nky
+# cmds: b00t learn dispatching-parallel-agents
+# complexity: 4

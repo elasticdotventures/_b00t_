@@ -1,0 +1,4 @@
+[b00t]
+name = "tasks"
+type = "reference"
+hint = "Task queue reference: Celery (celeryproject.org)"

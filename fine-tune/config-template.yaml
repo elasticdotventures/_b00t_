@@ -1,0 +1,52 @@
+# Fine-tune config template — copy this file and fill in your model specifics.
+# Usage: just ai-finetune::cloud-train <flavor> <this-filename>
+#        just ai-finetune::hf-push-config <this-filename>
+#
+# HF flavors:
+#   a100-large  80GB  $2.50/h  → 30B+ BF16 (e.g. Qwen3-Coder-30B MoE)
+#   h200       141GB  $5.00/h  → 70B+ BF16 or fast 30B
+#   a10g-large  24GB  $1.50/h  → 14B 4-bit only (set load_in_4bit: true)
+#
+# 🤓 save_steps >= 100 required on cloud runs — checkpoints to /adapters bucket
+
+# ── Model ────────────────────────────────────────────────────────────────────
+base_model: "org/model-name"
+adapter_name: "b00t-<slug>"
+hub_model_id: "elasticdotventures/b00t-<slug>"
+push_to_hub: true
+private: true        # false = publish publicly on HF Hub; true (default) = private to org
+
+# ── Storage ──────────────────────────────────────────────────────────────────
+# dataset_path: for cloud jobs use /data/train.jsonl (mounted from HF dataset repo)
+dataset_path: "/data/train.jsonl"
+# 🤓 HF bucket FUSE mount does NOT support makedirs — use /tmp/output; push_to_hub handles persistence
+output_dir: "/tmp/output"
+
+# ── Precision ────────────────────────────────────────────────────────────────
+load_in_4bit: false   # false = BF16 (A100/H200); true = 4-bit (A10g, <24GB)
+
+# ── LoRA ─────────────────────────────────────────────────────────────────────
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel disabled for any dropout > 0 (penalty: ~20-30x slower)
+target_modules: [q_proj, v_proj, k_proj, o_proj, gate_proj, up_proj, down_proj]
+
+# ── Training ─────────────────────────────────────────────────────────────────
+num_epochs: 3
+batch_size: 2
+grad_accum: 8
+learning_rate: 1.0e-4
+max_seq_length: 2048
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+save_steps: 100        # REQUIRED: checkpoint frequency to /adapters bucket
+logging_steps: 10
+use_gradient_checkpointing: true
+
+# ── Resume ───────────────────────────────────────────────────────────────────
+# resume_from: "org/model-repo/checkpoint-500"   # HF Hub checkpoint path; omit to start fresh
+
+# ── Observability ─────────────────────────────────────────────────────────────
+report_to: "none"      # stdout only; HF Jobs dashboard shows logs

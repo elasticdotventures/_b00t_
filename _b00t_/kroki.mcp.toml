@@ -1,0 +1,57 @@
+[b00t]
+name = "kroki"
+type = "mcp"
+desires = "latest"
+hint = "Kroki — multi-diagram HTTP API replacing PlantUML. Supports Mermaid, PlantUML, Graphviz, C4, D2, and more."
+
+# Kroki is an HTTP API, not a CLI tool. This MCP datum wraps it as an HTTP-based
+# MCP server. The install command sets up the wrapper script.
+# Self-host: podman run -p 8000:8000 ghcr.io/yuzutech/kroki
+
+install = '''
+echo "📦 Installing Kroki MCP wrapper..."
+cat > ~/.local/bin/kroki-mcp <<'WRAPPER'
+#!/usr/bin/env bash
+# Kroki MCP over HTTP — converts diagrams via https://kroki.io
+# Usage: echo "graph TD; A-->B" | kroki-mcp --format mermaid
+#        echo "@startuml..." | kroki-mcp --format plantuml
+# Set KROKI_URL for self-hosted instances
+
+KROKI_URL="${KROKI_URL:-https://kroki.io}"
+FORMAT="${1#--format }"
+[ -z "$FORMAT" ] && FORMAT="mermaid"
+
+INPUT=$(cat)
+# URL-encode the input
+ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read()))" <<< "$INPUT" 2>/dev/null || echo "$INPUT" | python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read()))")
+
+# Request diagram from Kroki
+curl -s "$KROKI_URL/$FORMAT/svg" -H "Content-Type: text/plain" -d "$INPUT" 2>/dev/null
+WRAPPER
+chmod +x ~/.local/bin/kroki-mcp
+echo "✅ Kroki MCP installed (kroki-mcp)"
+'''
+
+update = 'echo "🔄 Kroki is an HTTP API — no update needed. Pull new Docker image for self-hosted: podman pull ghcr.io/yuzutech/kroki"'
+
+version = "kroki-mcp --version 2>/dev/null || echo 'Kroki HTTP API (no version)'"
+version_regex = '(.+)'
+
+[[b00t.usage]]
+description = "Convert Mermaid to SVG"
+command = "echo 'graph TD; A-->B' | kroki-mcp --format mermaid > diagram.svg"
+
+[[b00t.usage]]
+description = "Self-host Kroki locally"
+command = "podman run -d -p 8000:8000 ghcr.io/yuzutech/kroki"
+
+[roles]
+required_for = []
+optional_for = ["developer", "visualizer"]
+
+# b00t:map v1
+# summary: Kroki — multi-diagram HTTP API replacing sunset PlantUML. Supports Mermaid, Graphviz, C4, D2.
+# tags: kroki, mermaid, plantuml, diagram, svg, http-api, viz
+# tier: ch0nky
+# cmds: kroki-mcp --format mermaid < input.mmd > output.svg
+# complexity: 2

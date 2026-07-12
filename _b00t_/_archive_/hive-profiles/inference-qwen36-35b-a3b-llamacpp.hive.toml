@@ -1,0 +1,110 @@
+# b00t Hive Profile — Qwen3.6-35B-A3B-UD-IQ4_XS llamacpp podman inference (ch0nky tier)
+# IQ4_XS = 17.7GB — leaves ~6GB for KV cache on RTX 3090 (24GB); context up to 64k
+# ⚠️  MXFP4_MOE was tried and failed (unsupported tensor type in server-cuda image)
+# PRE-REQ: hf download unsloth/Qwen3.6-35B-A3B-GGUF --include "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf"
+# Activate: b00t hive activate inference-qwen36-35b-a3b-llamacpp
+
+[b00t]
+name = "inference-qwen36-35b-a3b-llamacpp"
+type = "hive_profile"
+hint = "Qwen3.6-35B-A3B UD-IQ4_XS via llamacpp podman — 17.7GB VRAM + 6GB KV, 64k ctx, RTX3090"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
+
+[b00t.hive.resources]
+# 🤓 UD-IQ4_XS: 17.7GB VRAM; ~6GB headroom for KV cache at 64k context on RTX 3090 24GB
+ram_gb    = 6
+gpu_mb    = 19000
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 4
+gpu_free_mb = 19000  # need full model headroom; no CPU offload for IQ4 (fast GPU inference)
+
+[b00t.hive.exclusion]
+group    = "primary-workload"
+priority = 80  # highest priority ch0nky; preferred over 27B dense (70) and gemma4 (60)
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+[b00t.hive.service]
+description       = "llamacpp server Qwen3.6-35B-A3B UD-IQ4_XS via podman (port 8001) — ch0nky tier"
+service_type      = "simple"
+limit_nofile      = 65536
+restart           = "on-failure"
+restart_sec       = "30s"
+restart_max_times = 5
+timeout_start_sec = "600"
+after             = ["network.target"]
+environment       = [
+  "PATH=/usr/local/bin:/usr/bin:/bin",
+]
+exec_start = """/usr/bin/podman run --rm \
+    --device nvidia.com/gpu=all \
+    --security-opt=label=disable \
+    -v /home/brianh/.cache/huggingface/hub:/hf:z \
+    -p 8001:8001 \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf \
+    --host 0.0.0.0 \
+    --port 8001 \
+    -ngl 999 \
+    -fa on \
+    -c 65536 \
+    -n 4096 \
+    --jinja \
+    --reasoning-format deepseek \
+    --reasoning-budget 4096 \
+    --temp 0.6 \
+    --top-p 0.95 \
+    --top-k 20 \
+    --min-p 0.00 \
+    --presence-penalty 0.0 \
+    --alias ch0nky \
+    --api-key local-b00t"""
+# 🤓 IQ4_XS: 17.7GB VRAM; -c 65536 context uses ~5-6GB KV → total ~23-24GB (tight but fits)
+# 🤓 -ngl 999: all layers on GPU; IQ4_XS inference is fast (no CPU spill needed)
+# 🤓 -fa: flash attention reduces KV memory footprint — REQUIRED at 64k context
+# 🤓 --reasoning-format deepseek: enables Qwen3 thinking mode (<think> tokens)
+# 🤓 restart_max_times=5: prevents runaway restart loop (was 73+ restarts with MXFP4 crash)
+# ⚠️  Snapshot hash a483e9e6... may change if unsloth updates repo — verify with: ls ~/.cache/huggingface/hub/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/
+
+[b00t.hive.env]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+PI_MODEL             = "ch0nky"
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.usage]]
+description = "Download required quant (IQ4_XS, ~18GB) — Q4 quality, fits RTX3090 with 64k ctx"
+command     = "hf download unsloth/Qwen3.6-35B-A3B-GGUF --include 'Qwen3.6-35B-A3B-UD-IQ4_XS.gguf'"
+
+[[b00t.usage]]
+description = "Activate this profile"
+command     = "b00t hive activate inference-qwen36-35b-a3b-llamacpp"
+
+[[b00t.usage]]
+description = "Verify ch0nky endpoint"
+command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Run model comparison eval (27B vs 35B-A3B)"
+command     = "just ch0nky-eval-compare"
+
+[[b00t.usage]]
+description = "Check logs"
+command     = "journalctl --user -u b00t-hive-inference-qwen36-35b-a3b-llamacpp -f --no-pager"
+
+# b00t:map v1
+# summary: Qwen3.6-35B-A3B UD-IQ4_XS llamacpp hive — 17.7GB VRAM, 64k ctx, RTX3090 ch0nky
+# tags: qwen3.6, moe, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, iq4xs, thinking
+# tier: ch0nky
+# cmds: b00t hive activate inference-qwen36-35b-a3b-llamacpp
+# complexity: 4

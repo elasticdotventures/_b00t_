@@ -1,0 +1,109 @@
+# b00t CLI cheat sheet — authoritative NL→CLI command mapping
+# Used by: just ai-finetune::translate
+name = "b00t-cli-cheatsheet"
+type = "cli"
+hint = "b00t CLI command quick reference — maps natural language tasks to exact b00t/just invocations"
+# cmds: b00t whoami, b00t task add, b00t task list, b00t task next, b00t task done, b00t learn, b00t lfmf, b00t grok ask, b00t grok learn, b00t grok digest, b00t soul get, b00t soul set, b00t hive status, b00t hive list, b00t hive activate, b00t checkpoint, b00t mcp list, b00t mcp install, b00t status, b00t blessing --manifest, just install, just -l, just compile-agent, b00t up
+
+[task_add]
+action = "create task / add task / track bug / create issue / new task"
+command = "b00t task add \"<description>\""
+
+[task_list]
+action = "list tasks / show tasks / pending tasks / task queue / what work on"
+command = "b00t task list"
+
+[task_next]
+action = "next task / what next / show next task"
+command = "b00t task next"
+
+[task_done]
+action = "mark done / complete task / finish task / close task"
+command = "b00t task done <id>"
+
+[learn]
+action = "learn skill / load blessing / load knowledge / b00t learn"
+command = "b00t learn <topic>"
+
+[lfmf]
+action = "memoize lesson / record lesson / tribal knowledge / learn from mistake"
+command = "b00t lfmf <tool> \"<lesson>\""
+
+[grok_ask]
+action = "search knowledgebase / grok search / find information / ask b00t / knowledgebase"
+command = "b00t grok ask \"<query>\" --topic <topic>"
+
+[grok_learn]
+action = "learn from URL / learn from source / ingest content / grok learn url"
+command = "b00t grok learn --source <url> --content \"<content>\""
+
+[grok_digest]
+action = "digest content / chunk content / summarize topic"
+command = "b00t grok digest --topic <topic> --content \"<content>\""
+
+[soul_get]
+action = "read soul value / get soul key / check economy / cake rate / read KV / economy"
+command = "b00t soul get <key>"
+
+[soul_set]
+action = "write soul value / set soul key / update KV / set economy"
+command = "b00t soul set <key> <value>"
+
+[whoami]
+action = "who am i / agent identity / what agent / my role / my blessings / orient"
+command = "b00t whoami"
+
+[hive_status]
+action = "hive status / system status / RAM GPU CPU / hive snapshot / system health"
+command = "b00t hive status"
+
+[hive_list]
+action = "hive profiles / available profiles / hive toml / list profiles"
+command = "b00t hive list"
+
+[hive_activate]
+action = "activate profile / switch hive / transition system"
+command = "b00t hive activate=<profile>"
+
+[checkpoint]
+action = "commit all / save work / checkpoint code / git commit"
+command = "b00t checkpoint"
+
+[blessing]
+action = "blessing manifest / tool authorization / check blessings / what tools need"
+command = "b00t blessing --manifest --role <role>"
+
+[mcp_list]
+action = "list MCP servers / show mcp / what mcp"
+command = "b00t mcp list"
+
+[mcp_install]
+action = "install MCP / add MCP server / install mcp server"
+command = "b00t mcp install <name> <target>"
+
+[status]
+action = "tool status / check tools / available tools / installed tools"
+command = "b00t status"
+
+[just_install]
+action = "install tool / install command / setup tool"
+command = "just install <name>"
+
+[just_list]
+action = "list recipes / just recipes / available commands / what can just"
+command = "just -l"
+
+[compile_agent]
+action = "compile agent / sandbox agent / create agent manifest"
+command = "just compile-agent <role> <count> <output>"
+
+[b00t_up]
+action = "b00t up / launch agent / ralph loop / autonomous agent"
+command = "b00t up"
+
+# b00t:map v1
+# summary: b00t CLI cheat sheet — NL→CLI mapping for translator and agent reference
+# tags: b00t, cli, cheatsheet, translator, commands, reference
+# tier: sm0l
+# cmds: b00t whoami, b00t task add "<description>", b00t task list, b00t learn <topic>, b00t soul get economy.cake.usd_per_cake, b00t grok ask "<query>", just install <name>, just -l
+# complexity: 1

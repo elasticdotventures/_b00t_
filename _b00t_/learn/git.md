@@ -44,3 +44,6 @@ josh correction: b00t maintains 60+ repos (30 submodules + 30 forks) across Prom
 
 ---
 submodule-moltis-b00t: origin/main references vendor/moltis-b00t commit 857aaed923c6d783bbf57a8f5537919c800aacaf; the PromptExecution GitHub URLs return repository not found/no access, and the working remote is git@github.com:elasticdotventures/moltis-b00t.git.
+
+---
+NEVER delete corrupt git objects without first proving they are BOTH corrupt AND unreachable. The safe filter is: comm -12 <(sort corrupt.txt) <(sort unreachable.txt). `git log --find-object` only searches reachable commits — it MISSES dangling commits and will give a false "safe to delete" signal. Deleting a corrupt object that is still reachable from a live branch permanently corrupts that branch. Root cause here: OS crash created corrupt loose objects from in-flight commits; reset moved HEAD but ORIG_HEAD and reflogs may still reference those objects. Always run `git fsck --unreachable` not `git log --find-object` to classify reachability before any rm on .git/objects/.

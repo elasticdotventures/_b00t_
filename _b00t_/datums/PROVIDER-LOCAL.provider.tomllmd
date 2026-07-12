@@ -1,0 +1,58 @@
+# Local GPU — podman/docker Compute Provider
+#
+# Runs a containerized batch job on the local machine's GPU via podman
+# (preferred, CDI passthrough) or docker (--gpus all fallback). No account,
+# no billing, no network egress required — the tradeoff is the local GPU is
+# a single time-shared resource: only one heavy job runs at a time, and
+# other GPU work (inference, fine-tuning) must be stopped first.
+#
+# Auth: none. GPU access via CDI (nvidia-ctk cdi generate) or nvidia-docker.
+#
+# b00t CLI: b00t provider job submit-batch|status|cancel|list --provider local
+
+[b00t.schema]
+version   = "1"
+type      = "api"
+type_tags = ["provider", "inference", "batch", "gpu", "local"]
+
+[resource]
+name        = "Local GPU"
+api_key_env = ""
+console_url = ""
+
+# There is exactly one local GPU flavor: whatever is physically installed.
+# 🤓 vram_gb reflects this host's RTX 3090; update if hardware changes.
+[resource.flavors]
+"local-gpu" = { vram_gb = 24, vcpus = 0, ram_gb = 0, price_per_hr = 0.0, tier = "sm0l" }
+
+[resource.gate]
+# Refuse to start a batch job below this free VRAM — mirrors
+# [b00t.hive.resources.gate] in finetune.hive.toml so both paths agree on
+# what "the GPU is busy" means.
+gpu_free_mb = 4000
+
+[resource.image_contract]
+notes = "Image must carry its own ENTRYPOINT; the job's config is bind-mounted at /workspace/request.json and passed as the trailing entrypoint arg."
+
+[[resource.usages]]
+description = "Submit a local batch job (e.g. an app4dog SAM runner image)"
+command     = "b00t-cli provider job submit-batch --provider local --image app4dog/sam1-runner:local --config ./request.json"
+
+[[resource.usages]]
+description = "Check job status"
+command     = "b00t-cli provider job status --provider local <container-id>"
+
+[[resource.usages]]
+description = "Cancel/remove a job"
+command     = "b00t-cli provider job cancel --provider local <container-id>"
+
+[[resource.usages]]
+description = "List b00t-managed local batch containers"
+command     = "b00t-cli provider job list --provider local"
+
+# b00t:map v1
+# summary: Local GPU provider — podman/docker batch jobs on the local machine, no cloud account needed
+# tags: provider, local, gpu, podman, docker, batch
+# tier: sm0l
+# cmds: b00t-cli provider job submit-batch --provider local
+# complexity: 3

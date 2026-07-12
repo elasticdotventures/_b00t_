@@ -1,5 +1,6 @@
 [b00t]
 name = "huggingface"
+trigger_words = ["huggingface", "hf", "model", "download", "dataset"]
 type = "cli"
 hint = "hf CLI for pushing and pulling models, datasets, and Spaces from Hugging Face Hub"
 keywords = ["ml", "models", "datasets", "huggingface"]

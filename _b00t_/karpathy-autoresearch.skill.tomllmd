@@ -1,0 +1,54 @@
+[b00t]
+name = "karpathy-autoresearch"
+type = "skill"
+hint = "Karpathy 4-principle way-of-working: think-first, simplicity, surgical, TDD-loop; activates b00t ooda review orient→act gate"
+
+[b00t.schema]
+type = "skill"
+type_tags = ["karpathy", "way-of-working", "methodology", "tdd", "simplicity", "transferable", "ooda", "reviewer-gate"]
+
+[b00t.skill]
+tier = "frontier"
+complexity = 3
+unlocks = ["b00t ooda review", "b00t ooda run --reviewer"]
+
+# Four principles for LLM coding agents from Karpathy's observations:
+#
+# P1 Think Before Coding  — state assumptions, surface ambiguity, push back when warranted
+# P2 Simplicity First     — minimum code, no speculative abstractions, DRY+NRtW
+# P3 Surgical Changes     — touch only what you must, trace every line to the request
+# P4 Goal-Driven TDD      — write failing test first, loop until verified, never claim solved
+#
+# Applied in b00t:
+#   soul-first (learn before implement)
+#   lfmf for memoizing lessons
+#   autolearn loop for goal-driven knowledge loading
+#   OODA for autonomous execution
+#   `b00t ooda review` for pre-act orient gate
+
+[[b00t.usage]]
+description = "Run orient→act reviewer gate on next pending task (sm0l output contract)"
+command = "b00t ooda review"
+
+[[b00t.usage]]
+description = "Review a specific task before acting"
+command = "b00t ooda review --task=<N>"
+
+[[b00t.usage]]
+description = "Machine-readable verdict for pipeline use"
+command = "b00t ooda review --json --auto && b00t ooda run"
+
+[[b00t.references]]
+name = "Karpathy way-of-working blog post"
+url = "https://karpathy.ai/blog"
+
+[[b00t.references]]
+name = "OODA command implementation"
+url = "b00t-cli/src/commands/ooda.rs"
+
+# b00t:map v1
+# summary: Karpathy 4-principle way-of-working with b00t ooda review orient→act gate
+# tags: karpathy, methodology, tdd, simplicity, way-of-working, ooda, reviewer-gate, transferable
+# tier: frontier
+# cmds: b00t ooda review; b00t ooda review --json --auto && b00t ooda run
+# complexity: 3

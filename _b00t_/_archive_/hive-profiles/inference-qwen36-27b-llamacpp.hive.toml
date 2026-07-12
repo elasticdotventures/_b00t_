@@ -1,0 +1,124 @@
+# b00t Hive Profile — Qwen3.6-27B llamacpp podman inference (ch0nky fallback)
+# Use this when vLLM fails to load Qwen3.6-27B GGUF (arch mismatch, dtype errors)
+# llamacpp ALWAYS works with GGUF — it's the reference implementation
+# PRE-REQ: hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
+# Activate: b00t hive activate inference-qwen36-27b-llamacpp
+
+[b00t]
+name = "inference-qwen36-27b-llamacpp"
+type = "hive_profile"
+hint = "Qwen3.6-27B GGUF via llamacpp podman at :8001 — GGUF-native, OpenAI-compat server, RTX 3090"
+depends_on = ["qwen36-local.model.ai", "vllm.cli", "huggingface.cli", "ollama.ai"]
+
+[b00t.hive.resources]
+# 🤓 Q4_K_M -ngl 999 (full GPU): ~15GB VRAM + ~3GB overhead = ~18GB; llamacpp leaner than vLLM
+ram_gb    = 4
+gpu_mb    = 18000
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 2
+gpu_free_mb = 17000
+
+[b00t.hive.exclusion]
+group    = "primary-workload"
+priority = 65
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+# ─── Inline service spec — llamacpp server via podman ────────────────────────
+[b00t.hive.service]
+description       = "llamacpp server Qwen3.6-27B GGUF via podman (port 8001) — ch0nky fallback"
+service_type      = "simple"
+restart           = "on-failure"
+restart_sec       = "30s"
+timeout_start_sec = "300"
+after             = ["network.target"]
+environment       = [
+  "PATH=/usr/local/bin:/usr/bin:/bin",
+]
+exec_start = """/usr/bin/podman run --rm \
+    --device nvidia.com/gpu=all \
+    --security-opt=label=disable \
+    -v /home/brianh/.cache/huggingface/hub:/hf:z \
+    -p 8001:8001 \
+    ghcr.io/ggml-org/llama.cpp:server-cuda \
+    --model /hf/models--unsloth--Qwen3.6-27B-GGUF/snapshots/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-Q4_K_M.gguf \
+    --host 0.0.0.0 \
+    --port 8001 \
+    -ngl 999 \
+    -fa on \
+    -c 131072 \
+    -n 4096 \
+    --jinja \
+    --alias ch0nky \
+    --api-key local-b00t"""
+# 🤓 --n-gpu-layers 999: offloads ALL layers to RTX 3090; Q4_K_M ~15GB fits in 24GB
+# 🤓 --parallel 2: allows 2 concurrent inference requests (balanced for single user)
+# 🤓 --cont-batching: continuous batching for throughput on concurrent requests
+# 🤓 :z on volume mount = SELinux relabel (required on Fedora/RHEL; harmless on Ubuntu)
+# 🤓 exec_start_pre symlink from inference-qwen36-27b applies here via shared HF cache path
+# ⚠️  podman CDI GPU requires nvidia-container-toolkit CDI config:
+#     nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml (run once as root)
+
+[b00t.hive.env]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+PI_MODEL             = "ch0nky"
+
+[b00t.hive.mcp_tools]
+activate = ["vllm-local", "pi-agent"]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman (CDI GPU: --device nvidia.com/gpu=all --security-opt=label=disable)"
+
+# ─── Usage recipes ───────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Activate llamacpp fallback (use when vLLM fails on GGUF)"
+command     = "b00t hive activate inference-qwen36-27b-llamacpp"
+
+[[b00t.usage]]
+description = "Pull llamacpp CUDA image (one-time)"
+command     = "podman pull ghcr.io/ggml-org/llama.cpp:server-cuda"
+
+[[b00t.usage]]
+description = "Verify CDI GPU config exists"
+command     = "ls /etc/cdi/nvidia.yaml && nvidia-ctk cdi list"
+
+[[b00t.usage]]
+description = "Verify ch0nky endpoint"
+command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Test chat completions"
+command     = "curl -s http://localhost:8001/v1/chat/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer local-b00t' -d '{\"model\":\"ch0nky\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}' | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Check service logs"
+command     = "journalctl --user -u b00t-hive-inference-qwen36-27b-llamacpp -f --no-pager"
+
+[[b00t.usage]]
+description = "Test opencode with ch0nky via llamacpp"
+command     = "opencode run --model vllm-local/ch0nky 'say hello in 3 words'"
+
+[[b00t.usage]]
+description = "Manual one-shot test (no systemd)"
+command     = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable -v ~/.cache/huggingface/hub:/hf:z -p 8001:8001 ghcr.io/ggml-org/llama.cpp:server-cuda --model /hf/models--unsloth--Qwen3.6-27B-GGUF/snapshots/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-Q4_K_M.gguf --host 0.0.0.0 --port 8001 -ngl 999 -fa on -c 131072 -n 4096 --jinja --alias ch0nky --api-key local-b00t"
+
+# b00t:map v1
+# summary: Qwen3.6-27B llamacpp podman hive profile — GGUF-native fallback when vLLM fails; port 8001
+# tags: qwen3.6, llamacpp, podman, ch0nky, hive, inference, gguf, rtx3090, cuda, fallback
+# tier: ch0nky
+# cmds: b00t hive activate inference-qwen36-27b-llamacpp
+# complexity: 5

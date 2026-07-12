@@ -1,5 +1,0 @@
-{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-06-24T13:10:16.961288197+00:00"}
-{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-06-24T13:21:41.846450770+00:00"}
-{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-06-24T13:22:11.088927604+00:00"}
-{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-06-24T13:22:43.429368228+00:00"}
-{"consumer":"test-consumer","event":"spotlight.llm.chat_completions","latency_ms":42,"model":"test-model","ts":"2026-06-24T13:23:20.749024268+00:00"}

@@ -114,6 +114,9 @@ showipc() {
   fi
 }
 
-log_📢_记录 "🥾🐳 $ runc, runinc, stopc, showipc"
-
+if [ "$(LC_ALL=C type -t _b00t_log_once_per_session 2>/dev/null)" = "function" ]; then
+  _b00t_log_once_per_session docker-bashrc '🥾🐳 $ runc, runinc, stopc, showipc'
+else
+  log_📢_记录 '🥾🐳 $ runc, runinc, stopc, showipc'
+fi
 

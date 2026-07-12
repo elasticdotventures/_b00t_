@@ -1,0 +1,88 @@
+[b00t]
+name = "arxiv-mcp-server"
+type = "mcp"
+version = "0.1.0"
+hint = "arXiv MCP server — search, download, and read academic papers via podman container (HTTP mode, port 8000)"
+
+[b00t.mcp]
+name = "arxiv-mcp-server"
+repo = "https://github.com/blazickjp/arxiv-mcp-server"
+license = "Apache 2.0"
+language = "Python"
+runtime = "uv + Python 3.11"
+transport = "http"
+port = 8000
+image = "localhost/arxiv-mcp-server:latest"
+
+[b00t.mcp.tools]
+search_papers = "Query arXiv with filters for date ranges and categories"
+download_paper = "Download paper by arXiv ID (HTML first, PDF fallback)"
+read_paper = "Read downloaded paper in markdown format"
+list_papers = "List all locally downloaded papers"
+semantic_search = "Semantic similarity search over local papers (requires [pro] extra)"
+citation_graph = "Fetch references and citing papers via Semantic Scholar"
+
+[b00t.mcp.install]
+description = "Build and run arxiv-mcp-server as a podman container"
+steps = [
+    "git clone https://github.com/blazickjp/arxiv-mcp-server.git /tmp/arxiv-mcp-server",
+    "cd /tmp/arxiv-mcp-server && podman build -t arxiv-mcp-server .",
+    "mkdir -p ~/.local/share/arxiv-mcp-server/papers",
+]
+
+[b00t.mcp.start]
+command = "podman run -d --replace --name arxiv-mcp-server -p 8000:8000 -v ~/.local/share/arxiv-mcp-server/papers:/app/papers -e TRANSPORT=http -e HOST=0.0.0.0 -e PORT=8000 arxiv-mcp-server --storage-path /app/papers"
+
+[b00t.mcp.stop]
+command = "podman stop arxiv-mcp-server && podman rm arxiv-mcp-server"
+
+[b00t.mcp.verify]
+command = "curl -s http://localhost:8000/health 2>/dev/null || echo 'not running'"
+
+[b00t.mcp.config]
+# 🤓 OpenCode MCP config snippet
+opencode_json = """
+{
+    "arxiv-mcp-server": {
+        "type": "http",
+        "url": "http://127.0.0.1:8000/mcp"
+    }
+}
+"""
+
+[b00t.env]
+ARXIV_MCP_URL = "http://127.0.0.1:8000/mcp"
+ARXIV_STORAGE_PATH = "~/.local/share/arxiv-mcp-server/papers"
+
+# ── Assimilation pipeline ─────────────────────────────────────────────────────
+[b00t.assimilate]
+description = "How arxiv papers flow into b00t's knowledge graph"
+pipeline = [
+    "1. domain_router detects arxiv.org URL → extracts paper ID via regex",
+    "2. arxiv-mcp-server: download_paper → read_paper (markdown, via Streamable HTTP)",
+    "3. docling: convert paper to structured JSON/plaintext (parse PDF if needed)",
+    "4. raglite: embed paper chunks into DuckDB + GGUF vector store",
+    "5. b00t grok: query the embedded knowledge graph via grok ask",
+]
+auto_load = true          # 🤓 domain_router automatically activates arxiv-mcp-server
+triggers = ["b00t grok ask '<question>' -t arxiv", "b00t-stack arxiv-ingest <paper-id>"]
+url_pattern = "arxiv\\.org/(?:abs|pdf)/(\\d{4}\\.\\d{4,5})"
+
+[[b00t.usage]]
+description = "Build and start arxiv-mcp-server"
+command = "b00t install arxiv-mcp-server && b00t stack activate arxiv-mcp-server"
+
+[[b00t.usage]]
+description = "Search arXiv papers"
+command = "curl -s -X POST http://localhost:8000/mcp -H 'Content-Type: application/json' -d '{\"method\":\"tools/call\",\"params\":{\"name\":\"search_papers\",\"arguments\":{\"query\":\"transformer neural networks\",\"max_results\":5}}}'"
+
+[[b00t.usage]]
+description = "Ingest a paper into b00t knowledge graph"
+command = "b00t-cli grok assimilate -t arxiv --class research-paper --tags 'arxiv,ml,transformer' -- '<paper-id>'"
+
+# b00t:map v1
+# summary: arXiv MCP server podman container — search/download/read academic papers, assimilate into b00t grok via docling+raglite
+# tags: arxiv, mcp, research, papers, podman, container, assimilation, grok, raglite, docling
+# tier: ch0nky
+# cmds: podman run -d --name arxiv-mcp-server -p 8000:8000 arxiv-mcp-server, b00t install arxiv-mcp-server
+# complexity: 4

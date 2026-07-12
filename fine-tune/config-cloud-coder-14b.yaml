@@ -1,0 +1,51 @@
+# ⚠️ DEPRECATED / ARCHIVAL — do not submit new jobs with this config
+# Qwen2.5-Coder-14B-Instruct is prev-gen; operator prefers a different model.
+# Kept for reference: env var fixes, batch/grad_accum tuning, LoRA config.
+#
+# 🤓 Qwen3+ Coder series notes (2026-06-30):
+#   - Qwen3-Coder-14B-Instruct: does NOT exist on HF Hub
+#   - Qwen3-Coder family models: 30B-A3B-Instruct, 480B-A35B-Instruct, Next(~79B) — ALL MoE
+#   - MoE training requires triton_kernels.routing — NOT on PyPI (internal Meta/OpenAI tooling)
+#     triton-kernels==0.1.0 only provides add_vectors.py + rotary_embedding.py (wrong package)
+#   - Without routing kernel: ~184s/step on H200 (29h for 573 steps > 10h timeout)
+#   - Qwen3-Coder-Next: 79B params BF16, too large for A10g-large (24GB)
+#   - Status as of 2026-06-30: no usable Qwen3-Coder dense model exists for fine-tuning
+
+base_model: "Qwen/Qwen2.5-Coder-14B-Instruct"
+adapter_name: "b00t-qwen2.5-coder-14b"
+dataset_path: "/data/train.jsonl"
+output_dir: "/tmp/output"
+hub_model_id: "elasticdotventures/b00t-qwen2.5-coder-14b"
+push_to_hub: true
+private: true
+
+# Dense 14B in 4-bit: ~7GB weights; A10g-large 24GB fits cleanly
+load_in_4bit: true
+
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.0    # 🤓 MUST be 0.0 — Unsloth fast kernel requires 0 dropout
+target_modules:
+  - "q_proj"
+  - "v_proj"
+  - "k_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+num_epochs: 1
+batch_size: 1
+grad_accum: 16
+learning_rate: 1e-4
+max_seq_length: 2048
+packing: true
+optim: "adamw_8bit"
+weight_decay: 0.01
+lr_scheduler: "cosine"
+warmup_ratio: 0.05
+save_steps: 50
+
+use_gradient_checkpointing: true
+report_to: "none"
+logging_steps: 10

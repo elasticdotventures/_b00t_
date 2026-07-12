@@ -1,15 +1,61 @@
-use anyhow::{Result, anyhow};
-#[allow(unused_imports)]
-use b00t_cli::UnifiedConfig;
+use anyhow::{anyhow, Result};
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::{SessionState, load_datum_providers, whoami};
+use b00t_cli::UnifiedConfig;
+use b00t_cli::{load_datum_providers, whoami, SessionState};
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
     eprintln!("Error: {}", msg);
     std::process::exit(code);
 }
+
+struct ProjectContext {
+    name: String,
+    stack: String,
+}
+
+fn find_project_context() -> Option<ProjectContext> {
+    let cwd = std::env::current_dir().ok()?;
+    let mut current = cwd.as_path();
+    loop {
+        let candidates = &[
+            current.join("_b00t_").join("🥾.tomllmd"),
+            current.join(".git").join("🥾.tomllmd"),
+        ];
+        for project_toml in candidates {
+            if project_toml.exists() {
+                if let Ok(content) = std::fs::read_to_string(project_toml) {
+                    let name = content.lines()
+                        .find(|l| l.starts_with("name = "))
+                        .and_then(|l| l.split('"').nth(1))
+                        .unwrap_or("unknown");
+                    let stack = content.lines()
+                        .find(|l| l.starts_with("primary_stack = "))
+                        .and_then(|l| l.split('"').nth(1))
+                        .unwrap_or("unknown");
+                    return Some(ProjectContext { name: name.to_string(), stack: stack.to_string() });
+                }
+            }
+        }
+        if current.join(".git").exists() { break; }
+        current = current.parent()?;
+    }
+    None
+}
+
+fn target_str_to_install_target(s: &str) -> b00t_cli::commands::mcp::McpInstallTarget {
+    match s {
+        "opencode" => b00t_cli::commands::mcp::McpInstallTarget::Opencode,
+        "claudecode" | "claude" => b00t_cli::commands::mcp::McpInstallTarget::Claudecode,
+        "vscode" => b00t_cli::commands::mcp::McpInstallTarget::Vscode,
+        "codex" => b00t_cli::commands::mcp::McpInstallTarget::Codex,
+        "geminicli" | "gemini" => b00t_cli::commands::mcp::McpInstallTarget::Geminicli,
+        "dotmcpjson" => b00t_cli::commands::mcp::McpInstallTarget::Dotmcpjson,
+        _ => b00t_cli::commands::mcp::McpInstallTarget::Opencode,
+    }
+}
+
 use clap::Parser;
 use dirs;
 use duct::cmd;
@@ -20,9 +66,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
-use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
-use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
+use b00t_cli::commands::cake::{handle_cake_command, CakeArgs};
+use b00t_cli::commands::learn::{handle_learn, LearnArgs};
+use b00t_cli::commands::maintenance::{handle_maintenance_command, MaintenanceArgs};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -40,16 +86,20 @@ use b00t_cli::commands::{
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, ContextCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
+    GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
+    PipelineCommands,
     StoreCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
+    provider::ProviderCommands,
     K8sCommands,
     McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
+    runpod::RunpodCommands,
     TaskCommands,
     PatchCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands, ZellijCommand
@@ -61,9 +111,9 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
-    gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
-    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
+    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
+    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
+    mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp, DatumType,
 };
 
 mod integration_tests;
@@ -71,13 +121,18 @@ mod integration_tests;
 #[derive(Parser)]
 #[clap(version = b00t_c0re_lib::version::VERSION, about, long_about = None)]
 struct Cli {
-    #[clap(short, long, env = "_B00T_Path", default_value = "~/.b00t/_b00t_")]
+    #[clap(short, long, env = "_B00T_Path", default_value = "~/.dotfiles/_b00t_")]
     path: String,
     #[clap(
         long,
         help = "Output structured markdown documentation about internal structures"
     )]
     doc: bool,
+    #[clap(
+        long,
+        help = "Verbose: show hidden shortcut commands and full help tree"
+    )]
+    verbose: bool,
     #[clap(subcommand)]
     command: Option<Commands>,
 }
@@ -116,7 +171,13 @@ Good entries separate neophyte from master. Bad entries are vague, negative, or 
 
 Usage:
   b00t-cli lfmf <tool> "<topic>: <body>"
+  b00t-cli lfmf <tool> "<lesson>"        # colon optional — topic auto-derived, entry salvage-marked
   b00t-cli lfmf --tool <tool> --lesson "<topic>: <body>"
+  b00t-cli lfmf stats all|<tool>         # hit/salvage/miss telemetry report
+
+Salvage-first: malformed lessons (missing colon, URL first-colon, over-long topic/body)
+are NEVER discarded — the payload is recorded with a `<!-- salvaged:<kind> -->` marker
+and counted in telemetry (~/.b00t/lfmf-telemetry.jsonl, override $B00T_LFMF_TELEMETRY).
 
 Examples:
   # Good
@@ -134,6 +195,9 @@ Tips:
 - Body: <250 tokens, actionable, never repo-specific.
 - Affirmative: 'Do X for Y benefit', not 'Don't do X'.
 - Suitable tools: any with a b00t datum (TOML, learn/ dir, etc).
+
+Advice mode (consult prior lessons before fixing):
+  b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
     Lfmf {
@@ -199,7 +263,9 @@ The system will:
         #[clap(subcommand)]
         mcp_command: McpCommands,
     },
-    #[clap(about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)")]
+    #[clap(
+        about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)"
+    )]
     Maintenance {
         #[command(flatten)]
         maintenance_args: MaintenanceArgs,
@@ -375,6 +441,11 @@ The system will:
         #[clap(subcommand)]
         agent_command: AgentCommands,
     },
+    #[clap(about = "Multi-provider compute — inference endpoints + training jobs (runpod, hf)")]
+    Provider {
+        #[clap(subcommand)]
+        provider_command: ProviderCommands,
+    },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
         #[clap(subcommand)]
@@ -502,6 +573,8 @@ The system will:
     #[clap(subcommand)]
     Server(ServerCommands),
     #[clap(subcommand)]
+    Pipeline(PipelineCommands),
+    #[clap(subcommand)]
     Store(StoreCommands),
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
@@ -543,6 +616,19 @@ The system will:
     Doctor {
         #[clap(subcommand)]
         doctor_command: DoctorCommands,
+    },
+    #[clap(
+        about = "Manage self-hosted GitHub Actions runners via podman kube play",
+        long_about = "Install, check status, view logs, deregister, and diagnose self-hosted GitHub Actions runners deployed as podman pods.\n\nExamples:\n  b00t gh-runner install --repo app4dog/middleware --labels 'self-hosted,linux,x64' --workdir /var/lib/gh-runner/middleware --ephemeral\n  b00t gh-runner status --repo app4dog/middleware\n  b00t gh-runner logs --repo app4dog/middleware --follow\n  b00t gh-runner deregister --repo app4dog/middleware --remove-workdir\n  b00t gh-runner doctor --repo app4dog/middleware"
+    )]
+    GhRunner {
+        #[clap(subcommand)]
+        gh_runner_command: GhRunnerCommands,
+    },
+    #[clap(about = "RunPod GPU cloud — pods, endpoints, training")]
+    Runpod {
+        #[clap(subcommand)]
+        runpod_command: RunpodCommands,
     },
     #[clap(
         about = "List [[b00t.gate]] declarations across MCP datums",
@@ -588,6 +674,57 @@ The system will:
     Zellij {
         #[clap(subcommand)]
         zellij_command: ZellijCommand,
+    },
+
+    // ── Hidden shortcut commands (visible with --verbose) ──────────────────
+    /// 🥾 boot — shortcut: gated MCP install + tidy-sweep + restart
+    #[clap(hide = true, about = "🥾 DWIW shortcut → mcp boot")]
+    Boot {
+        #[clap(long, default_value = "opencode", help = "Target agent")]
+        target: String,
+        #[clap(long, help = "Skip tidy-sweep")]
+        no_tidy: bool,
+        #[clap(long, help = "Skip restart")]
+        no_restart: bool,
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+    },
+
+    /// 📦 quick-install — shortcut: smart MCP install (DWIW target detection)
+    #[clap(hide = true, about = "📦 DWIW shortcut → mcp install with auto-target")]
+    QuickInstall {
+        #[clap(help = "MCP server name")]
+        name: String,
+        #[clap(long, help = "Target override (opencode, claude, etc.)")]
+        target: Option<String>,
+    },
+
+    /// 🔌 run — shortcut: datum-space launch (runtime sandbox or CLI passthrough)
+    #[clap(
+        hide = true,
+        about = "🔌 DWIW shortcut → datum dispatch (runtime | cli | polyseme)"
+    )]
+    RunDatum {
+        #[clap(help = "Datum name")]
+        name: String,
+        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+
+    /// 🔴 die — shortcut: process-icide for the current agent
+    #[clap(hide = true, about = "🔴 DWIW shortcut → quit (kill agent)")]
+    Die {
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+    },
+
+    /// 🧹 sweep — shortcut: remove *~ backup files
+    #[clap(hide = true, about = "🧹 DWIW shortcut → tidy-sweep")]
+    Sweep {
+        #[clap(long, help = "Dry-run")]
+        dry_run: bool,
+        #[clap(long, help = "Root directory", default_value_t = String::new())]
+        root: String,
     },
 }
 
@@ -889,6 +1026,18 @@ fn show_status(
     only_installed: bool,
     only_available: bool,
 ) -> Result<()> {
+    // Project context header
+    let expanded = b00t_cli::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    if let Some(project) = find_project_context() {
+        println!("📂 project: {}  |  stack: {}  |  path: {}",
+            project.name, project.stack, expanded.display());
+        let overrides = b00t_cli::load_project_overrides();
+        if !overrides.is_empty() {
+            println!("📌 overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+        }
+        println!();
+    }
+
     let mut all_tools = Vec::new();
 
     // Collect tools from all subsystems using new generic trait-based architecture
@@ -1782,12 +1931,159 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
 
 #[tokio::main]
 async fn main() {
-    let cli = match Cli::try_parse_from(normalize_slash_args(std::env::args().collect())) {
+    let raw_args: Vec<String> = std::env::args().collect();
+    let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
         Ok(cli) => cli,
         Err(e) => {
-            // Agent-friendly error: short orientation, not full usage dump
+            // --help / --version: let clap print and exit 0
+            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+                e.exit();
+            }
+            // Datum-driven dispatch: search the datum space for <name>
+            if raw_args.len() > 1 {
+                let candidate = &raw_args[1];
+                if !candidate.starts_with('-') && !candidate.starts_with('/') {
+                    let path = std::env::var("_B00T_Path")
+                        .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+                    let expanded = b00t_cli::get_expanded_path(&path)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| shellexpand::tilde(&path).to_string());
+                    let passthrough: Vec<String> = raw_args.iter().skip(2).cloned().collect();
+                    let matches = b00t_cli::resolve_all_datum_dispatches(candidate, &expanded);
+
+                    if matches.len() > 1 {
+                        // Multiple datum types — prompt for disambiguation
+                        // 🤓 Interactive polyseme selection (#580): if terminal, prompt user.
+                        //    Non-interactive (pipe/script): print options and exit (existing behavior).
+                        let mut polyseme_choice: Option<String> = None;
+                        for m in &matches {
+                            if let b00t_cli::DatumDispatch::Polyseme { name, refs } = m {
+                                if let Some(choice) = b00t_cli::prompt_polyseme_selection(name, refs) {
+                                    polyseme_choice = Some(choice);
+                                }
+                            }
+                        }
+                        if let Some(choice) = polyseme_choice {
+                            // User selected a polyseme ref — dispatch the concrete name
+                            let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                            if let Some(dispatch) = resolved.into_iter().next() {
+                                match dispatch {
+                                    b00t_cli::DatumDispatch::Runtime(cfg) => {
+                                        match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                            Ok(code) => std::process::exit(code),
+                                            Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                        }
+                                    }
+                                    b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
+                                        let mut cmd_args = args;
+                                        cmd_args.extend(passthrough);
+                                        let status = std::process::Command::new(&command).args(&cmd_args).status();
+                                        std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                    }
+                                    _ => {} // fall through to print options
+                                }
+                            }
+                        }
+
+                        eprintln!("\n\x1b[1m{candidate}\x1b[0m — multiple datum matches:");
+                        for (i, m) in matches.iter().enumerate() {
+                            match m {
+                                b00t_cli::DatumDispatch::Runtime(_) => {
+                                    eprintln!(
+                                        "  {}) \x1b[1mruntime\x1b[0m — sandboxed launch",
+                                        i + 1
+                                    );
+                                }
+                                b00t_cli::DatumDispatch::CliPassthrough { command, .. } => {
+                                    eprintln!("  {}) \x1b[1mcli\x1b[0m — run `{command}`", i + 1);
+                                }
+                                b00t_cli::DatumDispatch::Polyseme { name, refs } => {
+                                    eprintln!(
+                                        "  {}) \x1b[1mpolyseme\x1b[0m — {name} ({n} refs)",
+                                        i + 1,
+                                        n = refs.len()
+                                    );
+                                }
+                                b00t_cli::DatumDispatch::Info(msg) => {
+                                    eprintln!("  {}) {msg}", i + 1);
+                                }
+                            }
+                        }
+                        eprintln!("  Run with explicit command (e.g. `b00t run {candidate}` for runtime, `b00t cli check {candidate}` for cli)");
+                        std::process::exit(0);
+                    }
+
+                    match matches.into_iter().next() {
+                        Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
+                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                Ok(code) => std::process::exit(code),
+                                Err(err) => {
+                                    eprintln!("[b00t] runtime launch failed: {err}");
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Some(b00t_cli::DatumDispatch::CliPassthrough { command, args }) => {
+                            let mut cmd_args = args;
+                            cmd_args.extend(passthrough);
+                            let status = std::process::Command::new(&command)
+                                .args(&cmd_args)
+                                .status()
+                                .unwrap_or_else(|err| {
+                                    eprintln!("[b00t] {command}: {err}");
+                                    std::process::exit(1);
+                                });
+                            std::process::exit(status.code().unwrap_or(1));
+                        }
+                        Some(b00t_cli::DatumDispatch::Polyseme { name, refs }) => {
+                            // Interactive selection (#580)
+                            if let Some(choice) = b00t_cli::prompt_polyseme_selection(&name, &refs) {
+                                let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                                if let Some(dispatch) = resolved.into_iter().next() {
+                                    match dispatch {
+                                        b00t_cli::DatumDispatch::Runtime(cfg) => {
+                                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                                Ok(code) => std::process::exit(code),
+                                                Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                            }
+                                        }
+                                        b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
+                                            let mut cmd_args = args;
+                                            cmd_args.extend(passthrough);
+                                            let status = std::process::Command::new(&command).args(&cmd_args).status();
+                                            std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            println!(
+                                "\n\x1b[1m{}\x1b[0m — polyseme datum (multiple resolutions)",
+                                name
+                            );
+                            println!();
+                            for r in &refs {
+                                println!("  \x1b[1m{}\x1b[0m → {}", r.name, r.canonical);
+                                println!("    datum: {}  |  {}", r.datum, r.description);
+                            }
+                            if refs.is_empty() {
+                                println!(
+                                    "  (no refs yet — use `b00t grok assimilate <url>` to add)"
+                                );
+                            }
+                            println!();
+                            std::process::exit(0);
+                        }
+                        Some(b00t_cli::DatumDispatch::Info(msg)) => {
+                            println!("[b00t] {msg}");
+                            std::process::exit(0);
+                        }
+                        None => { /* fall through to error */ }
+                    }
+                }
+            }
+            // Not a runtime datum — show standard error
             let msg = e.to_string();
-            // Extract the actionable line (first non-empty line after "error:")
             let brief = msg
                 .lines()
                 .find(|l| l.starts_with("error:") || l.contains("tip:"))
@@ -1809,6 +2105,19 @@ async fn main() {
     if cli.doc {
         generate_documentation();
         return;
+    }
+
+    if cli.verbose {
+        eprintln!("\n\x1b[1m🥾 b00t shortcuts\x1b[0m  (hidden — use for token-efficient dispatch)");
+        eprintln!("  \x1b[2mb00t boot\x1b[0m               → mcp boot (gated install + restart)");
+        eprintln!("  \x1b[2mb00t quick-install <name>\x1b[0m → mcp install <name> (DWIW target)");
+        eprintln!(
+            "  \x1b[2mb00t run <name> [args]\x1b[0m   → datum dispatch (runtime | cli | polyseme)"
+        );
+        eprintln!("  \x1b[2mb00t die\x1b[0m                → quit (process-icide)");
+        eprintln!("  \x1b[2mb00t sweep\x1b[0m              → tidy-sweep *~ files");
+        eprintln!("  \x1b[2mb00t <name>\x1b[0m             → auto-detect datum type");
+        eprintln!();
     }
 
     match &cli.command {
@@ -2037,6 +2346,12 @@ async fn main() {
         }
         Some(Commands::Job { job_command }) => {
             if let Err(e) = job_command.execute_async(&cli.path).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Provider { provider_command }) => {
+            if let Err(e) = b00t_cli::commands::provider::handle_provider_command(provider_command.clone()).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2355,7 +2670,23 @@ async fn main() {
             };
             // Determine scope
             let scope = if *global { "global" } else { "repo" };
-            if let Err(e) =
+            // `lfmf stats all|<tool>` — hit/salvage/miss report from telemetry JSONL.
+            if tool == "stats" {
+                let filter = if lesson == "all" { None } else { Some(lesson.as_str()) };
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_stats(filter) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            // `lfmf advice <tool>` — retrieve prior lessons instead of recording.
+            // 🤓 Kaizen agent-fix-first: consult lessons BEFORE attempting a fix.
+            } else if tool == "advice" {
+                if let Err(e) =
+                    b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
+                {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Err(e) =
                 b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
             {
                 eprintln!("Error: {}", e);
@@ -2374,7 +2705,10 @@ async fn main() {
             use b00t_cli::commands::script::handle_script_command;
 
             if let Err(e) = handle_script_command(script_command.clone()) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {:#}", e);
+                for cause in e.chain().skip(1) {
+                    eprintln!("  caused by: {}", cause);
+                }
                 std::process::exit(1);
             }
         }
@@ -2469,8 +2803,8 @@ async fn main() {
                     println!("focus_balance: {:.2}", status.focus_balance);
                 }
                 ExperimentCommands::History { limit, json } => {
-                    use b00t_cli::commands::focus::FocusCommands;
                     use b00t_cli::commands::focus::handle_focus_command;
+                    use b00t_cli::commands::focus::FocusCommands;
                     let args = FocusCommands::History {
                         limit: *limit,
                         json: *json,
@@ -2497,6 +2831,12 @@ async fn main() {
         }
         Some(Commands::Server(args)) => {
             if let Err(e) = b00t_cli::commands::server::handle_server_command(&args) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Pipeline(cmd)) => {
+            if let Err(e) = b00t_cli::commands::pipeline::handle_pipeline_command(&cmd, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2596,6 +2936,20 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::GhRunner { gh_runner_command }) => {
+            if let Err(e) =
+                b00t_cli::commands::gh_runner::handle_gh_runner_command(gh_runner_command)
+            {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Runpod { runpod_command }) => {
+            if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await {
+                eprintln!("error: {e:?}");
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Gates { gates_command }) => {
             if let Err(e) = gates_command.execute(&cli.path) {
                 eprintln!("Error: {e}");
@@ -2634,6 +2988,176 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+
+        // ── Hidden shortcuts ──────────────────────────────────────────────────
+        Some(Commands::Boot {
+            target,
+            no_tidy,
+            no_restart,
+            dry_run,
+        }) => {
+            let boot_cmd = b00t_cli::commands::mcp::McpCommands::Boot {
+                target: target.clone(),
+                no_tidy: *no_tidy,
+                no_restart: *no_restart,
+                dry_run: *dry_run,
+                signal: 15,
+            };
+            if let Err(e) = boot_cmd.execute_async(&cli.path).await {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Some(Commands::QuickInstall { name, target }) => {
+            let expanded = match b00t_cli::get_expanded_path(&cli.path) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+            };
+            let tgt = match target.as_deref() {
+                Some(t) => {
+                    let datum_exists = expanded.join(format!("{}.cli.toml", t)).exists()
+                        || expanded.join(format!("{}.runtime.toml", t)).exists()
+                        || expanded.join(format!("{}.cli.tomllmd", t)).exists()
+                        || expanded.join(format!("{}.runtime.tomllmd", t)).exists()
+                        || expanded.join(format!("{}.cli.tomllm", t)).exists()
+                        || expanded.join(format!("{}.runtime.tomllm", t)).exists();
+                    if !datum_exists {
+                        eprintln!(
+                            "no datum found for target '{}' in {} — try 'b00t quick-install {}' without --target",
+                            t, expanded.display(), name
+                        );
+                        std::process::exit(1);
+                    }
+                    target_str_to_install_target(t)
+                }
+                None => {
+                    let candidates = ["opencode", "claude", "vscode", "codex"];
+                    let mut found = None;
+                    for c in &candidates {
+                        if expanded.join(format!("{}.cli.toml", c)).exists()
+                            || expanded.join(format!("{}.runtime.toml", c)).exists()
+                            || expanded.join(format!("{}.cli.tomllmd", c)).exists()
+                            || expanded.join(format!("{}.runtime.tomllmd", c)).exists()
+                            || expanded.join(format!("{}.cli.tomllm", c)).exists()
+                            || expanded.join(format!("{}.runtime.tomllm", c)).exists()
+                        {
+                            found = Some(target_str_to_install_target(c));
+                            break;
+                        }
+                    }
+                    match found {
+                        Some(t) => t,
+                        None => {
+                            eprintln!(
+                                "no agent runtime datum found in {} — try 'b00t quick-install {} --target opencode'",
+                                expanded.display(), name
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            };
+            let install_cmd = McpCommands::Install {
+                name: name.clone(),
+                target: tgt,
+                repo: false,
+                user: false,
+                stdio_command: None,
+                httpstream: false,
+            };
+            if let Err(e) = install_cmd.execute_async(&cli.path).await {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Some(Commands::RunDatum { name, args }) => {
+            let expanded = shellexpand::tilde(&cli.path).to_string();
+            let passthrough: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            match b00t_cli::resolve_datum_dispatch(name, &expanded) {
+                Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
+                    match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                        Ok(code) => std::process::exit(code),
+                        Err(err) => {
+                            eprintln!("[b00t] runtime launch failed: {err}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some(b00t_cli::DatumDispatch::CliPassthrough {
+                    command,
+                    args: cmd_args,
+                }) => {
+                    let mut all_args = cmd_args;
+                    all_args.extend(passthrough);
+                    let status = std::process::Command::new(&command)
+                        .args(&all_args)
+                        .status()
+                        .unwrap_or_else(|err| {
+                            eprintln!("[b00t] {command}: {err}");
+                            std::process::exit(1);
+                        });
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+                Some(b00t_cli::DatumDispatch::Polyseme { name: pname, refs }) => {
+                    println!("\n\x1b[1m{}\x1b[0m — polyseme datum", pname);
+                    for r in &refs {
+                        println!("  {} → {}  ({})", r.name, r.canonical, r.description);
+                    }
+                }
+                Some(b00t_cli::DatumDispatch::Info(msg)) => {
+                    println!("[b00t] {msg}");
+                }
+                None => {
+                    eprintln!("[b00t] datum '{name}' not found");
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Some(Commands::Die { dry_run }) => {
+            let signal = 15i32;
+            if *dry_run {
+                match b00t_cli::commands::quit::resolve_agent_pid() {
+                    Ok(pid) => eprintln!("[dry-run] would kill pid {pid}"),
+                    Err(e) => eprintln!("[dry-run] resolve failed: {e}"),
+                }
+            } else {
+                match b00t_cli::commands::quit::resolve_agent_pid() {
+                    Ok(pid) => {
+                        eprintln!("🔴 killing agent pid={pid}");
+                        let ret = b00t_cli::commands::quit::libc_kill(pid as i32, signal);
+                        if ret != 0 {
+                            eprintln!("kill failed: {}", std::io::Error::last_os_error());
+                            std::process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("resolve agent pid: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+
+        Some(Commands::Sweep { dry_run, root }) => {
+            let sweep_root = if root.is_empty() {
+                dirs::home_dir().unwrap_or_default()
+            } else {
+                std::path::PathBuf::from(root)
+            };
+            if *dry_run {
+                eprintln!("[dry-run] would sweep *~ under {}", sweep_root.display());
+            } else {
+                let count = b00t_cli::sweep_backup_files(&sweep_root);
+                eprintln!("🧹 swept {} *~ file(s)", count);
+            }
+        }
+
         None => {
             eprintln!("No command provided. Use --help for usage information.");
             std::process::exit(1);
@@ -2754,6 +3278,32 @@ mod k0mmand3r_dispatch_tests {
             }
             _ => panic!("expected uninstall command"),
         }
+    }
+
+    #[test]
+    fn cli_default_path_points_to_dotfiles_datums() {
+        let cli = Cli::parse_from(args(&["b00t-cli", "install", "mold", "--dry-run"]));
+        assert_eq!(cli.path, "~/.dotfiles/_b00t_");
+    }
+
+    #[test]
+    fn cli_source_bans_short_v_flags() {
+        let source = include_str!("main.rs");
+        // 🤓 Solomon note: -v/-V are too ambiguous in b00t. Verbose is long-only;
+        // version keeps clap's generated long form. Nobody gets short v/V.
+        // Pattern split so this test's own source doesn't self-trigger.
+        let banned_v = ["short = '", "v'"].concat();
+        let banned_vv = ["short = '", "V'"].concat();
+        let test_fn_start = source.find("fn cli_source_bans_short_v_flags").unwrap_or(0);
+        let prod_source = &source[..test_fn_start];
+        assert!(
+            !prod_source.contains(&banned_v),
+            "short -v is banned; use an unambiguous long flag"
+        );
+        assert!(
+            !prod_source.contains(&banned_vv),
+            "short -V is banned; use an unambiguous long flag"
+        );
     }
 
     #[test]

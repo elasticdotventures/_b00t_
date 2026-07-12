@@ -3,6 +3,7 @@
 
 [b00t]
 name = "example-workflow"
+parent = "wrkflw.cli"
 type = "job"
 hint = "Multi-stage build workflow with checkpoints and sub-agent execution"
 version = "0.1.0"
@@ -141,6 +142,7 @@ when = "on_success"  # Only if previous steps succeeded
 # Rollback steps - executed on failure
 [[b00t.job.rollback]]
 name = "cleanup-artifacts"
+parent = "wrkflw.cli"
 description = "Clean up partial artifacts on failure"
 
 [b00t.job.rollback.task]
@@ -149,6 +151,7 @@ command = "rm -rf dist/*.tar.gz target/release/b00t-*"
 
 [[b00t.job.rollback]]
 name = "restore-checkpoint"
+parent = "wrkflw.cli"
 description = "Restore to last successful checkpoint"
 
 [b00t.job.rollback.task]

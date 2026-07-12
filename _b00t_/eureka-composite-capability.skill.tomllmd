@@ -1,0 +1,54 @@
+[b00t]
+name = "eureka-composite-capability"
+type = "skill"
+hint = "Eureka: capabilities built separately compose into obvious wins nobody planned — re-run the composition audit after every capability landing"
+aliases = ["eureka", "eurkea"]
+
+[b00t.schema]
+type = "skill"
+type_tags = ["eureka", "composition", "capability-audit", "assimilate", "grammar-verify", "serena", "meta-pattern"]
+
+# ── The eureka (2026-07-07): capabilities compose behind your back ────────────
+#
+# Reviewing `b00t grok assimilate` against capabilities landed SINCE it was
+# written exposed compositions that were invisible at authoring time and
+# obvious in hindsight:
+#
+# 1. assimilate × grammar-verify:
+#    concept_extractor.rs:43 BEGS the model — "Return ONLY valid JSON (no
+#    markdown fences, no commentary)" — then degrades to empty extraction on
+#    garbage. schema_constraint::constrain_request() (built days later) makes
+#    malformed extraction UNREPRESENTABLE. The beg-and-degrade posture is
+#    obsolete code the moment the constraint module landed; nobody noticed
+#    because nobody re-audited the old surface against the new capability.
+#
+# 2. assimilate × serena (LSP symbolic ops):
+#    assimilate ingests knowledge ABOUT tools; serena changes how agents READ
+#    CODE (symbol-scoped, 83-96% measured token savings vs whole-file). The
+#    hand-rolled cbm-code-discovery-gate hook was an ad-hoc attempt at exactly
+#    this — a mature drop-in existed upstream the whole time.
+#
+# 3. z3-examples × datum emission:
+#    S1-S5/A1-A3 were written as proofs; they ARE the audit half for any LLM
+#    emitting b00t artifacts (S1 type-uniqueness audits assimilate output,
+#    S3 acyclicity audits depends_on edges, A1 is pre-flight datum validation).
+#
+# 🤓 THE META-RULE: after every capability lands, walk the EXISTING surfaces
+#    and ask "which of these was built as a workaround for not having this?"
+#    Workarounds don't announce themselves — they look like normal code
+#    (a begging prompt, a blocking hook, a proof nobody calls). The eureka
+#    feels obvious precisely because the pieces already existed; the scarce
+#    act is scheduling the re-audit, not having the insight.
+#
+# Recipe: b00t learn grammar-verify (constraint leg) · b00t learn serena
+# (symbol leg) · cargo test -p b00t-c0re-lib --lib z3_ (audit leg).
+# Candidate next compositions: distillery #98 × schema_constraint;
+# sudo-operator disposition × schema_constraint; cbm hook → serena-backed gate.
+
+# b00t:map v1
+# summary: Composition audit meta-pattern — re-walk existing surfaces after each capability lands; workarounds look like normal code
+# tags: eureka, composition, capability-audit, meta-pattern, assimilate, serena, grammar-verify
+# tier: frontier
+# cmds: b00t learn eureka; b00t learn grammar-verify; b00t learn serena
+# related: b00t-cli/src/assimilate/concept_extractor.rs; b00t-mcp/src/schema_constraint.rs; _b00t_/serena.mcp.toml
+# complexity: 5

@@ -1,0 +1,14 @@
+---
+# PriorityClass for persistent GPU inference tiers (ch0nky, future sm0l/nomic-embed upgrades).
+# 🤓 Replaces the dead [b00t.hive.exclusion] priority field from .hive.toml — this is
+#    enforced by the k8s scheduler/kubelet (preemption), not just documented intent.
+#    Value sits well below system-cluster-critical (2000000000) and above the unset
+#    default (0) that any future unlabeled batch/Job pod would get, so batch work
+#    yields the GPU to inference tiers automatically instead of racing for it.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: b00t-gpu-primary
+value: 1000
+globalDefault: false
+description: "Persistent GPU inference services (ch0nky) — preempts unlabeled/batch GPU pods on the single-GPU node."

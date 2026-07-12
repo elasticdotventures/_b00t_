@@ -1,0 +1,67 @@
+[b00t]
+name = "huggingface"
+type = "mcp"
+version = "0.1.0"
+hint = "HuggingFace Official MCP Server — hosted Streamable HTTP at huggingface.co/mcp, models/datasets/spaces/papers"
+
+[b00t.mcp]
+name = "hf-mcp-server"
+repo = "https://github.com/huggingface/hf-mcp-server"
+license = "MIT"
+language = "TypeScript"
+transport = "streamable_http"
+url = "https://huggingface.co/mcp"
+port = "N/A (hosted)"
+
+[b00t.mcp.tools]
+hf_doc_search = "Search HuggingFace documentation"
+hf_doc_fetch = "Fetch documentation content by URL"
+hf_model_info = "Get model card and metadata"
+hf_dataset_info = "Get dataset card and metadata"
+hf_space_info = "Get space info"
+hf_search_models = "Search models on the Hub"
+hf_search_datasets = "Search datasets on the Hub"
+
+[b00t.mcp.auth]
+# 🤓 HF_TOKEN from environment. Set in .env:
+#   HF_TOKEN=hf_xxx
+env_var = "HF_TOKEN"
+header = "Authorization: Bearer"
+required = false
+note = "Public models work without auth; gated models need HF_TOKEN"
+
+[b00t.mcp.config]
+opencode_json = """
+{
+    "huggingface": {
+        "enabled": true,
+        "type": "http",
+        "url": "https://huggingface.co/mcp",
+        "headers": {
+            "Authorization": "Bearer ${HF_TOKEN}"
+        }
+    }
+}
+"""
+
+# ── Domain router integration ─────────────────────────────────────────────────
+[b00t.assimilate]
+auto_load = true
+url_pattern = "huggingface\\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)"
+description = "hf_doc_fetch retrieves model/dataset/space cards via MCP — no webfetch"
+
+# ── Usage ──────────────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Fetch a model card via MCP (not webfetch)"
+command = "b00t grok assimilate 'https://huggingface.co/meta-llama/Llama-3.1-8B' -t llm"
+
+[[b00t.usage]]
+description = "Search for models"
+command = "b00t grok ask 'what are the top text-to-image models on huggingface?' -t huggingface"
+
+# b00t:map v1
+# summary: HuggingFace Official MCP Server — hosted Streamable HTTP, domain router auto-detects huggingface.co URLs
+# tags: huggingface, mcp, models, datasets, spaces, hosted, domain-router, assimilation
+# tier: sm0l
+# cmds: b00t grok assimilate 'https://huggingface.co/...' -t <topic>
+# complexity: 3

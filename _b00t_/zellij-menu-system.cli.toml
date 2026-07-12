@@ -398,19 +398,13 @@ esac
 **🥾 Menu system proof of concept:** Interactive yes/no dialogs in Zellij via floating panes with user input capture.
 """
 
-[[b00t.gate.check]]
-name = "zellij_session_check"
-description = "Verify running in Zellij session"
+[[b00t.gate]]
 command = "test -n \"$ZELLIJ_SESSION_NAME\""
-severity = "error"
-on_fail = "Menu system requires active Zellij session - start with: zellij attach main"
+hint = "Menu system requires active Zellij session - start with: zellij attach main"
 
-[[b00t.gate.check]]
-name = "zellij_actions_check"
-description = "Verify Zellij actions available"
+[[b00t.gate]]
 command = "zellij action --help &> /dev/null"
-severity = "error"
-on_fail = "Zellij actions not available - check Zellij installation"
+hint = "Zellij actions not available - check Zellij installation"
 
 # b00t:map v1
 # summary: Zellij Menu System - Interactive yes/no dialogs and text input prompts in Zellij floating panes

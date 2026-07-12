@@ -1,0 +1,14 @@
+[b00t]
+name = "emoji-pinyin-naming"
+type = "learn"
+hint = "b00t naming convention: 4-character combo of Emoji + HSK1 Pinyin for ultra-dense semantic labels"
+
+[learn]
+topic = "emoji-pinyin-naming"
+lesson = """
+b00t uses fixed-width 4-character sequences combining Emoji (1024 chars) + HSK1 Mandarin (500 chars) + English (36 chars) = 1560 chars total, producing 5.9 trillion possible 'stories' in 4 character positions.
+
+By comparison, English-only (A-Z,0-9) produces only 1.6M combinations — not descriptive. Simplified Pinyin is more legible than traditional Chinese on screens, and Emoji is universally understood. DNS names (up to 65 chars) can carry rich semantic information using this encoding.
+"""
+category = "design-pattern"
+tags = ["naming", "emoji", "pinyin", "unicode", "semantic-encoding"]

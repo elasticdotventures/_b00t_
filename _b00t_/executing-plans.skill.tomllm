@@ -1,0 +1,29 @@
+[b00t]
+name = "executing-plans"
+type = "skill"
+version = "0.1.0"
+hint = "Execute a written implementation plan in a separate session with review checkpoints"
+
+[b00t.skill]
+description = """
+Use when you have a written implementation plan to execute in a separate session with review checkpoints.
+"""
+source = "Claude Code built-in skill (superpowers plugin) — no external assimilation source"
+tags = ["execution", "plans", "checkpoints", "review"]
+tier = "ch0nky"
+complexity = 4
+
+[b00t.learn]
+topic = "executing-plans"
+inline = """
+Use when you have a written implementation plan to execute in a separate session with review checkpoints.
+
+Invoke via the Skill tool in Claude Code: skill="executing-plans".
+"""
+
+# b00t:map v1
+# summary: Execute a written implementation plan in a separate session with review checkpoints
+# tags: execution, plans, checkpoints, review
+# tier: ch0nky
+# cmds: b00t learn executing-plans
+# complexity: 4

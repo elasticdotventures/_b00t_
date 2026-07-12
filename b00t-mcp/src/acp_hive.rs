@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
-use tracing::{info, warn, debug, error};
+use tracing::{info, warn, debug};
 use uuid::Uuid;
 
 use b00t_chat::{Agent, AgentConfig, ACPMessage, MessageType};

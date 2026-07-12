@@ -4,9 +4,10 @@ use crate::blessing::BlessingGraph;
 use crate::commands::task::load_store;
 use crate::datum_utils::{DatumGraph, build_datum_graph, graph_neighbors};
 use crate::viz::{
-    SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_plantuml, blessing_to_rhai_dsl,
-    blessing_to_scene, datum_graph_to_mermaid, datum_graph_to_plantuml, datum_graph_to_rhai_dsl,
-    datum_graph_to_scene, scene_to_ascii, scene_to_svg, tasks_to_mermaid, tasks_to_plantuml,
+    SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_rhai_dsl,
+    blessing_to_scene, datum_graph_to_mermaid, datum_graph_to_rhai_dsl,
+    datum_graph_to_scene, scene_to_ascii, scene_to_cytoscape, scene_to_owl2,
+    scene_to_svg, scene_to_sysmlv2, tasks_to_mermaid,
     tasks_to_rhai_dsl, tasks_to_scene,
 };
 use anyhow::{Context, Result};
@@ -68,10 +69,12 @@ pub enum VizFormat {
     Isometric,
     Mermaid,
     Rhai,
-    Plantuml,
     Json,
     Ascii,
     Svg,
+    Cytoscape,
+    SysMLv2,
+    Owl2,
 }
 
 pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
@@ -89,7 +92,6 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
                 *format,
                 blessing_to_mermaid(&graph),
                 blessing_to_rhai_dsl(&graph),
-                blessing_to_plantuml(&graph),
                 blessing_to_scene(&graph),
             )?;
             emit(rendered, output)
@@ -100,7 +102,6 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
                 *format,
                 tasks_to_mermaid(&store.tasks),
                 tasks_to_rhai_dsl(&store.tasks),
-                tasks_to_plantuml(&store.tasks),
                 tasks_to_scene(&store.tasks),
             )?;
             emit(rendered, output)
@@ -120,7 +121,6 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
                 *format,
                 datum_graph_to_mermaid(&graph),
                 datum_graph_to_rhai_dsl(&graph),
-                datum_graph_to_plantuml(&graph),
                 datum_graph_to_scene(&graph),
             )?;
             emit(rendered, output)
@@ -132,17 +132,17 @@ fn render(
     format: VizFormat,
     mermaid: String,
     rhai: String,
-    plantuml: String,
     scene: SceneGraph,
 ) -> Result<String> {
     match format {
-        VizFormat::Isometric => Ok(scene_to_svg(&scene, &SceneTheme::default())),
+        VizFormat::Isometric | VizFormat::Svg => Ok(scene_to_svg(&scene, &SceneTheme::default())),
         VizFormat::Mermaid => Ok(format!("```mermaid\n{}```\n", mermaid)),
         VizFormat::Rhai => Ok(format!("```rhai\n{}```\n", rhai)),
-        VizFormat::Plantuml => Ok(format!("```plantuml\n{}```\n", plantuml)),
         VizFormat::Json => serde_json::to_string_pretty(&scene).context("serialize scene graph"),
         VizFormat::Ascii => Ok(scene_to_ascii(&scene)),
-        VizFormat::Svg => Ok(scene_to_svg(&scene, &SceneTheme::default())),
+        VizFormat::Cytoscape => Ok(scene_to_cytoscape(&scene)),
+        VizFormat::SysMLv2 => Ok(scene_to_sysmlv2(&scene)),
+        VizFormat::Owl2 => Ok(scene_to_owl2(&scene)),
     }
 }
 
@@ -236,7 +236,6 @@ relationship = "delegates"
                 VizFormat::Mermaid,
                 "graph LR\n".into(),
                 "".into(),
-                "".into(),
                 scene.clone()
             )
             .unwrap()
@@ -247,25 +246,13 @@ relationship = "delegates"
                 VizFormat::Rhai,
                 "".into(),
                 "task(\"1\", {})\n".into(),
-                "".into(),
                 scene.clone()
             )
             .unwrap()
             .contains("```rhai")
         );
         assert!(
-            render(
-                VizFormat::Plantuml,
-                "".into(),
-                "".into(),
-                "@startuml\n@enduml\n".into(),
-                scene.clone()
-            )
-            .unwrap()
-            .contains("```plantuml")
-        );
-        assert!(
-            render(VizFormat::Ascii, "".into(), "".into(), "".into(), scene)
+            render(VizFormat::Ascii, "".into(), "".into(), scene)
                 .unwrap()
                 .contains("nodes:")
         );

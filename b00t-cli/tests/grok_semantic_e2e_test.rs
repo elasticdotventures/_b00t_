@@ -11,7 +11,6 @@
 //!
 //! Test data: tests/fixtures/grok_test_cases.json
 
-use anyhow::Result;
 use assert_cmd::prelude::*;
 use serde::Deserialize;
 use std::{env, fs, io::Write, path::PathBuf, process::Command};

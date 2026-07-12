@@ -1,0 +1,26 @@
+---
+# Expose ch0nky via standard k8s Ingress (Traefik v3, no CRDs required)
+# Accessible at: http://ch0nky.b00t.local:30080/v1/...
+# Network-wide: add 192.168.1.137 ch0nky.b00t.local to router/Pi-hole DNS
+# Local only:   echo '192.168.1.137 ch0nky.b00t.local' | sudo tee -a /etc/hosts
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ch0nky
+  namespace: b00t-inference
+  annotations:
+    # Traefik: pass Authorization header through (needed for api-key)
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ch0nky.b00t.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ch0nky
+                port:
+                  number: 8001

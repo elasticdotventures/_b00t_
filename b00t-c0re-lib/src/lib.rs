@@ -35,9 +35,11 @@ pub mod ato_client;
 pub mod b00t_config;
 pub mod context;
 pub mod datum_ai_model;
-pub mod datum_lsp;
+// 🤓 datum_lsp stub removed: superseded by the b00t-lsp crate (real tower-lsp server);
+//    the stub bin shared target/debug/b00t-lsp and clobbered it on rebuild.
 pub mod data_fabric;
 pub mod doc_pipeline;
+pub mod z3_examples;
 pub mod dual_grok;
 pub mod dual_install;
 pub mod events;
@@ -51,21 +53,25 @@ pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
 pub mod lfmf;
+pub mod lfmf_telemetry;
 pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
 pub mod ooda;
+pub mod ai_capability;
 pub mod pipeline_nodes;
 pub mod query_bus;
 pub mod rag;
 pub mod reasoning;
 pub mod reviewer;
+pub mod sudo_operator;
 pub mod redis;
 pub mod rhai_engine;
 pub mod runtime_env;
 pub mod secret_validation;
 pub mod sm0l_dispatch;
+pub mod soul_dataframerr;
 pub mod template;
 pub mod utils;
 
@@ -83,7 +89,6 @@ pub use doc_pipeline::{
     FOLFormula, FOLStereotype, FullPipelineResult, PipelineStage, Predicate, ProvenancePointer,
     Quantifier, ReqIFMetadata, Requirement, RequirementStatus, RequirementType,
     SemanticChunk, SerializableFOLFormula, StageResult, SysMLv2Stereotype,
-    // UFO traits — concept-as-code
     Category, Endurant, Perdurant, Quality, Relator, RelatorType, Role,
 };
 pub use dual_grok::{
@@ -139,5 +144,6 @@ mod tests {
         assert!(!version::VERSION.is_empty());
     }
 }
+pub mod credential_backend;
 pub mod datum_credential;
 pub mod store;
