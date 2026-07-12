@@ -200,6 +200,9 @@ Advice mode (consult prior lessons before fixing):
   b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
+    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
+    Blessing(b00t_cli::commands::blessing::BlessingArgs),
+
     Lfmf {
         #[clap(
             value_name = "TOOL",
@@ -2233,16 +2236,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami {
-            role,
-            with_skills,
-            json,
-            skills,
-            dashboard,
-        }) => {
-            if *dashboard {
-                whoami::print_dashboard();
-            } else if *json {
+        Some(Commands::Whoami { role, with_skills, json, skills }) => {
+            if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
                     Ok(ctx) => {

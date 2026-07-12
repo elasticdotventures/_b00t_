@@ -18,15 +18,8 @@
 //! | b00t:hasSkill      | skills                                   | capability tag         |
 //! | b00t:hasType       | datum_type                               | classifier             |
 //! | rdfs:label         | hint                                     | display name           |
-//! | b00t:alias         | aliases                                  | alternate name         |
-//! | b00t:unlocks       | unlocks, [b00t.skill].unlocks            | blessing tool globs    |
-//! | b00t:dependsOn     | [b00t.skill].depends_on                  | skill prerequisite     |
-//! | b00t:composes_with | [b00t.compose].composes_with             | capability composition |
-//! | b00t:audits        | [b00t.compose].audits                    | verification pairing   |
-//! | b00t:supersedes    | [b00t.compose].supersedes                | obsolescence           |
-//! | b00t:measured      | [b00t.compose].measured                  | "metric=value" evidence|
 //!
-//! Fields left for future triples: `members`, `compliance`, `url`.
+//! Fields left for future triples: `members`, `compliance`, `aliases`, `url`.
 
 use anyhow::Result;
 use crate::datum_utils::get_all_datums;
@@ -73,34 +66,6 @@ pub fn compile_datum_triples(b00t_path: &str) -> Result<Vec<(String, String, Str
         // Capability tags (literal annotations, not graph edges)
         emit_literal_list(&subj, "b00t:hasKeyword", datum.keywords.as_deref(), &mut triples);
         emit_literal_list(&subj, "b00t:hasSkill",   datum.skills.as_deref(),   &mut triples);
-
-        // Alternate names (literals — lexical aliases, not datum refs)
-        emit_literal_list(&subj, "b00t:alias", datum.aliases.as_deref(), &mut triples);
-
-        // Blessing authorization: tool globs unlocked when this datum is learned
-        emit_literal_list(&subj, "b00t:unlocks", datum.unlocks.as_deref(), &mut triples);
-
-        // [b00t.compose] — composition knowledge (previously comment-prose only)
-        if let Some(ref compose) = datum.compose {
-            emit_ref_list(&subj, "b00t:composes_with", compose.composes_with.as_deref(), &mut triples);
-            emit_ref_list(&subj, "b00t:audits",        compose.audits.as_deref(),        &mut triples);
-            emit_ref_list(&subj, "b00t:supersedes",    compose.supersedes.as_deref(),    &mut triples);
-            if let Some(ref measured) = compose.measured {
-                for m in measured {
-                    if !m.metric.is_empty() {
-                        triples.push((subj.clone(), "b00t:measured".into(), format!("{}={}", m.metric, m.value)));
-                    }
-                }
-            }
-        }
-
-        // [b00t.skill] table — generic JSON blob; lift depends_on/unlocks into the
-        // graph iff not already emitted from the top-level [b00t] fields.
-        // 🤓 skill depends_on reuses b00t:dependsOn (NOT b00t:depends_on) so the
-        //    DependsOn Horn transitive-closure rule sees one predicate spelling.
-        if let Some(ref skill) = datum.skill {
-            emit_skill_table(&subj, skill, &mut triples);
-        }
     }
 
     Ok(triples)
@@ -125,42 +90,6 @@ fn emit_ref_list(
             format!("b00t:datum/{v}")
         };
         out.push((subj.to_string(), pred.to_string(), obj));
-    }
-}
-
-/// Lift `depends_on` (refs) and `unlocks` (literals) out of the untyped
-/// `[b00t.skill]` JSON table, skipping triples already emitted from the
-/// top-level `[b00t]` fields.
-fn emit_skill_table(
-    subj: &str,
-    skill: &serde_json::Value,
-    out: &mut Vec<(String, String, String)>,
-) {
-    let str_items = |field: &str| -> Vec<String> {
-        skill.get(field)
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-
-    for dep in str_items("depends_on") {
-        let obj = if dep.contains(':') { dep } else { format!("b00t:datum/{dep}") };
-        let triple = (subj.to_string(), "b00t:dependsOn".to_string(), obj);
-        if !out.contains(&triple) {
-            out.push(triple);
-        }
-    }
-    for unlock in str_items("unlocks") {
-        let triple = (subj.to_string(), "b00t:unlocks".to_string(), unlock);
-        if !out.contains(&triple) {
-            out.push(triple);
-        }
     }
 }
 
@@ -272,92 +201,6 @@ keywords = ["json", "filter", "stream"]
         assert!(kw.contains(&"json"));
         assert!(kw.contains(&"filter"));
         assert!(kw.contains(&"stream"));
-    }
-
-    /// Fixture datums live in tests/fixtures/datum_triples/ (never embedded).
-    fn fixture_triples() -> Vec<(String, String, String)> {
-        let path = format!("{}/tests/fixtures/datum_triples", env!("CARGO_MANIFEST_DIR"));
-        compile_datum_triples(&path).unwrap()
-    }
-
-    fn objects_of<'a>(
-        triples: &'a [(String, String, String)],
-        subj: &str,
-        pred: &str,
-    ) -> Vec<&'a str> {
-        triples.iter()
-            .filter(|(s, p, _)| s == subj && p == pred)
-            .map(|(_, _, o)| o.as_str())
-            .collect()
-    }
-
-    #[test]
-    fn test_fixture_compose_emits_composes_with_audits_supersedes() {
-        let triples = fixture_triples();
-        let subj = "b00t:datum/composer.mcp";
-
-        let cw = objects_of(&triples, subj, "b00t:composes_with");
-        assert_eq!(cw.len(), 2);
-        assert!(cw.contains(&"b00t:datum/grammar-verify"));
-        assert!(cw.contains(&"b00t:datum/b00t-lsp"));
-
-        assert_eq!(objects_of(&triples, subj, "b00t:audits"), vec!["b00t:datum/assimilate"]);
-        assert_eq!(objects_of(&triples, subj, "b00t:supersedes"), vec!["b00t:datum/whole-file-read"]);
-    }
-
-    #[test]
-    fn test_fixture_compose_emits_measured_metric_value_pairs() {
-        let triples = fixture_triples();
-        let measured = objects_of(&triples, "b00t:datum/composer.mcp", "b00t:measured");
-        assert_eq!(measured.len(), 2);
-        assert!(measured.contains(&"context_savings_record_lesson=94%"));
-        assert!(measured.contains(&"context_savings_proxy_chat=83%"));
-    }
-
-    #[test]
-    fn test_fixture_aliases_emit_alias_literals() {
-        let triples = fixture_triples();
-        let aliases = objects_of(&triples, "b00t:datum/aliased.skill", "b00t:alias");
-        assert_eq!(aliases.len(), 2);
-        assert!(aliases.contains(&"ali"));
-        assert!(aliases.contains(&"alia"));
-        // mcp fixture aliases light up too
-        assert_eq!(objects_of(&triples, "b00t:datum/composer.mcp", "b00t:alias"), vec!["kompozer"]);
-    }
-
-    #[test]
-    fn test_fixture_skill_table_emits_depends_on_and_unlocks() {
-        let triples = fixture_triples();
-        let subj = "b00t:datum/skilldeps.skill";
-
-        // z3-verify appears top-level AND in [b00t.skill] — dedupe leaves one
-        let deps = objects_of(&triples, subj, "b00t:dependsOn");
-        assert_eq!(deps.len(), 2, "expected deduped depends_on, got {deps:?}");
-        assert!(deps.contains(&"b00t:datum/z3-verify"));
-        assert!(deps.contains(&"b00t:datum/gbnf-grammar"));
-
-        let unlocks = objects_of(&triples, subj, "b00t:unlocks");
-        assert_eq!(unlocks.len(), 2);
-        assert!(unlocks.contains(&"skilldeps::author"));
-        assert!(unlocks.contains(&"skilldeps::audit"));
-    }
-
-    #[test]
-    fn test_top_level_unlocks_emits_unlocks_literals() {
-        let triples = triples_for_toml(r#"
-[b00t]
-name = "rusty"
-type = "skill"
-hint = "Blessing datum"
-unlocks = ["cargo.*", "rustfmt"]
-        "#);
-        let unlocks: Vec<_> = triples.iter()
-            .filter(|(_, p, _)| p == "b00t:unlocks")
-            .map(|(_, _, o)| o.as_str())
-            .collect();
-        assert_eq!(unlocks.len(), 2);
-        assert!(unlocks.contains(&"cargo.*"));
-        assert!(unlocks.contains(&"rustfmt"));
     }
 
     #[test]

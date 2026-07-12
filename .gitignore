@@ -316,9 +316,3 @@ session-guards.json
 # Runtime state files
 exec-audit.json
 ooda-state.json
-evidence/
-test/bats/
-test/test_helper/
-buildd/
-.opencode/goals/
-*.wasm

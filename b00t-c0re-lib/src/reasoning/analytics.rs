@@ -6,10 +6,11 @@
 use ascent::ascent;
 use ascent::lattice::Dual;
 use std::collections::HashMap;
-use super::predicates::B00tPredicate;
 
 fn is_edge_pred(p: &str) -> bool {
-    B00tPredicate::from_uri(p).map(|pred| pred.is_edge_relation()).unwrap_or(false)
+    matches!(p, "b00t:relatedTo" | "b00t:dependsOn" | "b00t:informedBy")
+        || p.contains("DependsOn")
+        || p.contains("relatedTo")
 }
 
 ascent! {
@@ -69,10 +70,9 @@ pub fn analyze(triples: Vec<(String, String, String)>) -> AnalyticsResults {
 
     let path_count = prog.path.len();
 
-    let informed_by_uri = B00tPredicate::InformedBy.as_uri();
     let mut skill_frequency: HashMap<String, u32> = HashMap::new();
     for (_, p, skill) in &triples {
-        if *p == informed_by_uri {
+        if p.as_str() == "b00t:informedBy" {
             *skill_frequency.entry(skill.clone()).or_insert(0) += 1;
         }
     }

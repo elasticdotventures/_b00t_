@@ -1,8 +1,4 @@
 pub mod blessing;
-pub mod gap_detect;
-pub mod evidence;
-pub mod calibrate;
-pub mod from_artifact;
 pub mod agent;
 pub mod gh_runner;
 pub use gh_runner::GhRunnerCommands;
@@ -62,7 +58,6 @@ pub mod tutorial;
 pub mod uninstall;
 pub mod up;
 pub mod upgrade;
-pub mod provider;
 pub mod validate;
 pub mod version;
 pub mod viz;

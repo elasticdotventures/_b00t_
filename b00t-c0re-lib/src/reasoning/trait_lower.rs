@@ -13,7 +13,6 @@
 //!   the derived `Implements` fact.
 
 use syn::{GenericParam, Item, ItemImpl, Type, TypeParamBound, WherePredicate};
-use super::predicates::B00tPredicate;
 
 // ── String representations ────────────────────────────────────────────────
 
@@ -46,9 +45,9 @@ fn visit_impl(block: &ItemImpl, out: &mut Vec<(String, String, String)>) {
     let trait_name = path_str(trait_path);
 
     // Direct: Type implements Trait
-    out.push((self_ty.clone(), B00tPredicate::Implements.as_uri(), trait_name.clone()));
+    out.push((self_ty.clone(), "b00t:implements".to_string(), trait_name.clone()));
 
-    let req_pred = B00tPredicate::RequiresTrait { trait_name: trait_name.clone() }.as_uri();
+    let req_pred = format!("b00t:requires/{trait_name}");
 
     // Generic param bounds: `impl<T: Clone> Clone for Vec<T>`
     for param in &block.generics.params {

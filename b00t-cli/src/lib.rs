@@ -787,44 +787,6 @@ pub struct BootDatum {
     // 🤓 type_tags: content classification (transferable, domain, etc.) — distinct from datum_type
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_tags: Option<Vec<String>>,
-
-    // Maintenance: version-check automation
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub maintenance: Option<MaintenanceConfig>,
-    // Core requirement: b00t-lite.sh auto-installs datums with this flag
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_for_core: Option<bool>,
-    // Runtime wrapper profile — sandboxed application launch
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub runtime: Option<RuntimeConfig>,
-    // Polyseme container — canonical artifact references for ambiguous names
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub polyseme: Option<PolysemeConfig>,
-    // Composition knowledge ([b00t.compose]) — graph-visible capability composition
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compose: Option<ComposeConfig>,
-}
-
-impl BootDatum {
-    /// Deterministic mti TypeID for this datum, inferred from (datum_type, name).
-    ///
-    /// Prefix comes from `DatumType::type_prefix()` which mirrors `base_suffix()`.
-    /// Suffix is UUID v5 (SHA-1) over a stable b00t namespace + datum name — same
-    /// inputs always produce the same ID, no storage required.
-    ///
-    /// Example: a Skill datum named "bayesian" → `skill_<uuid-v5>`
-    pub fn type_id(&self) -> String {
-        use mti::prelude::MagicTypeIdExt;
-        let prefix = self.datum_type
-            .as_ref()
-            .map(|t| t.type_prefix())
-            .unwrap_or("dat");
-        let namespace = uuid::Uuid::new_v5(
-            &uuid::Uuid::NAMESPACE_DNS,
-            b"datum.b00t.promptexecution.com",
-        );
-        prefix.create_type_id_v3(namespace.into(), self.name.as_bytes()).to_string()
-    }
 }
 
 /// Handle datum types that are marked as *incubating*.

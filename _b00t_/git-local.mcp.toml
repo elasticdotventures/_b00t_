@@ -2,8 +2,6 @@
 name = "git-local"
 type = "mcp"
 hint = "Local git CLI operations via MCP (add, commit, push, branch, stash, rebase, etc.)"
-
-entangled_cli = ["git-local.cli"]
 lfmf_category = "git-local-mcp"
 hook_detect = "gates"
 

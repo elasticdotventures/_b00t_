@@ -24,11 +24,10 @@
 //! ```
 
 use crate::datum_proof::{
-    AsAgentDatum, AsAiDatum, AsAptDatum, AsApiDatum, AsBashDatum,
+    AsAgentDatum, AsAiDatum, AsAiModelDatum, AsAptDatum, AsApiDatum, AsBashDatum,
     AsCliDatum, AsConfigDatum, AsDatabaseDatum, AsDockerDatum, AsHiveProfileDatum,
     AsJobDatum, AsJustfileDatum, AsK8sDatum, AsMcpDatum, AsNixDatum, AsRepoDatum,
-    AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum,
-    DatumProofError, Provable,
+    AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum, Provable,
 };
 use crate::datum_utils::get_all_datums;
 use crate::{BootDatum, DatumType};
@@ -74,50 +73,6 @@ impl InternedDatum {
     }
 }
 
-// ── LearnResult ───────────────────────────────────────────────────────────────
-
-/// Discriminated result of a `DatumStore::learn(topic)` call.
-///
-/// Replaces the ambiguous `Option<InternedDatum>` + implicit prove() pattern
-/// with a typed enum so callers can route on the exact failure mode.
-#[derive(Debug)]
-pub enum LearnResult {
-    /// Topic found in store and passes `prove_by_type()`.
-    Found(InternedDatum),
-    /// Topic absent from store — candidate for auto-research or DWIW fanout.
-    NotFound,
-    /// Topic found but `prove_by_type()` fails — datum is malformed.
-    Malformed(InternedDatum, DatumProofError),
-    /// Store could not be loaded at all (I/O error, parse failure, etc).
-    StoreError(String),
-}
-
-impl LearnResult {
-    pub fn is_found(&self) -> bool { matches!(self, Self::Found(_)) }
-    pub fn is_not_found(&self) -> bool { matches!(self, Self::NotFound) }
-    pub fn is_malformed(&self) -> bool { matches!(self, Self::Malformed(..)) }
-    pub fn is_store_error(&self) -> bool { matches!(self, Self::StoreError(_)) }
-
-    /// Return the interned datum regardless of proof status, if present.
-    pub fn datum(&self) -> Option<&InternedDatum> {
-        match self {
-            Self::Found(d) | Self::Malformed(d, _) => Some(d),
-            Self::NotFound | Self::StoreError(_) => None,
-        }
-    }
-}
-
-impl fmt::Display for LearnResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Found(d) => write!(f, "found:{}", d.key),
-            Self::NotFound => write!(f, "not_found"),
-            Self::Malformed(d, e) => write!(f, "malformed:{}:{}", d.key, e),
-            Self::StoreError(e) => write!(f, "store_error:{}", e),
-        }
-    }
-}
-
 // ── DatumStore trait ──────────────────────────────────────────────────────────
 
 /// Abstract over how datums are stored: HashMap, SQLite, Qdrant, etc.
@@ -136,18 +91,6 @@ pub trait DatumStore: Send + Sync {
     fn len(&self) -> usize;
 
     fn is_empty(&self) -> bool { self.len() == 0 }
-
-    /// Discriminated learn lookup: returns Found/NotFound/Malformed.
-    /// Use this instead of `get()` + manual `prove_by_type()` to get actionable failure modes.
-    fn learn(&self, topic: &str) -> LearnResult {
-        match self.get(topic) {
-            None => LearnResult::NotFound,
-            Some(d) => match d.prove_by_type() {
-                Ok(()) => LearnResult::Found(d),
-                Err(e) => LearnResult::Malformed(d, e),
-            }
-        }
-    }
 
     /// Begin a goal-oriented query over this store.
     #[must_use = "call .run() or .run_keys() to evaluate the query"]
@@ -332,6 +275,8 @@ impl<'a> DatumQuery<'a> {
     pub fn proves_repo(self) -> Self { self.with(|d| AsRepoDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum proves Ai structural contract (hint present).
     pub fn proves_ai(self) -> Self { self.with(|d| AsAiDatum(&d.datum).prove().is_ok()) }
+    /// Goal: datum proves AiModel structural contract (hint present).
+    pub fn proves_ai_model(self) -> Self { self.with(|d| AsAiModelDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum proves Config structural contract (hint present).
     pub fn proves_config(self) -> Self { self.with(|d| AsConfigDatum(&d.datum).prove().is_ok()) }
     /// Goal: datum is Unknown — always passes.
@@ -640,58 +585,6 @@ mod tests {
         assert!(!errs.iter().any(|e| matches!(e, ReferenceError::MissingDependency {
             missing_key, ..
         } if missing_key == "external.cli")), "external.cli should be suppressed by allowlist");
-    }
-
-    // ── LearnResult / learn() ────────────────────────────────────────────────
-
-    #[test]
-    fn learn_found_for_valid_datum() {
-        let store = make_store();
-        assert!(matches!(store.learn("git.cli"), LearnResult::Found(_)));
-    }
-
-    #[test]
-    fn learn_not_found_for_missing_key() {
-        let store = make_store();
-        assert!(matches!(store.learn("does-not-exist.cli"), LearnResult::NotFound));
-    }
-
-    #[test]
-    fn learn_malformed_for_invalid_datum() {
-        let store = make_store();
-        // bare.cli has no install or version — fails AsCliDatum.prove()
-        assert!(matches!(store.learn("bare.cli"), LearnResult::Malformed(..)));
-    }
-
-    #[test]
-    fn learn_result_display() {
-        let store = make_store();
-        let found = store.learn("git.cli");
-        assert!(found.to_string().starts_with("found:git.cli"));
-        let not_found = store.learn("nope.cli");
-        assert_eq!(not_found.to_string(), "not_found");
-        let malformed = store.learn("bare.cli");
-        assert!(malformed.to_string().starts_with("malformed:bare.cli"));
-    }
-
-    #[test]
-    fn learn_result_helpers() {
-        let store = make_store();
-        assert!(store.learn("git.cli").is_found());
-        assert!(!store.learn("git.cli").is_not_found());
-        assert!(store.learn("nope.cli").is_not_found());
-        assert!(store.learn("bare.cli").is_malformed());
-        assert!(store.learn("git.cli").datum().is_some());
-        assert!(store.learn("nope.cli").datum().is_none());
-    }
-
-    #[test]
-    fn learn_result_store_error() {
-        let err = LearnResult::StoreError("disk full".to_string());
-        assert!(err.is_store_error());
-        assert!(!err.is_found());
-        assert!(err.datum().is_none());
-        assert_eq!(err.to_string(), "store_error:disk full");
     }
 
     #[test]

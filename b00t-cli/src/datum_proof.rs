@@ -144,6 +144,7 @@ macro_rules! hint_only_datum {
 }
 
 hint_only_datum!(AsAiDatum,        Ai,          "ai");
+hint_only_datum!(AsAiModelDatum,   AiModel,     "ai_model");
 hint_only_datum!(AsConfigDatum,    Config,      "config");
 hint_only_datum!(AsHiveProfileDatum, HiveProfile, "hive_profile");
 
@@ -360,9 +361,8 @@ impl BootDatum {
     pub fn prove_api(&self)         -> Result<(), DatumProofError> { AsApiDatum(self).prove() }
     pub fn prove_repo(&self)        -> Result<(), DatumProofError> { AsRepoDatum(self).prove() }
     pub fn prove_ai(&self)          -> Result<(), DatumProofError> { AsAiDatum(self).prove() }
+    pub fn prove_ai_model(&self)    -> Result<(), DatumProofError> { AsAiModelDatum(self).prove() }
     pub fn prove_config(&self)      -> Result<(), DatumProofError> { AsConfigDatum(self).prove() }
-    pub fn prove_runtime(&self)     -> Result<(), DatumProofError> { Ok(()) }
-    pub fn prove_polyseme(&self)    -> Result<(), DatumProofError> { Ok(()) }
 
     /// Dispatch prove based on declared datum_type. `Unknown` always passes.
     pub fn prove_by_type(&self) -> Result<(), DatumProofError> {
@@ -378,7 +378,6 @@ impl BootDatum {
             Some(DatumType::Vscode)      => self.prove_vscode(),
             Some(DatumType::K8s)         => self.prove_k8s(),
             Some(DatumType::Justfile)    => self.prove_justfile(),
-            Some(DatumType::Pipeline)    => Ok(()),
             Some(DatumType::Job)         => self.prove_job(),
             Some(DatumType::Stack)       => self.prove_stack(),
             Some(DatumType::Agent)       => self.prove_agent(),
@@ -387,20 +386,8 @@ impl BootDatum {
             Some(DatumType::Api)         => self.prove_api(),
             Some(DatumType::Repo)        => self.prove_repo(),
             Some(DatumType::Ai)          => self.prove_ai(),
+            Some(DatumType::AiModel)     => self.prove_ai_model(),
             Some(DatumType::Config)      => self.prove_config(),
-            Some(DatumType::Hardware)    => Ok(()),
-            Some(DatumType::Overlay)     => Ok(()),
-            Some(DatumType::Runtime)     => self.prove_runtime(),
-            Some(DatumType::Polyseme)    => self.prove_polyseme(),
-            Some(DatumType::Credential)  => Ok(()),
-            Some(DatumType::Gate)        => Ok(()),
-            Some(DatumType::Hook)        => Ok(()),
-            Some(DatumType::McpServer)   => Ok(()),
-            Some(DatumType::Plan)        => Ok(()),
-            Some(DatumType::Schema)      => Ok(()),
-            Some(DatumType::Training)    => Ok(()),
-            Some(DatumType::Vendor)      => Ok(()),
-            Some(DatumType::Ooda)       => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
     }
@@ -444,7 +431,7 @@ mod tests {
 
     #[test] fn ai_proves()            { assert!(datum!("gpt4", Ai).prove_ai().is_ok()); }
     #[test] fn ai_no_hint_fails()     { assert!(no_hint(DatumType::Ai).prove_ai().is_err()); }
-    #[test] fn ai_model_proves()       { assert!(datum!("gpt4o", Ai).prove_ai().is_ok()); }
+    #[test] fn aimodel_proves()       { assert!(datum!("gpt4o", AiModel).prove_ai_model().is_ok()); }
     #[test] fn config_proves()        { assert!(datum!("cfg", Config).prove_config().is_ok()); }
     #[test] fn hive_profile_proves()  { assert!(datum!("hive", HiveProfile).prove_hive_profile().is_ok()); }
 
