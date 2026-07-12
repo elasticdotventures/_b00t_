@@ -24,16 +24,24 @@ python        = "3.14"
 eval_metric   = "b00t command completion accuracy"
 
 [training.dataset]
+# 3-layer corpus architecture:
+#   Layer 1 (syntactic)  — datums, learn files, hive profiles, AGENTS, justfile, SKILL.md
+#   Layer 2 (generative) — hardcoded tasks teaching model to WRITE b00t syntax
+#   Layer 3 (library)    — NeumannStore knowledge corpus via b00t grok ask
 sources = [
+  # Layer 1: b00t syntactic corpus
   "_b00t_/datums/*.tomllmd — PRDs, patterns, datum examples",
   "_b00t_/learn/*.md — skill templates",
   "_b00t_/*.hive.toml — hive profiles",
   "AGENTS/*.md — role definitions",
   "justfile — command patterns",
-  "b00t-cli/src/**/*.rs — Rust source (future: code understanding)",
+  "plugins/*/skills/*/SKILL.md — skill frontmatter",
+  # Layer 2: generative tasks (hardcoded in generate_dataset.py::GENERATIVE_TASKS)
+  # Layer 3: NeumannStore library corpus (b00t grok ask — requires indexed library)
 ]
 format      = "alpaca/chatml"
-gen_cmd     = "uv run python3.14 fine-tune/generate_dataset.py --format=alpaca --max-rows=5000"
+gen_cmd     = "python3 fine-tune/generate_dataset.py --format=alpaca --max-rows=5000"
+gen_cmd_lib = "python3 fine-tune/generate_dataset.py --format=alpaca --library-namespace=library"
 target_rows = 5000
 
 [training.hyperparameters]
@@ -48,9 +56,10 @@ max_seq      = 2048
 
 [workflow]
 steps = [
-  "1. Generate dataset: uv run python3.14 fine-tune/generate_dataset.py",
-  "2. Train: uv run python3.14 fine-tune/train_unsloth.py --config fine-tune/config.yaml",
-  "3. Export GGUF: uv run python3.14 fine-tune/export_gguf.py --quant Q4_K_M",
+  "1. Generate dataset: python3 fine-tune/generate_dataset.py [--skip-library for fast iteration]",
+  "1b. With library corpus: python3 fine-tune/generate_dataset.py --library-namespace=library",
+  "2. Train: python3 fine-tune/train_unsloth.py --config fine-tune/config.yaml",
+  "3. Export GGUF: python3 fine-tune/export_gguf.py --quant Q4_K_M",
   "4. Deploy: cp ./fine-tune/output/b00t-aligned-qwen36-27b.gguf /opt/b00t/models/",
   "5. Test: b00t hive activate inference-qwen36-27b-llamacpp",
   "6. Evaluate: run b00t-aligned eval suite",

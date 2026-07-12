@@ -1,9 +1,8 @@
-use anyhow::{Result, anyhow};
-#[allow(unused_imports)]
-use b00t_cli::UnifiedConfig;
+use anyhow::{anyhow, Result};
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::{SessionState, load_datum_providers, whoami};
+use b00t_cli::UnifiedConfig;
+use b00t_cli::{load_datum_providers, whoami, SessionState};
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
@@ -67,9 +66,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
-use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
-use b00t_cli::commands::learn::{LearnArgs, handle_learn};
-use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
+use b00t_cli::commands::cake::{handle_cake_command, CakeArgs};
+use b00t_cli::commands::learn::{handle_learn, LearnArgs};
+use b00t_cli::commands::maintenance::{handle_maintenance_command, MaintenanceArgs};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -90,10 +89,8 @@ use b00t_cli::commands::{
     GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
-<<<<<<< HEAD
+    PipelineCommands,
     StoreCommands,
-=======
->>>>>>> origin/main
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -578,11 +575,10 @@ The system will:
     Focus(FocusCommands),
     #[clap(subcommand)]
     Server(ServerCommands),
-<<<<<<< HEAD
+    #[clap(subcommand)]
+    Pipeline(PipelineCommands),
     #[clap(subcommand)]
     Store(StoreCommands),
-=======
->>>>>>> origin/main
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
@@ -2091,7 +2087,6 @@ async fn main() {
             }
             // Not a runtime datum — show standard error
             let msg = e.to_string();
-            // Extract the actionable line (first non-empty line after "error:")
             let brief = msg
                 .lines()
                 .find(|l| l.starts_with("error:") || l.contains("tip:"))
@@ -2241,20 +2236,8 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-<<<<<<< HEAD
-        Some(Commands::Whoami {
-            role,
-            with_skills,
-            json,
-            skills,
-            dashboard,
-        }) => {
-=======
-        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
->>>>>>> origin/main
-            if *dashboard {
-                whoami::print_dashboard();
-            } else if *json {
+        Some(Commands::Whoami { role, with_skills, json, skills }) => {
+            if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
                     Ok(ctx) => {
@@ -2815,8 +2798,8 @@ async fn main() {
                     println!("focus_balance: {:.2}", status.focus_balance);
                 }
                 ExperimentCommands::History { limit, json } => {
-                    use b00t_cli::commands::focus::FocusCommands;
                     use b00t_cli::commands::focus::handle_focus_command;
+                    use b00t_cli::commands::focus::FocusCommands;
                     let args = FocusCommands::History {
                         limit: *limit,
                         json: *json,
@@ -2847,15 +2830,18 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-<<<<<<< HEAD
+        Some(Commands::Pipeline(cmd)) => {
+            if let Err(e) = b00t_cli::commands::pipeline::handle_pipeline_command(&cmd, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Store(args)) => {
             if let Err(e) = b00t_cli::commands::store::handle_store_command(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
-=======
->>>>>>> origin/main
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
                 eprintln!("Error: {}", e);
