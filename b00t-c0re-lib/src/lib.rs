@@ -49,7 +49,6 @@ pub mod gate_result;
 pub mod grok;
 pub mod interaction;
 pub mod irontology_bridge;
-pub mod data_fabric;
 pub mod knowledge;
 pub mod kv_store;
 pub mod learn;
@@ -60,10 +59,12 @@ pub mod man_page;
 pub mod mcp_proxy;
 pub mod mcp_registry;
 pub mod ooda;
+pub mod pipeline_nodes;
 pub mod query_bus;
 pub mod rag;
 pub mod reasoning;
 pub mod redis;
+pub mod reviewer;
 pub mod rhai_engine;
 pub mod runtime_env;
 pub mod secret_validation;
@@ -143,3 +144,4 @@ mod tests {
 }
 pub mod datum_credential;
 pub mod store;
+pub mod sudo_operator;
