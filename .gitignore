@@ -319,8 +319,6 @@ ooda-state.json
 *.wasm
 # Generated/runtime artifacts
 _b00t_/k8s/serena-config/
-_b00t_/learn/typescript.md
-_b00t_/learn/whoami-agent-flag.md
 _b00t_/lmcache.capability.toml
 _b00t_/typescript.skill.toml
 evidence/
