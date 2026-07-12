@@ -425,6 +425,7 @@ mod tests {
             error_routes: vec![],
             env: None,
             checkpoint_interval_seconds: None,
+            secret_refs: None,
         }
     }
 

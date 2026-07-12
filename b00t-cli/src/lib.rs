@@ -112,7 +112,9 @@ pub mod a2a_gates;
 pub mod pipeline_costs;
 pub mod pipeline_executor;
 pub mod pipeline_logs;
+pub mod pipeline_secrets;
 pub mod pipeline_types;
+pub mod pipeline_kerml;
 pub mod stage_registry;
 pub mod transmogrifier;
 #[cfg(feature = "rpa")]

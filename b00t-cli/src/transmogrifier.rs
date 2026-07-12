@@ -23,7 +23,7 @@ use std::collections::HashMap;
 /// `profile()` that bundles these into a `CapsuleProfile` for the pipeline
 /// registry.  The `transform` method performs the actual work (or a mock of
 /// it for reference implementations).
-pub trait Transmogrifier {
+pub trait Transmogrifier: Send + Sync {
     /// Human-readable stage name (e.g. `"VideoIngest"`, `"WhisperTranscribe"`).
     fn name(&self) -> &str;
 
