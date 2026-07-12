@@ -21,11 +21,12 @@ name = "generate_schemas"
 path = "src/bin/generate_schemas.rs"
 
 [features]
-default = ["store-neumann"]
+default = ["store-helixdb"]
 python = ["pyo3"]
 ledgrrr-events = []
-store-neumann = ["dep:storage-neumann"]
+store-neumann = ["dep:storage-neumann"]  # ARCHIVED/LEGACY — use store-helixdb or store-oxigraph
 store-oxigraph = ["dep:oxigraph"]
+store-helixdb = ["dep:helix-db"]
 oxigraph = ["store-oxigraph"]
 store-grafeo = ["dep:grafeo"]
 store-zvec = ["dep:zvec"]
@@ -74,6 +75,7 @@ futures = "0.3"
 cfg-if = "1.0.4"
 oxigraph = { version = "0.5.8", optional = true }
 storage-neumann = { version = "0.1", optional = true }
+helix-db = { version = "2.0", optional = true }
 grafeo = { version = "0.5.42", features = ["ai", "storage", "gql"], optional = true }
 zvec = { git = "https://github.com/zvec-ai/zvec-rust.git", tag = "v0.5.0", optional = true }
 b00t-ipc = { path = "../b00t-ipc", features = ["nats"], optional = true }
