@@ -1,10 +1,5 @@
-//! JSON graph data endpoint for client-side WASM rendering.
-//! Returns { nodes: [...], edges: [...], depth: {...} } directly,
-//! letting the WASM layout engine do SVG rendering client-side.
-
 use b00t_l3dg3rr_viz::InvariantGraph;
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, ContextDepth, filter_orphans};
-use b00t_l3dg3rr_viz::artifact::curate_orphans;
+use b00t_l3dg3rr_viz::isometric::{parse_mermaid, filter_orphans};
 use axum::extract::Query;
 use std::collections::HashMap;
 
@@ -12,7 +7,6 @@ pub async fn entangle_json_handler(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl axum::response::IntoResponse {
     let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
-    let curate = params.get("curate").map(|v| v == "true").unwrap_or(false);
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
@@ -27,16 +21,13 @@ pub async fn entangle_json_handler(
         graph = filter_orphans(&graph);
     }
 
-    let depth = ContextDepth::classify(&graph);
     let nodes: Vec<serde_json::Value> = graph.nodes.iter().map(|n| {
-        let d = depth.get(&n.id).copied().unwrap_or(ContextDepth::Surface);
-        let d_str = match d { ContextDepth::Surface => "surface", ContextDepth::Extended => "extended", ContextDepth::Historical => "historical" };
         serde_json::json!({
             "id": n.id,
             "label": n.label,
             "role": n.role.as_str(),
             "invariant": n.invariant,
-            "depth": d_str,
+            "depth": "unknown",
         })
     }).collect();
 
@@ -48,24 +39,11 @@ pub async fn entangle_json_handler(
         })
     }).collect();
 
-    let (surface, extended, historical) = (
-        depth.values().filter(|d| matches!(d, ContextDepth::Surface)).count(),
-        depth.values().filter(|d| matches!(d, ContextDepth::Extended)).count(),
-        depth.values().filter(|d| matches!(d, ContextDepth::Historical)).count(),
-    );
-
-    let mut response = serde_json::json!({
+    let response = serde_json::json!({
         "nodes": nodes,
         "edges": edges,
-        "depth": { "surface": surface, "extended": extended, "historical": historical },
+        "depth": { "surface": 0, "extended": 0, "historical": 0 },
     });
-
-    if curate {
-        let curation = curate_orphans(&nodes, &edges);
-        if let Some(obj) = response.as_object_mut() {
-            obj.insert("curation".to_string(), serde_json::json!(curation));
-        }
-    }
 
     axum::Json(response)
 }

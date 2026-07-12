@@ -6,6 +6,8 @@
 //! - `/api/admin/*` → JSON API for pipeline state/type introspection
 //! - `/ws` → WebSocket for live twin simulation updates
 
+mod graph_json;
+
 use axum::{
     body::Body,
     extract::{
@@ -855,7 +857,11 @@ fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
         .unwrap_or_default();
 
     let mermaid = if hide_orphans && !mermaid.is_empty() {
-        filter_orphans_from_mermaid(&mermaid).to_mermaid()
+        if let Ok(graph) = parse_mermaid(&mermaid) {
+            filter_orphans(&graph).to_mermaid()
+        } else {
+            mermaid
+        }
     } else {
         mermaid
     };
