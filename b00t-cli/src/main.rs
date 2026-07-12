@@ -90,7 +90,10 @@ use b00t_cli::commands::{
     GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
+<<<<<<< HEAD
     StoreCommands,
+=======
+>>>>>>> origin/main
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -575,8 +578,11 @@ The system will:
     Focus(FocusCommands),
     #[clap(subcommand)]
     Server(ServerCommands),
+<<<<<<< HEAD
     #[clap(subcommand)]
     Store(StoreCommands),
+=======
+>>>>>>> origin/main
     #[clap(
         about = "Execute command with guard enforcement and broad-authority audit log",
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
@@ -2235,6 +2241,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+<<<<<<< HEAD
         Some(Commands::Whoami {
             role,
             with_skills,
@@ -2242,6 +2249,9 @@ async fn main() {
             skills,
             dashboard,
         }) => {
+=======
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
+>>>>>>> origin/main
             if *dashboard {
                 whoami::print_dashboard();
             } else if *json {
@@ -2837,12 +2847,15 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+<<<<<<< HEAD
         Some(Commands::Store(args)) => {
             if let Err(e) = b00t_cli::commands::store::handle_store_command(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
         }
+=======
+>>>>>>> origin/main
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
                 eprintln!("Error: {}", e);

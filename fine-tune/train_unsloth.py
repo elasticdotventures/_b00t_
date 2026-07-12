@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.14
 """Unsloth QLoRA fine-tuning for b00t-aligned Qwen3.6-27B.
 
 Trains on the b00t corpus (datums, learn files, justfile, AGENTS) to produce
@@ -28,35 +28,20 @@ def load_config(config_path: str) -> dict:
         return {}
 
 
-def train(config: dict, args=None):
+def train(config: dict):
     """Run the unsloth QLoRA fine-tuning loop."""
-    # MLflow env wiring — must happen before any HF Trainer import reads env vars.
-    # Env var takes precedence over config (so RunPod pod's injected value wins).
-    _mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI") or config.get("mlflow_tracking_uri", "")
-    if _mlflow_uri:
-        os.environ["MLFLOW_TRACKING_URI"] = _mlflow_uri
-    _mlflow_exp = os.environ.get("MLFLOW_EXPERIMENT_NAME") or config.get("mlflow_experiment", "")
-    if _mlflow_exp:
-        os.environ["MLFLOW_EXPERIMENT_NAME"] = _mlflow_exp
-    if _mlflow_uri:
-        print(f"   MLflow: {_mlflow_uri} / {_mlflow_exp or 'default'}")
-
-    model_name = config.get("base_model", "unsloth/Qwen3.6-35B-A3B")
+    model_name = config.get("base_model", "unsloth/Qwen3.6-27B-GGUF")
     adapter_name = config.get("adapter_name", "b00t-aligned-qwen36-27b")
-    dataset_path = config.get("dataset_path", config.get("dataset", "fine-tune/train.jsonl"))
+    dataset_path = config.get("dataset", "fine-tune/train.jsonl")
     output_dir = config.get("output_dir", "./fine-tune/output")
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-    except OSError:
-        pass  # bucket FUSE may not need explicit mkdir; trainer will create on first write
     lora_r = config.get("lora_r", 16)
     lora_alpha = config.get("lora_alpha", 32)
     lora_dropout = config.get("lora_dropout", 0.05)
-    learning_rate = float(config.get("learning_rate", 2e-4))
-    num_epochs = int(config.get("num_epochs", 3))
-    per_device_batch_size = int(config.get("batch_size", 2))
-    gradient_accumulation_steps = int(config.get("grad_accum", 8))
-    max_seq_length = int(config.get("max_seq_length", 2048))
+    learning_rate = config.get("learning_rate", 2e-4)
+    num_epochs = config.get("num_epochs", 3)
+    per_device_batch_size = config.get("batch_size", 2)
+    gradient_accumulation_steps = config.get("grad_accum", 8)
+    max_seq_length = config.get("max_seq_length", 2048)
 
     print(f"🚀 Unsloth QLoRA Fine-Tuning")
     print(f"   Base model: {model_name}")
@@ -78,7 +63,7 @@ def train(config: dict, args=None):
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=max_seq_length,
-            load_in_4bit=config.get("load_in_4bit", True),
+            load_in_4bit=True,
             dtype=None,
         )
     except Exception as e:
@@ -94,7 +79,7 @@ def train(config: dict, args=None):
     model = FastLanguageModel.get_peft_model(
         model,
         r=lora_r,
-        target_modules=config.get("target_modules", ["q_proj", "v_proj", "k_proj", "o_proj"]),
+        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         bias="none",
@@ -147,47 +132,31 @@ def train(config: dict, args=None):
         dataset_text_field="text",
         max_seq_length=max_seq_length,
         dataset_num_proc=2,
-        packing=bool(config.get("packing", False)),
+        packing=False,
         args=TrainingArguments(
             per_device_train_batch_size=per_device_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
-            warmup_ratio=float(config.get("warmup_ratio", 0.05)),
+            warmup_steps=5,
             num_train_epochs=num_epochs,
             learning_rate=learning_rate,
             fp16=not model.dtype.is_floating_point,
             bf16=model.dtype.is_floating_point,
-            logging_steps=int(config.get("logging_steps", 10)),
-            optim=config.get("optim", "adamw_8bit"),
-            weight_decay=float(config.get("weight_decay", 0.01)),
-            lr_scheduler_type=config.get("lr_scheduler", "linear"),
+            logging_steps=1,
+            optim="adamw_8bit",
+            weight_decay=0.01,
+            lr_scheduler_type="linear",
             seed=42,
             output_dir=output_dir,
-            max_steps=int(config.get("max_steps", -1)),
-            save_steps=int(config.get("save_steps", 0)) or None,
-            report_to=config.get("report_to", "none"),
-            # 🤓 push each checkpoint to HF Hub during training — survives job death
-            push_to_hub=bool(config.get("hub_model_id") and int(config.get("save_steps", 0)) > 0),
-            hub_model_id=config.get("hub_model_id", "") or "",
-            hub_strategy="checkpoint",
-            hub_private_repo=config.get("private", True),
+            report_to="none",
         ),
     )
 
-    resume_from = args.resume if args else config.get("resume_from", None)
-    trainer.train(resume_from_checkpoint=resume_from)
+    trainer.train()
 
     # ─── Export ────────────────────────────────────────────────────────────────
     print("\nSaving LoRA adapter...")
     model.save_pretrained(f"{output_dir}/lora-adapter")
     tokenizer.save_pretrained(f"{output_dir}/lora-adapter")
-
-    if config.get("push_to_hub") and config.get("hub_model_id"):
-        hub_id = config["hub_model_id"]
-        private = config.get("private", True)  # default private; set private: false in config to publish
-        print(f"\nPushing adapter to HF Hub: {hub_id} (private={private})...")
-        model.push_to_hub(hub_id, private=private)
-        tokenizer.push_to_hub(hub_id, private=private)
-        print(f"✓ https://huggingface.co/{hub_id}")
 
     print(f"\n✅ Fine-tuning complete!")
     print(f"   Adapter: {output_dir}/lora-adapter")
@@ -198,18 +167,10 @@ def train(config: dict, args=None):
 def main():
     parser = argparse.ArgumentParser(description="Unsloth QLoRA fine-tuning for b00t")
     parser.add_argument("--config", default="fine-tune/config.yaml", help="Training config YAML")
-    parser.add_argument("--resume", type=str, default=None,
-                        help="Resume from checkpoint (local path or HF Hub repo/checkpoint-N)")
-    parser.add_argument("--max-steps", type=int, default=0,
-                        help="Override max training steps (0 = use num_epochs from config); use 5 for smoke test")
     args = parser.parse_args()
 
     config = load_config(args.config)
-    if args.max_steps > 0:
-        config["max_steps"] = args.max_steps
-        config["push_to_hub"] = False  # no partial adapter push during smoke test
-        print(f"  smoke-test mode: max_steps={args.max_steps}, hub push disabled")
-    train(config, args)
+    train(config)
 
 
 if __name__ == "__main__":

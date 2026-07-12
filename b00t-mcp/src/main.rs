@@ -123,6 +123,33 @@ async fn main() -> Result<()> {
             .map_or(false, |m| m == "http");
     let is_llm_mode = matches.get_flag("llm");
 
+    // 🤓 Structured logging via tracing — enable with RUST_LOG=info or RUST_LOG=debug
+    {
+        use tracing_subscriber::EnvFilter;
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("warn"));
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_target(false)
+            .try_init();
+    }
+
+    // 🤓 SkillExecutor — lazy MCP server lifecycle manager.
+    //    Loads [b00t.mcp.lifecycle] from .mcp.toml datums, reaps idle servers.
+    //    Child processes get kill_on_drop(true) — cleaned up on process exit.
+    match server_skill::init_executor().await {
+        Ok(n) if n > 0 => tracing::info!("SkillExecutor: {} skill(s) ready", n),
+        Err(e) => tracing::warn!("SkillExecutor init failed: {} (continuing)", e),
+        _ => {}
+    }
+    server_skill::start_reap_loop().await;
+
+    // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
+    //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
+    if let Err(e) = spawn_registry_bridges_on_startup().await {
+        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+    }
+
     if is_stdio_mode && !is_llm_mode {
         // Run as MCP server
         // eprintln!(
@@ -185,10 +212,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        let is_dev_mode = acl_config.as_ref()
-            .and_then(|c| c.dev.as_ref())
-            .and_then(|d| d.bypass_oauth)
-            .unwrap_or(false);
+        let auth_provider = server_llm::AuthProvider::from_env_or_default();
+
+        // Log auth provider
+        match auth_provider {
+            server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
+            server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
+            server_llm::AuthProvider::Hydra => eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)"),
+        }
 
         // Create GitHub auth state
         let github_config = GitHubAuthConfig::default();

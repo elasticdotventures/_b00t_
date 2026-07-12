@@ -211,6 +211,124 @@ pub fn sync(provider: &str) -> Result<()> {
     Ok(())
 }
 
+<<<<<<< HEAD
+=======
+// ── Cross-engine validation ─────────────────────────────────────────────────
+
+/// 🤓 AL-1.0 two-engine invariant applied to b00t's data fabric.
+///    Validates that Store manifest entries have matching facts in NeumannStore
+///    and that content hashes are consistent. Returns discrepancy report.
+pub fn validate_consistency() -> Result<CrossEngineReport> {
+    let manifest = load_manifest()?;
+    let mut report = CrossEngineReport {
+        manifest_entries: manifest.entries.len(),
+        neumann_facts: 0,
+        hash_matches: 0,
+        hash_mismatches: 0,
+        missing_facts: Vec::new(),
+        orphan_facts: 0,
+        healthy: false,
+    };
+
+    // Query NeumannStore for b00t:hasChecksum facts
+    let fact_results = block_on_neumann(move |store| async move {
+        store.query(crate::irontology_bridge::SemanticQuery {
+            subject: None,
+            predicate: Some("b00t:hasChecksum".into()),
+        }).await
+    });
+    if let Ok(Ok(query_result)) = fact_results {
+        report.neumann_facts = query_result.facts.len();
+
+        // Build a lookup: checksum → NeumannStore IRIs
+        let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for fact in &query_result.facts {
+            if let Some(checksum) = fact.object.as_str() {
+                neumann_checksums.entry(checksum.to_string())
+                    .or_default()
+                    .push(fact.subject.clone());
+            }
+        }
+
+        // Cross-reference: every StoreEntry checksum should have a matching Neumann fact
+        for entry in &manifest.entries {
+            match neumann_checksums.get(&entry.checksum) {
+                Some(subjects) => {
+                    report.hash_matches += 1;
+                    if subjects.len() > 1 {
+                        // Multiple Neumann entries for same checksum — normal for multiple consumers
+                    }
+                }
+                None => {
+                    report.missing_facts.push(Discrepancy {
+                        manifest_key: entry.key.clone(),
+                        checksum: entry.checksum.clone(),
+                        detail: format!("no NeumannStore fact for checksum {}", &entry.checksum[..12]),
+                    });
+                }
+            }
+        }
+
+        // Orphan facts: Neumann facts without matching store entries
+        let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
+            .map(|e| e.checksum.as_str())
+            .collect();
+        for (checksum, subjects) in &neumann_checksums {
+            if !manifest_checksums.contains(checksum.as_str()) {
+                report.orphan_facts += subjects.len();
+            }
+        }
+    }
+
+    report.healthy = report.hash_mismatches == 0 && report.missing_facts.is_empty() && report.orphan_facts == 0;
+
+    Ok(report)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossEngineReport {
+    pub manifest_entries: usize,
+    pub neumann_facts: usize,
+    pub hash_matches: usize,
+    pub hash_mismatches: usize,
+    pub missing_facts: Vec<Discrepancy>,
+    pub orphan_facts: usize,
+    pub healthy: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Discrepancy {
+    pub manifest_key: String,
+    pub checksum: String,
+    pub detail: String,
+}
+
+// ── Internal: NeumannStore async bridge ────────────────────────────────────
+
+fn block_on_neumann<F, Fut, T>(f: F) -> Result<Result<T>>
+where
+    F: FnOnce(ActiveKnowledgeStore) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<T>> + Send,
+    T: Send + 'static,
+{
+    let store = neumann()?;
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            // Already inside a tokio runtime — use block_in_place to yield the thread
+            Ok(tokio::task::block_in_place(|| handle.block_on(f(store))))
+        }
+        Err(_) => {
+            // No runtime — spin up a temporary one
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
+            Ok(rt.block_on(f(store)))
+        }
+    }
+}
+
+>>>>>>> origin/main
 // ── Internal: manifest + crypto ────────────────────────────────────────────
 
 fn load_manifest() -> Result<StoreManifest> {

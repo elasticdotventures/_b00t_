@@ -136,13 +136,6 @@ fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
 
 fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     for be in &soul.backends.remote {
-        // Check encrypted credential catalog first (zero-trust)
-        if let Ok(Some((_key_id, secret))) = b00t_c0re_lib::datum_credential::find_credential_by_name(&be.name) {
-            let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
-            eprintln!("🔐 upstream via credential store: {}", be.name);
-            return Some((be.name.clone(), secret, url));
-        }
-        // Fallback: env var (for backwards compat)
         if let Ok(key) = std::env::var(&be.key_env) {
             if key.is_empty() { continue; }
             let url = be.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into());
@@ -176,10 +169,79 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Action { Read, Write, Execute }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassPermission {
+    pub class: String,
+    pub action: Action,
+}
+
+impl ClassPermission {
+    pub fn parse(s: &str) -> Option<Self> {
+        // Format: "b00t:EmbeddingModel:execute"
+        let parts: Vec<&str> = s.rsplitn(2, ':').collect();
+        if parts.len() != 2 { return None; }
+        let action = match parts[0] {
+            "read" => Action::Read,
+            "write" => Action::Write,
+            "execute" => Action::Execute,
+            _ => return None,
+        };
+        Some(ClassPermission { class: parts[1].to_string(), action })
+    }
+
+    pub fn to_hydra_scope(&self) -> String {
+        HYDRA_SCOPE_MAP
+            .iter()
+            .find(|(class, action, _)| *class == self.class && *action == self.action)
+            .map(|(_, _, scope)| scope.to_string())
+            .unwrap_or_else(|| {
+                format!("{}.{}",
+                    self.class.strip_prefix("b00t:").unwrap_or(&self.class).to_lowercase(),
+                    format!("{:?}", self.action).to_lowercase(),
+                )
+            })
+    }
+}
+
+static HYDRA_SCOPE_MAP: &[(&str, Action, &str)] = &[
+    ("b00t:ChatModel", Action::Execute, "chat.execute"),
+    ("b00t:EmbeddingModel", Action::Execute, "embedding.execute"),
+    ("b00t:Model", Action::Read, "model.read"),
+    ("b00t:Model", Action::Write, "model.write"),
+    ("b00t:Store", Action::Read, "store.read"),
+    ("b00t:Store", Action::Write, "store.write"),
+];
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyEntry {
     pub consumer: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub access: Vec<ClassPermission>,
+}
+
+impl KeyEntry {
+    pub fn hydra_scopes(&self) -> String {
+        self.access
+            .iter()
+            .map(|p| p.to_hydra_scope())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    pub fn hydra_client_payload(&self, client_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "client_id": client_id,
+            "client_name": self.consumer,
+            "grant_types": ["client_credentials"],
+            "scope": self.hydra_scopes(),
+            "token_endpoint_auth_method": "client_secret_basic",
+        })
+    }
 }
 
 pub struct LlmState {
@@ -213,6 +275,7 @@ impl LlmState {
                                 keys.insert(k.clone(), KeyEntry {
                                     consumer: consumer.to_string(),
                                     created_at: ts.with_timezone(&chrono::Utc),
+                                    access: Vec::new(),
                                 });
                             }
                         }
@@ -233,11 +296,25 @@ impl LlmState {
         self.keys.read().await.get(token).cloned()
     }
 
-    pub async fn create_key(&self, consumer: &str) -> String {
+    pub async fn check_access(&self, token: &str, class: &str, action: Action) -> bool {
+        if let Some(entry) = self.validate_key(token).await {
+            if entry.access.is_empty() {
+                return true; // empty access = full access (backwards compat)
+            }
+            return entry.access.iter().any(|p| p.class == class && matches!(p.action, Action::Execute) || matches!(p.action, Action::Read));
+        }
+        false
+    }
+
+    pub async fn create_key(&self, consumer: &str, access: &[String]) -> String {
         let key = format!("b00t-sk-{}", Uuid::new_v4().simple());
+        let permissions: Vec<ClassPermission> = access.iter()
+            .filter_map(|a| ClassPermission::parse(a))
+            .collect();
         self.keys.write().await.insert(key.clone(), KeyEntry {
             consumer: consumer.to_string(),
             created_at: chrono::Utc::now(),
+            access: permissions,
         });
         self.save_keys_to_file().await;
         key
@@ -247,9 +324,14 @@ impl LlmState {
         let keys = self.keys.read().await;
         let mut map = serde_json::Map::new();
         for (k, v) in keys.iter() {
+            let access_json: Vec<Value> = v.access.iter().map(|p| json!({
+                "class": p.class,
+                "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
+            })).collect();
             map.insert(k.clone(), json!({
                 "consumer": v.consumer,
                 "created_at": v.created_at.to_rfc3339(),
+                "access": access_json,
             }));
         }
         let data = json!({"keys": map});
@@ -278,6 +360,30 @@ fn dirs_next() -> Option<std::path::PathBuf> {
     std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".b00t"))
 }
 
+// ── Auth provider selection ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthProvider {
+    /// Dev mode — bypass all auth, use hardcoded dev-key
+    Dev,
+    /// Basic auth — API keys from server-keys.json + ClassPermission ACL
+    Basic,
+    /// OAuth 2.1 — Hydra token introspection + ClassPermission ACL
+    Hydra,
+}
+
+impl AuthProvider {
+    pub fn from_env_or_default() -> Self {
+        if std::env::var("B00T_SERVER_DEV").map_or(false, |v| v == "1") {
+            return AuthProvider::Dev;
+        }
+        if std::env::var("HYDRA_ADMIN_URL").is_ok() {
+            return AuthProvider::Hydra;
+        }
+        AuthProvider::Basic
+    }
+}
+
 // ── Router ─────────────────────────────────────────────────────────────────
 
 pub fn llm_router(state: Arc<LlmState>, dev_mode: bool) -> Router {
@@ -302,6 +408,18 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+// ── Endpoint → ontology class mapping ─────────────────────────────────────
+
+fn class_for_path(path: &str) -> (&str, Action) {
+    if path.contains("chat/completions") {
+        ("b00t:ChatModel", Action::Execute)
+    } else if path.contains("embeddings") {
+        ("b00t:EmbeddingModel", Action::Execute)
+    } else {
+        ("b00t:Model", Action::Read)
+    }
+}
+
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 async fn list_models(
@@ -310,6 +428,13 @@ async fn list_models(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:ChatModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:ChatModel:execute"}))).into_response();
+    }
+
+    if !dev_mode && !state.check_access(&token, "b00t:Model", Action::Read).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:Model:read"}))).into_response();
+    }
     let url = format!("{}/models", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
@@ -340,6 +465,9 @@ async fn proxy_chat(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());

@@ -2085,3 +2085,249 @@ provision-agent role="worker" goal="":
       just ralph-spawn "$GOAL_TEXT" 3 | claude --print --agent "$AGENT_FILE" 2>/dev/null \
         || echo "[provision] agent ready at: $AGENT_FILE (manual launch required if claude not in PATH)"
     fi
+
+# pr-validate: blocking reviewer gate — exits non-zero on REQUEST_CHANGES
+# Usage: just pr-validate goal="fix login bug"
+# Usage: just pr-validate goal="refactor auth" scope="src/auth/"
+# If .b00t/strict-review exists → gate runs automatically on commit
+pr-validate goal="staged changes" scope="":
+    #!/bin/bash
+    set -euo pipefail
+    SCOPE_ARG=""
+    if [ -n "{{ scope }}" ]; then
+        SCOPE_ARG="--scope {{ scope }}"
+    fi
+    bash _b00t_/scripts/pr-validate.sh --goal "{{ goal }}" $SCOPE_ARG
+
+# ═══════════════════════════════════════════════════════════════════
+# 🛡️ Gate-Protected Actions (mandatory Zellij interaction gate)
+# These recipes ALWAYS run through the gate before executing.
+# Agent CANNOT proceed without user approval via fzf menu.
+# ═══════════════════════════════════════════════════════════════════
+
+# Gate-protected build: compile + test (gate must pass first)
+gate-build-test:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Build & Test"
+    echo ""
+    # Pre-flight gate check
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Build & Test" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    echo "🔨 Building..."
+    cargo build --workspace 2>&1 | tail -5
+    echo ""
+    echo "🧪 Testing..."
+    cargo test --workspace 2>&1 | tail -10
+    echo ""
+    echo "✅ Build & Test complete"
+
+# Gate-protected deploy to staging
+gate-deploy-staging:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Deploy to Staging"
+    echo ""
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Deploy to Staging" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    echo "🚀 Deploying to staging..."
+    # Staging deploy logic here
+    echo "✅ Staging deploy initiated"
+
+# Gate-protected deploy to production (double confirm)
+gate-deploy-production:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Deploy to Production"
+    echo ""
+    # Double gate: first the menu, then a confirm
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Deploy to Production" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    # Second confirm via urgent gate
+    JUST_UNSTABLE=1 just zellij-gate::gate-check-urgent "🔥 CONFIRM PRODUCTION DEPLOY" || {
+        echo "❌ Production deploy cancelled"
+        exit 1
+    }
+    echo ""
+    echo "🔥 Deploying to production..."
+    # Production deploy logic here
+    echo "✅ Production deploy initiated"
+
+# Gate-protected code review
+gate-code-review:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Code Review"
+    echo ""
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Code Review" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    echo "👁 Running code review..."
+    git diff --stat HEAD~3..HEAD 2>/dev/null || echo "No recent diffs"
+    echo "✅ Code review complete"
+
+# Gate-protected system diagnostics
+gate-diagnostics:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: System Diagnostics"
+    echo ""
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "System Diagnostics" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    echo "📊 System Diagnostics"
+    echo "──────────────────────"
+    echo "Zellij: ${ZELLIJ_SESSION_NAME:-not active}"
+    echo "fzf: $(fzf --version 2>/dev/null || echo 'not found')"
+    echo "Git branch: $(git branch --show-current 2>/dev/null || echo '?')"
+    echo "Last commit: $(git log --oneline -1 2>/dev/null || echo '?')"
+    echo ""
+    # MCP server status
+    echo "MCP Servers:"
+    ls _b00t_/*.mcp.toml 2>/dev/null | wc -l | xargs echo "  Configs:"
+    echo ""
+    echo "✅ Diagnostics complete"
+
+# Gate-protected task management
+gate-task-list:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Task Management"
+    echo ""
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Task Management" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    b00t task list 2>&1 || echo "No tasks"
+    echo ""
+    echo "✅ Task list displayed"
+
+# Gate-protected sub-agent dispatch
+gate-subagent-dispatch task="general-task":
+    #!/bin/bash
+    set -euo pipefail
+    echo "🛡️ Gate-protected: Sub-agent Dispatch"
+    echo "Task: {{ task }}"
+    echo ""
+    JUST_UNSTABLE=1 just zellij-gate::gate-preflight "Sub-agent Dispatch: {{ task }}" || {
+        echo "❌ Gate blocked — agent requires user approval"
+        exit 1
+    }
+    echo ""
+    echo "🤖 Dispatching sub-agent for: {{ task }}"
+    # Sub-agent dispatch logic here
+    echo "✅ Sub-agent dispatched"
+
+# Pre-commit hook: active if .b00t/strict-review exists
+pr-validate-hook:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f .b00t/strict-review ]; then
+        echo ".b00t/strict-review not found gate inactive"
+        echo "Create it touch .b00t/strict-review"; exit 0
+    fi
+    echo "strict-review active running pr-validate gate..."
+    G=$(git log -1 --format=%s HEAD 2>/dev/null || echo "staged changes")
+    just pr-validate goal="$G"
+
+# Create .b00t/scope contract for drift detection
+scope-init scope_patterns="":
+    #!/usr/bin/env bash
+    mkdir -p .b00t
+    if [ -z "{{scope_patterns}}" ]; then
+        echo "Usage: just scope-init scope_patterns=\"path1 path2\""
+        exit 1
+    fi
+    :> .b00t/scope
+    for p in {{scope_patterns}}; do echo "$p" >> .b00t/scope; done
+    echo ".b00t/scope created with $(wc -l < .b00t/scope) patterns"
+    cat .b00t/scope
+
+# ── All gate-protected recipes ──────────────────────────────────
+gate-help:
+    @echo "🛡️ Gate-Protected Actions (mandatory Zellij fzf menu)"
+    @echo ""
+    @echo "  just gate-build-test         - Build & test (gate required)"
+    @echo "  just gate-deploy-staging     - Deploy to staging (gate required)"
+    @echo "  just gate-deploy-production  - Deploy to production (double gate)"
+    @echo "  just gate-code-review        - Code review (gate required)"
+    @echo "  just gate-diagnostics        - System diagnostics (gate required)"
+    @echo "  just gate-task-list          - Task management (gate required)"
+    @echo "  just gate-subagent-dispatch  - Sub-agent dispatch (gate required)"
+    @echo "  just gate-help               - This help"
+    @echo ""
+    @echo "🔒 PR Validate Gate:"
+    @echo "  just pr-validate goal=\"...\"   - Review staged changes, exit 0=APPROVE, 1=CHANGES"
+    @echo "  (Set .b00t/strict-review to enable mandatory gate on commit)"
+    @echo ""
+    @echo "⚠️  All gate-protected actions require Zellij + fzf"
+    @echo "⚠️  Agent CANNOT proceed without user approval through interactive menu"
+
+# 🥾 Kreuzberg document intelligence — install + test
+kreuzberg-install:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 Installing kreuzberg document intelligence..."
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "📦 Installing uv (Astral Python toolchain)..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+    echo "📦 Installing kreuzberg via pip install --user..."
+    pip3 install --user kreuzberg
+    echo ""
+    echo "🔍 Verifying installation..."
+    python3 -c "import kreuzberg; print('kreuzberg OK')"
+    echo "✅ kreuzberg-install complete"
+
+kreuzberg-test *ARGS='':
+    #!/bin/bash
+    set -euo pipefail
+    echo "🧪 Testing kreuzberg document intelligence..."
+    echo ""
+    python3 "{{repo-root}}/_b00t_/kreuzberg-test.py" ${ARGS:-}
+
+# skills: list all registered b00t skills (SKILL.md + *.skill.toml datums)
+# 🤓 b00t-cli --path discovers skills/ relative to the path arg, not $PWD default
+skills query="":
+    #!/usr/bin/env bash
+    B00T_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    if [ -z "{{query}}" ]; then
+      b00t-cli --path "$B00T_ROOT" skill list
+    else
+      b00t-cli --path "$B00T_ROOT" skill search "{{query}}"
+    fi
+
+# ─── Fine-tuning: unsloth QLoRA for b00t-aligned subagent ────────────────────
+
+# Generate training dataset from b00t corpus
+finetune-dataset format="alpaca" max="5000":
+    uv run python3.14 fine-tune/generate_dataset.py --format={{format}} --max-rows={{max}}
+
+# Run unsloth QLoRA fine-tuning
+finetune-train config="fine-tune/config.yaml":
+    uv run python3.14 fine-tune/train_unsloth.py --config={{config}}
+
+# Export LoRA adapter to GGUF
+finetune-export adapter="./fine-tune/output/lora-adapter" quant="Q4_K_M":
+    uv run python3.14 fine-tune/export_gguf.py --adapter={{adapter}} --quant={{quant}}
+
+# Full pipeline: dataset -> train -> export
+finetune-all:
+    uv run python3.14 fine-tune/generate_dataset.py
+    uv run python3.14 fine-tune/train_unsloth.py
+    uv run python3.14 fine-tune/export_gguf.py
+
