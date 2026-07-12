@@ -317,3 +317,15 @@ session-guards.json
 exec-audit.json
 ooda-state.json
 *.wasm
+# Generated/runtime artifacts
+_b00t_/k8s/serena-config/
+_b00t_/lmcache.capability.toml
+_b00t_/typescript.skill.toml
+evidence/
+fine-tune/
+lfmf-telemetry.jsonl
+server-keys.json
+spotlight.jsonl
+unsloth_compiled_cache/
+vendor/pi-mono/
+"vscode.\360\237\206\232/vscode-docs/"
