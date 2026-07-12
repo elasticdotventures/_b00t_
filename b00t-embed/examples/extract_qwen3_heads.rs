@@ -16,8 +16,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use candle_core::{DType, Device, Tensor};
-use hf_hub::api::sync::ApiBuilder;
-use hf_hub::Repo;
+use hf_hub::HFClientSync;
 
 const MODEL_ID: &str = "Qwen/Qwen3-Embedding-0.6B";
 #[allow(dead_code)]
@@ -37,10 +36,11 @@ fn main() -> anyhow::Result<()> {
 
     // ── Wave 1a: Download model from HuggingFace ──
     println!("\n  Wave 1a: Download model from HuggingFace ...");
-    let api = ApiBuilder::from_env().build()?;
-    let repo = api.repo(Repo::new(MODEL_ID.to_string(), hf_hub::RepoType::Model));
-    let weights_path = repo.get("model.safetensors")?;
-    let config_path = repo.get("config.json")?;
+    let client = HFClientSync::new()?;
+    let (owner, name) = MODEL_ID.split_once('/').unwrap_or(("", MODEL_ID));
+    let repo = client.model(owner, name);
+    let weights_path = repo.download_file().filename("model.safetensors").send()?;
+    let config_path = repo.download_file().filename("config.json").send()?;
     println!("  ✓ Downloaded model.safetensors ({})", weights_path.display());
     println!("  ✓ Downloaded config.json ({})", config_path.display());
 

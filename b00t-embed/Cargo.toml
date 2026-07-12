@@ -10,7 +10,7 @@ description = "Unified embedding adapter wrapping embed_anything for b00t, ledgr
 [dependencies]
 embed_anything = { path = "../vendor/embed-anything-b00t/rust" }
 anyhow = "1"
-hf-hub = { version = "0.4", default-features = false }
+hf-hub = { version = "1.0", default-features = false, features = ["blocking"] }
 tokenizers = { version = "0.22", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -18,8 +18,8 @@ tokio = { version = "1", features = ["rt", "macros", "sync"] }
 async-trait = "0.1"
 tracing = "0.1"
 thiserror = "2"
-candle-core = "0.9"
-candle-nn = "0.9"
+candle-core = "0.11"
+candle-nn = "0.11"
 dyn-clone = "1"
 dashmap = "6"
 chrono = { version = "0.4", features = ["serde"] }

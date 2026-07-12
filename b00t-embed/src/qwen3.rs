@@ -18,8 +18,7 @@ use async_trait::async_trait;
 use candle_core::{DType, Device, Tensor};
 use candle_nn::{VarBuilder, VarMap};
 use embed_anything::models::qwen3::{Config, Model};
-use hf_hub::api::sync::ApiBuilder;
-use hf_hub::Repo;
+use hf_hub::HFClientSync;
 use tokenizers::{PaddingParams, Tokenizer, TruncationParams};
 
 use crate::layer::bouncer::LayerGateKeeper;
@@ -61,28 +60,32 @@ impl Qwen3Composable {
     /// 4. Initialize LayerStack for composable layer lifecycle
     ///
     /// Model ID: "Qwen/Qwen3-Embedding-0.6B" (768-dim embeddings)
+    #[allow(unused_variables)]
     pub fn new(
         model_id: &str,
         revision: Option<&str>,
         token: Option<&str>,
     ) -> Result<Self> {
-        let api = ApiBuilder::from_env()
-            .with_token(token.map(|s| s.to_string()))
-            .build()
-            .context("failed to build HF API")?;
-        let repo = match revision {
-            Some(rev) => api.repo(Repo::with_revision(
-                model_id.to_string(),
-                hf_hub::RepoType::Model,
-                rev.to_string(),
-            )),
-            None => api.repo(Repo::new(model_id.to_string(), hf_hub::RepoType::Model)),
-        };
+        let client = HFClientSync::new().context("failed to build HF client")?;
+        let (owner, name) = split_model_id(model_id);
+        let repo = client.model(owner, name);
 
         // Download model files
-        let config_path = repo.get("config.json").context("config.json not found")?;
-        let tokenizer_path = repo.get("tokenizer.json").context("tokenizer.json not found")?;
-        let weights_path = match repo.get("model.safetensors") {
+        let config_path = repo
+            .download_file()
+            .filename("config.json")
+            .send()
+            .context("config.json not found")?;
+        let tokenizer_path = repo
+            .download_file()
+            .filename("tokenizer.json")
+            .send()
+            .context("tokenizer.json not found")?;
+        let weights_path = match repo
+            .download_file()
+            .filename("model.safetensors")
+            .send()
+        {
             Ok(p) => p,
             Err(_) => anyhow::bail!("model.safetensors not found; Qwen3-Embedding uses single-file safetensors"),
         };
@@ -424,6 +427,14 @@ fn detect_safetensors_dtype(path: &std::path::Path) -> Result<DType> {
         }
     }
     Ok(DType::F32) // fallback
+}
+
+/// Split "owner/name" model ID into (owner, name) pair for hf-hub 1.0 API.
+fn split_model_id(model_id: &str) -> (&str, &str) {
+    match model_id.split_once('/') {
+        Some((owner, name)) => (owner, name),
+        None => ("", model_id),
+    }
 }
 
 #[cfg(test)]
