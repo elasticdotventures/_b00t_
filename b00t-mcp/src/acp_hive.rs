@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{info, warn, debug};
-use uuid::Uuid;
-
-use b00t_chat::{Agent, AgentConfig, ACPMessage, MessageType};
+use b00t_chat::{Agent, AgentConfig, ACPMessage};
 
 /// Hive mission configuration for ACP coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -173,14 +173,6 @@ impl RealNatsTransport {
             }
         }
 
-        let opts = match (&self.user, &self.password) {
-            (Some(u), Some(p)) => ConnectOptions::new()
-                .user_and_password(u.clone(), p.clone())
-                .retry_on_initial_connect(),
-            _ => ConnectOptions::new()
-                .retry_on_initial_connect(),
-        };
-
         let mut last_err = String::new();
         for attempt in 0..=self.max_reconnect_attempts {
             let opts = match (&self.user, &self.password) {

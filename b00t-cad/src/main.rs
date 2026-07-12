@@ -3,7 +3,7 @@
 //! Run: cargo run -p b00t-cad -- [part_name]
 //! Parts: flange, gear, bolt, heart, spring
 
-use cadrum::{DVec3, Solid, Edge};
+use cadrum::{DVec3, Solid};
 use std::time::Instant;
 use std::io::BufWriter;
 
