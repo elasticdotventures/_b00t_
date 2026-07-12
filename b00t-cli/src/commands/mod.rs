@@ -124,6 +124,8 @@ pub mod calibrate;
 pub mod evidence;
 pub mod from_artifact;
 pub mod provider;
+pub mod pipeline;
+pub use pipeline::PipelineCommands;
 pub mod store;
 pub use store::StoreCommands;
 pub use store::handle_store_command;

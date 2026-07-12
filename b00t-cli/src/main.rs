@@ -89,7 +89,6 @@ use b00t_cli::commands::{
     GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
-    PipelineCommands,
     StoreCommands,
     GrokCommands, HiveCommands,
     InitCommands,
@@ -97,7 +96,7 @@ use b00t_cli::commands::{
     provider::ProviderCommands,
     K8sCommands,
     McpCommands, ModelCommands,
-    ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, PipelineCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
     runpod::RunpodCommands,
     TaskCommands,
@@ -156,7 +155,8 @@ Example:
         #[clap(help = "Text to tokenize")]
         text: String,
     },
-    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
+    #[clap(
+        about = "Agent tool authorization manifest (unlocks via learning)")]
     Blessing(b00t_cli::commands::blessing::BlessingArgs),
 
     #[clap(
@@ -200,8 +200,6 @@ Advice mode (consult prior lessons before fixing):
   b00t-cli lfmf advice <tool>       # print recorded lessons for <tool> to stdout
 "#
     )]
-    #[clap(about = "Agent tool authorization manifest (unlocks via learning)")]
-    Blessing(b00t_cli::commands::blessing::BlessingArgs),
 
     Lfmf {
         #[clap(
@@ -2236,7 +2234,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills }) => {
+        Some(Commands::Whoami { role, with_skills, json, skills, .. }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
