@@ -5,27 +5,34 @@
 //! - `b00t_datum!` macro: declarative DSL → `DatumNode` literal
 //! - `IrontologyBridgeClient`: wraps the active store backend for ingest/query without MCP subprocess
 //!   (MCP transport pending: vendor/irontology-mcp has no main.rs yet)
-//! - Storage: Cargo-selected backend, using default paths
-//!   `~/.b00t/neumann/<namespace>/` for Neumann and
-//!   `~/.b00t/oxigraph/<namespace>/` for Oxigraph
+//! - Storage: Cargo-selected backend (`store-helixdb` default, `store-oxigraph` or legacy `store-neumann`)
+//!
+//! # Backends
+//! - **HelixDB** (default): remote labeled-property-graph via helix-db HTTP client
+//! - **Oxigraph**: embedded SPARQL 1.1 RDF store at `~/.b00t/oxigraph/<namespace>/`
+//! - **Neumann** (archived/legacy): embedded SQLite triple store at `~/.b00t/neumann/<namespace>/`
 //!
 //! # Semantic mapping
 //! b00t datum → irontology `FactRecord` triples:
 //!   subject   = `b00t:datum/<topic>/<uuid>`
 //!   predicate = `b00t:hasContent` | `b00t:hasTag` | `b00t:hasClass` | `<custom_predicate>`
 //!   object    = JSON Value (String for content/tags, object for complex predicates)
-//!
-//! 🤓 Embeddings deferred: NeumannStore accepts EmbeddingRecord but generation requires
-//!    active inference stack (vllm/ollama). Facts-only path works today; vector search
-//!    is additive once `b00t hive activate inference-qwen3` runs.
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(all(feature = "store-neumann", feature = "store-oxigraph"))]
-compile_error!("Enable exactly one b00t-c0re-lib storage backend: store-neumann OR store-oxigraph.");
+#[cfg(any(
+    all(feature = "store-neumann", feature = "store-oxigraph"),
+    all(feature = "store-neumann", feature = "store-helixdb"),
+    all(feature = "store-oxigraph", feature = "store-helixdb"),
+))]
+compile_error!("Enable exactly one storage backend: store-neumann, store-oxigraph, or store-helixdb.");
 
-#[cfg(not(any(feature = "store-neumann", feature = "store-oxigraph")))]
-compile_error!("Enable one b00t-c0re-lib storage backend: store-neumann OR store-oxigraph.");
+#[cfg(not(any(
+    feature = "store-neumann",
+    feature = "store-oxigraph",
+    feature = "store-helixdb",
+)))]
+compile_error!("Enable one storage backend: store-neumann, store-oxigraph, or store-helixdb.");
 
 // ── Core datum type ───────────────────────────────────────────────────────────
 
@@ -103,6 +110,7 @@ pub struct StoreConfig {
     pub data_path: Option<std::path::PathBuf>,
 }
 
+#[deprecated(note = "Neumann is archived/legacy. Use helixdb (default) or oxigraph instead.")]
 pub type NeumannConfig = StoreConfig;
 
 #[async_trait::async_trait]
@@ -117,12 +125,16 @@ pub trait KnowledgeStoreBackend: Clone + Send + Sync + 'static {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "store-oxigraph")] {
+    if #[cfg(feature = "store-helixdb")] {
+        pub type ActiveKnowledgeStore = HelixDBStore;
+        pub const COMPILED_KNOWLEDGE_BACKEND: &str = "helixdb";
+    } else if #[cfg(feature = "store-oxigraph")] {
         pub type ActiveKnowledgeStore = OxigraphStore;
         pub const COMPILED_KNOWLEDGE_BACKEND: &str = "oxigraph";
     }
 }
 
+// Legacy / archived — Neumann is not actively maintained.
 #[cfg(feature = "store-neumann")]
 pub type ActiveKnowledgeStore = NeumannStore;
 
@@ -283,6 +295,176 @@ impl KnowledgeStoreBackend for NeumannStore {
         self.inner
             .upsert_edges(edges.into_iter().map(Into::into).collect())
             .await
+    }
+}
+
+// ── HelixDB Store (default) ──────────────────────────────────────────────
+// Facts stored as `"Fact"`-labeled nodes with subject/predicate/object properties.
+// Edges stored as `"Edge"`-labeled nodes with from/to/kind/weight properties.
+
+#[cfg(feature = "store-helixdb")]
+#[derive(Clone)]
+pub struct HelixDBStore {
+    client: std::sync::Arc<helix_db::Client>,
+}
+
+#[cfg(feature = "store-helixdb")]
+#[async_trait::async_trait]
+impl KnowledgeStoreBackend for HelixDBStore {
+    fn try_new(config: StoreConfig) -> anyhow::Result<Self> {
+        let url = if config.endpoint.is_empty()
+            || config.endpoint == "local"
+            || config.endpoint == "http://localhost:7777"
+        {
+            None
+        } else {
+            Some(config.endpoint.as_str())
+        };
+        let client = helix_db::Client::new(url)
+            .map_err(|e| anyhow::anyhow!("HelixDB client init error: {e}"))?;
+        Ok(Self {
+            client: std::sync::Arc::new(client),
+        })
+    }
+
+    async fn query(&self, query: SemanticQuery) -> anyhow::Result<QueryResult> {
+        use helix_db::dsl::prelude::*;
+
+        let traversal = match (&query.subject, &query.predicate) {
+            (None, None) => g()
+                .n_with_label("Fact")
+                .value_map(Some(vec!["subject", "predicate", "object"])),
+            _ => {
+                let mut preds = Vec::new();
+                if let Some(ref subject) = query.subject {
+                    preds.push(SourcePredicate::eq("subject", subject.clone()));
+                }
+                if let Some(ref predicate) = query.predicate {
+                    preds.push(SourcePredicate::eq("predicate", predicate.clone()));
+                }
+                let combined = preds
+                    .into_iter()
+                    .reduce(|a, b| SourcePredicate::and(vec![a, b]))
+                    .unwrap();
+                g().n_with_label_where("Fact", combined)
+                    .value_map(Some(vec!["subject", "predicate", "object"]))
+            }
+        };
+
+        let batch = read_batch()
+            .var_as("facts", traversal)
+            .returning(["facts"]);
+
+        let request = DynamicQueryRequest::read(batch);
+        let response: serde_json::Value = self
+            .client
+            .query()
+            .dynamic(request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("HelixDB query error: {e}"))?;
+
+        let facts = response["facts"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|item| {
+                        let subject = item["subject"].as_str()?.to_string();
+                        let predicate = item["predicate"].as_str()?.to_string();
+                        let object = match item["object"].as_str() {
+                            Some(s) => serde_json::Value::String(s.to_string()),
+                            None => item["object"].clone(),
+                        };
+                        Some(FactRecord {
+                            subject,
+                            predicate,
+                            object,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(QueryResult { facts })
+    }
+
+    async fn upsert_facts(&self, facts: Vec<FactRecord>) -> anyhow::Result<()> {
+        use helix_db::dsl::prelude::*;
+
+        if facts.is_empty() {
+            return Ok(());
+        }
+
+        let mut batch = write_batch();
+        let mut var_names = Vec::with_capacity(facts.len());
+        for (i, fact) in facts.iter().enumerate() {
+            let var_name = format!("f{i}");
+            let object_str = match &fact.object {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            batch = batch.var_as(
+                &var_name,
+                g().add_n(
+                    "Fact",
+                    vec![
+                        ("subject", PropertyInput::from(fact.subject.clone())),
+                        ("predicate", PropertyInput::from(fact.predicate.clone())),
+                        ("object", PropertyInput::from(object_str)),
+                    ],
+                ),
+            );
+            var_names.push(var_name);
+        }
+        let batch = batch.returning(var_names);
+
+        let request = DynamicQueryRequest::write(batch);
+        self.client
+            .query::<serde_json::Value>()
+            .dynamic(request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("HelixDB upsert error: {e}"))?;
+
+        Ok(())
+    }
+
+    async fn upsert_edges(&self, edges: Vec<EdgeRecord>) -> anyhow::Result<()> {
+        use helix_db::dsl::prelude::*;
+
+        if edges.is_empty() {
+            return Ok(());
+        }
+
+        let mut batch = write_batch();
+        let mut var_names = Vec::with_capacity(edges.len());
+        for (i, edge) in edges.iter().enumerate() {
+            let var_name = format!("e{i}");
+            batch = batch.var_as(
+                &var_name,
+                g().add_n(
+                    "Edge",
+                    vec![
+                        ("from", PropertyInput::from(edge.from.clone())),
+                        ("to", PropertyInput::from(edge.to.clone())),
+                        ("kind", PropertyInput::from(format!("{:?}", edge.kind))),
+                        ("weight", PropertyInput::from(edge.weight as f64)),
+                    ],
+                ),
+            );
+            var_names.push(var_name);
+        }
+        let batch = batch.returning(var_names);
+
+        let request = DynamicQueryRequest::write(batch);
+        self.client
+            .query::<serde_json::Value>()
+            .dynamic(request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("HelixDB upsert edges error: {e}"))?;
+
+        Ok(())
     }
 }
 
@@ -734,10 +916,12 @@ mod tests {
 
     #[test]
     fn test_compiled_knowledge_backend_is_active_backend() {
-        #[cfg(feature = "store-neumann")]
-        assert_eq!(compiled_knowledge_backend(), "neumann");
+        #[cfg(feature = "store-helixdb")]
+        assert_eq!(compiled_knowledge_backend(), "helixdb");
         #[cfg(feature = "store-oxigraph")]
         assert_eq!(compiled_knowledge_backend(), "oxigraph");
+        #[cfg(feature = "store-neumann")]
+        assert_eq!(compiled_knowledge_backend(), "neumann");
     }
 
     #[test]

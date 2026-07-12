@@ -972,9 +972,12 @@ hint = "Test stack"
 
     #[test]
     fn test_gate_knowledge_backend_fails_for_mismatch() {
-        let mismatched = match b00t_c0re_lib::compiled_knowledge_backend() {
+        let active = b00t_c0re_lib::compiled_knowledge_backend();
+        let mismatched = match active {
+            "helixdb" => "oxigraph",
+            "oxigraph" => "helixdb",
             "neumann" => "oxigraph",
-            _ => "neumann",
+            _ => "helixdb",
         };
         let gates = vec![GateSpec {
             command: None,
