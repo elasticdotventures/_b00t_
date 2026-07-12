@@ -106,9 +106,6 @@
 	path = vendor/tomllm
 	url = https://github.com/PromptExecution/tomllm.git
 
-[submodule "vscode.🆚/vscode-docs"]
-	path = vscode.🆚/vscode-docs
-	url = https://github.com/microsoft/vscode-docs
 [submodule "vendor/agentsea-skillpacks"]
 	path = vendor/agentsea-skillpacks
 	url = https://github.com/PromptExecution/skillpacks-b00t.git
