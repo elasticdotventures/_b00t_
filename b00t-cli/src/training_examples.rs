@@ -65,7 +65,7 @@ pub fn convert_to_training(
         pass_count += 1;
 
         let subject_name = entry.subject.replace(".toml", "").replace(".gate", "");
-        let rule = entry.object.rule.as_deref().unwrap_or("gate-check");
+        let _rule = entry.object.rule.as_deref().unwrap_or("gate-check");
         let assertion = entry.object.assertion.as_deref().unwrap_or("validates");
         let file = entry.object.file.as_deref().unwrap_or("unknown");
 

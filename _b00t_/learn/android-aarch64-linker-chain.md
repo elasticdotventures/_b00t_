@@ -1,0 +1,2 @@
+---
+Cross-compile aarch64-linux-android linker chain: (1) cc=host x86_64 linker → EM:183 wrong arch. (2) mold=rejects -Wl,--version-script prefix rustc passes directly. (3) rust-lld=bundled with rustc, works but needs Android NDK sysroot for -lm/-lc. Solution: build inside podman container from build-android.sh which has NDK pre-configured. Host needs no NDK. Pure Rust crates tested natively via cargo test.

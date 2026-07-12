@@ -1,0 +1,12 @@
+[b00t]
+name = "sudo"
+type = "cli"
+hint = "sudo allows a permitted user to execute a command as the  superuser  or        another user, as specified by the security policy.  The invoking user's        real  (not  effective)  user-ID is used to determine the user name with"
+desires = "ersion"
+lfmf_category = "sudo"
+
+[b00t.learn]
+inline = "See: man sudo"
+
+# Auto-generated from man page
+# Edit to add usage examples, dependencies, etc.
