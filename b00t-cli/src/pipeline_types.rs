@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // ── GH #719: Port types ──
 
@@ -424,6 +424,352 @@ pub fn auto_insert_conversions(stages: &mut Vec<StageSpec>) {
     }
 }
 
+// ── GH #724: Pipeline DAG ──
+
+/// Edge connecting two stages in a pipeline DAG.
+///
+/// `from` and `to` refer to stage names.  `via_port` records which output
+/// port on the source stage matched the destination's input port during
+/// automatic wiring.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PipelineEdge {
+    pub from: String,
+    pub to: String,
+    pub via_port: Option<StagePort>,
+}
+
+/// A directed acyclic graph representation of a pipeline.
+///
+/// Built automatically from a `Vec<StageSpec>` by matching output ports
+/// to compatible input ports across all stages.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineDag {
+    pub stages: Vec<StageSpec>,
+    pub edges: Vec<PipelineEdge>,
+    pub entry_points: Vec<String>,
+    pub exit_points: Vec<String>,
+}
+
+impl PipelineDag {
+    /// Build a DAG from a list of stage specs.
+    ///
+    /// For every ordered pair of stages `(i, j)` where `i != j`, the builder
+    /// checks each output port of `i` against each input port of `j` via
+    /// `StagePort::compatible_with`.  The first compatible pair produces an
+    /// edge `i → j`.
+    ///
+    /// After wiring, a topological sort (Kahn's algorithm) confirms the
+    /// graph is acyclic.  Entry points (no incoming edges) and exit points
+    /// (no outgoing edges) are inferred automatically.
+    pub fn build(stages: Vec<StageSpec>) -> anyhow::Result<Self> {
+        // Check for duplicate stage names.
+        let mut seen = HashSet::new();
+        for stage in &stages {
+            if !seen.insert(stage.name.as_str()) {
+                anyhow::bail!("duplicate stage name: {}", stage.name);
+            }
+        }
+
+        // Wire edges by matching output ports → input ports.
+        let mut edges = Vec::new();
+        for i in 0..stages.len() {
+            for j in 0..stages.len() {
+                if i == j {
+                    continue;
+                }
+                // Find the first compatible output→input pair.
+                let mut matched: Option<StagePort> = None;
+                'outer: for out_port in &stages[i].output_ports {
+                    for in_port in &stages[j].input_ports {
+                        if out_port.compatible_with(in_port) {
+                            matched = Some(out_port.clone());
+                            break 'outer;
+                        }
+                    }
+                }
+                if let Some(port) = matched {
+                    edges.push(PipelineEdge {
+                        from: stages[i].name.clone(),
+                        to: stages[j].name.clone(),
+                        via_port: Some(port),
+                    });
+                }
+            }
+        }
+
+        // Entry points: stages with no incoming edges.
+        let entry_points: Vec<String> = stages
+            .iter()
+            .map(|s| s.name.clone())
+            .filter(|name| !edges.iter().any(|e| e.to == *name))
+            .collect();
+
+        // Exit points: stages with no outgoing edges.
+        let exit_points: Vec<String> = stages
+            .iter()
+            .map(|s| s.name.clone())
+            .filter(|name| !edges.iter().any(|e| e.from == *name))
+            .collect();
+
+        let dag = PipelineDag {
+            stages,
+            edges,
+            entry_points,
+            exit_points,
+        };
+
+        // Topological sort validates acyclicity.
+        dag.topological_sort()?;
+
+        Ok(dag)
+    }
+
+    /// Internal topological sort via Kahn's algorithm.
+    ///
+    /// Returns the stage names in execution order, or an error if a cycle
+    /// is detected.
+    fn topological_sort(&self) -> anyhow::Result<Vec<String>> {
+        let mut in_degree: HashMap<&str, usize> = HashMap::new();
+        let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
+
+        // Initialise all stages with in-degree 0 and an empty adjacency list.
+        for stage in &self.stages {
+            in_degree.entry(stage.name.as_str()).or_insert(0);
+            adj.entry(stage.name.as_str()).or_default();
+        }
+
+        // Populate adjacency and in-degrees from edges.
+        for edge in &self.edges {
+            adj.get_mut(edge.from.as_str())
+                .unwrap()
+                .push(&edge.to);
+            *in_degree.get_mut(edge.to.as_str()).unwrap() += 1;
+        }
+
+        // Seed the queue with nodes that have no dependencies.
+        let mut queue: Vec<&str> = in_degree
+            .iter()
+            .filter(|(_, deg)| **deg == 0)
+            .map(|(&name, _)| name)
+            .collect();
+
+        let mut order = Vec::new();
+        while let Some(node) = queue.pop() {
+            order.push(node.to_string());
+            for &next in adj.get(node).unwrap_or(&vec![]) {
+                let deg = in_degree.get_mut(next).unwrap();
+                *deg -= 1;
+                if *deg == 0 {
+                    queue.push(next);
+                }
+            }
+        }
+
+        if order.len() != self.stages.len() {
+            anyhow::bail!("cycle detected in pipeline DAG");
+        }
+
+        Ok(order)
+    }
+
+    /// Validate structural integrity of the DAG.
+    ///
+    /// Checks:
+    /// - All stage names are unique
+    /// - Every edge source and target refers to an existing stage
+    /// - No disconnected stages (no incoming AND no outgoing edges)
+    /// - No dangling ports (edge `via_port` exists on both source output and
+    ///   target input ports)
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // ── 1. Unique stage names ──
+        let mut seen = HashSet::new();
+        for stage in &self.stages {
+            if !seen.insert(stage.name.as_str()) {
+                anyhow::bail!("duplicate stage name: {}", stage.name);
+            }
+        }
+
+        let stage_names: HashSet<&str> =
+            self.stages.iter().map(|s| s.name.as_str()).collect();
+
+        // ── 2. All edge targets refer to existing stages ──
+        for edge in &self.edges {
+            if !stage_names.contains(edge.from.as_str()) {
+                anyhow::bail!(
+                    "edge source '{}' not found in stages",
+                    edge.from
+                );
+            }
+            if !stage_names.contains(edge.to.as_str()) {
+                anyhow::bail!(
+                    "edge target '{}' not found in stages",
+                    edge.to
+                );
+            }
+        }
+
+        // ── 3. No disconnected stages (singleton pipeline is always valid) ──
+        for stage in &self.stages {
+            let has_incoming = self.edges.iter().any(|e| e.to == stage.name);
+            let has_outgoing = self.edges.iter().any(|e| e.from == stage.name);
+            if !has_incoming && !has_outgoing && self.stages.len() > 1 {
+                anyhow::bail!(
+                    "stage '{}' is disconnected (no edges)",
+                    stage.name
+                );
+            }
+        }
+
+        // ── 4. No dangling ports ──
+        for edge in &self.edges {
+            if let Some(ref port) = edge.via_port {
+                let src = self
+                    .stages
+                    .iter()
+                    .find(|s| s.name == edge.from)
+                    .unwrap();
+                let dst = self
+                    .stages
+                    .iter()
+                    .find(|s| s.name == edge.to)
+                    .unwrap();
+
+                let src_has_port = src
+                    .output_ports
+                    .iter()
+                    .any(|p| p == port);
+                if !src_has_port {
+                    anyhow::bail!(
+                        "edge from '{}' references port {:?} not found in output ports",
+                        edge.from,
+                        port
+                    );
+                }
+
+                let dst_has_port = dst.input_ports.iter().any(|p| {
+                    p.direction == PortDirection::Input
+                        && p.media_type == port.media_type
+                });
+                if !dst_has_port {
+                    anyhow::bail!(
+                        "edge to '{}' references port {:?} not found in input ports",
+                        edge.to,
+                        port
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Return a topological execution order of stage names.
+    ///
+    /// Stages with no dependencies come first; stages that depend on others
+    /// appear after their dependencies.
+    pub fn execution_order(&self) -> anyhow::Result<Vec<String>> {
+        self.topological_sort()
+    }
+
+    // ── Backward-compatible helpers (used by pipeline_validate.rs) ──
+
+    /// Build a DAG by connecting stages sequentially.
+    ///
+    /// Each consecutive pair `(i, i+1)` gets a `PipelineEdge` — no port
+    /// compatibility checking.  Entry/exit points are inferred.
+    pub fn from_sequential(stages: Vec<StageSpec>) -> Self {
+        let edges: Vec<PipelineEdge> = stages
+            .windows(2)
+            .map(|w| PipelineEdge {
+                from: w[0].name.clone(),
+                to: w[1].name.clone(),
+                via_port: None,
+            })
+            .collect();
+
+        let entry_points: Vec<String> = stages
+            .iter()
+            .map(|s| s.name.clone())
+            .filter(|name| !edges.iter().any(|e| e.to == *name))
+            .collect();
+
+        let exit_points: Vec<String> = stages
+            .iter()
+            .map(|s| s.name.clone())
+            .filter(|name| !edges.iter().any(|e| e.from == *name))
+            .collect();
+
+        PipelineDag {
+            stages,
+            edges,
+            entry_points,
+            exit_points,
+        }
+    }
+
+    /// Find a stage by name.
+    pub fn find_stage(&self, name: &str) -> Option<&StageSpec> {
+        self.stages.iter().find(|s| s.name == name)
+    }
+
+    /// Stage names in declaration order.
+    pub fn stage_names(&self) -> Vec<&str> {
+        self.stages.iter().map(|s| s.name.as_str()).collect()
+    }
+
+    /// DFS-based cycle detection — returns the first cycle path if found.
+    ///
+    /// This complements `topological_sort` (which returns an error) by
+    /// providing the actual cycle path for user-facing diagnostics.
+    pub fn detect_cycle(&self) -> Option<Vec<String>> {
+        let mut visited: HashSet<&str> = HashSet::new();
+        let mut in_stack: HashSet<&str> = HashSet::new();
+        let mut path: Vec<String> = Vec::new();
+
+        fn dfs<'a>(
+            node: &'a str,
+            edges: &'a [PipelineEdge],
+            visited: &mut HashSet<&'a str>,
+            in_stack: &mut HashSet<&'a str>,
+            path: &mut Vec<String>,
+        ) -> Option<Vec<String>> {
+            visited.insert(node);
+            in_stack.insert(node);
+            path.push(node.to_string());
+
+            for edge in edges {
+                if edge.from == node {
+                    let next = edge.to.as_str();
+                    if !visited.contains(next) {
+                        if let Some(cycle) = dfs(next, edges, visited, in_stack, path) {
+                            return Some(cycle);
+                        }
+                    } else if in_stack.contains(next) {
+                        // Found a cycle — extract it
+                        let cycle_start = path.iter().position(|n| n == next).unwrap_or(0);
+                        let mut cycle: Vec<String> = path[cycle_start..].to_vec();
+                        cycle.push(next.to_string()); // close the cycle
+                        return Some(cycle);
+                    }
+                }
+            }
+
+            path.pop();
+            in_stack.remove(node);
+            None
+        }
+
+        for stage in &self.stages {
+            if !visited.contains(stage.name.as_str()) {
+                if let Some(cycle) = dfs(&stage.name, &self.edges, &mut visited, &mut in_stack, &mut path) {
+                    return Some(cycle);
+                }
+            }
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -808,6 +1154,130 @@ mod tests {
         assert_eq!(stages[1].output_ports[0].media_type, PortMediaType::Image);
     }
 
+    // ── #724 tests: PipelineDag ──
+
+    fn make_stage(name: &str, input_types: &[PortMediaType], output_types: &[PortMediaType]) -> StageSpec {
+        StageSpec {
+            name: name.into(),
+            profile: CapsuleProfile {
+                name: name.into(), ports: vec![],
+                resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
+                image: None, timeout_seconds: None,
+            },
+            input_ports: input_types.iter().map(|mt| StagePort {
+                direction: PortDirection::Input, media_type: mt.clone(), description: None,
+            }).collect(),
+            output_ports: output_types.iter().map(|mt| StagePort {
+                direction: PortDirection::Output, media_type: mt.clone(), description: None,
+            }).collect(),
+            error_routes: vec![], env: None, checkpoint_interval_seconds: None,
+        }
+    }
+
+    #[test]
+    fn dag_linear_pipeline() {
+        // A → B → C  where A outputs Audio, B inputs Audio & outputs Video, C inputs Video
+        let stages = vec![
+            make_stage("A", &[], &[PortMediaType::Audio]),
+            make_stage("B", &[PortMediaType::Audio], &[PortMediaType::Video]),
+            make_stage("C", &[PortMediaType::Video], &[]),
+        ];
+        let dag = PipelineDag::build(stages).unwrap();
+        assert_eq!(dag.edges.len(), 2);
+        assert_eq!(dag.edges[0].from, "A"); assert_eq!(dag.edges[0].to, "B");
+        assert_eq!(dag.edges[1].from, "B"); assert_eq!(dag.edges[1].to, "C");
+        assert_eq!(dag.entry_points, vec!["A"]);
+        assert_eq!(dag.exit_points, vec!["C"]);
+        // Execution order: A → B → C
+        let order = dag.execution_order().unwrap();
+        assert_eq!(order, vec!["A", "B", "C"]);
+    }
+
+    #[test]
+    fn dag_fan_out() {
+        // A → B, A → C  where A outputs Video, both B and C input Video
+        let stages = vec![
+            make_stage("A", &[], &[PortMediaType::Video]),
+            make_stage("B", &[PortMediaType::Video], &[]),
+            make_stage("C", &[PortMediaType::Video], &[]),
+        ];
+        let dag = PipelineDag::build(stages).unwrap();
+        assert_eq!(dag.edges.len(), 2);
+        assert!(dag.edges.iter().any(|e| e.from == "A" && e.to == "B"));
+        assert!(dag.edges.iter().any(|e| e.from == "A" && e.to == "C"));
+        assert_eq!(dag.entry_points, vec!["A"]);
+        // B and C are both exit points
+        assert_eq!(dag.exit_points.len(), 2);
+        assert!(dag.exit_points.contains(&"B".into()));
+        assert!(dag.exit_points.contains(&"C".into()));
+    }
+
+    #[test]
+    fn dag_fan_in() {
+        // A → C, B → C  where A outputs Audio, B outputs Video, C inputs both
+        let stages = vec![
+            make_stage("A", &[], &[PortMediaType::Audio]),
+            make_stage("B", &[], &[PortMediaType::Video]),
+            make_stage("C", &[PortMediaType::Audio, PortMediaType::Video], &[]),
+        ];
+        let dag = PipelineDag::build(stages).unwrap();
+        assert_eq!(dag.edges.len(), 2);
+        assert!(dag.edges.iter().any(|e| e.from == "A" && e.to == "C"));
+        assert!(dag.edges.iter().any(|e| e.from == "B" && e.to == "C"));
+        // A and B are entry points
+        assert_eq!(dag.entry_points.len(), 2);
+        assert!(dag.entry_points.contains(&"A".into()));
+        assert!(dag.entry_points.contains(&"B".into()));
+        assert_eq!(dag.exit_points, vec!["C"]);
+    }
+
+    #[test]
+    fn dag_cycle_detected() {
+        // A → B → A  (cycle)
+        let stages = vec![
+            make_stage("A", &[PortMediaType::Bytes], &[PortMediaType::Video]),
+            make_stage("B", &[PortMediaType::Video], &[PortMediaType::Bytes]),
+        ];
+        let err = PipelineDag::build(stages).unwrap_err();
+        assert!(err.to_string().contains("cycle"), "expected cycle error, got: {err}");
+    }
+
+    #[test]
+    fn dag_empty_pipeline() {
+        let dag = PipelineDag::build(vec![]).unwrap();
+        assert_eq!(dag.stages.len(), 0);
+        assert_eq!(dag.edges.len(), 0);
+        assert!(dag.entry_points.is_empty());
+        assert!(dag.exit_points.is_empty());
+        let order = dag.execution_order().unwrap();
+        assert!(order.is_empty());
+        assert!(dag.validate().is_ok());
+    }
+
+    #[test]
+    fn dag_duplicate_names() {
+        let stages = vec![
+            make_stage("dup", &[], &[PortMediaType::Bytes]),
+            make_stage("dup", &[PortMediaType::Bytes], &[]),
+        ];
+        let err = PipelineDag::build(stages).unwrap_err();
+        assert!(err.to_string().contains("duplicate"), "expected duplicate name error, got: {err}");
+    }
+
+    #[test]
+    fn dag_disconnected_stage() {
+        // A → B,  C is disconnected
+        let stages = vec![
+            make_stage("A", &[], &[PortMediaType::Audio]),
+            make_stage("B", &[PortMediaType::Audio], &[]),
+            make_stage("C", &[PortMediaType::Video], &[PortMediaType::Video]),
+        ];
+        let dag = PipelineDag::build(stages).unwrap();
+        // Build succeeds (acyclic), but validate catches the disconnected stage
+        let err = dag.validate().unwrap_err();
+        assert!(err.to_string().contains("disconnected"), "expected disconnected error, got: {err}");
+    }
+
     #[test]
     fn auto_insert_direct_match_no_change() {
         // Two stages: both Audio → no conversion needed
@@ -838,4 +1308,5 @@ mod tests {
         auto_insert_conversions(&mut stages);
         assert_eq!(stages.len(), 2, "direct match should not insert conversion");
     }
+
 }

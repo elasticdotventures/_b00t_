@@ -109,7 +109,9 @@ pub mod wow;
 pub mod calorie_tracker;
 pub mod cake_ledger;
 pub mod a2a_gates;
+pub mod pipeline_logs;
 pub mod pipeline_types;
+pub mod stage_registry;
 #[cfg(feature = "rpa")]
 pub mod rpa_cdp;
 #[cfg(feature = "rpa")]

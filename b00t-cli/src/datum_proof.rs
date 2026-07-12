@@ -443,7 +443,7 @@ mod tests {
 
     #[test] fn ai_proves()            { assert!(datum!("gpt4", Ai).prove_ai().is_ok()); }
     #[test] fn ai_no_hint_fails()     { assert!(no_hint(DatumType::Ai).prove_ai().is_err()); }
-    #[test] fn aimodel_proves()       { assert!(datum!("gpt4o", AiModel).prove_ai_model().is_ok()); }
+    #[test] fn aimodel_proves()       { assert!(datum!("gpt4o", Ai).prove_ai_model().is_ok()); }
     #[test] fn config_proves()        { assert!(datum!("cfg", Config).prove_config().is_ok()); }
     #[test] fn hive_profile_proves()  { assert!(datum!("hive", HiveProfile).prove_hive_profile().is_ok()); }
 

@@ -257,6 +257,19 @@ pub struct BootDatum {
 use crate::ApiProvides;
 
 impl BootDatum {
+    /// Type identity string: `{type_prefix}_{name}`.
+    ///
+    /// Deterministic — same name + same DatumType always produces the same ID.
+    /// Known types get `skill_`, `mcp_`, `cli_`, etc.  Unknown (None) gets `dat_`.
+    pub fn type_id(&self) -> String {
+        let prefix = self
+            .datum_type
+            .as_ref()
+            .map(|dt| dt.type_prefix())
+            .unwrap_or("dat");
+        format!("{}_{}", prefix, self.name)
+    }
+
     pub fn get_datum_type(&self, filename: Option<&str>) -> DatumType {
         self.datum_type.clone().unwrap_or_else(|| {
             filename
