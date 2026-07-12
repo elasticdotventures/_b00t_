@@ -6,6 +6,7 @@
 use std::io::Write;
 use std::process::Command;
 
+#[allow(dead_code)]
 fn z3_run(smt2: &str) -> Result<String, String> {
     let mut child = Command::new("z3")
         .arg("-in")
@@ -16,7 +17,8 @@ fn z3_run(smt2: &str) -> Result<String, String> {
         .spawn()
         .map_err(|e| format!("z3: {e}"))?;
 
-    use std::io::Write;
+
+
     child.stdin.as_mut().unwrap().write_all(smt2.as_bytes()).map_err(|e| format!("write: {e}"))?;
     let out = child.wait_with_output().map_err(|e| format!("wait: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();

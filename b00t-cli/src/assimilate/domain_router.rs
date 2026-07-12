@@ -4,7 +4,7 @@
 // Pattern: each domain gets a regex to extract the resource ID, then an MCP
 // tool chain to fetch + parse the content. New domains are added here.
 
-use anyhow::{Result, bail};
+use anyhow::{bail};
 use regex::Regex;
 
 /// A domain handler: regex to match URLs, MCP tool chain to process them.
