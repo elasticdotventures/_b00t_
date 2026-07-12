@@ -120,7 +120,7 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
         StoreCommands::Validate => {
             let report = b00t_c0re_lib::store::validate_consistency()?;
             println!("Manifest entries: {}", report.manifest_entries);
-            println!("Neumann facts:    {}", report.neumann_facts);
+            println!("Related facts:    {}", report.related_facts);
             println!("Hash matches:     {}", report.hash_matches);
             println!("Hash mismatches:  {}", report.hash_mismatches);
             println!("Orphan facts:     {}", report.orphan_facts);

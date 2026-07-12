@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::irontology_bridge::{ActiveKnowledgeStore, KnowledgeStoreBackend, StoreConfig};
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,8 +213,6 @@ pub fn sync(provider: &str) -> Result<()> {
     Ok(())
 }
 
-<<<<<<< HEAD
-=======
 // ── Cross-engine validation ─────────────────────────────────────────────────
 
 /// 🤓 AL-1.0 two-engine invariant applied to b00t's data fabric.
@@ -222,7 +222,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     let manifest = load_manifest()?;
     let mut report = CrossEngineReport {
         manifest_entries: manifest.entries.len(),
-        neumann_facts: 0,
+        related_facts: 0,
         hash_matches: 0,
         hash_mismatches: 0,
         missing_facts: Vec::new(),
@@ -231,28 +231,28 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     };
 
     // Query NeumannStore for b00t:hasChecksum facts
-    let fact_results = block_on_neumann(move |store| async move {
+    let fact_results = block_on_store(move |store| async move {
         store.query(crate::irontology_bridge::SemanticQuery {
             subject: None,
             predicate: Some("b00t:hasChecksum".into()),
         }).await
     });
     if let Ok(Ok(query_result)) = fact_results {
-        report.neumann_facts = query_result.facts.len();
+        report.related_facts = query_result.facts.len();
 
-        // Build a lookup: checksum → NeumannStore IRIs
-        let mut neumann_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        // Build a lookup: checksum → knowledge-backend IRIs
+        let mut backend_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for fact in &query_result.facts {
             if let Some(checksum) = fact.object.as_str() {
-                neumann_checksums.entry(checksum.to_string())
+                backend_checksums.entry(checksum.to_string())
                     .or_default()
                     .push(fact.subject.clone());
             }
         }
 
-        // Cross-reference: every StoreEntry checksum should have a matching Neumann fact
+        // Cross-reference: every StoreEntry checksum should have a matching backend fact
         for entry in &manifest.entries {
-            match neumann_checksums.get(&entry.checksum) {
+            match backend_checksums.get(&entry.checksum) {
                 Some(subjects) => {
                     report.hash_matches += 1;
                     if subjects.len() > 1 {
@@ -263,7 +263,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
                     report.missing_facts.push(Discrepancy {
                         manifest_key: entry.key.clone(),
                         checksum: entry.checksum.clone(),
-                        detail: format!("no NeumannStore fact for checksum {}", &entry.checksum[..12]),
+                        detail: format!("no knowledge-backend fact for checksum {}", &entry.checksum[..12]),
                     });
                 }
             }
@@ -273,7 +273,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
         let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
             .map(|e| e.checksum.as_str())
             .collect();
-        for (checksum, subjects) in &neumann_checksums {
+        for (checksum, subjects) in &backend_checksums {
             if !manifest_checksums.contains(checksum.as_str()) {
                 report.orphan_facts += subjects.len();
             }
@@ -288,7 +288,7 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossEngineReport {
     pub manifest_entries: usize,
-    pub neumann_facts: usize,
+    pub related_facts: usize,
     pub hash_matches: usize,
     pub hash_mismatches: usize,
     pub missing_facts: Vec<Discrepancy>,
@@ -305,13 +305,21 @@ pub struct Discrepancy {
 
 // ── Internal: NeumannStore async bridge ────────────────────────────────────
 
-fn block_on_neumann<F, Fut, T>(f: F) -> Result<Result<T>>
+fn block_on_store<F, Fut, T>(f: F) -> Result<Result<T>>
 where
     F: FnOnce(ActiveKnowledgeStore) -> Fut + Send + 'static,
     Fut: std::future::Future<Output = Result<T>> + Send,
     T: Send + 'static,
 {
-    let store = neumann()?;
+    let namespace = "store".to_string();
+    let data_dir = crate::irontology_bridge::compiled_knowledge_backend_data_path(&namespace)?;
+    std::fs::create_dir_all(&data_dir)?;
+    let config = StoreConfig {
+        endpoint: "http://localhost:7777".to_string(),
+        namespace,
+        data_path: Some(data_dir),
+    };
+    let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(config)?;
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => {
             // Already inside a tokio runtime — use block_in_place to yield the thread
@@ -328,7 +336,6 @@ where
     }
 }
 
->>>>>>> origin/main
 // ── Internal: manifest + crypto ────────────────────────────────────────────
 
 fn load_manifest() -> Result<StoreManifest> {
@@ -407,4 +414,36 @@ mod tests {
         let query = query(&tags).expect("query");
         assert!(!query.is_empty());
     }
+}
+
+// ── Store lifecycle + influence tracking ───────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceSource {
+    pub source_key: String,
+    pub ratio: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfluenceReceipt {
+    pub sources: Vec<InfluenceSource>,
+}
+
+pub fn init() -> Result<()> {
+    Ok(())
+}
+
+pub fn status() -> (usize, u64) {
+    (0, 0)
+}
+
+pub fn put_influence(_skill: &str, sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+    Ok(InfluenceReceipt {
+        sources: sources.iter().map(|(k, r)| InfluenceSource {
+            source_key: k.clone(),
+            ratio: *r,
+            score: 0.5,
+        }).collect(),
+    })
 }
