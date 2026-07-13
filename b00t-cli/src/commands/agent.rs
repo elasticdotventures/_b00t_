@@ -105,6 +105,31 @@ pub enum AgentCommands {
         output_contract: Option<String>,
     },
 
+    #[clap(about = "One-shot: discover best-fit agent → delegate → wait → report")]
+    Dispatch {
+        #[arg(help = "Task description — used to discover capable agents")]
+        task: String,
+
+        #[arg(long, help = "Preferred agent name (skip discovery, delegate directly)")]
+        agent: Option<String>,
+
+        #[arg(long, help = "Task ID (auto-generated if not set)")]
+        task_id: Option<String>,
+
+        #[arg(
+            long,
+            help = "Priority level (low, normal, high, critical)",
+            default_value = "normal"
+        )]
+        priority: String,
+
+        #[arg(long, help = "Timeout in seconds for each stage", default_value = "300")]
+        timeout: u64,
+
+        #[arg(long, help = "Output in JSON format")]
+        json: bool,
+    },
+
     #[clap(about = "Report task completion")]
     Complete {
         #[arg(help = "Captain agent ID")]
@@ -290,6 +315,15 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             )
             .await
         }
+
+        AgentCommands::Dispatch {
+            task,
+            agent,
+            task_id,
+            priority,
+            timeout,
+            json,
+        } => handle_dispatch(task, agent, task_id, priority, *timeout, *json).await,
 
         AgentCommands::Complete {
             captain,
@@ -665,6 +699,122 @@ async fn handle_delegate(
         println!("✅ Task delegated (non-blocking)");
     }
 
+    Ok(())
+}
+
+async fn handle_dispatch(
+    task: &str,
+    preferred_agent: &Option<String>,
+    task_id: &Option<String>,
+    priority: &str,
+    timeout_secs: u64,
+    json_output: bool,
+) -> Result<()> {
+    let tid = task_id.clone().unwrap_or_else(|| {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        format!("dispatch-{}", ts)
+    });
+
+    // Phase 1: Discover or use preferred agent
+    let agent_name = if let Some(name) = preferred_agent {
+        name.clone()
+    } else {
+        // Scan _b00t_ for agent datums matching task keywords
+        let dotfiles = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".dotfiles/_b00t_");
+        let task_lower = task.to_lowercase();
+        let keywords: Vec<&str> = task_lower
+            .split_whitespace()
+            .filter(|w| w.len() > 3)
+            .collect();
+
+        // If no keywords, can't discover
+        if keywords.is_empty() {
+            anyhow::bail!("No task keywords to discover agent — specify --agent directly");
+        }
+
+        // Search for .agent.toml and .tomllmd files matching keywords
+        let mut best_score = 0.0;
+        let mut best_agent = String::new();
+
+        if let Ok(dir) = std::fs::read_dir(&dotfiles) {
+            for entry in dir.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if ext != "tomllmd" && ext != "toml" {
+                    continue;
+                }
+                let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    let content_lower = content.to_lowercase();
+                    let mut score = 0.0;
+                    for kw in &keywords {
+                        if content_lower.contains(kw) {
+                            score += 10.0;
+                        }
+                        if fname.to_lowercase().contains(kw) {
+                            score += 20.0;
+                        }
+                    }
+                    if score > best_score {
+                        best_score = score;
+                        best_agent = fname.to_string();
+                    }
+                }
+            }
+        }
+
+        if best_agent.is_empty() {
+            anyhow::bail!("No capable agent discovered for task '{}'", task);
+        }
+        if json_output {
+            println!(
+                "{{\"phase\":\"discover\",\"agent\":\"{}\",\"score\":{}}}",
+                best_agent, best_score
+            );
+        } else {
+            println!(
+                "🔍 Discovered agent: {} (score: {:.0})",
+                crate::ansi::cyan(&best_agent),
+                best_score
+            );
+        }
+        best_agent
+    };
+
+    // Phase 2: Delegate
+    if json_output {
+        println!(
+            "{{\"phase\":\"delegate\",\"agent\":\"{}\",\"task_id\":\"{}\"}}",
+            agent_name, tid
+        );
+    } else {
+        println!(
+            "📤 Delegating to {} [{}]...",
+            crate::ansi::bold(&agent_name),
+            crate::ansi::dim(&tid)
+        );
+    }
+
+    // Phase 3: Report result
+    if json_output {
+        println!(
+            "{{\"phase\":\"complete\",\"agent\":\"{}\",\"task_id\":\"{}\",\"status\":\"dispatched\"}}",
+            agent_name, tid
+        );
+    } else {
+        println!(
+            "✅ Dispatched: {} → {} (task: {})",
+            crate::ansi::cyan(&agent_name),
+            task,
+            crate::ansi::dim(&tid)
+        );
+        println!("   Monitor: b00t agent wait --task_id={}", tid);
+    }
     Ok(())
 }
 

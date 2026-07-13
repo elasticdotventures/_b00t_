@@ -24,6 +24,15 @@ pub enum OntologyCommands {
         #[clap(long, default_value = "json", value_parser = ["json", "table"])]
         format: String,
     },
+    #[clap(about = "Semantic agent search: find best-fit agent for a task description")]
+    FindAgent {
+        #[clap(help = "Task description to match against agent capabilities")]
+        task: String,
+        #[clap(long, help = "Maximum results", default_value = "5")]
+        limit: usize,
+        #[clap(long, default_value = "table", value_parser = ["table", "json"])]
+        format: String,
+    },
 }
 
 impl OntologyCommands {
@@ -51,6 +60,16 @@ impl OntologyCommands {
                         }
                     }
                     _ => println!("{}", serde_json::to_string_pretty(&triples)?),
+                }
+                Ok(())
+            }
+            OntologyCommands::FindAgent { task, limit, format } => {
+                let workspace = crate::utils::get_workspace_root();
+                let datum_dir = format!("{}/_b00t_", workspace);
+                let results = find_agents_for_task(task, *limit, &datum_dir)?;
+                match format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&results)?),
+                    _ => print_agent_results(task, &results),
                 }
                 Ok(())
             }
@@ -270,6 +289,89 @@ pub fn sparql_query(subject: Option<&str>, predicate: &str, datum_dir: &str) -> 
         }
     }
     Ok(triples)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AgentMatch {
+    agent_name: String,
+    score: f64,
+    matched_keywords: Vec<String>,
+    reason: String,
+}
+
+fn find_agents_for_task(task: &str, limit: usize, datum_dir: &str) -> Result<Vec<AgentMatch>> {
+    let task_lower = task.to_lowercase();
+    let keywords: Vec<&str> = task_lower
+        .split_whitespace()
+        .filter(|w| w.len() > 3)
+        .collect();
+
+    let mut scores: Vec<(String, f64, Vec<String>)> = Vec::new();
+    let agent_dir = Path::new(datum_dir);
+
+    if agent_dir.exists() {
+        for entry in fs::read_dir(agent_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
+                continue;
+            }
+            let content = fs::read_to_string(&path)?;
+            let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            let content_lower = content.to_lowercase();
+
+            // Score: keyword matches in content
+            let mut matched: Vec<String> = Vec::new();
+            let mut score = 0.0;
+            for kw in &keywords {
+                if content_lower.contains(kw) {
+                    matched.push(kw.to_string());
+                    score += 10.0;
+                }
+            }
+
+            // Bonus: name match
+            if fname.to_lowercase().contains(&task_lower) {
+                score += 20.0;
+            }
+
+            // Bonus: role/agent/capability mentions
+            if content_lower.contains("role") || content_lower.contains("agent") {
+                score += 5.0;
+            }
+
+            if score > 0.0 {
+                scores.push((fname, score, matched));
+            }
+        }
+    }
+
+    scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scores.truncate(limit);
+
+    Ok(scores
+        .into_iter()
+        .map(|(name, score, matched)| AgentMatch {
+            reason: format!("matched {} keyword(s): {}", matched.len(), matched.join(", ")),
+            agent_name: name,
+            score,
+            matched_keywords: matched,
+        })
+        .collect())
+}
+
+fn print_agent_results(task: &str, results: &[AgentMatch]) {
+    println!("{}", crate::ansi::bold(&format!("\n🔍 Agent search for: \"{}\"", task)));
+    println!("{}", crate::ansi::dim(&format!("   {} result(s) found\n", results.len())));
+    if results.is_empty() {
+        println!("   No matching agents found.");
+        return;
+    }
+    for (i, r) in results.iter().enumerate() {
+        let pct = (r.score * 100.0) as u32;
+        println!(" {}. {} ({}%)", i + 1, crate::ansi::cyan(&r.agent_name), crate::ansi::green(&pct.to_string()));
+        println!("    {}", crate::ansi::dim(&r.reason));
+    }
 }
 
 #[cfg(test)]
