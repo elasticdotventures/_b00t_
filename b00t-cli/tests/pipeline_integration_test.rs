@@ -20,16 +20,14 @@ use std::sync::Arc;
 use b00t_cli::pipeline_costs::{
     CostConfig, CostEstimate, PipelineCostReport, ResourceUsage, StageCostRow,
 };
-use b00t_cli::pipeline_executor::{
-    PipelineExecutor, PipelineRunReport, RunStatus, StageResult, StageStatus,
-};
-use b00t_cli::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry, PipelineLogQuery, VecLogStore};
+use b00t_cli::pipeline_executor::{PipelineExecutor, PipelineRunReport, RunStatus, StageStatus};
+use b00t_cli::pipeline_logs::{LogStore, PipelineLogQuery, VecLogStore};
 use b00t_cli::pipeline_secrets::{SecretRef, SecretSource, SecretStore};
 use b00t_cli::pipeline_types::{
     CapsuleProfile, ErrorRoute, PipelineDag, PortDirection, PortMediaType,
     ResourceRequirements, StagePort, StageSpec,
 };
-use b00t_cli::transmogrifier::{Transmogrifier, TransmogrifierRegistry};
+use b00t_cli::transmogrifier::TransmogrifierRegistry;
 
 // ── Test Harness ─────────────────────────────────────────────────────────────
 
@@ -146,14 +144,8 @@ impl PipelineTestHarness {
     }
 
     /// Return a copy of all log entries (chronological order).
-    fn logs(&self) -> Vec<PipelineLogEntry> {
+    fn logs(&self) -> Vec<b00t_cli::pipeline_logs::PipelineLogEntry> {
         self.log_store.query(&PipelineLogQuery::default())
-    }
-
-    /// Clear all stored log entries.
-    fn clear_logs(&self) {
-        // VecLogStore doesn't expose clear, so we create a new store.
-        // For tests this is fine since we control the harness lifecycle.
     }
 }
 
@@ -577,7 +569,7 @@ async fn test_serial_execution_full() {
 ///   - Log entry warns that the pipeline has no stages
 #[tokio::test]
 async fn test_empty_pipeline() {
-    let mut harness = PipelineTestHarness::new();
+    let harness = PipelineTestHarness::new();
 
     // Arrange: no stages registered.
     assert!(harness.stages.is_empty());
