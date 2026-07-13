@@ -69,6 +69,7 @@ pub mod rhai_engine;
 pub mod runtime_env;
 pub mod secret_validation;
 pub mod sm0l_dispatch;
+pub mod state_introspection;
 pub mod sudo_operator;
 pub mod soul_dataframerr;
 pub mod template;
@@ -119,6 +120,9 @@ pub use rag::{DocumentSource, LoaderType, RagLightConfig, RagLightManager};
 pub use rhai_engine::RhaiEngine;
 pub use secret_validation::{
     AwsValidation, CloudflareValidation, QdrantValidation, SecretValidator,
+};
+pub use state_introspection::{
+    StateMachineIntrospection, StateTransitionDescriptor, StateTypeDescriptor,
 };
 pub use template::TemplateRenderer;
 
