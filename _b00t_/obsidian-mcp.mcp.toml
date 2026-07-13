@@ -3,35 +3,41 @@
 # Bridges MCP stdio ↔ HTTP to a running Obsidian instance.
 # Provides both MCP tool access (agent-facing) and REST API access (grok indexing).
 #
+# Two plugin backends:
+#   A. Semantic Notes Vault MCP (recommended) — runs INSIDE Obsidian, port 3001, 8 tools
+#   B. obsidian-mcp-connector (container/npx bridge) — port 27200, MCP transport only
+#
 # Requires:
-#   OBSIDIAN_TOKEN — Obsidian Local REST API key (Settings → Local REST API)
-#   OBSIDIAN_MCP_KEY — Obsidian MCP Connector plugin API key (if using MCP transport)
+#   OBSIDIAN_MCP_KEY — API key from the plugin's settings page
 #   OBSIDIAN_HOST — default: windows-host.lan
-#   OBSIDIAN_PORT — default: 27200
+#   OBSIDIAN_PORT — default: 3001
 #
-# 🤓 Token can be injected via URL: http://${OBSIDIAN_TOKEN}@${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/
-#   The env var name is literal — resolves at runtime via shell expansion.
+# 🤓 Token injected via header: Authorization: Bearer ${OBSIDIAN_MCP_KEY}
 #
-# 🤓 Two deployment modes:
-#   1. Container (default): podman run -i obsidian-mcp-bridge → host.docker.internal:27200
-#   2. Direct (no container): npx -y mcp-remote http://localhost:27200/mcp --header ...
-#
-# 🤓 REST API (for grok indexing):
-#   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/vault/
-#   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/vault/<path>
-#
-# 🤓 LAN access: Windows host with MCP connector on :27200. Set OBSIDIAN_HOST to reach it.
+# 🤓 REST API (for grok indexing, requires Obsidian Local REST API plugin on port 27123):
+#   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:27123/vault/
 
 [b00t]
 name = "obsidian-mcp"
 type = "mcp"
-hint = "MCP server + REST API bridging to Obsidian vault — query, read, search via b00t-mcp and b00t grok"
-depends_on = ["obsidian-mcp-bridge.docker"]
+hint = "MCP server bridging to Obsidian vault — 8 tools via Semantic Notes Vault MCP plugin (recommended) or MCP connector bridge"
 
 [b00t.learn]
 topic = "obsidian-mcp-connector"
 auto_digest = false
 
+# ── Transport A: Semantic Notes Vault MCP plugin (recommended) ──
+# Runs inside Obsidian, no container needed. Port 3001.
+# 8 tools: vault, edit, view, graph, workflow, dataview, bases, system
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "npx"
+args = ["-y", "mcp-remote", "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp",
+        "--header", "Authorization: Bearer ${OBSIDIAN_MCP_KEY}"]
+requires = ["OBSIDIAN_MCP_KEY"]
+
+# ── Transport B: obsidian-mcp-connector (container/npx bridge) ──
+# Requires Obsidian MCP Connector plugin + optionally the bridge container.
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "podman"
@@ -42,20 +48,19 @@ requires = ["OBSIDIAN_TOKEN", "OBSIDIAN_MCP_KEY"]
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "npx"
-args = ["-y", "mcp-remote", "http://${OBSIDIAN_HOST:-localhost}:${OBSIDIAN_PORT:-27200}/mcp",
+args = ["-y", "mcp-remote", "http://${OBSIDIAN_HOST:-windows-host.lan}:27200/mcp",
         "--header", "Authorization: Bearer ${OBSIDIAN_MCP_KEY}"]
 requires = ["OBSIDIAN_MCP_KEY"]
 
-# ── REST API transport (for b00t grok digest / query) ──
-# The token is interpolated into the URL at runtime via shell expansion.
-# This avoids exposing the token in process listings.
+# ── REST API transport (for b00t grok digest) ──
+# Requires Obsidian Local REST API plugin (port 27123).
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "sh"
-args = ["-c", 'curl -s -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/${1}" -- "$@"', "_"]
+args = ["-c", 'curl -s -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" "http://${OBSIDIAN_HOST:-windows-host.lan}:27123/vault/${1}" -- "$@"', "_"]
 requires = ["OBSIDIAN_TOKEN"]
 
-# ── Grok knowledge skill — index vault into grok KB ──
+# ── Grok knowledge skill ──
 [b00t.grok]
 topic = "obsidian-vault"
 description = "Index Obsidian vault files into grok knowledge base for semantic query"
@@ -63,12 +68,16 @@ auto_digest = false
 
 [b00t.grok.source.rest]
 method = "GET"
-url = "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/"
+url = "http://${OBSIDIAN_HOST:-windows-host.lan}:27123/vault/"
 headers = { Authorization = "Bearer ${OBSIDIAN_TOKEN}" }
 requires = ["OBSIDIAN_TOKEN"]
 
 [[b00t.references]]
-name = "GitHub: istefox/obsidian-mcp-connector"
+name = "Semantic Notes Vault MCP — runs inside Obsidian, MIT license"
+url = "https://github.com/aaronsb/obsidian-mcp-plugin"
+
+[[b00t.references]]
+name = "GitHub: istefox/obsidian-mcp-connector (alternative)"
 url = "https://github.com/istefox/obsidian-mcp-connector"
 
 [[b00t.references]]
@@ -83,34 +92,14 @@ url = "https://github.com/your/claude-obsidian-repo"
 name = "MCP Remote (npm)"
 url = "https://www.npmjs.com/package/mcp-remote"
 
-[[b00t.usage]]
-description = "List vault files via REST API"
-command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/"
+[[b00t.references]]
+name = "Smart Connections — local embedding model for semantic search"
+url = "https://github.com/brianpetro/obsidian-smart-connections"
 
 [[b00t.usage]]
-description = "Read a vault file"
-command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/<path>"
+description = "Install Semantic Notes Vault MCP via claude mcp add"
+command = "claude mcp add --transport http obsidian http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp --header \"Authorization: Bearer ${OBSIDIAN_MCP_KEY}\""
 
 [[b00t.usage]]
-description = "Index vault into grok knowledge base"
-command = "b00t grok digest -t obsidian-vault \"$(curl -s -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/)\""
-
-[[b00t.usage]]
-description = "Query vault via grok"
-command = "b00t grok ask 'what does my vault say about <topic>' -t obsidian-vault"
-
-[[b00t.usage]]
-description = "Build the container image"
-command = "podman build -t obsidian-mcp-bridge containers/obsidian-mcp-bridge"
-
-[[b00t.usage]]
-description = "Run as stdio MCP server (container mode)"
-command = "OBSIDIAN_TOKEN=your_token OBSIDIAN_MCP_KEY=your_key podman run -i --rm --network host obsidian-mcp-bridge:latest"
-
-[[b00t.usage]]
-description = "SSH tunnel from Linux to Windows host (if binding is 127.0.0.1)"
-command = "ssh windows-host.lan -L 27200:localhost:27200"
-
-[[b00t.usage]]
-description = "Windows firewall rule (run as Admin on Windows)"
-command = "netsh advfirewall firewall add rule name=\"Obsidian MCP\" dir=in action=allow protocol=TCP localport=27200 profile=any"
+description = "List vault tools (verify MCP connection)"
+command = "curl -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer $OBSIDIAN_MCP_KEY' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp"
