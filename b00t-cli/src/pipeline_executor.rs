@@ -748,9 +748,12 @@ mod tests {
     }
 
     /// Helper: build a sequential DAG from stage names.
+    ///
+    /// Uses `from_sequential` to avoid bidirectional edges that `build`
+    /// creates when all ports use `Bytes` (which would be flagged as a cycle).
     fn sequential_dag(names: &[&str]) -> PipelineDag {
         let stages: Vec<StageSpec> = names.iter().map(|n| make_stage(n, None)).collect();
-        PipelineDag::build(stages).expect("valid DAG")
+        PipelineDag::from_sequential(stages)
     }
 
     // ── Serial execution of 2 stages ────────────────────────────────────
@@ -851,7 +854,7 @@ mod tests {
                 ..make_stage("stage-fail", None)
             },
         ];
-        let dag = PipelineDag::build(stages).expect("valid DAG");
+        let dag = PipelineDag::from_sequential(stages);
 
         // Use an executor that forces stage-fail to fail on first try then
         // succeed on retry — this verifies the error route retry logic.
