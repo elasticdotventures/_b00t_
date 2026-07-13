@@ -355,7 +355,7 @@ The system will:
         alias = "whomai"
     )]
     Whoami {
-        #[clap(long, help = "Override detected role (matches role datum)")]
+        #[clap(long, alias = "agent", help = "Override detected role (matches role datum). Use --agent as synonym.")]
         role: Option<String>,
         #[clap(
             long,

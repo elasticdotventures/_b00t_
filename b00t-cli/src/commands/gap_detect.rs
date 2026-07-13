@@ -23,7 +23,7 @@ pub struct GapDetectArgs {
     #[clap(long, help = "Scan all roles, not just --role")]
     pub all_roles: bool,
 
-    #[clap(long, default_value = "worker", help = "Role to scan when not --all-roles")]
+    #[clap(long, alias = "agent", default_value = "worker", help = "Role to scan when not --all-roles")]
     pub role: String,
 
     #[clap(long, help = "Write auto-stub datums for each detected gap")]
