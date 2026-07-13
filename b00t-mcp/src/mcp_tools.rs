@@ -2,6 +2,7 @@ use crate::clap_reflection::{McpCommandRegistry, McpExecutor, McpReflection};
 use crate::impl_mcp_tool;
 use anyhow::Result;
 use clap::Parser;
+use crate::tools::pipeline::BPipelineCommand;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 // use b00t_c0re_lib::GrokClient;
@@ -1525,6 +1526,7 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry { name: "b00t_skill_activate",    description: "Activate a skill",                       subcommand: "skill activate" },
     ToolCatalogEntry { name: "b00t_app_vscode_mcp_install",     description: "Install MCP in VSCode",         subcommand: "app vscode mcp install" },
     ToolCatalogEntry { name: "b00t_app_claudecode_mcp_install", description: "Install MCP in Claude Code",    subcommand: "app claudecode mcp install" },
+    ToolCatalogEntry { name: "b00t_pipeline",          description: "Manage pipeline lifecycle — list, run, validate, inspect, cost", subcommand: "pipeline" },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
@@ -1648,7 +1650,7 @@ pub struct BDiscoverCommand {
     pub limit: Option<usize>,
 }
 
-/// Create SLIM surface registry — only 5 tools visible to agents.
+/// Create SLIM surface registry — 6 core tools visible to agents.
 /// Sub-agents call b00t_discover(query) to find tools, b00t_exec(argv) to run them.
 /// Use create_full_mcp_registry() for debug/migration compatibility.
 pub fn create_mcp_registry() -> McpCommandRegistry {
@@ -1663,13 +1665,14 @@ pub fn create_mcp_registry_with_notify(
     notify_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
 ) -> McpCommandRegistry {
     let mut builder = McpCommandRegistry::builder();
-    // Surface: learn + whoami + status + exec + discover + viz + log + verify + stack_load + stack_unload + DataFramerr (21 tools)
+    // Surface: learn + whoami + status + exec + discover + pipeline + viz + log + verify + stack_load + stack_unload + DataFramerr (22 tools)
     builder
         .register::<LearnCommand>()
         .register::<WhoamiCommand>()
         .register::<StatusCommand>()
         .register::<BExecCommand>()
         .register::<BDiscoverCommand>()
+        .register::<BPipelineCommand>()
         .add_post_hook("b00t_mcp_stack_load", std::sync::Arc::clone(&notify_fn))
         .add_post_hook("b00t_mcp_stack_unload", notify_fn);
     crate::soul_dataframerr_tools::register_dataframerr_tools(&mut builder);
@@ -1739,7 +1742,9 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<TaskNextCommand>()
         .register::<TaskAddCommand>()
         .register::<TaskDoneCommand>()
-        .register::<TaskUpdateCommand>();
+        .register::<TaskUpdateCommand>()
+        // Pipeline lifecycle tool — GH #717/#736
+        .register::<BPipelineCommand>();
     // ACP Hive coordination tools
     // 🤓 Disabled - acp_hive uses full NATS Agent from old ACP; chat refactor simplified to stubs
     // .register::<AcpHiveJoinCommand>()
@@ -2005,7 +2010,7 @@ mod tests {
 
     #[test]
     fn test_registry_creation() {
-        // Slim surface registry: 5 tools only
+        // Slim surface registry: 6 core + DataFramerr tools
         let surface = create_mcp_registry();
         let surface_tools = surface.get_tools();
         assert!(!surface_tools.is_empty());
@@ -2015,7 +2020,8 @@ mod tests {
         assert!(surface_names.contains(&"b00t_learn"),   "learn must be in surface");
         assert!(surface_names.contains(&"b00t_exec"),    "exec must be in surface");
         assert!(surface_names.contains(&"b00t_discover"),"discover must be in surface");
-        assert_eq!(surface_tools.len(), 5, "surface registry must expose exactly 5 tools");
+        assert!(surface_names.contains(&"b00t_pipeline"),"pipeline must be in surface");
+        assert!(surface_tools.len() >= 6, "surface registry must have at least 6 tools");
 
         // Full registry: all tools for debug/migration
         let full = create_full_mcp_registry();
@@ -2119,6 +2125,38 @@ mod tests {
             !args.contains(&"--content".to_string()),
             "--content flag must not be emitted"
         );
+    }
+
+    #[test]
+    fn test_pipeline_tool_registered() {
+        use crate::tools::pipeline::BPipelineCommand;
+        use crate::clap_reflection::McpReflection;
+
+        let tool = BPipelineCommand::to_mcp_tool();
+        assert_eq!(tool.name.as_ref(), "b00t_pipeline");
+        assert_eq!(
+            tool.description.as_deref().unwrap_or(""),
+            "Manage pipeline lifecycle — create, validate, execute, inspect"
+        );
+
+        // Schema must contain action (required) + pipeline/params (optional)
+        let schema = tool.input_schema.as_ref();
+        let props = schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("action"), "schema must have 'action'");
+        assert!(props.contains_key("pipeline"), "schema must have 'pipeline'");
+        assert!(props.contains_key("params"), "schema must have 'params'");
+        assert!(
+            schema["required"].as_array().unwrap().contains(&serde_json::json!("action")),
+            "action must be required"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_tool_in_catalog() {
+        let has_entry = TOOL_CATALOG
+            .iter()
+            .any(|e| e.name == "b00t_pipeline");
+        assert!(has_entry, "b00t_pipeline must be in TOOL_CATALOG");
     }
 
     #[test]
