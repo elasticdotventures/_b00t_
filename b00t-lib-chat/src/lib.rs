@@ -31,6 +31,7 @@ pub mod client;
 pub mod discovery;
 pub mod dataframe_receipt;
 pub mod error;
+pub mod flash_sheet;
 pub mod gossip;
 pub mod hive_transport;
 pub mod ipc_transport;
@@ -43,6 +44,7 @@ pub mod router;
 pub mod security;
 pub mod server;
 pub mod skill;
+pub mod state_machine;
 pub mod transport;
 pub mod transports;
 
@@ -53,7 +55,14 @@ pub use assignment::{
 pub use bridge::{McpBridge, McpServerSpec};
 pub use client::ChatClient;
 pub use discovery::{SocketRegistry, SocketRegistryBuilder};
+pub use dataframe_receipt::{
+    ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
+};
 pub use error::{ChatError, ChatResult};
+pub use flash_sheet::{
+    CellAddress, CellChange, CellExpression, CellGuard, CellHook, FlashSheet, FlashSheetError,
+    SheetCell, SheetColumn, SheetMetadata, SheetRow, SoulConcept, SoulKind, SymbolicRule,
+};
 pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
     DiscoverableTransport, IpcTransport, TransportKind,
@@ -65,9 +74,6 @@ pub use mesh::{
 };
 pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, MockLedgrrr, ReceiptConstraint, UsageReceipt};
 pub use gossip::{GossipTable, GossipMember};
-pub use dataframe_receipt::{
-    ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
-};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
@@ -76,6 +82,11 @@ pub use security::{
 };
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use skill::{parse_b00t_command, BootCommand, ModelAction};
+pub use state_machine::{
+    ClifPayload, LogicalAddress, StateDispatchOutcome, StateMachineEvent, StateMachineGraphEdge,
+    StateMachineGraphNode, StateMachineGraphSnapshot, StateMachineSpec, StateMachineVisualState,
+    StateNode, StateTransformOutcome, StateTransition,
+};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
 pub use transports::{MqttTransport, NatsTransport};
 
