@@ -1107,6 +1107,30 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
         crate::ansi::cyan(&format!("{} skills", skill_count)),
     );
 
+    // ─── Agent-role filter ────────────────────────────────────────────────
+    if let Some(f) = filter {
+        if f.starts_with("agent/") {
+            let role = f.strip_prefix("agent/").unwrap_or("");
+            println!("{}", crate::ansi::bold(&format!("\n🤖 Filtering for role: {}", role)));
+            // Scan agent datums matching this role
+            if let Ok(dir) = std::fs::read_dir(&datums_dir) {
+                for entry in dir.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
+                        continue;
+                    }
+                    let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    if fname.contains(role) {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            println!("   📄 {} — {} bytes", crate::ansi::cyan(fname), content.len());
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+    }
+
     // ─── Topology summary (detect relationships between types) ──────────
     let role_count = count_by_tag(&datums_dir, "role");
     let training_count = count_by_tag(&datums_dir, "training");

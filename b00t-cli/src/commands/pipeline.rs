@@ -3,8 +3,13 @@
 //    JustfileDatum, PipelineDatum previously had none). Shape mirrors
 //    StoreCommands (commands/store.rs) — the closest proven multi-verb
 //    datum-type subcommand pattern in this codebase.
+use crate::commands::pipeline_cost::{handle_pipeline_cost, PipelineCostArgs};
+use crate::commands::pipeline_validate::{print_validate_report, validate_pipeline};
 use crate::datum_pipeline::PipelineDatum;
 use crate::datum_utils::get_all_datums_with_paths;
+use crate::pipeline_dataframe::handle_pipeline_data;
+use crate::pipeline_logs::{handle_pipeline_logs, PipelineLogsArgs, PIPELINE_LOG_STORE};
+use crate::pipeline_scheduler::handle_schedule_command;
 use crate::traits::CliExecutor;
 use crate::{BootDatum, DatumType};
 use anyhow::Result;
@@ -25,9 +30,44 @@ pub enum PipelineCommands {
         )]
         stages: Vec<String>,
     },
+    #[clap(about = "Query or stream stage execution logs and telemetry")]
+    Logs {
+        #[clap(flatten)]
+        args: PipelineLogsArgs,
+    },
+    #[clap(about = "Static validation of pipeline DAG before execution")]
+    Validate {
+        #[clap(help = "Pipeline datum name")]
+        name: String,
+    },
+    #[clap(about = "Cost attribution and GPU-time accounting per pipeline run")]
+    Cost {
+        #[clap(flatten)]
+        args: PipelineCostArgs,
+    },
+    #[clap(about = "Query stage outputs as dataframe rows")]
+    Data {
+        #[clap(help = "Pipeline run ID")]
+        id: String,
+        #[clap(long, help = "Filter by stage name")]
+        stage: Option<String>,
+        #[clap(long, help = "Comma-separated column names to include")]
+        columns: Option<String>,
+    },
+    #[clap(about = "Simulate resource-aware scheduling against available hosts")]
+    Schedule {
+        #[clap(help = "Pipeline datum name")]
+        name: String,
+        #[clap(
+            long,
+            default_value = "greedy",
+            help = "Scheduling strategy: greedy (default) or binpack"
+        )]
+        strategy: String,
+    },
 }
 
-fn discover_pipeline_datums(b00t_path: &str) -> Result<Vec<(String, BootDatum, String)>> {
+pub fn discover_pipeline_datums(b00t_path: &str) -> Result<Vec<(String, BootDatum, String)>> {
     let all = get_all_datums_with_paths(b00t_path, None)?;
     let mut pipelines: Vec<(String, BootDatum, String)> = all
         .into_iter()
@@ -68,6 +108,26 @@ pub fn handle_pipeline_command(cmd: &PipelineCommands, b00t_path: &str) -> Resul
             let pipeline = PipelineDatum::from_datum(datum, &base_dir)?;
             let out = pipeline.execute(stages)?;
             println!("{}", out.value);
+        }
+        PipelineCommands::Logs { args } => {
+            handle_pipeline_logs(&*PIPELINE_LOG_STORE, args)?;
+        }
+        PipelineCommands::Validate { name } => {
+            let report = validate_pipeline(name, b00t_path)?;
+            print_validate_report(&report);
+            if !report.summary.passed {
+                std::process::exit(1);
+            }
+        }
+        PipelineCommands::Cost { args } => {
+            handle_pipeline_cost(args)?;
+        }
+        PipelineCommands::Data { id, stage, columns } => {
+            handle_pipeline_data(b00t_path, id, stage.as_deref(), columns.as_deref())?;
+        }
+        PipelineCommands::Schedule { name, strategy } => {
+            let output = handle_schedule_command(name, strategy, b00t_path)?;
+            println!("{}", output);
         }
     }
     Ok(())

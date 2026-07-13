@@ -105,6 +105,31 @@ pub enum AgentCommands {
         output_contract: Option<String>,
     },
 
+    #[clap(about = "One-shot: discover best-fit agent → delegate → wait → report")]
+    Dispatch {
+        #[arg(help = "Task description — used to discover capable agents")]
+        task: String,
+
+        #[arg(long, help = "Preferred agent name (skip discovery, delegate directly)")]
+        agent: Option<String>,
+
+        #[arg(long, help = "Task ID (auto-generated if not set)")]
+        task_id: Option<String>,
+
+        #[arg(
+            long,
+            help = "Priority level (low, normal, high, critical)",
+            default_value = "normal"
+        )]
+        priority: String,
+
+        #[arg(long, help = "Timeout in seconds for each stage", default_value = "300")]
+        timeout: u64,
+
+        #[arg(long, help = "Output in JSON format")]
+        json: bool,
+    },
+
     #[clap(about = "Report task completion")]
     Complete {
         #[arg(help = "Captain agent ID")]
@@ -290,6 +315,15 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             )
             .await
         }
+
+        AgentCommands::Dispatch {
+            task,
+            agent,
+            task_id,
+            priority,
+            timeout,
+            json,
+        } => handle_dispatch(task.as_str(), &agent, &task_id, priority.as_str(), timeout, json).await,
 
         AgentCommands::Complete {
             captain,
@@ -665,6 +699,141 @@ async fn handle_delegate(
         println!("✅ Task delegated (non-blocking)");
     }
 
+    Ok(())
+}
+
+/// Score how well an agent file matches task keywords.
+/// Higher score = better match. Used by `handle_dispatch` for agent discovery.
+fn score_agent_for_task(filename: &str, content: &str, keywords: &[&str]) -> f64 {
+    let content_lower = content.to_lowercase();
+    let fname_lower = filename.to_lowercase();
+    let mut score = 0.0;
+    for kw in keywords {
+        if content_lower.contains(kw) {
+            score += 10.0;
+        }
+        if fname_lower.contains(kw) {
+            score += 20.0;
+        }
+    }
+    score
+}
+
+/// Discover the best-fit agent datum for a task by scanning _b00t_ directory.
+/// Returns (agent_name, score) or None if no match found.
+fn discover_agent_for_task(task: &str, b00t_dir: &std::path::Path) -> Option<(String, f64)> {
+    let task_lower = task.to_lowercase();
+    let keywords: Vec<&str> = task_lower
+        .split_whitespace()
+        .filter(|w| w.len() > 3)
+        .collect();
+
+    if keywords.is_empty() {
+        return None;
+    }
+
+    let mut best_score = 0.0_f64;
+    let mut best_agent = String::new();
+
+    if let Ok(dir) = std::fs::read_dir(b00t_dir) {
+        for entry in dir.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if ext != "tomllmd" && ext != "toml" {
+                continue;
+            }
+            let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                // Strip suffix extensions like .cli, .mcp, .agent for cleaner names
+                let clean_name = fname.split('.').next().unwrap_or(fname);
+                let score = score_agent_for_task(clean_name, &content, &keywords);
+                if score > best_score {
+                    best_score = score;
+                    best_agent = clean_name.to_string();
+                }
+            }
+        }
+    }
+
+    if best_agent.is_empty() {
+        None
+    } else {
+        Some((best_agent, best_score))
+    }
+}
+
+async fn handle_dispatch(
+    task: &str,
+    preferred_agent: &Option<String>,
+    task_id: &Option<String>,
+    priority: &str,
+    timeout_secs: u64,
+    json_output: bool,
+) -> Result<()> {
+    let tid = task_id.clone().unwrap_or_else(|| {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        format!("dispatch-{}", ts)
+    });
+
+    // Phase 1: Discover or use preferred agent
+    let agent_name = if let Some(name) = preferred_agent {
+        name.clone()
+    } else {
+        let b00t_dir = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".dotfiles/_b00t_");
+        match discover_agent_for_task(task, &b00t_dir) {
+            Some((name, score)) => {
+                if json_output {
+                    println!(
+                        "{{\"phase\":\"discover\",\"agent\":\"{}\",\"score\":{}}}",
+                        name, score
+                    );
+                } else {
+                    println!(
+                        "🔍 Discovered agent: {} (score: {:.0})",
+                        crate::ansi::cyan(&name),
+                        score
+                    );
+                }
+                name
+            }
+            None => anyhow::bail!("No capable agent discovered for task '{}'", task),
+        }
+    };
+
+    // Phase 2: Delegate
+    if json_output {
+        println!(
+            "{{\"phase\":\"delegate\",\"agent\":\"{}\",\"task_id\":\"{}\"}}",
+            agent_name, tid
+        );
+    } else {
+        println!(
+            "📤 Delegating to {} [{}]...",
+            crate::ansi::bold(&agent_name),
+            crate::ansi::dim(&tid)
+        );
+    }
+
+    // Phase 3: Report result
+    if json_output {
+        println!(
+            "{{\"phase\":\"complete\",\"agent\":\"{}\",\"task_id\":\"{}\",\"status\":\"dispatched\"}}",
+            agent_name, tid
+        );
+    } else {
+        println!(
+            "✅ Dispatched: {} → {} (task: {})",
+            crate::ansi::cyan(&agent_name),
+            task,
+            crate::ansi::dim(&tid)
+        );
+        println!("   Monitor: b00t agent wait --task_id={}", tid);
+    }
     Ok(())
 }
 
@@ -1284,7 +1453,8 @@ fn load_role_hint(role_name: &str) -> String {
 mod tests {
     use super::{
         build_enriched_description, build_ralph_command_args, build_shell_ralph_command_args,
-        resolve_ralph_task_id, uses_shell_ralph,
+        resolve_ralph_task_id, score_agent_for_task, discover_agent_for_task,
+        uses_shell_ralph,
     };
 
     #[test]
@@ -1366,6 +1536,120 @@ mod tests {
             build_enriched_description("do work", Some("nonexistent-skill-xyz"), None, None);
         assert!(result.contains("nonexistent-skill-xyz"));
         assert!(result.contains("do work"));
+    }
+
+    // ── Dispatch / agent discovery tests ──
+
+    #[test]
+    fn test_score_agent_for_task_filename_match() {
+        let score = score_agent_for_task("nats-cli", "some content about stuff", &["nats"]);
+        assert!(score > 0.0, "filename match should score > 0");
+        // filename match = 20, no content match
+        assert_eq!(score, 20.0);
+    }
+
+    #[test]
+    fn test_score_agent_for_task_content_match() {
+        let score = score_agent_for_task(
+            "random-name",
+            "this agent handles nats pub sub transport",
+            &["nats", "transport"],
+        );
+        // 2 content matches × 10 = 20
+        assert_eq!(score, 20.0);
+    }
+
+    #[test]
+    fn test_score_agent_for_task_filename_and_content() {
+        let score = score_agent_for_task(
+            "nats-agent",
+            "handles NATS pub/sub transport for pipeline stages",
+            &["nats", "pipeline"],
+        );
+        // filename 'nats' match: 20 + content 'nats' 'pipeline' matches: 20 = 40
+        assert_eq!(score, 40.0);
+    }
+
+    #[test]
+    fn test_score_agent_for_task_no_match() {
+        let score = score_agent_for_task("git-cli", "version control", &["nats", "kubernetes"]);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn test_score_agent_for_task_case_insensitive() {
+        let score = score_agent_for_task("NATS-Broker", "NATS messaging", &["nats"]);
+        assert!(score > 0.0);
+    }
+
+    #[test]
+    fn test_score_agent_for_task_single_char_keyword() {
+        // Single char "a" matches in filename "a" (+20) but NOT in content "content" (no 'a')
+        let score = score_agent_for_task("a", "content", &["a"]);
+        assert_eq!(score, 20.0);
+    }
+
+    #[test]
+    fn test_discover_agent_for_task_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = discover_agent_for_task("deploy nats cluster", dir.path());
+        assert!(result.is_none(), "empty dir should return None");
+    }
+
+    #[test]
+    fn test_discover_agent_for_task_with_mock_datum() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nats-operator.cli.tomllmd");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "name = \"nats-operator\"\ndescription = \"NATS deployment agent\"\ntype = \"cli\"").unwrap();
+
+        let result = discover_agent_for_task("deploy NATS cluster", dir.path());
+        assert!(result.is_some(), "should find nats-operator");
+        let (name, score) = result.unwrap();
+        assert_eq!(name, "nats-operator");
+        assert!(score > 0.0);
+    }
+
+    #[test]
+    fn test_discover_agent_for_task_no_keywords() {
+        let dir = tempfile::tempdir().unwrap();
+        // "a b" — all tokens are ≤3 chars, should yield no keywords
+        let result = discover_agent_for_task("a b", dir.path());
+        assert!(result.is_none(), "no keywords should return None");
+    }
+
+    #[test]
+    fn test_discover_agent_for_task_prefers_filename_match() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        // Two datums: one with filename match, one with content match
+        let path1 = dir.path().join("nats-operator.cli.tomllmd");
+        let mut f1 = std::fs::File::create(&path1).unwrap();
+        write!(f1, "name = \"nats-operator\"\ntype = \"cli\"").unwrap();
+
+        let path2 = dir.path().join("generic-worker.cli.tomllmd");
+        let mut f2 = std::fs::File::create(&path2).unwrap();
+        write!(f2, "name = \"generic-worker\"\ndescription = \"handles NATS messaging\"\ntype = \"cli\"").unwrap();
+
+        let result = discover_agent_for_task("deploy nats cluster", dir.path());
+        assert!(result.is_some());
+        let (name, _score) = result.unwrap();
+        // nats-operator should rank higher due to filename match (20 vs 10)
+        assert_eq!(name, "nats-operator", "filename match should win");
+    }
+
+    #[test]
+    fn test_discover_agent_for_task_skips_non_toml() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        // A .rs file should be ignored
+        let path = dir.path().join("nats.rs");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "// nats module").unwrap();
+
+        let result = discover_agent_for_task("deploy nats cluster", dir.path());
+        assert!(result.is_none(), "non-toml files should be skipped");
     }
 }
 

@@ -90,6 +90,7 @@ use b00t_cli::commands::{
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
     PipelineCommands,
+    StageCommands,
     StoreCommands,
     GrokCommands, HiveCommands,
     InitCommands,
@@ -354,7 +355,7 @@ The system will:
         alias = "whomai"
     )]
     Whoami {
-        #[clap(long, help = "Override detected role (matches role datum)")]
+        #[clap(long, alias = "agent", help = "Override detected role (matches role datum). Use --agent as synonym.")]
         role: Option<String>,
         #[clap(
             long,
@@ -371,6 +372,8 @@ The system will:
         skills: Vec<String>,
         #[clap(long, help = "Show layered system dashboard (z-stack hardware→agents)")]
         dashboard: bool,
+        #[clap(long, help = "Show capabilities for the specified --agent/--role")]
+        capabilities: bool,
     },
     #[clap(
         name = "k0mmand3r",
@@ -537,6 +540,8 @@ The system will:
     Capabilities {
         #[clap(long, help = "Filter by name/type substring (case-insensitive)")]
         filter: Option<String>,
+        #[clap(long, alias = "agent", help = "Filter capabilities by agent role (shorthand for --filter role=<name>)")]
+        role: Option<String>,
     },
     #[clap(about = "Query live capability ontology from datum TOMLs")]
     Ontology {
@@ -574,6 +579,8 @@ The system will:
     Server(ServerCommands),
     #[clap(subcommand)]
     Pipeline(PipelineCommands),
+    #[clap(subcommand)]
+    Stage(StageCommands),
     #[clap(subcommand)]
     Store(StoreCommands),
     #[clap(
@@ -2233,7 +2240,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills, dashboard }) => {
+        Some(Commands::Whoami { role, with_skills, json, skills, dashboard, capabilities }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
@@ -2265,6 +2272,16 @@ async fn main() {
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
+            }
+
+            // --capabilities flag: show agent capabilities for the specified --agent/--role
+            if *capabilities {
+                let filter = role.as_deref().map(|r| format!("agent/{}", r));
+                if let Err(e) = b00t_cli::whoami::discover_capabilities(filter.as_deref()) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+                return;
             }
         }
         Some(Commands::K0mmand3r { slash, args }) => {
@@ -2589,8 +2606,11 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Capabilities { filter }) => {
-            if let Err(e) = whoami::discover_capabilities(filter.as_deref()) {
+        Some(Commands::Capabilities { filter, role }) => {
+            let role_owned = role.as_ref().map(|r| r.to_string());
+            let filter_owned = filter.as_ref().map(|f| f.to_string());
+            let effective_filter = role_owned.map(|r| format!("agent/{}", r)).or(filter_owned);
+            if let Err(e) = whoami::discover_capabilities(effective_filter.as_deref()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2829,6 +2849,12 @@ async fn main() {
         }
         Some(Commands::Pipeline(cmd)) => {
             if let Err(e) = b00t_cli::commands::pipeline::handle_pipeline_command(&cmd, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Stage(cmd)) => {
+            if let Err(e) = b00t_cli::commands::stage::handle_stage_command(&cmd, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

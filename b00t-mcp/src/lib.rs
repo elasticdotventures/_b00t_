@@ -14,6 +14,7 @@ pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
 pub mod schema_constraint;
+pub mod tools;
 pub mod verify_tool_loop;
 pub mod rag_mcp_tools;
 pub mod server_llm;

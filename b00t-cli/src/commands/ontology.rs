@@ -24,6 +24,15 @@ pub enum OntologyCommands {
         #[clap(long, default_value = "json", value_parser = ["json", "table"])]
         format: String,
     },
+    #[clap(about = "Semantic agent search: find best-fit agent for a task description")]
+    FindAgent {
+        #[clap(help = "Task description to match against agent capabilities")]
+        task: String,
+        #[clap(long, help = "Maximum results", default_value = "5")]
+        limit: usize,
+        #[clap(long, default_value = "table", value_parser = ["table", "json"])]
+        format: String,
+    },
 }
 
 impl OntologyCommands {
@@ -51,6 +60,16 @@ impl OntologyCommands {
                         }
                     }
                     _ => println!("{}", serde_json::to_string_pretty(&triples)?),
+                }
+                Ok(())
+            }
+            OntologyCommands::FindAgent { task, limit, format } => {
+                let workspace = crate::utils::get_workspace_root();
+                let datum_dir = format!("{}/_b00t_", workspace);
+                let results = find_agents_for_task(task, *limit, &datum_dir)?;
+                match format.as_str() {
+                    "json" => println!("{}", serde_json::to_string_pretty(&results)?),
+                    _ => print_agent_results(task, &results),
                 }
                 Ok(())
             }
@@ -272,9 +291,96 @@ pub fn sparql_query(subject: Option<&str>, predicate: &str, datum_dir: &str) -> 
     Ok(triples)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct AgentMatch {
+    agent_name: String,
+    score: f64,
+    matched_keywords: Vec<String>,
+    reason: String,
+}
+
+fn find_agents_for_task(task: &str, limit: usize, datum_dir: &str) -> Result<Vec<AgentMatch>> {
+    let task_lower = task.to_lowercase();
+    let keywords: Vec<&str> = task_lower
+        .split_whitespace()
+        .filter(|w| w.len() > 3)
+        .collect();
+
+    let mut scores: Vec<(String, f64, Vec<String>)> = Vec::new();
+    let agent_dir = Path::new(datum_dir);
+
+    if agent_dir.exists() {
+        for entry in fs::read_dir(agent_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
+                continue;
+            }
+            let content = fs::read_to_string(&path)?;
+            let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            // Strip suffix extensions like .cli, .mcp, .agent for cleaner names
+            let clean_name = fname.split('.').next().unwrap_or(&fname).to_string();
+            let content_lower = content.to_lowercase();
+
+            // Score: keyword matches in content and name
+            let mut matched: Vec<String> = Vec::new();
+            let mut score = 0.0;
+            for kw in &keywords {
+                if content_lower.contains(kw) {
+                    matched.push(kw.to_string());
+                    score += 10.0;
+                }
+                if clean_name.to_lowercase().contains(kw) {
+                    if !matched.contains(&kw.to_string()) {
+                        matched.push(kw.to_string());
+                    }
+                    score += 20.0;
+                }
+            }
+
+            // Bonus: role/agent/capability mentions
+            if content_lower.contains("role") || content_lower.contains("agent") {
+                score += 5.0;
+            }
+
+            if score > 0.0 {
+                scores.push((clean_name, score, matched));
+            }
+        }
+    }
+
+    scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scores.truncate(limit);
+
+    Ok(scores
+        .into_iter()
+        .map(|(name, score, matched)| AgentMatch {
+            reason: format!("matched {} keyword(s): {}", matched.len(), matched.join(", ")),
+            agent_name: name,
+            score,
+            matched_keywords: matched,
+        })
+        .collect())
+}
+
+fn print_agent_results(task: &str, results: &[AgentMatch]) {
+    println!("{}", crate::ansi::bold(&format!("\n🔍 Agent search for: \"{}\"", task)));
+    println!("{}", crate::ansi::dim(&format!("   {} result(s) found\n", results.len())));
+    if results.is_empty() {
+        println!("   No matching agents found.");
+        return;
+    }
+    for (i, r) in results.iter().enumerate() {
+        let pct = (r.score * 100.0) as u32;
+        println!(" {}. {} ({}%)", i + 1, crate::ansi::cyan(&r.agent_name), crate::ansi::green(&pct.to_string()));
+        println!("    {}", crate::ansi::dim(&r.reason));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     fn make_datum(
         name: &str,
@@ -387,5 +493,115 @@ optional_for = []
 
         let triples2 = sparql_query(Some("rust"), "roles", dir.path().to_str().unwrap()).unwrap();
         assert!(triples2.iter().any(|t| t[1] == "b00t:requiredFor" && t[2] == "developer"));
+    }
+
+    // ── find_agents_for_task tests ──
+
+    #[test]
+    fn test_find_agents_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let results = find_agents_for_task("deploy nats", 5, dir.path().to_str().unwrap()).unwrap();
+        assert!(results.is_empty(), "empty dir should return no agents");
+    }
+
+    #[test]
+    fn test_find_agents_nonexistent_dir() {
+        let results = find_agents_for_task("deploy nats", 5, "/nonexistent/b00t/dir").unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_find_agents_keyword_match() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nats-mcp.mcp.tomllmd");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "name = \"nats-mcp\"\ndescription = \"NATS messaging and pub/sub\"").unwrap();
+
+        let results = find_agents_for_task("deploy NATS pub sub", 5, dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(results.len(), 1, "should find nats-mcp");
+        assert_eq!(results[0].agent_name, "nats-mcp");
+        assert!(results[0].score > 0.0);
+        assert!(!results[0].matched_keywords.is_empty());
+    }
+
+    #[test]
+    fn test_find_agents_multiple_matches_ranked() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+
+        // Datum A: filename + content match for "nats"
+        let path_a = dir.path().join("nats-operator.cli.tomllmd");
+        let mut f_a = std::fs::File::create(&path_a).unwrap();
+        write!(f_a, "name = \"nats-operator\"\ntype = \"cli\"").unwrap();
+
+        // Datum B: content-only match for "nats"
+        let path_b = dir.path().join("generic-worker.cli.tomllmd");
+        let mut f_b = std::fs::File::create(&path_b).unwrap();
+        write!(f_b, "name = \"generic-worker\"\ndescription = \"handles NATS transport\"\ntype = \"cli\"").unwrap();
+
+        // Datum C: no match
+        let path_c = dir.path().join("git-cli.cli.tomllmd");
+        let mut f_c = std::fs::File::create(&path_c).unwrap();
+        write!(f_c, "name = \"git-cli\"\ntype = \"cli\"").unwrap();
+
+        let results = find_agents_for_task("deploy NATS cluster", 5, dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(results.len(), 2, "should find 2 matching agents");
+        // nats-operator should rank first (filename match = higher score)
+        assert_eq!(results[0].agent_name, "nats-operator");
+        assert!(results[0].score > results[1].score);
+    }
+
+    #[test]
+    fn test_find_agents_respects_limit() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..5 {
+            let path = dir.path().join(format!("agent-{}.cli.tomllmd", i));
+            let mut f = std::fs::File::create(&path).unwrap();
+            write!(f, "name = \"agent-{}\"\ndescription = \"common agent\"", i).unwrap();
+        }
+        let results = find_agents_for_task("common agent", 2, dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(results.len(), 2, "should be limited to 2");
+    }
+
+    #[test]
+    fn test_find_agents_score_json() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("k8s-operator.cli.tomllmd");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "name = \"k8s-operator\"\ndescription = \"Kubernetes cluster management\"\ntype = \"cli\"").unwrap();
+
+        let results = find_agents_for_task("kubernetes cluster", 5, dir.path().to_str().unwrap()).unwrap();
+        // Should serialize to JSON without error
+        let json = serde_json::to_string(&results).unwrap();
+        assert!(json.contains("k8s-operator"));
+        assert!(json.contains("score"));
+    }
+
+    #[test]
+    fn test_find_agents_no_match_returns_empty() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("git-cli.cli.tomllmd");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "name = \"git\"\ntype = \"cli\"").unwrap();
+
+        let results = find_agents_for_task("kubernetes deployment", 5, dir.path().to_str().unwrap()).unwrap();
+        assert!(results.is_empty(), "no matching keywords");
+    }
+
+    #[test]
+    fn test_find_agents_skips_short_keywords() {
+        // "a b c d" — all ≤3 chars, should produce no matches
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("anything.cli.tomllmd");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(f, "name = \"anything\"\ntype = \"cli\"").unwrap();
+
+        let results = find_agents_for_task("a b c d", 5, dir.path().to_str().unwrap()).unwrap();
+        assert!(results.is_empty());
     }
 }

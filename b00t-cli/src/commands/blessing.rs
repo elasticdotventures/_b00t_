@@ -30,7 +30,7 @@ pub struct BlessingArgs {
     #[clap(long, help = "Emit tool authorization manifest for this role")]
     pub manifest: bool,
 
-    #[clap(long, default_value = "worker", help = "Role to build manifest for")]
+    #[clap(long, alias = "agent", default_value = "worker", help = "Role to build manifest for")]
     pub role: String,
 
     #[clap(long, help = "List all available roles")]

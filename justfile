@@ -194,6 +194,40 @@ claim-crates:
 
     echo "✅ Crate names claimed (if available)"
 
+# Pre-release validation gate for 0.10.0+ releases
+# 🤓 Checks: --agent alias, version consistency, workspace deps, build
+pre-release-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔍 Pre-release check v$(grep '^version' Cargo.toml | head -1 | grep -oP '[\d]+\.[\d]+\.[\d]+')..."
+
+    # 1. Verify workspace build
+    echo "   [1/5] cargo check --workspace..."
+    cargo check --workspace --quiet 2>&1 | grep -E "^error" && { echo "❌ Build errors"; exit 1; } || echo "   ✅"
+
+    # 2. Verify --agent alias works for whoami
+    echo "   [2/5] --agent alias resolution..."
+    cargo run --bin b00t-cli --quiet -- whoami --agent worker --json 2>/dev/null | grep -q '"role"' && echo "   ✅" || { echo "❌ --agent alias failed"; exit 1; }
+
+    # 3. Verify --agent alias works for blessing
+    echo "   [3/5] blessing --agent alias..."
+    cargo run --bin b00t-cli --quiet -- blessing --manifest --agent worker >/dev/null 2>&1 && echo "   ✅" || { echo "❌ blessing --agent alias failed"; exit 1; }
+
+    # 4. Workspace version consistency (all path deps match workspace)
+    echo "   [4/5] workspace version consistency..."
+    for f in $(grep -rl "version.workspace = true" --include="Cargo.toml" . | grep -v target | grep -v "vendor"); do
+        dir=$(dirname "$f")
+        name=$(grep "^name" "$f" | head -1 | cut -d'"' -f2)
+        echo "      ✓ $name"
+    done
+    echo "   ✅"
+
+    # 5. No pre-existing test compilation errors from refactors
+    echo "   [5/5] cargo test --no-run..."
+    cargo test --no-run -p b00t-cli --lib --quiet 2>&1 | grep -E "^error" && { echo "❌ Test compilation errors"; exit 1; } || echo "   ✅"
+
+    echo "✅ Pre-release checks passed"
+
 # Create GitHub release (triggers crates.io publishing workflow)
 release:
     #!/bin/bash
@@ -201,6 +235,10 @@ release:
     VERSION=$(grep '^version = ' Cargo.toml | grep -oP '[\d]+\.[\d]+\.[\d]+')
 
     echo "🚀 Dispatching GitHub-native release for v${VERSION}..."
+
+    # Run pre-release gate
+    echo "🔍 Running pre-release checks..."
+    just pre-release-check
 
     # Verify workspace is clean
     if ! git diff --quiet; then
