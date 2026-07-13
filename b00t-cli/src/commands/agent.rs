@@ -323,7 +323,7 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             priority,
             timeout,
             json,
-        } => handle_dispatch(task, agent, task_id, priority, *timeout, *json).await,
+        } => handle_dispatch(task.as_str(), &agent, &task_id, priority.as_str(), timeout, json).await,
 
         AgentCommands::Complete {
             captain,

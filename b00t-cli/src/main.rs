@@ -2281,7 +2281,7 @@ async fn main() {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }
-                return Ok(());
+                return;
             }
         }
         Some(Commands::K0mmand3r { slash, args }) => {
@@ -2607,7 +2607,9 @@ async fn main() {
             }
         }
         Some(Commands::Capabilities { filter, role }) => {
-            let effective_filter = role.map(|r| format!("agent/{}", r)).or(filter);
+            let role_owned = role.as_ref().map(|r| r.to_string());
+            let filter_owned = filter.as_ref().map(|f| f.to_string());
+            let effective_filter = role_owned.map(|r| format!("agent/{}", r)).or(filter_owned);
             if let Err(e) = whoami::discover_capabilities(effective_filter.as_deref()) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
