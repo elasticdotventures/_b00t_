@@ -1,0 +1,4 @@
+{
+  "input": "cell.changed",
+  "emitted": "sheet.ready"
+}

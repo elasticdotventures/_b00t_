@@ -31,6 +31,7 @@ pub mod client;
 pub mod discovery;
 pub mod dataframe_receipt;
 pub mod error;
+pub mod flash_sheet;
 pub mod gossip;
 pub mod hive_transport;
 pub mod ipc_transport;
@@ -40,11 +41,14 @@ pub mod message;
 pub mod metrics;
 pub mod protocol;
 pub mod router;
+pub mod s5;
 pub mod security;
 pub mod server;
 pub mod skill;
+pub mod state_machine;
 pub mod transport;
 pub mod transports;
+pub mod type_introspection;
 
 pub use agent::{Agent, AgentConfig};
 pub use assignment::{
@@ -53,7 +57,15 @@ pub use assignment::{
 pub use bridge::{McpBridge, McpServerSpec};
 pub use client::ChatClient;
 pub use discovery::{SocketRegistry, SocketRegistryBuilder};
+pub use dataframe_receipt::{
+    ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
+};
 pub use error::{ChatError, ChatResult};
+pub use flash_sheet::{
+    CellAddress, CellChange, CellExpression, CellGuard, CellHook, FlashSheet, FlashSheetError,
+    SheetCell, SheetColumn, SheetMetadata, SheetRow, SoulConcept, SoulKind, SymbolicRule,
+    flash_sheet_type_descriptors,
+};
 pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
     DiscoverableTransport, IpcTransport, TransportKind,
@@ -65,19 +77,25 @@ pub use mesh::{
 };
 pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, MockLedgrrr, ReceiptConstraint, UsageReceipt};
 pub use gossip::{GossipTable, GossipMember};
-pub use dataframe_receipt::{
-    ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
-};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
+pub use s5::{parse_s5, render_s5, S5Document, S5ParseError};
 pub use security::{
     fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
 };
 pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
 pub use skill::{parse_b00t_command, BootCommand, ModelAction};
+pub use state_machine::{
+    ClifPayload, LogicalAddress, StateDispatchOutcome, StateMachineEvent, StateMachineGraphEdge,
+    StateMachineGraphNode, StateMachineGraphSnapshot, StateMachineSpec, StateMachineVisualState,
+    StateNode, StateTransformOutcome, StateTransition, state_machine_type_descriptors,
+};
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
 pub use transports::{MqttTransport, NatsTransport};
+pub use type_introspection::{
+    FieldDescriptor, TypeDescriptor, TypeIntrospection, TypeMetadata, TypeShape, VariantDescriptor,
+};
 
 // Type aliases for compatibility
 pub use ChatError as ACPError;

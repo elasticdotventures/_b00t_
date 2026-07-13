@@ -1,0 +1,37 @@
+{
+  "flash_sheet": {
+    "count": 13,
+    "classifiers": [
+      "flash_sheet.soul.kind",
+      "symbolic.rule",
+      "flash_sheet.soul",
+      "flash_sheet.cell.address",
+      "flash_sheet.row",
+      "flash_sheet.column",
+      "flash_sheet.cell.expression",
+      "flash_sheet.cell",
+      "flash_sheet.cell.change",
+      "flash_sheet.error",
+      "flash_sheet.sheet",
+      "flash_sheet.cell.guard",
+      "flash_sheet.cell.hook"
+    ]
+  },
+  "state_machine": {
+    "count": 12,
+    "classifiers": [
+      "state_machine.logical_address",
+      "logic.clif.payload",
+      "state_machine.event",
+      "state_machine.state",
+      "state_machine.transition",
+      "state_machine.spec",
+      "state_machine.visual_state",
+      "state_machine.graph.node",
+      "state_machine.graph.edge",
+      "state_machine.graph.snapshot",
+      "state_machine.dispatch_outcome",
+      "state_machine.transform_outcome"
+    ]
+  }
+}

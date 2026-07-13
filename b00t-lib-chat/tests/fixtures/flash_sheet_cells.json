@@ -1,0 +1,12 @@
+[
+  {
+    "row_id": "r1",
+    "column_id": "status",
+    "value": "ready"
+  },
+  {
+    "row_id": "r1",
+    "column_id": "score",
+    "value": "0.91"
+  }
+]

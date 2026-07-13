@@ -79,6 +79,51 @@ impl OodaPhase {
     }
 }
 
+fn ooda_phase_can_transition(source: &OodaPhase, target: &OodaPhase) -> bool {
+    source.can_transition_to(target)
+}
+
+fn ooda_phase_event_for_target(target: &OodaPhase) -> Option<&'static str> {
+    match target {
+        OodaPhase::Idle => None,
+        OodaPhase::Observing => Some("GoToObserving"),
+        OodaPhase::Orienting => Some("GoToOrienting"),
+        OodaPhase::Deciding => Some("GoToDeciding"),
+        OodaPhase::Acting => Some("GoToActing"),
+        OodaPhase::Reviewing => Some("GoToReviewing"),
+        OodaPhase::Complete => Some("GoToComplete"),
+        OodaPhase::Failed(_) => Some("GoToFailed"),
+    }
+}
+
+crate::impl_state_machine_introspection! {
+    impl OodaPhase {
+        machine_id: "OodaPhase",
+        initial: "Idle",
+        states: [
+            OodaPhase::Idle => "Idle",
+            OodaPhase::Observing => "Observing",
+            OodaPhase::Orienting => "Orienting",
+            OodaPhase::Deciding => "Deciding",
+            OodaPhase::Acting => "Acting",
+            OodaPhase::Reviewing => "Reviewing",
+            OodaPhase::Complete => "Complete",
+            OodaPhase::Failed(String::new()) => "Failed",
+        ],
+        finals: ["Complete", "Failed"],
+        can_transition: ooda_phase_can_transition,
+        event_for_target: ooda_phase_event_for_target,
+    }
+}
+
+pub fn ooda_phase_mermaid_state_diagram() -> String {
+    <OodaPhase as crate::state_introspection::StateMachineIntrospection>::render_mermaid_state_diagram()
+}
+
+pub fn ooda_phase_s5() -> String {
+    <OodaPhase as crate::state_introspection::StateMachineIntrospection>::render_s5()
+}
+
 // ---------------------------------------------------------------------------
 // Part 2: Guard rails — replace hardcoded limits
 // ---------------------------------------------------------------------------
@@ -894,6 +939,58 @@ mod tests {
                 phase.can_transition_to(&OodaPhase::Failed("reason".into())),
                 "{:?} should be able to transition to Failed",
                 phase
+            );
+        }
+    }
+
+    #[test]
+    fn ooda_phase_introspection_derives_existing_transitions() {
+        let transitions =
+            <OodaPhase as crate::state_introspection::StateMachineIntrospection>::transition_descriptors();
+
+        assert!(transitions.iter().any(|transition| {
+            transition.source == "Idle"
+                && transition.event == "GoToObserving"
+                && transition.target == "Observing"
+        }));
+        assert!(transitions.iter().any(|transition| {
+            transition.source == "Reviewing"
+                && transition.event == "GoToObserving"
+                && transition.target == "Observing"
+        }));
+        assert!(transitions.iter().any(|transition| {
+            transition.source == "Complete"
+                && transition.event == "GoToFailed"
+                && transition.target == "Failed"
+        }));
+    }
+
+    #[test]
+    fn ooda_phase_renders_mermaid_and_s5_from_introspection() {
+        let mermaid = ooda_phase_mermaid_state_diagram();
+        let s5 = ooda_phase_s5();
+
+        assert!(mermaid.starts_with("stateDiagram-v2\n"));
+        assert!(mermaid.contains("[*] --> Idle"));
+        assert!(mermaid.contains("Idle --> Observing: GoToObserving"));
+        assert!(mermaid.contains("Complete --> [*]"));
+        assert!(s5.starts_with("@machine id=OodaPhase initial=Idle datamodel=rust\n"));
+        assert!(s5.contains("@state Reviewing:"));
+        assert!(s5.contains("  -GoToObserving-> Observing"));
+
+        let transitions =
+            <OodaPhase as crate::state_introspection::StateMachineIntrospection>::transition_descriptors();
+        for transition in transitions {
+            assert!(
+                mermaid.contains(&format!(
+                    "{} --> {}: {}",
+                    transition.source, transition.target, transition.event
+                )),
+                "missing Mermaid transition: {transition:?}",
+            );
+            assert!(
+                s5.contains(&format!("-{}-> {}", transition.event, transition.target)),
+                "missing S5 transition: {transition:?}",
             );
         }
     }

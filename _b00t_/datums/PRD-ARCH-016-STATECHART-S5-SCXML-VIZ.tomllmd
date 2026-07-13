@@ -1,0 +1,112 @@
+# PRD-ARCH-016: S5 statechart DSL and canonical state-machine visualization
+
+[b00t.schema]
+version   = "1"
+type      = "prd"
+type_tags = ["prd", "state-machines", "visualization", "diagram-as-code", "mermaid", "stately", "xstate", "graphviz", "scxml", "s5", "statig"]
+
+[prd]
+id     = "PRD-ARCH-016-STATECHART-S5-SCXML-VIZ"
+title  = "S5 token-reduced statechart DSL with SCXML/SCE and Mermaid visualization adapters"
+status = "proposed"
+tier   = "ch0nky"
+github_issue = 774
+priority = "P1"
+estimate = "1 session"
+
+[summary]
+problem = "SCXML is the standards-compliant execution format but is contextually expensive for agents. b00t also has statig OODA state machines and custom pipeline_nodes state machines without one canonical visualization path."
+decision = "Use b00t_chat::StateMachineSpec as the pivot IR. Author compact machines in S5, render immediate diagrams as Mermaid stateDiagram-v2, and add later adapters for SCXML/SCE, XState/smcat JSON, CLIF, and Bevy/isometric scene graphs."
+non_goal = "Do not embed the upstream SCE browser visualizer into b00t-admin. b00t's own isometric/Bevy visualization should consume the same graph snapshot."
+caveat_ooda = "The current b00t OODA loop is only the first visualization source. It is not the final OODA design: the target OODA should classify transitions by implementation type, trait type, and lazy symbolic rhs/lhs guard expressions while preserving zero-copy Rust dataflow where possible."
+
+[references]
+sce = "https://newmassrael.github.io/scxml-core-engine/"
+sce_repo = "https://github.com/newmassrael/scxml-core-engine"
+scxml = "https://www.w3.org/TR/scxml/"
+stately = "https://stately.ai"
+xstate = "https://stately.ai/docs/xstate"
+mermaid_state = "https://mermaid.js.org/syntax/stateDiagram.html"
+diagrams = "https://github.com/mingrammer/diagrams"
+diagrams_docs = "https://diagrams.mingrammer.com"
+
+[format_strategy]
+authoring = "S5 line-oriented statechart shorthand; compact enough for sub-agent delegation and reviews."
+pivot_ir = "b00t_chat::StateMachineSpec plus StateMachineGraphSnapshot."
+immediate_viz = "Mermaid stateDiagram-v2 emitted from StateMachineSpec."
+architecture_viz = "mingrammer/diagrams remains useful for cloud/system diagrams, not canonical state-machine semantics."
+execution = "SCXML emitted for SCE AOT codegen where standards compliance and multi-language backends matter."
+round_trip = "Adapters should preserve StateMachineSpec semantics first; lossier render-only formats must declare limitations."
+
+[s5]
+example = """
+@machine id=lamp initial=off datamodel=null
+@state off -switch_flick-> on
+@state on:
+  +entry: log("on")
+  +exit: log("off")
+  -switch_flick-> off => lamp.toggled:clif=(lamp toggled)
+@state fault final
+"""
+
+[mermaid.example_ooda]
+output = """
+stateDiagram-v2
+  state "Idle" as Idle
+  state "Observing" as Observing
+  state "Orienting" as Orienting
+  state "Deciding" as Deciding
+  state "Acting" as Acting
+  state "Reviewing" as Reviewing
+  state "Complete" as Complete
+  state "Failed" as Failed
+  [*] --> Idle
+  Idle --> Observing: GoToObserving
+  Observing --> Orienting: GoToOrienting
+  Orienting --> Deciding: GoToDeciding
+  Deciding --> Acting: GoToActing
+  Acting --> Reviewing: GoToReviewing
+  Reviewing --> Complete: GoToComplete
+  Reviewing --> Observing: GoToObserving
+  Idle --> Failed: GoToFailed
+  Observing --> Failed: GoToFailed
+  Orienting --> Failed: GoToFailed
+  Deciding --> Failed: GoToFailed
+  Acting --> Failed: GoToFailed
+  Reviewing --> Failed: GoToFailed
+  Complete --> [*]
+  Failed --> [*]
+"""
+
+[implementation_plan]
+epic_01 = "Ship b00t_chat::s5 parser/renderer over StateMachineSpec with fixture tests."
+epic_02 = "Ship StateMachineSpec::render_mermaid_state_diagram for issue #774 Mermaid output."
+epic_03 = "Add OODA adapter from b00t_c0re_lib::OodaPhase transitions to StateMachineSpec."
+epic_04 = "Add pipeline_nodes adapter from custom StateMachine to StateMachineSpec."
+epic_05 = "Add SCXML serializer/deserializer adapter targeting SCE AOT codegen."
+epic_06 = "Add smcat/XState JSON adapter only if schema validation proves lower maintenance than direct SCXML."
+epic_07 = "Add CLIF payload validation fixtures, especially ISO 24707 string/escape edge cases."
+epic_08 = "Feed StateMachineGraphSnapshot into b00t-l3dg3rr-viz and future Bevy/isometric renderer."
+epic_09 = "Evolve OODA into a typed zero-copy matcher layer: classify phases/transitions by Rust implementation type, trait bounds, and lazily evaluated symbolic rhs/lhs guard formats."
+
+[acceptance]
+must = [
+  "b00t_chat parses S5 into StateMachineSpec with guards, actions, emitted events, and CLIF payloads",
+  "StateMachineSpec renders deterministic Mermaid stateDiagram-v2",
+  "OODA loop example exists as Mermaid stateDiagram-v2 in this datum",
+  "References include Stately, XState, Mermaid state diagrams, mingrammer/diagrams, W3C SCXML, and SCE",
+  "SCXML remains the execution/codegen target; S5 remains authoring syntax, not runtime semantics",
+  "OODA documentation states that current statig OODA is not the final typed zero-copy symbolic matcher design",
+]
+
+[risk]
+schema_drift = "smcat/XState schemas can drift; keep StateMachineSpec as local stability boundary."
+guard_injection = "Guard/action strings are data until a validated execution backend interprets them."
+xml_cost = "SCXML is verbose; agents should delegate compact S5 or IR JSON, then serialize SCXML at boundary."
+
+# b00t:map v1
+# summary: issue #774 canonical state-machine visualization via StateMachineSpec, S5 shorthand, Mermaid, and SCXML/SCE adapters
+# tags: state-machines, visualization, diagram-as-code, mermaid, stately, xstate, graphviz, scxml, s5, statig
+# tier: ch0nky
+# cmds: cargo test -p b00t-chat s5; cargo test -p b00t-chat state_machine
+# complexity: 7
