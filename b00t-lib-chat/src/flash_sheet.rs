@@ -173,6 +173,130 @@ pub trait CellGuard: Send + Sync {
     fn check(&self, change: &CellChange, sheet: &FlashSheet) -> GuardResult;
 }
 
+crate::impl_type_introspection! {
+    enum SoulKind {
+        classifier: "flash_sheet.soul.kind",
+        variants: [
+            Sheet => "sheet",
+            Row => "row",
+            Column => "column",
+            Cell => "cell",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct SymbolicRule {
+        classifier: "symbolic.rule",
+        fields: [
+            id: String => "identifier",
+            expression: String => "symbolic.expression",
+            metadata: SheetMetadata => "metadata",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct SoulConcept {
+        classifier: "flash_sheet.soul",
+        fields: [
+            id: String => "identifier",
+            kind: SoulKind => "classifier",
+            metadata: SheetMetadata => "metadata",
+            symbolic_rules: Vec<SymbolicRule> => "symbolic.rules",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct CellAddress {
+        classifier: "flash_sheet.cell.address",
+        fields: [
+            row_id: String => "row.logical_id",
+            column_id: String => "column.logical_id",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct SheetRow {
+        classifier: "flash_sheet.row",
+        fields: [
+            soul: SoulConcept => "soul",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct SheetColumn {
+        classifier: "flash_sheet.column",
+        fields: [
+            soul: SoulConcept => "soul",
+            datatype: Datatype => "dataframe.datatype",
+            nullable: bool => "constraint.nullable",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    enum CellExpression {
+        classifier: "flash_sheet.cell.expression",
+        variants: [
+            Literal => "literal",
+            Formula => "formula",
+            Symbol => "symbol",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct SheetCell {
+        classifier: "flash_sheet.cell",
+        fields: [
+            soul: SoulConcept => "soul",
+            expression: CellExpression => "cell.expression",
+            metadata: SheetMetadata => "metadata",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct CellChange {
+        classifier: "flash_sheet.cell.change",
+        fields: [
+            address: CellAddress => "cell.address",
+            old: Option<SheetCell> => "cell.previous",
+            new: SheetCell => "cell.next",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    enum FlashSheetError {
+        classifier: "flash_sheet.error",
+        variants: [
+            UnknownRow => "validation.row",
+            UnknownColumn => "validation.column",
+            GuardRejected => "guard.rejected",
+            HookFailed => "hook.failed",
+            MismatchedDataframe => "dataframe.shape",
+        ],
+    }
+}
+
+crate::impl_type_introspection! {
+    struct FlashSheet {
+        classifier: "flash_sheet.sheet",
+        fields: [
+            soul: SoulConcept => "soul",
+            rows: BTreeMap<String, SheetRow> => "sheet.rows",
+            columns: BTreeMap<String, SheetColumn> => "sheet.columns",
+            cells: BTreeMap<CellAddress, SheetCell> => "sheet.cells",
+            metadata: SheetMetadata => "metadata",
+        ],
+    }
+}
+
 impl<F> CellGuard for F
 where
     F: Fn(&CellChange, &FlashSheet) -> GuardResult + Send + Sync,
@@ -184,6 +308,18 @@ where
 
 pub trait CellHook: Send + Sync {
     fn on_change(&self, change: &CellChange, sheet: &FlashSheet) -> HookResult;
+}
+
+crate::impl_type_introspection! {
+    trait dyn CellGuard {
+        classifier: "flash_sheet.cell.guard",
+    }
+}
+
+crate::impl_type_introspection! {
+    trait dyn CellHook {
+        classifier: "flash_sheet.cell.hook",
+    }
 }
 
 impl<F> CellHook for F
@@ -337,6 +473,26 @@ impl FlashSheet {
 
         Ok(sheet)
     }
+}
+
+pub fn flash_sheet_type_descriptors() -> Vec<crate::type_introspection::TypeDescriptor> {
+    use crate::type_introspection::TypeIntrospection;
+
+    vec![
+        <SoulKind as TypeIntrospection>::type_descriptor(),
+        <SymbolicRule as TypeIntrospection>::type_descriptor(),
+        <SoulConcept as TypeIntrospection>::type_descriptor(),
+        <CellAddress as TypeIntrospection>::type_descriptor(),
+        <SheetRow as TypeIntrospection>::type_descriptor(),
+        <SheetColumn as TypeIntrospection>::type_descriptor(),
+        <CellExpression as TypeIntrospection>::type_descriptor(),
+        <SheetCell as TypeIntrospection>::type_descriptor(),
+        <CellChange as TypeIntrospection>::type_descriptor(),
+        <FlashSheetError as TypeIntrospection>::type_descriptor(),
+        <FlashSheet as TypeIntrospection>::type_descriptor(),
+        <dyn CellGuard as TypeIntrospection>::type_descriptor(),
+        <dyn CellHook as TypeIntrospection>::type_descriptor(),
+    ]
 }
 
 #[cfg(test)]

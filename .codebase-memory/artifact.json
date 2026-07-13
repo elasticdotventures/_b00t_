@@ -1,0 +1,11 @@
+{
+    "schema_version": 1,
+    "commit": "630b6d038d6f2c7264c52211a8b4232de2e3ffb0",
+    "indexed_at": "2026-07-13T14:02:11Z",
+    "project": "home-brianh-.dotfiles",
+    "nodes": 73352,
+    "edges": 153370,
+    "original_size": 129761280,
+    "compressed_size": 23219318,
+    "compression_level": 3
+}

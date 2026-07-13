@@ -43,6 +43,16 @@ impl LogicalAddress {
     }
 }
 
+crate::impl_type_introspection! {
+    struct LogicalAddress {
+        classifier: "state_machine.logical_address",
+        fields: [
+            graph_path: Vec<String> => "graph.path",
+            local_id: String => "local.id",
+        ],
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClifPayload {
     pub text: String,
@@ -55,6 +65,16 @@ impl ClifPayload {
             text: text.into(),
             metadata: SheetMetadata::new(),
         }
+    }
+}
+
+crate::impl_type_introspection! {
+    struct ClifPayload {
+        classifier: "logic.clif.payload",
+        fields: [
+            text: String => "clif.text",
+            metadata: SheetMetadata => "metadata",
+        ],
     }
 }
 
@@ -77,6 +97,17 @@ impl StateMachineEvent {
     pub fn with_clif(mut self, clif: ClifPayload) -> Self {
         self.clif = Some(clif);
         self
+    }
+}
+
+crate::impl_type_introspection! {
+    struct StateMachineEvent {
+        classifier: "state_machine.event",
+        fields: [
+            name: String => "event.name",
+            payload: SheetMetadata => "event.payload",
+            clif: Option<ClifPayload> => "logic.clif",
+        ],
     }
 }
 
@@ -134,6 +165,23 @@ impl StateNode {
     }
 }
 
+crate::impl_type_introspection! {
+    struct StateNode {
+        classifier: "state_machine.state",
+        fields: [
+            address: LogicalAddress => "logical.address",
+            superstate: Option<LogicalAddress> => "state.superstate",
+            is_initial: bool => "state.initial",
+            is_final: bool => "state.final",
+            entry_actions: Vec<String> => "state.entry_actions",
+            exit_actions: Vec<String> => "state.exit_actions",
+            state_local_metadata: SheetMetadata => "state.local_metadata",
+            metadata: SheetMetadata => "metadata",
+            symbolic_rules: Vec<SymbolicRule> => "symbolic.rules",
+        ],
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateTransition {
     pub source: LogicalAddress,
@@ -164,6 +212,20 @@ impl StateTransition {
     pub fn emits(mut self, event: StateMachineEvent) -> Self {
         self.emitted_events.push(event);
         self
+    }
+}
+
+crate::impl_type_introspection! {
+    struct StateTransition {
+        classifier: "state_machine.transition",
+        fields: [
+            source: LogicalAddress => "transition.source",
+            target: LogicalAddress => "transition.target",
+            event: String => "transition.event",
+            guard: Option<SymbolicRule> => "transition.guard",
+            actions: Vec<String> => "transition.actions",
+            emitted_events: Vec<StateMachineEvent> => "transition.emitted_events",
+        ],
     }
 }
 
@@ -377,6 +439,18 @@ impl StateMachineSpec {
     }
 }
 
+crate::impl_type_introspection! {
+    struct StateMachineSpec {
+        classifier: "state_machine.spec",
+        fields: [
+            address: LogicalAddress => "logical.address",
+            states: BTreeMap<LogicalAddress, StateNode> => "state_machine.states",
+            transitions: Vec<StateTransition> => "state_machine.transitions",
+            metadata: SheetMetadata => "metadata",
+        ],
+    }
+}
+
 fn mermaid_id(address: &LogicalAddress) -> String {
     let mut out = String::with_capacity(address.token().len() + 3);
     out.push_str("s__");
@@ -401,6 +475,19 @@ pub enum StateMachineVisualState {
     Initial,
     Final,
     ActiveFinal,
+}
+
+crate::impl_type_introspection! {
+    enum StateMachineVisualState {
+        classifier: "state_machine.visual_state",
+        variants: [
+            Idle => "state.idle",
+            Active => "state.active",
+            Initial => "state.initial",
+            Final => "state.final",
+            ActiveFinal => "state.active_final",
+        ],
+    }
 }
 
 impl StateMachineVisualState {
@@ -435,6 +522,20 @@ pub struct StateMachineGraphNode {
     pub metadata: SheetMetadata,
 }
 
+crate::impl_type_introspection! {
+    struct StateMachineGraphNode {
+        classifier: "state_machine.graph.node",
+        fields: [
+            id: String => "graph.node.id",
+            label: String => "graph.node.label",
+            address: LogicalAddress => "logical.address",
+            superstate: Option<LogicalAddress> => "state.superstate",
+            visual_state: StateMachineVisualState => "state.visual",
+            metadata: SheetMetadata => "metadata",
+        ],
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateMachineGraphEdge {
     pub from: String,
@@ -445,6 +546,20 @@ pub struct StateMachineGraphEdge {
     pub emitted_events: Vec<String>,
 }
 
+crate::impl_type_introspection! {
+    struct StateMachineGraphEdge {
+        classifier: "state_machine.graph.edge",
+        fields: [
+            from: String => "graph.edge.from",
+            to: String => "graph.edge.to",
+            event: String => "transition.event",
+            guard: Option<String> => "transition.guard",
+            actions: Vec<String> => "transition.actions",
+            emitted_events: Vec<String> => "transition.emitted_events",
+        ],
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateMachineGraphSnapshot {
     pub machine: LogicalAddress,
@@ -453,11 +568,34 @@ pub struct StateMachineGraphSnapshot {
     pub edges: Vec<StateMachineGraphEdge>,
 }
 
+crate::impl_type_introspection! {
+    struct StateMachineGraphSnapshot {
+        classifier: "state_machine.graph.snapshot",
+        fields: [
+            machine: LogicalAddress => "state_machine.address",
+            current: LogicalAddress => "state.current",
+            nodes: Vec<StateMachineGraphNode> => "graph.nodes",
+            edges: Vec<StateMachineGraphEdge> => "graph.edges",
+        ],
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateDispatchOutcome {
     Handled,
     Transition,
     Super,
+}
+
+crate::impl_type_introspection! {
+    enum StateDispatchOutcome {
+        classifier: "state_machine.dispatch_outcome",
+        variants: [
+            Handled => "dispatch.handled",
+            Transition => "dispatch.transition",
+            Super => "dispatch.super",
+        ],
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -471,6 +609,42 @@ pub struct StateTransformOutcome {
     pub guard: Option<SymbolicRule>,
     pub statig_outcome: StateDispatchOutcome,
     pub changed: bool,
+}
+
+crate::impl_type_introspection! {
+    struct StateTransformOutcome {
+        classifier: "state_machine.transform_outcome",
+        fields: [
+            machine: LogicalAddress => "state_machine.address",
+            from: LogicalAddress => "state.from",
+            to: LogicalAddress => "state.to",
+            consumed_event: StateMachineEvent => "event.consumed",
+            emitted_events: Vec<StateMachineEvent> => "event.emitted",
+            actions: Vec<String> => "transition.actions",
+            guard: Option<SymbolicRule> => "transition.guard",
+            statig_outcome: StateDispatchOutcome => "statig.outcome",
+            changed: bool => "state.changed",
+        ],
+    }
+}
+
+pub fn state_machine_type_descriptors() -> Vec<crate::type_introspection::TypeDescriptor> {
+    use crate::type_introspection::TypeIntrospection;
+
+    vec![
+        <LogicalAddress as TypeIntrospection>::type_descriptor(),
+        <ClifPayload as TypeIntrospection>::type_descriptor(),
+        <StateMachineEvent as TypeIntrospection>::type_descriptor(),
+        <StateNode as TypeIntrospection>::type_descriptor(),
+        <StateTransition as TypeIntrospection>::type_descriptor(),
+        <StateMachineSpec as TypeIntrospection>::type_descriptor(),
+        <StateMachineVisualState as TypeIntrospection>::type_descriptor(),
+        <StateMachineGraphNode as TypeIntrospection>::type_descriptor(),
+        <StateMachineGraphEdge as TypeIntrospection>::type_descriptor(),
+        <StateMachineGraphSnapshot as TypeIntrospection>::type_descriptor(),
+        <StateDispatchOutcome as TypeIntrospection>::type_descriptor(),
+        <StateTransformOutcome as TypeIntrospection>::type_descriptor(),
+    ]
 }
 
 #[cfg(test)]

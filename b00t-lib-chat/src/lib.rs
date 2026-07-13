@@ -48,6 +48,7 @@ pub mod skill;
 pub mod state_machine;
 pub mod transport;
 pub mod transports;
+pub mod type_introspection;
 
 pub use agent::{Agent, AgentConfig};
 pub use assignment::{
@@ -63,6 +64,7 @@ pub use error::{ChatError, ChatResult};
 pub use flash_sheet::{
     CellAddress, CellChange, CellExpression, CellGuard, CellHook, FlashSheet, FlashSheetError,
     SheetCell, SheetColumn, SheetMetadata, SheetRow, SoulConcept, SoulKind, SymbolicRule,
+    flash_sheet_type_descriptors,
 };
 pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
@@ -87,10 +89,13 @@ pub use skill::{parse_b00t_command, BootCommand, ModelAction};
 pub use state_machine::{
     ClifPayload, LogicalAddress, StateDispatchOutcome, StateMachineEvent, StateMachineGraphEdge,
     StateMachineGraphNode, StateMachineGraphSnapshot, StateMachineSpec, StateMachineVisualState,
-    StateNode, StateTransformOutcome, StateTransition,
+    StateNode, StateTransformOutcome, StateTransition, state_machine_type_descriptors,
 };
 pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
 pub use transports::{MqttTransport, NatsTransport};
+pub use type_introspection::{
+    FieldDescriptor, TypeDescriptor, TypeIntrospection, TypeMetadata, TypeShape, VariantDescriptor,
+};
 
 // Type aliases for compatibility
 pub use ChatError as ACPError;
