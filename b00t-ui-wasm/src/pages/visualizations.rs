@@ -32,6 +32,7 @@ extern "C" {
 const GRAPH_TYPES: &[(&str, &str)] = &[
     ("entangle", "Entanglement Graph"),
     ("task",     "Task Graph"),
+    ("state-machine", "State Machine Graph"),
     ("pipeline", "Pipeline Graph"),
     ("ato",      "ATO Graph"),
 ];
@@ -299,6 +300,14 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
                 }
             }
         }
+        "state-machine" => match api_data {
+            Ok(val) => val
+                .get("mermaid")
+                .and_then(Value::as_str)
+                .unwrap_or("stateDiagram-v2\n    [*] --> Idle")
+                .to_string(),
+            _ => "stateDiagram-v2\n    [*] --> Idle".to_string(),
+        },
         "pipeline" => {
             r#"flowchart TD
     A[Raw Input] --> B[Parser]

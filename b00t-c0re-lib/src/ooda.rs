@@ -977,6 +977,22 @@ mod tests {
         assert!(s5.starts_with("@machine id=OodaPhase initial=Idle datamodel=rust\n"));
         assert!(s5.contains("@state Reviewing:"));
         assert!(s5.contains("  -GoToObserving-> Observing"));
+
+        let transitions =
+            <OodaPhase as crate::state_introspection::StateMachineIntrospection>::transition_descriptors();
+        for transition in transitions {
+            assert!(
+                mermaid.contains(&format!(
+                    "{} --> {}: {}",
+                    transition.source, transition.target, transition.event
+                )),
+                "missing Mermaid transition: {transition:?}",
+            );
+            assert!(
+                s5.contains(&format!("-{}-> {}", transition.event, transition.target)),
+                "missing S5 transition: {transition:?}",
+            );
+        }
     }
 
     #[test]

@@ -5,14 +5,14 @@
 //! downstream code can serialize that shape as Mermaid, S5, SCXML, CLIF, or an
 //! isometric scene graph.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StateTypeDescriptor {
     pub id: &'static str,
     pub rust_type: &'static str,
     pub classifier: &'static str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StateTransitionDescriptor {
     pub source: &'static str,
     pub event: &'static str,
@@ -60,15 +60,15 @@ pub trait StateMachineIntrospection {
         );
 
         for state in Self::state_type_descriptors() {
-            if Self::final_states().contains(&state.id) {
-                out.push_str(&format!("@state {} final\n", state.id));
-                continue;
-            }
-
             let transitions = Self::transition_descriptors()
                 .into_iter()
                 .filter(|transition| transition.source == state.id)
                 .collect::<Vec<_>>();
+
+            if Self::final_states().contains(&state.id) && transitions.is_empty() {
+                out.push_str(&format!("@state {} final\n", state.id));
+                continue;
+            }
 
             if transitions.len() == 1 {
                 let transition = &transitions[0];

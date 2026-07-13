@@ -863,6 +863,24 @@ async fn viz_task_handler(
     viz_output("task", hide_orphans)
 }
 
+/// GET `/api/admin/viz/state-machine` — Canonical OODA state machine graph.
+async fn viz_state_machine_handler() -> impl IntoResponse {
+    let transitions =
+        <b00t_c0re_lib::OodaPhase as b00t_c0re_lib::StateMachineIntrospection>::transition_descriptors();
+    let states =
+        <b00t_c0re_lib::OodaPhase as b00t_c0re_lib::StateMachineIntrospection>::state_type_descriptors();
+
+    axum::Json(serde_json::json!({
+        "viz_type": "state-machine",
+        "machine_id": <b00t_c0re_lib::OodaPhase as b00t_c0re_lib::StateMachineIntrospection>::machine_id(),
+        "initial": <b00t_c0re_lib::OodaPhase as b00t_c0re_lib::StateMachineIntrospection>::initial_state(),
+        "states": states,
+        "transitions": transitions,
+        "mermaid": b00t_c0re_lib::ooda_phase_mermaid_state_diagram(),
+        "s5": b00t_c0re_lib::ooda_phase_s5(),
+    }))
+}
+
 fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
     let mermaid = std::process::Command::new("b00t")
         .args(["viz", subcommand, "--format", "mermaid"])
@@ -1469,6 +1487,7 @@ window._wasmLoadStart = Date.now();
         <option value="">— Choose —</option>
         <option value="entangle">🔗 Entanglement</option>
         <option value="task">📋 Tasks</option>
+        <option value="state-machine">🔁 State Machine</option>
         <option value="pipeline">📊 Pipeline</option>
         <option value="ato">🏛️ ATO</option>
         <option value="isometric">🧊 Isometric</option>
@@ -2147,6 +2166,7 @@ async fn main() {
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
         .route("/api/admin/viz/entangle/json", get(graph_json::entangle_json_handler))
         .route("/api/admin/viz/task", get(viz_task_handler))
+        .route("/api/admin/viz/state-machine", get(viz_state_machine_handler))
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
         .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
         .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler).post(viz_mermaid_render_handler))
@@ -2215,7 +2235,7 @@ mod html_sanity_tests {
         }
         // Viz dropdown
         assert!(h.contains("viz-select"), "Missing viz dropdown");
-        for opt in &["entangle", "task", "pipeline", "ato", "isometric", "kg"] {
+        for opt in &["entangle", "task", "state-machine", "pipeline", "ato", "isometric", "kg"] {
             assert!(h.contains(&format!("\"{opt}\"")), "Missing viz option: {opt}");
         }
         // JS functions
