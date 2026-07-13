@@ -110,11 +110,15 @@ pub mod calorie_tracker;
 pub mod cake_ledger;
 pub mod a2a_gates;
 pub mod pipeline_costs;
+pub mod pipeline_checkpoint;
 pub mod pipeline_executor;
 pub mod pipeline_logs;
 pub mod pipeline_secrets;
 pub mod pipeline_types;
+pub mod pipeline_viz;
 pub mod pipeline_kerml;
+pub mod pipeline_scheduler;
+pub mod pipeline_dataframe;
 pub mod stage_registry;
 pub mod transmogrifier;
 #[cfg(feature = "rpa")]

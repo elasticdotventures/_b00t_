@@ -10,6 +10,7 @@
 //      StageStatus        — Pending / Running / Completed / Failed / Skipped
 //      NatsClient         — trait for NATS publish/subscribe (mockable)
 
+use crate::pipeline_checkpoint::{compute_dag_hash, CheckpointStore, PipelineCheckpoint};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_types::{PipelineDag, PipelineError, StageSpec};
 use anyhow::Result;
@@ -127,6 +128,7 @@ pub struct PipelineExecutor {
     dag: PipelineDag,
     log_store: Arc<dyn LogStore>,
     nats_client: Option<Arc<dyn NatsClient>>,
+    checkpoint_store: Option<Arc<dyn CheckpointStore>>,
 }
 
 impl PipelineExecutor {
@@ -136,6 +138,7 @@ impl PipelineExecutor {
             dag,
             log_store: Arc::new(crate::pipeline_logs::VecLogStore::new()),
             nats_client: None,
+            checkpoint_store: None,
         }
     }
 
@@ -148,6 +151,17 @@ impl PipelineExecutor {
     /// Enable NATS transport for stage-to-stage communication.
     pub fn with_nats(mut self, nc: Arc<dyn NatsClient>) -> Self {
         self.nats_client = Some(nc);
+        self
+    }
+
+    /// Attach a checkpoint store for restartable pipeline execution.
+    ///
+    /// When set, the executor will save a checkpoint after each completed
+    /// stage and check for an existing checkpoint at the start of
+    /// `execute()`, skipping any stages that were already completed in a
+    /// previous run.
+    pub fn with_checkpoint_store(mut self, store: Arc<dyn CheckpointStore>) -> Self {
+        self.checkpoint_store = Some(store);
         self
     }
 
@@ -213,7 +227,67 @@ impl PipelineExecutor {
             ),
         ));
 
-        for (idx, stage_name) in order.iter().enumerate() {
+        // ── Checkpoint resume ────────────────────────────────────────────
+        // If a checkpoint store is attached, check for an existing checkpoint
+        // for this run_id and skip any stages that were already completed.
+        let mut checkpoint: Option<PipelineCheckpoint> = self
+            .checkpoint_store
+            .as_ref()
+            .and_then(|store| match store.load(run_id) {
+                Ok(Some(cp)) if cp.dag_hash == compute_dag_hash(&self.dag) => Some(cp),
+                _ => None,
+            });
+
+        let start_idx = if let Some(ref cp) = checkpoint {
+            // Rebuild completed StageResults from checkpoint entries.
+            for sc in &cp.completed_stages {
+                let name = order
+                    .get(sc.stage_index)
+                    .cloned()
+                    .unwrap_or_else(|| format!("stage_{}", sc.stage_index));
+                stage_results.push(StageResult {
+                    stage_name: name,
+                    duration_ms: 0,
+                    output: Some(sc.state.clone()),
+                    error: None,
+                    status: StageStatus::Completed,
+                });
+            }
+            last_output = cp
+                .completed_stages
+                .last()
+                .map(|sc| sc.state.clone());
+
+            self.log_store.store(PipelineLogEntry::new(
+                run_id,
+                "*pipeline*",
+                LogLevel::Info,
+                format!(
+                    "resumed from checkpoint: {} stage(s) previously completed, continuing from stage {}",
+                    cp.completed_stages.len(),
+                    cp.current_stage_index,
+                ),
+            ));
+
+            cp.current_stage_index
+        } else {
+            if self.checkpoint_store.is_some() {
+                // No existing checkpoint found — create a fresh one.
+                let cp = PipelineCheckpoint::new(run_id, &self.dag);
+                if let Err(e) = self.checkpoint_store.as_ref().unwrap().save(&cp) {
+                    self.log_store.store(PipelineLogEntry::new(
+                        run_id,
+                        "*pipeline*",
+                        LogLevel::Warn,
+                        format!("failed to create initial checkpoint: {e}"),
+                    ));
+                }
+                checkpoint = Some(cp);
+            }
+            0
+        };
+
+        for (idx, stage_name) in order.iter().enumerate().skip(start_idx) {
             // Look up the stage spec.
             let stage_spec = match self.dag.find_stage(stage_name) {
                 Some(s) => s.clone(),
@@ -307,7 +381,27 @@ impl PipelineExecutor {
             }
 
             let is_failure = matches!(&result.status, StageStatus::Failed(_));
+            let stage_output = result.output.clone();
             stage_results.push(result);
+
+            // ── Persist checkpoint after each completed stage ────────────
+            if !is_failure {
+                if let Some(ref mut cp) = checkpoint {
+                    if let Some(ref output) = stage_output {
+                        cp.record_stage_complete(idx, output.clone());
+                        if let Some(ref store) = self.checkpoint_store {
+                            if let Err(e) = store.save(cp) {
+                                self.log_store.store(PipelineLogEntry::new(
+                                    run_id,
+                                    stage_name,
+                                    LogLevel::Warn,
+                                    format!("failed to save checkpoint: {e}"),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
 
             if is_failure {
                 // Mark remaining stages as Skipped.

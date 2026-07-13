@@ -7,7 +7,9 @@ use crate::commands::pipeline_cost::{handle_pipeline_cost, PipelineCostArgs};
 use crate::commands::pipeline_validate::{print_validate_report, validate_pipeline};
 use crate::datum_pipeline::PipelineDatum;
 use crate::datum_utils::get_all_datums_with_paths;
+use crate::pipeline_dataframe::handle_pipeline_data;
 use crate::pipeline_logs::{handle_pipeline_logs, PipelineLogsArgs, PIPELINE_LOG_STORE};
+use crate::pipeline_scheduler::handle_schedule_command;
 use crate::traits::CliExecutor;
 use crate::{BootDatum, DatumType};
 use anyhow::Result;
@@ -42,6 +44,26 @@ pub enum PipelineCommands {
     Cost {
         #[clap(flatten)]
         args: PipelineCostArgs,
+    },
+    #[clap(about = "Query stage outputs as dataframe rows")]
+    Data {
+        #[clap(help = "Pipeline run ID")]
+        id: String,
+        #[clap(long, help = "Filter by stage name")]
+        stage: Option<String>,
+        #[clap(long, help = "Comma-separated column names to include")]
+        columns: Option<String>,
+    },
+    #[clap(about = "Simulate resource-aware scheduling against available hosts")]
+    Schedule {
+        #[clap(help = "Pipeline datum name")]
+        name: String,
+        #[clap(
+            long,
+            default_value = "greedy",
+            help = "Scheduling strategy: greedy (default) or binpack"
+        )]
+        strategy: String,
     },
 }
 
@@ -99,6 +121,13 @@ pub fn handle_pipeline_command(cmd: &PipelineCommands, b00t_path: &str) -> Resul
         }
         PipelineCommands::Cost { args } => {
             handle_pipeline_cost(args)?;
+        }
+        PipelineCommands::Data { id, stage, columns } => {
+            handle_pipeline_data(b00t_path, id, stage.as_deref(), columns.as_deref())?;
+        }
+        PipelineCommands::Schedule { name, strategy } => {
+            let output = handle_schedule_command(name, strategy, b00t_path)?;
+            println!("{}", output);
         }
     }
     Ok(())
