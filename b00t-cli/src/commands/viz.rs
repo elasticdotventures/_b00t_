@@ -3,6 +3,10 @@
 use crate::blessing::BlessingGraph;
 use crate::commands::task::load_store;
 use crate::datum_utils::{DatumGraph, build_datum_graph, graph_neighbors};
+use crate::commands::pipeline::discover_pipeline_datums;
+use crate::datum_pipeline::PipelineDatum;
+use crate::pipeline_types::{PipelineDag, StageSpec};
+use crate::pipeline_viz;
 use crate::viz::{
     SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_rhai_dsl,
     blessing_to_scene, datum_graph_to_mermaid, datum_graph_to_rhai_dsl,
@@ -14,7 +18,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Clone)]
 pub enum VizCommands {
@@ -62,6 +66,20 @@ pub enum VizCommands {
         #[clap(long, short, help = "Write output to file instead of stdout")]
         output: Option<PathBuf>,
     },
+    #[clap(about = "Visualize a pipeline DAG from pipeline datums")]
+    Pipeline {
+        #[clap(help = "Pipeline datum name to visualize")]
+        name: String,
+        #[clap(
+            long,
+            value_enum,
+            default_value = "mermaid",
+            help = "Output format"
+        )]
+        format: PipelineVizFormat,
+        #[clap(long, short, help = "Write output to file instead of stdout")]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -75,6 +93,14 @@ pub enum VizFormat {
     Cytoscape,
     SysMLv2,
     Owl2,
+}
+
+/// Output formats supported by pipeline DAG visualization.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum PipelineVizFormat {
+    Mermaid,
+    Json,
+    Svg,
 }
 
 pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
@@ -124,6 +150,49 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
                 datum_graph_to_scene(&graph),
             )?;
             emit(rendered, output)
+        }
+        VizCommands::Pipeline { name, format, output } => {
+            let pipelines = discover_pipeline_datums(path)?;
+            let (_key, datum, file_path) = pipelines
+                .into_iter()
+                .find(|(key, _, _)| key == name)
+                .ok_or_else(|| anyhow::anyhow!("no pipeline datum named '{}'", name))?;
+            let base_dir = Path::new(&file_path)
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf();
+            let pipeline = PipelineDatum::from_datum(datum, &base_dir)?;
+
+            let stage_specs: Vec<StageSpec> = pipeline
+                .stages()
+                .iter()
+                .map(|s| StageSpec::from_name(s))
+                .collect();
+
+            let dag = PipelineDag::build(stage_specs).unwrap_or_else(|_| {
+                let specs: Vec<StageSpec> = pipeline
+                    .stages()
+                    .iter()
+                    .map(|s| StageSpec::from_name(s))
+                    .collect();
+                PipelineDag::from_sequential(specs)
+            });
+
+            let fmt_str = match format {
+                PipelineVizFormat::Mermaid => "mermaid",
+                PipelineVizFormat::Json => "json",
+                PipelineVizFormat::Svg => "svg",
+            };
+
+            let rendered = pipeline_viz::render_pipeline(&dag, fmt_str)
+                .with_context(|| format!("render pipeline '{name}' as {fmt_str}"))?;
+
+            // Wrap Mermaid output in code fences (matching existing viz convention)
+            let output_content = match format {
+                PipelineVizFormat::Mermaid => format!("```mermaid\n{}```\n", rendered),
+                _ => rendered,
+            };
+            emit(output_content, output)
         }
     }
 }
