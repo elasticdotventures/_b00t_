@@ -146,7 +146,7 @@ pub fn load_secret(ref_: &SecretRef) -> Result<String> {
                 }
             })
         }
-        SecretSource::Keyring { service, account } => {
+        SecretSource::Keyring { service: _, account: _ } => {
             #[cfg(feature = "keyring")]
             {
                 let entry = keyring::Entry::new(service, account)

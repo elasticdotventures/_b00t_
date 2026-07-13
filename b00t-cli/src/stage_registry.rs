@@ -5,7 +5,6 @@
 //    Each .stage.tomllm file is a serialized CapsuleProfile (name, ports, resources, etc.)
 
 use crate::pipeline_types::CapsuleProfile;
-use anyhow::Result;
 use std::path::Path;
 
 /// In-memory registry of known pipeline stages, discovered from

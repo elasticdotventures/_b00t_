@@ -766,8 +766,8 @@ async fn handle_dispatch(
     task: &str,
     preferred_agent: &Option<String>,
     task_id: &Option<String>,
-    priority: &str,
-    timeout_secs: u64,
+    _priority: &str,
+    _timeout_secs: u64,
     json_output: bool,
 ) -> Result<()> {
     let tid = task_id.clone().unwrap_or_else(|| {

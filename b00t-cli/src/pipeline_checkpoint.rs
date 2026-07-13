@@ -10,7 +10,7 @@
 //      InMemoryCheckpointStore — HashMap-backed store for tests
 
 use crate::pipeline_executor::{
-    PipelineExecutor, PipelineRunReport, StageResult, StageStatus,
+    PipelineExecutor, PipelineRunReport,
 };
 use crate::pipeline_types::PipelineDag;
 use anyhow::{Context, Result};
@@ -20,7 +20,6 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 // ── CheckpointStatus ──────────────────────────────────────────────────────────
 

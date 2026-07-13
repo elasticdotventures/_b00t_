@@ -12,7 +12,7 @@
 
 use crate::pipeline_cache::TimeoutPredictor;
 use crate::pipeline_checkpoint::{compute_dag_hash, CheckpointStore, PipelineCheckpoint};
-use crate::pipeline_flowctl::{FlowControl, FlowGate, FlowStrategy, StageFlowConfig};
+use crate::pipeline_flowctl::{FlowControl, FlowGate, StageFlowConfig};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
 use crate::pipeline_types::{PipelineDag, PipelineError, StagePort, StageSpec};
@@ -624,7 +624,7 @@ impl PipelineExecutor {
         // Use the TimeoutPredictor to adjust the stage's timeout based on
         // historical timing data for this stage and input size.
         let adjusted_stage = if let Some(ref predictor) = self.timeout_predictor {
-            let mut pred = predictor.lock().expect("TimeoutPredictor lock");
+            let pred = predictor.lock().expect("TimeoutPredictor lock");
             if let Some(timeout_secs) = stage.profile.timeout_seconds {
                 let configured = Duration::from_secs(timeout_secs);
                 let effective = pred.should_extend_timeout(&stage_name, input_size, configured);

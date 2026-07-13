@@ -2,7 +2,7 @@
 //    Mirrors the PipelineCommands pattern in pipeline.rs.
 
 use crate::ansi;
-use crate::pipeline_types::{PortDirection, PortMediaType};
+use crate::pipeline_types::PortDirection;
 use crate::stage_registry::StageRegistry;
 use anyhow::Result;
 use clap::Subcommand;

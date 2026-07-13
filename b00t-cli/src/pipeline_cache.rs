@@ -20,7 +20,7 @@
 use crate::pipeline_executor::{
     PipelineExecutor, PipelineRunReport, RunStatus, StageResult, StageStatus,
 };
-use crate::pipeline_types::{PipelineError, StageSpec};
+use crate::pipeline_types::PipelineError;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;

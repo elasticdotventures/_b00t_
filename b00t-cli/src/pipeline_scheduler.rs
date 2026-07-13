@@ -293,7 +293,7 @@ impl Scheduler for BinpackScheduler {
                 allocated += 1;
             } else {
                 // No host fits
-                let reason = build_no_fit_reason(req, hosts);
+                let _reason = build_no_fit_reason(req, hosts);
                 unassigned.push(stage.name.clone());
                 // Leave assignments[orig_idx] as None
             }
