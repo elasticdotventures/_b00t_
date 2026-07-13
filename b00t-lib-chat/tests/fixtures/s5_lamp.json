@@ -1,0 +1,7 @@
+{
+  "source": "# compact S5 authoring form\n@machine id=lamp initial=off datamodel=null\n@state off -switch_flick-> on\n@state on:\n  +entry: log(\"on\")\n  +exit: log(\"off\")\n  -switch_flick-> off => lamp.toggled:clif=(lamp toggled)\n@state fault final\n",
+  "machine_id": "lamp",
+  "initial": "off",
+  "states": ["off", "on", "fault"],
+  "events": ["switch_flick"]
+}

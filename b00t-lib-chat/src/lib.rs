@@ -41,6 +41,7 @@ pub mod message;
 pub mod metrics;
 pub mod protocol;
 pub mod router;
+pub mod s5;
 pub mod security;
 pub mod server;
 pub mod skill;
@@ -77,6 +78,7 @@ pub use gossip::{GossipTable, GossipMember};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
+pub use s5::{parse_s5, render_s5, S5Document, S5ParseError};
 pub use security::{
     fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
 };

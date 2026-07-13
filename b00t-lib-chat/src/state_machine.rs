@@ -268,6 +268,72 @@ impl StateMachineSpec {
         out
     }
 
+    pub fn render_mermaid_state_diagram(&self) -> String {
+        let mut out = String::from("stateDiagram-v2\n");
+
+        for (address, state) in &self.states {
+            out.push_str(&format!(
+                "  state \"{}\" as {}\n",
+                escape_mermaid_label(&address.local_id),
+                mermaid_id(address)
+            ));
+
+            if state.is_initial {
+                out.push_str(&format!("  [*] --> {}\n", mermaid_id(address)));
+            }
+
+            if state.is_final {
+                out.push_str(&format!("  {} --> [*]\n", mermaid_id(address)));
+            }
+
+            for action in &state.entry_actions {
+                out.push_str(&format!(
+                    "  {}: entry / {}\n",
+                    mermaid_id(address),
+                    escape_mermaid_label(action)
+                ));
+            }
+
+            for action in &state.exit_actions {
+                out.push_str(&format!(
+                    "  {}: exit / {}\n",
+                    mermaid_id(address),
+                    escape_mermaid_label(action)
+                ));
+            }
+        }
+
+        for transition in &self.transitions {
+            let mut label = transition.event.clone();
+            if let Some(guard) = &transition.guard {
+                label.push_str(&format!(" [{}]", guard.expression));
+            }
+            if let Some(action) = transition.actions.first() {
+                label.push_str(&format!(" / {action}"));
+            }
+            if !transition.emitted_events.is_empty() {
+                label.push_str(" => ");
+                label.push_str(
+                    &transition
+                        .emitted_events
+                        .iter()
+                        .map(|event| event.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+            }
+
+            out.push_str(&format!(
+                "  {} --> {}: {}\n",
+                mermaid_id(&transition.source),
+                mermaid_id(&transition.target),
+                escape_mermaid_label(&label)
+            ));
+        }
+
+        out
+    }
+
     pub fn to_graph_snapshot(&self, current: &LogicalAddress) -> StateMachineGraphSnapshot {
         let nodes = self
             .states
@@ -309,6 +375,23 @@ impl StateMachineSpec {
             edges,
         }
     }
+}
+
+fn mermaid_id(address: &LogicalAddress) -> String {
+    let mut out = String::with_capacity(address.token().len() + 3);
+    out.push_str("s__");
+    for ch in address.token().chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    out
+}
+
+fn escape_mermaid_label(label: &str) -> String {
+    label.replace('"', "'").replace('\n', " ")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -500,5 +583,30 @@ mod tests {
         assert_eq!(snapshot.edges[0].event, "advance");
         assert_eq!(snapshot.edges[0].guard.as_deref(), Some("can_advance"));
         assert_eq!(snapshot.edges[0].emitted_events, vec!["machine.advanced"]);
+    }
+
+    #[test]
+    fn mermaid_state_diagram_is_deterministic() {
+        let root = LogicalAddress::new(["ooda"], "OodaPhase");
+        let idle = root.child("state", "Idle");
+        let observing = root.child("state", "Observing");
+        let mut machine = StateMachineSpec::new(root);
+        machine.add_state(StateNode::new(idle.clone()).initial());
+        machine.add_state(StateNode::new(observing.clone()));
+        machine.add_transition(
+            StateTransition::new(idle, "GoToObserving", observing)
+                .with_guard(SymbolicRule::new("guard", "observation_ready"))
+                .emits(StateMachineEvent::new("ooda.observing")),
+        );
+
+        let first = machine.render_mermaid_state_diagram();
+        let second = machine.render_mermaid_state_diagram();
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("stateDiagram-v2\n"));
+        assert!(first.contains("[*] --> s__ooda_state_Idle"));
+        assert!(first.contains(
+            "s__ooda_state_Idle --> s__ooda_state_Observing: GoToObserving [observation_ready] => ooda.observing"
+        ));
     }
 }
