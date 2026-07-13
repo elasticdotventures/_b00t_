@@ -6,7 +6,7 @@
 # Requires:
 #   OBSIDIAN_TOKEN — Obsidian Local REST API key (Settings → Local REST API)
 #   OBSIDIAN_MCP_KEY — Obsidian MCP Connector plugin API key (if using MCP transport)
-#   OBSIDIAN_HOST — default: 192.168.1.150 (Windows 11 host)
+#   OBSIDIAN_HOST — default: windows-host.lan
 #   OBSIDIAN_PORT — default: 27200
 #
 # 🤓 Token can be injected via URL: http://${OBSIDIAN_TOKEN}@${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/
@@ -20,7 +20,7 @@
 #   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/vault/
 #   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:${OBSIDIAN_PORT}/vault/<path>
 #
-# 🤓 LAN access: Windows host LappyX86.lan (192.168.1.150), MCP connector on :27200
+# 🤓 LAN access: Windows host with MCP connector on :27200. Set OBSIDIAN_HOST to reach it.
 
 [b00t]
 name = "obsidian-mcp"
@@ -52,7 +52,7 @@ requires = ["OBSIDIAN_MCP_KEY"]
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "sh"
-args = ["-c", 'curl -s -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" "http://${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-27200}/vault/${1}" -- "$@"', "_"]
+args = ["-c", 'curl -s -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/${1}" -- "$@"', "_"]
 requires = ["OBSIDIAN_TOKEN"]
 
 # ── Grok knowledge skill — index vault into grok KB ──
@@ -63,7 +63,7 @@ auto_digest = false
 
 [b00t.grok.source.rest]
 method = "GET"
-url = "http://${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-27200}/vault/"
+url = "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/"
 headers = { Authorization = "Bearer ${OBSIDIAN_TOKEN}" }
 requires = ["OBSIDIAN_TOKEN"]
 
@@ -85,15 +85,15 @@ url = "https://www.npmjs.com/package/mcp-remote"
 
 [[b00t.usage]]
 description = "List vault files via REST API"
-command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-27200}/vault/"
+command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/"
 
 [[b00t.usage]]
 description = "Read a vault file"
-command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-27200}/vault/<path>"
+command = "curl -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/<path>"
 
 [[b00t.usage]]
 description = "Index vault into grok knowledge base"
-command = "b00t grok digest -t obsidian-vault \"$(curl -s -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-27200}/vault/)\""
+command = "b00t grok digest -t obsidian-vault \"$(curl -s -H 'Authorization: Bearer $OBSIDIAN_TOKEN' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-27200}/vault/)\""
 
 [[b00t.usage]]
 description = "Query vault via grok"
@@ -109,7 +109,7 @@ command = "OBSIDIAN_TOKEN=your_token OBSIDIAN_MCP_KEY=your_key podman run -i --r
 
 [[b00t.usage]]
 description = "SSH tunnel from Linux to Windows host (if binding is 127.0.0.1)"
-command = "ssh LappyX86.lan -L 27200:localhost:27200"
+command = "ssh windows-host.lan -L 27200:localhost:27200"
 
 [[b00t.usage]]
 description = "Windows firewall rule (run as Admin on Windows)"
