@@ -207,13 +207,11 @@ pre-release-check:
 
     # 2. Verify --agent alias works for whoami
     echo "   [2/5] --agent alias resolution..."
-    cargo run -p b00t-cli --quiet -- whoami --agent worker --json 2>&1 | grep -q '"role"' || { echo "❌ --agent alias failed"; exit 1; }
-    echo "   ✅"
+    cargo run --bin b00t-cli --quiet -- whoami --agent worker --json 2>/dev/null | grep -q '"role"' && echo "   ✅" || { echo "❌ --agent alias failed"; exit 1; }
 
     # 3. Verify --agent alias works for blessing
     echo "   [3/5] blessing --agent alias..."
-    cargo run -p b00t-cli --quiet -- blessing --manifest --agent worker 2>&1 | grep -q "manifest" || { echo "❌ blessing --agent alias failed"; exit 1; }
-    echo "   ✅"
+    cargo run --bin b00t-cli --quiet -- blessing --manifest --agent worker >/dev/null 2>&1 && echo "   ✅" || { echo "❌ blessing --agent alias failed"; exit 1; }
 
     # 4. Workspace version consistency (all path deps match workspace)
     echo "   [4/5] workspace version consistency..."
