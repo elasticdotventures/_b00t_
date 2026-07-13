@@ -26,23 +26,22 @@
 [b00t]
 name = "obsidian-mcp"
 type = "mcp"
-hint = "MCP server bridging to Obsidian vault — 8 tools via Semantic Notes Vault MCP plugin (recommended) or MCP connector bridge"
+hint = "MCP server bridging to Obsidian vault — 8 tools via Semantic Notes Vault MCP plugin. Use via mcp-cli (avelino/mcp) or mcp-remote."
+depends_on = ["mcp-cli.cli"]
 
 [b00t.learn]
 topic = "obsidian-mcp-connector"
 auto_digest = false
 
-# ── Transport A: Semantic Notes Vault MCP plugin (recommended) ──
-# Runs inside Obsidian, no container needed. HTTPS on port 3443.
-# 8 tools: vault, edit, view, graph, workflow, dataview, bases, system
-# npx mcp-remote handles Streamable HTTP + session management correctly.
+# ── Transport A: avelino/mcp CLI (recommended) ──
+# Single Rust binary. Handles auth, sessions, proxy mode.
+# Usage: mcp obsidian vault '{"action":"search","query":"iroh"}'
+# Install: cargo install --git https://github.com/avelino/mcp.git
 [[b00t.mcp.stdio]]
 transport = "stdio"
-command = "npx"
-args = ["-y", "mcp-remote", "https://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3443}/mcp",
-        "--header", "Authorization: Bearer ${OBSIDIAN_MCP_KEY}"]
-env = { OBSIDIAN_MCP_KEY = "${OBSIDIAN_MCP_KEY}", OBSIDIAN_HOST = "${OBSIDIAN_HOST:-windows-host.lan}", OBSIDIAN_PORT = "${OBSIDIAN_PORT:-3443}" }
-requires = ["OBSIDIAN_MCP_KEY"]
+command = "mcp"
+args = ["serve", "--http", "127.0.0.1:3100"]
+requires = ["mcp-cli.cli"]
 
 # ── Transport B: obsidian-mcp-connector (container/npx bridge) ──
 # Requires Obsidian MCP Connector plugin + optionally the bridge container.
@@ -103,6 +102,18 @@ url = "https://www.npmjs.com/package/mcp-remote"
 [[b00t.references]]
 name = "Smart Connections — local embedding model for semantic search"
 url = "https://github.com/brianpetro/obsidian-smart-connections"
+
+[[b00t.usage]]
+description = "Call a vault tool via mcp-cli"
+command = "mcp obsidian vault '{\"action\":\"search\",\"query\":\"<query>\"}'"
+
+[[b00t.usage]]
+description = "List Obsidian vault tools via mcp-cli"
+command = "mcp obsidian --list"
+
+[[b00t.usage]]
+description = "Start mcp proxy for all configured servers"
+command = "mcp serve"
 
 [[b00t.usage]]
 description = "Set up token in ~/.b00t/.env (one-time setup)"

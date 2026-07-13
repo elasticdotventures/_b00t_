@@ -1,0 +1,47 @@
+[b00t]
+name = "mcp-cli"
+type = "cli"
+hint = "avelino/mcp — CLI that turns MCP servers into terminal commands. Single Rust binary, proxy mode, auth handling."
+
+[b00t.learn]
+topic = "mcp-cli"
+auto_digest = false
+
+[b00t.desires]
+version = "0.5.2"
+
+[[b00t.install]]
+command = "cargo install --git https://github.com/avelino/mcp.git"
+requires = ["cargo"]
+
+[[b00t.detect]]
+command = "mcp"
+args = ["--help"]
+
+[[b00t.references]]
+name = "GitHub: avelino/mcp"
+url = "https://github.com/avelino/mcp"
+
+[[b00t.references]]
+name = "Documentation"
+url = "https://mcp.avelino.run"
+
+[[b00t.usage]]
+description = "List configured servers"
+command = "mcp --list"
+
+[[b00t.usage]]
+description = "Add an HTTP MCP server"
+command = "mcp add --url <url> <name>"
+
+[[b00t.usage]]
+description = "Call a tool on a server"
+command = "mcp <server> <tool> '<json-args>'"
+
+[[b00t.usage]]
+description = "Start proxy mode (all servers as one MCP endpoint)"
+command = "mcp serve"
+
+[[b00t.usage]]
+description = "Search MCP registry for servers"
+command = "mcp search <query>"
