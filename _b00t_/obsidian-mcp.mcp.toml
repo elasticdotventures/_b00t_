@@ -34,14 +34,13 @@ topic = "obsidian-mcp-connector"
 auto_digest = false
 
 # ── Transport A: avelino/mcp CLI (recommended) ──
-# Single Rust binary. Handles auth, sessions, proxy mode.
-# Usage: mcp obsidian vault '{"action":"search","query":"iroh"}'
-# Install: cargo install --git https://github.com/avelino/mcp.git
+# Single Rust binary. Handles auth, proxy mode.
+# TLS: needs cert trust — set MCP_CA_CERT=_b00t_/certs/obsidian-mcp.crt
+# or use the socat wrapper below.
 [[b00t.mcp.stdio]]
 transport = "stdio"
-command = "mcp"
-args = ["serve", "--http", "127.0.0.1:3100"]
-requires = ["mcp-cli.cli"]
+command = "sh"
+args = ["-c", 'socat TCP-LISTEN:3101,reuseaddr OPENSSL-CONNECT:${OBSIDIAN_HOST:-192.168.1.150}:${OBSIDIAN_PORT:-3443},verify=0,commonname=${OBSIDIAN_HOST:-192.168.1.150} & sleep 1 && mcp serve --http 127.0.0.1:3100']
 
 # ── Transport B: obsidian-mcp-connector (container/npx bridge) ──
 # Requires Obsidian MCP Connector plugin + optionally the bridge container.
