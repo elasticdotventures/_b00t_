@@ -105,8 +105,8 @@ name = "Smart Connections — local embedding model for semantic search"
 url = "https://github.com/brianpetro/obsidian-smart-connections"
 
 [[b00t.usage]]
-description = "Set up token and test connection (one-time setup)"
-command = "read -s OBSIDIAN_MCP_KEY && export OBSIDIAN_MCP_KEY && echo 'export OBSIDIAN_MCP_KEY=\"$OBSIDIAN_MCP_KEY\"' >> ~/.dotfiles/.env && just obsidian-proxy"
+description = "Set up token in ~/.b00t/.env (one-time setup)"
+command = "read -s OBSIDIAN_MCP_KEY && echo \"OBSIDIAN_MCP_KEY=$OBSIDIAN_MCP_KEY\" >> ~/.b00t/.env && just obsidian-proxy"
 
 [[b00t.usage]]
 description = "Launch local proxy to Windows host Obsidian vault"
