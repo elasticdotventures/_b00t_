@@ -894,7 +894,16 @@ validate-mcp:
 			echo "✅ pi --mode rpc: supported"
 		else
 			echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
-		fi
+    fi
+
+# ── Obsidian MCP proxy ───────────────────────────────────────────────────
+# Launch local proxy to Windows host's Semantic Notes Vault MCP plugin.
+# Requires OBSIDIAN_MCP_KEY env var (set in .env or b00t install).
+# Connects via mcp-remote → https://${OBSIDIAN_HOST}:3443/mcp with Bearer auth.
+obsidian-proxy:
+    npx -y mcp-remote \
+      https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
+      --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
 	else
 		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
 	fi

@@ -4,18 +4,24 @@
 # Provides both MCP tool access (agent-facing) and REST API access (grok indexing).
 #
 # Two plugin backends:
-#   A. Semantic Notes Vault MCP (recommended) — runs INSIDE Obsidian, port 3001, 8 tools
+#   A. Semantic Notes Vault MCP (recommended) — runs INSIDE Obsidian, port 3443, 8 tools
 #   B. obsidian-mcp-connector (container/npx bridge) — port 27200, MCP transport only
 #
-# Requires:
-#   OBSIDIAN_MCP_KEY — API key from the plugin's settings page
-#   OBSIDIAN_HOST — default: windows-host.lan
-#   OBSIDIAN_PORT — default: 3001
+# Env vars (set via .env or b00t install):
+#   OBSIDIAN_MCP_KEY — required, API key from plugin settings
+#   OBSIDIAN_HOST    — default: windows-host.lan
+#   OBSIDIAN_PORT    — default: 3443
 #
-# 🤓 Token injected via header: Authorization: Bearer ${OBSIDIAN_MCP_KEY}
+# Quick start:
+#   b00t install obsidian-mcp        — prompts for token, tests connection
+#   just obsidian-proxy              — launch local proxy to Windows host
+#   b00t mcp install obsidian-mcp   — register with Claude Code / VSCode
 #
-# 🤓 REST API (for grok indexing, requires Obsidian Local REST API plugin on port 27123):
-#   curl -H "Authorization: Bearer ${OBSIDIAN_TOKEN}" http://${OBSIDIAN_HOST}:27123/vault/
+# 🤓 Proxy architecture:
+#   b00t-mcp runs mcp-remote locally, which connects to the Windows
+#   host's Obsidian MCP plugin via HTTPS. All MCP traffic is proxied
+#   through the local stdio→HTTP bridge. The token never leaves your
+#   machine — it's stored in your env/keyring.
 
 [b00t]
 name = "obsidian-mcp"
@@ -35,6 +41,7 @@ transport = "stdio"
 command = "npx"
 args = ["-y", "mcp-remote", "https://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3443}/mcp",
         "--header", "Authorization: Bearer ${OBSIDIAN_MCP_KEY}"]
+env = { OBSIDIAN_MCP_KEY = "${OBSIDIAN_MCP_KEY}", OBSIDIAN_HOST = "${OBSIDIAN_HOST:-windows-host.lan}", OBSIDIAN_PORT = "${OBSIDIAN_PORT:-3443}" }
 requires = ["OBSIDIAN_MCP_KEY"]
 
 # ── Transport B: obsidian-mcp-connector (container/npx bridge) ──
@@ -96,6 +103,14 @@ url = "https://www.npmjs.com/package/mcp-remote"
 [[b00t.references]]
 name = "Smart Connections — local embedding model for semantic search"
 url = "https://github.com/brianpetro/obsidian-smart-connections"
+
+[[b00t.usage]]
+description = "Set up token and test connection (one-time setup)"
+command = "read -s OBSIDIAN_MCP_KEY && export OBSIDIAN_MCP_KEY && echo 'export OBSIDIAN_MCP_KEY=\"$OBSIDIAN_MCP_KEY\"' >> ~/.dotfiles/.env && just obsidian-proxy"
+
+[[b00t.usage]]
+description = "Launch local proxy to Windows host Obsidian vault"
+command = "just obsidian-proxy"
 
 [[b00t.usage]]
 description = "Install Semantic Notes Vault MCP via claude mcp add"
