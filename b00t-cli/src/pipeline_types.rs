@@ -180,6 +180,7 @@ pub struct StageSpec {
     pub env: Option<HashMap<String, String>>,
     pub checkpoint_interval_seconds: Option<u64>,
     pub secret_refs: Option<Vec<SecretRef>>,
+    pub flow_control: Option<crate::pipeline_flowctl::StageFlowConfig>,
 }
 
 impl StageSpec {
@@ -213,7 +214,21 @@ impl StageSpec {
             env: None,
             checkpoint_interval_seconds: None,
             secret_refs: None,
+            flow_control: None,
         }
+    }
+
+    /// Attach a flow-control strategy to this stage.
+    ///
+    /// When set, the `PipelineExecutor` will apply back-pressure between
+    /// this stage's output and the next stage's input according to the
+    /// chosen strategy.
+    pub fn with_flow_control(mut self, strategy: crate::pipeline_flowctl::FlowStrategy) -> Self {
+        self.flow_control = Some(crate::pipeline_flowctl::StageFlowConfig::new(
+            &self.name,
+            strategy,
+        ));
+        self
     }
 }
 
@@ -417,6 +432,7 @@ pub fn auto_insert_conversions(stages: &mut Vec<StageSpec>) {
                     error_routes: vec![],
                     env: None,
                     checkpoint_interval_seconds: None,
+                    flow_control: None,
                 };
                 stages.insert(i + 1, conv_stage);
                 i += 2; // skip past the inserted conversion stage
@@ -1136,7 +1152,7 @@ mod tests {
                 },
                 input_ports: vec![],
                 output_ports: vec![StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None }],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None,
+                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
             },
             StageSpec {
                 name: "image-processor".into(),
@@ -1147,7 +1163,7 @@ mod tests {
                 },
                 input_ports: vec![StagePort { direction: PortDirection::Input, media_type: PortMediaType::Image, description: None }],
                 output_ports: vec![],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None,
+                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
             },
         ];
         auto_insert_conversions(&mut stages);
@@ -1174,7 +1190,7 @@ mod tests {
             output_ports: output_types.iter().map(|mt| StagePort {
                 direction: PortDirection::Output, media_type: mt.clone(), description: None,
             }).collect(),
-            error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None,
+            error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
         }
     }
 
@@ -1295,7 +1311,7 @@ mod tests {
                 },
                 input_ports: vec![],
                 output_ports: vec![StagePort { direction: PortDirection::Output, media_type: PortMediaType::Audio, description: None }],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None,
+                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
             },
             StageSpec {
                 name: "audio-processor".into(),
@@ -1306,7 +1322,7 @@ mod tests {
                 },
                 input_ports: vec![StagePort { direction: PortDirection::Input, media_type: PortMediaType::Audio, description: None }],
                 output_ports: vec![],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None,
+                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
             },
         ];
         auto_insert_conversions(&mut stages);

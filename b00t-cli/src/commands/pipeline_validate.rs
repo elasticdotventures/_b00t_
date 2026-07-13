@@ -426,6 +426,7 @@ mod tests {
             env: None,
             checkpoint_interval_seconds: None,
             secret_refs: None,
+            flow_control: None,
         }
     }
 

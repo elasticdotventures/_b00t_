@@ -1592,6 +1592,7 @@ dependencies = [
  "apalis",
  "apalis-sqlite",
  "assert_cmd",
+ "async-nats",
  "async-trait",
  "atty",
  "axum 0.7.9",

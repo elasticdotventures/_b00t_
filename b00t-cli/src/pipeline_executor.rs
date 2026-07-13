@@ -10,12 +10,18 @@
 //      StageStatus        — Pending / Running / Completed / Failed / Skipped
 //      NatsClient         — trait for NATS publish/subscribe (mockable)
 
+use crate::pipeline_cache::TimeoutPredictor;
 use crate::pipeline_checkpoint::{compute_dag_hash, CheckpointStore, PipelineCheckpoint};
+use crate::pipeline_flowctl::{FlowControl, FlowGate, FlowStrategy, StageFlowConfig};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
-use crate::pipeline_types::{PipelineDag, PipelineError, StageSpec};
+use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
+use crate::pipeline_types::{PipelineDag, PipelineError, StagePort, StageSpec};
 use anyhow::Result;
+use chrono::Utc;
+use std::sync::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 // ── NatsClient trait ─────────────────────────────────────────────────────────────
 
@@ -128,7 +134,10 @@ pub struct PipelineExecutor {
     dag: PipelineDag,
     log_store: Arc<dyn LogStore>,
     nats_client: Option<Arc<dyn NatsClient>>,
+    nats_router: Mutex<Option<NatsStageRouter>>,
     checkpoint_store: Option<Arc<dyn CheckpointStore>>,
+    flow_gates: HashMap<String, FlowGate>,
+    timeout_predictor: Option<Arc<Mutex<TimeoutPredictor>>>,
 }
 
 impl PipelineExecutor {
@@ -138,7 +147,10 @@ impl PipelineExecutor {
             dag,
             log_store: Arc::new(crate::pipeline_logs::VecLogStore::new()),
             nats_client: None,
+            nats_router: Mutex::new(None),
+            flow_gates: HashMap::new(),
             checkpoint_store: None,
+            timeout_predictor: None,
         }
     }
 
@@ -154,6 +166,16 @@ impl PipelineExecutor {
         self
     }
 
+    /// Attach a pre-configured `NatsStageRouter` for subject-based routing.
+    ///
+    /// When set, the executor uses the router's subject naming convention
+    /// (`pipeline.{run_id}.{stage}.{direction}.{media_type}`) instead of the
+    /// simple `pipeline.{run_id}.{stage}.output` format.
+    pub fn with_nats_router(self, router: NatsStageRouter) -> Self {
+        *self.nats_router.lock().expect("nats_router lock") = Some(router);
+        self
+    }
+
     /// Attach a checkpoint store for restartable pipeline execution.
     ///
     /// When set, the executor will save a checkpoint after each completed
@@ -163,6 +185,42 @@ impl PipelineExecutor {
     pub fn with_checkpoint_store(mut self, store: Arc<dyn CheckpointStore>) -> Self {
         self.checkpoint_store = Some(store);
         self
+    }
+
+    /// Attach flow-control gates between stages.
+    ///
+    /// Builds a `FlowGate` for each stage in the DAG that has a `flow_control`
+    /// config, using the configured strategy (or auto-detected from the stage
+    /// profile if the strategy is `FlowStrategy::Unbounded`).
+    pub fn with_flow_control(mut self) -> Self {
+        for stage in &self.dag.stages {
+            let config = stage.flow_control.clone().unwrap_or_else(|| {
+                // Auto-detect strategy from stage profile
+                StageFlowConfig::new(
+                    &stage.name,
+                    crate::pipeline_flowctl::auto_strategy(stage),
+                )
+            });
+            let fc = FlowControl::new(config.strategy.clone(), &stage.name);
+            let gate = FlowGate::new(fc);
+            self.flow_gates.insert(stage.name.clone(), gate);
+        }
+        self
+    }
+
+    /// Attach a timeout predictor for adaptive timeout prediction.
+    ///
+    /// When set, `execute_stage` will adjust per-stage timeouts based on
+    /// historical timing data before each execution, and record the actual
+    /// stage timing after completion.
+    pub fn with_timeout_predictor(mut self, predictor: Arc<Mutex<TimeoutPredictor>>) -> Self {
+        self.timeout_predictor = Some(predictor);
+        self
+    }
+
+    /// Access the pipeline DAG (used by `CachedExecutor` and other wrappers).
+    pub fn dag(&self) -> &PipelineDag {
+        &self.dag
     }
 
     /// Execute the full pipeline DAG.
@@ -316,10 +374,11 @@ impl PipelineExecutor {
                 }
             };
 
-            let input = if self.nats_client.is_some() && idx > 0 {
-                // NATS mode: subscribe to the previous stage's output subject.
+            // ── Subscribe to stage input ──────────────────────────────────
+            let use_nats = self.nats_client.is_some() || self.nats_router.lock().unwrap().is_some();
+            let input = if use_nats && idx > 0 {
                 let prev_stage = &order[idx - 1];
-                let subject = format!("pipeline.{run_id}.{prev_stage}.output");
+                let subject = self.subject_for_output(run_id, prev_stage);
                 self.log_store.store(PipelineLogEntry::new(
                     run_id,
                     stage_name,
@@ -356,21 +415,48 @@ impl PipelineExecutor {
                 last_output.take()
             };
 
+            // ── Flow control: record data accepted (consumer side) ─────────
+            if idx > 0 {
+                let prev_stage = &order[idx - 1];
+                if let Some(gate) = self.flow_gates.get(prev_stage) {
+                    if let Some(ref data) = input {
+                        let mut ctrl = gate.controller().lock().unwrap();
+                        ctrl.record_accept(data.len());
+                    }
+                }
+            }
+
             let result = self
                 .execute_stage(&stage_spec, input, run_id)
                 .await;
 
-            // If executing in NATS mode and the stage produced output, publish it.
-            if let Some(ref nc) = self.nats_client {
-                if let Some(ref output) = result.output {
-                    let subject = format!("pipeline.{run_id}.{stage_name}.output");
-                    if let Err(e) = nc.publish(&subject, output.clone()).await {
-                        self.log_store.store(PipelineLogEntry::new(
-                            run_id,
-                            stage_name,
-                            LogLevel::Error,
-                            format!("failed to publish to NATS '{subject}': {e}"),
-                        ));
+            // ── Publish stage output to NATS ──────────────────────────────
+            let output_subject = self.subject_for_output(run_id, stage_name);
+            {
+                let router_guard = self.nats_router.lock().expect("nats_router lock");
+                if let Some(ref router) = *router_guard {
+                    if let Some(ref output) = result.output {
+                        let port = self.default_output_port();
+                        if let Err(e) = router.route_output(stage_name, "", &port, output) {
+                            self.log_store.store(PipelineLogEntry::new(
+                                run_id,
+                                stage_name,
+                                LogLevel::Error,
+                                format!("failed to route output via NATS '{output_subject}': {e}"),
+                            ));
+                        }
+                    }
+                    // Router handles the publish — skip the nats_client fallback.
+                } else if let Some(ref nc) = self.nats_client {
+                    if let Some(ref output) = result.output {
+                        if let Err(e) = nc.publish(&output_subject, output.clone()).await {
+                            self.log_store.store(PipelineLogEntry::new(
+                                run_id,
+                                stage_name,
+                                LogLevel::Error,
+                                format!("failed to publish to NATS '{output_subject}': {e}"),
+                            ));
+                        }
                     }
                 }
             }
@@ -378,6 +464,45 @@ impl PipelineExecutor {
             // In serial mode, capture output for chaining.
             if self.nats_client.is_none() {
                 last_output = result.output.clone();
+            }
+
+            // ── Flow control: apply back-pressure before proceeding ───────
+            {
+                let gate_key = stage_name.clone();
+                if let Some(ref output) = result.output {
+                    if let Some(gate) = self.flow_gates.get(&gate_key) {
+                        let mut iteration = 0u32;
+                        loop {
+                            let guard = gate.controller().lock().unwrap();
+                            if guard.can_emit() {
+                                let data_len = output.len();
+                                drop(guard);
+                                let mut ctrl = gate.controller().lock().unwrap();
+                                ctrl.record_emit(data_len);
+                                break;
+                            }
+                            let backoff = guard.wait_backpressure();
+                            drop(guard);
+                            if backoff > Duration::ZERO {
+                                self.log_store.store(PipelineLogEntry::new(
+                                    run_id,
+                                    &gate_key,
+                                    LogLevel::Debug,
+                                    format!(
+                                        "flow control back-pressure for {}ms (iteration {})",
+                                        backoff.as_millis(),
+                                        iteration,
+                                    ),
+                                ));
+                                tokio::time::sleep(backoff).await;
+                                iteration += 1;
+                            } else {
+                                // No backoff means always ready — break to avoid busy-loop
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
             let is_failure = matches!(&result.status, StageStatus::Failed(_));
@@ -493,6 +618,39 @@ impl PipelineExecutor {
         // Determine the effective input: for the first stage, pass the input
         // through; for subsequent stages, use the chained input.
         let effective_input = input.unwrap_or_default();
+        let input_size = effective_input.len() as u64;
+
+        // ── Adaptive timeout ────────────────────────────────────────────
+        // Use the TimeoutPredictor to adjust the stage's timeout based on
+        // historical timing data for this stage and input size.
+        let adjusted_stage = if let Some(ref predictor) = self.timeout_predictor {
+            let mut pred = predictor.lock().expect("TimeoutPredictor lock");
+            if let Some(timeout_secs) = stage.profile.timeout_seconds {
+                let configured = Duration::from_secs(timeout_secs);
+                let effective = pred.should_extend_timeout(&stage_name, input_size, configured);
+                let effective_secs = effective.as_secs();
+                if effective_secs != timeout_secs {
+                    self.log_store.store(PipelineLogEntry::new(
+                        run_id,
+                        &stage_name,
+                        LogLevel::Info,
+                        format!(
+                            "timeout extended: {}s → {}s (predicted)",
+                            timeout_secs, effective_secs
+                        ),
+                    ));
+                    let mut adjusted = stage.clone();
+                    adjusted.profile.timeout_seconds = Some(effective_secs);
+                    adjusted
+                } else {
+                    stage.clone()
+                }
+            } else {
+                stage.clone()
+            }
+        } else {
+            stage.clone()
+        };
 
         // Attempt execution with retry logic.
         let mut last_error: Option<PipelineError> = None;
@@ -534,7 +692,7 @@ impl PipelineExecutor {
                 tokio::time::sleep(tokio::time::Duration::from_millis(backoff)).await;
             }
 
-            match self.run_stage_fn(stage, &effective_input).await {
+            match self.run_stage_fn(&adjusted_stage, &effective_input).await {
                 Ok(data) => {
                     // Stage succeeded.
                     output = Some(data);
@@ -606,6 +764,17 @@ impl PipelineExecutor {
         }
 
         let duration_ms = start.elapsed().as_millis() as u64;
+
+        // ── Record timing in predictor ─────────────────────────────────
+        if let Some(ref predictor) = self.timeout_predictor {
+            let mut pred = predictor.lock().expect("TimeoutPredictor lock");
+            pred.record(crate::pipeline_cache::StageTiming {
+                stage_name: stage_name.clone(),
+                input_size_bytes: input_size,
+                duration_ms,
+                timestamp: Utc::now(),
+            });
+        }
 
         match last_error {
             None => {
@@ -700,6 +869,38 @@ impl PipelineExecutor {
             None => None,
         }
     }
+
+    /// Build the NATS output subject for a stage.
+    ///
+    /// Uses the `NatsStageRouter`'s subject naming convention when the
+    /// router is available, otherwise falls back to the simple format
+    /// `pipeline.{run_id}.{stage_name}.output`.
+    ///
+    /// Lazily initialises the router from `nats_client` on first call.
+    fn subject_for_output(&self, run_id: &str, stage_name: &str) -> String {
+        let mut guard = self.nats_router.lock().expect("nats_router lock");
+        if guard.is_none() {
+            if let Some(ref nc) = self.nats_client {
+                let adapter = Box::new(NatsClientAdapter::new(nc.clone()));
+                *guard = Some(NatsStageRouter::new(adapter, run_id));
+            }
+        }
+        if let Some(ref router) = *guard {
+            let port = self.default_output_port();
+            router.subject_for(stage_name, &port)
+        } else {
+            format!("pipeline.{}.{}.output", run_id, stage_name)
+        }
+    }
+
+    /// Return a default `StagePort` for output (Bytes / Output direction).
+    fn default_output_port(&self) -> StagePort {
+        StagePort {
+            direction: crate::pipeline_types::PortDirection::Output,
+            media_type: crate::pipeline_types::PortMediaType::Bytes,
+            description: None,
+        }
+    }
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────────
@@ -744,6 +945,7 @@ mod tests {
             env: None,
             checkpoint_interval_seconds: None,
             secret_refs: None,
+            flow_control: None,
         }
     }
 
