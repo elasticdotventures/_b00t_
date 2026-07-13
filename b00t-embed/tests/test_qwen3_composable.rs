@@ -5,8 +5,7 @@
 
 use candle_core::{DType, Device};
 use candle_nn::{VarBuilder, VarMap};
-use hf_hub::api::sync::ApiBuilder;
-use hf_hub::Repo;
+use hf_hub::HFClientSync;
 
 const MODEL_ID: &str = "Qwen/Qwen3-Embedding-0.6B";
 
@@ -14,10 +13,14 @@ const MODEL_ID: &str = "Qwen/Qwen3-Embedding-0.6B";
 /// This is the critical path — mismatched names cause load() to fail silently.
 #[test]
 fn test_tensor_name_alignment() {
-    let api = ApiBuilder::from_env().build()
-        .expect("HF API init (set HF_TOKEN if needed)");
-    let repo = api.repo(Repo::new(MODEL_ID.to_string(), hf_hub::RepoType::Model));
-    let weights_path = repo.get("model.safetensors")
+    let client = HFClientSync::new()
+        .expect("HF client init (set HF_TOKEN if needed)");
+    let (owner, name) = MODEL_ID.split_once('/').unwrap_or(("", MODEL_ID));
+    let repo = client.model(owner, name);
+    let weights_path = repo
+        .download_file()
+        .filename("model.safetensors")
+        .send()
         .expect("model.safetensors download");
 
     // Read safetensors header to get actual tensor names
@@ -43,7 +46,11 @@ fn test_tensor_name_alignment() {
     let _vb = VarBuilder::from_varmap(&varmap, DType::F32, &Device::Cpu);
 
     // Load Qwen3 model config to know shapes
-    let config_path = repo.get("config.json").expect("config.json download");
+    let config_path = repo
+        .download_file()
+        .filename("config.json")
+        .send()
+        .expect("config.json download");
     let config_raw = std::fs::read_to_string(config_path).expect("read config");
     let cfg: serde_json::Value = serde_json::from_str(&config_raw).expect("parse config");
     let hidden_size = cfg["hidden_size"].as_u64().unwrap() as usize;
