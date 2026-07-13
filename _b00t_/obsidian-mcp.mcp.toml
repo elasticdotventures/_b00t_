@@ -27,12 +27,13 @@ topic = "obsidian-mcp-connector"
 auto_digest = false
 
 # ── Transport A: Semantic Notes Vault MCP plugin (recommended) ──
-# Runs inside Obsidian, no container needed. Port 3001.
+# Runs inside Obsidian, no container needed. HTTPS on port 3443.
 # 8 tools: vault, edit, view, graph, workflow, dataview, bases, system
+# npx mcp-remote handles Streamable HTTP + session management correctly.
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "npx"
-args = ["-y", "mcp-remote", "http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp",
+args = ["-y", "mcp-remote", "https://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3443}/mcp",
         "--header", "Authorization: Bearer ${OBSIDIAN_MCP_KEY}"]
 requires = ["OBSIDIAN_MCP_KEY"]
 
@@ -98,8 +99,8 @@ url = "https://github.com/brianpetro/obsidian-smart-connections"
 
 [[b00t.usage]]
 description = "Install Semantic Notes Vault MCP via claude mcp add"
-command = "claude mcp add --transport http obsidian http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp --header \"Authorization: Bearer ${OBSIDIAN_MCP_KEY}\""
+command = "claude mcp add --transport http obsidian https://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3443}/mcp --header \"Authorization: Bearer ${OBSIDIAN_MCP_KEY}\""
 
 [[b00t.usage]]
-description = "List vault tools (verify MCP connection)"
-command = "curl -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer $OBSIDIAN_MCP_KEY' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}' http://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3001}/mcp"
+description = "List vault tools (Streamable HTTP — requires Accept header)"
+command = "curl -sk -X POST -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -H 'Authorization: Bearer $OBSIDIAN_MCP_KEY' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"b00t\",\"version\":\"0.10.0\"}}}' https://${OBSIDIAN_HOST:-windows-host.lan}:${OBSIDIAN_PORT:-3443}/mcp"
