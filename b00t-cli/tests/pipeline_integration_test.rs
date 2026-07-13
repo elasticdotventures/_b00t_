@@ -85,6 +85,7 @@ impl PipelineTestHarness {
             env: None,
             checkpoint_interval_seconds: None,
             secret_refs: None,
+            flow_control: None,
         });
     }
 
@@ -124,6 +125,7 @@ impl PipelineTestHarness {
             env: None,
             checkpoint_interval_seconds: None,
             secret_refs,
+            flow_control: None,
         });
     }
 
