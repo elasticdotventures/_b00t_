@@ -1,4 +1,5 @@
 #![allow(dead_code, async_fn_in_trait)]
+#![recursion_limit = "256"]
 
 // 🤓 write_event moved to b00t-c0re-lib::events — unified telemetry writer
 pub use b00t_c0re_lib::write_event;
@@ -122,6 +123,10 @@ pub mod pipeline_kerml;
 pub mod pipeline_scheduler;
 pub mod pipeline_dataframe;
 pub mod pipeline_nats;
+pub mod pipeline_auth;
+pub mod pipeline_k8s;
+pub mod pipeline_statemachine;
+pub mod pipeline_store_nats;
 pub mod stage_registry;
 pub mod transmogrifier;
 #[cfg(feature = "rpa")]
