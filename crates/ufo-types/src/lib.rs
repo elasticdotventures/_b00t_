@@ -13,8 +13,8 @@
 //!   deterministic, audit-ready results. Domain-generic.
 //! - **Capability types** (`capability`): `Task`, `Attempt`, `ActionRecord`,
 //!   `Episode`, `ReviewVerdict`, `Solution`, `TrainingCorpus`,
-//!   `EnergyBudget`, etc. — generic agent-capability/OODA types extracted
-//!   from AgentSea skillpacks. Domain-generic.
+//!   `EnergyBudget`, etc. — generic agent-capability/OODA types.
+//!   Domain-generic.
 //! - **DARED proposal types** (`dare`): `Decision`, `Alternative`, `Risk`,
 //!   `ExecutiveDecision`, `OodaStateMachine` — a generic OODA state-change
 //!   proposal framework codified as Rust generics. Domain-generic.
@@ -25,8 +25,7 @@
 //!   consumers working in that space (e.g. Tax-Lawyer). Not intended as a
 //!   generic building block for unrelated domains.
 //!
-//! **Tax-Lawyer** (#510 EPIC) is this crate's first consumer, not its only
-//! intended one — any b00t-ecosystem project needing UFO-grounded domain
+//! Any b00t-ecosystem project needing UFO-grounded domain
 //! types and the `Satisfies<T>` pattern (e.g. `stereotype`, `satisfies`,
 //! `capability`, `dare`) can depend on it directly. Only `iso` carries
 //! genuinely finance/tax-domain-specific types.
