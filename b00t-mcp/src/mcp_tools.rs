@@ -17,7 +17,7 @@ pub struct McpListCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(McpListCommand, "mcp_list", ["mcp", "list"]);
+impl_mcp_tool!(McpListCommand, "b00t_mcp_list", ["mcp", "list"]);
 
 /// Add MCP server
 #[derive(Parser, Clone)]
@@ -53,7 +53,7 @@ pub struct CliDetectCommand {
     pub command: String,
 }
 
-impl_mcp_tool!(CliDetectCommand, "cli_detect", ["cli", "detect"]);
+impl_mcp_tool!(CliDetectCommand, "b00t_cli_detect", ["cli", "detect"]);
 
 /// Show desired CLI version
 #[derive(Parser, Clone)]
@@ -173,7 +173,7 @@ pub struct WhoamiCommand {
     pub json: bool,
 }
 
-impl_mcp_tool!(WhoamiCommand, "whoami", ["whoami"]);
+impl_mcp_tool!(WhoamiCommand, "b00t_whoami", ["whoami"]);
 
 /// Show system status
 #[derive(Parser, Clone)]
@@ -188,7 +188,7 @@ pub struct StatusCommand {
     pub available: bool,
 }
 
-impl_mcp_tool!(StatusCommand, "status", ["status"]);
+impl_mcp_tool!(StatusCommand, "b00t_status", ["status"]);
 
 /// List AI providers
 #[derive(Parser, Clone)]
@@ -1167,7 +1167,7 @@ pub struct LearnCommand {
     pub topic: Option<String>,
 }
 
-impl_mcp_tool!(LearnCommand, "learn", ["learn"]);
+impl_mcp_tool!(LearnCommand, "b00t_learn", ["learn"]);
 
 /// Checkpoint command
 // 🤓 ENTANGLED: b00t-cli/src/main.rs Commands::Checkpoint
@@ -2419,7 +2419,10 @@ mod tests {
     #[test]
     fn test_tool_schema_generation() {
         let tool = McpListCommand::to_mcp_tool();
-        assert_eq!(tool.name.as_ref(), "mcp_list");
+        // #827 — was "mcp_list" (unprefixed), contradicting test_registry_creation's
+        // "b00t_mcp_list" expectation; the documented, external tool-name contract
+        // (b00t_quick_reference.md, b00t-mcp-cloudflare/README.md) uses the prefix.
+        assert_eq!(tool.name.as_ref(), "b00t_mcp_list");
 
         // Check schema has expected properties
         let schema = tool.input_schema.as_ref();
