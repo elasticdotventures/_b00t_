@@ -192,6 +192,21 @@ pub struct WhoamiParams {
     /// Enable verbose output
     #[serde(default)]
     pub verbose: bool,
+    /// Agent role (e.g. operator, executive, worker)
+    #[serde(default)]
+    pub role: Option<String>,
+    /// Show layered system dashboard (z-stack: hardware to agents)
+    #[serde(default)]
+    pub dashboard: bool,
+    /// Discover agent capabilities for the specified role
+    #[serde(default)]
+    pub capabilities: bool,
+    /// Load and resolve skill metadata
+    #[serde(default)]
+    pub with_skills: bool,
+    /// Output as JSON (structured)
+    #[serde(default)]
+    pub json: bool,
 }
 
 /// Parameters for IP address information

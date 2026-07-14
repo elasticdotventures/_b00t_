@@ -26,19 +26,26 @@ fn find_project_context() -> Option<ProjectContext> {
         for project_toml in candidates {
             if project_toml.exists() {
                 if let Ok(content) = std::fs::read_to_string(project_toml) {
-                    let name = content.lines()
+                    let name = content
+                        .lines()
                         .find(|l| l.starts_with("name = "))
                         .and_then(|l| l.split('"').nth(1))
                         .unwrap_or("unknown");
-                    let stack = content.lines()
+                    let stack = content
+                        .lines()
                         .find(|l| l.starts_with("primary_stack = "))
                         .and_then(|l| l.split('"').nth(1))
                         .unwrap_or("unknown");
-                    return Some(ProjectContext { name: name.to_string(), stack: stack.to_string() });
+                    return Some(ProjectContext {
+                        name: name.to_string(),
+                        stack: stack.to_string(),
+                    });
                 }
             }
         }
-        if current.join(".git").exists() { break; }
+        if current.join(".git").exists() {
+            break;
+        }
         current = current.parent()?;
     }
     None
@@ -355,7 +362,11 @@ The system will:
         alias = "whomai"
     )]
     Whoami {
-        #[clap(long, alias = "agent", help = "Override detected role (matches role datum). Use --agent as synonym.")]
+        #[clap(
+            long,
+            alias = "agent",
+            help = "Override detected role (matches role datum). Use --agent as synonym."
+        )]
         role: Option<String>,
         #[clap(
             long,
@@ -540,7 +551,11 @@ The system will:
     Capabilities {
         #[clap(long, help = "Filter by name/type substring (case-insensitive)")]
         filter: Option<String>,
-        #[clap(long, alias = "agent", help = "Filter capabilities by agent role (shorthand for --filter role=<name>)")]
+        #[clap(
+            long,
+            alias = "agent",
+            help = "Filter capabilities by agent role (shorthand for --filter role=<name>)"
+        )]
         role: Option<String>,
     },
     #[clap(about = "Query live capability ontology from datum TOMLs")]
@@ -1034,13 +1049,25 @@ fn show_status(
     only_available: bool,
 ) -> Result<()> {
     // Project context header
-    let expanded = b00t_cli::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    let expanded =
+        b00t_cli::get_expanded_path(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
     if let Some(project) = find_project_context() {
-        println!("📂 project: {}  |  stack: {}  |  path: {}",
-            project.name, project.stack, expanded.display());
+        println!(
+            "📂 project: {}  |  stack: {}  |  path: {}",
+            project.name,
+            project.stack,
+            expanded.display()
+        );
         let overrides = b00t_cli::load_project_overrides();
         if !overrides.is_empty() {
-            println!("📌 overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+            println!(
+                "📌 overrides: {}",
+                overrides
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
         println!();
     }
@@ -1943,7 +1970,10 @@ async fn main() {
         Ok(cli) => cli,
         Err(e) => {
             // --help / --version: let clap print and exit 0
-            if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+            if matches!(
+                e.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) {
                 e.exit();
             }
             // Datum-driven dispatch: search the datum space for <name>
@@ -1965,27 +1995,40 @@ async fn main() {
                         let mut polyseme_choice: Option<String> = None;
                         for m in &matches {
                             if let b00t_cli::DatumDispatch::Polyseme { name, refs } = m {
-                                if let Some(choice) = b00t_cli::prompt_polyseme_selection(name, refs) {
+                                if let Some(choice) =
+                                    b00t_cli::prompt_polyseme_selection(name, refs)
+                                {
                                     polyseme_choice = Some(choice);
                                 }
                             }
                         }
                         if let Some(choice) = polyseme_choice {
                             // User selected a polyseme ref — dispatch the concrete name
-                            let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                            let resolved =
+                                b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
                             if let Some(dispatch) = resolved.into_iter().next() {
                                 match dispatch {
                                     b00t_cli::DatumDispatch::Runtime(cfg) => {
-                                        match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                        match b00t_cli::runtime_sandbox::spawn_sandboxed(
+                                            &cfg,
+                                            &passthrough,
+                                        ) {
                                             Ok(code) => std::process::exit(code),
-                                            Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                            Err(err) => {
+                                                eprintln!("[b00t] runtime launch failed: {err}");
+                                                std::process::exit(1);
+                                            }
                                         }
                                     }
                                     b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
                                         let mut cmd_args = args;
                                         cmd_args.extend(passthrough);
-                                        let status = std::process::Command::new(&command).args(&cmd_args).status();
-                                        std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                        let status = std::process::Command::new(&command)
+                                            .args(&cmd_args)
+                                            .status();
+                                        std::process::exit(
+                                            status.map_or(1, |s| s.code().unwrap_or(1)),
+                                        );
                                     }
                                     _ => {} // fall through to print options
                                 }
@@ -2044,21 +2087,38 @@ async fn main() {
                         }
                         Some(b00t_cli::DatumDispatch::Polyseme { name, refs }) => {
                             // Interactive selection (#580)
-                            if let Some(choice) = b00t_cli::prompt_polyseme_selection(&name, &refs) {
-                                let resolved = b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
+                            if let Some(choice) = b00t_cli::prompt_polyseme_selection(&name, &refs)
+                            {
+                                let resolved =
+                                    b00t_cli::resolve_all_datum_dispatches(&choice, &expanded);
                                 if let Some(dispatch) = resolved.into_iter().next() {
                                     match dispatch {
                                         b00t_cli::DatumDispatch::Runtime(cfg) => {
-                                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                                            match b00t_cli::runtime_sandbox::spawn_sandboxed(
+                                                &cfg,
+                                                &passthrough,
+                                            ) {
                                                 Ok(code) => std::process::exit(code),
-                                                Err(err) => { eprintln!("[b00t] runtime launch failed: {err}"); std::process::exit(1); }
+                                                Err(err) => {
+                                                    eprintln!(
+                                                        "[b00t] runtime launch failed: {err}"
+                                                    );
+                                                    std::process::exit(1);
+                                                }
                                             }
                                         }
-                                        b00t_cli::DatumDispatch::CliPassthrough { command, args } => {
+                                        b00t_cli::DatumDispatch::CliPassthrough {
+                                            command,
+                                            args,
+                                        } => {
                                             let mut cmd_args = args;
                                             cmd_args.extend(passthrough);
-                                            let status = std::process::Command::new(&command).args(&cmd_args).status();
-                                            std::process::exit(status.map_or(1, |s| s.code().unwrap_or(1)));
+                                            let status = std::process::Command::new(&command)
+                                                .args(&cmd_args)
+                                                .status();
+                                            std::process::exit(
+                                                status.map_or(1, |s| s.code().unwrap_or(1)),
+                                            );
                                         }
                                         _ => {}
                                     }
@@ -2240,7 +2300,14 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Whoami { role, with_skills, json, skills, dashboard, capabilities }) => {
+        Some(Commands::Whoami {
+            role,
+            with_skills,
+            json,
+            skills,
+            dashboard,
+            capabilities,
+        }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
                 match B00tContext::current() {
@@ -2274,6 +2341,10 @@ async fn main() {
                 std::process::exit(1);
             }
 
+            // --dashboard flag: show layered system dashboard
+            if *dashboard {
+                whoami::print_dashboard();
+            }
             // --capabilities flag: show agent capabilities for the specified --agent/--role
             if *capabilities {
                 let filter = role.as_deref().map(|r| format!("agent/{}", r));
@@ -2281,7 +2352,6 @@ async fn main() {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }
-                return;
             }
         }
         Some(Commands::K0mmand3r { slash, args }) => {
@@ -2360,7 +2430,10 @@ async fn main() {
             }
         }
         Some(Commands::Provider { provider_command }) => {
-            if let Err(e) = b00t_cli::commands::provider::handle_provider_command(provider_command.clone()).await {
+            if let Err(e) =
+                b00t_cli::commands::provider::handle_provider_command(provider_command.clone())
+                    .await
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2684,7 +2757,11 @@ async fn main() {
             let scope = if *global { "global" } else { "repo" };
             // `lfmf stats all|<tool>` — hit/salvage/miss report from telemetry JSONL.
             if tool == "stats" {
-                let filter = if lesson == "all" { None } else { Some(lesson.as_str()) };
+                let filter = if lesson == "all" {
+                    None
+                } else {
+                    Some(lesson.as_str())
+                };
                 if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_stats(filter) {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
@@ -2963,7 +3040,8 @@ async fn main() {
             }
         }
         Some(Commands::Runpod { runpod_command }) => {
-            if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await {
+            if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await
+            {
                 eprintln!("error: {e:?}");
                 std::process::exit(1);
             }
