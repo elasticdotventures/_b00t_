@@ -894,6 +894,9 @@ validate-mcp:
 			echo "✅ pi --mode rpc: supported"
 		else
 			echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
+		fi
+	else
+		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
 	fi
 
 # ── Obsidian MCP proxy ───────────────────────────────────────────────────
@@ -902,11 +905,8 @@ validate-mcp:
 # Connects via mcp-remote → https://${OBSIDIAN_HOST}:3443/mcp with Bearer auth.
 obsidian-proxy:
     npx -y mcp-remote \
-	  https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
-	  --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
-	else
-		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
-	fi
+      https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
+      --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
 
 # Lint: NTFS invalid character scan — fail if paths contain reserved chars
 # Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md
