@@ -40,7 +40,7 @@
 
 [submodule "rmcp-rust-sdk"]
 	path = rmcp-rust-sdk
-	url = git@github.com:modelcontextprotocol/rust-sdk.git
+	url = https://github.com/modelcontextprotocol/rust-sdk.git
 
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
