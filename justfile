@@ -894,7 +894,10 @@ validate-mcp:
 			echo "✅ pi --mode rpc: supported"
 		else
 			echo "⚠️ pi --mode rpc: NOT found (datum gap in _b00t_/pi.agent.toml)"
-    fi
+		fi
+	else
+		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
+	fi
 
 # ── Obsidian MCP proxy ───────────────────────────────────────────────────
 # Launch local proxy to Windows host's Semantic Notes Vault MCP plugin.
@@ -904,9 +907,6 @@ obsidian-proxy:
     npx -y mcp-remote \
       https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
       --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
-	else
-		echo "⚠️ pi: not installed; skipping --mode rpc smoke test"
-	fi
 
 # Lint: NTFS invalid character scan — fail if paths contain reserved chars
 # Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md

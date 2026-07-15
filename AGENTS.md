@@ -21,6 +21,12 @@ Yei = "You, everybody & I" — the hive collective. Individual agents are small;
 2. bash alias `b00t` or binary `b00t-cli`
 3. Remote: b00t.promptexecution.com
 
+**Execution ladder** (higher rung = higher value): `just <recipe>` (memoized, registered
+action space, self-documenting, contract-handler surface) > `b00t sh -- <cmd>` (audited
+one-off: guards + exec-log artifact, verification-eligible) > raw bash (invisible to the
+hive — last resort). Edit justfiles/datums via `b00t patch apply <file> -` (diff-before-write,
+serena-style anchored edits) — NEVER sed.
+
 Survey blessings → plan → `b00t learn` selectively → execute → checkpoint.
 
 ---
@@ -35,6 +41,11 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 **TDD-first**: write the failing test first. A task isn't done until tests pass. NEVER claim solved without testing.
 
 **Simon Willison patterns**: code is cheap / correctness is not; hoard working examples; diffs small + test evidence.
+
+**Trace-or-filler**: session transcripts are training corpus. A command that actually ran
+with an observable PASS/FAIL evidence line is a trace row worth fifty rows of narrative.
+Close every task by executing its declared verification handler (service contract, test,
+or just recipe) and paste the evidence line verbatim — prose without a command trains nothing.
 
 ---
 
@@ -58,6 +69,7 @@ Writing duplicate functionality is a sin. Search first. Fork-fix-forward when yo
 - store test datasets in JSON files, never embedded in test code
 - branch before changing: `git checkout -b task/<N>-<slug>`
 - use context7 MCP for library docs; rust-crate-docs MCP for Rust crates
+- end every task with an evidence line: run its `[[service_contract]]` handler (or test/recipe) and paste `PASS`/`FAIL` output verbatim
 
 ---
 
