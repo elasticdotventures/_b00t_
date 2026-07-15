@@ -5,6 +5,34 @@
 #    node, replacing the old runtimeClassName+NVIDIA_VISIBLE_DEVICES bypass (which
 #    gave k8s zero visibility into VRAM usage and allowed silent double-booking).
 #    17.7GB VRAM + ~6GB KV cache headroom at 64k context on RTX 3090 (24GB).
+#
+# ⚠️ KNOWN BROKEN on this host (2026-07-15): `podman kube play` against this
+#    file fails to start the container — `crun: error executing hook
+#    /usr/bin/nvidia-container-toolkit (exit code: 1)`. Traced to
+#    /usr/share/containers/oci/hooks.d/oci-nvidia-hook.json, which matches
+#    unconditionally ("when": {"always": true}) for every container on this
+#    host and fires regardless of NVIDIA_VISIBLE_DEVICES or a
+#    nvidia-container-runtime `io.podman.annotations.run` override — none of
+#    those made kube-play succeed. This manifest keeps the real k8s
+#    nvidia.com/gpu accounting contract intact; use the workaround below only
+#    for local rootless Podman. Root cause is very likely
+#    `no-cgroups` (commented out, defaulting to false) in
+#    /etc/nvidia-container-runtime/config.toml — a well-documented
+#    requirement for rootless podman + nvidia-container-toolkit, needs root
+#    to fix, not done here. CONFIRMED WORKING WORKAROUND: plain `podman run
+#    --device nvidia.com/gpu=all` (pure CDI, resolved directly by podman —
+#    doesn't go through the hooks.d prestart hook at all):
+#      podman run -d --name ch0nky --device nvidia.com/gpu=all -p 8001:8001 \
+#        -v /home/brianh/.cache/huggingface/hub:/hf:ro --restart unless-stopped \
+#        ghcr.io/ggml-org/llama.cpp:server-cuda \
+#        --model /hf/models--unsloth--Qwen3.6-35B-A3B-GGUF/snapshots/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf \
+#        --host 0.0.0.0 --port 8001 -ngl 999 -fa on -c 65536 -n 4096 --jinja \
+#        --reasoning-format deepseek --reasoning-budget 4096 --temp 0.6 --top-p 0.95 \
+#        --top-k 20 --min-p 0.00 --presence-penalty 0.0 --alias ch0nky --api-key local-b00t
+#    Then: podman update --health-cmd "curl -f http://localhost:8001/health" ch0nky
+#    (the image's baked-in default HEALTHCHECK checks port 8080, not 8001 —
+#    override it or `podman ps` reports "unhealthy" despite the server working).
+#    Revisit `podman kube play` here once no-cgroups is fixed with root access.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +56,6 @@ spec:
         b00t.tier: ch0nky
     spec:
       priorityClassName: b00t-gpu-primary
-      runtimeClassName: nvidia
       tolerations:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
@@ -73,6 +100,15 @@ spec:
           ports:
             - containerPort: 8001
               name: http
+          env:
+            # Harmless to keep even though `podman kube play` doesn't work
+            # on this host regardless (see the top-of-file note) — these
+            # didn't fix the hooks.d issue alone, but are what a real k8s
+            # nvidia-device-plugin node would set, and cost nothing to leave.
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "0"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: compute,utility
           resources:
             requests:
               memory: "6Gi"

@@ -445,6 +445,7 @@ hint = "containers"
             uninstall: None, hook_uninstall: None, unlocks: None,
             type_tags: None, maintenance: None, required_for_core: None,
             runtime: None, polyseme: None, trigger_words: None, compose: None,
+            requires_competency: None,
         }
     }
 
