@@ -336,9 +336,12 @@ mod tests {
         let state = sm.transition(PipelineEvent::StageComplete(2)).unwrap();
         assert_eq!(state, PipelineState::Completed);
 
-        // History must have 7 entries: Validate, Schedule, Execute,
-        // StageComplete(0), StageComplete(1), StageComplete(2)
-        assert_eq!(sm.history().len(), 7);
+        // History has 6 entries, one per transition() call: Validate,
+        // Schedule, Execute, StageComplete(0), StageComplete(1),
+        // StageComplete(2) — confirmed one-entry-per-call by the sibling
+        // history_tracks_all_transitions test (#822 — this used to assert
+        // 7, off by one from its own 6-item breakdown above).
+        assert_eq!(sm.history().len(), 6);
     }
 
     // ── Pause / Resume cycle ────────────────────────────────────────────

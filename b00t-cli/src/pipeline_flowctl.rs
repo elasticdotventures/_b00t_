@@ -95,7 +95,15 @@ impl FlowControl {
                 if *max_bytes_per_sec == 0 {
                     return false;
                 }
-                self.current_bytes_sec < *max_bytes_per_sec as f64
+                // Compare the raw bytes accumulated in the current (<=1s)
+                // window directly against the limit, not an elapsed-based
+                // rate (bytes / elapsed_seconds) — that extrapolation is
+                // unstable right after construction or a window reset,
+                // when elapsed is microseconds: dividing by a near-zero
+                // duration turns any nonzero byte count into an apparent
+                // rate of hundreds of thousands of bytes/sec, blocking
+                // traffic that's actually well under the limit (#819).
+                self.throttle_window_bytes < *max_bytes_per_sec
             }
             FlowStrategy::Windowed { max_in_flight } => self.in_flight < *max_in_flight,
         }
@@ -339,6 +347,13 @@ mod tests {
         assert!(fc.can_accept(), "buffer has data");
         fc.record_accept(10);
         assert!(fc.can_emit(), "after accept, buffer has room again");
+        assert!(fc.can_accept(), "2/3 still buffered after accepting 1 of 3");
+
+        // Drain the rest to actually reach the empty state (#820 — this
+        // used to assert emptiness after accepting only 1 of 3, which
+        // doesn't match the buffer's real state).
+        fc.record_accept(10);
+        fc.record_accept(10);
         assert!(!fc.can_accept(), "buffer is now empty");
     }
 
