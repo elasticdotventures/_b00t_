@@ -212,15 +212,28 @@ fn sample_stages_for(pipeline_id: &str) -> Vec<CapsuleProfile> {
     }
 }
 
+fn is_known_pipeline_id(pipeline_id: &str) -> bool {
+    matches!(
+        pipeline_id,
+        "video-pipeline"
+            | "video-transcode"
+            | "inference-pipeline"
+            | "llm-infer"
+            | "audio-pipeline"
+            | "stt"
+    )
+}
+
 /// Forecast cost for a pipeline based on historical averages.
 ///
 /// Uses the same stage profiles as `sample_stages_for` but multiplies
 /// by an assumed number of runs per day for a forecast window.
 fn handle_forecast(pipeline_name: &str, config: &CostConfig) -> Result<()> {
-    let stages = sample_stages_for(pipeline_name);
-    if stages.is_empty() {
+    if !is_known_pipeline_id(pipeline_name) {
         anyhow::bail!("Unknown pipeline: {}", pipeline_name);
     }
+
+    let stages = sample_stages_for(pipeline_name);
 
     // Simulate: average run takes 5 minutes processing 200 MB
     let avg_duration = 300.0;

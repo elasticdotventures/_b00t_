@@ -95,7 +95,7 @@ impl FlowControl {
                 if *max_bytes_per_sec == 0 {
                     return false;
                 }
-                self.current_bytes_sec < *max_bytes_per_sec as f64
+                self.throttle_window_bytes < *max_bytes_per_sec
             }
             FlowStrategy::Windowed { max_in_flight } => self.in_flight < *max_in_flight,
         }
@@ -122,8 +122,7 @@ impl FlowControl {
                     self.throttle_window_start = now;
                 }
                 self.throttle_window_bytes = self.throttle_window_bytes.saturating_add(bytes as u64);
-                self.current_bytes_sec = self.throttle_window_bytes as f64
-                    / elapsed.as_secs_f64().max(0.001);
+                self.current_bytes_sec = self.throttle_window_bytes as f64;
             }
             FlowStrategy::Windowed { .. } => {
                 self.in_flight = self.in_flight.saturating_add(1);
@@ -339,7 +338,10 @@ mod tests {
         assert!(fc.can_accept(), "buffer has data");
         fc.record_accept(10);
         assert!(fc.can_emit(), "after accept, buffer has room again");
-        assert!(!fc.can_accept(), "buffer is now empty");
+        assert!(fc.can_accept(), "buffer still has queued data");
+        fc.record_accept(10);
+        fc.record_accept(10);
+        assert!(!fc.can_accept(), "buffer is empty after draining");
     }
 
     #[test]

@@ -404,22 +404,31 @@ pub fn generate_deployment(capsule: &CapsuleDefinition) -> String {
                 "imagePullPolicy": "IfNotPresent"
             });
 
-            // Build resource requests from the stage's profile resources.
-            let res = &stage.profile.resources;
+            // Build resource requests from the stricter stage/capsule requirements.
+            let stage_res = &stage.profile.resources;
+            let capsule_res = &capsule.spec.resources;
+            let requires_gpu = stage_res.requires_gpu || capsule_res.requires_gpu;
+            let min_ram_gb = stage_res.min_ram_gb.max(capsule_res.min_ram_gb);
+            let cpu_cores = match (stage_res.cpu_cores, capsule_res.cpu_cores) {
+                (Some(stage), Some(capsule)) => Some(stage.max(capsule)),
+                (Some(stage), None) => Some(stage),
+                (None, Some(capsule)) => Some(capsule),
+                (None, None) => None,
+            };
             let mut requests = serde_json::Map::new();
-            if res.min_ram_gb > 0.0 {
+            if min_ram_gb > 0.0 {
                 requests.insert(
                     "memory".into(),
-                    serde_json::json!(format!("{}Gi", res.min_ram_gb as u64)),
+                    serde_json::json!(format!("{}Gi", min_ram_gb as u64)),
                 );
             }
-            if let Some(cores) = res.cpu_cores {
+            if let Some(cores) = cpu_cores {
                 requests.insert("cpu".into(), serde_json::json!(format!("{}", cores)));
             }
             let mut resources = serde_json::Map::new();
             resources.insert("requests".into(), serde_json::Value::Object(requests));
 
-            if res.requires_gpu {
+            if requires_gpu {
                 let mut limits = serde_json::Map::new();
                 limits.insert("nvidia.com/gpu".into(), serde_json::json!(1));
                 resources.insert("limits".into(), serde_json::Value::Object(limits));

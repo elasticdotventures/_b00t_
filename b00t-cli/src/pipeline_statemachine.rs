@@ -336,9 +336,9 @@ mod tests {
         let state = sm.transition(PipelineEvent::StageComplete(2)).unwrap();
         assert_eq!(state, PipelineState::Completed);
 
-        // History must have 7 entries: Validate, Schedule, Execute,
+        // History must have 6 entries: Validate, Schedule, Execute,
         // StageComplete(0), StageComplete(1), StageComplete(2)
-        assert_eq!(sm.history().len(), 7);
+        assert_eq!(sm.history().len(), 6);
     }
 
     // ── Pause / Resume cycle ────────────────────────────────────────────

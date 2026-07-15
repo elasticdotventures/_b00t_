@@ -18,10 +18,33 @@
 
 use crate::pipeline_executor::NatsClient;
 use crate::pipeline_types::{PortDirection, PortMediaType, StagePort};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use futures::StreamExt;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{Arc, Mutex};
+
+fn block_on_tokio<F, T>(future: F) -> Result<T>
+where
+    F: Future<Output = Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let run = move || -> Result<T> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("failed to build tokio runtime")?
+            .block_on(future)
+    };
+
+    if tokio::runtime::Handle::try_current().is_ok() {
+        std::thread::spawn(run)
+            .join()
+            .map_err(|_| anyhow!("tokio bridge thread panicked"))?
+    } else {
+        run()
+    }
+}
 
 // ── NatsTransport trait ─────────────────────────────────────────────────────────
 
@@ -82,13 +105,12 @@ impl NatsTransport for AsyncNatsTransport {
         let client = self.client.clone();
         let subject = subject.to_string();
         let payload = payload.to_vec();
-        tokio::runtime::Handle::current()
-            .block_on(async move {
-                client
-                    .publish(subject, payload.into())
-                    .await
-                    .context("async_nats publish failed")
-            })?;
+        block_on_tokio(async move {
+            client
+                .publish(subject, payload.into())
+                .await
+                .context("async_nats publish failed")
+        })?;
         Ok(())
     }
 
@@ -96,13 +118,12 @@ impl NatsTransport for AsyncNatsTransport {
         let client = self.client.clone();
         let subject = subject.to_string();
 
-        let subscriber = tokio::runtime::Handle::current()
-            .block_on(async move {
-                client
-                    .subscribe(subject)
-                    .await
-                    .context("async_nats subscribe failed")
-            })?;
+        let subscriber = block_on_tokio(async move {
+            client
+                .subscribe(subject)
+                .await
+                .context("async_nats subscribe failed")
+        })?;
 
         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
         tokio::spawn(async move {
@@ -151,7 +172,7 @@ struct MockNatsSubscription {
 
 impl NatsSubscription for MockNatsSubscription {
     fn next(&mut self) -> Option<Vec<u8>> {
-        self.rx.recv().ok()
+        self.rx.try_recv().ok()
     }
 }
 
@@ -211,8 +232,7 @@ impl NatsTransport for NatsClientAdapter {
         let client = self.client.clone();
         let subject = subject.to_string();
         let payload = payload.to_vec();
-        tokio::runtime::Handle::current()
-            .block_on(async move { client.publish(&subject, payload).await })
+        block_on_tokio(async move { client.publish(&subject, payload).await })
             .context("NatsClient publish failed")?;
         Ok(())
     }
@@ -220,8 +240,7 @@ impl NatsTransport for NatsClientAdapter {
     fn subscribe(&self, subject: &str) -> Result<Box<dyn NatsSubscription>> {
         let client = self.client.clone();
         let subject = subject.to_string();
-        let data = tokio::runtime::Handle::current()
-            .block_on(async move { client.subscribe(&subject).await })
+        let data = block_on_tokio(async move { client.subscribe(&subject).await })
             .context("NatsClient subscribe failed")?;
         let buffer = data.into_iter().collect::<Vec<Vec<u8>>>();
         Ok(Box::new(NatsClientAdapterSubscription {
@@ -352,11 +371,11 @@ mod tests {
         let transport = MockNatsTransport::new();
         let subject = "pipeline.test-run.stage-a.output.video";
 
+        let mut sub = transport.subscribe(subject).expect("subscribe");
         transport
             .publish(subject, b"hello-nats")
             .expect("publish");
 
-        let mut sub = transport.subscribe(subject).expect("subscribe");
         let msg = sub.next().expect("should receive message");
         assert_eq!(msg, b"hello-nats");
     }
