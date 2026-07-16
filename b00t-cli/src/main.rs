@@ -105,7 +105,7 @@ use b00t_cli::commands::{
     JobCommands,
     provider::ProviderCommands,
     K8sCommands,
-    McpCommands, ModelCommands,
+    LifecycleCommands, McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
     runpod::RunpodCommands,
@@ -416,6 +416,11 @@ The system will:
     Soul {
         #[clap(subcommand)]
         soul_command: SoulCommands,
+    },
+    #[clap(about = "Typed lifecycle flashtable audits")]
+    Lifecycle {
+        #[clap(subcommand)]
+        lifecycle_command: LifecycleCommands,
     },
     #[clap(about = "Skill discovery and activation — progressive disclosure across skill dirs")]
     Skill {
@@ -2382,6 +2387,12 @@ async fn main() {
         }
         Some(Commands::Soul { soul_command }) => {
             if let Err(e) = b00t_cli::commands::soul::handle_soul_command(soul_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Lifecycle { lifecycle_command }) => {
+            if let Err(e) = b00t_cli::commands::lifecycle_cmd::handle_lifecycle_command(&lifecycle_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

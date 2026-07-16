@@ -10,44 +10,44 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 table-init:
     #!/usr/bin/env bash
     set -euo pipefail
+    B00T_CLI="${B00T_CLI:-b00t-cli}"
     cd "$HOME/.b00t"
-    b00t-cli soul table-show lifecycle >/dev/null 2>&1 || \
-      b00t-cli soul table-create lifecycle file:text label:text method:text reason:text ts:timestamp
+    "$B00T_CLI" soul table-show lifecycle >/dev/null 2>&1 || \
+      "$B00T_CLI" soul table-create lifecycle file:text label:text method:text reason:text ts:timestamp
 
 # refresh node.* soul keys from live observation — powers the whoami node preamble
 # (compose_node_summary anchors on node.board; see b00t-cli/src/memory_provider.rs)
 soul-node-refresh:
     #!/usr/bin/env bash
     set -euo pipefail
+    B00T_CLI="${B00T_CLI:-b00t-cli}"
     cd "$HOME/.b00t"
-    b00t-cli soul set node.board "$(hostname)"
-    b00t-cli soul set node.soc "$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)"
-    b00t-cli soul set node.arch "$(uname -m)"
-    b00t-cli soul set node.ram_gb "$(free -g | awk '/^Mem:/{print $2}')"
-    b00t-cli soul set node.gpu "$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1 || echo none)"
-    b00t-cli soul set node.os "$(. /etc/os-release && echo "$PRETTY_NAME")"
-    b00t-cli soul set node.serving "$(podman ps --noheading 2>/dev/null | awk '$NF!=""{print $NF}' | paste -sd' ' - || echo none)"
+    "$B00T_CLI" soul set node.board "$(hostname)"
+    "$B00T_CLI" soul set node.soc "$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)"
+    "$B00T_CLI" soul set node.arch "$(uname -m)"
+    "$B00T_CLI" soul set node.ram_gb "$(free -g | awk '/^Mem:/{print $2}')"
+    "$B00T_CLI" soul set node.gpu "$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1 || echo none)"
+    "$B00T_CLI" soul set node.os "$(. /etc/os-release && echo "$PRETTY_NAME")"
+    "$B00T_CLI" soul set node.serving "$(podman ps --noheading 2>/dev/null | awk '$NF!=""{print $NF}' | paste -sd' ' - || echo none)"
     echo "node soul refreshed — b00t whoami preamble now populated"
 
-# classify unlabeled datum files via ch0nky (thinking ON); restartable via cursor scan
+# classify unlabeled datum files via ch0nky (thinking ON); restartable via typed missing-file audit
 classify limit="0":
     #!/usr/bin/env bash
     set -euo pipefail
+    B00T_CLI="${B00T_CLI:-b00t-cli}"
     DATUMS="{{justfile_directory()}}"
     HIVE="$DATUMS/inference-qwen36-35b-a3b-llamacpp.hive.toml"
     EP=$(grep -m1 -oP 'endpoint\s*=\s*"\K[^"]+' "$HIVE")
     KEY=$(grep -m1 -oP 'api_key\s*=\s*"\K[^"]+' "$HIVE")
     cd "$HOME/.b00t"
-    donef=$(mktemp); trap 'rm -f "$donef"' EXIT
-    b00t-cli soul cursor-reset lifedone >/dev/null 2>&1 || b00t-cli soul cursor-create lifedone lifecycle >/dev/null
-    while row=$(b00t-cli soul cursor-next lifedone 2>/dev/null); do
-        grep -oP 'file = Text\("\K[^"]+' <<<"$row" || true
-    done > "$donef"
+    pendingf=$(mktemp); trap 'rm -f "$pendingf"' EXIT
+    "$B00T_CLI" lifecycle missing --datums "$DATUMS" > "$pendingf"
     n=0
-    for f in "$DATUMS"/*; do
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        f="$DATUMS/$name"
         [[ -f "$f" ]] || continue
-        name=$(basename "$f")
-        if grep -qxF "$name" "$donef"; then continue; fi
         label="" ; method="" ; reason=""
         case "$name" in
           *~|*.bak|*.orig|*.swp) label=archive ; method=rule ; reason="backup/editor artifact" ;;
@@ -65,39 +65,25 @@ classify limit="0":
             method=ch0nky
             case "$label" in active|partial|aspirational|deprecated|archive) : ;; *) label=unresolved ; reason="unparseable response" ;; esac
         fi
-        b00t-cli soul frame-insert lifecycle file="$name" label="$label" method="$method" reason="${reason:-}" ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/dev/null
+        "$B00T_CLI" soul frame-insert lifecycle file="$name" label="$label" method="$method" reason="${reason:-}" ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)" >/dev/null
         n=$((n+1))
         echo "[$n] $name -> $label"
         if [[ "{{limit}}" != "0" && "$n" -ge "{{limit}}" ]]; then break; fi
-    done
+    done < "$pendingf"
     echo "classified $n files this run"
 
-# deterministic gate — sm0l output contract: PASS/FAIL, no LLM
+# deterministic gate — Rust-owned typed DataFramerr audit
 gate:
     #!/usr/bin/env bash
     set -euo pipefail
-    DATUMS="{{justfile_directory()}}"
+    B00T_CLI="${B00T_CLI:-b00t-cli}"
     cd "$HOME/.b00t"
-    inv=$(find "$DATUMS" -maxdepth 1 -type f | wc -l)
-    b00t-cli soul cursor-reset lifegate >/dev/null 2>&1 || b00t-cli soul cursor-create lifegate lifecycle >/dev/null
-    total=0 ; unres=0
-    while row=$(b00t-cli soul cursor-next lifegate 2>/dev/null); do
-        total=$((total+1))
-        if grep -q 'label = Text("unresolved")' <<<"$row"; then unres=$((unres+1)); fi
-    done
-    if [[ "$total" -eq "$inv" ]]; then
-        echo "PASS: $((total-unres))/$inv labeled, $unres unresolved"
-    else
-        echo "FAIL: $total rows for $inv files"
-        exit 1
-    fi
+    "$B00T_CLI" lifecycle gate --datums "{{justfile_directory()}}"
 
 # label distribution — read side of the flashtable
 status:
     #!/usr/bin/env bash
     set -euo pipefail
+    B00T_CLI="${B00T_CLI:-b00t-cli}"
     cd "$HOME/.b00t"
-    b00t-cli soul cursor-reset lifestat >/dev/null 2>&1 || b00t-cli soul cursor-create lifestat lifecycle >/dev/null
-    while row=$(b00t-cli soul cursor-next lifestat 2>/dev/null); do
-        grep -oP 'label = Text\("\K[^"]+' <<<"$row" || true
-    done | sort | uniq -c | sort -rn
+    "$B00T_CLI" lifecycle status --datums "{{justfile_directory()}}"
