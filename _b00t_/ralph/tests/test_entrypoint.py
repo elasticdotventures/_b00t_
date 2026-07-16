@@ -25,9 +25,9 @@ def test_parse_args_valid_agent() -> None:
 def test_progress_file_created_on_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "prompt.md").write_text("# Test prompt\n")
-    (tmp_path / ".taskmaster" / "tasks").mkdir(parents=True)
-    (tmp_path / ".taskmaster" / "tasks" / "tasks.json").write_text(
-        '{"tasks":[{"id":"task-001","title":"t","description":"d","status":"pending","priority":1}],"metadata":{"project":"t","branchName":"b","taskMasterVersion":"1.0"}}'
+    (tmp_path / ".b00t").mkdir(parents=True)
+    (tmp_path / ".b00t" / "tasks.json").write_text(
+        '{"tasks":[{"id":"task-001","title":"t","description":"d","status":"pending","priority":1}]}'
     )
 
     def fake_run(_cmd: Sequence[str], stdin_path: Path | None = None) -> str:
@@ -106,13 +106,24 @@ def test_main_mcp_calls_run_with_http(monkeypatch: pytest.MonkeyPatch) -> None:
 # ── OODA loop tests ──────────────────────────────────────────────────────────
 
 def _make_tasks_dir(tmp_path: Path) -> None:
-    (tmp_path / ".taskmaster" / "tasks").mkdir(parents=True)
-    (tmp_path / ".taskmaster" / "tasks" / "tasks.json").write_text(
-        '{"tasks":[{"id":"t1","title":"t","description":"d","status":"pending","priority":1}],'
-        '"metadata":{"project":"test","branchName":"b","taskMasterVersion":"1.0"}}'
+    (tmp_path / ".b00t").mkdir(parents=True)
+    (tmp_path / ".b00t" / "tasks.json").write_text(
+        '{"tasks":[{"id":"t1","title":"t","description":"d","status":"pending","priority":1}]}'
     )
     (tmp_path / "CLAUDE.md").write_text("# mission\n")
     (tmp_path / "prompt.md").write_text("# mission\n")
+
+
+def test_project_root_honors_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    assert entrypoint._project_root() == tmp_path.resolve()
+
+
+def test_tasks_file_prefers_native_b00t_store(tmp_path: Path) -> None:
+    (tmp_path / ".b00t").mkdir()
+    native = tmp_path / ".b00t" / "tasks.json"
+    native.write_text('{"tasks":[]}')
+    assert entrypoint._tasks_file(tmp_path) == native
 
 
 def test_ooda_flag_parsed() -> None:
