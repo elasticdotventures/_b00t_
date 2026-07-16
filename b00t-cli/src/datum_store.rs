@@ -99,7 +99,7 @@ pub trait DatumStore: Send + Sync {
     }
 
     /// Phase 2 — Coherence: validate cross-datum references (Chalk coherence analogy).
-    /// Reports: missing depends_on targets, self-deps, empty dep strings, missing members.
+    /// Reports: missing graph references, self-deps, empty ref strings, missing members.
     /// Override in bulk-query backends (e.g. SQL JOIN) for efficiency.
     fn validate_references(&self) -> Vec<ReferenceError> {
         let key_set: HashSet<String> = self.iter().map(|d| d.key.as_ref().to_owned()).collect();
@@ -130,6 +130,70 @@ pub trait DatumStore: Send + Sync {
                     }
                 }
             }
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "skills",
+                d.datum.skills.as_deref(),
+                Some(".skill"),
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_agents",
+                d.datum.entangled_agents.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_cli",
+                d.datum.entangled_cli.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_mcp",
+                d.datum.entangled_mcp.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_ai_models",
+                d.datum.entangled_ai_models.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_apis",
+                d.datum.entangled_apis.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_docker",
+                d.datum.entangled_docker.as_deref(),
+                None,
+            );
+            validate_graph_references(
+                &mut errors,
+                &key_set,
+                key,
+                "entangled_k8s",
+                d.datum.entangled_k8s.as_deref(),
+                None,
+            );
         }
         errors
     }
@@ -144,10 +208,52 @@ pub trait DatumStore: Send + Sync {
                     !allowlist.contains(missing_key.as_str()),
                 ReferenceError::MissingMember { missing_member, .. } =>
                     !allowlist.contains(missing_member.as_str()),
+                ReferenceError::MissingReference { missing_key, .. } =>
+                    !allowlist.contains(missing_key.as_str()),
                 _ => true,
             })
             .collect()
     }
+}
+
+fn validate_graph_references(
+    errors: &mut Vec<ReferenceError>,
+    key_set: &HashSet<String>,
+    datum: &str,
+    field: &'static str,
+    references: Option<&[String]>,
+    fallback_suffix: Option<&'static str>,
+) {
+    let Some(references) = references else {
+        return;
+    };
+
+    for reference in references {
+        if reference.is_empty() {
+            errors.push(ReferenceError::EmptyReference { datum: datum.to_string(), field });
+        } else if !reference_resolves(key_set, reference, fallback_suffix) {
+            errors.push(ReferenceError::MissingReference {
+                datum: datum.to_string(),
+                field,
+                missing_key: reference.clone(),
+            });
+        }
+    }
+}
+
+fn reference_resolves(
+    key_set: &HashSet<String>,
+    reference: &str,
+    fallback_suffix: Option<&'static str>,
+) -> bool {
+    if key_set.contains(reference) {
+        return true;
+    }
+
+    fallback_suffix
+        .filter(|_| !reference.contains('.'))
+        .map(|suffix| key_set.contains(&format!("{reference}{suffix}")))
+        .unwrap_or(false)
 }
 
 // ── ReferenceError ────────────────────────────────────────────────────────────
@@ -163,6 +269,10 @@ pub enum ReferenceError {
     EmptyDependency { datum: String },
     /// A `members` key references a datum not in this store (stacks).
     MissingMember { stack: String, missing_member: String },
+    /// A graph edge field references a datum not in this store.
+    MissingReference { datum: String, field: &'static str, missing_key: String },
+    /// Empty string in a graph edge field.
+    EmptyReference { datum: String, field: &'static str },
 }
 
 impl fmt::Display for ReferenceError {
@@ -176,6 +286,10 @@ impl fmt::Display for ReferenceError {
                 write!(f, "'{datum}' has empty string in depends_on"),
             Self::MissingMember { stack, missing_member } =>
                 write!(f, "stack '{stack}' member '{missing_member}' is not in this store"),
+            Self::MissingReference { datum, field, missing_key } =>
+                write!(f, "'{datum}' {field} '{missing_key}' which is not in this store"),
+            Self::EmptyReference { datum, field } =>
+                write!(f, "'{datum}' has empty string in {field}"),
         }
     }
 }
@@ -499,9 +613,13 @@ mod tests {
     fn store_with_refs() -> HashMapStore {
         let mut s = HashMapStore::default();
         s.intern("git.cli", BootDatum { name: "git".to_string(), hint: "git".to_string(), ..Default::default() });
+        s.intern("kaizen.skill", BootDatum { name: "kaizen".to_string(), hint: "kaizen".to_string(), ..Default::default() });
+        s.intern("b00t-mcp.mcp", BootDatum { name: "b00t-mcp".to_string(), hint: "mcp".to_string(), ..Default::default() });
         s.intern("worker.role", BootDatum {
             name: "worker".to_string(), hint: "worker".to_string(),
             depends_on: Some(vec!["git.cli".to_string()]),
+            skills: Some(vec!["kaizen".to_string()]),
+            entangled_mcp: Some(vec!["b00t-mcp.mcp".to_string()]),
             ..Default::default()
         });
         s.intern("ml-stack.stack", BootDatum {
@@ -570,6 +688,48 @@ mod tests {
         assert!(errs.iter().any(|e| matches!(e, ReferenceError::MissingMember {
             stack, missing_member
         } if stack == "broken-stack.stack" && missing_member == "phantom.cli")));
+    }
+
+    #[test]
+    fn validate_references_missing_skill() {
+        let mut store = store_with_refs();
+        store.intern("missing-skill.agent", BootDatum {
+            name: "missing-skill".to_string(), hint: "agent".to_string(),
+            skills: Some(vec!["phantom".to_string()]),
+            ..Default::default()
+        });
+        let errs = store.validate_references();
+        assert!(errs.iter().any(|e| matches!(e, ReferenceError::MissingReference {
+            datum, field, missing_key
+        } if datum == "missing-skill.agent" && *field == "skills" && missing_key == "phantom")));
+    }
+
+    #[test]
+    fn validate_references_missing_entangled_ref() {
+        let mut store = store_with_refs();
+        store.intern("missing-entangled.agent", BootDatum {
+            name: "missing-entangled".to_string(), hint: "agent".to_string(),
+            entangled_mcp: Some(vec!["phantom.mcp".to_string()]),
+            ..Default::default()
+        });
+        let errs = store.validate_references();
+        assert!(errs.iter().any(|e| matches!(e, ReferenceError::MissingReference {
+            datum, field, missing_key
+        } if datum == "missing-entangled.agent" && *field == "entangled_mcp" && missing_key == "phantom.mcp")));
+    }
+
+    #[test]
+    fn validate_references_empty_skill() {
+        let mut store = store_with_refs();
+        store.intern("empty-skill.agent", BootDatum {
+            name: "empty-skill".to_string(), hint: "agent".to_string(),
+            skills: Some(vec!["".to_string()]),
+            ..Default::default()
+        });
+        let errs = store.validate_references();
+        assert!(errs.iter().any(|e| matches!(e, ReferenceError::EmptyReference {
+            datum, field
+        } if datum == "empty-skill.agent" && *field == "skills")));
     }
 
     #[test]

@@ -1,0 +1,42 @@
+name: Datum graph validator
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'b00t-cli/src/datum_store.rs'
+      - 'b00t-cli/src/commands/datum.rs'
+      - '_b00t_/**'
+      - 'justfile'
+      - '.github/workflows/datum-validate-graph.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'b00t-cli/src/datum_store.rs'
+      - 'b00t-cli/src/commands/datum.rs'
+      - '_b00t_/**'
+      - 'justfile'
+      - '.github/workflows/datum-validate-graph.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: validate graph references
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run datum graph validator tests
+        run: cargo test -p b00t-cli --lib validate_references -- --nocapture
