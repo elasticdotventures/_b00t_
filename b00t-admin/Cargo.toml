@@ -47,6 +47,11 @@ schemars = "1"
 futures = "0.3"
 tokio-stream = "0.1"
 
+[features]
+default = []
+# 🤓 mermaid-native: Use local Mermaid CLI for SVG rendering instead of API
+mermaid-native = []
+
 [lints]
 workspace = true
 

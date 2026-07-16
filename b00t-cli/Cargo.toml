@@ -143,6 +143,8 @@ dbus = ["b00t-ipc/dbus", "dep:zbus"]
 candle = ["candle-core", "candle-nn", "candle-transformers", "hf-hub", "tokenizers"]
 # 🤓 llamacpp-fallback: Enable llama.cpp CPU inference for systems without GPU
 llamacpp-fallback = ["llama_cpp_sys"]
+# 🤓 keyring: Enable system keyring integration for secret storage (placeholder)
+keyring = []
 
 [dev-dependencies]
 assert_cmd = "2.0"

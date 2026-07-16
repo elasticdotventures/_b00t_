@@ -10,7 +10,7 @@
 //      InMemoryCheckpointStore — HashMap-backed store for tests
 
 use crate::pipeline_executor::{
-    PipelineExecutor, PipelineRunReport, StageStatus,
+    PipelineExecutor, PipelineRunReport,
 };
 use crate::pipeline_types::PipelineDag;
 use anyhow::{Context, Result};

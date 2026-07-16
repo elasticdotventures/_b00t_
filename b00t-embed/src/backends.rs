@@ -24,7 +24,7 @@ impl EmbedAnythingBackend {
 
         let embedder = match &config.provider {
             EmbedProvider::HuggingFace { model_id, revision } => {
-                Embedder::from_pretrained_hf(model_id, revision.as_deref(), None, None, None)?
+                Embedder::from_pretrained_hf(model_id, revision.as_deref(), None, None)?
             }
             EmbedProvider::ONNX { model_id } => {
                 Embedder::from_pretrained_onnx("bert", None, None, Some(model_id), None, None)?
