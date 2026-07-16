@@ -25,6 +25,8 @@ __version__ = "0.1.0"
 
 
 def _project_root() -> Path:
+    if project_root := os.environ.get("PROJECT_ROOT"):
+        return Path(project_root).expanduser().resolve()
     # Prefer the git root of the current working directory so `ralph` can be used
     # as a tool against *any* repo, not just this package's source checkout.
     cwd = Path.cwd().resolve()
@@ -35,43 +37,39 @@ def _project_root() -> Path:
 
 
 def _tasks_file(root: Path) -> Path:
-    return root / ".taskmaster" / "tasks" / "tasks.json"
+    return root / ".b00t" / "tasks.json"
 
 
 def _print_tasks_missing_instructions() -> None:
     # Keep this short and copy/paste friendly. It is printed from both bash and python
     # entrypoints to keep behavior consistent regardless of invocation method.
     sys.stderr.write("\n")
-    sys.stderr.write("To create tasks with the ralph-prd skill, run your designated agent with this prompt:\n\n")
+    sys.stderr.write("To create native b00t tasks, run:\n\n")
     sys.stderr.write(
-        "Use the ralph-prd skill to generate TaskMaster tasks.json for this repo.\n"
-        "Requirements:\n"
-        "- Output must be TaskMaster format with tasks[] and metadata.\n"
-        "- Include 3-7 small, actionable tasks with acceptance criteria.\n"
-        "- Use IETF 2119 MUST/SHOULD/MAY in acceptance criteria.\n"
-        "- Set metadata.project and metadata.branchName appropriately.\n"
+        "b00t task add \"<small actionable task>\"\n"
+        "Tasks are stored at .b00t/tasks.json with a top-level tasks[] array.\n"
     )
-    sys.stderr.write("\nThen re-run: ./ralph.sh --agent <amp|claude|codex> [max_iterations]\n\n")
+    sys.stderr.write("\nThen re-run: b00t ooda run --agent <claude|codex|opencode> [--max-iter N]\n\n")
 
 
 def _require_tasks(root: Path) -> bool:
     """Return True if tasks exist and are non-empty; otherwise print instructions and return False."""
     tasks_path = _tasks_file(root)
     if not tasks_path.exists():
-        LOGGER.warning("TaskMaster tasks.json not found; nothing to do.")
+        LOGGER.warning(".b00t/tasks.json not found; nothing to do.")
         _print_tasks_missing_instructions()
         return False
 
     try:
         payload = json.loads(tasks_path.read_text())
     except json.JSONDecodeError:
-        LOGGER.warning("TaskMaster tasks.json is invalid JSON; nothing to do.")
+        LOGGER.warning("%s is invalid JSON; nothing to do.", tasks_path)
         _print_tasks_missing_instructions()
         return False
 
     tasks = payload.get("tasks") if isinstance(payload, dict) else None
     if not tasks:
-        LOGGER.warning("TaskMaster tasks.json is empty; nothing to do.")
+        LOGGER.warning("%s is empty; nothing to do.", tasks_path)
         _print_tasks_missing_instructions()
         return False
 
@@ -276,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     Ralph runtime execution.
 
-    Note: Preflight checks (uv sync, .taskmaster setup, .gitignore) are handled
+    Note: Preflight checks (uv sync, .b00t/tasks.json setup, .gitignore) are handled
     by ralph.sh wrapper. This function focuses on execution only.
     """
     if argv is None:
@@ -422,51 +420,40 @@ def get_ralph_status() -> dict[str, Any]:
 
 @mcp.tool()
 def get_task_status() -> dict[str, Any]:
-    """Get TaskMaster completion status via task-master CLI."""
+    """Get native b00t task completion status from .b00t/tasks.json."""
+    root = _project_root()
+    tasks_path = _tasks_file(root)
+    if not tasks_path.exists():
+        return {"status": "missing", "message": f"{tasks_path} not found"}
     try:
-        result = subprocess.run(
-            ["task-master", "list", "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        task_data = json.loads(result.stdout)
+        task_data = json.loads(tasks_path.read_text())
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "message": f"invalid JSON in {tasks_path}: {exc}"}
 
-        total = len(task_data.get("tasks", []))
-        completed = sum(1 for t in task_data.get("tasks", []) if t.get("status") == "done")
-        in_progress = sum(1 for t in task_data.get("tasks", []) if t.get("status") == "in-progress")
-        pending = sum(1 for t in task_data.get("tasks", []) if t.get("status") == "pending")
+    tasks = task_data.get("tasks", []) if isinstance(task_data, dict) else []
+    total = len(tasks)
+    completed = sum(1 for t in tasks if t.get("status") == "done")
+    in_progress = sum(1 for t in tasks if t.get("status") == "in-progress")
+    pending = sum(1 for t in tasks if t.get("status") == "pending")
 
-        return {
-            "status": "loaded",
-            "project": task_data.get("metadata", {}).get("project", "Unknown"),
-            "total_tasks": total,
-            "completed": completed,
-            "in_progress": in_progress,
-            "pending": pending,
-            "completion_percentage": round((completed / total) * 100, 1) if total > 0 else 0,
-        }
-    except subprocess.CalledProcessError as e:
-        return {"status": "error", "message": f"task-master CLI error: {e}"}
-    except FileNotFoundError:
-        return {"status": "error", "message": "task-master CLI not found. Install taskmaster-ai first."}
+    return {
+        "status": "loaded",
+        "project": root.name,
+        "total_tasks": total,
+        "completed": completed,
+        "in_progress": in_progress,
+        "pending": pending,
+        "completion_percentage": round((completed / total) * 100, 1) if total > 0 else 0,
+    }
 
 
 @mcp.resource("ralph://tasks")
 def get_tasks_resource() -> str:
-    """Get current tasks via task-master CLI (not direct file access)."""
-    try:
-        result = subprocess.run(
-            ["task-master", "list", "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout
-    except subprocess.CalledProcessError:
-        return json.dumps({"error": "Failed to fetch tasks from task-master"})
-    except FileNotFoundError:
-        return json.dumps({"error": "task-master CLI not found"})
+    """Get current native b00t tasks."""
+    tasks_path = _tasks_file(_project_root())
+    if not tasks_path.exists():
+        return json.dumps({"error": f"{tasks_path} not found"})
+    return tasks_path.read_text()
 
 
 @mcp.resource("ralph://progress")
