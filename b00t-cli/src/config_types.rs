@@ -26,9 +26,22 @@ pub struct McpConfig {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct UnifiedConfig {
     pub b00t: BootDatum,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub service_contract: Vec<ServiceContract>,
     pub env: Option<std::collections::HashMap<String, String>>,
     #[serde(default)]
     pub sections: Option<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct ServiceContract {
+    pub capability: String,
+    pub handler: String,
+    pub evidence: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verifiable: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]

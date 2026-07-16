@@ -975,7 +975,7 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
         poly_cfg.sources = Some(sources);
         polyseme_datum.polyseme = Some(poly_cfg);
 
-        let unified = UnifiedConfig { b00t: polyseme_datum, env: None, sections: None };
+        let unified = UnifiedConfig { b00t: polyseme_datum, service_contract: vec![], env: None, sections: None };
         std::fs::write(&poly_path, format!("{}\n", toml::to_string_pretty(&unified)?))?;
         eprintln!("  ✅ polyseme: {}", poly_path.display());
 
