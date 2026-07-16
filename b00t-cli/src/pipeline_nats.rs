@@ -172,6 +172,13 @@ struct MockNatsSubscription {
 
 impl NatsSubscription for MockNatsSubscription {
     fn next(&mut self) -> Option<Vec<u8>> {
+        // try_recv, not recv: this mock is fully in-memory and synchronous —
+        // publish() has already delivered any pending message by the time
+        // next() is called, so there's nothing to block-wait for. A blocking
+        // recv() here hangs forever on the (deliberately, by-design) empty
+        // case — messages published before subscribe(), or genuinely no
+        // message sent — because the sender lives inside the still-alive
+        // MockNatsTransport and never gets dropped to unblock recv().
         self.rx.try_recv().ok()
     }
 }
@@ -371,6 +378,9 @@ mod tests {
         let transport = MockNatsTransport::new();
         let subject = "pipeline.test-run.stage-a.output.video";
 
+        // Subscribe *before* publish: per the mock's documented semantics
+        // (see mock_transport_publish_before_subscribe_lost below), a
+        // subscriber only receives messages published after it subscribes.
         let mut sub = transport.subscribe(subject).expect("subscribe");
         transport
             .publish(subject, b"hello-nats")
@@ -504,17 +514,27 @@ mod tests {
 
     #[tokio::test]
     async fn nats_client_adapter_round_trip() {
+        // NatsClientAdapter's methods are sync-but-block_on-internally (see
+        // the module doc) — calling them directly from this #[tokio::test]
+        // async fn would nest block_on inside the runtime already driving
+        // this test ("Cannot start a runtime from within a runtime").
+        // spawn_blocking moves the whole sync sequence onto a blocking-pool
+        // thread, where that internal block_on is safe.
         let mock_nats = Arc::new(crate::pipeline_executor::MockNatsClient::new())
             as Arc<dyn NatsClient>;
         let adapter = NatsClientAdapter::new(mock_nats.clone());
         let subject = "pipeline.adapter-test.stage.output.bytes";
 
-        adapter
-            .publish(subject, b"adapter-payload")
-            .expect("adapter publish");
+        let msg = tokio::task::spawn_blocking(move || {
+            adapter
+                .publish(subject, b"adapter-payload")
+                .expect("adapter publish");
+            let mut sub = adapter.subscribe(subject).expect("adapter subscribe");
+            sub.next().expect("should receive from adapter")
+        })
+        .await
+        .expect("blocking task panicked");
 
-        let mut sub = adapter.subscribe(subject).expect("adapter subscribe");
-        let msg = sub.next().expect("should receive from adapter");
         assert_eq!(msg, b"adapter-payload");
     }
 
@@ -582,36 +602,46 @@ mod tests {
 
     #[tokio::test]
     async fn nats_client_adapter_no_message() {
+        // See nats_client_adapter_round_trip for why this is spawn_blocking.
         let mock_nats = Arc::new(crate::pipeline_executor::MockNatsClient::new())
             as Arc<dyn NatsClient>;
         let adapter = NatsClientAdapter::new(mock_nats);
 
-        let mut sub = adapter
-            .subscribe("pipeline.empty.sub.output.bytes")
-            .expect("subscribe to empty");
-        assert!(
-            sub.next().is_none(),
-            "no message should be available"
-        );
+        let received = tokio::task::spawn_blocking(move || {
+            let mut sub = adapter
+                .subscribe("pipeline.empty.sub.output.bytes")
+                .expect("subscribe to empty");
+            sub.next()
+        })
+        .await
+        .expect("blocking task panicked");
+
+        assert!(received.is_none(), "no message should be available");
     }
 
     // ── NatsClientAdapter: subject isolation ────────────────────────────
 
     #[tokio::test]
     async fn nats_client_adapter_subject_isolation() {
+        // See nats_client_adapter_round_trip for why this is spawn_blocking.
         let mock_nats = Arc::new(crate::pipeline_executor::MockNatsClient::new())
             as Arc<dyn NatsClient>;
         let adapter = NatsClientAdapter::new(mock_nats);
 
-        adapter
-            .publish("pipeline.isolation.a.output.bytes", b"data-a")
-            .expect("publish a");
+        let received = tokio::task::spawn_blocking(move || {
+            adapter
+                .publish("pipeline.isolation.a.output.bytes", b"data-a")
+                .expect("publish a");
 
-        let mut sub_b = adapter
-            .subscribe("pipeline.isolation.b.output.bytes")
-            .expect("subscribe b");
+            let mut sub_b = adapter
+                .subscribe("pipeline.isolation.b.output.bytes")
+                .expect("subscribe b");
+            sub_b.next()
+        })
+        .await
+        .expect("blocking task panicked");
 
         // Subject B should have no messages (isolation).
-        assert!(sub_b.next().is_none(), "subjects must be isolated");
+        assert!(received.is_none(), "subjects must be isolated");
     }
 }

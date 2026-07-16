@@ -1,7 +1,7 @@
 use crate::agentic_role::resolve_role;
 use crate::entanglement::parse_entanglement_ref;
 use crate::skill_resolver::SkillResolver;
-use crate::{DatumType, UnifiedConfig, get_config, get_expanded_path};
+use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
@@ -34,7 +34,12 @@ pub fn detect_agent(ignore_env: bool) -> String {
 }
 
 /// Display agent identity information from AGENT.md template and role datum (if available)
-pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool, skills: Vec<String>) -> Result<()> {
+pub fn whoami(
+    path: &str,
+    role_override: Option<String>,
+    with_skills: bool,
+    skills: Vec<String>,
+) -> Result<()> {
     let expanded_path = get_expanded_path(path)?;
     let agent_md_path = expanded_path.join("AGENT.md");
 
@@ -106,7 +111,10 @@ pub fn whoami(path: &str, role_override: Option<String>, with_skills: bool, skil
         let blessing_loaded = datum_authoring_path.exists();
         if !blessing_loaded {
             println!();
-            println!("🛡️ BLESSING GATE: Task context '{}' involves _b00t_/ datum operations.", task_context);
+            println!(
+                "🛡️ BLESSING GATE: Task context '{}' involves _b00t_/ datum operations.",
+                task_context
+            );
             println!("   Required blessing: datum-authoring (→ datum-schema → tomllm-format)");
             println!("   Run: b00t learn datum-authoring");
             println!("   This ensures datums use correct field names (tags ≠ type_tags) and tail-map format.");
@@ -139,6 +147,7 @@ pub struct RoleDetails {
     pub hint: String,
     pub skills: Vec<String>,
     pub compliance: Vec<String>,
+    pub depends_on: Vec<String>,
     pub entangled_agents: Vec<String>,
     pub entangled_cli: Vec<String>,
     pub entangled_mcp: Vec<String>,
@@ -175,6 +184,7 @@ fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
 
     let skills = datum.skills.unwrap_or_default();
     let compliance = datum.compliance.unwrap_or_default();
+    let depends_on = datum.depends_on.unwrap_or_default();
     let entangled_agents = datum.entangled_agents.unwrap_or_default();
     let entangled_cli = datum.entangled_cli.unwrap_or_default();
     let entangled_mcp = datum.entangled_mcp.unwrap_or_default();
@@ -185,6 +195,7 @@ fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
         hint: datum.hint,
         skills,
         compliance,
+        depends_on,
         entangled_agents,
         entangled_cli,
         entangled_mcp,
@@ -365,6 +376,10 @@ fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
 
     if let Some(compliance_summary) = summarize_list(&role.compliance, 3) {
         println!("⚖️ Compliance: {}", compliance_summary);
+    }
+
+    if let Some(deps_summary) = summarize_list(&role.depends_on, 5) {
+        println!("🔗 Dependencies: {}", deps_summary);
     }
 
     if let Some(agent_summary) = summarize_list(&role.entangled_agents, 5) {
@@ -569,24 +584,24 @@ fn extract_json_string(s: &str, key: &str) -> Option<String> {
 fn print_skill_interview(path: &str) -> Result<()> {
     // Tag→skill mapping (deterministic, no LLM required)
     let tag_to_skill: &[(&str, &str)] = &[
-        ("bouncer",   "bouncer"),
-        ("sm0l",      "sm0l"),
+        ("bouncer", "bouncer"),
+        ("sm0l", "sm0l"),
         ("langchain", "langchain"),
-        ("sandbox",   "hive"),
-        ("datum",     "datum"),
-        ("mcp",       "mcp"),
-        ("rust",      "rust"),
-        ("agent",     "agent-orchestration"),
-        ("okr",       "okr"),
-        ("docker",    "podman"),
-        ("ci",        "wrkflw"),
-        ("prd",       "datum"),
-        ("ooda",      "agent-orchestration"),
-        ("guard",     "hive"),
-        ("neumann",   "sm0l"),
-        ("vllm",      "hive"),
-        ("tomllm",    "tomllm"),
-        ("a2a",       "agent-orchestration"),
+        ("sandbox", "hive"),
+        ("datum", "datum"),
+        ("mcp", "mcp"),
+        ("rust", "rust"),
+        ("agent", "agent-orchestration"),
+        ("okr", "okr"),
+        ("docker", "podman"),
+        ("ci", "wrkflw"),
+        ("prd", "datum"),
+        ("ooda", "agent-orchestration"),
+        ("guard", "hive"),
+        ("neumann", "sm0l"),
+        ("vllm", "hive"),
+        ("tomllm", "tomllm"),
+        ("a2a", "agent-orchestration"),
     ];
 
     // Read tasks from .b00t/tasks.json — try worktree-relative and home-relative
@@ -653,7 +668,13 @@ fn print_skill_interview(path: &str) -> Result<()> {
             let slug: String = title
                 .to_lowercase()
                 .chars()
-                .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '-'
+                    }
+                })
                 .collect::<String>()
                 .split('-')
                 .filter(|s| !s.is_empty())
@@ -661,7 +682,10 @@ fn print_skill_interview(path: &str) -> Result<()> {
                 .join("-");
             let num = id.trim_start_matches('#');
             let branch = format!("task/{}-{}", num, slug);
-            println!("  → [{:<8}] {}  {}  git checkout -b {}", tier, id, title, branch);
+            println!(
+                "  → [{:<8}] {}  {}  git checkout -b {}",
+                tier, id, title, branch
+            );
         }
 
         // Bouncer handoff for first (highest priority) task
@@ -670,7 +694,13 @@ fn print_skill_interview(path: &str) -> Result<()> {
         let first_slug: String = first_title
             .to_lowercase()
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '-'
+                }
+            })
             .collect::<String>()
             .split('-')
             .filter(|s| !s.is_empty())
@@ -759,7 +789,12 @@ pub fn build_dashboard() -> Vec<DashboardLayer> {
     hw.push(detect_ram());
     hw.push(detect_gpu());
     hw.push(detect_os());
-    layers.push(DashboardLayer { z: 0, name: "Hardware & OS", color: "#334155", items: hw });
+    layers.push(DashboardLayer {
+        z: 0,
+        name: "Hardware & OS",
+        color: "#334155",
+        items: hw,
+    });
 
     // Layer 1 — Runtime
     let mut rt = Vec::new();
@@ -767,7 +802,12 @@ pub fn build_dashboard() -> Vec<DashboardLayer> {
     rt.push(detect_node());
     rt.push(detect_rust());
     rt.push(detect_just());
-    layers.push(DashboardLayer { z: 1, name: "Runtime", color: "#1d4ed8", items: rt });
+    layers.push(DashboardLayer {
+        z: 1,
+        name: "Runtime",
+        color: "#1d4ed8",
+        items: rt,
+    });
 
     // Layer 2 — Inference
     let mut inf = Vec::new();
@@ -775,14 +815,24 @@ pub fn build_dashboard() -> Vec<DashboardLayer> {
     inf.push(check_binary("ollama", "ollama --version"));
     inf.push(check_binary("llama.cpp", "llama-cli --version"));
     inf.push(detect_models());
-    layers.push(DashboardLayer { z: 2, name: "Inference", color: "#7c3aed", items: inf });
+    layers.push(DashboardLayer {
+        z: 2,
+        name: "Inference",
+        color: "#7c3aed",
+        items: inf,
+    });
 
     // Layer 3 — MCP
     let mut mcp = Vec::new();
     mcp.push(count_mcp_tools());
     mcp.push(check_binary("uvx", "uvx --version"));
     mcp.push(check_binary("npx", "npx --version"));
-    layers.push(DashboardLayer { z: 3, name: "MCP Tools", color: "#b91c1c", items: mcp });
+    layers.push(DashboardLayer {
+        z: 3,
+        name: "MCP Tools",
+        color: "#b91c1c",
+        items: mcp,
+    });
 
     // Layer 4 — Datums
     layers.push(count_datums());
@@ -796,21 +846,27 @@ pub fn build_dashboard() -> Vec<DashboardLayer> {
 fn detect_cpu() -> DashboardItem {
     let info = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
     let cores = info.lines().filter(|l| l.starts_with("processor")).count();
-    let model = info.lines()
+    let model = info
+        .lines()
         .find(|l| l.starts_with("model name"))
         .and_then(|l| l.split(':').nth(1))
         .map(|s| s.trim())
         .unwrap_or("unknown");
     DashboardItem {
         label: format!("CPU ({} cores)", cores),
-        status: if cores > 0 { DashboardStatus::Ready } else { DashboardStatus::Unknown },
+        status: if cores > 0 {
+            DashboardStatus::Ready
+        } else {
+            DashboardStatus::Unknown
+        },
         detail: format!("{}", model),
     }
 }
 
 fn detect_ram() -> DashboardItem {
     let info = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
-    let total_kb = info.lines()
+    let total_kb = info
+        .lines()
         .find(|l| l.starts_with("MemTotal"))
         .and_then(|l| l.split_whitespace().nth(1))
         .and_then(|s| s.parse::<u64>().ok())
@@ -818,7 +874,11 @@ fn detect_ram() -> DashboardItem {
     let total_gb = total_kb / 1024 / 1024;
     DashboardItem {
         label: "RAM".into(),
-        status: if total_gb >= 8 { DashboardStatus::Ready } else { DashboardStatus::Warning },
+        status: if total_gb >= 8 {
+            DashboardStatus::Ready
+        } else {
+            DashboardStatus::Warning
+        },
         detail: format!("{} GB", total_gb),
     }
 }
@@ -867,9 +927,20 @@ fn detect_python() -> DashboardItem {
                 let is_314 = version.starts_with("3.14");
                 return DashboardItem {
                     label: format!("Python ({})", cmd),
-                    status: if is_314 { DashboardStatus::Ready } else { DashboardStatus::Warning },
-                    detail: format!("{} {}", version,
-                        if is_314 { "(GIL-free ✓)" } else { "(not 3.14)" }),
+                    status: if is_314 {
+                        DashboardStatus::Ready
+                    } else {
+                        DashboardStatus::Warning
+                    },
+                    detail: format!(
+                        "{} {}",
+                        version,
+                        if is_314 {
+                            "(GIL-free ✓)"
+                        } else {
+                            "(not 3.14)"
+                        }
+                    ),
                 };
             }
         }
@@ -890,7 +961,11 @@ fn detect_node() -> DashboardItem {
             detail: v,
         };
     }
-    DashboardItem { label: "Node".into(), status: DashboardStatus::Critical, detail: "not found".into() }
+    DashboardItem {
+        label: "Node".into(),
+        status: DashboardStatus::Critical,
+        detail: "not found".into(),
+    }
 }
 
 fn detect_rust() -> DashboardItem {
@@ -902,7 +977,11 @@ fn detect_rust() -> DashboardItem {
             detail: v,
         };
     }
-    DashboardItem { label: "Rust".into(), status: DashboardStatus::Critical, detail: "not found".into() }
+    DashboardItem {
+        label: "Rust".into(),
+        status: DashboardStatus::Critical,
+        detail: "not found".into(),
+    }
 }
 
 fn detect_just() -> DashboardItem {
@@ -914,13 +993,21 @@ fn detect_just() -> DashboardItem {
             detail: v,
         };
     }
-    DashboardItem { label: "just".into(), status: DashboardStatus::Unknown, detail: "not found".into() }
+    DashboardItem {
+        label: "just".into(),
+        status: DashboardStatus::Unknown,
+        detail: "not found".into(),
+    }
 }
 
 fn check_binary(name: &str, cmd: &str) -> DashboardItem {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     if parts.is_empty() {
-        return DashboardItem { label: name.into(), status: DashboardStatus::Unknown, detail: "no command".into() };
+        return DashboardItem {
+            label: name.into(),
+            status: DashboardStatus::Unknown,
+            detail: "no command".into(),
+        };
     }
     if let Some(out) = command_output_with_timeout(parts[0], &parts[1..], dashboard_probe_timeout()) {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -930,7 +1017,11 @@ fn check_binary(name: &str, cmd: &str) -> DashboardItem {
             detail: v.lines().next().unwrap_or("ok").to_string(),
         };
     }
-    DashboardItem { label: name.into(), status: DashboardStatus::Unknown, detail: "not found".into() }
+    DashboardItem {
+        label: name.into(),
+        status: DashboardStatus::Unknown,
+        detail: "not found".into(),
+    }
 }
 
 fn detect_models() -> DashboardItem {
@@ -940,29 +1031,43 @@ fn detect_models() -> DashboardItem {
         std::path::PathBuf::from("/usr/local/share/b00t/models"),
         dirs::home_dir().unwrap_or_default().join(".b00t/models"),
     ];
-    let count: usize = model_dirs.iter()
+    let count: usize = model_dirs
+        .iter()
         .filter_map(|d| std::fs::read_dir(d).ok())
         .flat_map(|e| e.filter_map(|e| e.ok()))
         .filter(|e| e.path().extension().map(|x| x == "gguf").unwrap_or(false))
         .count();
     DashboardItem {
         label: "Local Models".into(),
-        status: if count > 0 { DashboardStatus::Ready } else { DashboardStatus::Unknown },
+        status: if count > 0 {
+            DashboardStatus::Ready
+        } else {
+            DashboardStatus::Unknown
+        },
         detail: format!("{} GGUF files", count),
     }
 }
 
 fn count_mcp_tools() -> DashboardItem {
-    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_");
+    let dotfiles = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".dotfiles/_b00t_");
     let count: usize = std::fs::read_dir(&dotfiles)
-        .map(|d| d.filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|x| x == "tomllmd").unwrap_or(false))
-            .filter(|e| {
-                std::fs::read_to_string(e.path())
-                    .map(|c| c.contains("mcp") || c.contains("MCP"))
-                    .unwrap_or(false)
-            })
-            .count())
+        .map(|d| {
+            d.filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .map(|x| x == "tomllmd")
+                        .unwrap_or(false)
+                })
+                .filter(|e| {
+                    std::fs::read_to_string(e.path())
+                        .map(|c| c.contains("mcp") || c.contains("MCP"))
+                        .unwrap_or(false)
+                })
+                .count()
+        })
         .unwrap_or(0);
     DashboardItem {
         label: "MCP Servers".into(),
@@ -972,7 +1077,9 @@ fn count_mcp_tools() -> DashboardItem {
 }
 
 fn count_datums() -> DashboardLayer {
-    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_/datums");
+    let dotfiles = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".dotfiles/_b00t_/datums");
     let count: usize = std::fs::read_dir(&dotfiles)
         .map(|d| d.filter_map(|e| e.ok()).count())
         .unwrap_or(0);
@@ -982,7 +1089,11 @@ fn count_datums() -> DashboardLayer {
         color: "#0f766e",
         items: vec![DashboardItem {
             label: "Datums".into(),
-            status: if count > 0 { DashboardStatus::Ready } else { DashboardStatus::Warning },
+            status: if count > 0 {
+                DashboardStatus::Ready
+            } else {
+                DashboardStatus::Warning
+            },
             detail: format!("{} datum files", count),
         }],
     }
@@ -991,10 +1102,14 @@ fn count_datums() -> DashboardLayer {
 fn count_agents() -> DashboardLayer {
     let mut agents = Vec::new();
     // Check registered agent datums
-    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_/datums");
+    let dotfiles = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".dotfiles/_b00t_/datums");
     if let Ok(dir) = std::fs::read_dir(&dotfiles) {
         for entry in dir.filter_map(|e| e.ok()) {
-            let name = entry.path().file_stem()
+            let name = entry
+                .path()
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_string();
@@ -1013,12 +1128,17 @@ fn count_agents() -> DashboardLayer {
         for entry in dir.filter_map(|e| e.ok()) {
             let p = entry.path();
             if p.extension().and_then(|s| s.to_str()) == Some("toml")
-                && p.file_stem().and_then(|s| s.to_str())
+                && p.file_stem()
+                    .and_then(|s| s.to_str())
                     .map(|s| s.ends_with(".agent"))
                     .unwrap_or(false)
             {
                 agents.push(DashboardItem {
-                    label: p.file_stem().and_then(|s| s.to_str()).unwrap_or("?").to_string(),
+                    label: p
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .to_string(),
                     status: DashboardStatus::Ready,
                     detail: "agent file".into(),
                 });
@@ -1043,14 +1163,24 @@ fn count_agents() -> DashboardLayer {
 /// Print the layered dashboard to stdout
 pub fn print_dashboard() {
     let layers = build_dashboard();
-    println!("\n{}", crate::ansi::bold("╔══════════════════════════════════════════╗"));
-    println!("{}", crate::ansi::bold("║     b00t Agent System Dashboard           ║"));
-    println!("{}", crate::ansi::bold("╚══════════════════════════════════════════╝"));
+    println!(
+        "\n{}",
+        crate::ansi::bold("╔══════════════════════════════════════════╗")
+    );
+    println!(
+        "{}",
+        crate::ansi::bold("║     b00t Agent System Dashboard           ║")
+    );
+    println!(
+        "{}",
+        crate::ansi::bold("╚══════════════════════════════════════════╝")
+    );
     println!();
 
     for layer in &layers {
         let color_tag = crate::ansi::cyan;
-        println!("{} z={} {} {}",
+        println!(
+            "{} z={} {} {}",
             color_tag("┌─"),
             layer.z,
             color_tag(layer.name),
@@ -1063,7 +1193,8 @@ pub fn print_dashboard() {
                 DashboardStatus::Critical => crate::ansi::red("✗"),
                 DashboardStatus::Unknown => crate::ansi::dim("?"),
             };
-            println!("{} {} {} — {}",
+            println!(
+                "{} {} {} — {}",
                 crate::ansi::dim("│"),
                 status_char,
                 item.label,
@@ -1076,15 +1207,26 @@ pub fn print_dashboard() {
 
     // Summary health
     let total = layers.iter().flat_map(|l| l.items.iter()).count();
-    let ready = layers.iter().flat_map(|l| l.items.iter())
-        .filter(|i| i.status == DashboardStatus::Ready).count();
-    let warnings = layers.iter().flat_map(|l| l.items.iter())
-        .filter(|i| i.status == DashboardStatus::Warning).count();
-    let critical = layers.iter().flat_map(|l| l.items.iter())
-        .filter(|i| i.status == DashboardStatus::Critical).count();
-    println!("{} {} services: {} ready, {} warnings, {} critical",
+    let ready = layers
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Ready)
+        .count();
+    let warnings = layers
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Warning)
+        .count();
+    let critical = layers
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .filter(|i| i.status == DashboardStatus::Critical)
+        .count();
+    println!(
+        "{} {} services: {} ready, {} warnings, {} critical",
         crate::ansi::bold("Health:"),
-        total, crate::ansi::green(&ready.to_string()),
+        total,
+        crate::ansi::green(&ready.to_string()),
         crate::ansi::yellow(&warnings.to_string()),
         crate::ansi::red(&critical.to_string()),
     );
@@ -1092,15 +1234,23 @@ pub fn print_dashboard() {
 
 /// Discover capabilities across the hive — agents, MCP servers, CLI tools, topology.
 pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
-    let dotfiles = dirs::home_dir().unwrap_or_default().join(".dotfiles/_b00t_");
+    let dotfiles = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".dotfiles/_b00t_");
     let datums_dir = dotfiles.join("datums");
 
     println!("{}", crate::ansi::bold("🔍 Hive Capability Discovery"));
     println!();
 
     // ─── System overview ────────────────────────────────────────────────
-    println!("{}", crate::ansi::dim("b00t — hive agent operating protocol"));
-    println!("{}", crate::ansi::dim("Usage is subjective to task, agent, and system state."));
+    println!(
+        "{}",
+        crate::ansi::dim("b00t — hive agent operating protocol")
+    );
+    println!(
+        "{}",
+        crate::ansi::dim("Usage is subjective to task, agent, and system state.")
+    );
     println!("{}", crate::ansi::dim("Run `b00t whoami --help` for identity, `b00t capabilities --filter <topic>` to explore."));
     println!();
 
@@ -1133,9 +1283,13 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
         }
     }
 
-    println!("{} {} | {} {} | {} {} | {} {} | {} {}",
+    println!(
+        "{} {} | {} {} | {} {} | {} {} | {} {}",
         crate::ansi::bold("📊 System:"),
-        crate::ansi::cyan(&format!("{} datums", datum_count + mcp_count + agent_count + cli_count + skill_count)),
+        crate::ansi::cyan(&format!(
+            "{} datums",
+            datum_count + mcp_count + agent_count + cli_count + skill_count
+        )),
         crate::ansi::bold("🔌"),
         crate::ansi::cyan(&format!("{} MCP", mcp_count)),
         crate::ansi::bold("🤖"),
@@ -1150,7 +1304,10 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
     if let Some(f) = filter {
         if f.starts_with("agent/") {
             let role = f.strip_prefix("agent/").unwrap_or("");
-            println!("{}", crate::ansi::bold(&format!("\n🤖 Filtering for role: {}", role)));
+            println!(
+                "{}",
+                crate::ansi::bold(&format!("\n🤖 Filtering for role: {}", role))
+            );
             // Scan agent datums matching this role
             if let Ok(dir) = std::fs::read_dir(&datums_dir) {
                 for entry in dir.filter_map(|e| e.ok()) {
@@ -1161,7 +1318,11 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
                     let fname = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     if fname.contains(role) {
                         if let Ok(content) = std::fs::read_to_string(&path) {
-                            println!("   📄 {} — {} bytes", crate::ansi::cyan(fname), content.len());
+                            println!(
+                                "   📄 {} — {} bytes",
+                                crate::ansi::cyan(fname),
+                                content.len()
+                            );
                         }
                     }
                 }
@@ -1174,13 +1335,23 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
     let role_count = count_by_tag(&datums_dir, "role");
     let training_count = count_by_tag(&datums_dir, "training");
     let prd_count = count_by_tag(&datums_dir, "prd");
-    println!("{} {} {} {} {} {}",
-        crate::ansi::dim("Roles:"), crate::ansi::cyan(&role_count.to_string()),
-        crate::ansi::dim("PRDs:"), crate::ansi::cyan(&prd_count.to_string()),
-        crate::ansi::dim("Training pipelines:"), crate::ansi::cyan(&training_count.to_string()),
+    println!(
+        "{} {} {} {} {} {}",
+        crate::ansi::dim("Roles:"),
+        crate::ansi::cyan(&role_count.to_string()),
+        crate::ansi::dim("PRDs:"),
+        crate::ansi::cyan(&prd_count.to_string()),
+        crate::ansi::dim("Training pipelines:"),
+        crate::ansi::cyan(&training_count.to_string()),
     );
-    println!("{} b00t ontology export --format=mermaid", crate::ansi::dim("View topology:"));
-    println!("{} b00t ontology export --format=cytoscape --root=<type>", crate::ansi::dim("Interactive graph:"));
+    println!(
+        "{} b00t ontology export --format=mermaid",
+        crate::ansi::dim("View topology:")
+    );
+    println!(
+        "{} b00t ontology export --format=cytoscape --root=<type>",
+        crate::ansi::dim("Interactive graph:")
+    );
     println!();
 
     // ─── Detailed listing (with optional filter) ───────────────────────
@@ -1192,7 +1363,8 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
             if path.extension().and_then(|s| s.to_str()) != Some("tomllmd") {
                 continue;
             }
-            let name = path.file_stem()
+            let name = path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_string();
@@ -1228,16 +1400,38 @@ pub fn discover_capabilities(filter: Option<&str>) -> Result<()> {
 
     if found == 0 {
         if filter.is_some() {
-            println!("  {} No capabilities matching filter: {}", crate::ansi::yellow("⚠"), filter.unwrap());
-            println!("  {} Use `b00t ontology export --format=mermaid` to see full topology", crate::ansi::dim("Tip:"));
+            println!(
+                "  {} No capabilities matching filter: {}",
+                crate::ansi::yellow("⚠"),
+                filter.unwrap()
+            );
+            println!(
+                "  {} Use `b00t ontology export --format=mermaid` to see full topology",
+                crate::ansi::dim("Tip:")
+            );
         } else {
-            println!("  {} No capabilities found in {}", crate::ansi::yellow("⚠"), datums_dir.display());
+            println!(
+                "  {} No capabilities found in {}",
+                crate::ansi::yellow("⚠"),
+                datums_dir.display()
+            );
         }
     } else {
-        println!("\n{} {} capabilities discovered", crate::ansi::green(&found.to_string()),
-            if filter.is_some() { format!("matching '{}'", filter.unwrap()) } else { "total".into() });
+        println!(
+            "\n{} {} capabilities discovered",
+            crate::ansi::green(&found.to_string()),
+            if filter.is_some() {
+                format!("matching '{}'", filter.unwrap())
+            } else {
+                "total".into()
+            }
+        );
         if filter.is_some() {
-            println!("{} b00t ontology export --format=mermaid --root={}", crate::ansi::dim("Explore relationships:"), filter.unwrap());
+            println!(
+                "{} b00t ontology export --format=mermaid --root={}",
+                crate::ansi::dim("Explore relationships:"),
+                filter.unwrap()
+            );
         }
     }
 
@@ -1254,7 +1448,9 @@ fn count_by_tag(dir: &std::path::Path, tag: &str) -> usize {
                 continue;
             }
             if let Ok(content) = std::fs::read_to_string(&path) {
-                if content.contains(&format!("\"{}\"", tag)) || content.contains(&format!("type_tags = [\"{}\"", tag)) {
+                if content.contains(&format!("\"{}\"", tag))
+                    || content.contains(&format!("type_tags = [\"{}\"", tag))
+                {
                     count += 1;
                 }
             }
@@ -1386,6 +1582,7 @@ type = "role"
 hint = "orchestrator"
 skills = ["delegation"]
 compliance = ["monitor chat"]
+depends_on = ["b00t.cli", "just.cli"]
 entangled_agents = ["ralph.agent"]
 entangled_cli = ["b00t.cli"]
 entangled_mcp = ["ralph.mcp"]
@@ -1399,6 +1596,10 @@ channel_prefix = "agent:executive:"
         assert_eq!(role.entangled_agents, vec!["ralph.agent".to_string()]);
         assert_eq!(role.entangled_cli, vec!["b00t.cli".to_string()]);
         assert_eq!(role.entangled_mcp, vec!["ralph.mcp".to_string()]);
+        assert_eq!(
+            role.depends_on,
+            vec!["b00t.cli".to_string(), "just.cli".to_string()]
+        );
         assert_eq!(role.channel_prefix, Some("agent:executive:".to_string()));
     }
 
@@ -1504,7 +1705,11 @@ hint = "ralph mcp"
     fn test_build_dashboard_has_all_layers() {
         let layers = build_dashboard();
         let names: Vec<&str> = layers.iter().map(|l| l.name).collect();
-        assert!(names.contains(&"Hardware & OS"), "missing HW layer among: {:?}", names);
+        assert!(
+            names.contains(&"Hardware & OS"),
+            "missing HW layer among: {:?}",
+            names
+        );
         assert!(names.contains(&"Runtime"), "missing Runtime layer");
         assert!(names.contains(&"Inference"), "missing Inference layer");
         assert!(names.contains(&"MCP Tools"), "missing MCP layer");
@@ -1512,7 +1717,11 @@ hint = "ralph mcp"
         assert!(names.contains(&"Agents"), "missing Agents layer");
         // z values should be sequential
         for (i, layer) in layers.iter().enumerate() {
-            assert_eq!(layer.z as usize, i, "layer {} has wrong z value", layer.name);
+            assert_eq!(
+                layer.z as usize, i,
+                "layer {} has wrong z value",
+                layer.name
+            );
         }
     }
 
@@ -1521,7 +1730,12 @@ hint = "ralph mcp"
         let layers = build_dashboard();
         for layer in &layers {
             assert!(!layer.color.is_empty(), "layer {} has no color", layer.name);
-            assert!(layer.color.starts_with('#'), "layer {} color not hex: {}", layer.name, layer.color);
+            assert!(
+                layer.color.starts_with('#'),
+                "layer {} color not hex: {}",
+                layer.name,
+                layer.color
+            );
         }
     }
 
@@ -1537,7 +1751,11 @@ hint = "ralph mcp"
     fn test_detect_os_returns_ready() {
         let item = detect_os();
         assert_eq!(item.status, DashboardStatus::Ready);
-        assert!(item.detail.contains("linux") || item.detail.contains("windows") || item.detail.contains("macos"));
+        assert!(
+            item.detail.contains("linux")
+                || item.detail.contains("windows")
+                || item.detail.contains("macos")
+        );
     }
 
     #[test]
@@ -1546,7 +1764,11 @@ hint = "ralph mcp"
         let layers = build_dashboard();
         for layer in &layers {
             for item in &layer.items {
-                assert!(!item.label.is_empty(), "empty label in layer {}", layer.name);
+                assert!(
+                    !item.label.is_empty(),
+                    "empty label in layer {}",
+                    layer.name
+                );
             }
         }
     }
@@ -1555,7 +1777,11 @@ hint = "ralph mcp"
     fn test_discover_capabilities_returns_ok() {
         // Should not crash — returns Ok even if no capabilities found
         let result = discover_capabilities(None);
-        assert!(result.is_ok(), "discover_capabilities failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "discover_capabilities failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -1607,8 +1833,14 @@ hint = "ralph mcp"
         let output = "  #414  wrkflw local runner\n  #420  register b00t skills\n  #405  eureka\n";
         let tasks = parse_task_list_output(output);
         assert_eq!(tasks.len(), 3);
-        assert_eq!(tasks[0], ("#414".to_string(), "wrkflw local runner".to_string()));
-        assert_eq!(tasks[1], ("#420".to_string(), "register b00t skills".to_string()));
+        assert_eq!(
+            tasks[0],
+            ("#414".to_string(), "wrkflw local runner".to_string())
+        );
+        assert_eq!(
+            tasks[1],
+            ("#420".to_string(), "register b00t skills".to_string())
+        );
         assert_eq!(tasks[2], ("#405".to_string(), "eureka".to_string()));
     }
 
@@ -1617,8 +1849,14 @@ hint = "ralph mcp"
         let json = r#"[{"number":414,"title":"wrkflw local runner"},{"number":420,"title":"register b00t skills"}]"#;
         let tasks = parse_gh_issue_json(json);
         assert_eq!(tasks.len(), 2);
-        assert_eq!(tasks[0], ("#414".to_string(), "wrkflw local runner".to_string()));
-        assert_eq!(tasks[1], ("#420".to_string(), "register b00t skills".to_string()));
+        assert_eq!(
+            tasks[0],
+            ("#414".to_string(), "wrkflw local runner".to_string())
+        );
+        assert_eq!(
+            tasks[1],
+            ("#420".to_string(), "register b00t skills".to_string())
+        );
     }
 
     #[test]

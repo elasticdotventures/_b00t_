@@ -31,6 +31,11 @@ if [ "${B00T_NO_WORKTREE:-0}" != "1" ] && [ -n "${PROJECT_ROOT}" ] && [ -f "${PR
     if [ -n "${REF}" ]; then
       git -C "${PROJECT_ROOT}" worktree add --detach "${WT_DIR}" "${REF}" 2>/dev/null && {
         ln -sf "${PROJECT_ROOT}/.git/🥾.tomllmd" "${WT_DIR}/.git/🥾.tomllmd" 2>/dev/null || true
+        # Stamp per-worktree git identity with the b00t agent + session id so
+        # commits made here are attributable, instead of silently inheriting
+        # whatever default (or stale placeholder) sits in the shared repo config.
+        git -C "${WT_DIR}" config user.name "b00t-agent[${AGENT_TYPE}]" || true
+        git -C "${WT_DIR}" config user.email "${AGENT_ID}.${SESSION_ID}@b00t.local" || true
         echo "b00t agent.start: worktree ${WT_DIR}" >&2
       } || echo "b00t agent.start: worktree creation failed (non-fatal)" >&2
     fi

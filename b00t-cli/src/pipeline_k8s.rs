@@ -428,6 +428,10 @@ pub fn generate_deployment(capsule: &CapsuleDefinition) -> String {
             let mut resources = serde_json::Map::new();
             resources.insert("requests".into(), serde_json::Value::Object(requests));
 
+            // A stage needs GPU limits if either its own profile requires
+            // it, or the capsule's overall resource budget does (#821 — the
+            // capsule-level `requires_gpu` was never consulted here, so
+            // setting it had no effect on the generated container limits).
             if requires_gpu {
                 let mut limits = serde_json::Map::new();
                 limits.insert("nvidia.com/gpu".into(), serde_json::json!(1));

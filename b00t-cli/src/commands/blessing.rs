@@ -12,8 +12,9 @@
 //! b00t blessing --list-roles               # list available roles
 //! ```
 
-use anyhow::Result;
 use crate::datum_utils::get_all_datums;
+use crate::DatumType;
+use anyhow::Result;
 use std::path::PathBuf;
 
 fn find_b00t_dir() -> Result<PathBuf> {
@@ -21,7 +22,9 @@ fn find_b00t_dir() -> Result<PathBuf> {
         .ok_or_else(|| anyhow::anyhow!("no home dir"))?
         .join(".b00t")
         .join("_b00t_");
-    if b00t.exists() { return Ok(b00t); }
+    if b00t.exists() {
+        return Ok(b00t);
+    }
     Err(anyhow::anyhow!("_b00t_ not found — run `b00t up` first"))
 }
 
@@ -30,7 +33,12 @@ pub struct BlessingArgs {
     #[clap(long, help = "Emit tool authorization manifest for this role")]
     pub manifest: bool,
 
-    #[clap(long, alias = "agent", default_value = "worker", help = "Role to build manifest for")]
+    #[clap(
+        long,
+        alias = "agent",
+        default_value = "worker",
+        help = "Role to build manifest for"
+    )]
     pub role: String,
 
     #[clap(long, help = "List all available roles")]
@@ -64,26 +72,45 @@ fn list_roles(b00t_path: &str) -> Result<()> {
     let mut roles: Vec<String> = Vec::new();
 
     for (key, datum) in &datums {
-        let is_role = datum.datum_type.as_ref()
+        let is_role = datum
+            .datum_type
+            .as_ref()
             .map(|t| format!("{t:?}").to_lowercase().contains("role"))
             .unwrap_or(false);
-        let has_skills = datum.skills.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+        let has_skills = datum
+            .skills
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
         if is_role || has_skills {
-            let hint = if datum.hint.is_empty() { key.as_str() } else { datum.hint.as_str() };
+            let hint = if datum.hint.is_empty() {
+                key.as_str()
+            } else {
+                datum.hint.as_str()
+            };
             roles.push(format!("  {key} — {hint}"));
         }
     }
 
     // AGENTS/ supplement names
-    if let Ok(agents_dir) = find_b00t_dir().map(|p| {
-        p.parent().unwrap_or(p.as_path()).join("AGENTS")
-    }) {
+    if let Ok(agents_dir) =
+        find_b00t_dir().map(|p| p.parent().unwrap_or(p.as_path()).join("AGENTS"))
+    {
         if agents_dir.exists() {
-            for entry in std::fs::read_dir(&agents_dir).into_iter().flatten().flatten() {
+            for entry in std::fs::read_dir(&agents_dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if let Some(role) = name.strip_prefix("--role=").and_then(|s| s.strip_suffix(".md")) {
+                if let Some(role) = name
+                    .strip_prefix("--role=")
+                    .and_then(|s| s.strip_suffix(".md"))
+                {
                     let line = format!("  {role} (AGENTS/ supplement)");
-                    if !roles.contains(&line) { roles.push(line); }
+                    if !roles.contains(&line) {
+                        roles.push(line);
+                    }
                 }
             }
         }
@@ -94,7 +121,9 @@ fn list_roles(b00t_path: &str) -> Result<()> {
         println!("No roles found. Create AGENTS/--role=<name>.md or add depends_on to a datum.");
     } else {
         println!("Available roles:");
-        for r in &roles { println!("{r}"); }
+        for r in &roles {
+            println!("{r}");
+        }
     }
     println!();
     println!("next: b00t blessing --manifest --role <role>");
@@ -104,10 +133,25 @@ fn list_roles(b00t_path: &str) -> Result<()> {
 fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
     let datums = get_all_datums(b00t_path)?;
 
-    // Find role datum by key or prefix match
-    let role_datum = datums.get(role).or_else(|| {
-        datums.iter().find(|(k, _)| k.starts_with(role)).map(|(_, v)| v)
-    });
+    // Find role datum — prefer typed Role, then exact match, then prefix match.
+    // Mirror whoami.rs load_role_datum() type-preference behaviour.
+    let role_datum = datums
+        .get(role)
+        .or_else(|| {
+            // Prefer any datum whose datum_type is Role
+            datums.values().find(|d| {
+                d.datum_type
+                    .as_ref()
+                    .map(|t| matches!(t, DatumType::Role))
+                    .unwrap_or(false)
+            })
+        })
+        .or_else(|| {
+            datums
+                .iter()
+                .find(|(k, _)| k.starts_with(role))
+                .map(|(_, v)| v)
+        });
 
     let direct_deps: Vec<String> = role_datum
         .and_then(|d| d.depends_on.clone())
@@ -117,7 +161,8 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
     let mut optional: Vec<(String, Vec<String>)> = Vec::new();
 
     for dep_key in &direct_deps {
-        let unlocks = datums.get(dep_key)
+        let unlocks = datums
+            .get(dep_key)
             .and_then(|d| d.unlocks.clone())
             .unwrap_or_default();
         required.push((dep_key.clone(), unlocks));
@@ -125,8 +170,12 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
 
     // Optional: datums that declare this role in their skills field
     for (key, datum) in &datums {
-        if direct_deps.contains(key) { continue; }
-        let in_skills = datum.skills.as_ref()
+        if direct_deps.contains(key) {
+            continue;
+        }
+        let in_skills = datum
+            .skills
+            .as_ref()
             .map(|s| s.iter().any(|sk| sk == role))
             .unwrap_or(false);
         if in_skills {
@@ -142,7 +191,10 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
         "huggingface-cli  → use: hf download",
     ];
 
-    let next_skill = required.first().map(|(k, _)| k.as_str()).unwrap_or("<skill>");
+    let next_skill = required
+        .first()
+        .map(|(k, _)| k.as_str())
+        .unwrap_or("<skill>");
 
     match fmt {
         "json" => {
@@ -176,7 +228,9 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
             }
             println!();
             println!("[blessing.forbidden]");
-            for f in &forbidden { println!("# {f}"); }
+            for f in &forbidden {
+                println!("# {f}");
+            }
             println!();
             println!("[blessing.next]");
             println!("hint = {:?}", format!("b00t learn {next_skill}"));

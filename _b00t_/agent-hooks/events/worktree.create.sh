@@ -7,6 +7,7 @@
 set -euo pipefail
 
 AGENT_ID="${1:-${B00T_AGENT_ID:-unknown}}"
+SESSION_ID="${B00T_SESSION_ID:-unknown}"
 PROJECT_ROOT="${B00T_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
 WORKTREE_DIR="${PROJECT_ROOT}/.b00t/worktrees/${AGENT_ID}"
 
@@ -45,6 +46,12 @@ fi
 
 # Symlink the project soul into the worktree's .git/
 ln -sf "${PROJECT_ROOT}/.git/🥾.tomllmd" "${WORKTREE_DIR}/.git/🥾.tomllmd" 2>/dev/null || true
+
+# Stamp per-worktree git identity with the b00t agent + session id so commits
+# made here are attributable, instead of silently inheriting whatever default
+# (or stale placeholder) sits in the shared repo config.
+git -C "${WORKTREE_DIR}" config user.name "b00t-agent[${AGENT_ID}]" || true
+git -C "${WORKTREE_DIR}" config user.email "${AGENT_ID}.${SESSION_ID}@b00t.local" || true
 
 echo "[worktree.create] created ${WORKTREE_DIR}"
 echo "B00T_WORKTREE=${WORKTREE_DIR}"
