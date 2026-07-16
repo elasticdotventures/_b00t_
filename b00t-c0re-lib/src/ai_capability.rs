@@ -161,7 +161,7 @@ impl Sam3JobRequest {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Mask in any of the three supported encodings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "format")]
 pub enum EncodedMask {
     Rle      { data: RleMask },
@@ -169,7 +169,7 @@ pub enum EncodedMask {
     Polygon  { data: Vec<[f32; 2]> },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RleMask {
     pub size: [u32; 2],   // [height, width]
     pub counts: Vec<u64>,
