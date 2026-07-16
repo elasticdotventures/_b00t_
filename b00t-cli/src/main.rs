@@ -99,6 +99,7 @@ use b00t_cli::commands::{
     PipelineCommands,
     StageCommands,
     StoreCommands,
+    ContractCommands,
     GrokCommands, HiveCommands,
     InitCommands,
     JobCommands,
@@ -604,6 +605,11 @@ The system will:
         long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\n`b00t sh -- <cmd>` is the task-work alias: same audited path, exec-log artifacts feed ledgrrr verification + 🍰 allocation.\nUse --sleep=<duration> for background execution (returns immediately)."
     )]
     Exec(b00t_cli::commands::exec::ExecArgs),
+    #[clap(about = "Run deterministic service-contract handlers and append evidence")]
+    Contract {
+        #[clap(subcommand)]
+        contract_command: ContractCommands,
+    },
     #[clap(about = "Schema datum management (generate, validate)")]
     Schema {
         #[clap(subcommand)]
@@ -2945,6 +2951,12 @@ async fn main() {
         }
         Some(Commands::Exec(args)) => {
             if let Err(e) = b00t_cli::commands::exec::handle_exec(args, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Contract { contract_command }) => {
+            if let Err(e) = b00t_cli::commands::contract::handle_contract_command(contract_command, &cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -66,6 +66,8 @@ pub mod zellij;
 pub use zellij::ZellijCommand;
 pub mod context;
 pub use context::ContextCommands;
+pub mod contract;
+pub use contract::ContractCommands;
 
 pub use agent::AgentCommands;
 pub use bouncer::{BouncerArgs, BouncerCommands};

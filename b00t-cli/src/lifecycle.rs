@@ -28,6 +28,7 @@ pub fn create_ai_toml_config(ai_config: &AiConfig, path: &str) -> Result<()> {
 pub fn create_unified_toml_config(datum: &BootDatum, path: &str) -> Result<()> {
     let config = UnifiedConfig {
         b00t: datum.clone(),
+        service_contract: vec![],
         env: None,
         sections: None,
     };
