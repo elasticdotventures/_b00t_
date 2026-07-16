@@ -621,6 +621,19 @@ commit-hook:
             exit 1
         fi
     fi
+    # Hard-gate datum graph coherence when staged changes touch datum files.
+    STAGED_DATUMS="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^_b00t_/.*\.tomll?m?d?$' || true)"
+    if [[ -n "${STAGED_DATUMS}" ]]; then
+        echo "🕸️  datum graph gate active — validating staged datum changes..."
+        if ! JUST_UNSTABLE=1 just datum-validate-graph; then
+            echo "❌ Datum graph validation failed. Fix dangling refs and try again."
+            exit 1
+        fi
+        echo "✅ Datum graph validation passed"
+    fi
+
+datum-validate-graph path="_b00t_":
+    cargo run -p b00t-cli --bin b00t-cli -- --path {{path}} datum validate --graph
 
 commit-hook2:
     #!/bin/bash

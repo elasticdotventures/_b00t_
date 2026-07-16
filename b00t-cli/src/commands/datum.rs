@@ -1,4 +1,5 @@
 use crate::DatumType;
+use crate::datum_store::{DatumStore, HashMapStore};
 use crate::datum_utils::{self, DatumFilter};
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -106,13 +107,16 @@ pub enum DatumCommands {
     #[clap(about = "Validate a datum TOML file against BootDatum schema")]
     Validate {
         #[clap(help = "Path to .toml file or datum key (e.g., mold.cli)")]
-        target: String,
+        target: Option<String>,
 
         #[clap(
             long,
             help = "check extension/type consistency (e.g. .cli suffix vs type=cli)"
         )]
         strict: bool,
+
+        #[clap(long, help = "validate cross-datum graph references")]
+        graph: bool,
     },
 
     #[clap(about = "Emit a minimal valid datum TOML for the given type")]
@@ -249,7 +253,16 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
         }
-        DatumCommands::Validate { target, strict } => handle_validate(path, target, *strict),
+        DatumCommands::Validate { target, strict, graph } => {
+            if *graph {
+                handle_validate_graph(path)
+            } else {
+                let Some(target) = target else {
+                    anyhow::bail!("specify datum key, file path, or --graph");
+                };
+                handle_validate(path, target, *strict)
+            }
+        }
         DatumCommands::Scaffold { datum_type, name } => handle_scaffold(datum_type, name),
         DatumCommands::Delegate {
             datum_type,
@@ -1052,6 +1065,21 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     }
 
     print_validation_result(&errors, &warnings)
+}
+
+fn handle_validate_graph(datum_path: &str) -> Result<()> {
+    let store = HashMapStore::from_path(datum_path)?;
+    let errors = store.validate_references();
+
+    if errors.is_empty() {
+        println!("datum graph: valid ({} datums)", store.len());
+        return Ok(());
+    }
+
+    for error in &errors {
+        eprintln!("  ERROR: {error}");
+    }
+    anyhow::bail!("datum graph validation failed: {} reference error(s)", errors.len());
 }
 
 fn print_validation_result(errors: &[String], warnings: &[String]) -> Result<()> {
