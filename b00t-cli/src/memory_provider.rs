@@ -34,11 +34,7 @@ impl FileMemory {
             return Ok(FileStore::default());
         }
         let raw = std::fs::read_to_string(&self.path)?;
-        let stripped: String = raw
-            .lines()
-            .filter(|l| !l.trim_start().starts_with('#'))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let stripped = strip_tomllm_comments(&raw);
         Ok(toml::from_str(&stripped).unwrap_or_default())
     }
 
@@ -46,7 +42,16 @@ impl FileMemory {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let toml_body = toml::to_string(store)?;
+        let mut doc = if self.path.exists() {
+            let raw = std::fs::read_to_string(&self.path)?;
+            let stripped = strip_tomllm_comments(&raw);
+            stripped.parse::<toml::Table>().unwrap_or_default()
+        } else {
+            toml::Table::new()
+        };
+        let data = toml::Value::try_from(&store.data)?;
+        doc.insert("data".to_string(), data);
+        let toml_body = toml::to_string_pretty(&doc)?;
         let output = format!(
             "# b00t SOUL — agentic identity & persistent memory\n\
              # @tribal: soul persists across sessions; write via `b00t soul set`, never edit directly\n\
@@ -60,6 +65,13 @@ impl FileMemory {
         std::fs::write(&self.path, output)?;
         Ok(())
     }
+}
+
+fn strip_tomllm_comments(raw: &str) -> String {
+    raw.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -314,6 +326,69 @@ mod tests {
         mem.write("k", "v1").unwrap();
         mem.write("k", "v2").unwrap();
         assert_eq!(mem.read("k").unwrap(), Some("v2".to_string()));
+    }
+
+    #[test]
+    fn test_file_memory_write_preserves_dataframerr_registry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("SOUL.tomllm");
+        std::fs::write(
+            &path,
+            r#"
+[data]
+existing = "keep"
+
+[soul.tables.repro_t]
+name = "repro_t"
+next_id = 2
+
+[[soul.tables.repro_t.columns]]
+name = "a"
+type = "text"
+nullable = false
+
+[[soul.tables.repro_t.rows]]
+id = 1
+
+[soul.tables.repro_t.rows.fields]
+a = { Text = "row1" }
+
+[soul.cursors.repro_cursor]
+table = "repro_t"
+next_id = 1
+"#,
+        )
+        .unwrap();
+
+        let mem = FileMemory::new(path.clone());
+        mem.write("fresh", "value").unwrap();
+
+        let raw = std::fs::read_to_string(path).unwrap();
+        let doc: toml::Table = strip_tomllm_comments(&raw).parse().unwrap();
+        assert_eq!(
+            doc.get("data")
+                .and_then(|v| v.as_table())
+                .and_then(|t| t.get("fresh"))
+                .and_then(|v| v.as_str()),
+            Some("value")
+        );
+        assert!(doc.contains_key("soul"), "DataFramerr registry was dropped");
+        assert_eq!(
+            doc.get("soul")
+                .and_then(|v| v.get("tables"))
+                .and_then(|v| v.get("repro_t"))
+                .and_then(|v| v.get("name"))
+                .and_then(|v| v.as_str()),
+            Some("repro_t")
+        );
+        assert_eq!(
+            doc.get("soul")
+                .and_then(|v| v.get("cursors"))
+                .and_then(|v| v.get("repro_cursor"))
+                .and_then(|v| v.get("table"))
+                .and_then(|v| v.as_str()),
+            Some("repro_t")
+        );
     }
 
     #[test]
