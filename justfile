@@ -2145,3 +2145,41 @@ provision-agent role="worker" goal="":
       just ralph-spawn "$GOAL_TEXT" 3 | claude --print --agent "$AGENT_FILE" 2>/dev/null \
         || echo "[provision] agent ready at: $AGENT_FILE (manual launch required if claude not in PATH)"
     fi
+
+# PRD-011 G1
+b00t-metrics:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    datums="$(
+      find _b00t_ -maxdepth 1 -type f -printf '%f\n' \
+        | awk '
+            {
+              ext = "no_ext"
+              if ($0 ~ /\./) {
+                ext = $0
+                sub(/^.*\./, "", ext)
+              }
+              count[ext]++
+            }
+            END {
+              for (ext in count) {
+                printf "%s\t%d\n", ext, count[ext]
+              }
+            }
+          ' \
+        | jq -Rn '
+            reduce inputs as $line (
+              {};
+              ($line | split("\t")) as $row
+              | .[$row[0]] = ($row[1] | tonumber)
+            )
+          '
+    )"
+    train_rows=0
+    if [ -f fine-tune/train.jsonl ]; then
+      train_rows="$(wc -l < fine-tune/train.jsonl | awk '{print $1}')"
+    fi
+    jq -cn \
+      --argjson datums "$datums" \
+      --argjson train_rows "$train_rows" \
+      '{datums: $datums, train_rows: $train_rows, dangling_refs: null, probe_score: null}'
