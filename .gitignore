@@ -329,3 +329,10 @@ spotlight.jsonl
 unsloth_compiled_cache/
 vendor/pi-mono/
 .codebase-memory/
+
+# Local verification/tooling artifacts
+.b00t/ledgrrr-mock.jsonl
+.b00t/toolscore/
+.b00t/verification-artifacts.jsonl
+/target
+vscode.🆚/vscode-docs/

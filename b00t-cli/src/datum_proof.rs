@@ -32,6 +32,10 @@ pub enum DatumProofError {
     MissingHint { datum: String },
     /// Generic structural gap: at least one of `expected` fields must be present.
     MissingStructuralField { datum: String, expected: &'static str },
+    /// `requires_competency` was set but evidence::prove_skill() returned no records.
+    NoCompetencyEvidence { datum: String, skill: String },
+    /// evidence::prove_skill() itself failed (e.g. evidence log unreadable).
+    CompetencyProofError { datum: String, skill: String, reason: String },
 }
 
 impl fmt::Display for DatumProofError {
@@ -51,6 +55,10 @@ impl fmt::Display for DatumProofError {
                 write!(f, "datum '{datum}' requires non-empty hint"),
             Self::MissingStructuralField { datum, expected } =>
                 write!(f, "datum '{datum}' requires at least one of: {expected}"),
+            Self::NoCompetencyEvidence { datum, skill } =>
+                write!(f, "datum '{datum}' requires competency evidence for skill '{skill}' (see `b00t evidence record --skill {skill} --constraint ...`)"),
+            Self::CompetencyProofError { datum, skill, reason } =>
+                write!(f, "datum '{datum}' competency check for skill '{skill}' failed: {reason}"),
         }
     }
 }
@@ -365,6 +373,13 @@ impl BootDatum {
 
     /// Dispatch prove based on declared datum_type. `Unknown` always passes.
     pub fn prove_by_type(&self) -> Result<(), DatumProofError> {
+        self.prove_structural()?;
+        self.prove_competency()?;
+        Ok(())
+    }
+
+    /// Structural well-formedness dispatch based on declared datum_type. `Unknown` always passes.
+    fn prove_structural(&self) -> Result<(), DatumProofError> {
         match &self.datum_type {
             Some(DatumType::Cli)         => self.prove_cli(),
             Some(DatumType::Skill)       => self.prove_skill(),
@@ -402,6 +417,26 @@ impl BootDatum {
             Some(DatumType::Ooda)        => Ok(()),
             Some(DatumType::Unknown) | None => Ok(()),
         }
+    }
+
+    /// Phase 3 — Competency cross-reference (issue #710): if `requires_competency`
+    /// is set, at least one evidence::prove_skill() record must exist for it.
+    fn prove_competency(&self) -> Result<(), DatumProofError> {
+        let Some(skill) = &self.requires_competency else { return Ok(()); };
+        let chain = crate::commands::evidence::prove_skill(skill).map_err(|e| {
+            DatumProofError::CompetencyProofError {
+                datum: self.name.clone(),
+                skill: skill.clone(),
+                reason: e.to_string(),
+            }
+        })?;
+        if chain.is_empty() {
+            return Err(DatumProofError::NoCompetencyEvidence {
+                datum: self.name.clone(),
+                skill: skill.clone(),
+            });
+        }
+        Ok(())
     }
 
     /// Check if `type_tags` includes a given tag (bridge to trait resolution).
@@ -703,6 +738,53 @@ mod tests {
     }
     #[test] fn prove_by_type_none_always_ok() {
         let d = BootDatum { name: "x".to_string(), hint: "x".to_string(), ..Default::default() };
+        assert!(d.prove_by_type().is_ok());
+    }
+
+    // ── prove_by_type × requires_competency (issue #710) ────────────────────
+
+    #[test] fn prove_by_type_missing_competency_evidence_fails() {
+        let skill = format!("issue710-test-skill-{}", uuid::Uuid::new_v4());
+        let dir = tempfile::tempdir().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+        crate::commands::evidence::with_test_evidence_log_path(log_path, || {
+            let d = BootDatum {
+                name: "needs-competency".to_string(),
+                hint: "x".to_string(),
+                requires_competency: Some(skill),
+                ..Default::default()
+            };
+            assert!(matches!(
+                d.prove_by_type(),
+                Err(DatumProofError::NoCompetencyEvidence { .. })
+            ));
+        });
+    }
+
+    #[test] fn prove_by_type_with_recorded_competency_evidence_ok() {
+        let skill = format!("issue710-test-skill-{}", uuid::Uuid::new_v4());
+        let dir = tempfile::tempdir().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+        crate::commands::evidence::with_test_evidence_log_path(log_path, || {
+            crate::commands::evidence::record_satisfies(&skill, "some-constraint")
+                .expect("record_satisfies should succeed");
+            let d = BootDatum {
+                name: "needs-competency".to_string(),
+                hint: "x".to_string(),
+                requires_competency: Some(skill),
+                ..Default::default()
+            };
+            assert!(d.prove_by_type().is_ok());
+        });
+    }
+
+    #[test] fn prove_by_type_no_competency_requirement_is_structural_only() {
+        let d = BootDatum {
+            name: "no-competency".to_string(),
+            hint: "x".to_string(),
+            requires_competency: None,
+            ..Default::default()
+        };
         assert!(d.prove_by_type().is_ok());
     }
 

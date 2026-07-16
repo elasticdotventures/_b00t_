@@ -13,7 +13,9 @@
 #    unconditionally ("when": {"always": true}) for every container on this
 #    host and fires regardless of runtimeClassName, NVIDIA_VISIBLE_DEVICES,
 #    or a nvidia-container-runtime `io.podman.annotations.run` override —
-#    none of those made kube-play succeed. Root cause is very likely
+#    none of those made kube-play succeed. This manifest keeps the real k8s
+#    nvidia.com/gpu accounting contract intact; use the workaround below only
+#    for local rootless Podman. Root cause is very likely
 #    `no-cgroups` (commented out, defaulting to false) in
 #    /etc/nvidia-container-runtime/config.toml — a well-documented
 #    requirement for rootless podman + nvidia-container-toolkit, needs root

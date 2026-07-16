@@ -167,6 +167,11 @@ pub struct BootDatum {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
 
+    // Competency cross-reference (issue #710): when set, prove_by_type() also
+    // requires evidence::prove_skill(skill) to return at least one record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requires_competency: Option<String>,
+
     // Source control metadata
     pub url: Option<String>,
     pub branch: Option<String>,

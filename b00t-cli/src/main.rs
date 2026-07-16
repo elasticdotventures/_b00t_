@@ -599,8 +599,9 @@ The system will:
     #[clap(subcommand)]
     Store(StoreCommands),
     #[clap(
+        visible_alias = "sh",
         about = "Execute command with guard enforcement and broad-authority audit log",
-        long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\nUse --sleep=<duration> for background execution (returns immediately)."
+        long_about = "Audited execution: Allow→run, Warn→run with warning, Block→reject first time / force on re-submit within 5min.\nAll executions logged to ~/.b00t/exec-log.jsonl.\n\n`b00t sh -- <cmd>` is the task-work alias: same audited path, exec-log artifacts feed ledgrrr verification + 🍰 allocation.\nUse --sleep=<duration> for background execution (returns immediately)."
     )]
     Exec(b00t_cli::commands::exec::ExecArgs),
     #[clap(about = "Schema datum management (generate, validate)")]

@@ -17,6 +17,12 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[cfg(test)]
+thread_local! {
+    static TEST_EVIDENCE_LOG_PATH: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// FactRecord mirrors b00t_c0re_lib::irontology_bridge::FactRecord.
 /// subject=skill, predicate="satisfies", object=constraint JSON value.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,12 +65,30 @@ impl EvidenceRecord {
 }
 
 fn evidence_log_path() -> Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = TEST_EVIDENCE_LOG_PATH.with(|slot| slot.borrow().clone()) {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).context("create test evidence dir")?;
+        }
+        return Ok(path);
+    }
+
     let dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("no home dir"))?
         .join(".b00t")
         .join("evidence");
     std::fs::create_dir_all(&dir).context("create evidence dir")?;
     Ok(dir.join("satisfies.jsonl"))
+}
+
+#[cfg(test)]
+pub(crate) fn with_test_evidence_log_path<R>(path: PathBuf, f: impl FnOnce() -> R) -> R {
+    TEST_EVIDENCE_LOG_PATH.with(|slot| {
+        let previous = slot.replace(Some(path));
+        let result = f();
+        slot.replace(previous);
+        result
+    })
 }
 
 /// Append one evidence record to the JSONL log.
@@ -393,28 +417,15 @@ mod tests {
     fn append_and_read_evidence_roundtrip() {
         let dir = TempDir::new().unwrap();
         let log_path = dir.path().join("satisfies.jsonl");
+        with_test_evidence_log_path(log_path, || {
+            append_evidence(&EvidenceRecord::satisfies("skill-a", "constraint-x")).unwrap();
+            append_evidence(&EvidenceRecord::satisfies("skill-b", "constraint-y")).unwrap();
 
-        // Write two records manually
-        let r1 = EvidenceRecord::satisfies("skill-a", "constraint-x");
-        let r2 = EvidenceRecord::satisfies("skill-b", "constraint-y");
-        {
-            use std::io::Write;
-            let mut f = std::fs::File::create(&log_path).unwrap();
-            writeln!(f, "{}", serde_json::to_string(&r1).unwrap()).unwrap();
-            writeln!(f, "{}", serde_json::to_string(&r2).unwrap()).unwrap();
-        }
-
-        // Read them back (parsing the file directly)
-        let content = std::fs::read_to_string(&log_path).unwrap();
-        let records: Vec<EvidenceRecord> = content
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| serde_json::from_str(l).unwrap())
-            .collect();
-
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].subject, "skill-a");
-        assert_eq!(records[1].subject, "skill-b");
+            let records = read_evidence().unwrap();
+            assert_eq!(records.len(), 2);
+            assert_eq!(records[0].subject, "skill-a");
+            assert_eq!(records[1].subject, "skill-b");
+        });
     }
 
     #[test]

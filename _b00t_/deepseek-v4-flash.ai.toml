@@ -1,0 +1,17 @@
+[b00t]
+name = "deepseek-v4-flash"
+type = "ai_provider"
+hint = "DeepSeek v4 Flash — frontier model via DeepSeek API; ch0nky-tier in opencode"
+
+[b00t.ai]
+provider = "deepseek"
+model = "deepseek-v4-flash"
+runtime = "opencode"
+tier = "ch0nky"
+
+# b00t:map v1
+# summary: DeepSeek v4 Flash — frontier model via DeepSeek API, ch0nky-tier opencode runtime
+# tags: deepseek, model, ai, provider, frontier
+# tier: ch0nky
+# cmds: opencode
+# complexity: 2

@@ -317,6 +317,7 @@ impl CheckpointStore for InMemoryCheckpointStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipeline_executor::StageStatus;
     use crate::pipeline_logs::VecLogStore;
     use crate::pipeline_types::{
         CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements,

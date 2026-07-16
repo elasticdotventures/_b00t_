@@ -218,9 +218,6 @@ fn sample_stages_for(pipeline_id: &str) -> Vec<CapsuleProfile> {
 /// by an assumed number of runs per day for a forecast window.
 fn handle_forecast(pipeline_name: &str, config: &CostConfig) -> Result<()> {
     let stages = sample_stages_for(pipeline_name);
-    if stages.is_empty() {
-        anyhow::bail!("Unknown pipeline: {}", pipeline_name);
-    }
 
     // Simulate: average run takes 5 minutes processing 200 MB
     let avg_duration = 300.0;

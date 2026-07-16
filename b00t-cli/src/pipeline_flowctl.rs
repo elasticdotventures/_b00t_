@@ -130,8 +130,7 @@ impl FlowControl {
                     self.throttle_window_start = now;
                 }
                 self.throttle_window_bytes = self.throttle_window_bytes.saturating_add(bytes as u64);
-                self.current_bytes_sec = self.throttle_window_bytes as f64
-                    / elapsed.as_secs_f64().max(0.001);
+                self.current_bytes_sec = self.throttle_window_bytes as f64;
             }
             FlowStrategy::Windowed { .. } => {
                 self.in_flight = self.in_flight.saturating_add(1);
@@ -168,7 +167,6 @@ impl FlowControl {
             FlowStrategy::Windowed { .. } => {
                 self.in_flight = self.in_flight.saturating_sub(1);
             }
-            _ => {}
         }
         _ = bytes; // unused for tracking but kept for API symmetry
     }

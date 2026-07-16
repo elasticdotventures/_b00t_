@@ -5,6 +5,8 @@ use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
 use anyhow::{Context, Result};
 use b00t_c0re_lib::TemplateRenderer;
 use std::fs;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 /// Detect current AI agent based on environment variables
 pub fn detect_agent(ignore_env: bool) -> String {
@@ -742,6 +744,41 @@ pub enum DashboardStatus {
     Unknown,
 }
 
+fn dashboard_probe_timeout() -> Duration {
+    if cfg!(test) {
+        Duration::from_millis(500)
+    } else {
+        Duration::from_secs(2)
+    }
+}
+
+fn command_output_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Option<Output> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let start = Instant::now();
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return child.wait_with_output().ok(),
+            Ok(None) if start.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
 /// Build the layered system dashboard for an agent.
 pub fn build_dashboard() -> Vec<DashboardLayer> {
     let mut layers = Vec::new();
@@ -848,9 +885,11 @@ fn detect_ram() -> DashboardItem {
 
 fn detect_gpu() -> DashboardItem {
     // Check nvidia-smi first, then amdgpu
-    if let Ok(out) = std::process::Command::new("nvidia-smi")
-        .args(["--query-gpu=name,memory.total", "--format=csv,noheader"])
-        .output()
+    if let Some(out) = command_output_with_timeout(
+        "nvidia-smi",
+        &["--query-gpu=name,memory.total", "--format=csv,noheader"],
+        dashboard_probe_timeout(),
+    )
     {
         let stdout = String::from_utf8_lossy(&out.stdout);
         if out.status.success() && !stdout.trim().is_empty() {
@@ -881,7 +920,7 @@ fn detect_os() -> DashboardItem {
 fn detect_python() -> DashboardItem {
     // Try python3.14 first (target version), fall back to python3
     for cmd in &["python3.14", "python3"] {
-        if let Ok(out) = std::process::Command::new(cmd).arg("--version").output() {
+        if let Some(out) = command_output_with_timeout(cmd, &["--version"], dashboard_probe_timeout()) {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let version = stdout.trim().trim_start_matches("Python ");
             if !version.is_empty() {
@@ -914,7 +953,7 @@ fn detect_python() -> DashboardItem {
 }
 
 fn detect_node() -> DashboardItem {
-    if let Ok(out) = std::process::Command::new("node").arg("--version").output() {
+    if let Some(out) = command_output_with_timeout("node", &["--version"], dashboard_probe_timeout()) {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return DashboardItem {
             label: "Node".into(),
@@ -930,10 +969,7 @@ fn detect_node() -> DashboardItem {
 }
 
 fn detect_rust() -> DashboardItem {
-    if let Ok(out) = std::process::Command::new("rustc")
-        .arg("--version")
-        .output()
-    {
+    if let Some(out) = command_output_with_timeout("rustc", &["--version"], dashboard_probe_timeout()) {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return DashboardItem {
             label: "Rust".into(),
@@ -949,7 +985,7 @@ fn detect_rust() -> DashboardItem {
 }
 
 fn detect_just() -> DashboardItem {
-    if let Ok(out) = std::process::Command::new("just").arg("--version").output() {
+    if let Some(out) = command_output_with_timeout("just", &["--version"], dashboard_probe_timeout()) {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return DashboardItem {
             label: "just".into(),
@@ -973,10 +1009,7 @@ fn check_binary(name: &str, cmd: &str) -> DashboardItem {
             detail: "no command".into(),
         };
     }
-    if let Ok(out) = std::process::Command::new(parts[0])
-        .args(&parts[1..])
-        .output()
-    {
+    if let Some(out) = command_output_with_timeout(parts[0], &parts[1..], dashboard_probe_timeout()) {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return DashboardItem {
             label: name.into(),
