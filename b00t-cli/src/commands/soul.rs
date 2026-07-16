@@ -982,7 +982,7 @@ async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
 // ── DataFramerr registry I/O ──────────────────────────────────────────────────
 
 /// Load the full TOML document from the active soul file.
-fn load_soul_doc() -> Result<toml::Table> {
+pub(crate) fn load_soul_doc() -> Result<toml::Table> {
     let path = active_soul_path();
     if !path.exists() {
         return Ok(toml::Table::new());
@@ -994,7 +994,7 @@ fn load_soul_doc() -> Result<toml::Table> {
 }
 
 /// Extract [soul] → SoulDataFramerrRegistry from the doc.
-fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry> {
+pub(crate) fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry> {
     match doc.get("soul") {
         None => Ok(SoulDataFramerrRegistry::default()),
         Some(v) => {
