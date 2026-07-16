@@ -30,6 +30,8 @@ pub mod aaiii;
 pub mod agent_coordination;
 pub mod agent_manager;
 pub mod agent_subtype;
+pub mod ai_artifact;
+pub mod ai_capability;
 pub mod ai_client;
 pub mod ato_client;
 pub mod b00t_config;
@@ -77,6 +79,13 @@ pub mod utils;
 
 // Re-export commonly used types
 pub use agent_subtype::AgentSubtype;
+pub use ai_artifact::{
+    ArtifactExtractionConstraint, ArtifactExtractionManifest, ArtifactId, BoundingBoxRegion,
+    ExtractedArtifact, OcrProviderOutput, OcrTextRegion, Photo, PhotoArtifactExtractionRequest,
+    PhotoId, PhotoSource, PromptArgumentMap, PromptParameterKind, PromptParameterSpec,
+    PromptTemplate, PromptTemplateId, PromptValue, Sam3ArtifactExtractionInput,
+    Sam3ArtifactExtractionNode, SegmentedRegion, StructuredRegion, TextRegion,
+};
 pub use agent_manager::{
     AgentConfig, AgentHandle, AgentManager, ExecutorConfig, invoke_agent_executor,
 };
