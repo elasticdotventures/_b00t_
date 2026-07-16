@@ -64,7 +64,7 @@
 
 [submodule "vendor/hermes-agent-b00t"]
 	path = vendor/hermes-agent-b00t
-	url = git@github.com:PromptExecution/hermes-agent-b00t.git
+	url = https://github.com/PromptExecution/hermes-agent-b00t.git
 
 [submodule "vendor/irontology-mcp"]
 	path = vendor/irontology-mcp
@@ -85,11 +85,11 @@
 
 [submodule "vendor/moltis-b00t"]
 	path = vendor/moltis-b00t
-	url = git@github.com:elasticdotventures/moltis-b00t.git
+	url = https://github.com/elasticdotventures/moltis-b00t.git
 
 [submodule "vendor/opencode-b00t"]
 	path = vendor/opencode-b00t
-	url = git@github.com:PromptExecution/opencode-b00t.git
+	url = https://github.com/PromptExecution/opencode-b00t.git
 
 [submodule "vendor/rust-docs-mcp-server"]
 	path = vendor/rust-docs-mcp-server
