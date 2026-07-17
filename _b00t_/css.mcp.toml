@@ -3,6 +3,7 @@ name = "css"
 type = "mcp"
 hint = "MCP server"
 
+# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
 entangled_cli = ["css.cli"]
 
 [[b00t.mcp.stdio]]

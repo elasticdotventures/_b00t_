@@ -9,8 +9,10 @@ depends_on = ["ai-worker.role", "ai-finetune.skill", "hf.cli", "just.cli", "vllm
 skills = [
     "ai-finetune",
     "datum-authoring",
+    # <|🦨: aspirational — cognitive-tier-routing/stateless-scoring skill datums not yet authored; referenced by 4 roles per #163; roadmap _b00t_#850 |>
     "cognitive-tier-routing",
     "stateless-scoring",
+    # <|🦨: aspirational — next 3 skill datums never authored (intent captured in trailing comments); _b00t_#850, #163 |>
     "model-architecture",     # knows dense vs MoE, attention vs FFN tradeoffs
     "lora-hyperparams",       # knows r, alpha, dropout, target_modules impact
     "hf-ecosystem",           # HF Hub, Jobs, datasets, PEFT, Transformers internals
