@@ -301,7 +301,7 @@ impl LlmState {
             if entry.access.is_empty() {
                 return true; // empty access = full access (backwards compat)
             }
-            return entry.access.iter().any(|p| p.class == class && matches!(p.action, Action::Execute) || matches!(p.action, Action::Read));
+            return entry.access.iter().any(|p| p.class == class && p.action == action);
         }
         false
     }
@@ -406,18 +406,6 @@ fn extract_bearer_token(headers: &HeaderMap, dev_mode: bool) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|s| s.to_string())
-}
-
-// ── Endpoint → ontology class mapping ─────────────────────────────────────
-
-fn class_for_path(path: &str) -> (&str, Action) {
-    if path.contains("chat/completions") {
-        ("b00t:ChatModel", Action::Execute)
-    } else if path.contains("embeddings") {
-        ("b00t:EmbeddingModel", Action::Execute)
-    } else {
-        ("b00t:Model", Action::Read)
-    }
 }
 
 // ── Handlers ───────────────────────────────────────────────────────────────

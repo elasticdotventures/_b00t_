@@ -31,12 +31,8 @@ wasm-bindgen = "0.2.89"
 winnow = "0.7"
 wasm-bindgen-test = "0.3.39"
 
-[tool.maturin]
-# https://www.maturin.rs/config
-## 🦀 rust/cargo specic:
-# Build artifacts with the specified Cargo profile
+[package.metadata.maturin]
 profile = "release"
-# List of features to activate
 features = ["lang-python", "pyo3/extension-module"]
 # Activate all available features
 all-features = false
