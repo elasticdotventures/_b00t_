@@ -27,7 +27,7 @@ version_regex = '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'
 depends_on = ["node.cli"]
 
 entangled_mcp = ["qwen-code.mcp"]
-entangled_ai_models = ["qwen3-coder-local.model"]
+entangled_ai_models = ["qwen3-coder-local.model.ai"]
 
 [b00t.learn]
 topic = "qwen-code"

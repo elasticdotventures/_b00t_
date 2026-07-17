@@ -3,7 +3,7 @@ name = "gemini-mcp-tool"
 type = "mcp"
 hint = "Google Gemini MCP server - AI assistant with code sandbox and file analysis"
 lfmf_category = "gemini"
-entangled_cli = ["geminicli"]
+entangled_cli = ["geminicli.cli"]
 
 [b00t.learn]
 topic = "gemini"

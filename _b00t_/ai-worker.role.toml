@@ -4,7 +4,7 @@ type = "role"
 hint = "AI fine-tuning agent: QLoRA dataset generation, local k8s training, HF Jobs cloud dispatch, adapter evaluation."
 
 # Inherits worker base + adds AI-specific capabilities
-depends_on = ["worker", "ai-finetune", "hf-cli", "just.cli"]
+depends_on = ["worker.role", "ai-finetune.skill", "hf.cli", "just.cli"]
 
 skills = [
     "ai-finetune",
