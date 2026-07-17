@@ -1,0 +1,32 @@
+# Python Minimum — canonical system minimum for b00t-managed projects
+# 🤓 This datum is THE single source of truth for Python version requirements.
+#    Every project's .python-version and Containerfile MUST match this.
+#    Scripts that check Python versions MUST read this datum, not hardcode.
+#
+# uv project python: uv reads .python-version at project root. The system
+# /usr/bin/python3 is irrelevant — uv manages its own Python installations.
+#
+# Check current: cat .python-version
+# Pin project:   uv python pin 3.14
+# List available: uv python list
+
+[b00t.python]
+minimum = "3.14"
+pin_command = "uv python pin 3.14"
+file = ".python-version"
+container = "docker.io/python:3.14-slim"
+requires_pyproject = ">=3.14"
+package_manager = "uv"
+pip_banned = true
+
+[b00t.python.guards]
+pip_install = "warn|redirect: uv pip install --system"
+pip3_install = "warn|redirect: uv pip install --system"
+python_mpip = "warn|redirect: uv pip install --system"
+
+# b00t:map v1
+# summary: Canonical Python minimum — uv project python 3.14
+# tags: python, 3.14, minimum, canonical, uv, .python-version
+# tier: sm0l
+# cmds: cat .python-version, uv python list
+# complexity: 1

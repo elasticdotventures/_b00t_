@@ -103,6 +103,16 @@ precriteria_key  = "[[b00t.hive.precriteria]]"
 # Enforced in: b00t task list, b00t task add, b00t hive activate
 # NOT enforced in: b00t learn, b00t whoami, b00t status (read-only ops)
 
+[[system_normal.checks]]
+id        = "python-version-gate"
+label     = "uv project python >= 3.14 (PYTHON-MINIMUM datum)"
+command   = "cat .python-version 2>/dev/null || echo 'none'"
+expected  = "3.14"
+severity  = "warn"
+message   = "uv project python is not pinned to 3.14 — run 'uv python pin 3.14'"
+fix       = "uv python pin 3.14"
+rationale = "PYTHON-MINIMUM datum requires uv project python >= 3.14"
+
 # b00t:map v1
 # summary: system-normal precriteria — git stash empty + no conflicts + on task branch + submodules in sync
 # tags: guardrail, precriteria, git, maintenance, system-health, blocking, submodule
