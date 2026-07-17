@@ -521,13 +521,23 @@ fn local_batch_args(name: &str, runtime: &ContainerRuntime, spec: &BatchJobSpec)
         args.push(format!("{key}={value}"));
     }
 
-    // 🤓 config_path is a host path here — bind-mounted at a fixed in-container
-    //    location and passed as the trailing entrypoint arg, matching how the
-    //    app4dog sam-runner images expect their request JSON.
+    // 🤓 Job-dir convention: config_path's parent directory is the job's
+    //    staging dir, bind-mounted rw at /workspace so the runner can read
+    //    adjacent inputs (e.g. the photo referenced by the request) and write
+    //    outputs (output.json, masks/) back to the host — the read-back half
+    //    of app4dog's submit→poll→read pipeline. The request file itself is
+    //    passed as the trailing entrypoint arg at its in-container path.
+    let config_dir = p
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("config_path has no parent dir: {:?}", spec.config_path))?;
+    let config_name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("config_path has no valid filename: {:?}", spec.config_path))?;
     args.push("-v".into());
-    args.push(format!("{}:/workspace/request.json:ro", spec.config_path));
+    args.push(format!("{}:/workspace:rw", config_dir.display()));
     args.push(spec.image.clone());
-    args.push("/workspace/request.json".into());
+    args.push(format!("/workspace/{config_name}"));
 
     Ok(args)
 }
@@ -914,9 +924,29 @@ mod batch_job_tests {
         assert!(args.contains(&"--device".to_string()));
         assert!(args.contains(&"nvidia.com/gpu=all".to_string()));
         assert!(!args.contains(&"--gpus".to_string()));
-        assert_eq!(args.last().unwrap(), "/workspace/request.json");
+        // NamedTempFile has a random basename; the job-dir convention passes
+        // it through at /workspace/<basename>.
+        let basename = std::path::Path::new(&path).file_name().unwrap().to_str().unwrap();
+        assert_eq!(args.last().unwrap(), &format!("/workspace/{basename}"));
         assert!(args.contains(&"app4dog/sam1-runner:local".to_string()));
-        assert!(args.iter().any(|a| a.ends_with(":/workspace/request.json:ro")));
+        assert!(args.iter().any(|a| a.ends_with(":/workspace:rw")));
+    }
+
+    #[test]
+    fn local_batch_args_mounts_job_dir_rw() {
+        // Job-dir convention: the config file's parent directory is the job's
+        // staging dir — mounted rw at /workspace so the runner can read
+        // adjacent inputs (photo) and write outputs (output.json, masks/)
+        // back to the host.
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("request.json");
+        std::fs::write(&config, b"{}").unwrap();
+        let spec = sample_spec("app4dog/sam1-runner:local", config.to_str().unwrap());
+        let args = local_batch_args("b00t-batch-test", &ContainerRuntime::Podman, &spec).unwrap();
+        let dir_str = dir.path().to_str().unwrap();
+        assert!(args.contains(&format!("{dir_str}:/workspace:rw")));
+        assert_eq!(args.last().unwrap(), "/workspace/request.json");
+        assert!(!args.iter().any(|a| a.ends_with(":ro")));
     }
 
     #[test]
