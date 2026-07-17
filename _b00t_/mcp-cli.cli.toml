@@ -2,17 +2,12 @@
 name = "mcp-cli"
 type = "cli"
 hint = "avelino/mcp — CLI that turns MCP servers into terminal commands. Single Rust binary, proxy mode, auth handling."
+desires = "0.5.2"
+install = "cargo install --git https://github.com/avelino/mcp.git"
 
 [b00t.learn]
 topic = "mcp-cli"
 auto_digest = false
-
-[b00t.desires]
-version = "0.5.2"
-
-[[b00t.install]]
-command = "cargo install --git https://github.com/avelino/mcp.git"
-requires = ["cargo"]
 
 [[b00t.detect]]
 command = "mcp"

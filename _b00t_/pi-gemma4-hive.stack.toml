@@ -15,7 +15,7 @@ name = "pi-gemma4-hive"
 type = "stack"
 hint = "pi + Gemma 4 direct local hive stack — autonomous ch0nky tier via llama-cpp provider"
 members = [
-  "gemma-4-26b-a4b-local.model",   # vLLM gemma4 service (port 8001)
+  "gemma-4-26b-a4b-local.model.ai",   # vLLM gemma4 service (port 8001)
   "pi-coding-agent.cli",            # pi executor
   "pi-mcp-adapter.cli",             # MCP proxy for pi
 ]

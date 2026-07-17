@@ -10,7 +10,7 @@ version_regex = '(\d+\.\d+\.\d+)'
 aliases = ["gemini"]
 env = { GEMINI_API_KEY = "required" }
 depends_on = ["node.cli"]
-entangled_mcp = ["gemini-mcp-tool"]
+entangled_mcp = ["gemini-mcp-tool.mcp"]
 
 [b00t.skill]
 type_tags = ["cli", "ai", "google", "gemini", "mcp", "agent", "code-assist", "grounding"]

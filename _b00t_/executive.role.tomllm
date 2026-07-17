@@ -17,9 +17,9 @@ skills = [
     "resource-scheduling",
     "agent-delegation",
     "tomllm",
-    "systemd",
-    "vllm",
-    "rust",
+    "systemd.cli",
+    "vllm.cli",
+    "rust.cli",
 ]
 
 compliance = [
