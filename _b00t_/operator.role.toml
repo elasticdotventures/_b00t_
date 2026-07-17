@@ -16,7 +16,7 @@ skills = [
     "bouncer",
     "sm0l",
     "datum",
-    "wrkflw",
+    "wrkflw.cli",
     "karpathy-autoresearch",
 ]
 
