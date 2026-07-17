@@ -107,3 +107,6 @@ Optimal kernel 6.14+ (Ubuntu 25.04) for full podman 6.0 feature set.
 uname -r          # check kernel version
 podman info --format '{{.Host.Kernel}}'  # podman's view of kernel
 ```
+
+---
+CDI GPU injection breaks after reboot when /dev/dri renumbers (card1→card0): /etc/cdi/nvidia.yaml goes stale and needs root. Rootless fix: nvidia-ctk cdi generate --output=~/.config/containers/cdi/nvidia.yaml — containers.conf already sets cdi_spec_dirs to that path. Regenerate after every reboot; symptom is 'failed to stat CDI host device /dev/dri/cardN'

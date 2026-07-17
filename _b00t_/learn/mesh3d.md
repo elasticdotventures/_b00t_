@@ -1,0 +1,2 @@
+---
+sm3lly local 3D-gen attempt took the node down (reboot 2026-07-17: sm3lly local 3D-gen attempt took the node down (reboot 2026-07-17 ~01:17). mesh3d/TRELLIS.2 jobs MUST run containerized via podman with --memory cap + --memory-swap equal (31GB host RAM), VRAM gate raised (TRELLIS.2-4B tested on H100; use Pixal3D --low_vram res 1024 on RTX3090 24GB), and hive exclusion.group must evict llama-server before dispatch <!-- salvaged:topic_overflow -->
