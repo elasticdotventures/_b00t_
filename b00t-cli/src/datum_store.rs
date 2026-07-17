@@ -29,7 +29,7 @@ use crate::datum_proof::{
     AsJobDatum, AsJustfileDatum, AsK8sDatum, AsMcpDatum, AsNixDatum, AsRepoDatum,
     AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum, Provable,
 };
-use crate::datum_utils::get_all_datums;
+use crate::datum_utils::get_all_datums_with_paths;
 use crate::{BootDatum, DatumType};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
@@ -294,23 +294,194 @@ impl fmt::Display for ReferenceError {
     }
 }
 
+impl ReferenceError {
+    /// Key of the datum that declares the offending reference.
+    pub fn datum_key(&self) -> &str {
+        match self {
+            Self::MissingDependency { datum, .. }
+            | Self::SelfDependency { datum }
+            | Self::EmptyDependency { datum }
+            | Self::MissingReference { datum, .. }
+            | Self::EmptyReference { datum, .. } => datum,
+            Self::MissingMember { stack, .. } => stack,
+        }
+    }
+
+    /// Edge field the reference appears in.
+    pub fn field_name(&self) -> &'static str {
+        match self {
+            Self::MissingDependency { .. }
+            | Self::SelfDependency { .. }
+            | Self::EmptyDependency { .. } => "depends_on",
+            Self::MissingMember { .. } => "members",
+            Self::MissingReference { field, .. } | Self::EmptyReference { field, .. } => field,
+        }
+    }
+
+    /// The unresolved key, for missing-reference variants.
+    pub fn missing_key(&self) -> Option<&str> {
+        match self {
+            Self::MissingDependency { missing_key, .. }
+            | Self::MissingReference { missing_key, .. } => Some(missing_key),
+            Self::MissingMember { missing_member, .. } => Some(missing_member),
+            _ => None,
+        }
+    }
+}
+
+// ── ReferenceDiagnostic (#163) ────────────────────────────────────────────────
+
+/// Fallback suffix `reference_resolves` probes for a given edge field.
+/// MUST mirror the `fallback_suffix` arguments passed in `validate_references`.
+pub fn fallback_suffix_for_field(field: &str) -> Option<&'static str> {
+    match field {
+        "skills" => Some(".skill"),
+        _ => None,
+    }
+}
+
+/// Exact key patterns `reference_resolves` probes for `reference` in `field`.
+pub fn probe_patterns(reference: &str, field: &str) -> Vec<String> {
+    let mut probed = vec![reference.to_string()];
+    if let Some(suffix) = fallback_suffix_for_field(field) {
+        if !reference.contains('.') {
+            probed.push(format!("{reference}{suffix}"));
+        }
+    }
+    probed
+}
+
+/// Classic two-row Levenshtein edit distance. Small keys only — O(n*m) is fine.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut curr = vec![i + 1; b.len() + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            curr[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(curr[j] + 1);
+        }
+        prev = curr;
+    }
+    prev[b.len()]
+}
+
+/// Nearest-key suggestion for an unresolved reference: substring containment
+/// (either direction) or small edit distance. Deterministic tie-break.
+pub fn nearest_key<'a>(keys: impl IntoIterator<Item = &'a str>, missing: &str) -> Option<String> {
+    if missing.len() < 3 {
+        return None;
+    }
+    let mut best: Option<(usize, &str)> = None;
+    for key in keys {
+        if key == missing {
+            continue;
+        }
+        let containment = key.len() >= 3 && (key.contains(missing) || missing.contains(key));
+        let score = if containment {
+            key.len().abs_diff(missing.len())
+        } else {
+            let d = levenshtein(missing, key);
+            if d > 2.max(missing.len() / 4) {
+                continue; // too far — no suggestion from this key
+            }
+            d
+        };
+        let better = match best {
+            None => true,
+            Some((s, k)) => score < s || (score == s && key < k),
+        };
+        if better {
+            best = Some((score, key));
+        }
+    }
+    best.map(|(_, k)| k.to_string())
+}
+
+/// A `ReferenceError` enriched with actionable context (#163):
+/// source file of the referencing datum, patterns probed, nearest-key suggestion.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReferenceDiagnostic {
+    pub error: ReferenceError,
+    /// Source file the referencing datum was loaded from (None for in-memory datums).
+    pub source_path: Option<String>,
+    /// Key patterns `reference_resolves` probed (exact + fallback-suffixed).
+    pub probed: Vec<String>,
+    /// Nearest existing key, when a close match exists in the store.
+    pub suggestion: Option<String>,
+}
+
+impl fmt::Display for ReferenceDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.error)?;
+        write!(f, "\n    source: {}", self.source_path.as_deref().unwrap_or("<in-memory>"))?;
+        if !self.probed.is_empty() {
+            let probed: Vec<String> = self.probed.iter().map(|p| format!("'{p}'")).collect();
+            write!(f, "\n    probed: {}", probed.join(", "))?;
+        }
+        if let Some(s) = &self.suggestion {
+            write!(f, "\n    suggestion: did you mean '{s}'?")?;
+        }
+        Ok(())
+    }
+}
+
 // ── HashMapStore ──────────────────────────────────────────────────────────────
 
 /// Concrete store backed by an in-memory HashMap. Equivalent to Chalk's Box strategy.
 #[derive(Default)]
 pub struct HashMapStore {
     inner: HashMap<String, InternedDatum>,
+    /// Source file each datum was loaded from (key -> path). Diagnostics only (#163).
+    source_paths: HashMap<String, String>,
 }
 
 impl HashMapStore {
     /// Load all datums from a `_b00t_` directory path (standard TOML scan).
+    /// Same scan as `get_all_datums`, but source file paths are retained for diagnostics.
     pub fn from_path(b00t_path: &str) -> Result<Self> {
-        let raw = get_all_datums(b00t_path)?;
+        let raw = get_all_datums_with_paths(b00t_path, None)?;
         let mut store = Self::default();
-        for (key, datum) in raw {
-            store.intern(&key, datum);
+        for (key, (datum, path)) in raw {
+            store.intern_with_path(&key, datum, &path);
         }
         Ok(store)
+    }
+
+    /// Intern a datum and record the source file it was loaded from.
+    pub fn intern_with_path(&mut self, key: &str, datum: BootDatum, source_path: &str) -> InternedDatum {
+        self.source_paths.insert(key.to_string(), source_path.to_string());
+        self.intern(key, datum)
+    }
+
+    /// Source file a datum was loaded from, if known.
+    pub fn source_path(&self, key: &str) -> Option<&str> {
+        self.source_paths.get(key).map(String::as_str)
+    }
+
+    /// `validate_references` with actionable context (#163). Wraps each error 1:1 —
+    /// resolution semantics are untouched, only diagnostics are added.
+    pub fn diagnose_references(&self) -> Vec<ReferenceDiagnostic> {
+        let keys: Vec<&str> = self.inner.keys().map(String::as_str).collect();
+        self.validate_references()
+            .into_iter()
+            .map(|error| {
+                let (probed, suggestion) = match error.missing_key() {
+                    Some(missing) => (
+                        probe_patterns(missing, error.field_name()),
+                        nearest_key(keys.iter().copied(), missing),
+                    ),
+                    None => (Vec::new(), None),
+                };
+                ReferenceDiagnostic {
+                    source_path: self.source_path(error.datum_key()).map(str::to_owned),
+                    probed,
+                    suggestion,
+                    error,
+                }
+            })
+            .collect()
     }
 }
 
@@ -766,5 +937,100 @@ mod tests {
             .collect();
         assert!(self_deps.is_empty(), "self-dependencies in real _b00t_: {self_deps:?}");
         assert!(empty_deps.is_empty(), "empty depends_on entries in real _b00t_: {empty_deps:?}");
+    }
+
+    // ── #163: actionable validate --graph diagnostics ─────────────────────────
+
+    fn store_for_diagnostics() -> HashMapStore {
+        let mut store = HashMapStore::default();
+        store.intern_with_path("gemma-4-26b-a4b-local.model.ai", BootDatum {
+            name: "gemma-4-26b-a4b-local".to_string(), hint: "local gemma".to_string(),
+            ..Default::default()
+        }, "_b00t_/gemma-4-26b-a4b-local.model.ai.tomllmd");
+        store.intern_with_path("hive-cmdb.skill", BootDatum {
+            name: "hive-cmdb".to_string(), hint: "cmdb".to_string(),
+            ..Default::default()
+        }, "_b00t_/hive-cmdb.skill.toml");
+        store.intern_with_path("pi-gemma4-hive.stack", BootDatum {
+            name: "pi-gemma4-hive".to_string(), hint: "stack".to_string(),
+            members: Some(vec!["gemma-4-26b-a4b-local.model".to_string()]),
+            ..Default::default()
+        }, "_b00t_/pi-gemma4-hive.stack.toml");
+        store.intern_with_path("executive.role", BootDatum {
+            name: "executive".to_string(), hint: "role".to_string(),
+            skills: Some(vec!["hive-cmd".to_string()]),
+            ..Default::default()
+        }, "_b00t_/AGENTS/executive.role.toml");
+        store
+    }
+
+    #[test]
+    fn diagnose_missing_member_has_path_probes_and_suggestion() {
+        let store = store_for_diagnostics();
+        let diags = store.diagnose_references();
+        let d = diags.iter()
+            .find(|d| d.error.missing_key() == Some("gemma-4-26b-a4b-local.model"))
+            .expect("missing-member diagnostic present");
+        assert_eq!(d.source_path.as_deref(), Some("_b00t_/pi-gemma4-hive.stack.toml"));
+        assert_eq!(d.probed, vec!["gemma-4-26b-a4b-local.model".to_string()]);
+        assert_eq!(d.suggestion.as_deref(), Some("gemma-4-26b-a4b-local.model.ai"));
+    }
+
+    #[test]
+    fn diagnose_skills_probes_fallback_suffix() {
+        let store = store_for_diagnostics();
+        let diags = store.diagnose_references();
+        let d = diags.iter()
+            .find(|d| d.error.missing_key() == Some("hive-cmd"))
+            .expect("missing-skill diagnostic present");
+        assert_eq!(d.probed, vec!["hive-cmd".to_string(), "hive-cmd.skill".to_string()]);
+        assert_eq!(d.suggestion.as_deref(), Some("hive-cmdb.skill"));
+    }
+
+    #[test]
+    fn diagnostic_display_is_actionable() {
+        let store = store_for_diagnostics();
+        let diags = store.diagnose_references();
+        let d = diags.iter()
+            .find(|d| d.error.missing_key() == Some("hive-cmd"))
+            .unwrap();
+        let s = d.to_string();
+        assert!(s.contains("_b00t_/AGENTS/executive.role.toml"), "source path in display: {s}");
+        assert!(s.contains("probed: 'hive-cmd', 'hive-cmd.skill'"), "probe patterns in display: {s}");
+        assert!(s.contains("did you mean 'hive-cmdb.skill'"), "suggestion in display: {s}");
+    }
+
+    #[test]
+    fn diagnose_does_not_change_error_count_or_semantics() {
+        let store = store_for_diagnostics();
+        let errors = store.validate_references();
+        let diags = store.diagnose_references();
+        assert_eq!(errors.len(), diags.len(), "diagnostics wrap errors 1:1");
+        let wrapped: Vec<&ReferenceError> = diags.iter().map(|d| &d.error).collect();
+        for e in &errors {
+            assert!(wrapped.contains(&e), "error preserved in diagnostics: {e}");
+        }
+    }
+
+    #[test]
+    fn nearest_key_edit_distance_and_none() {
+        let keys = ["git.cli", "gh.cli", "kaizen.skill"];
+        assert_eq!(nearest_key(keys.iter().copied(), "git.clii").as_deref(), Some("git.cli"));
+        assert_eq!(nearest_key(keys.iter().copied(), "zzz-unrelated-thing"), None);
+    }
+
+    #[test]
+    fn from_path_records_source_paths() {
+        use std::io::Write;
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("solo.cli.toml");
+        let mut f = std::fs::File::create(&file_path).unwrap();
+        write!(f, "[b00t]\nname = \"solo\"\ntype = \"cli\"\nhint = \"solo tool\"\n").unwrap();
+        let store = HashMapStore::from_path(temp_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(store.len(), 1);
+        assert_eq!(
+            store.source_path("solo.cli"),
+            Some(file_path.to_string_lossy().as_ref())
+        );
     }
 }

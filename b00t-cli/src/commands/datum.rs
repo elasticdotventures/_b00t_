@@ -1219,17 +1219,61 @@ impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
 
 fn handle_validate_graph(datum_path: &str) -> Result<()> {
     let store = HashMapStore::from_path(datum_path)?;
-    let errors = store.validate_references();
+    let diagnostics = store.diagnose_references();
 
-    if errors.is_empty() {
-        println!("datum graph: valid ({} datums)", store.len());
+    if diagnostics.is_empty() {
+        println!("datum graph: valid ({} datums loaded from {datum_path})", store.len());
         return Ok(());
     }
 
-    for error in &errors {
-        eprintln!("  ERROR: {error}");
+    for diagnostic in &diagnostics {
+        eprintln!("  ERROR: {diagnostic}");
     }
-    anyhow::bail!("datum graph validation failed: {} reference error(s)", errors.len());
+    eprintln!("{}", render_graph_summary(&store, &diagnostics, datum_path));
+    anyhow::bail!(
+        "datum graph validation failed: {} reference error(s)",
+        diagnostics.len()
+    );
+}
+
+/// #163: summary block — total datums loaded, errors grouped per source datum,
+/// count per field type. Deterministic (BTreeMap) ordering.
+fn render_graph_summary(
+    store: &HashMapStore,
+    diagnostics: &[crate::datum_store::ReferenceDiagnostic],
+    datum_path: &str,
+) -> String {
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+
+    let mut per_datum: BTreeMap<&str, (Option<&str>, usize)> = BTreeMap::new();
+    let mut per_field: BTreeMap<&str, usize> = BTreeMap::new();
+    for d in diagnostics {
+        let entry = per_datum
+            .entry(d.error.datum_key())
+            .or_insert((d.source_path.as_deref(), 0));
+        entry.1 += 1;
+        *per_field.entry(d.error.field_name()).or_insert(0) += 1;
+    }
+
+    let mut out = String::new();
+    let _ = writeln!(out, "\n── datum graph summary ──────────────────────────");
+    let _ = writeln!(out, "datums loaded: {} from {datum_path}", store.len());
+    let _ = writeln!(
+        out,
+        "reference errors: {} across {} source datum(s)",
+        diagnostics.len(),
+        per_datum.len()
+    );
+    let _ = writeln!(out, "errors per source datum:");
+    for (key, (path, count)) in &per_datum {
+        let _ = writeln!(out, "  {key} ({}): {count}", path.unwrap_or("<in-memory>"));
+    }
+    let _ = writeln!(out, "errors per field:");
+    for (field, count) in &per_field {
+        let _ = writeln!(out, "  {field}: {count}");
+    }
+    out.trim_end().to_string()
 }
 
 fn print_validation_result(errors: &[String], warnings: &[String]) -> Result<()> {
