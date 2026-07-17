@@ -1,0 +1,18 @@
+# vqa-ByteDance-Seed.cli — cli datum (polyseme ref of vqa)
+# Assimilated from: github:ByteDance-Seed/BAGEL
+
+[b00t]
+name        = "vqa-ByteDance-Seed"
+type        = "cli"
+hint        = "BAGEL — ByteDance-Seed/BAGEL — ByteDance-Seed/BAGEL"
+
+# install = "TODO: install BAGEL (unknown)"
+# version = "TODO: version check for BAGEL"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: concrete datum for github:ByteDance-Seed/BAGEL
+# tags: vqa-ByteDance-Seed, ByteDance-Seed, BAGEL
+# tier: ch0nky
+# cmds: b00t install vqa-ByteDance-Seed
+# complexity: 1

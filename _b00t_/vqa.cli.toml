@@ -1,0 +1,18 @@
+# vqa.cli — cli datum
+# Assimilated from: github:Tencent-Hunyuan/Hy-Embodied-RxBrain-1.0
+
+[b00t]
+name        = "vqa"
+type        = "cli"
+hint        = "Hy-Embodied-RxBrain-1.0 — Tencent-Hunyuan/Hy-Embodied-RxBrain-1.0 — Tencent-Hunyuan/Hy-Embodied-RxBrain-1.0"
+
+# install = "TODO: install Hy-Embodied-RxBrain-1.0 (unknown)"
+# version = "TODO: version check for Hy-Embodied-RxBrain-1.0"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: datum for github:Tencent-Hunyuan/Hy-Embodied-RxBrain-1.0 — scaffolded by grok assimilate
+# tags: vqa, Tencent-Hunyuan, Hy-Embodied-RxBrain-1.0
+# tier: ch0nky
+# cmds: b00t install vqa
+# complexity: 1

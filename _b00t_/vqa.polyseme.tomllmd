@@ -1,0 +1,15 @@
+[b00t]
+name = "vqa"
+type = "unknown"
+hint = "Polyseme datum — 'vqa' resolves to multiple artifacts"
+requires_sudo = false
+
+[b00t.polyseme]
+sources = ["https://github.com/ByteDance-Seed/BAGEL"]
+
+[[b00t.polyseme.refs]]
+name = "vqa-ByteDance-Seed"
+canonical = "github:ByteDance-Seed/BAGEL"
+datum = "vqa-ByteDance-Seed.cli"
+description = "BAGEL — ByteDance-Seed/BAGEL"
+
