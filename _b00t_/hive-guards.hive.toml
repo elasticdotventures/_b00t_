@@ -33,6 +33,23 @@ rm_rf_guard = "cmd.contains(\"rm\") && cmd.contains(\"-rf\") && cmd.contains(\"/
 ledgerr_mcp_guard = "cmd.contains(\"ledgerr-mcp\")"
 ledgerr_port_guard = "cmd.contains(\"rotel-visual\")"
 ledgerr_just_guard = "cmd.contains(\"just\") && cmd.contains(\"ledgrrr::\")"
+# 🤓 shared-node resource protocol (2026-07-18): uncapped container workloads
+#    crashed sm3lly twice on 2026-07-17 — cgroup caps are mandatory.
+podman_run_uncapped = "cmd.contains(\"podman run\") && !cmd.contains(\"--memory\")"
+podman_build_uncapped = "cmd.contains(\"podman build\") && !cmd.contains(\"--memory\")"
+
+# --- Shared-node resource protocol guards ---
+[[b00t.hive.guards]]
+pattern = { rhai = "podman_build_uncapped" }
+action = "block"
+message = "🚫 uncapped podman build OOMed the node (2026-07-17, 20.7G buildah RSS). MUST add --memory=16g --memory-swap=16g and stop inference sidecars first. Resubmit identical command within 300s to force."
+repeat_threshold = 1
+
+[[b00t.hive.guards]]
+pattern = { rhai = "podman_run_uncapped" }
+action = "warn"
+message = "🦨 shared node: podman run MUST carry --memory + --memory-swap caps (see AGENTS/--role=podman.md); GPU jobs go through b00t hive plan=<profile> first"
+repeat_threshold = 1
 
 # --- Python/pip guards ---
 [[b00t.hive.guards]]

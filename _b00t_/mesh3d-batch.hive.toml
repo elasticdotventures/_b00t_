@@ -1,0 +1,70 @@
+# b00t Hive Profile — mesh3d batch: Pixal3D image→GLB job (app4dog create-a-critter)
+# 🤓 One-off GPU batch job, NOT a resident service. Runs the
+#    app4dog/mesh-runner:v1 container (TRELLIS.2 backbone, MIT) against a
+#    job dir per the b00t local-provider convention (request.json rw mount).
+# 🤓 RESOURCE MANDATE (operator 2026-07-17, after two node crashes):
+#    every mesh3d execution — image BUILD and job RUN — MUST be cgroup-capped.
+#    Bare-host 3D-gen took out sm3lly on 2026-07-17 ~01:17; the image build
+#    (MAX_JOBS=4, no cap) took it out again ~23:05 (buildah 20.7G RSS peak).
+# ⚠️ VRAM: --low_vram (resolution 1024) peaks ~10-12GB, standard ~18GB.
+#    ch0nky (:8001, ~19GB) MUST be evicted first; sm0l-vqa (:8002, ~4GB) may
+#    stay resident only in low_vram mode — evict it too for standard runs.
+
+[b00t]
+name = "mesh3d-batch"
+type = "hive_profile"
+hint = "Pixal3D image→GLB batch job — evicts ch0nky, caps container at 20G RAM / low_vram, RTX3090 time-share"
+depends_on = ["huggingface.cli"]
+
+[b00t.hive.resources]
+# 🤓 low_vram profile: ~12GB VRAM + model load / trimesh validation in RAM
+ram_gb    = 20
+gpu_mb    = 13000
+cpu_cores = 4
+
+[b00t.hive.resources.gate]
+# 🤓 forces ch0nky eviction (19GB resident) before the job may start;
+#    sm0l-vqa (~4GB) fits alongside the low_vram job on the 24GB card
+ram_free_gb = 20
+gpu_free_mb = 13000
+
+[b00t.hive.exclusion]
+# 🤓 same group as local-gpu-batch — GPU is time-shared with interactive
+#    inference; inference resumes when the batch job exits
+group    = "primary-workload"
+priority = 8
+
+[b00t.hive.services]
+stop = [
+  "b00t@inference-qwen36-27b-llamacpp.service",
+  "b00t@inference-qwen36-35b-a3b-llamacpp.service",
+]
+
+[[b00t.hive.guards]]
+pattern = "pip install"
+action  = "warn"
+message = "🦨 use uv pip install"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman --device nvidia.com/gpu=all"
+
+[[b00t.usage]]
+description = "Build the mesh-runner image (capped — the uncapped build OOMed the node)"
+command = "podman build --memory=16g --memory-swap=16g -t app4dog/mesh-runner:v1 -f critter-keeper/docker/mesh-runner/Containerfile ."
+
+[[b00t.usage]]
+description = "Run a mesh3d job (job-dir convention: request.json + photo in $JOB_DIR)"
+command = "podman run --rm --device nvidia.com/gpu=all --security-opt=label=disable --memory=20g --memory-swap=20g -v $JOB_DIR:/workspace:rw -v /home/brianh/.cache/huggingface/hub:/hf:z app4dog/mesh-runner:v1 /workspace/request.json"
+
+[[b00t.usage]]
+description = "Dry-run the resource gate before launching"
+command = "b00t hive plan mesh3d-batch"
+
+# b00t:map v1
+# summary: Pixal3D image→GLB batch profile — cgroup-capped build+run, evicts ch0nky, low_vram RTX3090 path
+# tags: hive, gpu, mesh3d, pixal3d, trellis2, batch, app4dog
+# tier: ch0nky
+# cmds: b00t hive activate mesh3d-batch
+# complexity: 4

@@ -14,8 +14,9 @@ if [[ "$TOOL_NAME" != "bash" && "$TOOL_NAME" != "Bash" && -z "${BASH_COMMAND:-}"
 fi
 
 # ─── BLOCK patterns (exit 2) ───────────────────────────────────────────────
-# rm -rf / — absolute destruction
-if echo "$COMMAND" | grep -qE "rm\s+-rf\s+/"; then
+# rm -rf / — absolute destruction (root itself or /*; NOT targeted absolute
+# paths like /tmp/ext — those are legitimate and common in Containerfiles)
+if echo "$COMMAND" | grep -qE "rm\s+-rf\s+[\"']?/[\"']?(\*)?[\"']?([[:space:]]|$|;|\||&)"; then
     echo '{"decision":"block","reason":"rm -rf / is BLOCKED by b00t guard","suggestion":"use trash or targeted paths"}' >&2
     exit 2
 fi
