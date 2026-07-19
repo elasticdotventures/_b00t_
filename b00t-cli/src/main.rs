@@ -106,7 +106,7 @@ use b00t_cli::commands::{
     provider::ProviderCommands,
     K8sCommands,
     LifecycleCommands, McpCommands, ModelCommands,
-    ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, PythonCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
     runpod::RunpodCommands,
     TaskCommands,
@@ -578,6 +578,11 @@ The system will:
     Viz {
         #[clap(subcommand)]
         viz_command: VizCommands,
+    },
+    #[clap(about = "Python version management — query PYTHON-MINIMUM datum")]
+    Python {
+        #[clap(subcommand)]
+        python_command: PythonCommands,
     },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
@@ -2744,6 +2749,12 @@ async fn main() {
         },
         Some(Commands::Viz { viz_command }) => {
             if let Err(e) = b00t_cli::commands::viz::handle_viz_command(&cli.path, viz_command) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Python { python_command }) => {
+            if let Err(e) = python_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
