@@ -13,7 +13,10 @@ fn main() -> anyhow::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let schema = b00t_lsp::schema::datum_schema();
-    std::fs::write(&out, format!("{}\n", serde_json::to_string_pretty(&schema)?))?;
+    std::fs::write(
+        &out,
+        format!("{}\n", serde_json::to_string_pretty(&schema)?),
+    )?;
     println!("wrote {}", out.display());
     Ok(())
 }

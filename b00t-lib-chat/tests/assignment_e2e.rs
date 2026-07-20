@@ -114,14 +114,20 @@ mod phase2_assignment_e2e {
             "new_email",
             json!({"from": "spam@ads.com", "subject": "buy now"}),
         );
-        client.publish_notification(&non_matching).await.expect("publish");
+        client
+            .publish_notification(&non_matching)
+            .await
+            .expect("publish");
 
         let matching = NotificationMessage::new(
             "gmail",
             "new_email",
             json!({"from": "friend@personal.com", "subject": "hey"}),
         );
-        client.publish_notification(&matching).await.expect("publish");
+        client
+            .publish_notification(&matching)
+            .await
+            .expect("publish");
 
         let task = tokio::time::timeout(Duration::from_secs(5), task_rx.recv())
             .await
@@ -174,7 +180,12 @@ mod phase2_assignment_e2e {
 
         assert_eq!(task.to_agent, "indexer");
         assert_eq!(task.action, "index");
-        assert!(task.payload["path"].as_str().unwrap().contains("/docs/readme.md"));
+        assert!(
+            task.payload["path"]
+                .as_str()
+                .unwrap()
+                .contains("/docs/readme.md")
+        );
 
         engine.stop().await;
     }

@@ -36,10 +36,20 @@ fn record_hardware_drift(snapshot: &SystemSnapshot) -> Option<String> {
     // Refresh accelerator identity keys from the live probe (deterministic).
     // Only these two are derivable from the snapshot; static identity keys
     // (node.board/soc/arch/os/...) are left as seeded — see P4 datums.
-    if let Some(n) = snapshot.accelerators.iter().find(|a| a.is_npu()).map(|a| &a.name) {
+    if let Some(n) = snapshot
+        .accelerators
+        .iter()
+        .find(|a| a.is_npu())
+        .map(|a| &a.name)
+    {
         let _ = mem.write("node.npu", n);
     }
-    if let Some(g) = snapshot.accelerators.iter().find(|a| a.is_gpu()).map(|a| &a.name) {
+    if let Some(g) = snapshot
+        .accelerators
+        .iter()
+        .find(|a| a.is_gpu())
+        .map(|a| &a.name)
+    {
         let _ = mem.write("node.gpu", g);
     }
     let _ = mem.write("node.fingerprint", &live);
@@ -131,14 +141,16 @@ pub enum HiveCommands {
     Cyber(HiveCyberCommands),
 }
 
-
 #[derive(Parser)]
 pub enum PeerCommands {
     #[clap(about = "List all known hive peers with trust zone and health status")]
     List {
         #[clap(long, help = "Output as JSON")]
         json: bool,
-        #[clap(long, help = "Health-check all peers in parallel (5s timeout per peer)")]
+        #[clap(
+            long,
+            help = "Health-check all peers in parallel (5s timeout per peer)"
+        )]
         health: bool,
     },
     #[clap(about = "Register a peer in the hive ledger")]
@@ -224,7 +236,10 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             println!();
 
             if let Some(d) = drift {
-                println!("  ⚠️  HW drift: {}  (soul node.* + events.jsonl updated)", d);
+                println!(
+                    "  ⚠️  HW drift: {}  (soul node.* + events.jsonl updated)",
+                    d
+                );
                 println!();
             }
 
@@ -487,7 +502,7 @@ fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
 fn handle_peer_command(cmd: &PeerCommands) -> Result<()> {
     match cmd {
         PeerCommands::List { json, health: _ } => {
-let snapshot = SystemSnapshot::capture()?;
+            let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.as_deref().unwrap_or("/dev/null");
             // Read peer ledger
             let peers = if std::path::Path::new(ledger_path).exists() {
@@ -507,17 +522,22 @@ let snapshot = SystemSnapshot::capture()?;
             }
             Ok(())
         }
-        PeerCommands::Add { id, address, auth_type } => {
+        PeerCommands::Add {
+            id,
+            address,
+            auth_type,
+        } => {
             let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.clone().unwrap_or_default();
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             peers.push(crate::hive::PeerEntry {
                 id: id.clone(),
                 address: address.clone(),
@@ -532,14 +552,15 @@ let snapshot = SystemSnapshot::capture()?;
         PeerCommands::Remove { id } => {
             let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.clone().unwrap_or_default();
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             let before = peers.len();
             peers.retain(|p| &p.id != id);
             if peers.len() < before {
@@ -562,7 +583,10 @@ let snapshot = SystemSnapshot::capture()?;
                 Vec::new()
             };
             if let Some(p) = peers.iter().find(|pe| &pe.id == id) {
-                println!("Peer: {}  {}  zone={}  auth={}  last_seen={}", p.id, p.address, p.zone, p.auth_type, p.last_seen);
+                println!(
+                    "Peer: {}  {}  zone={}  auth={}  last_seen={}",
+                    p.id, p.address, p.zone, p.auth_type, p.last_seen
+                );
             } else {
                 println!("Peer not found: {}", id);
             }
@@ -583,14 +607,15 @@ let snapshot = SystemSnapshot::capture()?;
                 .and_then(|n| n.parse::<i64>().ok())
                 .unwrap_or(30);
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             let before = peers.len();
             peers.retain(|p| {
                 chrono::DateTime::parse_from_rfc3339(&p.last_seen)
@@ -599,14 +624,21 @@ let snapshot = SystemSnapshot::capture()?;
             });
             if peers.len() < before {
                 std::fs::write(&ledger_path, serde_json::to_string_pretty(&peers)?)?;
-                println!("Pruned {} peers (older than {})", before - peers.len(), older_than);
+                println!(
+                    "Pruned {} peers (older than {})",
+                    before - peers.len(),
+                    older_than
+                );
             } else {
                 println!("No peers pruned.");
             }
             Ok(())
         }
         PeerCommands::Discover { subnet } => {
-            println!("🔍 Discover: scanning {}...", subnet.as_deref().unwrap_or("192.168.1.0/24"));
+            println!(
+                "🔍 Discover: scanning {}...",
+                subnet.as_deref().unwrap_or("192.168.1.0/24")
+            );
             // TODO: actual mDNS/network scan
             println!("Discover complete.");
             Ok(())

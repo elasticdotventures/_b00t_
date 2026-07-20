@@ -28,8 +28,8 @@ pub mod agent;
 pub mod assignment;
 pub mod bridge;
 pub mod client;
-pub mod discovery;
 pub mod dataframe_receipt;
+pub mod discovery;
 pub mod error;
 pub mod flash_sheet;
 pub mod gossip;
@@ -56,42 +56,44 @@ pub use assignment::{
 };
 pub use bridge::{McpBridge, McpServerSpec};
 pub use client::ChatClient;
-pub use discovery::{SocketRegistry, SocketRegistryBuilder};
 pub use dataframe_receipt::{
     ColumnValue, Dataframe, DataframeReceipt, Datatype, Field, FocusRecord,
 };
+pub use discovery::{SocketRegistry, SocketRegistryBuilder};
 pub use error::{ChatError, ChatResult};
 pub use flash_sheet::{
     CellAddress, CellChange, CellExpression, CellGuard, CellHook, FlashSheet, FlashSheetError,
     SheetCell, SheetColumn, SheetMetadata, SheetRow, SoulConcept, SoulKind, SymbolicRule,
     flash_sheet_type_descriptors,
 };
+pub use gossip::{GossipMember, GossipTable};
 pub use ipc_transport::{
     AgentEndpoint, AgentEvent, AgentWatcher, BroadcastTransport, DirectTransport,
     DiscoverableTransport, IpcTransport, TransportKind,
 };
-pub use message::{ChatMessage, NotificationMessage, TaskMessage};
-pub use mesh::{
-    AgentPresence, MeshFrame, MeshNodeConfig, NatsMeshNode, DEFAULT_DISCOVER_TIMEOUT,
-    DEFAULT_PRESENCE_INTERVAL, DEFAULT_PRESENCE_TTL,
+pub use ledgrrr::{
+    FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, MockLedgrrr, ReceiptConstraint, UsageReceipt,
 };
-pub use ledgrrr::{FinopsCode, Ledgrrr, LocalLedgrrr, McpLedgrrr, MockLedgrrr, ReceiptConstraint, UsageReceipt};
-pub use gossip::{GossipTable, GossipMember};
+pub use mesh::{
+    AgentPresence, DEFAULT_DISCOVER_TIMEOUT, DEFAULT_PRESENCE_INTERVAL, DEFAULT_PRESENCE_TTL,
+    MeshFrame, MeshNodeConfig, NatsMeshNode,
+};
+pub use message::{ChatMessage, NotificationMessage, TaskMessage};
 pub use metrics::{ChatMetrics, LatencyTimer};
 pub use protocol::{ACPMessage, MessageType, StepBarrier};
 pub use router::{Destination, MessageRouter, MessageRouterBuilder};
-pub use s5::{parse_s5, render_s5, S5Document, S5ParseError};
+pub use s5::{S5Document, S5ParseError, parse_s5, render_s5};
 pub use security::{
-    fetch_jwt_from_website, AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer,
+    AcpJwtValidator, AcpSecurityContext, NamespaceEnforcer, fetch_jwt_from_website,
 };
-pub use server::{spawn_local_server, ChatInbox, LocalChatServer};
-pub use skill::{parse_b00t_command, BootCommand, ModelAction};
+pub use server::{ChatInbox, LocalChatServer, spawn_local_server};
+pub use skill::{BootCommand, ModelAction, parse_b00t_command};
 pub use state_machine::{
     ClifPayload, LogicalAddress, StateDispatchOutcome, StateMachineEvent, StateMachineGraphEdge,
     StateMachineGraphNode, StateMachineGraphSnapshot, StateMachineSpec, StateMachineVisualState,
     StateNode, StateTransformOutcome, StateTransition, state_machine_type_descriptors,
 };
-pub use transport::{default_socket_path, ChatTransport, ChatTransportConfig, ChatTransportKind};
+pub use transport::{ChatTransport, ChatTransportConfig, ChatTransportKind, default_socket_path};
 pub use transports::{MqttTransport, NatsTransport};
 pub use type_introspection::{
     FieldDescriptor, TypeDescriptor, TypeIntrospection, TypeMetadata, TypeShape, VariantDescriptor,

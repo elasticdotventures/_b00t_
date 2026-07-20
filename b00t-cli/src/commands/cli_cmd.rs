@@ -135,7 +135,10 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
         println!("📌 Project override: {}={}", command, pinned);
         // Resolve the datum but enforce pinned version in desires
         // (install command from datum, version from override)
-        eprintln!("  🥾 Using pinned version '{}' from .git/🥾.tomllmd", pinned);
+        eprintln!(
+            "  🥾 Using pinned version '{}' from .git/🥾.tomllmd",
+            pinned
+        );
     }
 
     run_hook_detect(&cli_datum.datum);
@@ -305,12 +308,23 @@ fn cli_check(command: &str, path: &str) -> Result<()> {
     // Check project overrides
     let overrides = crate::load_project_overrides();
     let override_ver = overrides.get(command);
-    let pinned = override_ver.map(|v| format!(" (project pinned: {})", v)).unwrap_or_default();
+    let pinned = override_ver
+        .map(|v| format!(" (project pinned: {})", v))
+        .unwrap_or_default();
 
     let status_text = match version_status {
-        VersionStatus::Match => format!("🥾👍🏻 {} {} {} (desired: {})", command, current, pinned, desired),
-        VersionStatus::Newer => format!("🥾🐣 {} {} {} (newer than desired: {})", command, current, pinned, desired),
-        VersionStatus::Older => format!("🥾😭 {} {} {} (older than desired: {})", command, current, pinned, desired),
+        VersionStatus::Match => format!(
+            "🥾👍🏻 {} {} {} (desired: {})",
+            command, current, pinned, desired
+        ),
+        VersionStatus::Newer => format!(
+            "🥾🐣 {} {} {} (newer than desired: {})",
+            command, current, pinned, desired
+        ),
+        VersionStatus::Older => format!(
+            "🥾😭 {} {} {} (older than desired: {})",
+            command, current, pinned, desired
+        ),
         VersionStatus::Missing => format!("🥾😱 {} (not installed){}", command, pinned),
         VersionStatus::Unknown => format!(
             "🥾⏹️ {} {} {} (version comparison unavailable)",
@@ -345,7 +359,14 @@ fn cli_up(path: &str, yes: bool, maintenance: bool) -> Result<()> {
 
     let overrides = crate::load_project_overrides();
     if !overrides.is_empty() {
-        println!("📌 Project overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+        println!(
+            "📌 Project overrides: {}",
+            overrides
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     let mut updated_count = 0;
@@ -716,9 +737,18 @@ mod tests {
         let _check = CliCommands::Check {
             command: "test".to_string(),
         };
-        let _up = CliCommands::Up { yes: false, maintenance: false };
-        let _up_yes = CliCommands::Up { yes: true, maintenance: false };
-        let _up_maint = CliCommands::Up { yes: false, maintenance: true };
+        let _up = CliCommands::Up {
+            yes: false,
+            maintenance: false,
+        };
+        let _up_yes = CliCommands::Up {
+            yes: true,
+            maintenance: false,
+        };
+        let _up_maint = CliCommands::Up {
+            yes: false,
+            maintenance: true,
+        };
         let _run = CliCommands::Run {
             script_name: "test".to_string(),
             args: vec![],

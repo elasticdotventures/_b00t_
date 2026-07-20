@@ -9,9 +9,7 @@
 //      FileCheckpointStore  — JSON file-backed store in ~/.b00t/checkpoints/
 //      InMemoryCheckpointStore — HashMap-backed store for tests
 
-use crate::pipeline_executor::{
-    PipelineExecutor, PipelineRunReport,
-};
+use crate::pipeline_executor::{PipelineExecutor, PipelineRunReport};
 use crate::pipeline_types::PipelineDag;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -120,10 +118,7 @@ impl PipelineCheckpoint {
         }
 
         // Get the last output from the most recently completed stage.
-        let last_output = self
-            .completed_stages
-            .last()
-            .map(|cp| cp.state.clone());
+        let last_output = self.completed_stages.last().map(|cp| cp.state.clone());
 
         // Delegate to the executor — it will find the checkpoint via its
         // store and skip already-completed stages automatically.
@@ -320,8 +315,8 @@ mod tests {
     use crate::pipeline_executor::StageStatus;
     use crate::pipeline_logs::VecLogStore;
     use crate::pipeline_types::{
-        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements,
-        StagePort, StageSpec,
+        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements, StagePort,
+        StageSpec,
     };
     use std::sync::Arc;
 
@@ -483,16 +478,14 @@ mod tests {
     #[test]
     fn test_file_checkpoint_store_persists() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let store_a = FileCheckpointStore::new(dir.path().to_path_buf())
-            .expect("store creation");
+        let store_a = FileCheckpointStore::new(dir.path().to_path_buf()).expect("store creation");
         let dag = sequential_dag(&["x", "y"]);
 
         let cp = PipelineCheckpoint::new("persist-test", &dag);
         store_a.save(&cp).expect("save should succeed");
 
         // Create a *new* store instance pointing at the same directory.
-        let store_b = FileCheckpointStore::new(dir.path().to_path_buf())
-            .expect("store creation");
+        let store_b = FileCheckpointStore::new(dir.path().to_path_buf()).expect("store creation");
         let loaded = store_b
             .load("persist-test")
             .expect("load should succeed")
@@ -505,7 +498,9 @@ mod tests {
         assert!(ids.contains(&"persist-test".to_string()));
 
         // Verify delete() removes it.
-        store_b.delete("persist-test").expect("delete should succeed");
+        store_b
+            .delete("persist-test")
+            .expect("delete should succeed");
         let gone = store_b
             .load("persist-test")
             .expect("load after delete should succeed");
@@ -561,7 +556,10 @@ mod tests {
 
         let store = FileCheckpointStore::new(checkpoints_dir.clone())
             .expect("store creation should create directory");
-        assert!(checkpoints_dir.exists(), "store should create the directory");
+        assert!(
+            checkpoints_dir.exists(),
+            "store should create the directory"
+        );
 
         let dag = sequential_dag(&["a"]);
         let cp = PipelineCheckpoint::new("dir-creation", &dag);
@@ -582,8 +580,7 @@ mod tests {
     #[test]
     fn test_multiple_checkpoints_in_file_store() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let store = FileCheckpointStore::new(dir.path().to_path_buf())
-            .expect("store creation");
+        let store = FileCheckpointStore::new(dir.path().to_path_buf()).expect("store creation");
         let dag = sequential_dag(&["a"]);
 
         store
@@ -637,8 +634,7 @@ mod tests {
     #[test]
     fn test_run_id_sanitization() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let store = FileCheckpointStore::new(dir.path().to_path_buf())
-            .expect("store creation");
+        let store = FileCheckpointStore::new(dir.path().to_path_buf()).expect("store creation");
         let dag = sequential_dag(&["a"]);
 
         let cp = PipelineCheckpoint::new("path/../traversal", &dag);
@@ -648,7 +644,8 @@ mod tests {
         let ids = store.list().expect("list");
         // The sanitized name replaces / with _
         assert!(
-            ids.iter().any(|id| id.contains("path") || id.contains("traversal")),
+            ids.iter()
+                .any(|id| id.contains("path") || id.contains("traversal")),
             "checkpoint should be listed even with tricky run_id: {:?}",
             ids
         );
@@ -660,6 +657,8 @@ mod tests {
     fn test_delete_nonexistent() {
         let store = InMemoryCheckpointStore::new();
         // Should not panic.
-        store.delete("does-not-exist").expect("delete non-existent should be ok");
+        store
+            .delete("does-not-exist")
+            .expect("delete non-existent should be ok");
     }
 }

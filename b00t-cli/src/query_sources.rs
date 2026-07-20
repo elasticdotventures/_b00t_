@@ -35,18 +35,26 @@ pub struct DatumSearchSource {
 
 impl DatumSearchSource {
     pub fn new(b00t_path: impl Into<String>) -> Self {
-        Self { b00t_path: b00t_path.into() }
+        Self {
+            b00t_path: b00t_path.into(),
+        }
     }
 }
 
 #[async_trait]
 impl QuerySource for DatumSearchSource {
-    fn name(&self) -> &'static str { "datum:search" }
-    fn weight(&self) -> u32 { 3 }
+    fn name(&self) -> &'static str {
+        "datum:search"
+    }
+    fn weight(&self) -> u32 {
+        3
+    }
 
     async fn query(&self, ctx: &QueryContext) -> Result<Vec<QueryResult>> {
-        let mut scores: std::collections::HashMap<String, (u32, crate::datum_utils::DatumSearchResult)> =
-            std::collections::HashMap::new();
+        let mut scores: std::collections::HashMap<
+            String,
+            (u32, crate::datum_utils::DatumSearchResult),
+        > = std::collections::HashMap::new();
 
         // Full-phrase match → +3
         let phrase_pat = regex::escape(&ctx.text);
@@ -77,7 +85,11 @@ impl QuerySource for DatumSearchSource {
                 };
                 QueryResult {
                     key: r.key.clone(),
-                    summary: if r.hint.is_empty() { r.name.clone() } else { r.hint.clone() },
+                    summary: if r.hint.is_empty() {
+                        r.name.clone()
+                    } else {
+                        r.hint.clone()
+                    },
                     source: "datum:search",
                     trust,
                     score,
@@ -108,14 +120,21 @@ pub struct GraphAdjacencySource {
 
 impl GraphAdjacencySource {
     pub fn new(b00t_path: impl Into<String>, top: usize) -> Self {
-        Self { b00t_path: b00t_path.into(), top }
+        Self {
+            b00t_path: b00t_path.into(),
+            top,
+        }
     }
 }
 
 #[async_trait]
 impl QuerySource for GraphAdjacencySource {
-    fn name(&self) -> &'static str { "graph:adjacency" }
-    fn weight(&self) -> u32 { 2 }
+    fn name(&self) -> &'static str {
+        "graph:adjacency"
+    }
+    fn weight(&self) -> u32 {
+        2
+    }
 
     async fn query(&self, ctx: &QueryContext) -> Result<Vec<QueryResult>> {
         // Use pre-compiled triples from context if available, else compile fresh.

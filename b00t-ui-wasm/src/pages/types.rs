@@ -10,9 +10,9 @@ use serde_json::Value;
 /// Type explorer page component.
 pub fn Types() -> Element {
     let mut types_list = use_signal(|| Vec::<String>::new());
-    let mut selected   = use_signal(|| None::<String>);
-    let detail     = use_signal(|| Value::Null);
-    let mut loading    = use_signal(|| true);
+    let mut selected = use_signal(|| None::<String>);
+    let detail = use_signal(|| Value::Null);
+    let mut loading = use_signal(|| true);
 
     // ── Fetch type list on mount ───────────────────────────────────────
     use_effect(move || {

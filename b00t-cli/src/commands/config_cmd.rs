@@ -66,8 +66,7 @@ async fn handle_env(path: &str, json_output: bool, direnv_mode: bool) -> Result<
     }
 
     // 3. Always emit _B00T_PATH (default to the cli --path / env var)
-    let b00t_path = std::env::var("_B00T_PATH")
-        .unwrap_or_else(|_| path.to_string());
+    let b00t_path = std::env::var("_B00T_PATH").unwrap_or_else(|_| path.to_string());
     vars.insert("_B00T_PATH".to_string(), b00t_path);
 
     // 4. Emit
@@ -85,8 +84,8 @@ async fn handle_env(path: &str, json_output: bool, direnv_mode: bool) -> Result<
 
 /// Scaffold a new b00t project in the specified directory.
 async fn handle_init(dir: Option<PathBuf>, force: bool) -> Result<()> {
-    let project_dir = dir
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let project_dir =
+        dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     fs::create_dir_all(&project_dir)?;
 
     let mut created: Vec<String> = Vec::new();
@@ -168,7 +167,10 @@ clean:
     }
 
     // Summary
-    println!("✅ Created b00t project scaffold in {}", project_dir.display());
+    println!(
+        "✅ Created b00t project scaffold in {}",
+        project_dir.display()
+    );
     for item in &created {
         println!("  📁 {}", item);
     }

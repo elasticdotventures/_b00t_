@@ -342,10 +342,7 @@ mod tests {
 
     #[test]
     fn disposition_display() {
-        assert_eq!(
-            Disposition::Satisfied.to_string(),
-            "Satisfied"
-        );
+        assert_eq!(Disposition::Satisfied.to_string(), "Satisfied");
         assert_eq!(
             Disposition::Violated {
                 reason: "no LEI".into()
@@ -395,8 +392,7 @@ mod tests {
             has_valid_lei: true,
         };
         let constraint = LeiRequired;
-        let (result, stereotype, iso_ids) =
-            EvidenceBridge::evaluate(&company, &constraint);
+        let (result, stereotype, iso_ids) = EvidenceBridge::evaluate(&company, &constraint);
         assert!(result.is_satisfied());
         assert_eq!(stereotype.to_string(), "Kind:Company");
         assert_eq!(iso_ids, vec!["ISO 17442"]);

@@ -6,7 +6,7 @@
 //! from the same constants the diagnostics use, so the two cannot drift.
 
 use crate::analysis::{KNOWN_CONTENT_TAGS, VALID_TYPE_TOKENS};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Build the b00t datum JSON schema (draft-07, taplo-compatible).
 pub fn datum_schema() -> Value {

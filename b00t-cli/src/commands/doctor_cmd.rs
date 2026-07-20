@@ -10,10 +10,10 @@
 //! b00t doctor ide list          # MCP servers in IDEs
 //! ```
 
-use anyhow::{Context, Result};
 use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
+use anyhow::{Context, Result};
 use clap::Parser;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
@@ -23,16 +23,33 @@ fn home() -> PathBuf {
 }
 
 fn sh(cmd: &str) -> (bool, String) {
-    Command::new("sh").args(["-c", cmd]).output().map(|o| {
-        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-        let e = String::from_utf8_lossy(&o.stderr).trim().to_string();
-        (o.status.success() && !s.is_empty(), if !s.is_empty() { s } else if !e.is_empty() { e } else { "not found".into() })
-    }).unwrap_or((false, "exec failed".into()))
+    Command::new("sh")
+        .args(["-c", cmd])
+        .output()
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            let e = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            (
+                o.status.success() && !s.is_empty(),
+                if !s.is_empty() {
+                    s
+                } else if !e.is_empty() {
+                    e
+                } else {
+                    "not found".into()
+                },
+            )
+        })
+        .unwrap_or((false, "exec failed".into()))
 }
 
 fn check_version(name: &str) -> Value {
     let which = sh(&format!("which {} 2>/dev/null", name));
-    let ver = if which.0 { sh(&format!("{} --version 2>/dev/null | head -1", name)) } else { (false, String::new()) };
+    let ver = if which.0 {
+        sh(&format!("{} --version 2>/dev/null | head -1", name))
+    } else {
+        (false, String::new())
+    };
     json!({"id": name, "pass": which.0 || ver.0, "detail": if which.0 || ver.0 {
         format!("{} {}", which.1.trim(), ver.1.trim())
     } else { "not found".into() }})
@@ -92,31 +109,51 @@ fn all_deps() -> Vec<Value> {
 }
 
 #[derive(Default)]
-struct RoleComposite { agents: Vec<String>, cli: Vec<String>, mcps: Vec<String>, skills: Vec<String>, compliance: Vec<String> }
+struct RoleComposite {
+    agents: Vec<String>,
+    cli: Vec<String>,
+    mcps: Vec<String>,
+    skills: Vec<String>,
+    compliance: Vec<String>,
+}
 
 fn compose_roles(roles: &[String], b00t_path: &str) -> Result<RoleComposite> {
     let mut merged = RoleComposite::default();
     for role_name in roles {
-        let ext = if *role_name == "executive" { "role.tomllm" } else { "role.toml" };
+        let ext = if *role_name == "executive" {
+            "role.tomllm"
+        } else {
+            "role.toml"
+        };
         let path = PathBuf::from(b00t_path).join(format!("{}.{}", role_name, ext));
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("role datum not found: {}", path.display()))?;
         let v: Value = toml::from_str(&content)?;
         let b = &v["b00t"];
         if let Some(arr) = b["entangled_agents"].as_array() {
-            merged.agents.extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
+            merged
+                .agents
+                .extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
         }
         if let Some(arr) = b["entangled_cli"].as_array() {
-            merged.cli.extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
+            merged
+                .cli
+                .extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
         }
         if let Some(arr) = b["entangled_mcp"].as_array() {
-            merged.mcps.extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
+            merged
+                .mcps
+                .extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
         }
         if let Some(arr) = b["skills"].as_array() {
-            merged.skills.extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
+            merged
+                .skills
+                .extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
         }
         if let Some(arr) = b["compliance"].as_array() {
-            merged.compliance.extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
+            merged
+                .compliance
+                .extend(arr.iter().filter_map(|s| s.as_str().map(String::from)));
         }
     }
     Ok(merged)
@@ -141,16 +178,20 @@ fn list_ide_mcp(name: &str) -> Value {
             let mcp = home().join(".vscode/mcp.json");
             json!({"ide":"copilot", "mcp_json": mcp.exists(), "path": mcp.display().to_string()})
         }
-        _ => json!({"ide": name, "error": "unknown IDE"})
+        _ => json!({"ide": name, "error": "unknown IDE"}),
     }
 }
 
 fn install_role_mcps(composite: &RoleComposite, target: &str) -> Vec<String> {
-    composite.mcps.iter().map(|mcp| {
-        let name = mcp.trim_end_matches(".mcp");
-        let out = sh(&format!("b00t-cli mcp install {} {} 2>&1", name, target));
-        format!("{} {}: {}", name, target, out.1.trim())
-    }).collect()
+    composite
+        .mcps
+        .iter()
+        .map(|mcp| {
+            let name = mcp.trim_end_matches(".mcp");
+            let out = sh(&format!("b00t-cli mcp install {} {} 2>&1", name, target));
+            format!("{} {}: {}", name, target, out.1.trim())
+        })
+        .collect()
 }
 
 fn generate_env_doc(b00t_path: &str) -> Value {
@@ -184,7 +225,10 @@ pub enum DoctorCommands {
     Setup {
         #[clap(long, help = "Roles (comma-separated, e.g. executive,operator)")]
         role: Option<String>,
-        #[clap(long, help = "Target IDE: vscode, claudecode, geminicli, copilot (default: all)")]
+        #[clap(
+            long,
+            help = "Target IDE: vscode, claudecode, geminicli, copilot (default: all)"
+        )]
         target: Option<String>,
         #[clap(long, help = "JSON output")]
         json: bool,
@@ -192,7 +236,10 @@ pub enum DoctorCommands {
         dry_run: bool,
     },
     #[clap(about = "Environment documentation for the AI model")]
-    Env { #[clap(long)] json: bool },
+    Env {
+        #[clap(long)]
+        json: bool,
+    },
     #[clap(about = "List MCP servers registered in IDEs")]
     Ide {
         #[clap(subcommand)]
@@ -203,28 +250,40 @@ pub enum DoctorCommands {
 }
 
 #[derive(Parser, Clone)]
-pub enum IdeAction { #[clap(about = "List all")] List, #[clap(about = "Show one")] Show { name: String } }
+pub enum IdeAction {
+    #[clap(about = "List all")]
+    List,
+    #[clap(about = "Show one")]
+    Show { name: String },
+}
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<()> {
     match args {
         DoctorCommands::Check { json, probe } => {
-            let results: Vec<Value> = all_deps().into_iter().filter(|d| {
-                probe.as_ref().map_or(true, |p| d["id"].as_str().map_or(false, |id| id.contains(p)))
-            }).collect();
+            let results: Vec<Value> = all_deps()
+                .into_iter()
+                .filter(|d| {
+                    probe.as_ref().map_or(true, |p| {
+                        d["id"].as_str().map_or(false, |id| id.contains(p))
+                    })
+                })
+                .collect();
 
             // Phase 1: well-formedness — count datums that pass prove_by_type()
             let store = HashMapStore::from_path(b00t_path).unwrap_or_default();
             let total_datums = store.len();
-            let (provable, broken): (Vec<_>, Vec<_>) = store.iter()
-                .partition(|d| d.datum.prove_by_type().is_ok());
+            let (provable, broken): (Vec<_>, Vec<_>) =
+                store.iter().partition(|d| d.datum.prove_by_type().is_ok());
             // Phase 2: coherence — cross-datum reference validation
             let ref_errors = store.validate_references();
-            let self_deps: Vec<_> = ref_errors.iter()
+            let self_deps: Vec<_> = ref_errors
+                .iter()
                 .filter(|e| matches!(e, ReferenceError::SelfDependency { .. }))
                 .collect();
-            let empty_deps: Vec<_> = ref_errors.iter()
+            let empty_deps: Vec<_> = ref_errors
+                .iter()
                 .filter(|e| matches!(e, ReferenceError::EmptyDependency { .. }))
                 .collect();
 
@@ -238,19 +297,30 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                     }).collect::<Vec<_>>(),
                     "reference_errors": ref_errors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
                 });
-                println!("{}", serde_json::to_string_pretty(&json!({
-                    "system_deps": results,
-                    "datum_store": datum_report
-                }))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "system_deps": results,
+                        "datum_store": datum_report
+                    }))?
+                );
             } else {
                 println!("🥾 b00t doctor — dependency check\n");
                 for r in &results {
                     let ok = r["pass"].as_bool().unwrap_or(false);
                     let ms = r["latency_ms"].as_u64().unwrap_or(0);
-                    println!("  {}  {}  {}ms  {}", if ok { "✅" } else { "❌" },
-                        r["id"].as_str().unwrap_or("?"), ms, r["detail"].as_str().unwrap_or(""));
+                    println!(
+                        "  {}  {}  {}ms  {}",
+                        if ok { "✅" } else { "❌" },
+                        r["id"].as_str().unwrap_or("?"),
+                        ms,
+                        r["detail"].as_str().unwrap_or("")
+                    );
                 }
-                let ok = results.iter().filter(|r| r["pass"].as_bool().unwrap_or(false)).count();
+                let ok = results
+                    .iter()
+                    .filter(|r| r["pass"].as_bool().unwrap_or(false))
+                    .count();
                 println!("\n  {}/{} satisfied", ok, results.len());
 
                 println!("\n🗄️  datum store — {b00t_path}");
@@ -260,8 +330,11 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                     println!("  ❌ {}: {}", d.key.as_ref(), err);
                 }
                 if !self_deps.is_empty() || !empty_deps.is_empty() {
-                    println!("  ⚠️  reference errors: {} self-deps, {} empty deps",
-                        self_deps.len(), empty_deps.len());
+                    println!(
+                        "  ⚠️  reference errors: {} self-deps, {} empty deps",
+                        self_deps.len(),
+                        empty_deps.len()
+                    );
                     for e in self_deps.iter().chain(empty_deps.iter()) {
                         println!("     {e}");
                     }
@@ -271,17 +344,30 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             }
             Ok(())
         }
-        DoctorCommands::Setup { role, target, json, dry_run } => {
-            let roles: Vec<String> = role.as_deref().unwrap_or("worker").split(',')
-                .map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        DoctorCommands::Setup {
+            role,
+            target,
+            json,
+            dry_run,
+        } => {
+            let roles: Vec<String> = role
+                .as_deref()
+                .unwrap_or("worker")
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             let composite = compose_roles(&roles, b00t_path)?;
             if *json {
-                println!("{}", serde_json::to_string_pretty(&json!({
-                    "roles": roles, "composite": {
-                        "agents": composite.agents, "cli": composite.cli, "mcps": composite.mcps,
-                        "skills": composite.skills, "compliance": composite.compliance
-                    }, "dry_run": dry_run
-                }))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&json!({
+                        "roles": roles, "composite": {
+                            "agents": composite.agents, "cli": composite.cli, "mcps": composite.mcps,
+                            "skills": composite.skills, "compliance": composite.compliance
+                        }, "dry_run": dry_run
+                    }))?
+                );
                 return Ok(());
             }
             println!("🥾 b00t doctor setup — roles: {}", roles.join(", "));
@@ -291,65 +377,108 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             println!("\n  🔧 CLI check:");
             for cli in &composite.cli {
                 let name = cli.trim_end_matches(".cli");
-                let (ok, d) = sh(&format!("which {} 2>/dev/null && {} --version 2>/dev/null | head -1 || echo MISSING", name, name));
-                println!("    {} {}: {}", if ok { "✅" } else { "❌" }, name, d.trim());
+                let (ok, d) = sh(&format!(
+                    "which {} 2>/dev/null && {} --version 2>/dev/null | head -1 || echo MISSING",
+                    name, name
+                ));
+                println!(
+                    "    {} {}: {}",
+                    if ok { "✅" } else { "❌" },
+                    name,
+                    d.trim()
+                );
             }
             println!("\n  🔌 MCP datums:");
             for mcp in &composite.mcps {
                 let name = mcp.trim_end_matches(".mcp");
                 let p = PathBuf::from(b00t_path).join(format!("{}.mcp.toml", name));
-                println!("    {} {}: {}", if p.exists() { "✅" } else { "❌" }, name, p.display());
+                println!(
+                    "    {} {}: {}",
+                    if p.exists() { "✅" } else { "❌" },
+                    name,
+                    p.display()
+                );
             }
             if !*dry_run {
                 let idelist: Vec<&str> = if target.as_deref().unwrap_or("all") == "all" {
-                    vec!["vscode","claudecode","geminicli","copilot"]
-                } else { vec![target.as_deref().unwrap_or("all")] };
+                    vec!["vscode", "claudecode", "geminicli", "copilot"]
+                } else {
+                    vec![target.as_deref().unwrap_or("all")]
+                };
                 for ide in &idelist {
                     println!("\n  📡 Installing into {}:", ide);
-                    for r in &install_role_mcps(&composite, ide) { println!("    {}", r); }
+                    for r in &install_role_mcps(&composite, ide) {
+                        println!("    {}", r);
+                    }
                 }
             }
             Ok(())
         }
         DoctorCommands::Env { json } => {
             let doc = generate_env_doc(b00t_path);
-            if *json { println!("{}", serde_json::to_string_pretty(&doc)?); }
-            else {
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&doc)?);
+            } else {
                 println!("🥾 b00t doctor env — local environment\n");
                 println!("  Host: {}", doc["hostname"].as_str().unwrap_or("?"));
                 println!("  OS: {}", doc["os"].as_str().unwrap_or("?"));
-                println!("  RAM: {} | Disk: {}", doc["memory"].as_str().unwrap_or("?"), doc["disk"].as_str().unwrap_or("?"));
+                println!(
+                    "  RAM: {} | Disk: {}",
+                    doc["memory"].as_str().unwrap_or("?"),
+                    doc["disk"].as_str().unwrap_or("?")
+                );
                 println!("  Epoch: {}", doc["epoch"].as_str().unwrap_or("?"));
                 println!("\n  Deps:");
                 for d in doc["deps"].as_array().unwrap_or(&vec![]) {
                     let ok = d["pass"].as_bool().unwrap_or(false);
-                    println!("    {}  {}: {}", if ok { "●" } else { "○" }, d["id"].as_str().unwrap_or("?"), d["detail"].as_str().unwrap_or(""));
+                    println!(
+                        "    {}  {}: {}",
+                        if ok { "●" } else { "○" },
+                        d["id"].as_str().unwrap_or("?"),
+                        d["detail"].as_str().unwrap_or("")
+                    );
                 }
             }
             Ok(())
         }
         DoctorCommands::Ide { cmd } => {
-            let ides = vec![list_ide_mcp("vscode"), list_ide_mcp("claudecode"), list_ide_mcp("geminicli"), list_ide_mcp("copilot")];
+            let ides = vec![
+                list_ide_mcp("vscode"),
+                list_ide_mcp("claudecode"),
+                list_ide_mcp("geminicli"),
+                list_ide_mcp("copilot"),
+            ];
             match cmd.as_ref().unwrap_or(&IdeAction::List) {
                 IdeAction::List => println!("{}", serde_json::to_string_pretty(&ides)?),
-                IdeAction::Show { name } => println!("{}", serde_json::to_string_pretty(&list_ide_mcp(name))?),
+                IdeAction::Show { name } => {
+                    println!("{}", serde_json::to_string_pretty(&list_ide_mcp(name))?)
+                }
             }
             Ok(())
         }
         DoctorCommands::HealthJson => {
             let results = all_deps();
-            let ok = results.iter().filter(|r| r["pass"].as_bool().unwrap_or(false)).count();
-            println!("{}", serde_json::to_string_pretty(&json!({
-                "timestamp": chrono::Utc::now().to_rfc3339(),
-                "total": results.len(), "passed": ok, "failed": results.len() - ok, "probes": results
-            }))?);
+            let ok = results
+                .iter()
+                .filter(|r| r["pass"].as_bool().unwrap_or(false))
+                .count();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "total": results.len(), "passed": ok, "failed": results.len() - ok, "probes": results
+                }))?
+            );
             Ok(())
         }
     }
 }
 pub fn health_json() -> serde_json::Value {
     let results = all_deps();
-    let ok = results.iter().filter(|r| r["pass"].as_bool().unwrap_or(false)).count();
+    let ok = results
+        .iter()
+        .filter(|r| r["pass"].as_bool().unwrap_or(false))
+        .count();
     serde_json::json!({
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "total": results.len(), "passed": ok, "failed": results.len() - ok, "probes": results
@@ -475,7 +604,6 @@ fn check_focus_schema(b00t_path: &str) -> Value {
 fn check_ledgrrr_service() -> Value {
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "ledgrrr-mcp"])
-
         .output();
 
     match output {
@@ -502,7 +630,16 @@ fn check_ledgrrr_service() -> Value {
 fn check_model_endpoint() -> Value {
     // Use curl (preferred) to avoid tokio runtime panic (#[tokio::main]); reqwest fallback commented below
     let reachable = std::process::Command::new("curl")
-        .args(["-s", "--max-time", "3", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:8001/v1/models"])
+        .args([
+            "-s",
+            "--max-time",
+            "3",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "http://localhost:8001/v1/models",
+        ])
         .output()
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "200")

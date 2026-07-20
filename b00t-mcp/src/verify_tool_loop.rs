@@ -15,7 +15,7 @@
 //! Streaming requests (`"stream": true`) bypass the loop entirely: SSE bytes
 //! are forwarded verbatim (loop-in-stream is follow-up work, see gh#597).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Hard cap on model re-entries per request; beyond this the last upstream
 /// response is returned as-is. Prevents a model that keeps emitting verify
@@ -244,7 +244,10 @@ fn grammar_shape_regex() -> &'static regex::Regex {
 /// Solve one assertion via the local z3 surface, returning just the result
 /// token ("sat" | "unsat" | "unknown") for grammar-audit rewriting.
 pub fn z3_result_of(assertion: &str) -> String {
-    let raw = execute_verify_call(&VerifyCall { id: String::new(), assertion: assertion.to_string() });
+    let raw = execute_verify_call(&VerifyCall {
+        id: String::new(),
+        assertion: assertion.to_string(),
+    });
     serde_json::from_str::<Value>(&raw)
         .ok()
         .and_then(|v| v["result"].as_str().map(str::to_string))
@@ -255,9 +258,13 @@ pub fn z3_result_of(assertion: &str) -> String {
 pub fn execute_verify_call(call: &VerifyCall) -> String {
     use crate::clap_reflection::McpExecutor;
     let mut params = std::collections::HashMap::new();
-    params.insert("assertion".to_string(), Value::String(call.assertion.clone()));
-    crate::mcp_tools::BVerifyCommand::execute_mcp_call(&params)
-        .unwrap_or_else(|e| json!({"result": "error", "verified": false, "error": e.to_string()}).to_string())
+    params.insert(
+        "assertion".to_string(),
+        Value::String(call.assertion.clone()),
+    );
+    crate::mcp_tools::BVerifyCommand::execute_mcp_call(&params).unwrap_or_else(|e| {
+        json!({"result": "error", "verified": false, "error": e.to_string()}).to_string()
+    })
 }
 
 #[cfg(test)]
@@ -305,13 +312,21 @@ mod tests {
     fn inject_adds_tool_once_and_preserves_existing() {
         let mut req = json!({"model": "m", "messages": []});
         assert!(inject_verify_tool(&mut req));
-        assert!(!inject_verify_tool(&mut req), "second inject must be a no-op");
+        assert!(
+            !inject_verify_tool(&mut req),
+            "second inject must be a no-op"
+        );
         assert_eq!(req["tools"].as_array().unwrap().len(), 1);
 
-        let mut with_other = json!({"tools": [{"type": "function", "function": {"name": "get_weather"}}]});
+        let mut with_other =
+            json!({"tools": [{"type": "function", "function": {"name": "get_weather"}}]});
         assert!(inject_verify_tool(&mut with_other));
-        let names: Vec<&str> = with_other["tools"].as_array().unwrap().iter()
-            .filter_map(|t| t["function"]["name"].as_str()).collect();
+        let names: Vec<&str> = with_other["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["function"]["name"].as_str())
+            .collect();
         assert_eq!(names, vec!["get_weather", "verify"]);
     }
 
@@ -362,12 +377,27 @@ mod tests {
         // Real z3 would say unsat — the model hallucinated sat; audit corrects it.
         let (audited, summary) = audit_grammar_content(content, |_a| "unsat".to_string()).unwrap();
         assert!(audited.contains("[result: unsat]"), "corrected: {audited}");
-        assert!(audited.contains("therefore x exists."), "claim text preserved");
-        assert_eq!(summary, GrammarAudit { checked: 1, corrected: 1 });
+        assert!(
+            audited.contains("therefore x exists."),
+            "claim text preserved"
+        );
+        assert_eq!(
+            summary,
+            GrammarAudit {
+                checked: 1,
+                corrected: 1
+            }
+        );
 
         // Agreeing result → no correction counted
         let (_same, summary2) = audit_grammar_content(content, |_a| "sat".to_string()).unwrap();
-        assert_eq!(summary2, GrammarAudit { checked: 1, corrected: 0 });
+        assert_eq!(
+            summary2,
+            GrammarAudit {
+                checked: 1,
+                corrected: 0
+            }
+        );
     }
 
     #[test]
@@ -400,7 +430,10 @@ mod tests {
         )
         .await;
         assert_eq!(sends.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert_eq!(final_resp["choices"][0]["message"]["content"], "verified: sat");
+        assert_eq!(
+            final_resp["choices"][0]["message"]["content"],
+            "verified: sat"
+        );
     }
 
     #[tokio::test]
@@ -414,12 +447,20 @@ mod tests {
             first,
             |_body| {
                 let n = sends.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                async move { Ok(tool_call_response(&format!("call_{}", n + 1), "(check-sat)")) }
+                async move {
+                    Ok(tool_call_response(
+                        &format!("call_{}", n + 1),
+                        "(check-sat)",
+                    ))
+                }
             },
             |_call| "{\"result\":\"sat\"}".to_string(),
         )
         .await;
-        assert_eq!(sends.load(std::sync::atomic::Ordering::SeqCst), MAX_TOOL_ITERATIONS);
+        assert_eq!(
+            sends.load(std::sync::atomic::Ordering::SeqCst),
+            MAX_TOOL_ITERATIONS
+        );
         // Passthrough: last response still asks for tools, client sees it verbatim
         assert_eq!(final_resp["choices"][0]["finish_reason"], "tool_calls");
     }
@@ -448,6 +489,9 @@ mod tests {
             |_call| panic!("execute must not be called"),
         )
         .await;
-        assert_eq!(final_resp["choices"][0]["message"]["content"], "no tools needed");
+        assert_eq!(
+            final_resp["choices"][0]["message"]["content"],
+            "no tools needed"
+        );
     }
 }

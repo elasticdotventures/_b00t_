@@ -17,7 +17,10 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "b00t-ast", about = "Rust AST extraction and ontology graph builder")]
+#[command(
+    name = "b00t-ast",
+    about = "Rust AST extraction and ontology graph builder"
+)]
 enum Cli {
     /// Extract code elements from a directory of Rust source files
     Dir {
@@ -44,7 +47,11 @@ fn main() {
     let cli = Cli::parse();
 
     match cli {
-        Cli::Dir { path, format, limit } => {
+        Cli::Dir {
+            path,
+            format,
+            limit,
+        } => {
             run_extraction_with_opts(&path, &format, limit);
         }
         Cli::Self_ { format } => {
@@ -80,7 +87,8 @@ fn run_extraction_with_opts(path: &PathBuf, format: &str, limit: usize) {
                     let limited = if limit > 0 {
                         // Apply limit to nodes/edges for MCP payload
                         let mut limited = payload;
-                        if let Some(nodes) = limited.get_mut("nodes").and_then(|n| n.as_array_mut()) {
+                        if let Some(nodes) = limited.get_mut("nodes").and_then(|n| n.as_array_mut())
+                        {
                             nodes.truncate(limit);
                         }
                         limited
@@ -96,7 +104,8 @@ fn run_extraction_with_opts(path: &PathBuf, format: &str, limit: usize) {
                         // Limit elements in output
                         let mut v: serde_json::Value =
                             serde_json::from_str(&json).unwrap_or(serde_json::Value::Null);
-                        if let Some(elements) = v.get_mut("elements").and_then(|e| e.as_array_mut()) {
+                        if let Some(elements) = v.get_mut("elements").and_then(|e| e.as_array_mut())
+                        {
                             elements.truncate(limit);
                             elements.shrink_to_fit();
                         }

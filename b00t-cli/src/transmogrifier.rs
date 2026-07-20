@@ -31,11 +31,7 @@ pub trait Transmogrifier: Send + Sync {
     ///
     /// `params` carries per-invocation configuration (e.g. codec, bitrate,
     /// model name).  Returns the transformed bytes or a pipeline error.
-    fn transform(
-        &self,
-        input: &[u8],
-        params: &HashMap<String, String>,
-    ) -> anyhow::Result<Vec<u8>>;
+    fn transform(&self, input: &[u8], params: &HashMap<String, String>) -> anyhow::Result<Vec<u8>>;
 
     /// Declare input and output ports for this stage.
     ///
@@ -84,10 +80,7 @@ impl Transmogrifier for VideoIngest {
     ) -> anyhow::Result<Vec<u8>> {
         // Passthrough: return input bytes unchanged, prepended with metadata
         // header for test verifiability.
-        let meta = format!(
-            "metadata: stage=VideoIngest input_bytes={}\n",
-            input.len()
-        );
+        let meta = format!("metadata: stage=VideoIngest input_bytes={}\n", input.len());
         let mut output = meta.into_bytes();
         output.extend_from_slice(input);
         Ok(output)
@@ -133,17 +126,10 @@ impl Transmogrifier for Transcode {
         "Transcode"
     }
 
-    fn transform(
-        &self,
-        input: &[u8],
-        params: &HashMap<String, String>,
-    ) -> anyhow::Result<Vec<u8>> {
+    fn transform(&self, input: &[u8], params: &HashMap<String, String>) -> anyhow::Result<Vec<u8>> {
         // Mock: prepend a header with the transcode parameters so tests can
         // verify parameter propagation.
-        let mut header = format!(
-            "transcoded: input_bytes={}",
-            input.len(),
-        );
+        let mut header = format!("transcoded: input_bytes={}", input.len(),);
         if let Some(codec) = params.get("codec") {
             header.push_str(&format!(" codec={codec}"));
         }
@@ -194,17 +180,10 @@ impl Transmogrifier for WhisperTranscribe {
         "WhisperTranscribe"
     }
 
-    fn transform(
-        &self,
-        input: &[u8],
-        params: &HashMap<String, String>,
-    ) -> anyhow::Result<Vec<u8>> {
+    fn transform(&self, input: &[u8], params: &HashMap<String, String>) -> anyhow::Result<Vec<u8>> {
         // Produce a structured JSON response that mimics Whisper output.
         let input_duration_s = (input.len() as f64 / 16000.0 * 100.0).round() / 100.0;
-        let language = params
-            .get("language")
-            .map(|s| s.as_str())
-            .unwrap_or("en");
+        let language = params.get("language").map(|s| s.as_str()).unwrap_or("en");
 
         let json = serde_json::json!({
             "text": "This is a mock transcription of the provided audio input.",
@@ -416,11 +395,8 @@ impl TransmogrifierRegistry {
     /// Useful for wiring stages into a `PipelineDag` or listing available
     /// stages in a UI.
     pub fn all_stages(&self) -> Vec<CapsuleProfile> {
-        let mut profiles: Vec<CapsuleProfile> = self
-            .transmogrifiers
-            .values()
-            .map(|t| t.profile())
-            .collect();
+        let mut profiles: Vec<CapsuleProfile> =
+            self.transmogrifiers.values().map(|t| t.profile()).collect();
         profiles.sort_by(|a, b| a.name.cmp(&b.name));
         profiles
     }
@@ -503,10 +479,7 @@ mod tests {
             res.requires_gpu,
             "Transcode should require GPU (requires_gpu = true)"
         );
-        assert!(
-            res.min_vram_gb > 0.0,
-            "Transcode should require VRAM > 0"
-        );
+        assert!(res.min_vram_gb > 0.0, "Transcode should require VRAM > 0");
     }
 
     /// WhisperTranscribe output must be valid JSON with expected fields.
@@ -517,8 +490,8 @@ mod tests {
         let params = HashMap::new();
         let result = wt.transform(input, &params).unwrap();
 
-        let parsed: serde_json::Value = serde_json::from_slice(&result)
-            .expect("WhisperTranscribe output must be valid JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&result).expect("WhisperTranscribe output must be valid JSON");
 
         assert!(
             parsed.get("text").is_some(),
@@ -536,10 +509,7 @@ mod tests {
             parsed.get("duration").is_some(),
             "JSON must contain 'duration' field"
         );
-        assert_eq!(
-            parsed["language"], "en",
-            "default language should be 'en'"
-        );
+        assert_eq!(parsed["language"], "en", "default language should be 'en'");
     }
 
     /// WhisperTranscribe respects the `language` parameter.
@@ -563,8 +533,8 @@ mod tests {
         let params = HashMap::new();
         let result = embed.transform(input, &params).unwrap();
 
-        let parsed: serde_json::Value = serde_json::from_slice(&result)
-            .expect("Embed output must be valid JSON");
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&result).expect("Embed output must be valid JSON");
 
         let vector = parsed
             .get("vector")
@@ -572,15 +542,8 @@ mod tests {
             .expect("JSON must contain 'vector' as an array");
 
         assert!(!vector.is_empty(), "vector must not be empty");
-        assert_eq!(
-            parsed["dimension"], 384,
-            "default dimension should be 384"
-        );
-        assert_eq!(
-            vector.len(),
-            384,
-            "vector length should match dimension"
-        );
+        assert_eq!(parsed["dimension"], 384, "default dimension should be 384");
+        assert_eq!(vector.len(), 384, "vector length should match dimension");
         assert!(
             vector.iter().all(|v| v.as_f64() == Some(0.1)),
             "mock vector entries should all be 0.1"
@@ -659,22 +622,39 @@ mod tests {
     fn registry_register_custom() {
         struct CustomStage;
         impl Transmogrifier for CustomStage {
-            fn name(&self) -> &str { "CustomStage" }
-            fn transform(&self, input: &[u8], _: &HashMap<String, String>) -> anyhow::Result<Vec<u8>> {
+            fn name(&self) -> &str {
+                "CustomStage"
+            }
+            fn transform(
+                &self,
+                input: &[u8],
+                _: &HashMap<String, String>,
+            ) -> anyhow::Result<Vec<u8>> {
                 let mut out = b"custom:".to_vec();
                 out.extend_from_slice(input);
                 Ok(out)
             }
             fn ports(&self) -> (Vec<StagePort>, Vec<StagePort>) {
                 (
-                    vec![StagePort { direction: PortDirection::Input, media_type: PortMediaType::Bytes, description: None }],
-                    vec![StagePort { direction: PortDirection::Output, media_type: PortMediaType::Bytes, description: None }],
+                    vec![StagePort {
+                        direction: PortDirection::Input,
+                        media_type: PortMediaType::Bytes,
+                        description: None,
+                    }],
+                    vec![StagePort {
+                        direction: PortDirection::Output,
+                        media_type: PortMediaType::Bytes,
+                        description: None,
+                    }],
                 )
             }
             fn resources(&self) -> ResourceRequirements {
                 ResourceRequirements {
-                    min_ram_gb: 0.5, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 0.5,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 }
             }
         }

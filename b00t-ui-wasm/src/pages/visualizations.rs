@@ -10,8 +10,8 @@ use dioxus::prelude::*;
 use js_sys::Reflect;
 use serde_json::Value;
 use std::time::Duration;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::HtmlScriptElement;
 
@@ -31,10 +31,10 @@ extern "C" {
 /// Available graph types for the dropdown.
 const GRAPH_TYPES: &[(&str, &str)] = &[
     ("entangle", "Entanglement Graph"),
-    ("task",     "Task Graph"),
+    ("task", "Task Graph"),
     ("state-machine", "State Machine Graph"),
     ("pipeline", "Pipeline Graph"),
-    ("ato",      "ATO Graph"),
+    ("ato", "ATO Graph"),
 ];
 
 // ---------------------------------------------------------------------------
@@ -43,10 +43,10 @@ const GRAPH_TYPES: &[(&str, &str)] = &[
 
 /// Visualizations page component.
 pub fn Visualizations() -> Element {
-    let mut viz_type    = use_signal(|| "entangle".to_string());
+    let mut viz_type = use_signal(|| "entangle".to_string());
     let mut mermaid_svg = use_signal(|| String::new());
-    let mut status      = use_signal(|| String::from("Ready"));
-    let mut progress    = use_signal(|| 0u8);
+    let mut status = use_signal(|| String::from("Ready"));
+    let mut progress = use_signal(|| 0u8);
     let mermaid_loaded = use_signal(|| false);
 
     // ── Load mermaid.js from CDN on mount ──────────────────────────────
@@ -219,31 +219,29 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
     // We attempt to read the API response to build a richer graph,
     // but fall back to sample diagrams when data is unavailable.
     match viz_type {
-        "entangle" => {
-            match api_data {
-                Ok(val) if !val.is_null() => {
-                    let mut lines = vec!["graph TD".to_string()];
-                    if let Some(chunks) = val.get("chunks").and_then(Value::as_array) {
-                        for (i, chunk) in chunks.iter().enumerate() {
-                            let id = format!("C{i}");
-                            let label = chunk.get("id").and_then(Value::as_str).unwrap_or(&id);
-                            lines.push(format!("    {id}[{label}]"));
-                            if let Some(ev) = chunk.get("evidence").and_then(Value::as_array) {
-                                for (j, _) in ev.iter().enumerate() {
-                                    let eid = format!("E{i}_{j}");
-                                    lines.push(format!("    {eid}(Evidence)"));
-                                    lines.push(format!("    {id} --> {eid}"));
-                                }
+        "entangle" => match api_data {
+            Ok(val) if !val.is_null() => {
+                let mut lines = vec!["graph TD".to_string()];
+                if let Some(chunks) = val.get("chunks").and_then(Value::as_array) {
+                    for (i, chunk) in chunks.iter().enumerate() {
+                        let id = format!("C{i}");
+                        let label = chunk.get("id").and_then(Value::as_str).unwrap_or(&id);
+                        lines.push(format!("    {id}[{label}]"));
+                        if let Some(ev) = chunk.get("evidence").and_then(Value::as_array) {
+                            for (j, _) in ev.iter().enumerate() {
+                                let eid = format!("E{i}_{j}");
+                                lines.push(format!("    {eid}(Evidence)"));
+                                lines.push(format!("    {id} --> {eid}"));
                             }
                         }
                     }
-                    if lines.len() == 1 {
-                        lines.push("    A[No entanglement data]".to_string());
-                    }
-                    lines.join("\n")
                 }
-                _ => {
-                    r#"graph TD
+                if lines.len() == 1 {
+                    lines.push("    A[No entanglement data]".to_string());
+                }
+                lines.join("\n")
+            }
+            _ => r#"graph TD
     A[Source Document] --> B[Chunk 1]
     A --> C[Chunk 2]
     B --> D[Evidence A]
@@ -252,10 +250,8 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
     style A fill:#1e3a5f,stroke:#38bdf8,color:#e2e8f0
     style B fill:#0f172a,stroke:#38bdf8,color:#e2e8f0
     style C fill:#0f172a,stroke:#38bdf8,color:#e2e8f0"#
-                        .to_string()
-                }
-            }
-        }
+                .to_string(),
+        },
         "task" => {
             match api_data {
                 Ok(val) if !val.is_null() => {
@@ -263,19 +259,14 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
                     if let Some(tasks) = val.get("tasks").and_then(Value::as_array) {
                         for (i, task) in tasks.iter().enumerate() {
                             let tid = format!("T{i}");
-                            let label =
-                                task.get("name").and_then(Value::as_str).unwrap_or(&tid);
+                            let label = task.get("name").and_then(Value::as_str).unwrap_or(&tid);
                             lines.push(format!("    {tid}[{label}]"));
-                            if let Some(deps) =
-                                task.get("depends_on").and_then(Value::as_array)
-                            {
+                            if let Some(deps) = task.get("depends_on").and_then(Value::as_array) {
                                 for dep in deps {
                                     if let Some(dep_name) = dep.as_str() {
                                         // Find index of dep task
                                         if let Some(dep_idx) = tasks.iter().position(|t| {
-                                            t.get("name")
-                                                .and_then(Value::as_str)
-                                                == Some(dep_name)
+                                            t.get("name").and_then(Value::as_str) == Some(dep_name)
                                         }) {
                                             lines.push(format!("    T{dep_idx} --> {tid}"));
                                         }
@@ -288,16 +279,14 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
                     }
                     lines.join("\n")
                 }
-                _ => {
-                    r#"graph LR
+                _ => r#"graph LR
     A[Ingest] --> B[Chunk]
     B --> C[Analyse]
     C --> D[Classify]
     D --> E[Store]
     style A fill:#1e3a5f,stroke:#38bdf8,color:#e2e8f0
     style C fill:#0f172a,stroke:#f59e0b,color:#e2e8f0"#
-                        .to_string()
-                }
+                    .to_string(),
             }
         }
         "state-machine" => match api_data {
@@ -308,8 +297,7 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
                 .to_string(),
             _ => "stateDiagram-v2\n    [*] --> Idle".to_string(),
         },
-        "pipeline" => {
-            r#"flowchart TD
+        "pipeline" => r#"flowchart TD
     A[Raw Input] --> B[Parser]
     B --> C{Validation}
     C -->|Pass| D[Transformer]
@@ -335,8 +323,7 @@ fn build_mermaid(viz_type: &str, api_data: &Result<Value, String>) -> String {
     style D fill:#0f172a,stroke:#f59e0b,color:#e2e8f0
     style E fill:#0f172a,stroke:#22c55e,color:#e2e8f0
     style F fill:#0f172a,stroke:#ef4444,color:#e2e8f0"#
-                .to_string()
-        }
+            .to_string(),
         _ => "graph TD; A[Unknown];".to_string(),
     }
 }

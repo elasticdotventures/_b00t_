@@ -31,9 +31,11 @@ use pyo3::types::{PyDict, PyList};
 use std::collections::HashMap;
 
 // Import b00t-cli functions
+use b00t_cli::hive::{
+    GuardContext, GuardPattern, HiveGuard, HiveGuardAction, check_guards as rust_check_guards,
+};
 use b00t_cli::model_manager::{self, ServeOptions};
 use b00t_cli::{get_expanded_path, mcp_list, mcp_output};
-use b00t_cli::hive::{check_guards as rust_check_guards, GuardContext, GuardPattern, HiveGuard, HiveGuardAction};
 
 // Python exception for b00t errors
 create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);
@@ -257,7 +259,7 @@ fn python_guard_to_rust(obj: &Py<PyAny>, py: Python<'_>) -> PyResult<HiveGuard> 
         other => {
             return Err(PyTypeError::new_err(format!(
                 "Unknown guard action '{other}'. Use 'warn', 'block', or 'redirect'",
-            )))
+            )));
         }
     };
 
@@ -308,7 +310,9 @@ fn python_pattern_to_rust(d: &Bound<'_, PyDict>) -> PyResult<GuardPattern> {
             .flatten()
             .and_then(|v| v.extract::<String>().ok())
         {
-            return Ok(GuardPattern::RhaiExpr(b00t_cli::hive::RhaiGuardExpr { rhai }));
+            return Ok(GuardPattern::RhaiExpr(b00t_cli::hive::RhaiGuardExpr {
+                rhai,
+            }));
         }
         if let Some(stage) = pd
             .get_item("stage")
@@ -316,7 +320,9 @@ fn python_pattern_to_rust(d: &Bound<'_, PyDict>) -> PyResult<GuardPattern> {
             .flatten()
             .and_then(|v| v.extract::<String>().ok())
         {
-            return Ok(GuardPattern::K0mmand3rStage(b00t_cli::hive::K0mmand3rStageGuard { stage }));
+            return Ok(GuardPattern::K0mmand3rStage(
+                b00t_cli::hive::K0mmand3rStageGuard { stage },
+            ));
         }
     }
 
@@ -517,9 +523,7 @@ fn register_stage_guard_py(py: Python<'_>, stage: &str, callback: Py<PyAny>) -> 
 
                 match cb.call1(py, (dict,)) {
                     Ok(result) => {
-                        let s: String = result
-                            .extract(py)
-                            .unwrap_or_else(|_| "allow".to_string());
+                        let s: String = result.extract(py).unwrap_or_else(|_| "allow".to_string());
                         if s == "allow" || s.is_empty() {
                             StageAction::Allow
                         } else if let Some(msg) = s.strip_prefix("block:") {
@@ -646,8 +650,7 @@ fn model_list_py(path: &str) -> PyResult<String> {
 fn model_info_py(path: &str, name: Option<&str>) -> PyResult<String> {
     let record = model_manager::describe_model(path, name)
         .map_err(|e| to_py_err("Failed to load model datum", e))?;
-    serde_json::to_string(&record)
-        .map_err(|e| to_py_err_serde("Failed to serialise model info", e))
+    serde_json::to_string(&record).map_err(|e| to_py_err_serde("Failed to serialise model info", e))
 }
 
 #[pyfunction]
@@ -680,8 +683,7 @@ fn model_remove_py(name: &str, path: &str) -> PyResult<Option<String>> {
 #[pyfunction]
 #[pyo3(signature = (name, path = "~/.dotfiles/_b00t_"))]
 fn model_activate_py(name: &str, path: &str) -> PyResult<()> {
-    model_manager::activate_model(path, name)
-        .map_err(|e| to_py_err("Failed to activate model", e))
+    model_manager::activate_model(path, name).map_err(|e| to_py_err("Failed to activate model", e))
 }
 
 #[pyfunction]

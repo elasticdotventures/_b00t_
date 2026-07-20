@@ -693,9 +693,6 @@ mod tests {
             },
             EnergyBudget::default(),
         );
-        assert_eq!(
-            cs.ufo_stereotype().to_string(),
-            "Relator:CarmackSolution"
-        );
+        assert_eq!(cs.ufo_stereotype().to_string(), "Relator:CarmackSolution");
     }
 }

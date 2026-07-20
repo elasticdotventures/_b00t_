@@ -1,6 +1,6 @@
 use crate::pipeline_costs::{
-    estimate_from_stage_profile, CostConfig, CostEstimate, PipelineCostReport, ResourceUsage,
-    StageCostRow,
+    CostConfig, CostEstimate, PipelineCostReport, ResourceUsage, StageCostRow,
+    estimate_from_stage_profile,
 };
 use crate::pipeline_types::CapsuleProfile;
 use anyhow::Result;
@@ -23,7 +23,10 @@ pub struct PipelineCostArgs {
     pub since: Option<String>,
 
     /// Forecast cost for a pipeline name based on historical average.
-    #[clap(long, help = "Estimate cost for a pipeline based on historical average")]
+    #[clap(
+        long,
+        help = "Estimate cost for a pipeline based on historical average"
+    )]
     pub forecast: Option<String>,
 }
 
@@ -116,28 +119,40 @@ fn sample_stages_for(pipeline_id: &str) -> Vec<CapsuleProfile> {
                 name: "ffmpeg-decode".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 2.0, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: Some(2), scratch_disk_gb: None,
+                    min_ram_gb: 2.0,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: Some(2),
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "gpu-encode-h264".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 4.0, min_vram_gb: 8.0, requires_gpu: true,
-                    cpu_cores: Some(4), scratch_disk_gb: None,
+                    min_ram_gb: 4.0,
+                    min_vram_gb: 8.0,
+                    requires_gpu: true,
+                    cpu_cores: Some(4),
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "mux-upload".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 1.0, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 1.0,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
         ],
         "inference-pipeline" | "llm-infer" => vec![
@@ -145,28 +160,40 @@ fn sample_stages_for(pipeline_id: &str) -> Vec<CapsuleProfile> {
                 name: "tokenize".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 0.5, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 0.5,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "gpu-infer-llama".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 8.0, min_vram_gb: 24.0, requires_gpu: true,
-                    cpu_cores: Some(8), scratch_disk_gb: None,
+                    min_ram_gb: 8.0,
+                    min_vram_gb: 24.0,
+                    requires_gpu: true,
+                    cpu_cores: Some(8),
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "detokenize-output".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 0.5, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 0.5,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
         ],
         "audio-pipeline" | "stt" => vec![
@@ -174,41 +201,55 @@ fn sample_stages_for(pipeline_id: &str) -> Vec<CapsuleProfile> {
                 name: "audio-ingest".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 1.0, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 1.0,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "gpu-whisper-transcribe".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 4.0, min_vram_gb: 6.0, requires_gpu: true,
-                    cpu_cores: Some(4), scratch_disk_gb: None,
+                    min_ram_gb: 4.0,
+                    min_vram_gb: 6.0,
+                    requires_gpu: true,
+                    cpu_cores: Some(4),
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
             CapsuleProfile {
                 name: "text-postprocess".into(),
                 ports: vec![],
                 resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 0.5, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
+                    min_ram_gb: 0.5,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
                 },
-                image: None, timeout_seconds: None,
+                image: None,
+                timeout_seconds: None,
             },
         ],
-        _ => vec![
-            CapsuleProfile {
-                name: format!("{}-stage-default", pipeline_id),
-                ports: vec![],
-                resources: crate::pipeline_types::ResourceRequirements {
-                    min_ram_gb: 1.0, min_vram_gb: 0.0, requires_gpu: false,
-                    cpu_cores: None, scratch_disk_gb: None,
-                },
-                image: None, timeout_seconds: None,
+        _ => vec![CapsuleProfile {
+            name: format!("{}-stage-default", pipeline_id),
+            ports: vec![],
+            resources: crate::pipeline_types::ResourceRequirements {
+                min_ram_gb: 1.0,
+                min_vram_gb: 0.0,
+                requires_gpu: false,
+                cpu_cores: None,
+                scratch_disk_gb: None,
             },
-        ],
+            image: None,
+            timeout_seconds: None,
+        }],
     }
 }
 
@@ -240,7 +281,11 @@ fn handle_forecast(pipeline_name: &str, config: &CostConfig) -> Result<()> {
     let monthly_cost = daily_cost * 30.0;
 
     println!();
-    println!("  {} Forecast for: {}", crate::ansi::bold("Pipeline:"), pipeline_name);
+    println!(
+        "  {} Forecast for: {}",
+        crate::ansi::bold("Pipeline:"),
+        pipeline_name
+    );
     println!(
         "  {}  1 run  — ${:.4}  (est. {:.1}s, {:.1} MiB)",
         crate::ansi::dim("Estimate"),
@@ -262,7 +307,10 @@ fn handle_forecast(pipeline_name: &str, config: &CostConfig) -> Result<()> {
     println!();
 
     if monthly_cost > 500.0 {
-        println!("  {}  Monthly cost exceeds $500 — consider GPU reservation or spot instances", crate::ansi::red("⚠"));
+        println!(
+            "  {}  Monthly cost exceeds $500 — consider GPU reservation or spot instances",
+            crate::ansi::red("⚠")
+        );
     }
     println!();
 

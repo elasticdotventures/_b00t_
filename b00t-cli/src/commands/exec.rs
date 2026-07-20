@@ -212,144 +212,146 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
             // broad authority: proceed without user gate
         }
         GuardResult::Block { message } => {
-          if let Some(justification) = &args.justification {
-            // Adversarial-review path (PRD-SUDO-OPERATOR-GOVERNANCE) —
-            // replaces the anonymous TTL-bypass below when a justification
-            // is supplied. Justification-less Block behavior (the `else`
-            // branch) is completely unchanged.
-            use b00t_c0re_lib::sudo_operator::{adversarial_review, checkpoint_system_state, SudoDisposition, SudoGrantEvidence};
+            if let Some(justification) = &args.justification {
+                // Adversarial-review path (PRD-SUDO-OPERATOR-GOVERNANCE) —
+                // replaces the anonymous TTL-bypass below when a justification
+                // is supplied. Justification-less Block behavior (the `else`
+                // branch) is completely unchanged.
+                use b00t_c0re_lib::sudo_operator::{
+                    SudoDisposition, SudoGrantEvidence, adversarial_review, checkpoint_system_state,
+                };
 
-            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let (review_event, disposition) =
-                adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
+                let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                let (review_event, disposition) =
+                    adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
 
-            match &disposition {
-                SudoDisposition::Grant { ttl_seconds } => {
-                    let checkpoint_id = now_unix().to_string();
-                    let checkpoint =
-                        checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
-                    let evidence = SudoGrantEvidence::new(&review_event, &disposition)
-                        .with_checkpoint(checkpoint.as_evidence_string());
+                match &disposition {
+                    SudoDisposition::Grant { ttl_seconds } => {
+                        let checkpoint_id = now_unix().to_string();
+                        let checkpoint =
+                            checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
+                        let evidence = SudoGrantEvidence::new(&review_event, &disposition)
+                            .with_checkpoint(checkpoint.as_evidence_string());
 
-                    eprintln!(
-                        "✅ SUDO-GRANT: {} (ttl={}s) evidence={}",
-                        cmd_str, ttl_seconds, evidence.content_hash
-                    );
-                    append_audit_log(
-                        &log_path,
-                        &AuditLogEntry {
-                            ts: Utc::now().to_rfc3339(),
-                            cmd: cmd_str.clone(),
-                            result: "sudo-granted".into(),
-                            guard_msg: Some(message.clone()),
-                            pid: None,
-                            justification: Some(justification.clone()),
-                            cited_commits: args.cites.clone(),
-                            sudo_disposition: Some(disposition.to_string()),
-                            checkpoint_ref: Some(checkpoint.as_evidence_string()),
-                        },
-                    );
-                    // fall through to execution below
+                        eprintln!(
+                            "✅ SUDO-GRANT: {} (ttl={}s) evidence={}",
+                            cmd_str, ttl_seconds, evidence.content_hash
+                        );
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "sudo-granted".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                justification: Some(justification.clone()),
+                                cited_commits: args.cites.clone(),
+                                sudo_disposition: Some(disposition.to_string()),
+                                checkpoint_ref: Some(checkpoint.as_evidence_string()),
+                            },
+                        );
+                        // fall through to execution below
+                    }
+                    SudoDisposition::Deny { reason } => {
+                        eprintln!("🚫 SUDO-DENY: {}", reason);
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "sudo-denied".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                justification: Some(justification.clone()),
+                                cited_commits: args.cites.clone(),
+                                sudo_disposition: Some(disposition.to_string()),
+                                checkpoint_ref: None,
+                            },
+                        );
+                        std::process::exit(1);
+                    }
+                    SudoDisposition::Escalate { reason } => {
+                        eprintln!("📡 SUDO-ESCALATE: {}", reason);
+                        crate::budget_controller::fire_sudo_escalation(
+                            &cmd_str,
+                            justification,
+                            &args.cites,
+                            reason,
+                        );
+                        notify_send(&format!("b00t sudo escalation: {cmd_str}"), reason);
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "sudo-escalated".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                justification: Some(justification.clone()),
+                                cited_commits: args.cites.clone(),
+                                sudo_disposition: Some(disposition.to_string()),
+                                checkpoint_ref: None,
+                            },
+                        );
+                        eprintln!("   Not executed. Resolve the escalation and re-run.");
+                        std::process::exit(1);
+                    }
                 }
-                SudoDisposition::Deny { reason } => {
-                    eprintln!("🚫 SUDO-DENY: {}", reason);
-                    append_audit_log(
-                        &log_path,
-                        &AuditLogEntry {
-                            ts: Utc::now().to_rfc3339(),
-                            cmd: cmd_str.clone(),
-                            result: "sudo-denied".into(),
-                            guard_msg: Some(message.clone()),
-                            pid: None,
-                            justification: Some(justification.clone()),
-                            cited_commits: args.cites.clone(),
-                            sudo_disposition: Some(disposition.to_string()),
-                            checkpoint_ref: None,
-                        },
-                    );
-                    std::process::exit(1);
-                }
-                SudoDisposition::Escalate { reason } => {
-                    eprintln!("📡 SUDO-ESCALATE: {}", reason);
-                    crate::budget_controller::fire_sudo_escalation(
-                        &cmd_str,
-                        justification,
-                        &args.cites,
-                        reason,
-                    );
-                    notify_send(&format!("b00t sudo escalation: {cmd_str}"), reason);
-                    append_audit_log(
-                        &log_path,
-                        &AuditLogEntry {
-                            ts: Utc::now().to_rfc3339(),
-                            cmd: cmd_str.clone(),
-                            result: "sudo-escalated".into(),
-                            guard_msg: Some(message.clone()),
-                            pid: None,
-                            justification: Some(justification.clone()),
-                            cited_commits: args.cites.clone(),
-                            sudo_disposition: Some(disposition.to_string()),
-                            checkpoint_ref: None,
-                        },
-                    );
-                    eprintln!("   Not executed. Resolve the escalation and re-run.");
-                    std::process::exit(1);
+            } else {
+                let mut cache = load_block_cache(&cache_path);
+                let now = now_unix();
+
+                match cache.get(&cmd_str).copied() {
+                    Some(first_ts) if now.saturating_sub(first_ts) < BLOCK_TTL_SECS => {
+                        // Re-submission within TTL → force-execute with audit warning
+                        eprintln!(
+                            "🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)",
+                            message, BLOCK_TTL_SECS
+                        );
+                        eprintln!("   Executing with audit trail.");
+                        cache.remove(&cmd_str); // consume the bypass
+                        save_block_cache(&cache_path, &cache);
+
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "block-forced".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                ..Default::default()
+                            },
+                        );
+                        // fall through to execution below
+                    }
+                    _ => {
+                        // First rejection (or expired TTL): record + reject
+                        cache.insert(cmd_str.clone(), now);
+                        save_block_cache(&cache_path, &cache);
+
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "block-rejected".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                ..Default::default()
+                            },
+                        );
+
+                        eprintln!("🚫 BLOCKED: {}", message);
+                        eprintln!(
+                            "   Re-submit within {}s to force execution.",
+                            BLOCK_TTL_SECS
+                        );
+                        std::process::exit(1);
+                    }
                 }
             }
-          } else {
-            let mut cache = load_block_cache(&cache_path);
-            let now = now_unix();
-
-            match cache.get(&cmd_str).copied() {
-                Some(first_ts) if now.saturating_sub(first_ts) < BLOCK_TTL_SECS => {
-                    // Re-submission within TTL → force-execute with audit warning
-                    eprintln!(
-                        "🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)",
-                        message, BLOCK_TTL_SECS
-                    );
-                    eprintln!("   Executing with audit trail.");
-                    cache.remove(&cmd_str); // consume the bypass
-                    save_block_cache(&cache_path, &cache);
-
-                    append_audit_log(
-                        &log_path,
-                        &AuditLogEntry {
-                            ts: Utc::now().to_rfc3339(),
-                            cmd: cmd_str.clone(),
-                            result: "block-forced".into(),
-                            guard_msg: Some(message.clone()),
-                            pid: None,
-                                                ..Default::default()
-                        },
-                    );
-                    // fall through to execution below
-                }
-                _ => {
-                    // First rejection (or expired TTL): record + reject
-                    cache.insert(cmd_str.clone(), now);
-                    save_block_cache(&cache_path, &cache);
-
-                    append_audit_log(
-                        &log_path,
-                        &AuditLogEntry {
-                            ts: Utc::now().to_rfc3339(),
-                            cmd: cmd_str.clone(),
-                            result: "block-rejected".into(),
-                            guard_msg: Some(message.clone()),
-                            pid: None,
-                                                ..Default::default()
-                        },
-                    );
-
-                    eprintln!("🚫 BLOCKED: {}", message);
-                    eprintln!(
-                        "   Re-submit within {}s to force execution.",
-                        BLOCK_TTL_SECS
-                    );
-                    std::process::exit(1);
-                }
-            }
-          }
         }
     }
 
@@ -369,7 +371,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: "background".into(),
                 guard_msg: None,
                 pid: None,
-                        ..Default::default()
+                ..Default::default()
             },
         );
 
@@ -447,13 +449,14 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: format!("{}:{}", result_label, sandbox_kind_label),
                 guard_msg: guard_msg.clone(),
                 pid: Some(pid),
-                        ..Default::default()
+                ..Default::default()
             },
         );
         child.wait()?.code().unwrap_or(1)
     } else {
         // Sandbox provider: run() captures output
-        let output = sandbox_provider.run(&plan)
+        let output = sandbox_provider
+            .run(&plan)
             .map_err(|e| anyhow::anyhow!("sandbox exec failed: {}", e))?;
 
         append_audit_log(
@@ -464,7 +467,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 result: format!("{}:{}", result_label, sandbox_kind_label),
                 guard_msg,
                 pid: None,
-                        ..Default::default()
+                ..Default::default()
             },
         );
 

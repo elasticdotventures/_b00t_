@@ -33,14 +33,24 @@ fn test_captain_creates_team() {
 fn test_recruit_request_ranks_by_skill() {
     let request = RecruitRequest {
         captain_id: "cap1".to_string(),
-        required_skills: vec!["rust".to_string(), "python".to_string(), "docker".to_string()],
+        required_skills: vec![
+            "rust".to_string(),
+            "python".to_string(),
+            "docker".to_string(),
+        ],
         max_players: 2,
         bounty_share: 10.0,
     };
 
     let agents = vec![
         make_agent("a1", Role::Executor, &["rust"], true, false),
-        make_agent("a2", Role::Executor, &["rust", "python", "docker"], true, false),
+        make_agent(
+            "a2",
+            Role::Executor,
+            &["rust", "python", "docker"],
+            true,
+            false,
+        ),
         make_agent("a3", Role::Executor, &["python", "docker"], true, false),
     ];
 

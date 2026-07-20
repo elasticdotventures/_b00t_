@@ -158,11 +158,9 @@ pub fn validate_datum_entanglements(
         let mut ai_models = Vec::new();
         for reference in refs {
             let resolved =
-                validate_entanglement_ref(reference, all_datums, Some(DatumType::Ai))
-                    .context(format!(
-                        "Invalid AI model entanglement in datum '{}'",
-                        datum.name
-                    ))?;
+                validate_entanglement_ref(reference, all_datums, Some(DatumType::Ai)).context(
+                    format!("Invalid AI model entanglement in datum '{}'", datum.name),
+                )?;
             ai_models.push(resolved);
         }
         validated.insert("ai_models".to_string(), ai_models);

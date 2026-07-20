@@ -100,12 +100,18 @@ impl TomllmDoc {
 
     /// Returns `# summary:` value from the `# b00t:map v1` tail block.
     pub fn summary(&self) -> Option<&str> {
-        self.map_tags.get("summary").map(String::as_str).filter(|s| !s.is_empty())
+        self.map_tags
+            .get("summary")
+            .map(String::as_str)
+            .filter(|s| !s.is_empty())
     }
 
     /// Returns `# tier:` value from the tail block.
     pub fn tier(&self) -> Option<&str> {
-        self.map_tags.get("tier").map(String::as_str).filter(|s| !s.is_empty())
+        self.map_tags
+            .get("tier")
+            .map(String::as_str)
+            .filter(|s| !s.is_empty())
     }
 
     /// Returns `# complexity:` parsed as u8.
@@ -127,11 +133,7 @@ fn strip_comments(src: &str) -> String {
     src.lines()
         .map(|line| {
             let trimmed = line.trim_start();
-            if trimmed.starts_with('#') {
-                ""
-            } else {
-                line
-            }
+            if trimmed.starts_with('#') { "" } else { line }
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -172,7 +174,8 @@ fn extract_map_block(src: &str) -> HashMap<String, String> {
 
 /// Parse cleaned TOML and return extra top-level sections (excluding `b00t`) as JSON.
 fn extra_sections(clean: &str) -> Result<HashMap<String, serde_json::Value>> {
-    let value: toml::Value = toml::from_str(clean).unwrap_or(toml::Value::Table(Default::default()));
+    let value: toml::Value =
+        toml::from_str(clean).unwrap_or(toml::Value::Table(Default::default()));
     let mut out = HashMap::new();
     if let toml::Value::Table(table) = value {
         for (k, v) in table {
@@ -194,9 +197,11 @@ fn toml_value_to_json(v: toml::Value) -> serde_json::Value {
         toml::Value::Array(arr) => {
             serde_json::Value::Array(arr.into_iter().map(toml_value_to_json).collect())
         }
-        toml::Value::Table(tbl) => {
-            serde_json::Value::Object(tbl.into_iter().map(|(k, v)| (k, toml_value_to_json(v))).collect())
-        }
+        toml::Value::Table(tbl) => serde_json::Value::Object(
+            tbl.into_iter()
+                .map(|(k, v)| (k, toml_value_to_json(v)))
+                .collect(),
+        ),
         toml::Value::Datetime(dt) => serde_json::Value::String(dt.to_string()),
     }
 }

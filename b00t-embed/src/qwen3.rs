@@ -61,11 +61,7 @@ impl Qwen3Composable {
     ///
     /// Model ID: "Qwen/Qwen3-Embedding-0.6B" (768-dim embeddings)
     #[allow(unused_variables)]
-    pub fn new(
-        model_id: &str,
-        revision: Option<&str>,
-        token: Option<&str>,
-    ) -> Result<Self> {
+    pub fn new(model_id: &str, revision: Option<&str>, token: Option<&str>) -> Result<Self> {
         let client = HFClientSync::new().context("failed to build HF client")?;
         let (owner, name) = split_model_id(model_id);
         let repo = client.model(owner, name);
@@ -81,13 +77,11 @@ impl Qwen3Composable {
             .filename("tokenizer.json")
             .send()
             .context("tokenizer.json not found")?;
-        let weights_path = match repo
-            .download_file()
-            .filename("model.safetensors")
-            .send()
-        {
+        let weights_path = match repo.download_file().filename("model.safetensors").send() {
             Ok(p) => p,
-            Err(_) => anyhow::bail!("model.safetensors not found; Qwen3-Embedding uses single-file safetensors"),
+            Err(_) => anyhow::bail!(
+                "model.safetensors not found; Qwen3-Embedding uses single-file safetensors"
+            ),
         };
 
         // Parse config
@@ -126,8 +120,7 @@ impl Qwen3Composable {
         let model = {
             let vm = varmap.lock().unwrap();
             let vb = VarBuilder::from_varmap(&vm, model_dtype, &device);
-            let m = Model::new(&config, vb)
-                .context("failed to build Qwen3 model with VarMap")?;
+            let m = Model::new(&config, vb).context("failed to build Qwen3 model with VarMap")?;
             drop(vm);
             m
         };
@@ -184,10 +177,7 @@ impl Qwen3Composable {
     }
 
     /// Register a GGUF/safetensors layer for runtime composition.
-    pub async fn register_layer(
-        &self,
-        source: Box<dyn crate::layer::TensorSource>,
-    ) {
+    pub async fn register_layer(&self, source: Box<dyn crate::layer::TensorSource>) {
         let mut guard = self.layer_stack.write().await;
         if let Some(stack) = guard.as_mut() {
             stack.register_source(source);
@@ -202,8 +192,10 @@ impl Qwen3Composable {
             .map_err(|e| anyhow::anyhow!("tokenization: {e}"))?;
 
         let token_ids: Vec<Vec<u32>> = tokens.iter().map(|t| t.get_ids().to_vec()).collect();
-        let attention_mask: Vec<Vec<u32>> =
-            tokens.iter().map(|t| t.get_attention_mask().to_vec()).collect();
+        let attention_mask: Vec<Vec<u32>> = tokens
+            .iter()
+            .map(|t| t.get_attention_mask().to_vec())
+            .collect();
 
         let max_len = token_ids.iter().map(|t| t.len()).max().unwrap_or(0);
         let batch_size = token_ids.len();
@@ -236,9 +228,10 @@ impl EmbedBackend for Qwen3Composable {
 
         // Forward pass through the model
         let hidden = {
-            let mut model = self.model.write().map_err(|e| {
-                anyhow::anyhow!("model lock: {e}")
-            })?;
+            let mut model = self
+                .model
+                .write()
+                .map_err(|e| anyhow::anyhow!("model lock: {e}"))?;
             let result = model
                 .forward(&ids, &mask, 0)
                 .context("qwen3 forward pass")?;
@@ -263,9 +256,10 @@ impl EmbedBackend for Qwen3Composable {
         let seq_len = ids.dims()[1];
 
         let hidden = {
-            let mut model = self.model.write().map_err(|e| {
-                anyhow::anyhow!("model lock: {e}")
-            })?;
+            let mut model = self
+                .model
+                .write()
+                .map_err(|e| anyhow::anyhow!("model lock: {e}"))?;
             let result = model
                 .forward(&ids, &mask, 0)
                 .context("qwen3 forward pass")?;
@@ -292,21 +286,24 @@ impl EmbedBackend for Qwen3Composable {
         self.available
     }
 
-    async fn compose_layers(&self, query: &str, max_layers: usize) -> Result<Vec<crate::layer::LayerDescriptor>> {
+    async fn compose_layers(
+        &self,
+        query: &str,
+        max_layers: usize,
+    ) -> Result<Vec<crate::layer::LayerDescriptor>> {
         // Build query embedding from the input text via the model itself
         let (ids, mask) = self.tokenize_batch(&[query])?;
         let query_hidden = {
-            let mut model = self.model.write().map_err(|e| {
-                anyhow::anyhow!("model lock: {e}")
-            })?;
+            let mut model = self
+                .model
+                .write()
+                .map_err(|e| anyhow::anyhow!("model lock: {e}"))?;
             let h = model.forward(&ids, &mask, 0).context("qwen3 forward")?;
             model.clear_kv_cache();
             h
         };
         let seq_len = ids.dims()[1];
-        let query_vec = query_hidden
-            .narrow(1, seq_len - 1, 1)?
-            .squeeze(1)?;
+        let query_vec = query_hidden.narrow(1, seq_len - 1, 1)?.squeeze(1)?;
         let normalized = normalize_l2(query_vec)?;
         let query_embedding = crate::Embedding {
             data: normalized.to_vec1::<f32>()?,
@@ -345,7 +342,9 @@ impl EmbedBackend for Qwen3Composable {
                 for tname in registry.active_tensor_names() {
                     // Skip non-head tensors (transformer layer weights stay frozen)
                     let is_head = head_prefixes.iter().any(|p| tname.starts_with(p));
-                    if !is_head { continue; }
+                    if !is_head {
+                        continue;
+                    }
                     let maybe_tensor: Option<Tensor> = {
                         let vm = registry.varmap().lock().unwrap();
                         let inner = vm.data().lock().unwrap();
@@ -364,7 +363,8 @@ impl EmbedBackend for Qwen3Composable {
                         };
                         if let Some(target_dtype) = var_dtype {
                             if tensor.dtype() != target_dtype {
-                                tensor = tensor.to_dtype(target_dtype)
+                                tensor = tensor
+                                    .to_dtype(target_dtype)
                                     .map_err(|e| anyhow::anyhow!("dtype cast for set_one: {e}"))?;
                             }
                         }
@@ -409,13 +409,17 @@ fn detect_safetensors_dtype(path: &std::path::Path) -> Result<DType> {
     if 8 + header_len > content.len() {
         anyhow::bail!("header exceeds file");
     }
-    let header: serde_json::Value = serde_json::from_slice(&content[8..8 + header_len])
-        .context("parse safetensors header")?;
-    let obj = header.as_object().ok_or_else(|| anyhow::anyhow!("header not object"))?;
+    let header: serde_json::Value =
+        serde_json::from_slice(&content[8..8 + header_len]).context("parse safetensors header")?;
+    let obj = header
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("header not object"))?;
 
     // Find first non-metadata tensor and read its dtype
     for (key, val) in obj {
-        if key == "__metadata__" { continue; }
+        if key == "__metadata__" {
+            continue;
+        }
         if let Some(dtype_str) = val.get("dtype").and_then(|v| v.as_str()) {
             return Ok(match dtype_str {
                 "F32" => DType::F32,

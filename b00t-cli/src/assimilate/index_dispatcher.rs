@@ -59,13 +59,13 @@ impl IndexDispatcher {
                 "raglite" | "rag" => {
                     targets.push(Box::new(RagliteTarget::new()));
                 }
-        "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
-            targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
-        }
-        "store" | "knowledge-store" | "s3" | "object-storage" => {
-            targets.push(Box::new(StoreTarget::new()));
-        }
-        other => {
+                "codebase-memory" | "codebase" | "cb" | "codebase_memory" => {
+                    targets.push(Box::new(McpBridgeTarget::new("codebase-memory")?));
+                }
+                "store" | "knowledge-store" | "s3" | "object-storage" => {
+                    targets.push(Box::new(StoreTarget::new()));
+                }
+                other => {
                     // Try as MCP server name
                     targets.push(Box::new(McpBridgeTarget::new(other)?));
                 }
@@ -84,11 +84,9 @@ impl IndexDispatcher {
         let reports: Vec<String> = self
             .targets
             .iter()
-            .filter_map(|t| {
-                match t.ingest(docs, topic) {
-                    Ok(report) => Some(report.to_string()),
-                    Err(e) => Some(format!("{}: ERROR: {e}", t.name())),
-                }
+            .filter_map(|t| match t.ingest(docs, topic) {
+                Ok(report) => Some(report.to_string()),
+                Err(e) => Some(format!("{}: ERROR: {e}", t.name())),
             })
             .collect();
 
@@ -149,7 +147,10 @@ impl IndexTarget for GrafeoTarget {
                     Ok(out) => {
                         report.errors.push(format!(
                             "grafeo upsert failed for '{subject}': {}",
-                            String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("?")
+                            String::from_utf8_lossy(&out.stderr)
+                                .lines()
+                                .next()
+                                .unwrap_or("?")
                         ));
                     }
                     Err(e) => {
@@ -187,14 +188,7 @@ impl IndexTarget for RagliteTarget {
         for doc in docs {
             let content = &doc.content.text;
             let result = Command::new("b00t")
-                .args([
-                    "grok",
-                    "learn",
-                    "--topic",
-                    topic,
-                    "--rag",
-                    "raglite",
-                ])
+                .args(["grok", "learn", "--topic", topic, "--rag", "raglite"])
                 .stdin(std::process::Stdio::piped())
                 .spawn();
 
@@ -209,10 +203,9 @@ impl IndexTarget for RagliteTarget {
                             report.docs_indexed += 1;
                         }
                         Ok(status) => {
-                            report.errors.push(format!(
-                                "raglite exited {:?} for {topic}",
-                                status.code()
-                            ));
+                            report
+                                .errors
+                                .push(format!("raglite exited {:?} for {topic}", status.code()));
                         }
                         Err(e) => {
                             report.errors.push(format!("raglite wait error: {e}"));
@@ -255,11 +248,10 @@ impl McpBridgeTarget {
     /// Find MCP server binary from datum config.
     fn find_mcp_binary(name: &str) -> Option<String> {
         // Check common locations
-        let b00t_path = std::env::var("_B00T_Path")
-            .unwrap_or_else(|_| {
-                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-                format!("{home}/.b00t/_b00t_")
-            });
+        let b00t_path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            format!("{home}/.b00t/_b00t_")
+        });
 
         let datum_path = format!("{b00t_path}/{name}.mcp.toml");
         if let Ok(content) = std::fs::read_to_string(&datum_path) {
@@ -292,8 +284,7 @@ impl IndexTarget for McpBridgeTarget {
         if self.server_name.contains("codebase-memory") || self.server_name == "codebase" {
             // Write combined content to a temp directory
             let tmp_dir = std::env::temp_dir().join(format!("b00t-assimilate-{topic}"));
-            std::fs::create_dir_all(&tmp_dir)
-                .map_err(|e| anyhow!("create temp dir: {e}"))?;
+            std::fs::create_dir_all(&tmp_dir).map_err(|e| anyhow!("create temp dir: {e}"))?;
 
             for (i, doc) in docs.iter().enumerate() {
                 let file_path = tmp_dir.join(format!("{i:03}.md"));
@@ -316,7 +307,11 @@ impl IndexTarget for McpBridgeTarget {
             }
 
             // Call codebase-memory-mcp index via b00t CLI or direct subprocess
-            eprintln!("  → indexing into {} via temp dir {}", self.server_name, tmp_dir.display());
+            eprintln!(
+                "  → indexing into {} via temp dir {}",
+                self.server_name,
+                tmp_dir.display()
+            );
 
             // Try b00t ast-extract → codebase-memory pipeline
             let result = Command::new("b00t")
@@ -325,12 +320,16 @@ impl IndexTarget for McpBridgeTarget {
 
             match result {
                 Ok(out) if out.status.success() => {
-                    report.concepts_indexed = docs.iter().map(|d| d.extraction.concepts.len()).sum();
+                    report.concepts_indexed =
+                        docs.iter().map(|d| d.extraction.concepts.len()).sum();
                 }
                 Ok(out) => {
                     report.errors.push(format!(
                         "ast-extract failed: {}",
-                        String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("?")
+                        String::from_utf8_lossy(&out.stderr)
+                            .lines()
+                            .next()
+                            .unwrap_or("?")
                     ));
                 }
                 Err(e) => {
@@ -385,10 +384,8 @@ mod tests {
 
     #[test]
     fn test_dispatcher_discovers_store_target() {
-        let dispatcher =
-            IndexDispatcher::discover(&["store".to_string()]).unwrap();
-        let target_names: Vec<&str> =
-            dispatcher.targets.iter().map(|t| t.name()).collect();
+        let dispatcher = IndexDispatcher::discover(&["store".to_string()]).unwrap();
+        let target_names: Vec<&str> = dispatcher.targets.iter().map(|t| t.name()).collect();
         assert!(target_names.contains(&"b00t-store"));
     }
 }
@@ -411,33 +408,75 @@ const STORE_SIZE_THRESHOLD: u64 = 1_048_576;
 pub struct StoreTarget;
 
 impl StoreTarget {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl IndexTarget for StoreTarget {
-    fn name(&self) -> &str { "b00t-store" }
+    fn name(&self) -> &str {
+        "b00t-store"
+    }
 
     fn ingest(&self, docs: &[CrawledDoc], topic: &str) -> Result<IngestReport> {
-        let mut report = IngestReport { target: self.name().to_string(), ..Default::default() };
+        let mut report = IngestReport {
+            target: self.name().to_string(),
+            ..Default::default()
+        };
 
         for doc in docs {
             let is_large = doc.content.text.len() as u64 > STORE_SIZE_THRESHOLD;
-            let concepts: Vec<String> = doc.extraction.concepts.iter()
-                .map(|c| format!("- **{}**: {}", c.name, c.description)).collect();
+            let concepts: Vec<String> = doc
+                .extraction
+                .concepts
+                .iter()
+                .map(|c| format!("- **{}**: {}", c.name, c.description))
+                .collect();
 
             let (class, body) = match &doc.content.content_type {
-                ContentType::Image(sub) => ("b00t:MediaAsset",
-                    format!("# {topic} (image/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
-                ContentType::Audio(sub) => ("b00t:MediaAsset",
-                    format!("# {topic} (audio/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
-                ContentType::Video(sub) => ("b00t:MediaAsset",
-                    format!("# {topic} (video/{sub})\nSource: {}\n{} bytes", doc.url, doc.content.text.len())),
-                ContentType::Pdf => ("b00t:ExtractedDocument",
-                    format!("# {topic}\nSource: {}\n\n{}", doc.url, doc.content.text)),
+                ContentType::Image(sub) => (
+                    "b00t:MediaAsset",
+                    format!(
+                        "# {topic} (image/{sub})\nSource: {}\n{} bytes",
+                        doc.url,
+                        doc.content.text.len()
+                    ),
+                ),
+                ContentType::Audio(sub) => (
+                    "b00t:MediaAsset",
+                    format!(
+                        "# {topic} (audio/{sub})\nSource: {}\n{} bytes",
+                        doc.url,
+                        doc.content.text.len()
+                    ),
+                ),
+                ContentType::Video(sub) => (
+                    "b00t:MediaAsset",
+                    format!(
+                        "# {topic} (video/{sub})\nSource: {}\n{} bytes",
+                        doc.url,
+                        doc.content.text.len()
+                    ),
+                ),
+                ContentType::Pdf => (
+                    "b00t:ExtractedDocument",
+                    format!("# {topic}\nSource: {}\n\n{}", doc.url, doc.content.text),
+                ),
                 _ => {
-                    let body = format!("# {topic}\nSource: {}\n\n{}\n## Concepts\n{}",
-                        doc.url, doc.content.text, concepts.join("\n"));
-                    (if is_large { "b00t:LargeDocument" } else { "b00t:AssimilatedDocument" }, body)
+                    let body = format!(
+                        "# {topic}\nSource: {}\n\n{}\n## Concepts\n{}",
+                        doc.url,
+                        doc.content.text,
+                        concepts.join("\n")
+                    );
+                    (
+                        if is_large {
+                            "b00t:LargeDocument"
+                        } else {
+                            "b00t:AssimilatedDocument"
+                        },
+                        body,
+                    )
                 }
             };
 
@@ -456,7 +495,9 @@ impl IndexTarget for StoreTarget {
                     report.docs_indexed += 1;
                     report.concepts_indexed += doc.extraction.concepts.len();
                 }
-                Err(e) => report.errors.push(format!("store put failed for {}: {e}", doc.url)),
+                Err(e) => report
+                    .errors
+                    .push(format!("store put failed for {}: {e}", doc.url)),
             }
         }
         if let Err(e) = emit_assimilation_facts(docs, topic) {
@@ -469,13 +510,21 @@ impl IndexTarget for StoreTarget {
 fn emit_assimilation_facts(docs: &[CrawledDoc], topic: &str) -> Result<()> {
     for doc in docs {
         for concept in &doc.extraction.concepts {
-            let _ = Command::new("b00t").args([
-                "data", "fabric", "upsert",
-                "--subject", &format!("doc:{}", doc.url),
-                "--predicate", "b00t:hasConcept",
-                "--object", &format!("concept:{}", concept.name),
-                "--namespace", topic,
-            ]).output();
+            let _ = Command::new("b00t")
+                .args([
+                    "data",
+                    "fabric",
+                    "upsert",
+                    "--subject",
+                    &format!("doc:{}", doc.url),
+                    "--predicate",
+                    "b00t:hasConcept",
+                    "--object",
+                    &format!("concept:{}", concept.name),
+                    "--namespace",
+                    topic,
+                ])
+                .output();
         }
     }
     Ok(())

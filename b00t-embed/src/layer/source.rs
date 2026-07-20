@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::layer::{LayerError, LayerId, TensorSpec};
 use crate::layer::trait_def::TensorSource;
+use crate::layer::{LayerError, LayerId, TensorSpec};
 
 use candle_core::quantized::gguf_file;
 use candle_core::{DType, Device, Tensor};
@@ -44,7 +44,9 @@ impl SafetensorsSource {
 
     /// Read tensor metadata from a safetensors file header without loading data.
     /// Returns (name -> (shape, dtype_offset)) mapping.
-    pub fn read_metadata(path: &Path) -> Result<HashMap<String, (Vec<usize>, usize, usize)>, LayerError> {
+    pub fn read_metadata(
+        path: &Path,
+    ) -> Result<HashMap<String, (Vec<usize>, usize, usize)>, LayerError> {
         let content = std::fs::read(path).map_err(|e| {
             LayerError::source_error(
                 path.file_stem().unwrap_or_default().to_string_lossy(),
@@ -64,12 +66,13 @@ impl SafetensorsSource {
                 "header length exceeds file size",
             ));
         }
-        let header: serde_json::Value = serde_json::from_slice(&content[8..8 + header_len]).map_err(|e| {
-            LayerError::source_error(
-                path.file_stem().unwrap_or_default().to_string_lossy(),
-                format!("invalid safetensors header: {e}"),
-            )
-        })?;
+        let header: serde_json::Value = serde_json::from_slice(&content[8..8 + header_len])
+            .map_err(|e| {
+                LayerError::source_error(
+                    path.file_stem().unwrap_or_default().to_string_lossy(),
+                    format!("invalid safetensors header: {e}"),
+                )
+            })?;
 
         let metadata = header.as_object().ok_or_else(|| {
             LayerError::source_error(
@@ -85,8 +88,14 @@ impl SafetensorsSource {
                 continue;
             }
             if let Some(obj) = info.as_object() {
-                if let (Some(dtype_str), Some(shape)) = (obj.get("dtype").and_then(|v| v.as_str()), obj.get("shape").and_then(|v| v.as_array())) {
-                    let shape: Vec<usize> = shape.iter().filter_map(|v| v.as_u64().map(|u| u as usize)).collect();
+                if let (Some(dtype_str), Some(shape)) = (
+                    obj.get("dtype").and_then(|v| v.as_str()),
+                    obj.get("shape").and_then(|v| v.as_array()),
+                ) {
+                    let shape: Vec<usize> = shape
+                        .iter()
+                        .filter_map(|v| v.as_u64().map(|u| u as usize))
+                        .collect();
                     let elem_size = match dtype_str {
                         "F32" | "I32" | "U32" => 4,
                         "F16" | "BF16" | "I16" | "U16" => 2,
@@ -146,9 +155,8 @@ impl TensorSource for SafetensorsSource {
                     ));
                 }
                 let raw = &content[*data_offset..end];
-                let tensor = Tensor::from_raw_buffer(raw, dtype, shape, device).map_err(|e| {
-                    LayerError::source_error(&self.id, format!("tensor load: {e}"))
-                })?;
+                let tensor = Tensor::from_raw_buffer(raw, dtype, shape, device)
+                    .map_err(|e| LayerError::source_error(&self.id, format!("tensor load: {e}")))?;
                 tensors.insert(spec.name.clone(), tensor);
             } else {
                 return Err(LayerError::source_error(
@@ -240,7 +248,10 @@ impl GGUFSource {
             };
             meta.insert(k.clone(), val);
         }
-        meta.insert("tensor_count".into(), content.tensor_infos.len().to_string());
+        meta.insert(
+            "tensor_count".into(),
+            content.tensor_infos.len().to_string(),
+        );
         Ok(meta)
     }
 
@@ -275,12 +286,10 @@ impl TensorSource for GGUFSource {
         device: &Device,
         dtype: DType,
     ) -> Result<HashMap<String, Tensor>, LayerError> {
-        let mut file = std::fs::File::open(&self.path).map_err(|e| {
-            LayerError::source_error(&self.id, format!("cannot open gguf: {e}"))
-        })?;
-        let content = gguf_file::Content::read(&mut file).map_err(|e| {
-            LayerError::source_error(&self.id, format!("cannot parse gguf: {e}"))
-        })?;
+        let mut file = std::fs::File::open(&self.path)
+            .map_err(|e| LayerError::source_error(&self.id, format!("cannot open gguf: {e}")))?;
+        let content = gguf_file::Content::read(&mut file)
+            .map_err(|e| LayerError::source_error(&self.id, format!("cannot parse gguf: {e}")))?;
 
         let mut tensors = HashMap::new();
         for spec in &self.specs {
@@ -474,7 +483,11 @@ mod tests {
 
     #[test]
     fn test_tensor_spec_defaults() {
-        let spec = TensorSpec::new("bert.embeddings.word_embeddings.weight", vec![30522, 768], "F32");
+        let spec = TensorSpec::new(
+            "bert.embeddings.word_embeddings.weight",
+            vec![30522, 768],
+            "F32",
+        );
         assert_eq!(spec.name, "bert.embeddings.word_embeddings.weight");
         assert_eq!(spec.shape, vec![30522, 768]);
     }

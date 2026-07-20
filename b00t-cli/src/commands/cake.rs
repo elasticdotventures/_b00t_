@@ -113,13 +113,22 @@ pub fn handle_cake_command(args: &CakeArgs) -> Result<()> {
                 return Ok(());
             }
             println!("🍰 Cake history for '{agent}' ({})", filtered.len());
-            println!("{:<24} {:<8} {:<10} {:<8} {}", "ID", "thumbs", "verdict", "amount", "created");
+            println!(
+                "{:<24} {:<8} {:<10} {:<8} {}",
+                "ID", "thumbs", "verdict", "amount", "created"
+            );
             println!("{}", "-".repeat(72));
             for t in filtered {
                 let verdict = t.reviewer_verdict.as_deref().unwrap_or("pending");
-                let amount = t.amount.map(|a| a.to_string()).unwrap_or_else(|| "?".into());
+                let amount = t
+                    .amount
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|| "?".into());
                 let short_id = &t.id[..t.id.len().min(22)];
-                println!("{short_id:<24} {:<8} {verdict:<10} {amount:<8} {}", t.thumbs, t.created_at);
+                println!(
+                    "{short_id:<24} {:<8} {verdict:<10} {amount:<8} {}",
+                    t.thumbs, t.created_at
+                );
             }
         }
 
@@ -133,7 +142,10 @@ pub fn handle_cake_command(args: &CakeArgs) -> Result<()> {
             for t in &tickets {
                 let verdict = t.reviewer_verdict.as_deref().unwrap_or("pending");
                 let amount = t.amount.unwrap_or(0);
-                println!("  {} | {} | {} | {} | <|🍰:{amount}|>", t.id, t.agent, t.thumbs, verdict);
+                println!(
+                    "  {} | {} | {} | {} | <|🍰:{amount}|>",
+                    t.id, t.agent, t.thumbs, verdict
+                );
                 if let Some(ref j) = t.justification {
                     println!("    justification: {j}");
                 }
@@ -142,7 +154,13 @@ pub fn handle_cake_command(args: &CakeArgs) -> Result<()> {
 
         CakeCommands::Ticket { cmd } => match cmd {
             TicketCommands::Create {
-                agent, thumbs, task, git_ref, estimate, actual, justification,
+                agent,
+                thumbs,
+                task,
+                git_ref,
+                estimate,
+                actual,
+                justification,
             } => {
                 let kind = match thumbs.as_str() {
                     "up" | "👍" | "👍🏻" | "<|👍🏻|>" => VoteTokenKind::ThumbsUp,
@@ -160,20 +178,31 @@ pub fn handle_cake_command(args: &CakeArgs) -> Result<()> {
                 };
                 let id = ledger.create_ticket(req)?;
                 println!("🎟️  Ticket created: {id}");
-                println!("   Resolve after pre-commit review: b00t cake ticket resolve {id} --verdict=APPROVE");
+                println!(
+                    "   Resolve after pre-commit review: b00t cake ticket resolve {id} --verdict=APPROVE"
+                );
             }
 
             TicketCommands::Resolve {
-                ticket_id, verdict, reviewer_output, useful_work,
+                ticket_id,
+                verdict,
+                reviewer_output,
+                useful_work,
             } => {
                 let output = reviewer_output.as_deref().unwrap_or("");
                 let outcome = ledger.resolve_ticket(ticket_id, verdict, output, *useful_work)?;
                 if outcome.won {
-                    println!("🎉 Lottery WON! <|🍰:{}|> awarded (p={:.2}, roll={:.3})", outcome.amount, outcome.p_cake, outcome.luck_roll);
+                    println!(
+                        "🎉 Lottery WON! <|🍰:{}|> awarded (p={:.2}, roll={:.3})",
+                        outcome.amount, outcome.p_cake, outcome.luck_roll
+                    );
                     let bal = ledger.balance("operator")?;
                     println!("   New balance: <|🍰:{bal}|>");
                 } else if verdict == "APPROVE" {
-                    println!("😢 Lottery lost. (p={:.2}, roll={:.3}) — better luck next time.", outcome.p_cake, outcome.luck_roll);
+                    println!(
+                        "😢 Lottery lost. (p={:.2}, roll={:.3}) — better luck next time.",
+                        outcome.p_cake, outcome.luck_roll
+                    );
                 } else {
                     println!("❌ Ticket voided — verdict: {verdict}. No cake.");
                 }

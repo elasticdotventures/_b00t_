@@ -17,8 +17,8 @@
 use crate::error::{ChatError, ChatResult};
 use crate::ipc_transport::TransportKind;
 use async_trait::async_trait;
-use futures::stream::BoxStream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -126,7 +126,11 @@ mod nats_impl {
 /// the gossip-first discovery path and broker-free tests.
 #[derive(Debug, Clone, Default)]
 pub struct MemoryHiveTransport {
-    subs: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Vec<tokio::sync::broadcast::Sender<Vec<u8>>>>>>,
+    subs: Arc<
+        tokio::sync::Mutex<
+            std::collections::HashMap<String, Vec<tokio::sync::broadcast::Sender<Vec<u8>>>>,
+        >,
+    >,
 }
 
 impl MemoryHiveTransport {
@@ -216,10 +220,14 @@ mod iroh_impl {
             ))
         }
         async fn publish(&self, _subject: &str, _payload: &[u8]) -> ChatResult<()> {
-            Err(ChatError::Other("iroh HiveTransport not yet implemented".into()))
+            Err(ChatError::Other(
+                "iroh HiveTransport not yet implemented".into(),
+            ))
         }
         async fn subscribe(&self, _subject: &str) -> ChatResult<BoxStream<'static, Vec<u8>>> {
-            Err(ChatError::Other("iroh HiveTransport not yet implemented".into()))
+            Err(ChatError::Other(
+                "iroh HiveTransport not yet implemented".into(),
+            ))
         }
         fn kind(&self) -> TransportKind {
             TransportKind::Iroh

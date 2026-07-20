@@ -36,10 +36,7 @@ struct TrainingExample {
 }
 
 /// Convert satisfies.jsonl to training examples, keeping only PASS entries.
-pub fn convert_to_training(
-    evidence_path: &Path,
-    output_path: &Path,
-) -> Result<(usize, usize)> {
+pub fn convert_to_training(evidence_path: &Path, output_path: &Path) -> Result<(usize, usize)> {
     let content = std::fs::read_to_string(evidence_path)
         .with_context(|| format!("read {}", evidence_path.display()))?;
 

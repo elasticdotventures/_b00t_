@@ -180,7 +180,10 @@ pub enum DatumCommands {
         )]
         repo_path: String,
 
-        #[clap(long, help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing")]
+        #[clap(
+            long,
+            help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing"
+        )]
         write: bool,
     },
 }
@@ -281,15 +284,11 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             token,
             exec,
         } => handle_call(path, datum, interface, token, *exec),
-        DatumCommands::Calibrate(args) => {
-            crate::commands::calibrate::handle_calibrate(path, args)
-        }
+        DatumCommands::Calibrate(args) => crate::commands::calibrate::handle_calibrate(path, args),
         DatumCommands::FromArtifact(args) => {
             crate::commands::from_artifact::handle_from_artifact(args)
         }
-        DatumCommands::GenWrkflw { repo_path, write } => {
-            handle_gen_wrkflw(repo_path, *write)
-        }
+        DatumCommands::GenWrkflw { repo_path, write } => handle_gen_wrkflw(repo_path, *write),
     }
 }
 
@@ -1411,7 +1410,8 @@ fn handle_call(
 fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
     use std::path::Path;
 
-    let root = Path::new(repo_path).canonicalize()
+    let root = Path::new(repo_path)
+        .canonicalize()
         .with_context(|| format!("cannot resolve path: {repo_path}"))?;
 
     let workflows_dir = root.join(".github/workflows");
@@ -1424,14 +1424,17 @@ fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
     // Check for existing wrkflw workflow
     let out_path = workflows_dir.join("wrkflw-ci-build.yml");
     if out_path.exists() && !write {
-        println!("# wrkflw-ci-build.yml already exists at {}", out_path.display());
+        println!(
+            "# wrkflw-ci-build.yml already exists at {}",
+            out_path.display()
+        );
         println!("# Use --write to overwrite.");
         return Ok(());
     }
 
     // Detect build shape
-    let is_rust   = root.join("Cargo.toml").exists();
-    let is_node   = root.join("package.json").exists();
+    let is_rust = root.join("Cargo.toml").exists();
+    let is_node = root.join("package.json").exists();
     let is_python = root.join("pyproject.toml").exists() || root.join("setup.py").exists();
     let repo_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
 
@@ -1476,7 +1479,9 @@ fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
         std::fs::write(&out_path, &content)
             .with_context(|| format!("write {}", out_path.display()))?;
         println!("✓ wrote {}", out_path.display());
-        println!("  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml");
+        println!(
+            "  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml"
+        );
         println!("  Declare in datum: [b00t.services.action_runner] local = \"wrkflw\"");
     } else {
         println!("# Preview — run with --write to create .github/workflows/wrkflw-ci-build.yml");

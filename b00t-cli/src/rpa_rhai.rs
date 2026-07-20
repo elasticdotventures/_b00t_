@@ -25,36 +25,60 @@ pub async fn run_commands(session: &crate::rpa_cdp::RpaSession, rx: &mut CmdRx) 
     while let Some(cmd) = rx.recv().await {
         match cmd {
             Cmd::Nav(url, enrich, tx) => {
-                match tokio::time::timeout(std::time::Duration::from_secs(20), session.open_page(&url, enrich)).await {
-                    Ok(Ok(page)) => { current_page = Some(page); let _ = tx.send(true); }
-                    Ok(Err(e)) => { eprintln!("  ⚠️ {}", e); let _ = tx.send(false); }
-                    Err(_) => { eprintln!("  ⚠️ Timeout navigating to {}", url); let _ = tx.send(false); }
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(20),
+                    session.open_page(&url, enrich),
+                )
+                .await
+                {
+                    Ok(Ok(page)) => {
+                        current_page = Some(page);
+                        let _ = tx.send(true);
+                    }
+                    Ok(Err(e)) => {
+                        eprintln!("  ⚠️ {}", e);
+                        let _ = tx.send(false);
+                    }
+                    Err(_) => {
+                        eprintln!("  ⚠️ Timeout navigating to {}", url);
+                        let _ = tx.send(false);
+                    }
                 }
             }
             Cmd::Click(sel, tx) => {
                 let r = if let Some(ref page) = current_page {
                     session.click(page, &sel).await.is_ok()
-                } else { false };
+                } else {
+                    false
+                };
                 let _ = tx.send(r);
             }
             Cmd::Type(sel, txt, tx) => {
                 let r = if let Some(ref page) = current_page {
                     session.type_text(page, &sel, &txt).await.is_ok()
-                } else { false };
+                } else {
+                    false
+                };
                 let _ = tx.send(r);
             }
             Cmd::Eval(js, tx) => {
                 let r = if let Some(ref page) = current_page {
                     session.evaluate(page, &js).await.unwrap_or_default()
-                } else { String::new() };
+                } else {
+                    String::new()
+                };
                 let _ = tx.send(r);
             }
             Cmd::Screen(path, tx) => {
                 let r = if let Some(ref page) = current_page {
                     if let Ok(png) = session.screenshot(page).await {
                         std::fs::write(&path, &png).is_ok()
-                    } else { false }
-                } else { false };
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
                 let _ = tx.send(r);
             }
             Cmd::Wait(sel, tx) => {
@@ -63,20 +87,33 @@ pub async fn run_commands(session: &crate::rpa_cdp::RpaSession, rx: &mut CmdRx) 
                     for _ in 0..20 {
                         let js = format!("!!document.querySelector('{}')", sel);
                         if let Ok(r) = session.evaluate(page, &js).await {
-                            if r == "true" { found = true; break; }
+                            if r == "true" {
+                                found = true;
+                                break;
+                            }
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                     found
-                } else { false };
+                } else {
+                    false
+                };
                 let _ = tx.send(r);
             }
             Cmd::Desc(tx) => {
                 let r = if let Some(ref page) = current_page {
-                    let t = session.evaluate(page, "document.title").await.unwrap_or_default();
-                    let l = session.evaluate(page, "document.querySelectorAll('a').length").await.unwrap_or_default();
+                    let t = session
+                        .evaluate(page, "document.title")
+                        .await
+                        .unwrap_or_default();
+                    let l = session
+                        .evaluate(page, "document.querySelectorAll('a').length")
+                        .await
+                        .unwrap_or_default();
                     format!("📄 {}\n   Links: {}", t, l)
-                } else { "No page open".into() };
+                } else {
+                    "No page open".into()
+                };
                 let _ = tx.send(r);
             }
         }
@@ -158,7 +195,9 @@ pub fn load_page_model(path: &str) -> Result<Map> {
 fn toml_to_map(v: &toml::Value) -> Map {
     let mut m = Map::new();
     if let toml::Value::Table(t) = v {
-        for (k, v) in t { m.insert(k.into(), toml_to_dyn(v)); }
+        for (k, v) in t {
+            m.insert(k.into(), toml_to_dyn(v));
+        }
     }
     m
 }

@@ -94,17 +94,15 @@ fn cmd_show() -> Result<()> {
 }
 
 fn cmd_override(tool_version: &str) -> Result<()> {
-    let (tool, version) = tool_version.split_once('=')
+    let (tool, version) = tool_version
+        .split_once('=')
         .ok_or_else(|| anyhow!("expected format: tool=version (e.g. rustc=1.85.0)"))?;
     let path = boot_path()?;
     let content = read_boot()?;
 
     let updated = if content.contains(&format!("# {}", tool)) {
         // Replace existing commented override
-        content.replace(
-            &format!("# {} = \"", tool),
-            &format!("{} = \"", tool),
-        )
+        content.replace(&format!("# {} = \"", tool), &format!("{} = \"", tool))
     } else {
         // Add to overrides section
         content.replace(
@@ -121,10 +119,7 @@ fn cmd_unset(tool: &str) -> Result<()> {
     let path = boot_path()?;
     let content = read_boot()?;
     // Comment out the override line
-    let updated = content.replace(
-        &format!("{} = \"", tool),
-        &format!("# {} = \"", tool),
-    );
+    let updated = content.replace(&format!("{} = \"", tool), &format!("# {} = \"", tool));
     std::fs::write(&path, &updated)?;
     println!("✅ {} unpinned", tool);
     Ok(())
@@ -333,8 +328,8 @@ fn cmd_sync() -> Result<()> {
     // move tag forward
     git(&["tag", "-f", &tag, &upstream])?;
 
-    let new_count = git(&["rev-list", "--count", &format!("{tag}..{branch}")])
-        .unwrap_or_else(|_| "0".into());
+    let new_count =
+        git(&["rev-list", "--count", &format!("{tag}..{branch}")]).unwrap_or_else(|_| "0".into());
 
     println!("✓ enclave synced");
     println!("  tag moved: {old_tag:.12} → {upstream:.12}");
@@ -379,9 +374,7 @@ fn cmd_commit(message: Option<String>, files: Vec<String>) -> Result<()> {
         git(&["add", f])?;
     }
 
-    let msg = message.unwrap_or_else(|| {
-        format!("overlay: {}", to_stage.join(", "))
-    });
+    let msg = message.unwrap_or_else(|| format!("overlay: {}", to_stage.join(", ")));
 
     git(&["commit", "-m", &msg])?;
 

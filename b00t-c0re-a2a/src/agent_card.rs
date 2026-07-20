@@ -248,7 +248,13 @@ mod tests {
     fn test_agent_card_with_skill() {
         let url = Url::parse("stdio://my-agent").unwrap();
         let card = AgentCard::new("test", "desc", url)
-            .with_skill(Skill::new("s1", "Skill 1", "Does stuff", serde_json::json!({}), serde_json::json!({})))
+            .with_skill(Skill::new(
+                "s1",
+                "Skill 1",
+                "Does stuff",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ))
             .with_default_skill("s1");
         assert_eq!(card.skills.len(), 1);
         assert_eq!(card.default_skill, Some("s1".to_string()));
@@ -260,7 +266,13 @@ mod tests {
     fn test_serialization_roundtrip() {
         let url = Url::parse("http://localhost:8080").unwrap();
         let card = AgentCard::new("agent-x", "Agent X", url)
-            .with_skill(Skill::new("code", "Code Gen", "Generates code", serde_json::json!({"type": "object"}), serde_json::json!({"type": "object"})))
+            .with_skill(Skill::new(
+                "code",
+                "Code Gen",
+                "Generates code",
+                serde_json::json!({"type": "object"}),
+                serde_json::json!({"type": "object"}),
+            ))
             .with_auth(AuthenticationScheme::bearer("tok_123"));
         let json = serde_json::to_string_pretty(&card).unwrap();
         let deserialized: AgentCard = serde_json::from_str(&json).unwrap();

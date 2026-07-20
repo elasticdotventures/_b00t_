@@ -4,7 +4,7 @@
 //! Lottery math keeps agents honest about time estimates while rewarding useful work.
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------

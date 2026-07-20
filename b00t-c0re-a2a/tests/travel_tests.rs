@@ -73,8 +73,7 @@ fn test_travel_manifest_serialization_roundtrip() {
     };
 
     let json = serde_json::to_string_pretty(&manifest).expect("serialize");
-    let deserialized: TravelManifest =
-        serde_json::from_str(&json).expect("deserialize");
+    let deserialized: TravelManifest = serde_json::from_str(&json).expect("deserialize");
 
     assert_eq!(deserialized.source_hive, "src");
     assert_eq!(deserialized.destination_hive, "dst");
@@ -180,7 +179,11 @@ fn test_overdue_detection() {
     let manifests = vec![overdue, on_time, returned, indefinite];
     let overdue_manifests = TravelAgent::check_overdue(&manifests);
 
-    assert_eq!(overdue_manifests.len(), 1, "Only one manifest should be overdue");
+    assert_eq!(
+        overdue_manifests.len(),
+        1,
+        "Only one manifest should be overdue"
+    );
     assert_eq!(
         overdue_manifests[0].state,
         TravelState::Abroad,
@@ -235,5 +238,9 @@ fn test_overdue_requires_abroad_state() {
 
     let manifests = vec![departed, lost];
     let overdue = TravelAgent::check_overdue(&manifests);
-    assert_eq!(overdue.len(), 0, "Neither Departing nor Lost should be overdue");
+    assert_eq!(
+        overdue.len(),
+        0,
+        "Neither Departing nor Lost should be overdue"
+    );
 }

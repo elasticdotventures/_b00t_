@@ -15,7 +15,9 @@
 //! PASS: <requirement-id>
 //! FAIL: <requirement-id>: <reason>
 
-use crate::datum_schema::{AbDataRequirement, AbDataSchema, FocusJsonlSequence, FocusSchema, MatchMode, SchemaError};
+use crate::datum_schema::{
+    AbDataRequirement, AbDataSchema, FocusJsonlSequence, FocusSchema, MatchMode, SchemaError,
+};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
@@ -41,22 +43,40 @@ pub struct ValidateArgs {
     #[arg(long, help = "Output raw PASS/FAIL without explanation")]
     pub quiet: bool,
 
-    #[arg(long, help = "Read FOCUS records from JSONL file and validate against FocusSchema")]
+    #[arg(
+        long,
+        help = "Read FOCUS records from JSONL file and validate against FocusSchema"
+    )]
     pub jsonl: Option<PathBuf>,
 
-    #[arg(long, help = "Skip the sm0l model call, only validate schema conformance")]
+    #[arg(
+        long,
+        help = "Skip the sm0l model call, only validate schema conformance"
+    )]
     pub skip_model: bool,
 
-    #[arg(long, help = "Auto-train model when FSL failures exceed threshold (default: 10)")]
+    #[arg(
+        long,
+        help = "Auto-train model when FSL failures exceed threshold (default: 10)"
+    )]
     pub auto_train: bool,
 
-    #[arg(long, help = "Training datum name for --auto-train (default: focus-validator)")]
+    #[arg(
+        long,
+        help = "Training datum name for --auto-train (default: focus-validator)"
+    )]
     pub train_name: Option<String>,
 
-    #[arg(long, help = "FSL failure threshold to trigger auto-train (default: 10)")]
+    #[arg(
+        long,
+        help = "FSL failure threshold to trigger auto-train (default: 10)"
+    )]
     pub train_threshold: Option<usize>,
 
-    #[arg(long, help = "Schema datum name (default: focus). Loads _b00t_/<name>.schema.tomllmd")]
+    #[arg(
+        long,
+        help = "Schema datum name (default: focus). Loads _b00t_/<name>.schema.tomllmd"
+    )]
     pub schema: Option<String>,
 }
 
@@ -79,7 +99,12 @@ fn load_fsl_examples(max: usize) -> Vec<String> {
         Ok(c) => c,
         Err(_) => return Vec::new(),
     };
-    content.lines().rev().take(max).map(|l| l.to_string()).collect()
+    content
+        .lines()
+        .rev()
+        .take(max)
+        .map(|l| l.to_string())
+        .collect()
 }
 
 /// Save a failed validation as a new few-shot example.
@@ -89,8 +114,16 @@ fn save_fsl_failure(t00n_data: &str, req_id: &str, reason: &str) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let line = format!("{}|{}|{}\n", t00n_data.lines().next().unwrap_or(""), req_id, reason);
-    let _ = OpenOptions::new().create(true).append(true).open(&path)
+    let line = format!(
+        "{}|{}|{}\n",
+        t00n_data.lines().next().unwrap_or(""),
+        req_id,
+        reason
+    );
+    let _ = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
         .and_then(|mut f| f.write_all(line.as_bytes()));
 }
 
@@ -99,13 +132,16 @@ fn build_validation_prompt(t00n_data: &str, reqs: &[AbDataRequirement]) -> Strin
         "You are a FOCUS v1.3 compliance validator. Given the following t00n-encoded FOCUS records, \
          verify each requirement below. Respond with EXACTLY one line per requirement in the format:\n\
          PASS: <id>\n\
-         FAIL: <id>: <reason>\n\n"
+         FAIL: <id>: <reason>\n\n",
     );
     prompt.push_str("--- t00n records ---\n");
     prompt.push_str(t00n_data);
     prompt.push_str("\n--- requirements ---\n");
     for req in reqs {
-        prompt.push_str(&format!("[{}] {} (header={}, constraint={})\n", req.id, req.statement, req.header, req.constraint));
+        prompt.push_str(&format!(
+            "[{}] {} (header={}, constraint={})\n",
+            req.id, req.statement, req.header, req.constraint
+        ));
     }
     prompt.push_str("\n--- response ---\n");
     prompt
@@ -118,8 +154,7 @@ fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
     // 🤓 model name resolved from: B00T_SM0L_MODEL env > registry (tier=ch0nky) > hardcoded
     let _model = std::env::var("B00T_SM0L_MODEL")
         .ok()
-        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
-            .map(|(_, m)| m))
+        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky").map(|(_, m)| m))
         .unwrap_or_else(|| SM0L_MODEL.to_string());
     // 🤓 model name + endpoint are env-configurable so any OpenAI-compatible
     //    peer (llamacpp, vLLM, mistral.rs, …) can serve as the sm0l validator.
@@ -140,9 +175,13 @@ fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
 
     let output = std::process::Command::new("curl")
         .args([
-            "-s", "--max-time", &SM0L_TIMEOUT_SEC.to_string(),
-            "-H", "content-type: application/json",
-            "-d", &format!("@{}", tmp.display()),
+            "-s",
+            "--max-time",
+            &SM0L_TIMEOUT_SEC.to_string(),
+            "-H",
+            "content-type: application/json",
+            "-d",
+            &format!("@{}", tmp.display()),
             &url,
         ])
         .output()
@@ -155,8 +194,8 @@ fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
         anyhow::bail!("curl failed (exit={:?}): {stderr}", output.status.code());
     }
 
-    let body: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .context("parse model response JSON")?;
+    let body: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("parse model response JSON")?;
     let content = body["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("")
@@ -168,11 +207,14 @@ fn call_sm0l_model(prompt: &str, endpoint: &str) -> Result<String> {
 
 fn parse_validation_response(response: &str, reqs: &[AbDataRequirement]) -> Vec<ValidationResult> {
     let mut results = Vec::new();
-    let req_map: HashMap<&str, &AbDataRequirement> = reqs.iter().map(|r| (r.id.as_str(), r)).collect();
+    let req_map: HashMap<&str, &AbDataRequirement> =
+        reqs.iter().map(|r| (r.id.as_str(), r)).collect();
 
     for line in response.lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         if let Some(rest) = line.strip_prefix("PASS: ") {
             let id = rest.trim();
             if req_map.contains_key(id) {
@@ -220,11 +262,15 @@ fn resolve_schema(name: Option<&str>) -> Result<FocusSchema> {
         Some(schema_name) => {
             // Search: cwd/_b00t_/, then ~/.dotfiles/_b00t_/
             let candidates = [
-                std::env::current_dir()
-                    .ok()
-                    .map(|d| d.join("_b00t_").join(format!("{schema_name}.schema.tomllmd"))),
-                dirs::home_dir()
-                    .map(|h| h.join(".dotfiles").join("_b00t_").join(format!("{schema_name}.schema.tomllmd"))),
+                std::env::current_dir().ok().map(|d| {
+                    d.join("_b00t_")
+                        .join(format!("{schema_name}.schema.tomllmd"))
+                }),
+                dirs::home_dir().map(|h| {
+                    h.join(".dotfiles")
+                        .join("_b00t_")
+                        .join(format!("{schema_name}.schema.tomllmd"))
+                }),
             ];
 
             for candidate in candidates.iter().flatten() {
@@ -269,18 +315,23 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
     let extended_input = if fsl_examples.is_empty() {
         t00n_data.clone()
     } else {
-        format!("Prior validation failures (learn from these):\n{}\n\nNew records:\n{}",
-            fsl_examples.join("\n"), t00n_data)
+        format!(
+            "Prior validation failures (learn from these):\n{}\n\nNew records:\n{}",
+            fsl_examples.join("\n"),
+            t00n_data
+        )
     };
 
     // 🤓 endpoint resolution: --endpoint flag > registry (tier=ch0nky) > env > localhost
-    let endpoint = args.endpoint.clone()
-        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
-            .map(|(base, _)| base))
+    let endpoint = args
+        .endpoint
+        .clone()
+        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky").map(|(base, _)| base))
         .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
         .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&extended_input, &reqs);
-    let response = call_sm0l_model(&prompt, &endpoint).context("sm0l model call failed — is ch0nky running on :8001?")?;
+    let response = call_sm0l_model(&prompt, &endpoint)
+        .context("sm0l model call failed — is ch0nky running on :8001?")?;
     let results = parse_validation_response(&response, &reqs);
 
     let passed = results.iter().filter(|r| r.passed).count();
@@ -300,7 +351,10 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
         }
     }
 
-    eprintln!("validation complete: {passed} passed, {failed} failed (fsl examples: {})", fsl_examples.len());
+    eprintln!(
+        "validation complete: {passed} passed, {failed} failed (fsl examples: {})",
+        fsl_examples.len()
+    );
 
     // Auto-train trigger: when failures exceed threshold, kick off `b00t model train`
     if failed > 0 && args.auto_train {
@@ -308,7 +362,9 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
         let current = load_fsl_examples(usize::MAX).len();
         if current >= threshold {
             let train_name = args.train_name.as_deref().unwrap_or("focus-validator");
-            eprintln!("   FSL store ({current}) ≥ threshold ({threshold}) — triggering auto-train for '{train_name}'...");
+            eprintln!(
+                "   FSL store ({current}) ≥ threshold ({threshold}) — triggering auto-train for '{train_name}'..."
+            );
             let status = std::process::Command::new("b00t-cli")
                 .args(["model", "train", train_name])
                 .status();
@@ -322,7 +378,9 @@ pub fn handle_validate(args: &ValidateArgs) -> Result<()> {
         }
     }
 
-    if failed > 0 { std::process::exit(1); }
+    if failed > 0 {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
@@ -360,7 +418,11 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
         }
     }
 
-    eprintln!("schema validation complete: {} frames, {} errors", frame_count, errors.len());
+    eprintln!(
+        "schema validation complete: {} frames, {} errors",
+        frame_count,
+        errors.len()
+    );
 
     if !errors.is_empty() {
         std::process::exit(1);
@@ -376,9 +438,10 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
         .with_context(|| format!("read JSONL file '{}'", path.display()))?;
     let reqs = schema.requirements();
     // 🤓 endpoint resolution: --endpoint flag > registry > env > localhost
-    let endpoint = args.endpoint.clone()
-        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky")
-            .map(|(base, _)| base))
+    let endpoint = args
+        .endpoint
+        .clone()
+        .or_else(|| crate::model_registry::resolve_tier_endpoint("ch0nky").map(|(base, _)| base))
         .or_else(|| std::env::var("B00T_AI_SM0L_BASE").ok())
         .unwrap_or_else(|| "http://localhost:8001".to_string());
     let prompt = build_validation_prompt(&jsonl_data, &reqs);
@@ -400,7 +463,9 @@ fn validate_jsonl(args: &ValidateArgs, path: &PathBuf) -> Result<()> {
     }
 
     eprintln!("model validation complete: {passed} passed, {failed} failed");
-    if failed > 0 { std::process::exit(1); }
+    if failed > 0 {
+        std::process::exit(1);
+    }
     Ok(())
 }
 

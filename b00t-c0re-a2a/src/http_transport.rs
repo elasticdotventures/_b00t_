@@ -80,7 +80,10 @@ impl A2aHttpTransport {
     ///
     /// Uses the agent card's URL to determine the endpoint.
     /// Sends a POST /task with the task JSON body.
-    pub async fn send_task(agent_url: &Url, task: &Task) -> Result<Task, Box<dyn std::error::Error>> {
+    pub async fn send_task(
+        agent_url: &Url,
+        task: &Task,
+    ) -> Result<Task, Box<dyn std::error::Error>> {
         let body = serde_json::to_string(task)?;
         let host = agent_url
             .host_str()
@@ -164,10 +167,7 @@ async fn handle_connection(
         if trimmed.is_empty() {
             break;
         }
-        if let Some(val) = trimmed
-            .to_lowercase()
-            .strip_prefix("content-length:")
-        {
+        if let Some(val) = trimmed.to_lowercase().strip_prefix("content-length:") {
             content_length = val.trim().parse().unwrap_or(0);
         }
     }
@@ -219,12 +219,13 @@ async fn handle_get_cards(
     registry: &SkillRegistry,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let skills = registry.list_skills();
-    let card = AgentCard::new("a2a-agent", "A2A HTTP Agent", Url::parse("http://localhost").unwrap());
+    let card = AgentCard::new(
+        "a2a-agent",
+        "A2A HTTP Agent",
+        Url::parse("http://localhost").unwrap(),
+    );
     // Return actual skills from the registry
-    let cards = vec![AgentCard {
-        skills,
-        ..card
-    }];
+    let cards = vec![AgentCard { skills, ..card }];
     let json = serde_json::to_string(&cards)?;
     send_json_response(writer, 200, &json).await
 }
@@ -328,11 +329,7 @@ async fn http_request(
 
     // Parse status line: HTTP/1.1 200 OK
     let status_parts: Vec<&str> = status_line.trim().splitn(3, ' ').collect();
-    let status: u16 = status_parts
-        .get(1)
-        .unwrap_or(&"500")
-        .parse()
-        .unwrap_or(500);
+    let status: u16 = status_parts.get(1).unwrap_or(&"500").parse().unwrap_or(500);
 
     // Read headers
     let mut headers = Vec::new();
@@ -344,10 +341,7 @@ async fn http_request(
         if trimmed.is_empty() {
             break;
         }
-        if let Some(val) = trimmed
-            .to_lowercase()
-            .strip_prefix("content-length:")
-        {
+        if let Some(val) = trimmed.to_lowercase().strip_prefix("content-length:") {
             content_length = val.trim().parse().unwrap_or(0);
         }
         headers.push(trimmed);

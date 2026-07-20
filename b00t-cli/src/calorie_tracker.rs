@@ -2,10 +2,10 @@
 //! Every command deducts calories based on the agent's tier.
 //! Calories are tracked in the agent store (~/.local/share/b00t/agents/<name>_meta.json).
 
+use b00t_c0re_gov::errors::{GovResult, GovernanceError};
 use b00t_c0re_gov::scoring::AgentTier;
-use b00t_c0re_gov::errors::{GovernanceError, GovResult};
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalorieRecord {
@@ -81,10 +81,12 @@ impl CalorieTracker {
             return Ok(None);
         }
         let content = std::fs::read_to_string(&path)?;
-        let record: CalorieRecord = serde_json::from_str(&content)
-            .map_err(|e| GovernanceError::ContextCorrupt(format!(
-                "Failed to parse calorie record for '{}': {}", agent, e
-            )))?;
+        let record: CalorieRecord = serde_json::from_str(&content).map_err(|e| {
+            GovernanceError::ContextCorrupt(format!(
+                "Failed to parse calorie record for '{}': {}",
+                agent, e
+            ))
+        })?;
         Ok(Some(record))
     }
 
@@ -108,10 +110,12 @@ impl CalorieTracker {
         let path = self.record_path(agent);
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
-            let record: CalorieRecord = serde_json::from_str(&content)
-                .map_err(|e| GovernanceError::ContextCorrupt(format!(
-                    "Failed to parse calorie record for '{}': {}", agent, e
-                )))?;
+            let record: CalorieRecord = serde_json::from_str(&content).map_err(|e| {
+                GovernanceError::ContextCorrupt(format!(
+                    "Failed to parse calorie record for '{}': {}",
+                    agent, e
+                ))
+            })?;
             Ok(record)
         } else {
             // Create a new record with default calorie budget
@@ -130,10 +134,12 @@ impl CalorieTracker {
     fn save(&self, record: &CalorieRecord) -> GovResult<()> {
         std::fs::create_dir_all(&self.store_dir)?;
         let path = self.record_path(&record.agent_name);
-        let content = serde_json::to_string_pretty(record)
-            .map_err(|e| GovernanceError::ContextCorrupt(format!(
-                "Failed to serialize calorie record for '{}': {}", record.agent_name, e
-            )))?;
+        let content = serde_json::to_string_pretty(record).map_err(|e| {
+            GovernanceError::ContextCorrupt(format!(
+                "Failed to serialize calorie record for '{}': {}",
+                record.agent_name, e
+            ))
+        })?;
         std::fs::write(&path, content)?;
         Ok(())
     }
@@ -153,7 +159,9 @@ mod tests {
     #[test]
     fn test_new_record_creation() {
         let (tracker, _tmp) = setup_tracker();
-        let record = tracker.load_or_create("test-agent", AgentTier::SLM).unwrap();
+        let record = tracker
+            .load_or_create("test-agent", AgentTier::SLM)
+            .unwrap();
         assert_eq!(record.agent_name, "test-agent");
         assert!((record.calories_remaining - 1000.0).abs() < f64::EPSILON);
         assert!(record.is_alive);
@@ -194,12 +202,16 @@ mod tests {
         let (tracker, _tmp) = setup_tracker();
         // Algorithmic tier: 0.01x multiplier on base_cost=200_000 => 2000 cost
         // Starting with 1000 calories, 2000 required → InsufficientCalories
-        let result = tracker.execute_with_calories("algo-agent", AgentTier::Algorithmic, 200_000.0, || {
-            Ok::<_, GovernanceError>("should not run")
-        });
+        let result =
+            tracker.execute_with_calories("algo-agent", AgentTier::Algorithmic, 200_000.0, || {
+                Ok::<_, GovernanceError>("should not run")
+            });
         assert!(result.is_err());
         match result.unwrap_err() {
-            GovernanceError::InsufficientCalories { available, required } => {
+            GovernanceError::InsufficientCalories {
+                available,
+                required,
+            } => {
                 assert!((available - 1000.0).abs() < f64::EPSILON);
                 assert!((required - 2000.0).abs() < f64::EPSILON); // 200_000 * 0.01 = 2000
             }
@@ -235,15 +247,15 @@ mod tests {
     fn test_execute_preserves_record_on_failure() {
         let (tracker, _tmp) = setup_tracker();
         // Execute once successfully
-        let _: GovResult<i32> = tracker.execute_with_calories("fragile", AgentTier::SLM, 10.0, || {
-            Ok(42)
-        });
+        let _: GovResult<i32> =
+            tracker.execute_with_calories("fragile", AgentTier::SLM, 10.0, || Ok(42));
         let before = tracker.get_record("fragile").unwrap().unwrap();
 
         // Try again — the op fails but calories are already burned
-        let result: GovResult<i32> = tracker.execute_with_calories("fragile", AgentTier::SLM, 10.0, || {
-            Err(GovernanceError::GateNotFound("oops".into()))
-        });
+        let result: GovResult<i32> =
+            tracker.execute_with_calories("fragile", AgentTier::SLM, 10.0, || {
+                Err(GovernanceError::GateNotFound("oops".into()))
+            });
         assert!(result.is_err());
 
         let after = tracker.get_record("fragile").unwrap().unwrap();

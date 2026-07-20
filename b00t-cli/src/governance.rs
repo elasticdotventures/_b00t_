@@ -2,8 +2,8 @@
 //! Starts the EventScheduler on b00t-cli boot, wires it into the agent loop.
 //! On startup: check for pending hooks, fire any expired ones, restore contexts.
 
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -52,9 +52,9 @@ impl GovernanceRuntime {
         let ring = Arc::new(HookRing::new());
         let (event_tx, _event_rx): (broadcast::Sender<String>, broadcast::Receiver<String>) =
             broadcast::channel(256);
-        let scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(
-            Arc::clone(&ring),
-        )));
+        let scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(Arc::clone(
+            &ring,
+        ))));
 
         // ── Background event loop ──────────────────────────────────────────
         // Periodically checks for expired timers and composites.
@@ -123,7 +123,11 @@ impl GovernanceRuntime {
     /// The caller's `context.hook_token` is overwritten with the newly generated
     /// token so that `ContextStore` filename keys and `list_pending()` results
     /// are always consistent with the returned `Uuid`.
-    pub fn register_stop_hook(&self, mut context: AgentContext, ttl_ms: Option<u64>) -> Result<uuid::Uuid> {
+    pub fn register_stop_hook(
+        &self,
+        mut context: AgentContext,
+        ttl_ms: Option<u64>,
+    ) -> Result<uuid::Uuid> {
         let id = uuid::Uuid::new_v4();
         let token = HookToken {
             id,
@@ -180,9 +184,7 @@ impl GovernanceRuntime {
             .scheduler
             .try_lock()
             .map_err(|_| anyhow::anyhow!("scheduler lock contended; retry later"))?;
-        sched
-            .cancel(hook_id)
-            .context("failed to cancel hook")?;
+        sched.cancel(hook_id).context("failed to cancel hook")?;
         self.store
             .delete(&hook_id)
             .context("failed to delete hook context")?;
@@ -474,16 +476,15 @@ mod tests {
         let ring = Arc::new(HookRing::new());
         let (_event_tx, _): (broadcast::Sender<String>, broadcast::Receiver<String>) =
             broadcast::channel(256);
-        let _scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(
-            Arc::clone(&ring),
-        )));
+        let _scheduler = Arc::new(tokio::sync::Mutex::new(EventScheduler::new(Arc::clone(
+            &ring,
+        ))));
 
         // Simulate the expired-hook recovery logic from init()
         if let Ok(pending) = store.list_pending() {
             for token in &pending {
                 if let Some(ttl) = token.ttl_ms {
-                    let elapsed =
-                        (Utc::now() - token.created_at).num_milliseconds() as u64;
+                    let elapsed = (Utc::now() - token.created_at).num_milliseconds() as u64;
                     if elapsed > ttl {
                         ring.try_push(HookNotification {
                             hook_id: token.id,
@@ -571,7 +572,10 @@ mod tests {
         );
         // Also verify the persisted context has the correct hook_token.id
         let loaded = gov.store.load_by_id(&hook_id).unwrap();
-        assert!(loaded.is_some(), "store should have context keyed by hook_id");
+        assert!(
+            loaded.is_some(),
+            "store should have context keyed by hook_id"
+        );
         assert_eq!(
             loaded.unwrap().hook_token.id,
             hook_id,

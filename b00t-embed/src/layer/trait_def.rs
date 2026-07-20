@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::layer::{LayerError, LayerId, TensorSpec};
 use crate::Embedding;
+use crate::layer::{LayerError, LayerId, TensorSpec};
 
 use candle_core::{DType, Device, Tensor};
 use dyn_clone::DynClone;
@@ -69,11 +69,7 @@ pub trait EmbedLayer: DynClone + Send + Sync {
 
     /// Bouncer output gate: verify the swap produced a coherent embedding.
     /// Called after load with the embedding BEFORE and AFTER the swap.
-    fn verify_post_swap(
-        &self,
-        before: &Embedding,
-        after: &Embedding,
-    ) -> Result<(), LayerError> {
+    fn verify_post_swap(&self, before: &Embedding, after: &Embedding) -> Result<(), LayerError> {
         if before.data.is_empty() || after.data.is_empty() {
             return Err(LayerError::Other(anyhow::anyhow!(
                 "layer {}: empty embedding after swap",
@@ -105,9 +101,5 @@ dyn_clone::clone_trait_object!(EmbedLayer);
 pub trait LayerFactory: Send + Sync {
     type Source: TensorSource;
 
-    fn create_layer(
-        &self,
-        id: LayerId,
-        source: Self::Source,
-    ) -> Box<dyn EmbedLayer>;
+    fn create_layer(&self, id: LayerId, source: Self::Source) -> Box<dyn EmbedLayer>;
 }

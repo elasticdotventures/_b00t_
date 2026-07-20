@@ -209,9 +209,6 @@ mod tests {
                 UfoStereotype::Kind("TestEntity".into())
             }
         }
-        assert_eq!(
-            TestEntity.ufo_stereotype().to_string(),
-            "Kind:TestEntity"
-        );
+        assert_eq!(TestEntity.ufo_stereotype().to_string(), "Kind:TestEntity");
     }
 }

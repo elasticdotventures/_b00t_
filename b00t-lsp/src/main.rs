@@ -8,9 +8,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-use b00t_lsp::analysis::{
-    self, Diag, Severity, WorkspaceIndex,
-};
+use b00t_lsp::analysis::{self, Diag, Severity, WorkspaceIndex};
 
 struct State {
     index: Option<WorkspaceIndex>,

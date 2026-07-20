@@ -6,8 +6,8 @@
 //! implement or build an [`InvariantGraph`], validate its type invariants, then
 //! render Mermaid or deterministic SVG documentation.
 
-pub mod isometric;
 pub mod artifact;
+pub mod isometric;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -142,88 +142,188 @@ impl VisualizationRole {
 
     pub const fn all() -> &'static [Self] {
         &[
-            Self::Data, Self::Intelligence, Self::Rule, Self::Security,
-            Self::Human, Self::Logic, Self::Storage, Self::Report,
-            Self::Task, Self::Event, Self::Ingest, Self::Validate,
-            Self::Classify, Self::Review, Self::Reconcile, Self::Commit,
-            Self::Decision, Self::Step,
+            Self::Data,
+            Self::Intelligence,
+            Self::Rule,
+            Self::Security,
+            Self::Human,
+            Self::Logic,
+            Self::Storage,
+            Self::Report,
+            Self::Task,
+            Self::Event,
+            Self::Ingest,
+            Self::Validate,
+            Self::Classify,
+            Self::Review,
+            Self::Reconcile,
+            Self::Commit,
+            Self::Decision,
+            Self::Step,
         ]
     }
 }
 
 const DATA_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.800), (0.415, -0.692), (0.692, -0.415), (0.800, 0.000),
-    (0.692, 0.415), (0.415, 0.692), (0.000, 0.800), (-0.415, 0.692),
-    (-0.692, 0.415), (-0.800, 0.000), (-0.692, -0.415), (-0.415, -0.692),
+    (0.000, -0.800),
+    (0.415, -0.692),
+    (0.692, -0.415),
+    (0.800, 0.000),
+    (0.692, 0.415),
+    (0.415, 0.692),
+    (0.000, 0.800),
+    (-0.415, 0.692),
+    (-0.692, 0.415),
+    (-0.800, 0.000),
+    (-0.692, -0.415),
+    (-0.415, -0.692),
 ];
 
 const OCTAGON_POLYGON: &[(f32, f32)] = &[
-    (0.383, -0.900), (0.900, -0.383), (0.900, 0.383), (0.383, 0.900),
-    (-0.383, 0.900), (-0.900, 0.383), (-0.900, -0.383), (-0.383, -0.900),
+    (0.383, -0.900),
+    (0.900, -0.383),
+    (0.900, 0.383),
+    (0.383, 0.900),
+    (-0.383, 0.900),
+    (-0.900, 0.383),
+    (-0.900, -0.383),
+    (-0.383, -0.900),
 ];
 
 const HEXAGON_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.900), (0.779, -0.450), (0.779, 0.450),
-    (0.000, 0.900), (-0.779, 0.450), (-0.779, -0.450),
+    (0.000, -0.900),
+    (0.779, -0.450),
+    (0.779, 0.450),
+    (0.000, 0.900),
+    (-0.779, 0.450),
+    (-0.779, -0.450),
 ];
 
 const HEXAGON_POLYGON_30: &[(f32, f32)] = &[
-    (0.450, -0.779), (0.900, 0.000), (0.450, 0.779),
-    (-0.450, 0.779), (-0.900, 0.000), (-0.450, -0.779),
+    (0.450, -0.779),
+    (0.900, 0.000),
+    (0.450, 0.779),
+    (-0.450, 0.779),
+    (-0.900, 0.000),
+    (-0.450, -0.779),
 ];
 
 const SHIELD_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.900), (0.800, -0.500), (0.800, 0.300),
-    (0.000, 0.900), (-0.800, 0.300), (-0.800, -0.500),
+    (0.000, -0.900),
+    (0.800, -0.500),
+    (0.800, 0.300),
+    (0.000, 0.900),
+    (-0.800, 0.300),
+    (-0.800, -0.500),
 ];
 
 const CIRCLE16_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.850), (0.325, -0.789), (0.601, -0.601), (0.789, -0.325),
-    (0.850, 0.000), (0.789, 0.325), (0.601, 0.601), (0.325, 0.789),
-    (0.000, 0.850), (-0.325, 0.789), (-0.601, 0.601), (-0.789, 0.325),
-    (-0.850, 0.000), (-0.789, -0.325), (-0.601, -0.601), (-0.325, -0.789),
+    (0.000, -0.850),
+    (0.325, -0.789),
+    (0.601, -0.601),
+    (0.789, -0.325),
+    (0.850, 0.000),
+    (0.789, 0.325),
+    (0.601, 0.601),
+    (0.325, 0.789),
+    (0.000, 0.850),
+    (-0.325, 0.789),
+    (-0.601, 0.601),
+    (-0.789, 0.325),
+    (-0.850, 0.000),
+    (-0.789, -0.325),
+    (-0.601, -0.601),
+    (-0.325, -0.789),
 ];
 
 const DIAMOND_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.950), (0.950, 0.000), (0.000, 0.950), (-0.950, 0.000),
+    (0.000, -0.950),
+    (0.950, 0.000),
+    (0.000, 0.950),
+    (-0.950, 0.000),
 ];
 
 const CIRCLE24_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.800), (0.207, -0.774), (0.400, -0.693), (0.566, -0.566),
-    (0.693, -0.400), (0.774, -0.207), (0.800, 0.000), (0.774, 0.207),
-    (0.693, 0.400), (0.566, 0.566), (0.400, 0.693), (0.207, 0.774),
-    (0.000, 0.800), (-0.207, 0.774), (-0.400, 0.693), (-0.566, 0.566),
-    (-0.693, 0.400), (-0.774, 0.207), (-0.800, 0.000), (-0.774, -0.207),
-    (-0.693, -0.400), (-0.566, -0.566), (-0.400, -0.693), (-0.207, -0.774),
+    (0.000, -0.800),
+    (0.207, -0.774),
+    (0.400, -0.693),
+    (0.566, -0.566),
+    (0.693, -0.400),
+    (0.774, -0.207),
+    (0.800, 0.000),
+    (0.774, 0.207),
+    (0.693, 0.400),
+    (0.566, 0.566),
+    (0.400, 0.693),
+    (0.207, 0.774),
+    (0.000, 0.800),
+    (-0.207, 0.774),
+    (-0.400, 0.693),
+    (-0.566, 0.566),
+    (-0.693, 0.400),
+    (-0.774, 0.207),
+    (-0.800, 0.000),
+    (-0.774, -0.207),
+    (-0.693, -0.400),
+    (-0.566, -0.566),
+    (-0.400, -0.693),
+    (-0.207, -0.774),
 ];
 
 const TRAPEZOID_POLYGON: &[(f32, f32)] = &[
-    (-0.900, -0.600), (0.900, -0.600), (0.700, 0.800), (-0.700, 0.800),
+    (-0.900, -0.600),
+    (0.900, -0.600),
+    (0.700, 0.800),
+    (-0.700, 0.800),
 ];
 
 const RECTANGLE_POLYGON: &[(f32, f32)] = &[
-    (-0.900, -0.600), (0.900, -0.600), (0.900, 0.600), (-0.900, 0.600),
+    (-0.900, -0.600),
+    (0.900, -0.600),
+    (0.900, 0.600),
+    (-0.900, 0.600),
 ];
 
 const CALENDAR_POLYGON: &[(f32, f32)] = &[
-    (-0.800, -0.600), (-0.500, -0.600), (-0.500, -0.900), (-0.300, -0.900),
-    (-0.300, -0.600), (0.300, -0.600), (0.300, -0.900), (0.500, -0.900),
-    (0.500, -0.600), (0.800, -0.600), (0.800, 0.800), (-0.800, 0.800),
+    (-0.800, -0.600),
+    (-0.500, -0.600),
+    (-0.500, -0.900),
+    (-0.300, -0.900),
+    (-0.300, -0.600),
+    (0.300, -0.600),
+    (0.300, -0.900),
+    (0.500, -0.900),
+    (0.500, -0.600),
+    (0.800, -0.600),
+    (0.800, 0.800),
+    (-0.800, 0.800),
 ];
 
 const ARROW_RIGHT_POLYGON: &[(f32, f32)] = &[
-    (-0.800, -0.400), (0.400, -0.400), (0.400, -0.700), (0.900, 0.000),
-    (0.400, 0.700), (0.400, 0.400), (-0.800, 0.400),
+    (-0.800, -0.400),
+    (0.400, -0.400),
+    (0.400, -0.700),
+    (0.900, 0.000),
+    (0.400, 0.700),
+    (0.400, 0.400),
+    (-0.800, 0.400),
 ];
 
 const PENTAGON_POLYGON: &[(f32, f32)] = &[
-    (0.000, -0.850), (0.809, -0.263), (0.500, 0.688),
-    (-0.500, 0.688), (-0.809, -0.263),
+    (0.000, -0.850),
+    (0.809, -0.263),
+    (0.500, 0.688),
+    (-0.500, 0.688),
+    (-0.809, -0.263),
 ];
 
 const HOURGLASS_POLYGON: &[(f32, f32)] = &[
-    (-0.800, -0.800), (0.800, -0.800), (0.000, 0.000),
-    (0.800, 0.800), (-0.800, 0.800), (0.000, 0.000),
+    (-0.800, -0.800),
+    (0.800, -0.800),
+    (0.000, 0.000),
+    (0.800, 0.800),
+    (-0.800, 0.800),
+    (0.000, 0.000),
 ];
 
 impl std::fmt::Display for VisualizationRole {
@@ -369,10 +469,9 @@ impl InvariantGraph {
             ));
         }
         for edge in &self.edges {
-            let label = edge
-                .label
-                .as_ref()
-                .map_or(String::new(), |label| format!("|{}|", escape_mermaid(label)));
+            let label = edge.label.as_ref().map_or(String::new(), |label| {
+                format!("|{}|", escape_mermaid(label))
+            });
             out.push_str(&format!(
                 "  {} -->{} {}\n",
                 mermaid_id(&edge.from),
@@ -452,7 +551,6 @@ impl InvariantGraph {
         out.push_str("</svg>");
         out
     }
-
 }
 
 /// A host system can implement this trait to provide visualization without
@@ -480,53 +578,61 @@ pub enum GraphValidationError {
 pub fn tax_lawyer_demo() -> InvariantGraph {
     InvariantGraph::new("AU R&D Claim Constraint Graph")
         // Data sources
-        .with_node(InvariantNode::new(
-            "xero-invoice",
-            "Xero Invoice",
-            VisualizationRole::Data,
-        ).with_invariant("source: Xero API"))
+        .with_node(
+            InvariantNode::new("xero-invoice", "Xero Invoice", VisualizationRole::Data)
+                .with_invariant("source: Xero API"),
+        )
         // Classification
-        .with_node(InvariantNode::new(
-            "classify-rd",
-            "Classify R&D Expenditure",
-            VisualizationRole::Classify,
-        ).with_invariant("s.355-305, contractor"))
+        .with_node(
+            InvariantNode::new(
+                "classify-rd",
+                "Classify R&D Expenditure",
+                VisualizationRole::Classify,
+            )
+            .with_invariant("s.355-305, contractor"),
+        )
         // Core task
-        .with_node(InvariantNode::new(
-            "rd-activity",
-            "Registered R&D Activity",
-            VisualizationRole::Task,
-        ).with_invariant("Core: AI/ML experiments"))
+        .with_node(
+            InvariantNode::new(
+                "rd-activity",
+                "Registered R&D Activity",
+                VisualizationRole::Task,
+            )
+            .with_invariant("Core: AI/ML experiments"),
+        )
         // Validation gateway
-        .with_node(InvariantNode::new(
-            "eligibility",
-            "Eligibility Check",
-            VisualizationRole::Validate,
-        ).with_invariant("s.355-100: PASS"))
+        .with_node(
+            InvariantNode::new(
+                "eligibility",
+                "Eligibility Check",
+                VisualizationRole::Validate,
+            )
+            .with_invariant("s.355-100: PASS"),
+        )
         // Reporting
-        .with_node(InvariantNode::new(
-            "rd-offset",
-            "R&D Offset 43.5%",
-            VisualizationRole::Report,
-        ).with_invariant("refundable tax offset"))
+        .with_node(
+            InvariantNode::new("rd-offset", "R&D Offset 43.5%", VisualizationRole::Report)
+                .with_invariant("refundable tax offset"),
+        )
         // Tax rule
-        .with_node(InvariantNode::new(
-            "gst-check",
-            "AU GST Check",
-            VisualizationRole::Rule,
-        ).with_invariant("s38-190: overseas SaaS"))
+        .with_node(
+            InvariantNode::new("gst-check", "AU GST Check", VisualizationRole::Rule)
+                .with_invariant("s38-190: overseas SaaS"),
+        )
         // Evidence storage
-        .with_node(InvariantNode::new(
-            "evidence-chain",
-            "Evidence Chain",
-            VisualizationRole::Storage,
-        ).with_invariant("ledgerr: blake3 audit"))
+        .with_node(
+            InvariantNode::new(
+                "evidence-chain",
+                "Evidence Chain",
+                VisualizationRole::Storage,
+            )
+            .with_invariant("ledgerr: blake3 audit"),
+        )
         // Human review
-        .with_node(InvariantNode::new(
-            "cpa-review",
-            "CPA Review",
-            VisualizationRole::Human,
-        ).with_invariant("CPA sign-off"))
+        .with_node(
+            InvariantNode::new("cpa-review", "CPA Review", VisualizationRole::Human)
+                .with_invariant("CPA sign-off"),
+        )
         // Edges: data flow through the DAG
         .with_edge(InvariantEdge::new("xero-invoice", "classify-rd").with_label("satisfies: PASS"))
         .with_edge(InvariantEdge::new("classify-rd", "rd-activity").with_label("satisfies: PASS"))
@@ -597,7 +703,11 @@ mod tests {
     #[test]
     fn valid_graph_renders_mermaid_and_svg() {
         let graph = InvariantGraph::new("b00t")
-            .with_node(InvariantNode::new("datum", "Datum", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new(
+                "datum",
+                "Datum",
+                VisualizationRole::Ingest,
+            ))
             .with_node(InvariantNode::new(
                 "verify",
                 "Verify",

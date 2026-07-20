@@ -164,7 +164,8 @@ impl VizFormat for SvgViz {
             return r##"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100">
   <rect width="100%" height="100%" fill="#fafafa" rx="8"/>
   <text x="20" y="50" font-family="monospace" font-size="14" fill="#888">(empty pipeline)</text>
-</svg>"##.to_string();
+</svg>"##
+                .to_string();
         }
 
         // Determine order: topological sort or declaration order fallback
@@ -336,7 +337,13 @@ fn media_type_marker_and_color(mt: &PortMediaType) -> (&'static str, &'static st
 /// Sanitize a stage name for use as a Mermaid node ID.
 fn sanitize_id(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -365,8 +372,8 @@ pub fn render_pipeline(dag: &PipelineDag, format: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::pipeline_types::{
-        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements,
-        StagePort, StageSpec,
+        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements, StagePort,
+        StageSpec,
     };
 
     fn make_stage(
@@ -532,10 +539,7 @@ mod tests {
         assert!(output.contains("<svg"), "should be SVG");
         assert!(output.contains("</svg>"), "should close SVG");
         assert!(output.contains("ingest"), "should label ingest stage");
-        assert!(
-            output.contains("transcode"),
-            "should label transcode stage"
-        );
+        assert!(output.contains("transcode"), "should label transcode stage");
         assert!(output.contains("export"), "should label export stage");
     }
 

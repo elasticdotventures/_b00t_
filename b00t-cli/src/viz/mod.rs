@@ -632,9 +632,9 @@ fn escape_xml(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DatumType;
     use crate::blessing::{BlessingEdge, BlessingNode};
     use crate::datum_utils::{DatumGraphEdge, DatumGraphNode};
-    use crate::DatumType;
 
     #[test]
     fn iso_project_matches_l3dg3rr_contract() {
@@ -769,7 +769,10 @@ mod tests {
 
     #[test]
     fn empty_datum_graph_produces_empty_scene() {
-        let graph = DatumGraph { nodes: vec![], edges: vec![] };
+        let graph = DatumGraph {
+            nodes: vec![],
+            edges: vec![],
+        };
         let scene = datum_graph_to_scene(&graph);
         assert_eq!(scene.nodes.len(), 0);
         assert_eq!(scene.edges.len(), 0);
@@ -780,33 +783,50 @@ mod tests {
 
 /// Cytoscape.js-compatible JSON — paste directly into Cytoscape.js `elements`.
 pub fn scene_to_cytoscape(scene: &SceneGraph) -> String {
-    let nodes: Vec<serde_json::Value> = scene.nodes.iter().map(|n| {
-        serde_json::json!({
-            "data": { "id": n.id, "label": n.label, "role": n.role.to_string() }
+    let nodes: Vec<serde_json::Value> = scene
+        .nodes
+        .iter()
+        .map(|n| {
+            serde_json::json!({
+                "data": { "id": n.id, "label": n.label, "role": n.role.to_string() }
+            })
         })
-    }).collect();
-    let edges: Vec<serde_json::Value> = scene.edges.iter().enumerate().map(|(i, e)| {
-        serde_json::json!({
-            "data": {
-                "id": format!("e{i}"),
-                "source": e.from, "target": e.to,
-                "label": e.label.as_deref().unwrap_or("")
-            }
+        .collect();
+    let edges: Vec<serde_json::Value> = scene
+        .edges
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            serde_json::json!({
+                "data": {
+                    "id": format!("e{i}"),
+                    "source": e.from, "target": e.to,
+                    "label": e.label.as_deref().unwrap_or("")
+                }
+            })
         })
-    }).collect();
-    serde_json::to_string_pretty(&serde_json::json!({ "elements": { "nodes": nodes, "edges": edges } }))
-        .unwrap_or_default()
+        .collect();
+    serde_json::to_string_pretty(
+        &serde_json::json!({ "elements": { "nodes": nodes, "edges": edges } }),
+    )
+    .unwrap_or_default()
 }
 
 /// SysMLv2 textual notation — minimal `package` / `part def` / `connection def` blocks.
 pub fn scene_to_sysmlv2(scene: &SceneGraph) -> String {
     let mut out = String::from("package B00tGraph {\n");
     for node in &scene.nodes {
-        out.push_str(&format!("    part def '{}' {{\n        doc /* role: {} */\n    }}\n", node.label, node.role));
+        out.push_str(&format!(
+            "    part def '{}' {{\n        doc /* role: {} */\n    }}\n",
+            node.label, node.role
+        ));
     }
     for edge in &scene.edges {
         let label = edge.label.as_deref().unwrap_or("connects");
-        out.push_str(&format!("    connection def '{label}' connect '{}' to '{}';\n", edge.from, edge.to));
+        out.push_str(&format!(
+            "    connection def '{label}' connect '{}' to '{}';\n",
+            edge.from, edge.to
+        ));
     }
     out.push_str("}\n");
     out
@@ -818,7 +838,7 @@ pub fn scene_to_owl2(scene: &SceneGraph) -> String {
         "@prefix ex: <https://b00t.promptexecution.com/ontology#> .\n\
          @prefix owl: <http://www.w3.org/2002/07/owl#> .\n\
          @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n\n\
-         ex:B00tGraph a owl:Ontology .\n\n"
+         ex:B00tGraph a owl:Ontology .\n\n",
     );
     for node in &scene.nodes {
         let safe_id = node.id.replace(' ', "_").replace(['\'', '"'], "");
@@ -830,7 +850,7 @@ pub fn scene_to_owl2(scene: &SceneGraph) -> String {
     for (i, edge) in scene.edges.iter().enumerate() {
         let label = edge.label.as_deref().unwrap_or("connects");
         let from = edge.from.replace(' ', "_").replace(['\'', '"'], "");
-        let to   = edge.to.replace(' ', "_").replace(['\'', '"'], "");
+        let to = edge.to.replace(' ', "_").replace(['\'', '"'], "");
         out.push_str(&format!(
             "ex:edge{i} a owl:ObjectProperty ;\n    rdfs:label \"{label}\" ;\n    rdfs:domain ex:{from} ;\n    rdfs:range ex:{to} .\n\n"
         ));

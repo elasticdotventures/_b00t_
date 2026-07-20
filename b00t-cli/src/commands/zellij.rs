@@ -286,9 +286,7 @@ fn cmd_menu(
     // Build fzf input text
     let fzf_input: String = items
         .iter()
-        .map(|item| {
-            format!("{}\t{}", item.key, item.label)
-        })
+        .map(|item| format!("{}\t{}", item.key, item.label))
         .collect::<Vec<_>>()
         .join("\n");
 

@@ -10,7 +10,7 @@ use crate::metrics::{ChatMetrics, LatencyTimer};
 use async_trait::async_trait;
 use rumqttc::{AsyncClient, ConnectionError, Event, EventLoop, MqttOptions, Packet, QoS};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, error, info, warn};
 
 /// MQTT transport for IoT and edge agent communication.
