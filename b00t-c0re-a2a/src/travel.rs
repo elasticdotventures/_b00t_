@@ -70,8 +70,9 @@ impl TravelAgent {
             .find(|(_, card)| card.name == agent_name)
             .map(|(_, card)| card)
             .ok_or_else(|| {
-                Box::new(crate::error::A2AError::AgentNotFound(agent_name.to_string()))
-                    as Box<dyn std::error::Error>
+                Box::new(crate::error::A2AError::AgentNotFound(
+                    agent_name.to_string(),
+                )) as Box<dyn std::error::Error>
             })?;
 
         let now = chrono::Utc::now();
@@ -149,12 +150,8 @@ mod tests {
     #[test]
     fn test_travel_manifest_creation() {
         let url = Url::parse("stdio://agent-1").unwrap();
-        let agent = AgentCard::new_with_reputation(
-            "agent-1",
-            "Test agent",
-            url,
-            AgentReputation::new(),
-        );
+        let agent =
+            AgentCard::new_with_reputation("agent-1", "Test agent", url, AgentReputation::new());
         let manifest = TravelManifest {
             agent,
             source_hive: "hive-alpha".to_string(),

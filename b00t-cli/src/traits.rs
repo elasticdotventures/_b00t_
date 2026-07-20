@@ -435,7 +435,10 @@ pub struct SystemdRunSandbox {
 
 impl Default for SystemdRunSandbox {
     fn default() -> Self {
-        Self { mem_limit: None, cpu_weight: None }
+        Self {
+            mem_limit: None,
+            cpu_weight: None,
+        }
     }
 }
 
@@ -716,12 +719,18 @@ mod tests {
     fn sandbox_kind_name_includes_systemd_run() {
         assert_eq!(SandboxKind::None.name(), "none");
         assert_eq!(SandboxKind::SystemdRun.name(), "systemd-run");
-        assert_eq!(SandboxKind::Container("img".to_string()).name(), "container");
+        assert_eq!(
+            SandboxKind::Container("img".to_string()).name(),
+            "container"
+        );
     }
 
     #[test]
     fn io_method_for_sandbox_systemd_run_is_stdio() {
-        assert_eq!(IoMethod::for_sandbox(&SandboxKind::SystemdRun), IoMethod::Stdio);
+        assert_eq!(
+            IoMethod::for_sandbox(&SandboxKind::SystemdRun),
+            IoMethod::Stdio
+        );
     }
 
     #[test]
@@ -753,5 +762,4 @@ mod tests {
         assert_eq!(output.exit_code, 0);
         assert!(output.value.contains("sandbox-provider-test"));
     }
-
 }

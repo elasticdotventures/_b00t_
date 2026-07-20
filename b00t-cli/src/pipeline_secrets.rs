@@ -23,18 +23,11 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SecretSource {
     /// Read from a file on disk (whitespace-trimmed).
-    File {
-        path: String,
-    },
+    File { path: String },
     /// Read from a process environment variable.
-    EnvVar {
-        name: String,
-    },
+    EnvVar { name: String },
     /// Read from the OS keyring / credential store.
-    Keyring {
-        service: String,
-        account: String,
-    },
+    Keyring { service: String, account: String },
     /// Read interactively from stdin (no echo).
     Prompt {
         /// Human-readable prompt shown to the user.
@@ -84,8 +77,8 @@ impl SecretStore {
     pub fn resolve(secret_refs: &[SecretRef]) -> Result<Self> {
         let mut secrets = HashMap::with_capacity(secret_refs.len());
         for ref_ in secret_refs {
-            let value =
-                load_secret(ref_).with_context(|| format!("failed to resolve secret '{}'", ref_.key))?;
+            let value = load_secret(ref_)
+                .with_context(|| format!("failed to resolve secret '{}'", ref_.key))?;
             secrets.insert(ref_.key.clone(), (ref_.env_var.clone(), value));
         }
         Ok(SecretStore { secrets })
@@ -136,24 +129,32 @@ pub fn load_secret(ref_: &SecretRef) -> Result<String> {
                 .map(|s| s.trim().to_string())
                 .with_context(|| format!("failed to read secret file at '{}'", path))
         }
-        SecretSource::EnvVar { name } => {
-            std::env::var(name).map_err(|e| match e {
-                std::env::VarError::NotPresent => {
-                    anyhow!("environment variable '{}' is not set", name)
-                }
-                std::env::VarError::NotUnicode(_) => {
-                    anyhow!("environment variable '{}' contains invalid unicode", name)
-                }
-            })
-        }
-        SecretSource::Keyring { service: _, account: _ } => {
+        SecretSource::EnvVar { name } => std::env::var(name).map_err(|e| match e {
+            std::env::VarError::NotPresent => {
+                anyhow!("environment variable '{}' is not set", name)
+            }
+            std::env::VarError::NotUnicode(_) => {
+                anyhow!("environment variable '{}' contains invalid unicode", name)
+            }
+        }),
+        SecretSource::Keyring {
+            service: _,
+            account: _,
+        } => {
             #[cfg(feature = "keyring")]
             {
-                let entry = keyring::Entry::new(service, account)
-                    .with_context(|| format!("failed to create keyring entry for '{}'/'{}'", service, account))?;
-                let secret = entry
-                    .get_secret()
-                    .with_context(|| format!("failed to get secret from keyring for '{}'/'{}'", service, account))?;
+                let entry = keyring::Entry::new(service, account).with_context(|| {
+                    format!(
+                        "failed to create keyring entry for '{}'/'{}'",
+                        service, account
+                    )
+                })?;
+                let secret = entry.get_secret().with_context(|| {
+                    format!(
+                        "failed to get secret from keyring for '{}'/'{}'",
+                        service, account
+                    )
+                })?;
                 String::from_utf8(secret).map_err(|_| {
                     anyhow!(
                         "keyring secret for '{}'/'{}' is not valid UTF-8",
@@ -403,7 +404,10 @@ mod tests {
             !debug_str.contains("super-secret-value"),
             "Debug must NOT contain secret values: {debug_str}"
         );
-        assert!(debug_str.contains("<redacted>"), "Debug should have <redacted>: {debug_str}");
+        assert!(
+            debug_str.contains("<redacted>"),
+            "Debug should have <redacted>: {debug_str}"
+        );
     }
 
     #[test]
@@ -507,7 +511,9 @@ mod tests {
     #[test]
     fn secret_source_serialize_round_trip_all_variants() {
         let variants = vec![
-            SecretSource::File { path: "/path".into() },
+            SecretSource::File {
+                path: "/path".into(),
+            },
             SecretSource::EnvVar { name: "VAR".into() },
             SecretSource::Keyring {
                 service: "svc".into(),

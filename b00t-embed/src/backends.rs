@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use embed_anything::embeddings::embed::Embedder;
 
-use crate::{EmbedBackend, EmbedConfig, Embedding, EmbedProvider};
+use crate::{EmbedBackend, EmbedConfig, EmbedProvider, Embedding};
 
 pub struct EmbedAnythingBackend {
     embedder: Arc<Embedder>,
@@ -24,7 +24,7 @@ impl EmbedAnythingBackend {
 
         let embedder = match &config.provider {
             EmbedProvider::HuggingFace { model_id, revision } => {
-                Embedder::from_pretrained_hf(model_id, revision.as_deref(), None, None, None)?
+                Embedder::from_pretrained_hf(model_id, revision.as_deref(), None, None)?
             }
             EmbedProvider::ONNX { model_id } => {
                 Embedder::from_pretrained_onnx("bert", None, None, Some(model_id), None, None)?
@@ -57,10 +57,7 @@ impl EmbedAnythingBackend {
 #[async_trait]
 impl EmbedBackend for EmbedAnythingBackend {
     async fn embed(&self, text: &str) -> Result<Embedding> {
-        let results = self
-            .embedder
-            .embed(&[text], Some(1), None)
-            .await?;
+        let results = self.embedder.embed(&[text], Some(1), None).await?;
         let vec = results
             .into_iter()
             .next()

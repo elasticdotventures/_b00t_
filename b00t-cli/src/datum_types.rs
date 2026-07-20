@@ -198,8 +198,13 @@ impl DatumType {
             Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => {
                 SemanticClass::Skill
             }
-            Self::Config | Self::Bash | Self::Cli | Self::Justfile
-            | Self::Plan | Self::Vendor | Self::Ooda => SemanticClass::Tool,
+            Self::Config
+            | Self::Bash
+            | Self::Cli
+            | Self::Justfile
+            | Self::Plan
+            | Self::Vendor
+            | Self::Ooda => SemanticClass::Tool,
             Self::Stack | Self::Repo | Self::Vscode | Self::Apt => SemanticClass::Repo,
             Self::Database | Self::HiveProfile => SemanticClass::Data,
             Self::Polyseme | Self::Credential => SemanticClass::Secret,

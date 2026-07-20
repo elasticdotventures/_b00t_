@@ -42,7 +42,9 @@ fn test_agent_card_creation_and_serialization() {
         ))
         .with_default_skill("code-gen")
         .with_auth(AuthenticationScheme::bearer("test-token-123"))
-        .with_auth(AuthenticationScheme::oauth2("https://auth.example.com/token"));
+        .with_auth(AuthenticationScheme::oauth2(
+            "https://auth.example.com/token",
+        ));
 
     // Serialize to JSON
     let json = serde_json::to_string_pretty(&card).expect("serialization should succeed");
@@ -61,7 +63,12 @@ fn test_agent_card_creation_and_serialization() {
     // Verify skill lookup
     let code_skill = deserialized.find_skill("code-gen").unwrap();
     assert_eq!(code_skill.name, "Code Generator");
-    assert_eq!(code_skill.input_schema["properties"]["language"]["type"].as_str().unwrap(), "string");
+    assert_eq!(
+        code_skill.input_schema["properties"]["language"]["type"]
+            .as_str()
+            .unwrap(),
+        "string"
+    );
     assert_eq!(code_skill.input_schema["type"].as_str().unwrap(), "object");
 
     let search_skill = deserialized.find_skill("search").unwrap();
@@ -77,7 +84,11 @@ fn test_agent_card_creation_and_serialization() {
 
 #[test]
 fn test_task_full_lifecycle() {
-    let mut task = Task::new("code-gen", serde_json::json!({"prompt": "write a hello world"}), "user-1");
+    let mut task = Task::new(
+        "code-gen",
+        serde_json::json!({"prompt": "write a hello world"}),
+        "user-1",
+    );
 
     // Initial state
     assert_eq!(task.state, TaskState::Submitted);
@@ -89,10 +100,13 @@ fn test_task_full_lifecycle() {
     assert_eq!(task.state, TaskState::Working);
 
     // Add output
-    task.add_artifact(Artifact::json("output", serde_json::json!({
-        "code": "fn main() { println!(\"Hello\"); }",
-        "language": "rust"
-    })));
+    task.add_artifact(Artifact::json(
+        "output",
+        serde_json::json!({
+            "code": "fn main() { println!(\"Hello\"); }",
+            "language": "rust"
+        }),
+    ));
 
     // Complete
     task.transition_to(TaskState::Completed);
@@ -107,13 +121,21 @@ fn test_task_full_lifecycle() {
     // Verify history
     assert!(task.history.len() >= 3);
     assert!(task.history.iter().any(|m| m.content.contains("Submitted")));
-    assert!(task.history.iter().any(|m| m.content.contains("Artifact added")));
+    assert!(
+        task.history
+            .iter()
+            .any(|m| m.content.contains("Artifact added"))
+    );
     assert!(task.history.iter().any(|m| m.content.contains("Completed")));
 }
 
 #[test]
 fn test_task_input_required_then_complete() {
-    let mut task = Task::new("conversation", serde_json::json!({"query": "book a flight"}), "user");
+    let mut task = Task::new(
+        "conversation",
+        serde_json::json!({"query": "book a flight"}),
+        "user",
+    );
     task.transition_to(TaskState::Working);
     task.transition_to(TaskState::InputRequired);
     assert_eq!(task.state, TaskState::InputRequired);
@@ -131,20 +153,20 @@ fn test_task_input_required_then_complete() {
 
 #[test]
 fn test_task_failure_with_artifacts() {
-    let mut task = Task::new("file-processor", serde_json::json!({"path": "/invalid"}), "svc");
+    let mut task = Task::new(
+        "file-processor",
+        serde_json::json!({"path": "/invalid"}),
+        "svc",
+    );
     task.transition_to(TaskState::Working);
     task.add_artifact(
-        Artifact::text("error", "File not found: /invalid")
-            .with_metadata("error_code", "404"),
+        Artifact::text("error", "File not found: /invalid").with_metadata("error_code", "404"),
     );
     task.transition_to(TaskState::Failed);
     assert!(task.is_terminal());
 
     assert_eq!(task.artifacts[0].name, "error");
-    assert_eq!(
-        task.artifacts[0].metadata.get("error_code").unwrap(),
-        "404"
-    );
+    assert_eq!(task.artifacts[0].metadata.get("error_code").unwrap(), "404");
 }
 
 #[test]
@@ -176,22 +198,29 @@ fn test_task_serialization_roundtrip() {
 
 #[test]
 fn test_agent_store_lifecycle() {
-    let tmpdir = std::env::temp_dir().join(format!(
-        "b00t_a2a_int_test_{}",
-        uuid::Uuid::new_v4()
-    ));
+    let tmpdir = std::env::temp_dir().join(format!("b00t_a2a_int_test_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&tmpdir).unwrap();
     let store = AgentStore::with_path(tmpdir.join("agents"));
 
     // Save multiple agents
     let url_a = Url::parse("http://agent-a.local").unwrap();
-    let card_a = AgentCard::new("agent-a", "Agent A", url_a)
-        .with_skill(Skill::new("ping", "Ping", "Ping test", serde_json::json!({}), serde_json::json!({})));
+    let card_a = AgentCard::new("agent-a", "Agent A", url_a).with_skill(Skill::new(
+        "ping",
+        "Ping",
+        "Ping test",
+        serde_json::json!({}),
+        serde_json::json!({}),
+    ));
     store.save(&card_a).unwrap();
 
     let url_b = Url::parse("http://agent-b.local").unwrap();
-    let card_b = AgentCard::new("agent-b", "Agent B", url_b)
-        .with_skill(Skill::new("pong", "Pong", "Pong test", serde_json::json!({}), serde_json::json!({})));
+    let card_b = AgentCard::new("agent-b", "Agent B", url_b).with_skill(Skill::new(
+        "pong",
+        "Pong",
+        "Pong test",
+        serde_json::json!({}),
+        serde_json::json!({}),
+    ));
     store.save(&card_b).unwrap();
 
     // List
@@ -242,7 +271,11 @@ fn test_skill_registry_register_and_execute() {
             serde_json::json!({"type": "object", "properties": {"greeting": {"type": "string"}}}),
         ),
         Arc::new(|mut task| {
-            let name = task.input.get("name").and_then(|v| v.as_str()).unwrap_or("World");
+            let name = task
+                .input
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("World");
             task.add_artifact(Artifact::text("greeting", &format!("Hello, {}!", name)));
             task.transition_to(TaskState::Completed);
             Ok(task)
@@ -273,7 +306,13 @@ fn test_multiple_skills_in_registry() {
     let mut registry = SkillRegistry::new();
 
     registry.register(
-        Skill::new("translate", "Translator", "Translates text", serde_json::json!({}), serde_json::json!({})),
+        Skill::new(
+            "translate",
+            "Translator",
+            "Translates text",
+            serde_json::json!({}),
+            serde_json::json!({}),
+        ),
         Arc::new(|mut t| {
             t.transition_to(TaskState::Completed);
             Ok(t)
@@ -281,7 +320,13 @@ fn test_multiple_skills_in_registry() {
     );
 
     registry.register(
-        Skill::new("summarize", "Summarizer", "Summarizes text", serde_json::json!({}), serde_json::json!({})),
+        Skill::new(
+            "summarize",
+            "Summarizer",
+            "Summarizes text",
+            serde_json::json!({}),
+            serde_json::json!({}),
+        ),
         Arc::new(|mut t| {
             t.transition_to(TaskState::Completed);
             Ok(t)
@@ -294,7 +339,11 @@ fn test_multiple_skills_in_registry() {
     assert!(!registry.has_skill("nonexistent"));
 
     let task_t = Task::new("translate", serde_json::json!({"text": "hello"}), "user");
-    let task_s = Task::new("summarize", serde_json::json!({"text": "long text"}), "user");
+    let task_s = Task::new(
+        "summarize",
+        serde_json::json!({"text": "long text"}),
+        "user",
+    );
 
     assert!(registry.execute(&task_t).unwrap().is_terminal());
     assert!(registry.execute(&task_s).unwrap().is_terminal());
@@ -304,7 +353,13 @@ fn test_multiple_skills_in_registry() {
 fn test_skill_registry_unregister() {
     let mut registry = SkillRegistry::new();
     registry.register(
-        Skill::new("temp", "Temp", "Temporary", serde_json::json!({}), serde_json::json!({})),
+        Skill::new(
+            "temp",
+            "Temp",
+            "Temporary",
+            serde_json::json!({}),
+            serde_json::json!({}),
+        ),
         Arc::new(|t| Ok(t)),
     );
     assert!(registry.has_skill("temp"));

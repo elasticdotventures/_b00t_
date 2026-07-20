@@ -195,8 +195,7 @@ impl StateMachine {
         };
 
         let timestamp = Utc::now();
-        self.history
-            .push((self.current.clone(), event, timestamp));
+        self.history.push((self.current.clone(), event, timestamp));
         self.current = next_state.clone();
         Ok(next_state)
     }
@@ -258,9 +257,7 @@ pub struct StateSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline_types::{
-        CapsuleProfile, PipelineDag, ResourceRequirements, StageSpec,
-    };
+    use crate::pipeline_types::{CapsuleProfile, PipelineDag, ResourceRequirements, StageSpec};
 
     /// Build a sequential DAG with `count` stages (no ports — just identity).
     fn make_dag(count: u32) -> PipelineDag {
@@ -396,7 +393,9 @@ mod tests {
         to_running0(&mut sm);
 
         let err = PipelineError::StageCrashed("out of memory".into());
-        let state = sm.transition(PipelineEvent::StageFailed(err.clone())).unwrap();
+        let state = sm
+            .transition(PipelineEvent::StageFailed(err.clone()))
+            .unwrap();
         assert_eq!(state, PipelineState::Failed(err));
     }
 
@@ -526,8 +525,10 @@ mod tests {
         let mut sm = StateMachine::new(dag);
         to_running0(&mut sm);
 
-        sm.transition(PipelineEvent::StageFailed(PipelineError::InputValidation("err".into())))
-            .unwrap();
+        sm.transition(PipelineEvent::StageFailed(PipelineError::InputValidation(
+            "err".into(),
+        )))
+        .unwrap();
         assert!(matches!(*sm.state(), PipelineState::Failed(_)));
 
         // Failed → Idle

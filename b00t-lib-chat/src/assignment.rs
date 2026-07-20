@@ -49,11 +49,9 @@ impl ConditionOp {
             Self::Eq => actual == expected,
             Self::Neq => actual != expected,
             Self::Contains => actual.contains(expected),
-            Self::Regex => {
-                regex::Regex::new(expected)
-                    .map(|re| re.is_match(actual))
-                    .unwrap_or(false)
-            }
+            Self::Regex => regex::Regex::new(expected)
+                .map(|re| re.is_match(actual))
+                .unwrap_or(false),
         }
     }
 }
@@ -78,7 +76,10 @@ impl TaskTemplate {
     }
 }
 
-fn interpolate_value(value: &serde_json::Value, notification: &NotificationMessage) -> serde_json::Value {
+fn interpolate_value(
+    value: &serde_json::Value,
+    notification: &NotificationMessage,
+) -> serde_json::Value {
     match value {
         serde_json::Value::String(s) => {
             let rendered = s
@@ -91,9 +92,11 @@ fn interpolate_value(value: &serde_json::Value, notification: &NotificationMessa
                 );
             serde_json::Value::String(rendered)
         }
-        serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(|v| interpolate_value(v, notification)).collect())
-        }
+        serde_json::Value::Array(arr) => serde_json::Value::Array(
+            arr.iter()
+                .map(|v| interpolate_value(v, notification))
+                .collect(),
+        ),
         serde_json::Value::Object(map) => {
             let mut new_map = serde_json::Map::new();
             for (k, v) in map {
@@ -286,7 +289,10 @@ impl AssignmentEngine {
     }
 
     async fn start_event_loop(&self) -> ChatResult<()> {
-        let mut rx = self.transport.subscribe_notifications("b00t.notify.>").await?;
+        let mut rx = self
+            .transport
+            .subscribe_notifications("b00t.notify.>")
+            .await?;
         let rules = self.rules.clone();
         let transport = self.transport.clone();
 
@@ -300,7 +306,9 @@ impl AssignmentEngine {
                 let mut rules = rules.write().await;
                 let matching: Vec<&mut AssignmentRule> = rules
                     .iter_mut()
-                    .filter(|r| r.trigger == TriggerKind::Event && r.matches(&notification) && r.enabled)
+                    .filter(|r| {
+                        r.trigger == TriggerKind::Event && r.matches(&notification) && r.enabled
+                    })
                     .collect();
 
                 for rule in matching {
@@ -398,7 +406,10 @@ impl AssignmentEngine {
                         let schedule = match expr.parse::<cron::Schedule>() {
                             Ok(s) => s,
                             Err(e) => {
-                                warn!("Invalid cron expression '{}' for rule '{}': {}", expr, rule_name, e);
+                                warn!(
+                                    "Invalid cron expression '{}' for rule '{}': {}",
+                                    expr, rule_name, e
+                                );
                                 return;
                             }
                         };
@@ -411,7 +422,9 @@ impl AssignmentEngine {
                                     break;
                                 }
                             };
-                            let delay = (next - Utc::now()).to_std().unwrap_or(std::time::Duration::from_secs(1));
+                            let delay = (next - Utc::now())
+                                .to_std()
+                                .unwrap_or(std::time::Duration::from_secs(1));
                             tokio::time::sleep(delay).await;
 
                             let task = TaskMessage {

@@ -103,13 +103,9 @@ mod tests {
         let path = dir.path().join("_b00t_/schema/variant.toml");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut f = std::fs::File::create(&path).unwrap();
-        f.write_all(b"[b00t.variant]\nname = \"core\"\n")
-            .unwrap();
+        f.write_all(b"[b00t.variant]\nname = \"core\"\n").unwrap();
 
-        assert_eq!(
-            detect_variant(&dir.path().to_path_buf()),
-            B00tVariant::Core
-        );
+        assert_eq!(detect_variant(&dir.path().to_path_buf()), B00tVariant::Core);
     }
 
     #[test]
@@ -130,10 +126,7 @@ mod tests {
     #[test]
     fn test_default_is_core() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(
-            detect_variant(&dir.path().to_path_buf()),
-            B00tVariant::Core
-        );
+        assert_eq!(detect_variant(&dir.path().to_path_buf()), B00tVariant::Core);
     }
 
     #[test]

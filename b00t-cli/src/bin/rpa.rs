@@ -12,13 +12,16 @@
 
 use b00t_cli::rpa_cdp::RpaSession;
 use b00t_cli::rpa_rhai::{create_rpa_engine, run_commands};
-use b00t_cli::rpa_tui::{run_curation_menu, print_script, ScriptStep};
+use b00t_cli::rpa_tui::{ScriptStep, print_script, run_curation_menu};
 use clap::Parser;
 use std::io::{BufRead, Write};
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
-#[clap(name = "b00t-rpa", about = "Browser RPA via CDP — WSL-aware Chrome automation")]
+#[clap(
+    name = "b00t-rpa",
+    about = "Browser RPA via CDP — WSL-aware Chrome automation"
+)]
 struct Cli {
     #[clap(subcommand)]
     command: Option<RpaCommands>,
@@ -34,9 +37,15 @@ struct Cli {
     url: Option<String>,
     #[clap(long, help = "Force TUI menu")]
     menu: bool,
-    #[clap(long, help = "Describe page structure (headings, links, forms, buttons)")]
+    #[clap(
+        long,
+        help = "Describe page structure (headings, links, forms, buttons)"
+    )]
     describe: bool,
-    #[clap(long, help = "Inject DOM enrichment (single data-b00t attribute, 500-element cap)")]
+    #[clap(
+        long,
+        help = "Inject DOM enrichment (single data-b00t attribute, 500-element cap)"
+    )]
     enrich: bool,
     #[clap(long, help = "Take screenshot after navigation")]
     screenshot: bool,
@@ -72,7 +81,11 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(RpaCommands::Script { script }) = &cli.command {
         // Discover CDP endpoint, then run script
-        let host = if detect_wsl() { windows_host_ip() } else { "127.0.0.1".to_string() };
+        let host = if detect_wsl() {
+            windows_host_ip()
+        } else {
+            "127.0.0.1".to_string()
+        };
         let cdp_port = ensure_chrome(Some(&host), cli.port).await?;
         return run_rhai_script(script, &host, cdp_port).await;
     }
@@ -82,7 +95,11 @@ async fn main() -> anyhow::Result<()> {
     // Detect WSL environment
     let is_wsl = detect_wsl();
     let win_host = cli.host.clone().or_else(|| {
-        if is_wsl { Some(windows_host_ip()) } else { None }
+        if is_wsl {
+            Some(windows_host_ip())
+        } else {
+            None
+        }
     });
 
     // Auto-start Chrome on Windows if requested or in WSL.
@@ -125,7 +142,10 @@ async fn main() -> anyhow::Result<()> {
     if cli.describe {
         return describe_page(&session).await;
     }
-    if matches!(&cli.command, Some(RpaCommands::Menu)) || cli.menu || !atty::is(atty::Stream::Stdout) {
+    if matches!(&cli.command, Some(RpaCommands::Menu))
+        || cli.menu
+        || !atty::is(atty::Stream::Stdout)
+    {
         return tui_menu(&session).await;
     }
 
@@ -140,7 +160,8 @@ fn detect_wsl() -> bool {
         return true;
     }
     if let Ok(version) = std::fs::read_to_string("/proc/version") {
-        if version.contains("Microsoft") || version.contains("WSL") || version.contains("microsoft") {
+        if version.contains("Microsoft") || version.contains("WSL") || version.contains("microsoft")
+        {
             return true;
         }
     }
@@ -157,7 +178,9 @@ fn windows_host_ip() -> String {
         .output()
     {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(ip) = stdout.lines().next()
+        if let Some(ip) = stdout
+            .lines()
+            .next()
             .and_then(|l| l.split_whitespace().nth(2))
         {
             return ip.to_string();
@@ -189,8 +212,8 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
         // Try relay port first (port+1) — Chrome only binds 127.0.0.1,
         // relay/proxy is the only way to reach it from WSL.
         format!("http://{}:{}/json/version", host, port + 1),
-        format!("http://localhost:{}/json/version", port),         // WSL localhost fwd
-        format!("http://{}:{}/json/version", host, port),          // direct to Windows host
+        format!("http://localhost:{}/json/version", port), // WSL localhost fwd
+        format!("http://{}:{}/json/version", host, port),  // direct to Windows host
     ];
 
     // Probe CDP endpoint
@@ -201,15 +224,20 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
             if resp.status().is_success() {
                 eprintln!("✅ Chrome already running with CDP at {}", target);
                 // Extract the actual port from the target URL
-                let p = target.trim_end_matches("/json/version")
-                    .rsplit(':').next()
+                let p = target
+                    .trim_end_matches("/json/version")
+                    .rsplit(':')
+                    .next()
                     .and_then(|s| s.parse::<u16>().ok())
                     .unwrap_or(port);
                 return Ok(p);
             }
         }
     }
-    eprintln!("🔍 Chrome CDP not reachable (tried {}:{}, localhost:{}, portproxy)", host, port, port);
+    eprintln!(
+        "🔍 Chrome CDP not reachable (tried {}:{}, localhost:{}, portproxy)",
+        host, port, port
+    );
 
     // Launch Chrome on Windows from WSL
     // Probe common Chrome install paths on the Windows host
@@ -252,7 +280,10 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
                 "/C if exist \"{}\" (start \"\" \"{}\" --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={} --no-first-run)",
                 path, path, port, user_data
             );
-            if let Ok(out) = std::process::Command::new("cmd.exe").args(["/C", &cmd]).output() {
+            if let Ok(out) = std::process::Command::new("cmd.exe")
+                .args(["/C", &cmd])
+                .output()
+            {
                 if out.status.success() {
                     launched = true;
                     eprintln!("  ✅ Chrome launched via cmd.exe");
@@ -265,7 +296,10 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
     if !launched {
         eprintln!("  ⚠️  Could not launch Chrome from WSL.");
         eprintln!("  Please start Chrome manually on Windows:");
-        eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={} --no-first-run", port, user_data);
+        eprintln!(
+            "    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={} --no-first-run",
+            port, user_data
+        );
         anyhow::bail!("Chrome CDP not available");
     }
 
@@ -274,10 +308,16 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
     // If socat is not available, falls back to PowerShell-based relay on Windows.
     let relay_port = port + 1;
     let socat_available = std::process::Command::new("which")
-        .arg("socat").output().map(|o| o.status.success()).unwrap_or(false);
+        .arg("socat")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
 
     if socat_available {
-        eprintln!("  🔄 Starting socat relay (WSL:{} → Windows:{}:{})...", relay_port, host, port);
+        eprintln!(
+            "  🔄 Starting socat relay (WSL:{} → Windows:{}:{})...",
+            relay_port, host, port
+        );
         let relay_listen = format!("TCP-LISTEN:{},fork,reuseaddr", relay_port);
         let relay_target = format!("TCP:{}:{}", host, port);
         let _ = std::process::Command::new("socat")
@@ -295,7 +335,13 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
             relay_port, port
         );
         let _ = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps_relay])
+            .args([
+                "-NoProfile",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                &ps_relay,
+            ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn();
@@ -310,9 +356,9 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
         .timeout(std::time::Duration::from_secs(3))
         .build()?;
     let probe_targets = &[
-        format!("http://{}:{}", host, port + 1),          // relay port first
-        format!("http://localhost:{}", port),             // WSL localhost forwarding
-        format!("http://{}:{}", host, port),              // direct to Windows host
+        format!("http://{}:{}", host, port + 1), // relay port first
+        format!("http://localhost:{}", port),    // WSL localhost forwarding
+        format!("http://{}:{}", host, port),     // direct to Windows host
     ];
     for i in 0..30 {
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -320,8 +366,10 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
             if let Ok(resp) = wait_client.get(target).send().await {
                 if resp.status().is_success() {
                     eprintln!("✅ Chrome CDP ready after {}s at {}", i + 1, target);
-                    let p = target.trim_end_matches('/')
-                        .rsplit(':').next()
+                    let p = target
+                        .trim_end_matches('/')
+                        .rsplit(':')
+                        .next()
                         .and_then(|s| s.parse::<u16>().ok())
                         .unwrap_or(port);
                     return Ok(p);
@@ -335,12 +383,20 @@ async fn ensure_chrome(host: Option<&str>, port: u16) -> anyhow::Result<u16> {
 
     eprintln!("⚠️  Chrome did not start within 30s. Check Windows host.");
     eprintln!("  Run manually from Windows cmd (admin not required):");
-    eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={}", port, user_data);
+    eprintln!(
+        "    chrome.exe --remote-debugging-port={} --remote-allow-origins=* --user-data-dir={}",
+        port, user_data
+    );
     anyhow::bail!("Chrome CDP timeout");
 }
 
 /// Navigate to URL, optionally enrich, execute JavaScript.
-async fn navigate_and_eval(session: &RpaSession, url: &str, js: &str, enrich: bool) -> anyhow::Result<()> {
+async fn navigate_and_eval(
+    session: &RpaSession,
+    url: &str,
+    js: &str,
+    enrich: bool,
+) -> anyhow::Result<()> {
     eprintln!("🌐 Navigating to {} ...", url);
     let page = session.open_page(url, enrich).await?;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
@@ -351,7 +407,11 @@ async fn navigate_and_eval(session: &RpaSession, url: &str, js: &str, enrich: bo
 }
 
 /// Navigate then describe page structure (headings, links, forms, buttons).
-async fn navigate_and_describe(session: &RpaSession, url: &str, enrich: bool) -> anyhow::Result<()> {
+async fn navigate_and_describe(
+    session: &RpaSession,
+    url: &str,
+    enrich: bool,
+) -> anyhow::Result<()> {
     eprintln!("🌐 Navigating to {} ...", url);
     let page = session.open_page(url, enrich).await?;
     tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
@@ -370,12 +430,19 @@ async fn navigate_and_describe(session: &RpaSession, url: &str, enrich: bool) ->
 }
 
 /// Navigate then take a screenshot.
-async fn navigate_and_screenshot(session: &RpaSession, url: &str, enrich: bool) -> anyhow::Result<()> {
+async fn navigate_and_screenshot(
+    session: &RpaSession,
+    url: &str,
+    enrich: bool,
+) -> anyhow::Result<()> {
     eprintln!("🌐 Navigating to {} ...", url);
     let page = session.open_page(url, enrich).await?;
     tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
     let png = session.screenshot(&page).await?;
-    let path = format!("screenshot_{}.png", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+    let path = format!(
+        "screenshot_{}.png",
+        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+    );
     std::fs::write(&path, &png)?;
     println!("✅ Screenshot saved: {} ({} bytes)", path, png.len());
     Ok(())
@@ -391,11 +458,18 @@ async fn describe_page(session: &RpaSession) -> anyhow::Result<()> {
     let title = session.evaluate(&page, "document.title").await?;
     println!("📄 Page: {}", title);
     println!("   URL: {}", pages[0].1);
-    let links = session.evaluate(&page, "document.querySelectorAll('a').length").await?;
-    let buttons = session.evaluate(&page, "document.querySelectorAll('button').length").await?;
-    println!("   Links: {} | Buttons: {} | Forms: {}",
-        links, buttons,
-        session.evaluate(&page, "document.forms.length").await?);
+    let links = session
+        .evaluate(&page, "document.querySelectorAll('a').length")
+        .await?;
+    let buttons = session
+        .evaluate(&page, "document.querySelectorAll('button').length")
+        .await?;
+    println!(
+        "   Links: {} | Buttons: {} | Forms: {}",
+        links,
+        buttons,
+        session.evaluate(&page, "document.forms.length").await?
+    );
     Ok(())
 }
 
@@ -453,11 +527,17 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
         std::io::stdout().flush()?;
 
         match step.action.as_str() {
-            "navigate" => { let _ = session.open_page_no_enrich(&step.args).await?; }
-            "click" => { session.click(&page, &step.selector).await?; }
+            "navigate" => {
+                let _ = session.open_page_no_enrich(&step.args).await?;
+            }
+            "click" => {
+                session.click(&page, &step.selector).await?;
+            }
             "type" => {
                 let parts: Vec<&str> = step.args.splitn(2, ' ').collect();
-                session.type_text(&page, &step.selector, parts.get(1).unwrap_or(&"")).await?;
+                session
+                    .type_text(&page, &step.selector, parts.get(1).unwrap_or(&""))
+                    .await?;
             }
             "evaluate" => {
                 let r = session.evaluate(&page, &step.args).await?;
@@ -466,7 +546,11 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
             }
             "screenshot" => {
                 let png = session.screenshot(&page).await?;
-                let path = if step.args.is_empty() { format!("screenshot_{}.png", chrono::Utc::now().format("%H%M%S")) } else { step.args.clone() };
+                let path = if step.args.is_empty() {
+                    format!("screenshot_{}.png", chrono::Utc::now().format("%H%M%S"))
+                } else {
+                    step.args.clone()
+                };
                 std::fs::write(&path, &png)?;
                 print!("saved: {}", path);
             }
@@ -475,7 +559,10 @@ async fn execute_script(session: &RpaSession, steps: &[ScriptStep]) -> anyhow::R
                 println!("\n{}", &t[..t.len().min(200)]);
                 continue;
             }
-            other => { println!("⚠️ Unknown: {}", other); continue; }
+            other => {
+                println!("⚠️ Unknown: {}", other);
+                continue;
+            }
         }
         println!("✅");
     }
@@ -491,7 +578,10 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
     let ext_path = format!("{}/.dotfiles/_b00t_/browser-plugin", home);
     let ext_win = format!(r"C:\b00t\browser-plugin");
 
-    if !std::path::Path::new(&ext_path).join("manifest.json").exists() {
+    if !std::path::Path::new(&ext_path)
+        .join("manifest.json")
+        .exists()
+    {
         anyhow::bail!("Plugin not found at {}. Run from dotfiles repo.", ext_path);
     }
 
@@ -514,7 +604,10 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
             if out.status.success() {
                 eprintln!("    ✅ Copied via WSL mount");
             } else {
-                eprintln!("    ⚠️  cp failed: {}", String::from_utf8_lossy(&out.stderr));
+                eprintln!(
+                    "    ⚠️  cp failed: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
                 // Fallback: try PowerShell with \\wsl$\ path
                 let ps_copy = format!(
                     "Copy-Item -Recurse -Force '\\\\wsl.localhost\\Ubuntu{}\\browser-plugin\\*' '{}'",
@@ -553,9 +646,12 @@ async fn install_plugin(port: u16) -> anyhow::Result<()> {
         let probe = format!("http://{}:{}", windows_host_ip(), port + 1);
         for i in 0..10 {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                if let Ok(resp) = client.get(&format!("{}/json/version", probe)).send().await {
+            if let Ok(resp) = client.get(&format!("{}/json/version", probe)).send().await {
                 if resp.status().is_success() {
-                    eprintln!("    ✅ Chrome CDP ready after {}s with plugin loaded", (i + 1) * 2);
+                    eprintln!(
+                        "    ✅ Chrome CDP ready after {}s with plugin loaded",
+                        (i + 1) * 2
+                    );
                     eprintln!();
                     eprintln!("🐝 b00t plugin installed!");
                     eprintln!("   Open Chrome → click the 🐝 icon in extensions toolbar");
@@ -612,7 +708,10 @@ async fn run_setup(port: u16) -> anyhow::Result<()> {
     if !detect_wsl() {
         eprintln!("⚠️  Setup is only needed when running from WSL.");
         eprintln!("    If running on Windows directly, just launch Chrome with:");
-        eprintln!("    chrome.exe --remote-debugging-port={} --remote-allow-origins=*", port);
+        eprintln!(
+            "    chrome.exe --remote-debugging-port={} --remote-allow-origins=*",
+            port
+        );
         return Ok(());
     }
 
@@ -626,7 +725,10 @@ async fn run_setup(port: u16) -> anyhow::Result<()> {
     // Step 1: Verify socat is available (primary relay tool)
     eprintln!("1️⃣  Checking socat (required for CDP relay)...");
     let socat_ok = std::process::Command::new("which")
-        .arg("socat").output().map(|o| o.status.success()).unwrap_or(false);
+        .arg("socat")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
     if socat_ok {
         eprintln!("    ✅ socat found");
     } else {
@@ -640,7 +742,8 @@ async fn run_setup(port: u16) -> anyhow::Result<()> {
     eprintln!("    A UAC prompt will appear. Click Yes to allow.");
     let cmd = format!(
         "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-Command',\"New-NetFirewallRule -DisplayName 'WSL CDP {}' -Direction Inbound -Protocol TCP -LocalPort {} -Action Allow -Profile Any\"",
-        port + 1, port + 1
+        port + 1,
+        port + 1
     );
     let _ = std::process::Command::new("powershell.exe")
         .args(["-NoProfile", "-Command", &cmd])
@@ -662,8 +765,11 @@ async fn run_setup(port: u16) -> anyhow::Result<()> {
         Err(_) => {
             eprintln!("    ⚠️  Could not verify. You may need to:");
             eprintln!("       Run this in PowerShell AS ADMINISTRATOR:");
-            eprintln!("       New-NetFirewallRule -DisplayName 'WSL CDP {}' -Direction Inbound -Protocol TCP -LocalPort {} -Action Allow",
-                port + 1, port + 1);
+            eprintln!(
+                "       New-NetFirewallRule -DisplayName 'WSL CDP {}' -Direction Inbound -Protocol TCP -LocalPort {} -Action Allow",
+                port + 1,
+                port + 1
+            );
         }
     }
 

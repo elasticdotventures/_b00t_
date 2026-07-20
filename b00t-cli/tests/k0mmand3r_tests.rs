@@ -52,8 +52,7 @@ fn test_parse_negotiate_resource_modifier() {
 
 #[test]
 fn test_parse_negotiate_with_extra_modifiers() {
-    let cmd =
-        K0mmand3rCmd::parse("/negotiate blessing:deploy scope=global ttl=3600").unwrap();
+    let cmd = K0mmand3rCmd::parse("/negotiate blessing:deploy scope=global ttl=3600").unwrap();
     match cmd {
         K0mmand3rCmd::Negotiate {
             resource,
@@ -168,8 +167,7 @@ fn test_parse_vote_abstain_shorthand() {
 #[test]
 fn test_parse_vote_with_reason() {
     // NOTE: "with" is a modifier keyword so avoid it in reason text
-    let cmd =
-        K0mmand3rCmd::parse("/vote prop-42 yes because it aligns our goals").unwrap();
+    let cmd = K0mmand3rCmd::parse("/vote prop-42 yes because it aligns our goals").unwrap();
     match cmd {
         K0mmand3rCmd::Vote {
             proposal,
@@ -229,8 +227,7 @@ fn test_parse_delegate_positional() {
 #[test]
 fn test_parse_delegate_with_modifiers() {
     // Avoid "to" keyword — use agent: and budget: directly
-    let cmd =
-        K0mmand3rCmd::parse("/delegate agent:executive budget:10000").unwrap();
+    let cmd = K0mmand3rCmd::parse("/delegate agent:executive budget:10000").unwrap();
     match cmd {
         K0mmand3rCmd::Delegate { agent, budget } => {
             assert_eq!(agent, "executive");
@@ -329,8 +326,7 @@ fn test_parse_crew_leave() {
 #[test]
 fn test_parse_crew_with_modifiers() {
     // Use action=form syntax to avoid "action" being consumed as positional
-    let cmd =
-        K0mmand3rCmd::parse("/crew action=form members=alice,bob").unwrap();
+    let cmd = K0mmand3rCmd::parse("/crew action=form members=alice,bob").unwrap();
     match cmd {
         K0mmand3rCmd::Crew { action, members } => {
             assert_eq!(action, CrewAction::Form);
@@ -366,8 +362,7 @@ fn test_parse_handshake_positional() {
 
 #[test]
 fn test_parse_handshake_with_proposal() {
-    let cmd =
-        K0mmand3rCmd::parse("/handshake observer propose alliance").unwrap();
+    let cmd = K0mmand3rCmd::parse("/handshake observer propose alliance").unwrap();
     match cmd {
         K0mmand3rCmd::Handshake { agent, proposal } => {
             assert_eq!(agent, "observer");
@@ -380,8 +375,7 @@ fn test_parse_handshake_with_proposal() {
 #[test]
 fn test_parse_handshake_with_modifier() {
     // Avoid "to" keyword — use agent: directly
-    let cmd =
-        K0mmand3rCmd::parse("/handshake agent:executive proposal=secret-deal").unwrap();
+    let cmd = K0mmand3rCmd::parse("/handshake agent:executive proposal=secret-deal").unwrap();
     match cmd {
         K0mmand3rCmd::Handshake { agent, proposal } => {
             assert_eq!(agent, "executive");
@@ -412,8 +406,7 @@ fn test_parse_status_with_extra() {
 
 #[test]
 fn test_parse_propose() {
-    let cmd =
-        K0mmand3rCmd::parse("/propose Let us build a new feature").unwrap();
+    let cmd = K0mmand3rCmd::parse("/propose Let us build a new feature").unwrap();
     match cmd {
         K0mmand3rCmd::Propose { description } => {
             assert_eq!(description, "Let us build a new feature");
@@ -424,8 +417,7 @@ fn test_parse_propose() {
 
 #[test]
 fn test_parse_propose_with_modifier() {
-    let cmd =
-        K0mmand3rCmd::parse("/propose description=refactor-the-database").unwrap();
+    let cmd = K0mmand3rCmd::parse("/propose description=refactor-the-database").unwrap();
     match cmd {
         K0mmand3rCmd::Propose { description } => {
             assert_eq!(description, "refactor-the-database");
@@ -447,8 +439,7 @@ fn test_parse_propose_empty() {
 
 #[test]
 fn test_parse_ahoy_full() {
-    let cmd =
-        K0mmand3rCmd::parse("/ahoy rust-dev 500 rust,cli,api Build CLI tools").unwrap();
+    let cmd = K0mmand3rCmd::parse("/ahoy rust-dev 500 rust,cli,api Build CLI tools").unwrap();
     match cmd {
         K0mmand3rCmd::Ahoy {
             role,
@@ -526,8 +517,7 @@ fn test_parse_ahoy_no_skills() {
 
 #[test]
 fn test_parse_apply_positional() {
-    let cmd =
-        K0mmand3rCmd::parse("/apply ahoy-42 I am the best for this").unwrap();
+    let cmd = K0mmand3rCmd::parse("/apply ahoy-42 I am the best for this").unwrap();
     match cmd {
         K0mmand3rCmd::Apply { ahoy_id, pitch } => {
             assert_eq!(ahoy_id, "ahoy-42");
@@ -539,8 +529,7 @@ fn test_parse_apply_positional() {
 
 #[test]
 fn test_parse_apply_modifier() {
-    let cmd =
-        K0mmand3rCmd::parse("/apply ahoy_id=ahoy-99 pitch=hire-me").unwrap();
+    let cmd = K0mmand3rCmd::parse("/apply ahoy_id=ahoy-99 pitch=hire-me").unwrap();
     match cmd {
         K0mmand3rCmd::Apply { ahoy_id, pitch } => {
             assert_eq!(ahoy_id, "ahoy-99");
@@ -582,8 +571,7 @@ fn test_parse_award_positional() {
 
 #[test]
 fn test_parse_award_modifier() {
-    let cmd =
-        K0mmand3rCmd::parse("/award ahoy_id=ahoy-7 winner=bob").unwrap();
+    let cmd = K0mmand3rCmd::parse("/award ahoy_id=ahoy-7 winner=bob").unwrap();
     match cmd {
         K0mmand3rCmd::Award { ahoy_id, winner } => {
             assert_eq!(ahoy_id, "ahoy-7");
@@ -611,8 +599,7 @@ fn test_parse_award_missing_winner() {
 
 #[test]
 fn test_k0mmand_parse_negotiate() {
-    let cmd =
-        K0mmand::parse("/negotiate blessing:observe-infrastructure").unwrap();
+    let cmd = K0mmand::parse("/negotiate blessing:observe-infrastructure").unwrap();
     assert_eq!(cmd.verb, "negotiate");
     assert_eq!(cmd.object, "blessing:observe-infrastructure");
     // K0mmand::parse also pushes key:value tokens into modifiers map
@@ -621,17 +608,14 @@ fn test_k0mmand_parse_negotiate() {
 
 #[test]
 fn test_k0mmand_parse_vote() {
-    let cmd =
-        K0mmand::parse("/vote on blessing:execute-transition-safely").unwrap();
+    let cmd = K0mmand::parse("/vote on blessing:execute-transition-safely").unwrap();
     assert_eq!(cmd.verb, "vote");
     assert_eq!(cmd.object, "blessing:execute-transition-safely");
 }
 
 #[test]
 fn test_k0mmand_parse_delegate() {
-    let cmd =
-        K0mmand::parse("/delegate step:apply-transitions to agent:b00t-sandbox")
-            .unwrap();
+    let cmd = K0mmand::parse("/delegate step:apply-transitions to agent:b00t-sandbox").unwrap();
     assert_eq!(cmd.verb, "delegate");
     assert_eq!(cmd.object, "step:apply-transitions");
     assert!(cmd.modifiers.get("to").is_some());
@@ -684,8 +668,7 @@ fn test_k0mmand_parse_empty_string() {
 
 #[test]
 fn test_k0mmand_parse_modifiers_key_value() {
-    let cmd =
-        K0mmand::parse("/negotiate blessing:foo budget=3000 ttl=600").unwrap();
+    let cmd = K0mmand::parse("/negotiate blessing:foo budget=3000 ttl=600").unwrap();
     assert_eq!(cmd.verb, "negotiate");
     assert_eq!(
         cmd.modifiers.get("budget").map(String::as_str),
@@ -869,8 +852,7 @@ fn test_handshake_basic() {
 #[test]
 fn test_handshake_challenge_response() {
     // Avoid "to" keyword — use "respond-challenge" as one token
-    let cmd =
-        K0mmand3rCmd::parse("/handshake bob respond-challenge xyz789").unwrap();
+    let cmd = K0mmand3rCmd::parse("/handshake bob respond-challenge xyz789").unwrap();
     match cmd {
         K0mmand3rCmd::Handshake { agent, proposal } => {
             assert_eq!(agent, "bob");
@@ -959,8 +941,7 @@ fn test_parse_unknown_verb_object_method() {
     let cmd = K0mmand3rCmd::parse("/weird-command arg1 arg2").unwrap();
     // Unknown stores the raw string in object()
     assert!(
-        cmd.object().contains("/weird-command arg1 arg2")
-            || cmd.object().contains("weird-command")
+        cmd.object().contains("/weird-command arg1 arg2") || cmd.object().contains("weird-command")
     );
 }
 
@@ -1007,8 +988,7 @@ fn test_parse_very_long_input() {
 fn test_parse_repeated_modifier_keys() {
     // When same modifier key appears multiple times, last one wins (BTreeMap insert)
     // Avoid "to" keyword — use agent: and budget: directly
-    let cmd =
-        K0mmand3rCmd::parse("/delegate agent:bob budget:100 budget:200").unwrap();
+    let cmd = K0mmand3rCmd::parse("/delegate agent:bob budget:100 budget:200").unwrap();
     match cmd {
         K0mmand3rCmd::Delegate { agent, budget } => {
             assert_eq!(agent, "bob");
@@ -1022,8 +1002,7 @@ fn test_parse_repeated_modifier_keys() {
 #[test]
 fn test_parse_only_modifiers_no_positional() {
     // All key=value or key:value tokens, no bare words
-    let cmd =
-        K0mmand3rCmd::parse("/vote proposal=p-1 choice=yes reason=ok").unwrap();
+    let cmd = K0mmand3rCmd::parse("/vote proposal=p-1 choice=yes reason=ok").unwrap();
     match cmd {
         K0mmand3rCmd::Vote {
             proposal,

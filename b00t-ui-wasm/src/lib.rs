@@ -9,15 +9,17 @@
 
 mod api;
 mod components;
+mod mermaid;
 mod pages;
 mod sleep;
-mod mermaid;
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::{Outlet, Router, Routable};
+use dioxus_router::prelude::{Outlet, Routable, Router};
 
 // Route component functions must be in scope for the `#[route]` attributes.
-use crate::pages::{pipeline::Pipeline, types::Types, simulation::Simulation, visualizations::Visualizations};
+use crate::pages::{
+    pipeline::Pipeline, simulation::Simulation, types::Types, visualizations::Visualizations,
+};
 
 /// Application routes — each variant maps to a page component.
 /// The `#[layout]` attribute wraps all routes in the sidebar layout.

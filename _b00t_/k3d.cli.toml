@@ -4,6 +4,7 @@ type = "cli"
 hint = "k3s in Docker. Spin up local k8s clusters in seconds for testing."
 desires = "5.7.0"
 auto_install = false
+# <|🦨: repoint-candidate — docker.cli never authored; podman.cli exists (house podman guard); #163 |>
 depends_on = ["docker.cli"]
 
 install = '''

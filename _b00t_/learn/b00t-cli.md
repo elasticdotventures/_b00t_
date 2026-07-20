@@ -17,3 +17,6 @@ salvage-first meta-pattern: an outer layer (CLI/MCP) must never validate stricte
 
 ---
 durable-first persistence: record_lesson tried vector store before filesystem write — SIGPIPE from a truncating pipe (lfmf ... | head -1) killed the process between them and lost the payload; cheap local store MUST come first, enrichment second
+
+---
+patch apply with stdin '-' does NOT parse unified diffs — it replaces the whole file with stdin content. Until fixed, use: patch apply with stdin '-' does NOT parse unified diffs — it replaces the whole file with stdin content. Until fixed, use python scripted anchored insert for code edits; always wc -l before/after <!-- salvaged:no_colon -->

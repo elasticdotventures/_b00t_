@@ -190,10 +190,7 @@ impl DatumProvider for JustfileDatum {
 /// // This just validates the logic compiles.
 /// assert_eq!(jf_config.role_pattern.as_deref(), Some("developer"));
 /// ```
-pub fn justfile_for_role<'a>(
-    role: &str,
-    justfiles: &'a [JustfileDatum],
-) -> Vec<&'a JustfileDatum> {
+pub fn justfile_for_role<'a>(role: &str, justfiles: &'a [JustfileDatum]) -> Vec<&'a JustfileDatum> {
     justfiles
         .iter()
         .filter(|jf| {

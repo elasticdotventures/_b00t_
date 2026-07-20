@@ -119,10 +119,7 @@ impl PipelineCostReport {
             "Stage", "GPU·hr", "CPU·hr", "Data·GiB", "Cost·$"
         );
         println!("\n  {}", ansi::bold(&header));
-        println!(
-            "  {}",
-            ansi::dim(&"─".repeat(68))
-        );
+        println!("  {}", ansi::dim(&"─".repeat(68)));
 
         for row in &self.stages {
             let line = format!(
@@ -132,10 +129,7 @@ impl PipelineCostReport {
             println!("  {}", line);
         }
 
-        println!(
-            "  {}",
-            ansi::dim(&"─".repeat(68))
-        );
+        println!("  {}", ansi::dim(&"─".repeat(68)));
 
         let total = self.total_cost.estimated_cost_usd.unwrap_or(0.0);
         let total_line = format!(
@@ -159,7 +153,11 @@ impl PipelineCostReport {
 
         // Highlight expensive runs
         if total > 10.0 {
-            println!("  {}  ${:.2} — consider optimising GPU-intensive stages", ansi::red("⚠"), total);
+            println!(
+                "  {}  ${:.2} — consider optimising GPU-intensive stages",
+                ansi::red("⚠"),
+                total
+            );
         } else if total > 1.0 {
             println!("  {}  ${:.2} — moderate cost", ansi::yellow("ℹ"), total);
         } else {
@@ -175,10 +173,10 @@ mod tests {
 
     fn sample_usage() -> ResourceUsage {
         ResourceUsage {
-            gpu_seconds: 3600.0,  // 1 GPU·hr
-            cpu_seconds: 7200.0,  // 2 CPU·hr
-            bytes_ingested: 1_073_741_824,  // 1 GiB
-            bytes_egressed: 2_147_483_648,  // 2 GiB
+            gpu_seconds: 3600.0,           // 1 GPU·hr
+            cpu_seconds: 7200.0,           // 2 CPU·hr
+            bytes_ingested: 1_073_741_824, // 1 GiB
+            bytes_egressed: 2_147_483_648, // 2 GiB
         }
     }
 
@@ -198,8 +196,8 @@ mod tests {
     #[test]
     fn calculate_custom_rates() {
         let usage = ResourceUsage {
-            gpu_seconds: 1800.0,  // 0.5 GPU·hr
-            cpu_seconds: 3600.0,  // 1 CPU·hr
+            gpu_seconds: 1800.0, // 0.5 GPU·hr
+            cpu_seconds: 3600.0, // 1 CPU·hr
             ..Default::default()
         };
         let config = CostConfig {
@@ -222,8 +220,8 @@ mod tests {
     #[test]
     fn calculate_gpu_seconds_correct() {
         let usage = ResourceUsage {
-            gpu_seconds: 180.0,    // 0.05 GPU·hr
-            cpu_seconds: 180.0,    // 0.05 CPU·hr
+            gpu_seconds: 180.0, // 0.05 GPU·hr
+            cpu_seconds: 180.0, // 0.05 CPU·hr
             ..Default::default()
         };
         let config = CostConfig::default();
@@ -256,8 +254,8 @@ mod tests {
     #[test]
     fn resource_usage_data_gib() {
         let usage = ResourceUsage {
-            bytes_ingested: 1_073_741_824,  // 1 GiB
-            bytes_egressed: 1_073_741_824,  // 1 GiB
+            bytes_ingested: 1_073_741_824, // 1 GiB
+            bytes_egressed: 1_073_741_824, // 1 GiB
             ..Default::default()
         };
         assert!((usage.data_gib() - 2.0).abs() < 1e-6);

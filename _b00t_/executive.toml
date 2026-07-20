@@ -5,6 +5,7 @@ hint = "Executive orchestration role: delegate heavy work to Codex/Gemini, guard
 depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli"]
 
 skills = [
+    # <|🦨: prose-logical — free-text capability names, not datum keys; consider moving to compliance; #163, _b00t_#850 |>
     "delegation-first decision-making",
     "codex mcp orchestration",
     "gemini research delegation",

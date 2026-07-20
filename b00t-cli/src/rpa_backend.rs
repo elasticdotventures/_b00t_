@@ -74,7 +74,10 @@ pub mod chromiumoxide_backend {
 
     impl ChromiumOxideBackend {
         pub fn new() -> Self {
-            ChromiumOxideBackend { browser: None, _handler: None }
+            ChromiumOxideBackend {
+                browser: None,
+                _handler: None,
+            }
         }
     }
 
@@ -133,7 +136,10 @@ pub mod playwright_backend {
 
     impl PlaywrightBackend {
         pub fn new() -> Self {
-            PlaywrightBackend { server_process: None, ws_endpoint: None }
+            PlaywrightBackend {
+                server_process: None,
+                ws_endpoint: None,
+            }
         }
 
         /// Launch Playwright MCP server as a subprocess.
@@ -183,7 +189,8 @@ const {{ chromium }} = require('playwright');
         process.stdout.write(JSON.stringify({{ type: 'done' }}) + '\n');
     }});
 }})();
-"#, host, port
+"#,
+                host, port
             );
             let child = Command::new("node")
                 .args(["-e", &script])
@@ -192,7 +199,10 @@ const {{ chromium }} = require('playwright');
                 .stderr(Stdio::null())
                 .spawn()?;
             // Wait for CONNECTED signal
-            let stdout = child.stdout.as_ref().ok_or_else(|| anyhow::anyhow!("no stdout"))?;
+            let stdout = child
+                .stdout
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no stdout"))?;
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 if line?.contains("CONNECTED") {
@@ -212,7 +222,9 @@ const {{ chromium }} = require('playwright');
         }
 
         async fn open_page(&self, url: &str) -> Result<String> {
-            anyhow::bail!("Playwright backend not fully implemented yet. Use chromiumoxide backend (default).")
+            anyhow::bail!(
+                "Playwright backend not fully implemented yet. Use chromiumoxide backend (default)."
+            )
         }
 
         async fn list_pages(&self) -> Result<Vec<PageHandle>> {

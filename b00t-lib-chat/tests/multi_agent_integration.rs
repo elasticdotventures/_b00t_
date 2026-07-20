@@ -3,9 +3,7 @@
 //! Tests communication patterns, timeouts, and deadlock detection across
 //! multiple transports (Unix sockets, NATS, MQTT, Redis).
 
-use b00t_chat::{
-    ChatMessage, ChatMetrics, Destination, MessageRouter, SocketRegistryBuilder,
-};
+use b00t_chat::{ChatMessage, ChatMetrics, Destination, MessageRouter, SocketRegistryBuilder};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -13,7 +11,6 @@ use tokio::time::{sleep, timeout};
 
 /// Timeout duration for operations (prevents tests hanging indefinitely).
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
-
 
 #[tokio::test]
 async fn test_basic_agent_discovery() {

@@ -126,7 +126,13 @@ pub trait Ledgrrr: Send + Sync {
 fn slug(project: &str) -> String {
     project
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()
@@ -221,7 +227,9 @@ impl Ledgrrr for LocalLedgrrr {
         let code = self.next_code(&receipt.project, &map);
         receipt.finops_code = Some(code.0.clone());
         self.append_line(&receipt)?;
-        map.entry(receipt.project.clone()).or_default().push(receipt);
+        map.entry(receipt.project.clone())
+            .or_default()
+            .push(receipt);
         Ok(code)
     }
 
@@ -230,7 +238,11 @@ impl Ledgrrr for LocalLedgrrr {
             .lock()
             .unwrap()
             .get(project)
-            .map(|v| v.iter().filter_map(|r| r.finops_code.clone().map(FinopsCode)).collect())
+            .map(|v| {
+                v.iter()
+                    .filter_map(|r| r.finops_code.clone().map(FinopsCode))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -319,8 +331,14 @@ fn call_ledgerr_stdio(cmd: &str, payload: &serde_json::Value) -> anyhow::Result<
         .spawn()
         .map_err(|e| anyhow::anyhow!("spawn ledgerr-mcp failed: {e}"))?;
 
-    let mut stdin = child.stdin.take().ok_or_else(|| anyhow::anyhow!("no stdin"))?;
-    let stdout = child.stdout.take().ok_or_else(|| anyhow::anyhow!("no stdout"))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("no stdin"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("no stdout"))?;
 
     let initialize = serde_json::json!({
         "jsonrpc": "2.0", "id": 1,

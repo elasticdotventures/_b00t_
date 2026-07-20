@@ -34,9 +34,17 @@ pub enum GatesCommands {
 impl GatesCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            GatesCommands::Eval { action, urgent, important, json: as_json } => {
-                use b00t_c0re_gov::{ZellijGate, traits::{GovernanceGate, GateCheckContext}};
+            GatesCommands::Eval {
+                action,
+                urgent,
+                important,
+                json: as_json,
+            } => {
                 use b00t_c0re_gov::types::GateResult;
+                use b00t_c0re_gov::{
+                    ZellijGate,
+                    traits::{GateCheckContext, GovernanceGate},
+                };
 
                 let gate = ZellijGate::new("b00t-gates-eval");
                 let ctx = GateCheckContext {
@@ -58,17 +66,23 @@ impl GatesCommands {
                 let (verdict, detail) = match &result {
                     GateResult::Allow => ("Allow", "action permitted".to_string()),
                     GateResult::Deny { reason, .. } => ("Deny", reason.clone()),
-                    GateResult::Hook(token) => ("Hook", format!("hook_id={} type={:?}", token.id, token.hook_type)),
+                    GateResult::Hook(token) => (
+                        "Hook",
+                        format!("hook_id={} type={:?}", token.id, token.hook_type),
+                    ),
                 };
 
                 if *as_json {
-                    println!("{}", serde_json::json!({
-                        "action": action,
-                        "urgent": urgent,
-                        "important": important,
-                        "verdict": verdict,
-                        "detail": detail,
-                    }));
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "action": action,
+                            "urgent": urgent,
+                            "important": important,
+                            "verdict": verdict,
+                            "detail": detail,
+                        })
+                    );
                 } else {
                     println!("{verdict}: {detail}");
                     println!("  action: {action} [urgent={urgent} important={important}]");
@@ -79,7 +93,11 @@ impl GatesCommands {
                 }
                 Ok(())
             }
-            GatesCommands::List { search, by_kind, json: as_json } => {
+            GatesCommands::List {
+                search,
+                by_kind,
+                json: as_json,
+            } => {
                 let all = crate::list_gates(path, search.as_deref())?;
 
                 let filtered: Vec<_> = if let Some(kind) = by_kind {
@@ -135,9 +153,19 @@ impl GatesCommands {
                                 "fail" => "⏳",
                                 _ => "❓",
                             };
-                            println!("    {} {}  {}  {}  {}", status_icon, origin_icon, g.kind, g.spec, crate::ansi::dim(&format!("({})", g.origin)));
+                            println!(
+                                "    {} {}  {}  {}  {}",
+                                status_icon,
+                                origin_icon,
+                                g.kind,
+                                g.spec,
+                                crate::ansi::dim(&format!("({})", g.origin))
+                            );
                             if let Some(hint) = &g.hint {
-                                println!("           {}", crate::ansi::yellow(&format!("↳ {hint}")));
+                                println!(
+                                    "           {}",
+                                    crate::ansi::yellow(&format!("↳ {hint}"))
+                                );
                             }
                         }
                         println!();

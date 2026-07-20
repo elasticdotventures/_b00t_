@@ -42,17 +42,36 @@ pub struct ChatTransportConfig {
 
 impl Default for ChatTransportConfig {
     fn default() -> Self {
-        Self { kind: ChatTransportKind::LocalSocket, socket_path: None, nats_url: None, nats_user: None, nats_password: None }
+        Self {
+            kind: ChatTransportKind::LocalSocket,
+            socket_path: None,
+            nats_url: None,
+            nats_user: None,
+            nats_password: None,
+        }
     }
 }
 
 impl ChatTransportConfig {
-    pub fn nats(url: impl Into<String>, user: impl Into<String>, password: impl Into<String>) -> Self {
-        Self { kind: ChatTransportKind::Nats, socket_path: None, nats_url: Some(url.into()), nats_user: Some(user.into()), nats_password: Some(password.into()) }
+    pub fn nats(
+        url: impl Into<String>,
+        user: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind: ChatTransportKind::Nats,
+            socket_path: None,
+            nats_url: Some(url.into()),
+            nats_user: Some(user.into()),
+            nats_password: Some(password.into()),
+        }
     }
 
     pub fn resolve_nats_url(&self) -> String {
-        self.nats_url.clone().or_else(|| std::env::var("NATS_URL").ok()).unwrap_or_else(|| "nats://localhost:4222".to_string())
+        self.nats_url
+            .clone()
+            .or_else(|| std::env::var("NATS_URL").ok())
+            .unwrap_or_else(|| "nats://localhost:4222".to_string())
     }
 }
 
@@ -65,56 +84,106 @@ pub enum ChatTransport {
 impl ChatTransport {
     pub fn from_config(config: ChatTransportConfig) -> ChatResult<Self> {
         match config.kind {
-            ChatTransportKind::LocalSocket => Ok(Self::Local(LocalSocketTransport::new(config.socket_path)?)),
+            ChatTransportKind::LocalSocket => {
+                Ok(Self::Local(LocalSocketTransport::new(config.socket_path)?))
+            }
             ChatTransportKind::Nats => {
                 let url = config.resolve_nats_url();
                 // No hardcoded credential fallback — anonymous NATS connections are valid
                 // (e.g. local dev servers with no auth configured). B00T_HIVE_NATS_USER/
                 // B00T_HIVE_NATS_PASSWORD is the common hive-wide credential convention.
-                let user = config.nats_user.or_else(|| std::env::var("B00T_HIVE_NATS_USER").ok());
-                let password = config.nats_password.or_else(|| std::env::var("B00T_HIVE_NATS_PASSWORD").ok());
+                let user = config
+                    .nats_user
+                    .or_else(|| std::env::var("B00T_HIVE_NATS_USER").ok());
+                let password = config
+                    .nats_password
+                    .or_else(|| std::env::var("B00T_HIVE_NATS_PASSWORD").ok());
                 Ok(Self::Nats(RealNatsTransport::new(url, user, password)))
             }
         }
     }
 
     pub async fn send(&self, message: &ChatMessage) -> ChatResult<()> {
-        match self { ChatTransport::Local(t) => t.send(message).await, ChatTransport::Nats(t) => t.send(message).await }
+        match self {
+            ChatTransport::Local(t) => t.send(message).await,
+            ChatTransport::Nats(t) => t.send(message).await,
+        }
     }
 
     pub async fn send_task(&self, task: &TaskMessage) -> ChatResult<()> {
-        match self { ChatTransport::Nats(t) => t.send_task(task).await, ChatTransport::Local(_) => Err(ChatError::Other("task dispatch requires NATS transport".into())) }
+        match self {
+            ChatTransport::Nats(t) => t.send_task(task).await,
+            ChatTransport::Local(_) => Err(ChatError::Other(
+                "task dispatch requires NATS transport".into(),
+            )),
+        }
     }
 
-    pub async fn subscribe_tasks(&self, agent_id: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
-        match self { ChatTransport::Nats(t) => t.subscribe_tasks(agent_id).await, ChatTransport::Local(_) => Err(ChatError::Other("task subscription requires NATS transport".into())) }
+    pub async fn subscribe_tasks(
+        &self,
+        agent_id: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
+        match self {
+            ChatTransport::Nats(t) => t.subscribe_tasks(agent_id).await,
+            ChatTransport::Local(_) => Err(ChatError::Other(
+                "task subscription requires NATS transport".into(),
+            )),
+        }
     }
 
     pub async fn publish_notification(&self, notification: &NotificationMessage) -> ChatResult<()> {
-        match self { ChatTransport::Nats(t) => t.publish_notification(notification).await, ChatTransport::Local(_) => Err(ChatError::Other("notification publish requires NATS transport".into())) }
+        match self {
+            ChatTransport::Nats(t) => t.publish_notification(notification).await,
+            ChatTransport::Local(_) => Err(ChatError::Other(
+                "notification publish requires NATS transport".into(),
+            )),
+        }
     }
 
-    pub async fn subscribe_notifications(&self, wildcard: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
-        match self { ChatTransport::Nats(t) => t.subscribe_notifications(wildcard).await, ChatTransport::Local(_) => Err(ChatError::Other("notification subscribe requires NATS transport".into())) }
+    pub async fn subscribe_notifications(
+        &self,
+        wildcard: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
+        match self {
+            ChatTransport::Nats(t) => t.subscribe_notifications(wildcard).await,
+            ChatTransport::Local(_) => Err(ChatError::Other(
+                "notification subscribe requires NATS transport".into(),
+            )),
+        }
     }
 
     /// Low-level publish: send raw bytes to a NATS subject.
     pub async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
-        match self { ChatTransport::Nats(t) => t.send_raw(subject, payload).await, ChatTransport::Local(_) => Err(ChatError::Other("send_raw requires NATS transport".into())) }
+        match self {
+            ChatTransport::Nats(t) => t.send_raw(subject, payload).await,
+            ChatTransport::Local(_) => {
+                Err(ChatError::Other("send_raw requires NATS transport".into()))
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalSocketTransport { socket_path: PathBuf }
+pub struct LocalSocketTransport {
+    socket_path: PathBuf,
+}
 
 impl LocalSocketTransport {
     pub fn new(path_override: Option<PathBuf>) -> ChatResult<Self> {
-        let socket_path = if let Some(path) = path_override { path } else { default_socket_path()? };
+        let socket_path = if let Some(path) = path_override {
+            path
+        } else {
+            default_socket_path()?
+        };
         Ok(Self { socket_path })
     }
 
     async fn ensure_parent_dir(path: &Path) -> ChatResult<()> {
-        if let Some(parent) = path.parent() { if !parent.exists() { fs::create_dir_all(parent).await?; } }
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).await?;
+            }
+        }
         Ok(())
     }
 
@@ -124,8 +193,14 @@ impl LocalSocketTransport {
         let connect_future = UnixStream::connect(&self.socket_path);
         let stream = match timeout(Duration::from_secs(1), connect_future).await {
             Ok(Ok(stream)) => stream,
-            Ok(Err(e)) => { warn!("local chat socket unavailable: {}", e); return Err(ChatError::NotConnected); }
-            Err(_) => { warn!("local chat socket connection timed out"); return Err(ChatError::NotConnected); }
+            Ok(Err(e)) => {
+                warn!("local chat socket unavailable: {}", e);
+                return Err(ChatError::NotConnected);
+            }
+            Err(_) => {
+                warn!("local chat socket connection timed out");
+                return Err(ChatError::NotConnected);
+            }
         };
         let mut stream = stream;
         stream.write_all(&payload).await?;
@@ -134,7 +209,9 @@ impl LocalSocketTransport {
         Ok(())
     }
 
-    pub fn socket_path(&self) -> &Path { &self.socket_path }
+    pub fn socket_path(&self) -> &Path {
+        &self.socket_path
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -150,7 +227,9 @@ pub struct RealNatsTransport {
 impl RealNatsTransport {
     pub fn new(url: String, user: Option<String>, password: Option<String>) -> Self {
         Self {
-            url, user, password,
+            url,
+            user,
+            password,
             client: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             max_reconnect_attempts: 3,
             reconnect_delay_ms: 1000,
@@ -161,7 +240,8 @@ impl RealNatsTransport {
         {
             let guard = self.client.read().await;
             if let Some(ref client) = *guard {
-                match tokio::time::timeout(std::time::Duration::from_secs(1), client.flush()).await {
+                match tokio::time::timeout(std::time::Duration::from_secs(1), client.flush()).await
+                {
                     Ok(Ok(())) => return Ok(client.clone()),
                     _ => {
                         warn!("NATS connection lost, reconnecting...");
@@ -176,8 +256,7 @@ impl RealNatsTransport {
         let mut last_err = String::new();
         for attempt in 0..=self.max_reconnect_attempts {
             let opts = match (&self.user, &self.password) {
-                (Some(u), Some(p)) => ConnectOptions::new()
-                    .user_and_password(u.clone(), p.clone()),
+                (Some(u), Some(p)) => ConnectOptions::new().user_and_password(u.clone(), p.clone()),
                 _ => ConnectOptions::new(),
             };
             match opts.connect(&self.url).await {
@@ -194,7 +273,9 @@ impl RealNatsTransport {
                             if let Err(_) = tokio::time::timeout(
                                 std::time::Duration::from_secs(2),
                                 client_for_heartbeat.flush(),
-                            ).await {
+                            )
+                            .await
+                            {
                                 warn!("NATS heartbeat failed, marking connection stale");
                                 let mut write = client_arc.write().await;
                                 *write = None;
@@ -209,23 +290,33 @@ impl RealNatsTransport {
                     warn!("NATS reconnect attempt {} failed: {}", attempt + 1, e);
                     last_err = e.to_string();
                     if attempt < self.max_reconnect_attempts {
-                        tokio::time::sleep(std::time::Duration::from_millis(self.reconnect_delay_ms)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            self.reconnect_delay_ms,
+                        ))
+                        .await;
                     }
                 }
             }
         }
 
         Err(ChatError::Other(format!(
-            "NATS connect failed ({}): {}", self.url, last_err)))
+            "NATS connect failed ({}): {}",
+            self.url, last_err
+        )))
     }
 
-    fn chat_subject(msg: &ChatMessage) -> String { format!("b00t.chat.{}.{}", msg.channel, msg.sender) }
+    fn chat_subject(msg: &ChatMessage) -> String {
+        format!("b00t.chat.{}.{}", msg.channel, msg.sender)
+    }
 
     async fn send(&self, message: &ChatMessage) -> ChatResult<()> {
         let client = self.ensure_connected().await?;
         let subject = Self::chat_subject(message);
         let payload = serde_json::to_vec(message)?;
-        client.publish(subject.clone(), payload.into()).await.map_err(|e| ChatError::Other(format!("NATS publish failed: {}", e)))?;
+        client
+            .publish(subject.clone(), payload.into())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS publish failed: {}", e)))?;
         debug!("NATS published to {}", subject);
         Ok(())
     }
@@ -234,21 +325,39 @@ impl RealNatsTransport {
         let client = self.ensure_connected().await?;
         let subject = task.subject();
         let payload = serde_json::to_vec(task)?;
-        client.publish(subject.clone(), payload.into()).await.map_err(|e| ChatError::Other(format!("NATS task publish failed: {}", e)))?;
-        info!("Task {} dispatched to {} via NATS", task.task_id, task.to_agent);
+        client
+            .publish(subject.clone(), payload.into())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS task publish failed: {}", e)))?;
+        info!(
+            "Task {} dispatched to {} via NATS",
+            task.task_id, task.to_agent
+        );
         Ok(())
     }
 
-    async fn subscribe_tasks(&self, agent_id: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
+    async fn subscribe_tasks(
+        &self,
+        agent_id: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<TaskMessage>> {
         let client = self.ensure_connected().await?;
         let subject = TaskMessage::agent_subject(agent_id);
-        let mut subscriber = client.subscribe(subject.clone()).await.map_err(|e| ChatError::Other(format!("NATS task subscribe failed: {}", e)))?;
+        let mut subscriber = client
+            .subscribe(subject.clone())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS task subscribe failed: {}", e)))?;
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(async move {
             while let Some(msg) = subscriber.next().await {
                 match serde_json::from_slice::<TaskMessage>(&msg.payload) {
-                    Ok(task) => { if tx.send(task).is_err() { break; } }
-                    Err(e) => { warn!("NATS task deserialize failed: {}", e); }
+                    Ok(task) => {
+                        if tx.send(task).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("NATS task deserialize failed: {}", e);
+                    }
                 }
             }
         });
@@ -260,20 +369,35 @@ impl RealNatsTransport {
         let client = self.ensure_connected().await?;
         let subject = notification.subject();
         let payload = serde_json::to_vec(notification)?;
-        client.publish(subject.clone(), payload.into()).await.map_err(|e| ChatError::Other(format!("NATS notify publish failed: {}", e)))?;
+        client
+            .publish(subject.clone(), payload.into())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS notify publish failed: {}", e)))?;
         debug!("NATS notification published to {}", subject);
         Ok(())
     }
 
-    async fn subscribe_notifications(&self, wildcard: &str) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
+    async fn subscribe_notifications(
+        &self,
+        wildcard: &str,
+    ) -> ChatResult<tokio::sync::mpsc::UnboundedReceiver<NotificationMessage>> {
         let client = self.ensure_connected().await?;
-        let mut subscriber = client.subscribe(wildcard.to_string()).await.map_err(|e| ChatError::Other(format!("NATS notify subscribe failed: {}", e)))?;
+        let mut subscriber = client
+            .subscribe(wildcard.to_string())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS notify subscribe failed: {}", e)))?;
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(async move {
             while let Some(msg) = subscriber.next().await {
                 match serde_json::from_slice::<NotificationMessage>(&msg.payload) {
-                    Ok(notification) => { if tx.send(notification).is_err() { break; } }
-                    Err(e) => { warn!("NATS notification deserialize failed: {}", e); }
+                    Ok(notification) => {
+                        if tx.send(notification).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("NATS notification deserialize failed: {}", e);
+                    }
                 }
             }
         });
@@ -283,14 +407,18 @@ impl RealNatsTransport {
 
     async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
         let client = self.ensure_connected().await?;
-        client.publish(subject.to_string(), payload.to_vec().into()).await.map_err(|e| ChatError::Other(format!("NATS raw publish failed: {}", e)))?;
+        client
+            .publish(subject.to_string(), payload.to_vec().into())
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS raw publish failed: {}", e)))?;
         debug!("NATS raw published to {}", subject);
         Ok(())
     }
 }
 
 pub fn default_socket_path() -> ChatResult<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| ChatError::InvalidSocketPath("unable to resolve home directory".into()))?;
+    let home = dirs::home_dir()
+        .ok_or_else(|| ChatError::InvalidSocketPath("unable to resolve home directory".into()))?;
     Ok(home.join(".b00t/chat.channel.socket"))
 }
 
@@ -299,29 +427,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_nats_url_defaults() { let cfg = ChatTransportConfig::default(); assert!(cfg.resolve_nats_url().starts_with("nats://")); }
+    fn test_resolve_nats_url_defaults() {
+        let cfg = ChatTransportConfig::default();
+        assert!(cfg.resolve_nats_url().starts_with("nats://"));
+    }
 
     #[test]
     fn test_task_subject_routing() {
-        let task = TaskMessage::new("deploy", "orchestrator", "worker-7", serde_json::json!({"v": "v2"}));
+        let task = TaskMessage::new(
+            "deploy",
+            "orchestrator",
+            "worker-7",
+            serde_json::json!({"v": "v2"}),
+        );
         assert_eq!(task.subject(), "b00t.tasks.worker-7");
-        assert_eq!(TaskMessage::agent_subject("worker-7"), "b00t.tasks.worker-7");
+        assert_eq!(
+            TaskMessage::agent_subject("worker-7"),
+            "b00t.tasks.worker-7"
+        );
         assert_eq!(TaskMessage::broadcast_subject(), "b00t.tasks.*");
     }
 
     #[test]
     fn test_notification_subject_convention() {
-        let n = NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
+        let n =
+            NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
         assert_eq!(n.subject(), "b00t.notify.gmail.new_email");
         assert_eq!(NotificationMessage::wildcard_subject(), "b00t.notify.>");
-        assert_eq!(NotificationMessage::source_wildcard("files"), "b00t.notify.files.>");
+        assert_eq!(
+            NotificationMessage::source_wildcard("files"),
+            "b00t.notify.files.>"
+        );
     }
 
     #[tokio::test]
     async fn test_local_send_stale_socket_returns_not_connected() {
-        let transport = LocalSocketTransport::new(Some(PathBuf::from("/tmp/b00t_no_such_socket_xyz.sock"))).unwrap();
+        let transport =
+            LocalSocketTransport::new(Some(PathBuf::from("/tmp/b00t_no_such_socket_xyz.sock")))
+                .unwrap();
         let msg = ChatMessage::new("test", "tester", "hello");
-        assert!(matches!(transport.send(&msg).await, Err(ChatError::NotConnected) | Err(ChatError::Io(_))));
+        assert!(matches!(
+            transport.send(&msg).await,
+            Err(ChatError::NotConnected) | Err(ChatError::Io(_))
+        ));
     }
 
     #[tokio::test]

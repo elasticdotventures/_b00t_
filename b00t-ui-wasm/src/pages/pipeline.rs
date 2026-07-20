@@ -49,13 +49,16 @@ pub fn Pipeline() -> Element {
         }
     } else {
         let v = data.read();
-        let chunks      = v.get("chunks").and_then(Value::as_u64).unwrap_or(0);
-        let evidence    = v.get("evidence").and_then(Value::as_u64).unwrap_or(0);
+        let chunks = v.get("chunks").and_then(Value::as_u64).unwrap_or(0);
+        let evidence = v.get("evidence").and_then(Value::as_u64).unwrap_or(0);
         let requirements = v.get("requirements").and_then(Value::as_u64).unwrap_or(0);
-        let fol         = v.get("fol_count").and_then(Value::as_u64).unwrap_or(0);
-        let version     = v.get("version").and_then(Value::as_str).unwrap_or("—");
-        let source_id   = v.get("source_id").and_then(Value::as_str).unwrap_or("—");
-        let last_exec   = v.get("last_execution").and_then(Value::as_str).unwrap_or("—");
+        let fol = v.get("fol_count").and_then(Value::as_u64).unwrap_or(0);
+        let version = v.get("version").and_then(Value::as_str).unwrap_or("—");
+        let source_id = v.get("source_id").and_then(Value::as_str).unwrap_or("—");
+        let last_exec = v
+            .get("last_execution")
+            .and_then(Value::as_str)
+            .unwrap_or("—");
 
         rsx! {
             div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;",

@@ -3,7 +3,7 @@
 //! calculates the cake payout via the governance epoch3 engine.
 
 use crate::roles::{Agent, MissionTopic};
-use b00t_c0re_gov::epoch3::{calculate_cake_payout, MissionResult};
+use b00t_c0re_gov::epoch3::{MissionResult, calculate_cake_payout};
 use b00t_c0re_gov::types::ScoreCard;
 
 /// Default penalty rate for calorie over-budget (10% per excess calorie).
@@ -73,11 +73,8 @@ mod tests {
         let score = ScoreCard::new(0.9, 0.8, 0.7, 1.0, 0.6, 0.5);
 
         let payout = complete_mission_with_scoring(
-            &mission,
-            &agent,
-            50.0,   // calories burned (under budget)
-            score,
-            100.0,  // calorie budget
+            &mission, &agent, 50.0, // calories burned (under budget)
+            score, 100.0, // calorie budget
         );
 
         assert!(
@@ -101,11 +98,8 @@ mod tests {
         let score = ScoreCard::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
 
         let payout = complete_mission_with_scoring(
-            &mission,
-            &agent,
-            30.0,   // well under budget
-            score,
-            100.0,  // generous budget
+            &mission, &agent, 30.0, // well under budget
+            score, 100.0, // generous budget
         );
 
         // Perfect score * bounty = 200.0, no penalty since under budget
@@ -125,11 +119,8 @@ mod tests {
         let score = ScoreCard::new(1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
 
         let payout = complete_mission_with_scoring(
-            &mission,
-            &agent,
-            200.0,  // double the budget
-            score,
-            100.0,  // budget = 100
+            &mission, &agent, 200.0, // double the budget
+            score, 100.0, // budget = 100
         );
 
         // Perfect score = 100.0 base
@@ -152,19 +143,9 @@ mod tests {
 
         let score = ScoreCard::new(0.6, 0.5, 0.4, 0.7, 0.5, 0.3);
 
-        let payout = complete_mission_with_scoring(
-            &mission,
-            &agent,
-            40.0,
-            score,
-            60.0,
-        );
+        let payout = complete_mission_with_scoring(&mission, &agent, 40.0, score, 60.0);
 
-        assert!(
-            payout >= 0.0,
-            "Payout must be >= 0, got {}",
-            payout
-        );
+        assert!(payout >= 0.0, "Payout must be >= 0, got {}", payout);
         // Verify the agent field is correctly accessible in the bridge
         assert!(agent.is_player, "Agent should be marked as player");
     }
@@ -176,13 +157,7 @@ mod tests {
         // Zero score in all dimensions
         let score = ScoreCard::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-        let payout = complete_mission_with_scoring(
-            &mission,
-            &agent,
-            10.0,
-            score,
-            100.0,
-        );
+        let payout = complete_mission_with_scoring(&mission, &agent, 10.0, score, 100.0);
 
         assert!(
             (payout - 0.0).abs() < f64::EPSILON,

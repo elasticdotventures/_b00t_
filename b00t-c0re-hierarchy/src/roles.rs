@@ -41,7 +41,7 @@ pub struct Agent {
     pub cake_balance: f64,
     pub is_alive: bool,
     pub manager_id: Option<String>, // Captain or Operator who recruited them
-    pub is_player: bool,           // true if this Agent represents a human user
+    pub is_player: bool,            // true if this Agent represents a human user
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,12 +140,7 @@ pub struct MissionTopic {
 
 impl MissionTopic {
     /// Create a new MissionTopic with status `Open`.
-    pub fn new(
-        id: &str,
-        bounty: f64,
-        description: &str,
-        required_skills: Vec<String>,
-    ) -> Self {
+    pub fn new(id: &str, bounty: f64, description: &str, required_skills: Vec<String>) -> Self {
         Self {
             id: id.to_string(),
             bounty,

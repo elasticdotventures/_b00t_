@@ -56,7 +56,11 @@ pub struct NotificationMessage {
 }
 
 impl NotificationMessage {
-    pub fn new(source: impl Into<String>, event_type: impl Into<String>, payload: serde_json::Value) -> Self {
+    pub fn new(
+        source: impl Into<String>,
+        event_type: impl Into<String>,
+        payload: serde_json::Value,
+    ) -> Self {
         Self {
             source: source.into(),
             event_type: event_type.into(),
@@ -72,7 +76,10 @@ impl NotificationMessage {
     }
 
     pub fn subject(&self) -> String {
-        format!("{}.{}.{}", NOTIFY_SUBJECT_PREFIX, self.source, self.event_type)
+        format!(
+            "{}.{}.{}",
+            NOTIFY_SUBJECT_PREFIX, self.source, self.event_type
+        )
     }
 
     pub fn wildcard_subject() -> &'static str {
@@ -90,18 +97,26 @@ mod notification_tests {
 
     #[test]
     fn test_notification_subject_convention() {
-        let n = NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
+        let n =
+            NotificationMessage::new("gmail", "new_email", serde_json::json!({"from": "a@b.com"}));
         assert_eq!(n.subject(), "b00t.notify.gmail.new_email");
     }
 
     #[test]
     fn test_notification_source_wildcard() {
-        assert_eq!(NotificationMessage::source_wildcard("gmail"), "b00t.notify.gmail.>");
+        assert_eq!(
+            NotificationMessage::source_wildcard("gmail"),
+            "b00t.notify.gmail.>"
+        );
     }
 
     #[test]
     fn test_notification_json_roundtrip() {
-        let n = NotificationMessage::new("slack", "new_message", serde_json::json!({"channel": "#dev"}));
+        let n = NotificationMessage::new(
+            "slack",
+            "new_message",
+            serde_json::json!({"channel": "#dev"}),
+        );
         let json = serde_json::to_string(&n).unwrap();
         let parsed: NotificationMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.source, "slack");
@@ -125,7 +140,9 @@ pub struct TaskMessage {
     pub timestamp: DateTime<Utc>,
 }
 
-fn default_priority() -> String { "normal".to_string() }
+fn default_priority() -> String {
+    "normal".to_string()
+}
 
 impl TaskMessage {
     pub fn new(
@@ -146,10 +163,22 @@ impl TaskMessage {
         }
     }
 
-    pub fn with_deadline(mut self, deadline: DateTime<Utc>) -> Self { self.deadline = Some(deadline); self }
-    pub fn with_priority(mut self, p: impl Into<String>) -> Self { self.priority = p.into(); self }
+    pub fn with_deadline(mut self, deadline: DateTime<Utc>) -> Self {
+        self.deadline = Some(deadline);
+        self
+    }
+    pub fn with_priority(mut self, p: impl Into<String>) -> Self {
+        self.priority = p.into();
+        self
+    }
 
-    pub fn subject(&self) -> String { format!("b00t.tasks.{}", self.to_agent) }
-    pub fn broadcast_subject() -> &'static str { "b00t.tasks.*" }
-    pub fn agent_subject(agent_id: &str) -> String { format!("b00t.tasks.{}", agent_id) }
+    pub fn subject(&self) -> String {
+        format!("b00t.tasks.{}", self.to_agent)
+    }
+    pub fn broadcast_subject() -> &'static str {
+        "b00t.tasks.*"
+    }
+    pub fn agent_subject(agent_id: &str) -> String {
+        format!("b00t.tasks.{}", agent_id)
+    }
 }

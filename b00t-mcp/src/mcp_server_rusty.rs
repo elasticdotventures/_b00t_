@@ -8,6 +8,7 @@ use rmcp::{
         CallToolResult,
         Content,
         ErrorData as McpError,
+        Extensions,
         Implementation,
         // Add resource support
         ListResourcesResult,
@@ -22,7 +23,6 @@ use rmcp::{
         ServerNotification,
         ToolListChangedNotification,
         ToolListChangedNotificationMethod,
-        Extensions,
     },
     service::{RequestContext, RoleServer},
 };
@@ -52,7 +52,11 @@ pub struct B00tMcpServerRusty {
 }
 
 impl B00tMcpServerRusty {
-    pub fn new<P: AsRef<Path>>(working_dir: P, _config_path: &str, code_mode: bool) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(
+        working_dir: P,
+        _config_path: &str,
+        code_mode: bool,
+    ) -> Result<Self> {
         let working_dir = working_dir.as_ref().to_path_buf();
 
         // Build the peer Arc first so the notify closure can capture it before self exists.
@@ -211,7 +215,9 @@ impl ServerHandler for B00tMcpServerRusty {
         let tool_name = request.name.as_ref();
 
         // Extract client identity for response customization
-        let client_name = context.peer.peer_info()
+        let client_name = context
+            .peer
+            .peer_info()
             .map(|p| p.client_info.name.clone())
             .unwrap_or_default();
 
@@ -315,9 +321,9 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("📚 Reading b00t skill: {}", topic);
 
                 match self.read_b00t_skill(topic).await {
-                    Ok(content) => Ok(ReadResourceResult::new(
-                        vec![ResourceContents::text(content, uri)],
-                    )),
+                    Ok(content) => Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                        content, uri,
+                    )])),
                     Err(e) => {
                         error!("❌ Failed to read b00t skill {}: {}", topic, e);
                         let error_msg = format!("Failed to read skill: {}", e);
@@ -329,14 +335,14 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("🎯 Reading current b00t context");
 
                 match self.read_current_context().await {
-                    Ok(content) => Ok(ReadResourceResult::new(
-                        vec![ResourceContents::TextResourceContents {
+                    Ok(content) => Ok(ReadResourceResult::new(vec![
+                        ResourceContents::TextResourceContents {
                             uri: uri.clone(),
                             mime_type: Some("application/json".to_string()),
                             text: content,
                             meta: None,
-                        }],
-                    )),
+                        },
+                    ])),
                     Err(e) => {
                         error!("❌ Failed to read current context: {}", e);
                         let error_msg = format!("Failed to read context: {}", e);
@@ -349,9 +355,9 @@ impl ServerHandler for B00tMcpServerRusty {
                 info!("📁 Reading file resource: {}", file_path);
 
                 match std::fs::read_to_string(file_path) {
-                    Ok(content) => Ok(ReadResourceResult::new(
-                        vec![ResourceContents::text(content, uri)],
-                    )),
+                    Ok(content) => Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                        content, uri,
+                    )])),
                     Err(e) => {
                         error!("❌ Failed to read file {}: {}", file_path, e);
                         let error_msg = format!("Failed to read file: {}", e);

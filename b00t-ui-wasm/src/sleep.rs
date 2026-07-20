@@ -14,10 +14,7 @@ pub async fn sleep(duration: Duration) {
 
     let promise = js_sys::Promise::new(&mut |resolve, _reject| {
         let window = web_sys::window().expect("window not available");
-        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-            &resolve,
-            ms as i32,
-        );
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms as i32);
     });
     wasm_bindgen_futures::JsFuture::from(promise)
         .await

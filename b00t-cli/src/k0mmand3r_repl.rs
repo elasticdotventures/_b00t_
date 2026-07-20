@@ -24,7 +24,9 @@ fn resolve_templates(input: &str) -> Result<String, String> {
     let mut result = input.to_string();
     let re = regex::Regex::new(r"<\|:(.*?):\|>").map_err(|e| e.to_string())?;
     loop {
-        let Some(caps) = re.captures(&result) else { break };
+        let Some(caps) = re.captures(&result) else {
+            break;
+        };
         let full_match = caps.get(0).unwrap().as_str();
         let code = caps.get(1).unwrap().as_str().trim();
         let output = std::process::Command::new("sh")

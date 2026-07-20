@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::{edl::EdlQuery, TomllmDoc, TomllmdExt};
+use crate::{TomllmDoc, TomllmdExt, edl::EdlQuery};
 
 /// Single entry in the datum index — slim summary for fast query without loading full doc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,12 +29,14 @@ impl DatumIndex {
     /// Load from `datum-index.json`; returns empty index if file missing.
     pub fn load(path: &Path) -> Result<Self> {
         if !path.exists() {
-            return Ok(Self { entries: vec![], built_at: Utc::now() });
+            return Ok(Self {
+                entries: vec![],
+                built_at: Utc::now(),
+            });
         }
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read {}", path.display()))?;
-        serde_json::from_str(&content)
-            .with_context(|| format!("cannot parse {}", path.display()))
+        serde_json::from_str(&content).with_context(|| format!("cannot parse {}", path.display()))
     }
 
     /// Scan `datums_dir` recursively, parse each `.tomllmd`/`.tomllm`/`.toml`, build index.
@@ -42,7 +44,10 @@ impl DatumIndex {
         let mut entries = Vec::new();
         scan_dir(datums_dir, &mut entries)?;
         entries.sort_by(|a, b| a.key.cmp(&b.key));
-        Ok(Self { entries, built_at: Utc::now() })
+        Ok(Self {
+            entries,
+            built_at: Utc::now(),
+        })
     }
 
     /// Save to `datum-index.json`.
@@ -110,7 +115,10 @@ mod tests {
     fn rebuild_and_query() {
         let tmp = TempDir::new().unwrap();
 
-        write_datum(tmp.path(), "PRD-A", r#"
+        write_datum(
+            tmp.path(),
+            "PRD-A",
+            r#"
 [b00t.schema]
 version = "1"
 type = "prd"
@@ -118,9 +126,13 @@ type_tags = ["prd", "ooda"]
 # b00t:map v1
 # tier: frontier
 # complexity: 5
-"#);
+"#,
+        );
 
-        write_datum(tmp.path(), "PRD-B", r#"
+        write_datum(
+            tmp.path(),
+            "PRD-B",
+            r#"
 [b00t.schema]
 version = "1"
 type = "prd"
@@ -128,7 +140,8 @@ type_tags = ["prd", "agent"]
 # b00t:map v1
 # tier: sm0l
 # complexity: 2
-"#);
+"#,
+        );
 
         let idx = DatumIndex::rebuild(tmp.path()).unwrap();
         assert_eq!(idx.entries.len(), 2);
@@ -150,7 +163,11 @@ type_tags = ["prd", "agent"]
         let tmp = TempDir::new().unwrap();
         let index_path = tmp.path().join("datum-index.json");
 
-        write_datum(tmp.path(), "X", "[b00t.schema]\ntype = \"prd\"\ntype_tags = [\"prd\"]\n");
+        write_datum(
+            tmp.path(),
+            "X",
+            "[b00t.schema]\ntype = \"prd\"\ntype_tags = [\"prd\"]\n",
+        );
         let idx = DatumIndex::rebuild(tmp.path()).unwrap();
         idx.save(&index_path).unwrap();
 

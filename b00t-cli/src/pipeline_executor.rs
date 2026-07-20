@@ -11,16 +11,16 @@
 //      NatsClient         — trait for NATS publish/subscribe (mockable)
 
 use crate::pipeline_cache::TimeoutPredictor;
-use crate::pipeline_checkpoint::{compute_dag_hash, CheckpointStore, PipelineCheckpoint};
+use crate::pipeline_checkpoint::{CheckpointStore, PipelineCheckpoint, compute_dag_hash};
 use crate::pipeline_flowctl::{FlowControl, FlowGate, StageFlowConfig};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
 use crate::pipeline_types::{PipelineDag, PipelineError, StagePort, StageSpec};
 use anyhow::Result;
 use chrono::Utc;
-use std::sync::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 // ── NatsClient trait ─────────────────────────────────────────────────────────────
@@ -47,9 +47,9 @@ pub trait NatsClient: Send + Sync {
 /// `subscribe` pops from the front.  Thread-safe via `Mutex`.
 #[cfg(test)]
 pub struct MockNatsClient {
-    queues: Arc<std::sync::Mutex<
-        std::collections::HashMap<String, std::collections::VecDeque<Vec<u8>>>,
-    >>,
+    queues: Arc<
+        std::sync::Mutex<std::collections::HashMap<String, std::collections::VecDeque<Vec<u8>>>>,
+    >,
 }
 
 #[cfg(test)]
@@ -75,9 +75,7 @@ impl NatsClient for MockNatsClient {
 
     async fn subscribe(&self, subject: &str) -> Result<Option<Vec<u8>>> {
         let mut queues = self.queues.lock().expect("mock nats lock");
-        Ok(queues
-            .get_mut(subject)
-            .and_then(|q| q.pop_front()))
+        Ok(queues.get_mut(subject).and_then(|q| q.pop_front()))
     }
 }
 
@@ -196,10 +194,7 @@ impl PipelineExecutor {
         for stage in &self.dag.stages {
             let config = stage.flow_control.clone().unwrap_or_else(|| {
                 // Auto-detect strategy from stage profile
-                StageFlowConfig::new(
-                    &stage.name,
-                    crate::pipeline_flowctl::auto_strategy(stage),
-                )
+                StageFlowConfig::new(&stage.name, crate::pipeline_flowctl::auto_strategy(stage))
             });
             let fc = FlowControl::new(config.strategy.clone(), &stage.name);
             let gate = FlowGate::new(fc);
@@ -231,11 +226,7 @@ impl PipelineExecutor {
     /// and the next stage subscribes to receive its input.
     ///
     /// `initial_input` is passed to the first entry-point stage(s).
-    pub async fn execute(
-        &self,
-        run_id: &str,
-        initial_input: Option<Vec<u8>>,
-    ) -> PipelineRunReport {
+    pub async fn execute(&self, run_id: &str, initial_input: Option<Vec<u8>>) -> PipelineRunReport {
         let start = Instant::now();
         let mut stage_results: Vec<StageResult> = Vec::new();
         let mut last_output: Option<Vec<u8>> = initial_input;
@@ -288,13 +279,13 @@ impl PipelineExecutor {
         // ── Checkpoint resume ────────────────────────────────────────────
         // If a checkpoint store is attached, check for an existing checkpoint
         // for this run_id and skip any stages that were already completed.
-        let mut checkpoint: Option<PipelineCheckpoint> = self
-            .checkpoint_store
-            .as_ref()
-            .and_then(|store| match store.load(run_id) {
-                Ok(Some(cp)) if cp.dag_hash == compute_dag_hash(&self.dag) => Some(cp),
-                _ => None,
-            });
+        let mut checkpoint: Option<PipelineCheckpoint> =
+            self.checkpoint_store
+                .as_ref()
+                .and_then(|store| match store.load(run_id) {
+                    Ok(Some(cp)) if cp.dag_hash == compute_dag_hash(&self.dag) => Some(cp),
+                    _ => None,
+                });
 
         let start_idx = if let Some(ref cp) = checkpoint {
             // Rebuild completed StageResults from checkpoint entries.
@@ -311,10 +302,7 @@ impl PipelineExecutor {
                     status: StageStatus::Completed,
                 });
             }
-            last_output = cp
-                .completed_stages
-                .last()
-                .map(|sc| sc.state.clone());
+            last_output = cp.completed_stages.last().map(|sc| sc.state.clone());
 
             self.log_store.store(PipelineLogEntry::new(
                 run_id,
@@ -426,9 +414,7 @@ impl PipelineExecutor {
                 }
             }
 
-            let result = self
-                .execute_stage(&stage_spec, input, run_id)
-                .await;
+            let result = self.execute_stage(&stage_spec, input, run_id).await;
 
             // ── Publish stage output to NATS ──────────────────────────────
             let output_subject = self.subject_for_output(run_id, stage_name);
@@ -544,10 +530,12 @@ impl PipelineExecutor {
         }
 
         // Compute overall status.
-        let has_failure = stage_results.iter().any(|sr| {
-            matches!(&sr.status, StageStatus::Failed(_))
-        });
-        let has_skipped = stage_results.iter().any(|sr| sr.status == StageStatus::Skipped);
+        let has_failure = stage_results
+            .iter()
+            .any(|sr| matches!(&sr.status, StageStatus::Failed(_)));
+        let has_skipped = stage_results
+            .iter()
+            .any(|sr| sr.status == StageStatus::Skipped);
 
         let status = if has_failure && has_skipped {
             // Find the first error message.
@@ -575,10 +563,7 @@ impl PipelineExecutor {
             } else {
                 LogLevel::Error
             },
-            format!(
-                "pipeline finished: {:?} in {}ms",
-                status, total_duration_ms
-            ),
+            format!("pipeline finished: {:?} in {}ms", status, total_duration_ms),
         ));
 
         PipelineRunReport {
@@ -612,7 +597,11 @@ impl PipelineExecutor {
             run_id,
             &stage_name,
             LogLevel::Info,
-            format!("stage '{}' starting (input: {} bytes)", stage_name, input.as_ref().map(|v| v.len()).unwrap_or(0)),
+            format!(
+                "stage '{}' starting (input: {} bytes)",
+                stage_name,
+                input.as_ref().map(|v| v.len()).unwrap_or(0)
+            ),
         ));
 
         // Determine the effective input: for the first stage, pass the input
@@ -657,7 +646,8 @@ impl PipelineExecutor {
         let mut output: Option<Vec<u8>> = None;
 
         // Track how many retries we've attempted per error route.
-        let mut retry_tracker: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let mut retry_tracker: std::collections::HashMap<usize, u32> =
+            std::collections::HashMap::new();
 
         // Try the stage once + up to `max_retries` per matching ErrorRoute.
         let max_attempts = {
@@ -677,9 +667,7 @@ impl PipelineExecutor {
                 let backoff = stage
                     .error_routes
                     .iter()
-                    .find(|er| {
-                        last_error.as_ref().map_or(false, |e| er.matches(e))
-                    })
+                    .find(|er| last_error.as_ref().map_or(false, |e| er.matches(e)))
                     .map(|er| er.backoff_ms)
                     .unwrap_or(100);
 
@@ -703,9 +691,11 @@ impl PipelineExecutor {
                     last_error = Some(e.clone());
 
                     // Check if any error route can handle this.
-                    let matching_route = stage.error_routes.iter().enumerate().find(|(_, er)| {
-                        er.matches(&e)
-                    });
+                    let matching_route = stage
+                        .error_routes
+                        .iter()
+                        .enumerate()
+                        .find(|(_, er)| er.matches(&e));
 
                     match matching_route {
                         Some((idx, er)) => {
@@ -965,7 +955,9 @@ mod tests {
         let dag = sequential_dag(&["stage-a", "stage-b"]);
         let executor = PipelineExecutor::new(dag);
 
-        let report = executor.execute("test-serial-2", Some(b"hello".to_vec())).await;
+        let report = executor
+            .execute("test-serial-2", Some(b"hello".to_vec()))
+            .await;
 
         assert_eq!(
             report.status,
@@ -980,7 +972,10 @@ mod tests {
         assert_eq!(report.stages[1].status, StageStatus::Completed);
 
         // Verify output chaining: stage-a appends ":stage-a", stage-b appends ":stage-b"
-        let output = report.stages[1].output.as_ref().expect("stage-b should have output");
+        let output = report.stages[1]
+            .output
+            .as_ref()
+            .expect("stage-b should have output");
         let output_str = String::from_utf8_lossy(output);
         assert!(
             output_str.contains("hello"),

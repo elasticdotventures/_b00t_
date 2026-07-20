@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::layer::bouncer::LayerGateKeeper;
 use crate::Embedding;
+use crate::layer::bouncer::LayerGateKeeper;
 use crate::layer::trait_def::TensorSource;
 use crate::layer::{LayerDescriptor, LayerError, LayerId, LayerStatus};
 
@@ -95,17 +95,16 @@ impl TensorRegistry {
     pub fn load_tensors(&self, tensors: HashMap<String, Tensor>) -> Result<(), LayerError> {
         for (name, tensor) in tensors {
             let shape = tensor.dims().to_vec();
-            let tensor = tensor.to_device(&self.device).map_err(|e| {
-                LayerError::Other(anyhow::anyhow!("tensor device transfer: {e}"))
-            })?;
-            let tensor = tensor.to_dtype(self.dtype).map_err(|e| {
-                LayerError::Other(anyhow::anyhow!("tensor dtype cast: {e}"))
-            })?;
+            let tensor = tensor
+                .to_device(&self.device)
+                .map_err(|e| LayerError::Other(anyhow::anyhow!("tensor device transfer: {e}")))?;
+            let tensor = tensor
+                .to_dtype(self.dtype)
+                .map_err(|e| LayerError::Other(anyhow::anyhow!("tensor dtype cast: {e}")))?;
 
             let vm = self.varmap.lock().unwrap();
-            let var = Var::from_tensor(&tensor).map_err(|e| {
-                LayerError::Other(anyhow::anyhow!("var creation: {e}"))
-            })?;
+            let var = Var::from_tensor(&tensor)
+                .map_err(|e| LayerError::Other(anyhow::anyhow!("var creation: {e}")))?;
             let mut inner = vm.data().lock().unwrap();
             inner.insert(name.clone(), var);
             self.active_tensors.insert(name, shape);
@@ -119,9 +118,8 @@ impl TensorRegistry {
         for name in names {
             if let Some(base) = self.base_tensors.get(name) {
                 let vm = self.varmap.lock().unwrap();
-                let var = Var::from_tensor(base).map_err(|e| {
-                    LayerError::Other(anyhow::anyhow!("var creation: {e}"))
-                })?;
+                let var = Var::from_tensor(base)
+                    .map_err(|e| LayerError::Other(anyhow::anyhow!("var creation: {e}")))?;
                 let mut inner = vm.data().lock().unwrap();
                 inner.insert(name.clone(), var);
             }
@@ -137,7 +135,10 @@ impl TensorRegistry {
 
     /// List currently overridden tensor names.
     pub fn active_tensor_names(&self) -> Vec<String> {
-        self.active_tensors.iter().map(|e| e.key().clone()).collect()
+        self.active_tensors
+            .iter()
+            .map(|e| e.key().clone())
+            .collect()
     }
 }
 
@@ -222,7 +223,10 @@ impl LayerStack {
         id: &LayerId,
         query_embedding: Option<&Embedding>,
     ) -> Result<LayerStatus, LayerError> {
-        let source = self.sources.get(id).ok_or_else(|| LayerError::not_found(id))?;
+        let source = self
+            .sources
+            .get(id)
+            .ok_or_else(|| LayerError::not_found(id))?;
 
         // Bouncer input gate
         self.gatekeeper
@@ -257,7 +261,9 @@ impl LayerStack {
             let after = Embedding {
                 data: vec![0.5f32; dim], // placeholder
             };
-            self.gatekeeper.verify_post_swap(id, &before, &after).await?;
+            self.gatekeeper
+                .verify_post_swap(id, &before, &after)
+                .await?;
         }
 
         Ok(LayerStatus::Active)
@@ -273,13 +279,12 @@ impl LayerStack {
             }
         }
 
-        let source = self.sources.get(id).ok_or_else(|| LayerError::not_found(id))?;
+        let source = self
+            .sources
+            .get(id)
+            .ok_or_else(|| LayerError::not_found(id))?;
 
-        let tensor_names: Vec<String> = source
-            .tensor_specs()
-            .into_iter()
-            .map(|s| s.name)
-            .collect();
+        let tensor_names: Vec<String> = source.tensor_specs().into_iter().map(|s| s.name).collect();
 
         self.registry.restore_base(&tensor_names)?;
 
@@ -310,13 +315,26 @@ impl LayerStack {
                 let source = &self.sources[id];
                 let relevance = if let Some(sig) = source.relevance_signature() {
                     if sig.len() == query_embedding.data.len() && sig.len() > 0 {
-                        let dot: f32 = sig.iter()
+                        let dot: f32 = sig
+                            .iter()
                             .zip(query_embedding.data.iter())
-                            .map(|(a, b)| a * b).sum();
+                            .map(|(a, b)| a * b)
+                            .sum();
                         let ma: f32 = sig.iter().map(|x| x * x).sum::<f32>().sqrt();
-                        let mb: f32 = query_embedding.data.iter().map(|x| x * x).sum::<f32>().sqrt();
-                        if ma == 0.0 || mb == 0.0 { 0.0 } else { dot / (ma * mb) }
-                    } else { 0.0 }
+                        let mb: f32 = query_embedding
+                            .data
+                            .iter()
+                            .map(|x| x * x)
+                            .sum::<f32>()
+                            .sqrt();
+                        if ma == 0.0 || mb == 0.0 {
+                            0.0
+                        } else {
+                            dot / (ma * mb)
+                        }
+                    } else {
+                        0.0
+                    }
                 } else if query_embedding.data.len() == source.embedding_dim() {
                     query_embedding
                         .data
@@ -342,7 +360,8 @@ impl LayerStack {
         // Restore base tensors for deactivated layers
         for id in &previously_active {
             if let Some(source) = self.sources.get(id) {
-                let names: Vec<String> = source.tensor_specs().into_iter().map(|s| s.name).collect();
+                let names: Vec<String> =
+                    source.tensor_specs().into_iter().map(|s| s.name).collect();
                 self.registry.restore_base(&names)?;
             }
         }
@@ -354,24 +373,38 @@ impl LayerStack {
         //
         // P5: When using RelevanceWeighted, overlapping tensor names are averaged
         // proportionally to each layer's relevance score instead of last-writer-wins.
-        let top_k: Vec<(LayerId, f32)> = scored.iter().take(max_layers).map(|(id, s)| (id.clone(), *s)).collect();
+        let top_k: Vec<(LayerId, f32)> = scored
+            .iter()
+            .take(max_layers)
+            .map(|(id, s)| (id.clone(), *s))
+            .collect();
         let mut descriptors = Vec::new();
 
         // Detect tensor name overlaps among top-k layers
         let strategy = MergeStrategy::LastWriterWins; // default
         let overlapping: Vec<String> = if matches!(strategy, MergeStrategy::RelevanceWeighted) {
-            let all_specs: Vec<Vec<String>> = top_k.iter().map(|(id, _)| {
-                self.sources.get(id).map(|s| s.tensor_specs().into_iter().map(|t| t.name).collect())
-                    .unwrap_or_default()
-            }).collect();
+            let all_specs: Vec<Vec<String>> = top_k
+                .iter()
+                .map(|(id, _)| {
+                    self.sources
+                        .get(id)
+                        .map(|s| s.tensor_specs().into_iter().map(|t| t.name).collect())
+                        .unwrap_or_default()
+                })
+                .collect();
             // Find tensor names that appear in more than one layer
-            let mut name_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            let mut name_counts: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
             for specs in &all_specs {
                 for name in specs {
                     *name_counts.entry(name.clone()).or_default() += 1;
                 }
             }
-            name_counts.into_iter().filter(|(_, count)| *count > 1).map(|(n, _)| n).collect()
+            name_counts
+                .into_iter()
+                .filter(|(_, count)| *count > 1)
+                .map(|(n, _)| n)
+                .collect()
         } else {
             Vec::new()
         };
@@ -383,7 +416,9 @@ impl LayerStack {
 
             if overlapping.is_empty() {
                 // Standard: activate normally, last writer wins conflicts
-                let status = self.activate_layer(&id, Some(query_embedding)).await
+                let status = self
+                    .activate_layer(&id, Some(query_embedding))
+                    .await
                     .unwrap_or_else(|e| LayerStatus::Error(e.to_string()));
                 descriptors.push(LayerDescriptor {
                     id,
@@ -399,7 +434,9 @@ impl LayerStack {
                 // names, keep all contributions for weighted averaging.
                 // For now, all layers activate and the last one wins for non-overlapping,
                 // while overlapping names get averaged post-hoc in the registry.
-                let status = self.activate_layer(&id, Some(query_embedding)).await
+                let status = self
+                    .activate_layer(&id, Some(query_embedding))
+                    .await
                     .unwrap_or_else(|e| LayerStatus::Error(e.to_string()));
                 descriptors.push(LayerDescriptor {
                     id,
@@ -415,18 +452,25 @@ impl LayerStack {
 
         // P5: For RelevanceWeighted, compute weighted average of overlapping tensors
         if <f32>::is_normal(total_relevance) && !overlapping.is_empty() {
-            let mut merged: std::collections::HashMap<String, Tensor> = std::collections::HashMap::new();
+            let mut merged: std::collections::HashMap<String, Tensor> =
+                std::collections::HashMap::new();
             for (id, score) in scored.iter().take(max_layers) {
                 let weight_f32 = score / total_relevance;
                 if let Some(source) = self.sources.get(id) {
-                    if let Ok(tensors) = source.load_tensors(self.registry.device(), self.registry.dtype()) {
+                    if let Ok(tensors) =
+                        source.load_tensors(self.registry.device(), self.registry.dtype())
+                    {
                         for (name, tensor) in tensors {
-                            if !overlapping.contains(&name) { continue; }
+                            if !overlapping.contains(&name) {
+                                continue;
+                            }
                             let wt = Tensor::new(weight_f32, tensor.device()).ok();
                             let weighted = wt.and_then(|w| tensor.broadcast_mul(&w).ok());
                             if let Some(w) = weighted {
                                 match merged.get(&name) {
-                                    None => { merged.insert(name.clone(), w); }
+                                    None => {
+                                        merged.insert(name.clone(), w);
+                                    }
                                     Some(acc) => {
                                         if let Ok(sum) = w.broadcast_add(acc) {
                                             merged.insert(name.clone(), sum);
@@ -449,15 +493,27 @@ impl LayerStack {
                 id: id.clone(),
                 status: LayerStatus::Inactive,
                 embedding_dim: self.sources.get(id).map(|s| s.embedding_dim()).unwrap_or(0),
-                tensor_count: self.sources.get(id).map(|s| s.tensor_specs().len()).unwrap_or(0),
+                tensor_count: self
+                    .sources
+                    .get(id)
+                    .map(|s| s.tensor_specs().len())
+                    .unwrap_or(0),
                 source_kind: self.sources.get(id).map(|s| s.source_kind()).unwrap_or(""),
-                model_architecture: self.sources.get(id).map(|s| s.model_architecture()).unwrap_or(""),
+                model_architecture: self
+                    .sources
+                    .get(id)
+                    .map(|s| s.model_architecture())
+                    .unwrap_or(""),
                 relevance_score: *score,
             });
         }
 
         // Sort descriptors by relevance descending (highest first for display)
-        descriptors.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
+        descriptors.sort_by(|a, b| {
+            b.relevance_score
+                .partial_cmp(&a.relevance_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(descriptors)
     }
@@ -474,8 +530,8 @@ impl LayerStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layer::source::SafetensorsSource;
     use crate::layer::TensorSpec;
+    use crate::layer::source::SafetensorsSource;
 
     fn make_test_registry() -> TensorRegistry {
         let varmap = Arc::new(Mutex::new(VarMap::new()));
@@ -501,7 +557,13 @@ mod tests {
         let mut stack = LayerStack::new(registry, gatekeeper);
 
         let specs = vec![TensorSpec::new("test.weight", vec![384, 768], "F32")];
-        let source = SafetensorsSource::new("test-layer", "/tmp/nonexistent.safetensors", specs, 384, "bert");
+        let source = SafetensorsSource::new(
+            "test-layer",
+            "/tmp/nonexistent.safetensors",
+            specs,
+            384,
+            "bert",
+        );
         stack.register_source(Box::new(source));
         assert_eq!(stack.layer_count(), 1);
     }

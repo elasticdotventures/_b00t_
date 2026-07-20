@@ -1,10 +1,8 @@
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
-use runpod_sdk::{RunpodClient, RunpodConfig};
-use runpod_sdk::model::{
-    CloudType, GpuTypeId, ListPodsQuery, PodCreateInput,
-};
+use runpod_sdk::model::{CloudType, GpuTypeId, ListPodsQuery, PodCreateInput};
 use runpod_sdk::service::PodsService;
+use runpod_sdk::{RunpodClient, RunpodConfig};
 use std::collections::HashMap;
 
 #[derive(Subcommand, Debug, Clone)]
@@ -14,17 +12,11 @@ pub enum RunpodCommands {
     #[clap(about = "List running pods")]
     Pods,
     #[clap(about = "Stop a pod")]
-    Stop {
-        id: String,
-    },
+    Stop { id: String },
     #[clap(about = "Delete a pod")]
-    Delete {
-        id: String,
-    },
+    Delete { id: String },
     #[clap(about = "Get container logs (requires supportPublicIp=true on pod creation)")]
-    Logs {
-        id: String,
-    },
+    Logs { id: String },
     #[clap(about = "Launch a training pod using a b00t fine-tune config YAML")]
     Train {
         #[clap(long, default_value = "fine-tune/config-smol.yaml")]
@@ -44,9 +36,7 @@ fn load_key() -> Result<String> {
             return Ok(k);
         }
     }
-    let env_path = dirs::home_dir()
-        .unwrap_or_default()
-        .join(".b00t/.env");
+    let env_path = dirs::home_dir().unwrap_or_default().join(".b00t/.env");
     if env_path.exists() {
         for line in std::fs::read_to_string(&env_path)?.lines() {
             if let Some(rest) = line.strip_prefix("RUNPOD_API_KEY=") {
@@ -73,7 +63,9 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
         RunpodCommands::Ping => {
             let key = load_key()?;
             let client = build_client(&key)?;
-            let pods = client.list_pods(ListPodsQuery::default()).await
+            let pods = client
+                .list_pods(ListPodsQuery::default())
+                .await
                 .context("list_pods failed")?;
             println!("PASS — API key valid; {} pod(s) visible", pods.len());
         }
@@ -81,13 +73,20 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
         RunpodCommands::Pods => {
             let key = load_key()?;
             let client = build_client(&key)?;
-            let pods = client.list_pods(ListPodsQuery::default()).await
+            let pods = client
+                .list_pods(ListPodsQuery::default())
+                .await
                 .context("list_pods failed")?;
             if pods.is_empty() {
                 println!("No pods running.");
             } else {
                 for p in &pods {
-                    println!("{} — {} — {:?}", p.id, p.name.as_deref().unwrap_or("?"), p.desired_status);
+                    println!(
+                        "{} — {} — {:?}",
+                        p.id,
+                        p.name.as_deref().unwrap_or("?"),
+                        p.desired_status
+                    );
                 }
             }
         }
@@ -117,7 +116,10 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
                 .await
                 .context("logs request failed")?;
             if !resp.status().is_success() {
-                bail!("logs unavailable ({}): pod must be created with support_public_ip=true — use `runpod pods` to check status", resp.status());
+                bail!(
+                    "logs unavailable ({}): pod must be created with support_public_ip=true — use `runpod pods` to check status",
+                    resp.status()
+                );
             }
             let body: serde_json::Value = resp.json().await.context("logs JSON parse failed")?;
             let lines = body["container"].as_array().cloned().unwrap_or_default();
@@ -126,15 +128,18 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
             }
         }
 
-        RunpodCommands::Train { config, gpu, spot, dry_run } => {
+        RunpodCommands::Train {
+            config,
+            gpu,
+            spot,
+            dry_run,
+        } => {
             // Load fine-tune config YAML for base model name
             let yaml_src = std::fs::read_to_string(&config)
                 .with_context(|| format!("read config {config}"))?;
-            let yaml: serde_yaml::Value = serde_yaml::from_str(&yaml_src)
-                .context("parse config YAML")?;
-            let base_model = yaml["base_model"].as_str()
-                .unwrap_or("unknown")
-                .to_string();
+            let yaml: serde_yaml::Value =
+                serde_yaml::from_str(&yaml_src).context("parse config YAML")?;
+            let base_model = yaml["base_model"].as_str().unwrap_or("unknown").to_string();
 
             // runpod/pytorch has bash + cuda + python pre-installed; simpler than nvcr.io NGC image
             let image = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04".to_string();
@@ -164,11 +169,20 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
 
             // Parse GPU type string → typed enum (rejects unknown GPU types at call site)
             let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu.clone()))
-                .with_context(|| format!("unknown GPU type '{gpu}' — run `b00t-cli runpod ping` to list valid types"))?;
+                .with_context(|| {
+                    format!(
+                        "unknown GPU type '{gpu}' — run `b00t-cli runpod ping` to list valid types"
+                    )
+                })?;
 
             // Collect env vars (log keys only — never log values)
             let mut env: HashMap<String, String> = HashMap::new();
-            for var in &["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "NGC_API_KEY", "NVIDIA_API_KEY"] {
+            for var in &[
+                "HF_TOKEN",
+                "HUGGING_FACE_HUB_TOKEN",
+                "NGC_API_KEY",
+                "NVIDIA_API_KEY",
+            ] {
                 if let Ok(v) = std::env::var(var) {
                     env.insert(var.to_string(), v);
                 }
@@ -177,12 +191,24 @@ pub async fn handle_runpod(command: RunpodCommands) -> Result<()> {
             let env_path = dirs::home_dir().unwrap_or_default().join(".b00t/.env");
             if env_path.exists() {
                 for line in std::fs::read_to_string(&env_path)?.lines() {
-                    if line.starts_with('#') || !line.contains('=') { continue; }
+                    if line.starts_with('#') || !line.contains('=') {
+                        continue;
+                    }
                     let (k, v) = line.split_once('=').unwrap();
                     let k = k.trim().to_string();
-                    if ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "MLFLOW_TRACKING_URI",
-                        "MLFLOW_EXPERIMENT_NAME", "NGC_API_KEY", "NVIDIA_API_KEY"].contains(&k.as_str()) {
-                        env.entry(k).or_insert_with(|| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                    if [
+                        "HF_TOKEN",
+                        "HUGGING_FACE_HUB_TOKEN",
+                        "MLFLOW_TRACKING_URI",
+                        "MLFLOW_EXPERIMENT_NAME",
+                        "NGC_API_KEY",
+                        "NVIDIA_API_KEY",
+                    ]
+                    .contains(&k.as_str())
+                    {
+                        env.entry(k).or_insert_with(|| {
+                            v.trim().trim_matches('"').trim_matches('\'').to_string()
+                        });
                     }
                 }
             }

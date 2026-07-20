@@ -364,7 +364,9 @@ impl K0mmand3rCmd {
                     .map(|s| s.to_string())
                     .or_else(|| modifiers.remove("proposal"))
                     .or_else(|| {
-                        on_value.as_ref().and_then(|v| v.split_whitespace().next().map(|s| s.to_string()))
+                        on_value
+                            .as_ref()
+                            .and_then(|v| v.split_whitespace().next().map(|s| s.to_string()))
                     })
                     .ok_or("Usage: !vote <proposal> <yes|no|abstain>")?;
                 let choice_str = positional
@@ -435,10 +437,7 @@ impl K0mmand3rCmd {
                 let budget = budget_str
                     .parse::<u64>()
                     .map_err(|_| "Budget must be a number".to_string())?;
-                Ok(K0mmand3rCmd::Delegate {
-                    agent,
-                    budget,
-                })
+                Ok(K0mmand3rCmd::Delegate { agent, budget })
             }
             "loop" => {
                 let spec = LoopSpec::from_tokens(&positional, &modifiers)?;
@@ -599,9 +598,7 @@ impl K0mmand3rCmd {
             K0mmand3rCmd::Delegate { agent, .. } => format!("agent:{}", agent),
             K0mmand3rCmd::Loop { .. } => "loop".to_string(),
             K0mmand3rCmd::Handshake { agent, .. } => format!("agent:{}", agent),
-            K0mmand3rCmd::Crew { action, .. } => {
-                format!("crew:{:?}", action).to_lowercase()
-            }
+            K0mmand3rCmd::Crew { action, .. } => format!("crew:{:?}", action).to_lowercase(),
             K0mmand3rCmd::Status => "status".to_string(),
             K0mmand3rCmd::Propose { .. } => "proposal".to_string(),
             K0mmand3rCmd::Ahoy { role, .. } => format!("role:{}", role),
@@ -632,9 +629,18 @@ impl K0mmand3rTelemetry {
         }
         let tracer = opentelemetry::global::tracer("k0mmand3r");
         let mut span = tracer.start(format!("k0mmand3r.{}", verb));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.verb", verb.to_string()));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.object", object.to_string()));
-        span.set_attribute(opentelemetry::KeyValue::new("k0mmand3r.agent_id", agent_id.to_string()));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.verb",
+            verb.to_string(),
+        ));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.object",
+            object.to_string(),
+        ));
+        span.set_attribute(opentelemetry::KeyValue::new(
+            "k0mmand3r.agent_id",
+            agent_id.to_string(),
+        ));
         let result = f();
         span.end();
         result

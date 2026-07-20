@@ -79,8 +79,8 @@ pub mod stereotype;
 // Re-export key types for convenience
 pub use capability::{
     ActionRecord, AgentCapability, Attempt, AttemptStatus, CapabilityDomain, CarmackSolution,
-    EnergyBudget, Episode, History, ReviewVerdict, ReviewerType, Solution, StateObservation,
-    Task, TaskStatus, TrainingCorpus,
+    EnergyBudget, Episode, History, ReviewVerdict, ReviewerType, Solution, StateObservation, Task,
+    TaskStatus, TrainingCorpus,
 };
 pub use dare::{
     Alternative, DaredAcceptanceCriteria, DaredDocument, DaredProposal, DaredValidationError,

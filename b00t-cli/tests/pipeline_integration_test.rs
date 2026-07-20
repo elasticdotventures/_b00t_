@@ -24,8 +24,8 @@ use b00t_cli::pipeline_executor::{PipelineExecutor, PipelineRunReport, RunStatus
 use b00t_cli::pipeline_logs::{LogStore, PipelineLogQuery, VecLogStore};
 use b00t_cli::pipeline_secrets::{SecretRef, SecretSource, SecretStore};
 use b00t_cli::pipeline_types::{
-    CapsuleProfile, ErrorRoute, PipelineDag, PortDirection, PortMediaType,
-    ResourceRequirements, StagePort, StageSpec,
+    CapsuleProfile, ErrorRoute, PipelineDag, PortDirection, PortMediaType, ResourceRequirements,
+    StagePort, StageSpec,
 };
 use b00t_cli::transmogrifier::TransmogrifierRegistry;
 
@@ -196,10 +196,7 @@ fn assert_all_stages(report: &PipelineRunReport, expected: StageStatus) {
 /// (in order, verifying the serial execution chain).
 fn assert_output_chain(report: &PipelineRunReport, expected_parts: &[&str]) {
     let last = report.stages.last().expect("at least one stage");
-    let output = last
-        .output
-        .as_ref()
-        .expect("last stage should have output");
+    let output = last.output.as_ref().expect("last stage should have output");
     let output_str = String::from_utf8_lossy(output);
     for part in expected_parts {
         assert!(
@@ -517,11 +514,7 @@ async fn test_serial_execution_full() {
             i,
             sr.stage_name
         );
-        assert!(
-            sr.duration_ms > 0,
-            "stage {} duration should be > 0",
-            i
-        );
+        assert!(sr.duration_ms > 0, "stage {} duration should be > 0", i);
     }
 
     // Stage names in declaration order.
@@ -660,7 +653,10 @@ async fn test_pipeline_with_secrets() {
     let mut env = HashMap::new();
     env.insert("EXISTING_VAR".into(), "keep-me".into());
     store.inject_to_env(&mut env);
-    assert_eq!(env.get("OPENAI_API_KEY"), Some(&"sk-1234-secret".to_string()));
+    assert_eq!(
+        env.get("OPENAI_API_KEY"),
+        Some(&"sk-1234-secret".to_string())
+    );
     assert_eq!(env.get("DB_PASSWORD"), Some(&"hunter2".to_string()));
     assert_eq!(env.get("EXISTING_VAR"), Some(&"keep-me".to_string()));
     assert_eq!(env.len(), 3);
@@ -679,9 +675,15 @@ async fn test_pipeline_with_secrets() {
 
     // Debug output must NOT contain secret values.
     let debug_str = format!("{:?}", store);
-    assert!(!debug_str.contains("sk-1234-secret"), "Debug must redact values");
+    assert!(
+        !debug_str.contains("sk-1234-secret"),
+        "Debug must redact values"
+    );
     assert!(!debug_str.contains("hunter2"), "Debug must redact values");
-    assert!(debug_str.contains("<redacted>"), "Debug should show <redacted>");
+    assert!(
+        debug_str.contains("<redacted>"),
+        "Debug should show <redacted>"
+    );
 
     // ✅ Positive: secrets resolve, inject, round-trip, and stay redacted.
     // ❌ Negative: missing file returns an error; unknown key returns None.
@@ -762,7 +764,7 @@ async fn test_cost_reporting() {
     let usage = ResourceUsage {
         gpu_seconds: 3600.0,
         cpu_seconds: 7200.0,
-        bytes_ingested: 1_073_741_824,  // 1 GiB
+        bytes_ingested: 1_073_741_824, // 1 GiB
         bytes_egressed: 2_147_483_648, // 2 GiB
     };
     assert!((usage.gpu_hours() - 1.0).abs() < 1e-9);

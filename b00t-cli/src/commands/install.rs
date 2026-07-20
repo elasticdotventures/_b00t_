@@ -110,7 +110,10 @@ pub(crate) fn checkpoint_installed(workspace_root: &str) -> Result<()> {
     tags.insert("version".to_string(), version.clone());
 
     match b00t_c0re_lib::store::put(&tmp, "b00t:InstalledBinary", "b00t-cli", &tags) {
-        Ok(_) => eprintln!("  📦 store checkpointed: b00t-cli v{} ({})", version, commit),
+        Ok(_) => eprintln!(
+            "  📦 store checkpointed: b00t-cli v{} ({})",
+            version, commit
+        ),
         Err(e) => eprintln!("  ⚠️  store checkpoint failed (non-fatal): {}", e),
     }
     let _ = std::fs::remove_file(&tmp);
@@ -184,12 +187,20 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
         // Evaluate hook_detect if set (e.g. hook_detect = "gates")
         if let Some(hook) = &datum.hook_detect {
             // Set env vars so gates.rhai can find the datum file
-            let datum_file = format!("{}/{}.toml", shellexpand::tilde(path), key.replace('.', "."));
-            unsafe { std::env::set_var("_B00T_DATUM_FILE", &datum_file); }
-            unsafe { std::env::set_var("_B00T_DATUM_NAME", &datum.name); }
+            let datum_file = format!(
+                "{}/{}.toml",
+                shellexpand::tilde(path),
+                key.replace('.', ".")
+            );
+            unsafe {
+                std::env::set_var("_B00T_DATUM_FILE", &datum_file);
+            }
+            unsafe {
+                std::env::set_var("_B00T_DATUM_NAME", &datum.name);
+            }
             let result = crate::hook_engine::run_hook(hook);
             match &result {
-                crate::hook_engine::HookResult::Ok => {},
+                crate::hook_engine::HookResult::Ok => {}
                 crate::hook_engine::HookResult::Warn(msg) => {
                     eprintln!("⚠️  {} hook_detect: {}", key, msg);
                 }
@@ -1020,8 +1031,16 @@ hint = "Test stack"
         ];
         let results = evaluate_gates(&gates, "/tmp");
         assert!(results.len() == 2);
-        assert!(results[0].passed, "file gate should pass: {}", results[0].reason);
-        assert!(results[1].passed, "env gate should pass: {}", results[1].reason);
+        assert!(
+            results[0].passed,
+            "file gate should pass: {}",
+            results[0].reason
+        );
+        assert!(
+            results[1].passed,
+            "env gate should pass: {}",
+            results[1].reason
+        );
     }
 
     #[test]

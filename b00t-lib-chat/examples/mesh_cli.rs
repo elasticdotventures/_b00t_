@@ -23,7 +23,9 @@ use std::sync::Arc;
 async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let agent_id = args.next().unwrap_or_else(|| "b00t-comms".to_string());
-    let nats_url = args.next().unwrap_or_else(|| "nats://localhost:4222".to_string());
+    let nats_url = args
+        .next()
+        .unwrap_or_else(|| "nats://localhost:4222".to_string());
     let command = args.next().unwrap_or_else(|| "discover".to_string());
 
     // Finops ledger (collaborative-autonomy receipts). Defaults to an in-memory

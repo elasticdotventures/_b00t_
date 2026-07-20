@@ -64,9 +64,16 @@ pub enum SkillCommands {
 
     #[clap(about = "Pull skills from a remote opencode-compatible URL")]
     Sync {
-        #[clap(long, help = "Remote URL serving /index.json (e.g. http://localhost:4097)")]
+        #[clap(
+            long,
+            help = "Remote URL serving /index.json (e.g. http://localhost:4097)"
+        )]
         url: String,
-        #[clap(long, help = "Output directory for downloaded skills", default_value = ".opencode/skills")]
+        #[clap(
+            long,
+            help = "Output directory for downloaded skills",
+            default_value = ".opencode/skills"
+        )]
         output: PathBuf,
     },
 
@@ -217,9 +224,12 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
 
         SkillCommands::Sync { url, output } => handle_sync(url, output),
 
-        SkillCommands::Index { dirs, json, store, depth } => {
-            handle_index(dirs, *json, *store, *depth)
-        }
+        SkillCommands::Index {
+            dirs,
+            json,
+            store,
+            depth,
+        } => handle_index(dirs, *json, *store, *depth),
     }
 }
 
@@ -351,8 +361,7 @@ fn handle_serve(port: u16, host: &str, base_path: &str) -> Result<()> {
     if let Ok(base) = get_expanded_path(base_path) {
         let opencode_dir = base.join(".opencode").join("skills");
         if opencode_dir.is_dir() {
-            let extra =
-                SkillResolver::with_dirs(vec![(opencode_dir, SkillFormat::SkillMd)]);
+            let extra = SkillResolver::with_dirs(vec![(opencode_dir, SkillFormat::SkillMd)]);
             let seen: std::collections::HashSet<String> =
                 skills.iter().map(|s| s.name.clone()).collect();
             for s in extra.list() {
@@ -365,8 +374,8 @@ fn handle_serve(port: u16, host: &str, base_path: &str) -> Result<()> {
 
     let skills = Arc::new(skills);
     let addr = format!("{}:{}", host, port);
-    let listener = TcpListener::bind(&addr)
-        .map_err(|e| anyhow::anyhow!("Cannot bind to {}: {}", addr, e))?;
+    let listener =
+        TcpListener::bind(&addr).map_err(|e| anyhow::anyhow!("Cannot bind to {}: {}", addr, e))?;
 
     println!("🥾 b00t skill server — http://{}", addr);
     println!("   {} skills available", skills.len());
@@ -466,10 +475,7 @@ fn serve_index_json(skills: &[crate::skill_resolver::SkillMeta]) -> String {
 }
 
 /// Serve a skill file: path is "<name>/<filename>".
-fn serve_skill_file(
-    path: &str,
-    skills: &[crate::skill_resolver::SkillMeta],
-) -> String {
+fn serve_skill_file(path: &str, skills: &[crate::skill_resolver::SkillMeta]) -> String {
     let parts: Vec<&str> = path.splitn(2, '/').collect();
     if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
         return http_response(
@@ -495,7 +501,7 @@ fn serve_skill_file(
                 "404 Not Found",
                 "text/plain",
                 &format!("Skill '{}' not found", skill_name),
-            )
+            );
         }
     };
 
@@ -579,7 +585,8 @@ fn mime_type(filename: &str) -> &'static str {
         "application/json"
     } else if filename.ends_with(".sh") || filename.ends_with(".bash") {
         "text/plain"
-    } else if filename.ends_with(".toml") || filename.ends_with(".tomllm")
+    } else if filename.ends_with(".toml")
+        || filename.ends_with(".tomllm")
         || filename.ends_with(".tomllmd")
     {
         "text/plain"
@@ -694,25 +701,70 @@ struct IndexEntry {
 
 /// Domain keywords for specialization scoring.
 const DOMAIN_KEYWORDS: &[&str] = &[
-    "legal", "medical", "healthcare", "financial", "finance", "audit",
-    "regulatory", "compliance", "clinical", "pharma", "insurance", "tax",
-    "real-estate", "construction", "manufacturing", "aerospace",
+    "legal",
+    "medical",
+    "healthcare",
+    "financial",
+    "finance",
+    "audit",
+    "regulatory",
+    "compliance",
+    "clinical",
+    "pharma",
+    "insurance",
+    "tax",
+    "real-estate",
+    "construction",
+    "manufacturing",
+    "aerospace",
 ];
 const ENGINEERING_KEYWORDS: &[&str] = &[
-    "code", "deploy", "ci/cd", "docker", "kubernetes", "database", "migration",
-    "test", "refactor", "debug", "build", "compile", "lint", "security-scan",
-    "infrastructure", "terraform", "ansible",
+    "code",
+    "deploy",
+    "ci/cd",
+    "docker",
+    "kubernetes",
+    "database",
+    "migration",
+    "test",
+    "refactor",
+    "debug",
+    "build",
+    "compile",
+    "lint",
+    "security-scan",
+    "infrastructure",
+    "terraform",
+    "ansible",
 ];
 const ANALYSIS_KEYWORDS: &[&str] = &[
-    "analyze", "report", "statistics", "data-pipeline", "etl", "dashboard",
-    "visualization", "research", "survey", "benchmark", "evaluation",
+    "analyze",
+    "report",
+    "statistics",
+    "data-pipeline",
+    "etl",
+    "dashboard",
+    "visualization",
+    "research",
+    "survey",
+    "benchmark",
+    "evaluation",
 ];
 
 fn score_specialization(desc: &str) -> (&'static str, u8) {
     let lower = desc.to_lowercase();
-    let domain_hits = DOMAIN_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
-    let eng_hits = ENGINEERING_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
-    let analysis_hits = ANALYSIS_KEYWORDS.iter().filter(|kw| lower.contains(*kw)).count();
+    let domain_hits = DOMAIN_KEYWORDS
+        .iter()
+        .filter(|kw| lower.contains(*kw))
+        .count();
+    let eng_hits = ENGINEERING_KEYWORDS
+        .iter()
+        .filter(|kw| lower.contains(*kw))
+        .count();
+    let analysis_hits = ANALYSIS_KEYWORDS
+        .iter()
+        .filter(|kw| lower.contains(*kw))
+        .count();
 
     if domain_hits > 0 {
         ("domain", 4)
@@ -753,7 +805,12 @@ fn parse_frontmatter(content: &str) -> Option<(String, String)> {
 }
 
 /// Recursively scan a directory for SKILL.md files up to max_depth.
-fn scan_for_skills(dir: &std::path::Path, max_depth: usize, current_depth: usize, out: &mut Vec<(std::path::PathBuf, String)>) {
+fn scan_for_skills(
+    dir: &std::path::Path,
+    max_depth: usize,
+    current_depth: usize,
+    out: &mut Vec<(std::path::PathBuf, String)>,
+) {
     if current_depth > max_depth {
         return;
     }
@@ -779,7 +836,13 @@ fn scan_for_skills(dir: &std::path::Path, max_depth: usize, current_depth: usize
 /// Try to get git remote URL and commit hash for a path.
 fn git_upstream(path: &std::path::Path) -> (Option<String>, Option<String>) {
     let remote = std::process::Command::new("git")
-        .args(["-C", &path.display().to_string(), "remote", "get-url", "origin"])
+        .args([
+            "-C",
+            &path.display().to_string(),
+            "remote",
+            "get-url",
+            "origin",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -798,7 +861,7 @@ fn git_upstream(path: &std::path::Path) -> (Option<String>, Option<String>) {
 }
 
 fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Result<()> {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     let mut raw_skills: Vec<(std::path::PathBuf, String)> = Vec::new();
 
@@ -823,14 +886,14 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     // Parse and rank each skill
     let mut entries: Vec<IndexEntry> = Vec::new();
     for (dir_path, content) in &raw_skills {
-        let (name, description) = parse_frontmatter(content)
-            .unwrap_or_else(|| {
-                let dir_name = dir_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                (dir_name, String::new())
-            });
+        let (name, description) = parse_frontmatter(content).unwrap_or_else(|| {
+            let dir_name = dir_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            (dir_name, String::new())
+        });
 
         let (specialization, rank) = score_specialization(&description);
 
@@ -855,19 +918,32 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     }
 
     // Sort by rank descending, then alphabetically
-    entries.sort_by(|a, b| {
-        b.rank.cmp(&a.rank).then_with(|| a.name.cmp(&b.name))
-    });
+    entries.sort_by(|a, b| b.rank.cmp(&a.rank).then_with(|| a.name.cmp(&b.name)));
 
     // Build datum TOML (ingestible by `b00t data fabric ingest-datum`)
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let sources_str: Vec<String> = dirs.iter().map(|d| format!("\"{}\"", d.display())).collect();
+    let sources_str: Vec<String> = dirs
+        .iter()
+        .map(|d| format!("\"{}\"", d.display()))
+        .collect();
 
     // Count by specialization
-    let domain_count = entries.iter().filter(|e| e.specialization == "domain").count();
-    let eng_count = entries.iter().filter(|e| e.specialization == "engineering").count();
-    let analysis_count = entries.iter().filter(|e| e.specialization == "analysis").count();
-    let general_count = entries.iter().filter(|e| e.specialization == "general").count();
+    let domain_count = entries
+        .iter()
+        .filter(|e| e.specialization == "domain")
+        .count();
+    let eng_count = entries
+        .iter()
+        .filter(|e| e.specialization == "engineering")
+        .count();
+    let analysis_count = entries
+        .iter()
+        .filter(|e| e.specialization == "analysis")
+        .count();
+    let general_count = entries
+        .iter()
+        .filter(|e| e.specialization == "general")
+        .count();
 
     let mut datum_toml = String::new();
     datum_toml.push_str("# b00t composite skill index — auto-generated\n");
@@ -879,7 +955,9 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     datum_toml.push_str("name = \"skill-index\"\n");
     datum_toml.push_str("type = \"skill_index\"\n");
     datum_toml.push_str("hint = \"Composite skill index — ranked scan of SKILL.md files\"\n");
-    datum_toml.push_str("keywords = [\"skill\", \"index\", \"composite\", \"ranking\", \"discovery\"]\n\n");
+    datum_toml.push_str(
+        "keywords = [\"skill\", \"index\", \"composite\", \"ranking\", \"discovery\"]\n\n",
+    );
 
     // Index metadata
     datum_toml.push_str("[meta]\n");
@@ -898,10 +976,16 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     for entry in &entries {
         let safe_name = entry.name.replace('.', "-");
         datum_toml.push_str(&format!("[skills.{safe_name}]\n"));
-        datum_toml.push_str(&format!("description = \"{}\"\n", entry.description.replace('"', "\\\"").replace('\n', " ")));
+        datum_toml.push_str(&format!(
+            "description = \"{}\"\n",
+            entry.description.replace('"', "\\\"").replace('\n', " ")
+        ));
         datum_toml.push_str(&format!("specialization = \"{}\"\n", entry.specialization));
         datum_toml.push_str(&format!("rank = {}\n", entry.rank));
-        datum_toml.push_str(&format!("source_path = \"{}\"\n", entry.source_path.replace('"', "\\\"")));
+        datum_toml.push_str(&format!(
+            "source_path = \"{}\"\n",
+            entry.source_path.replace('"', "\\\"")
+        ));
         if let Some(git) = &entry.source_git {
             datum_toml.push_str(&format!("source_git = \"{}\"\n", git));
         }
@@ -940,8 +1024,10 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
     } else {
         println!("╔══ Skill Composite Index ═══════════════════════════════╗");
         println!("║  Total: {:<4}  Hash: {}  ║", entries.len(), short_hash);
-        println!("║  Domain: {:<2}  Eng: {:<2}  Analysis: {:<2}  General: {:<2}     ║",
-            domain_count, eng_count, analysis_count, general_count);
+        println!(
+            "║  Domain: {:<2}  Eng: {:<2}  Analysis: {:<2}  General: {:<2}     ║",
+            domain_count, eng_count, analysis_count, general_count
+        );
         println!("╚════════════════════════════════════════════════════════╝\n");
 
         for entry in &entries {
@@ -951,12 +1037,16 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
                 "analysis" => "📊",
                 _ => "📦",
             };
-            println!("  {icon} [{}] {} — {}", entry.rank, entry.name,
+            println!(
+                "  {icon} [{}] {} — {}",
+                entry.rank,
+                entry.name,
                 if entry.description.len() > 60 {
                     format!("{}…", &entry.description[..60])
                 } else {
                     entry.description.clone()
-                });
+                }
+            );
         }
         println!("\n  datum_sha256: {datum_hash}");
     }
@@ -989,7 +1079,10 @@ fn handle_index(dirs: &[PathBuf], json: bool, store: bool, depth: usize) -> Resu
         println!("\n📦 stored git blob: {git_hash}");
         println!("   retrieve: git cat-file blob {git_hash} | gunzip");
         println!("📝 datum written: {}", datum_path.display());
-        println!("   ingest: b00t data fabric ingest-datum {}", datum_path.display());
+        println!(
+            "   ingest: b00t data fabric ingest-datum {}",
+            datum_path.display()
+        );
     }
 
     Ok(())
@@ -1031,12 +1124,17 @@ mod tests {
 
     struct RestoreCwd(std::path::PathBuf);
     impl Drop for RestoreCwd {
-        fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); }
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.0);
+        }
     }
 
     #[test]
     fn test_find_b00t_dir_project_local() {
-        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CWD_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         let _restore = RestoreCwd(std::env::current_dir().expect("failed to get current dir"));
         // Use a temporary project-local _b00t_ directory so the test is hermetic
         let original_cwd = std::env::current_dir().expect("failed to get current dir");

@@ -200,7 +200,9 @@ pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<
     }
 
     // Ensure namespace exists (ignore error if already present)
-    let _ = cmd!("kubectl", "create", "namespace", namespace).unchecked().run();
+    let _ = cmd!("kubectl", "create", "namespace", namespace)
+        .unchecked()
+        .run();
 
     let datum_dir = Path::new(b00t_path).join("datums");
     if !datum_dir.exists() {
@@ -228,10 +230,16 @@ pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<
 
         // kubectl create configmap --dry-run=client -o yaml | kubectl apply -f -
         let result = cmd!(
-            "kubectl", "create", "configmap", &cm_name,
-            "--namespace", namespace,
+            "kubectl",
+            "create",
+            "configmap",
+            &cm_name,
+            "--namespace",
+            namespace,
             &format!("--from-file=content={}", path.display()),
-            "--dry-run=client", "-o", "yaml"
+            "--dry-run=client",
+            "-o",
+            "yaml"
         )
         .pipe(cmd!("kubectl", "apply", "-f", "-"))
         .run();

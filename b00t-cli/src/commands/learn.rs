@@ -3,7 +3,9 @@
 //! Combines LFMF lessons, curated docs, man pages, and RAG into one command
 
 use anyhow::{Context, Result};
-use b00t_c0re_lib::{lfmf::classify_init_failure, DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage};
+use b00t_c0re_lib::{
+    DisplayOpts, GrokClient, KnowledgeSource, LfmfSystem, ManPage, lfmf::classify_init_failure,
+};
 use clap::Parser;
 use std::fs;
 use tiktoken_rs::o200k_base;
@@ -128,7 +130,10 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
         if let Ok(chain) = crate::commands::evidence::prove_skill(&skill_key) {
             if !chain.is_empty() {
                 let latest = chain.last().unwrap();
-                eprintln!("[learn:skip] {skill_key} already proven at {} — use --force to reload", latest.timestamp);
+                eprintln!(
+                    "[learn:skip] {skill_key} already proven at {} — use --force to reload",
+                    latest.timestamp
+                );
                 return Ok(());
             }
         }
@@ -301,7 +306,13 @@ fn get_registry_path(path: &str) -> Result<std::path::PathBuf> {
     Ok(expanded.join("capability-registry.toml"))
 }
 
-async fn handle_display(path: &str, topic: &str, opts: DisplayOpts, mcp: bool, limit: usize) -> Result<()> {
+async fn handle_display(
+    path: &str,
+    topic: &str,
+    opts: DisplayOpts,
+    mcp: bool,
+    limit: usize,
+) -> Result<()> {
     let knowledge = KnowledgeSource::gather(topic, path).await?;
 
     // Auto-create datum if man page exists but no datum
@@ -349,10 +360,10 @@ async fn handle_display(path: &str, topic: &str, opts: DisplayOpts, mcp: bool, l
 ///   5. Render: counts, trust grades, graph context, MCP examples (MCP ctx only)
 ///   6. Cache miss (0 results): queue research-soul task, warn about web trust
 async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Result<()> {
-    use b00t_c0re_lib::query_bus::QueryBus;
-    use b00t_c0re_lib::query_bus::QueryContext;
     use crate::datum_triples::compile_datum_triples;
     use crate::query_sources::{DatumSearchSource, GraphAdjacencySource};
+    use b00t_c0re_lib::query_bus::QueryBus;
+    use b00t_c0re_lib::query_bus::QueryContext;
 
     // Compile datum triples once — amortized across both sources
     let triples = compile_datum_triples(path).unwrap_or_default();
@@ -389,13 +400,23 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     if total > SM0L_ITEM_GATE {
         let raw = ranked
             .iter()
-            .map(|r| format!("  {} [{}] (score={}) — {}", r.key, r.trust.as_str(), r.score, r.summary))
+            .map(|r| {
+                format!(
+                    "  {} [{}] (score={}) — {}",
+                    r.key,
+                    r.trust.as_str(),
+                    r.score,
+                    r.summary
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
         use b00t_c0re_lib::sm0l_dispatch::{SmolBehavior, SmolConfig, SmolSession, dispatch};
         let session = SmolSession::new();
-        let config = SmolConfig { max_output_lines: limit };
+        let config = SmolConfig {
+            max_output_lines: limit,
+        };
         match dispatch(
             &SmolBehavior::Summarize,
             &config,
@@ -404,7 +425,9 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             32_000,
         ) {
             Ok(out) if out.result.is_some() => {
-                println!("[learn:dwiw] {total} results for '{topic}' — sm0l summary (top {limit}):");
+                println!(
+                    "[learn:dwiw] {total} results for '{topic}' — sm0l summary (top {limit}):"
+                );
                 println!("[graph] {triple_count} triples compiled from datum graph");
                 println!();
                 println!("{}", out.result.unwrap());
@@ -420,9 +443,7 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
         }
     }
 
-    println!(
-        "[learn:dwiw] {total} results for '{topic}'; showing top {shown}; --limit=N for more"
-    );
+    println!("[learn:dwiw] {total} results for '{topic}'; showing top {shown}; --limit=N for more");
     println!("[graph] {triple_count} triples | sources: datum:search(w=3) graph:adjacency(w=2)");
     println!();
 
@@ -432,7 +453,11 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
             r.key,
             r.trust.as_str(),
             r.score,
-            if r.summary.is_empty() { r.key.as_str() } else { r.summary.as_str() }
+            if r.summary.is_empty() {
+                r.key.as_str()
+            } else {
+                r.summary.as_str()
+            }
         );
         if let Some(ref reason) = r.match_reason {
             println!("    ↳ {reason}");
@@ -440,7 +465,10 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     }
 
     if total > shown {
-        println!("\n  … {} more — use --limit={total} to see all", total - shown);
+        println!(
+            "\n  … {} more — use --limit={total} to see all",
+            total - shown
+        );
     }
 
     if mcp_ctx {

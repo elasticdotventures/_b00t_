@@ -124,10 +124,12 @@ pub struct InstallerRegistry {
 impl InstallerRegistry {
     /// Load checks from a schema datum TOML file.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path.as_ref())
-            .with_context(|| {
-                format!("Failed to read capability datum: {}", path.as_ref().display())
-            })?;
+        let content = std::fs::read_to_string(path.as_ref()).with_context(|| {
+            format!(
+                "Failed to read capability datum: {}",
+                path.as_ref().display()
+            )
+        })?;
         Self::from_toml_str(&content)
     }
 
@@ -199,10 +201,7 @@ impl InstallerEngine {
                         check: check.clone(),
                         status: CheckStatus::Fail,
                         output: Some(combined),
-                        error: Some(format!(
-                            "Exit code: {}",
-                            out.status.code().unwrap_or(-1)
-                        )),
+                        error: Some(format!("Exit code: {}", out.status.code().unwrap_or(-1))),
                         duration_ms,
                     }
                 }
@@ -321,8 +320,14 @@ impl CapabilityDashboard {
     /// Build a dashboard from a vector of check results.
     pub fn from_results(results: Vec<CheckResult>) -> Self {
         let total_checks = results.len();
-        let passed = results.iter().filter(|r| r.status == CheckStatus::Pass).count();
-        let failed = results.iter().filter(|r| r.status == CheckStatus::Fail).count();
+        let passed = results
+            .iter()
+            .filter(|r| r.status == CheckStatus::Pass)
+            .count();
+        let failed = results
+            .iter()
+            .filter(|r| r.status == CheckStatus::Fail)
+            .count();
         let remediated = results
             .iter()
             .filter(|r| r.status == CheckStatus::Remediated)
@@ -331,7 +336,10 @@ impl CapabilityDashboard {
             .iter()
             .filter(|r| r.status == CheckStatus::Escalated)
             .count();
-        let skipped = results.iter().filter(|r| r.status == CheckStatus::Skipped).count();
+        let skipped = results
+            .iter()
+            .filter(|r| r.status == CheckStatus::Skipped)
+            .count();
 
         Self {
             total_checks,
