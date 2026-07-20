@@ -6,10 +6,12 @@ hint = "Default hive worker agent: general-purpose executor with governance safe
 depends_on = ["git.cli", "b00t.cli", "just.cli", "bash.cli"]
 
 skills = [
+    # <|🦨: aspirational — next 4 skill datums never authored; roadmap _b00t_#850, triage #163 |>
     "worker-execution",
     "ab-experiment-dispatch",
     "governance-safety-gate",
     "phygital-status-reporting",
+    # <|🦨: aspirational — shared skill datums referenced by worker/ai-worker/ai-wizard/executive roles, not yet authored; _b00t_#850, #163 |>
     "stateless-scoring",
     "cognitive-tier-routing",
 ]
