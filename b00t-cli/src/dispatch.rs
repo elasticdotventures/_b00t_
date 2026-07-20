@@ -3,9 +3,8 @@ use std::io::{self, BufRead, IsTerminal, Read, Write};
 use anyhow::{Context, Result};
 
 use crate::{
-    check_command_available, get_expanded_path, load_runtime_datum, BootDatum,
-    DatumType, GateSpec, McpListFilter, McpListItem, McpMethods, PolysemeRef, RuntimeConfig,
-    UnifiedConfig,
+    BootDatum, DatumType, GateSpec, McpListFilter, McpListItem, McpMethods, PolysemeRef,
+    RuntimeConfig, UnifiedConfig, check_command_available, get_expanded_path, load_runtime_datum,
 };
 
 // ── Datum Dispatch ─────────────────────────────────────────────────────
@@ -18,7 +17,10 @@ pub enum DatumDispatch {
     /// Execute the datum's command + passthrough args (cli datum)
     CliPassthrough { command: String, args: Vec<String> },
     /// Show polyseme resolution options
-    Polyseme { name: String, refs: Vec<PolysemeRef> },
+    Polyseme {
+        name: String,
+        refs: Vec<PolysemeRef>,
+    },
     /// Found but not directly dispatchable (mcp, ai, etc.)
     Info(String),
 }
@@ -56,10 +58,7 @@ pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDis
                 if let Ok(datum) = load_cli_datum(candidate, path) {
                     let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
                     let args: Vec<String> = datum.args.unwrap_or_default();
-                    results.push(DatumDispatch::CliPassthrough {
-                        command: cmd,
-                        args,
-                    });
+                    results.push(DatumDispatch::CliPassthrough { command: cmd, args });
                     break;
                 }
             }
@@ -335,12 +334,14 @@ fn create_mcp_datum_from_json(
                     .collect()
             }),
         mcp: Some(McpMethods {
-            stdio: Some(vec![cli_method
-                .as_object()
-                .unwrap()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()]),
+            stdio: Some(vec![
+                cli_method
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ]),
             httpstream: None,
         }),
         gate: server_config
@@ -353,10 +354,11 @@ fn create_mcp_datum_from_json(
                         let file = g.get("file").and_then(|v| v.as_str());
                         let env = g.get("env").and_then(|v| v.as_str());
                         let rhai = g.get("rhai").and_then(|v| v.as_str());
-                        let knowledge_backend =
-                            g.get("knowledge_backend").and_then(|v| v.as_str());
-                        let hint =
-                            g.get("hint").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        let knowledge_backend = g.get("knowledge_backend").and_then(|v| v.as_str());
+                        let hint = g
+                            .get("hint")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                         if cmd.is_none()
                             && file.is_none()
                             && env.is_none()
@@ -445,7 +447,11 @@ pub fn normalize_mcp_json(input: &str, dwiw: bool) -> Result<BootDatum> {
             });
         }
 
-        return Ok(create_mcp_datum_from_json(name_str, hint.clone(), &json_value));
+        return Ok(create_mcp_datum_from_json(
+            name_str,
+            hint.clone(),
+            &json_value,
+        ));
     }
 
     // Handle mcpServers wrapper format
@@ -536,37 +542,38 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
         }
         match crate::get_mcp_config(&server_name, path) {
             Ok(datum) => {
-                let (command, args) = if let Some(mcp) = &datum.mcp {
-                    if let Some(stdio_methods) = &mcp.stdio {
-                        if let Some(first_method) = stdio_methods.first() {
-                            let command = first_method
-                                .get("command")
+                let (command, args) =
+                    if let Some(mcp) = &datum.mcp {
+                        if let Some(stdio_methods) = &mcp.stdio {
+                            if let Some(first_method) = stdio_methods.first() {
+                                let command = first_method
+                                    .get("command")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+                                let args = first_method.get("args").and_then(|v| v.as_array()).map(
+                                    |arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str())
+                                            .map(|s| s.to_string())
+                                            .collect::<Vec<String>>()
+                                    },
+                                );
+                                (command, args)
+                            } else {
+                                (None, None)
+                            }
+                        } else if let Some(httpstream) = &mcp.httpstream {
+                            let url = httpstream
+                                .get("url")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            let args = first_method.get("args").and_then(|v| v.as_array()).map(
-                                |arr| {
-                                    arr.iter()
-                                        .filter_map(|v| v.as_str())
-                                        .map(|s| s.to_string())
-                                        .collect::<Vec<String>>()
-                                },
-                            );
-                            (command, args)
+                            (Some("HTTP".to_string()), url.map(|u| vec![u]))
                         } else {
                             (None, None)
                         }
-                    } else if let Some(httpstream) = &mcp.httpstream {
-                        let url = httpstream
-                            .get("url")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        (Some("HTTP".to_string()), url.map(|u| vec![u]))
                     } else {
-                        (None, None)
-                    }
-                } else {
-                    (datum.command.clone(), datum.args.clone())
-                };
+                        (datum.command.clone(), datum.args.clone())
+                    };
 
                 let is_installed = command
                     .as_deref()
@@ -608,15 +615,11 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                         if pgrep_result == Some(true) {
                             return Some(true);
                         }
-                        duct::cmd!(
-                            "pgrep",
-                            "-f",
-                            &format!("[{}]{}", &cname[..1], &cname[1..])
-                        )
-                        .stderr_null()
-                        .read()
-                        .ok()
-                        .map(|s| !s.trim().is_empty())
+                        duct::cmd!("pgrep", "-f", &format!("[{}]{}", &cname[..1], &cname[1..]))
+                            .stderr_null()
+                            .read()
+                            .ok()
+                            .map(|s| !s.trim().is_empty())
                     })
                     .unwrap_or(false);
 
@@ -639,10 +642,7 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                                 .map(|url| format!("restart: connect to httpstream at {}", url))
                         } else if let Some(methods) = &mcp.stdio {
                             methods.first().map(|m| {
-                                let cmd = m
-                                    .get("command")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(cmd);
+                                let cmd = m.get("command").and_then(|v| v.as_str()).unwrap_or(cmd);
                                 let args: Vec<&str> = m
                                     .get("args")
                                     .and_then(|v| v.as_array())
@@ -741,9 +741,8 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
         || filter.is_running.is_some()
         || filter.is_suspended.is_some();
 
-    let truncated = !filter.bypass_threshold
-        && !has_active_filter
-        && mcp_items.len() > threshold as usize;
+    let truncated =
+        !filter.bypass_threshold && !has_active_filter && mcp_items.len() > threshold as usize;
 
     if truncated {
         mcp_items.truncate(threshold as usize);
@@ -869,7 +868,10 @@ pub fn mcp_list(path: &str, json_output: bool, filter: McpListFilter) -> Result<
                             println!("   args: {}", args.join(" "));
                         }
                         if item.is_suspended {
-                            println!("   ⏸️  SUSPENDED — enable with: b00t-cli mcp register --restore {}", item.name);
+                            println!(
+                                "   ⏸️  SUSPENDED — enable with: b00t-cli mcp register --restore {}",
+                                item.name
+                            );
                         }
                         if !item.is_running && !item.is_suspended && item.is_installed {
                             if let Some(hint) = &item.restart_hint {
@@ -958,8 +960,12 @@ pub fn mcp_remove(name: &str, path: &str) -> Result<()> {
     let mcp_path = expanded_path.join(format!("{}.mcp.toml", name));
 
     if mcp_path.exists() {
-        std::fs::remove_file(&mcp_path)
-            .with_context(|| format!("Failed to remove MCP server configuration: {}", mcp_path.display()))?;
+        std::fs::remove_file(&mcp_path).with_context(|| {
+            format!(
+                "Failed to remove MCP server configuration: {}",
+                mcp_path.display()
+            )
+        })?;
         println!("Removed MCP server configuration: {}", name);
     } else {
         anyhow::bail!("MCP server configuration not found: {}", name);
@@ -981,8 +987,7 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
             Ok(datum) => {
                 let (command, args) = extract_mcp_command_args(&datum);
                 let mut server_config = serde_json::Map::new();
-                server_config
-                    .insert("command".to_string(), serde_json::Value::String(command));
+                server_config.insert("command".to_string(), serde_json::Value::String(command));
                 server_config.insert(
                     "args".to_string(),
                     serde_json::Value::Array(
@@ -990,7 +995,10 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
                     ),
                 );
 
-                server_configs.insert(server_name.to_string(), serde_json::Value::Object(server_config));
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(server_config),
+                );
             }
             Err(_) => {
                 let mut error_config = serde_json::Map::new();
@@ -1019,7 +1027,10 @@ pub fn mcp_output(path: &str, use_mcp_servers_wrapper: bool, servers: &str) -> R
                     ]),
                 );
 
-                server_configs.insert(server_name.to_string(), serde_json::Value::Object(error_config));
+                server_configs.insert(
+                    server_name.to_string(),
+                    serde_json::Value::Object(error_config),
+                );
             }
         }
     }
@@ -1280,7 +1291,11 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
 
     match result {
         Ok(_) => {
-            let location = if use_repo { "repository" } else { "user global" };
+            let location = if use_repo {
+                "repository"
+            } else {
+                "user global"
+            };
             println!(
                 "Successfully installed MCP server '{}' to Gemini CLI ({})",
                 datum.name, location
@@ -1291,7 +1306,11 @@ pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> 
             );
         }
         Err(e) => {
-            let location = if use_repo { "repository" } else { "user global" };
+            let location = if use_repo {
+                "repository"
+            } else {
+                "user global"
+            };
             eprintln!(
                 "Failed to install MCP server to Gemini CLI ({}): {}",
                 location, e
@@ -1411,7 +1430,10 @@ pub fn dotmcpjson_install_mcp(
     std::fs::write(&mcp_json_path, updated_content)
         .context("Failed to write updated .mcp.json file")?;
 
-    println!("✅ Successfully installed MCP server '{}' to .mcp.json", datum.name);
+    println!(
+        "✅ Successfully installed MCP server '{}' to .mcp.json",
+        datum.name
+    );
 
     if method_type == "httpstream" {
         println!("🌐 Used httpstream method");
@@ -1451,8 +1473,8 @@ pub fn opencode_install_mcp(
         }
     }
 
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
     let config_path = home.join(".config").join("opencode").join("opencode.json");
 
     let config_path = if config_path.exists() {
@@ -1476,11 +1498,14 @@ pub fn opencode_install_mcp(
 
     config["mcp"][name] = server_entry;
 
-    let updated = serde_json::to_string_pretty(&config)
-        .context("Failed to serialize opencode config")?;
+    let updated =
+        serde_json::to_string_pretty(&config).context("Failed to serialize opencode config")?;
     std::fs::write(&config_path, updated).context("Failed to write opencode config")?;
 
-    println!("✅ Successfully installed MCP server '{}' to opencode", name);
+    println!(
+        "✅ Successfully installed MCP server '{}' to opencode",
+        name
+    );
     println!("📁 Config: {}", config_path.display());
 
     if method_type == "httpstream" {
@@ -1560,7 +1585,11 @@ pub fn codex_sync_dotmcpjson(path: &str, use_repo: bool) -> Result<()> {
     }
 
     if failures.is_empty() {
-        let location = if use_repo { "repository" } else { "user global" };
+        let location = if use_repo {
+            "repository"
+        } else {
+            "user global"
+        };
         println!(
             "✅ Synced {} MCP servers from {} into Codex ({})",
             servers.len(),

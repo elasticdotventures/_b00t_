@@ -25,7 +25,10 @@ pub enum ObservabilityCommands {
         long_about = "Read ~/.b00t/guard-violations.jsonl and show top N patterns.\n\nExamples:\n  b00t observability guards\n  b00t observability guards --escalated\n  b00t observability guards --top 20"
     )]
     Guards {
-        #[clap(long, help = "Show only escalated violations (action=block after warn)")]
+        #[clap(
+            long,
+            help = "Show only escalated violations (action=block after warn)"
+        )]
         escalated: bool,
         #[clap(long, help = "Show top N patterns by hit count", default_value_t = 10)]
         top: usize,
@@ -49,10 +52,14 @@ fn guards_path() -> PathBuf {
 fn parse_ts(ts: &str) -> Option<SystemTime> {
     // Try RFC3339 first, then simple ISO-like formats
     chrono::DateTime::parse_from_rfc3339(ts)
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%.f")
-            .map(|d| d.and_utc().into()))
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S")
-            .map(|d| d.and_utc().into()))
+        .or_else(|_| {
+            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%.f")
+                .map(|d| d.and_utc().into())
+        })
+        .or_else(|_| {
+            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S")
+                .map(|d| d.and_utc().into())
+        })
         .ok()
         .map(|dt: chrono::DateTime<chrono::FixedOffset>| -> SystemTime { dt.into() })
 }
@@ -60,7 +67,12 @@ fn parse_ts(ts: &str) -> Option<SystemTime> {
 impl ObservabilityCommands {
     pub fn execute(&self) -> Result<()> {
         match self {
-            ObservabilityCommands::Events { event, failed, since, follow } => {
+            ObservabilityCommands::Events {
+                event,
+                failed,
+                since,
+                follow,
+            } => {
                 let path = events_path();
                 if !path.exists() {
                     println!("No events yet — run some commands first.");
@@ -73,22 +85,25 @@ impl ObservabilityCommands {
                     let mut file = std::fs::File::open(&path)?;
 
                     // Read and display existing content within the time window
-                    let lines: Vec<String> = BufReader::new(&file)
-                        .lines()
-                        .flatten()
-                        .collect();
+                    let lines: Vec<String> = BufReader::new(&file).lines().flatten().collect();
 
-                    let filtered: Vec<&String> = lines.iter().filter(|l| {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(l) {
-                            let ts = val.get("ts").and_then(|v| v.as_str()).unwrap_or("");
-                            let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
-                            let detail = val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
-                            let time_ok = parse_ts(ts).map(|t| t >= cutoff).unwrap_or(true);
-                            let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
-                            let fail_ok = !failed || detail.to_lowercase().contains("fail");
-                            time_ok && event_ok && fail_ok
-                        } else { false }
-                    }).collect();
+                    let filtered: Vec<&String> = lines
+                        .iter()
+                        .filter(|l| {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(l) {
+                                let ts = val.get("ts").and_then(|v| v.as_str()).unwrap_or("");
+                                let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                                let detail =
+                                    val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+                                let time_ok = parse_ts(ts).map(|t| t >= cutoff).unwrap_or(true);
+                                let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
+                                let fail_ok = !failed || detail.to_lowercase().contains("fail");
+                                time_ok && event_ok && fail_ok
+                            } else {
+                                false
+                            }
+                        })
+                        .collect();
 
                     if !filtered.is_empty() {
                         println!("📊 {} recent events:", filtered.len());
@@ -108,7 +123,10 @@ impl ObservabilityCommands {
                             std::thread::sleep(Duration::from_millis(250));
                             continue;
                         }
-                        let l = partial.trim_end_matches('\n').trim_end_matches('\r').to_string();
+                        let l = partial
+                            .trim_end_matches('\n')
+                            .trim_end_matches('\r')
+                            .to_string();
                         partial.clear();
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&l) {
                             let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
@@ -123,26 +141,39 @@ impl ObservabilityCommands {
                 } else {
                     // Static view: read all lines, filter, show last 20
                     let content = std::fs::read_to_string(&path)?;
-                    let all: Vec<&str> = content.lines().filter(|l| {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(l) {
-                            let ts = val.get("ts").and_then(|v| v.as_str()).unwrap_or("");
-                            let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
-                            let detail = val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
-                            let time_ok = parse_ts(ts).map(|t| {
-                                t >= (SystemTime::now() - Duration::from_secs(*since * 60))
-                            }).unwrap_or(true);
-                            let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
-                            let fail_ok = !failed || detail.to_lowercase().contains("fail");
-                            time_ok && event_ok && fail_ok
-                        } else { false }
-                    }).collect();
+                    let all: Vec<&str> = content
+                        .lines()
+                        .filter(|l| {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(l) {
+                                let ts = val.get("ts").and_then(|v| v.as_str()).unwrap_or("");
+                                let ev = val.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                                let detail =
+                                    val.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+                                let time_ok = parse_ts(ts)
+                                    .map(|t| {
+                                        t >= (SystemTime::now() - Duration::from_secs(*since * 60))
+                                    })
+                                    .unwrap_or(true);
+                                let event_ok = event.as_ref().map(|e| ev == e).unwrap_or(true);
+                                let fail_ok = !failed || detail.to_lowercase().contains("fail");
+                                time_ok && event_ok && fail_ok
+                            } else {
+                                false
+                            }
+                        })
+                        .collect();
 
                     let total = all.len();
                     let shown = all.iter().rev().take(20).rev();
                     if total == 0 {
                         println!("No events match filters.");
                     } else {
-                        println!("📊 {} events (showing last {}, filtered from last {} min)", total, shown.len().min(20), since);
+                        println!(
+                            "📊 {} events (showing last {}, filtered from last {} min)",
+                            total,
+                            shown.len().min(20),
+                            since
+                        );
                         for line in shown {
                             display_event(line);
                         }
@@ -158,23 +189,28 @@ impl ObservabilityCommands {
                 }
 
                 let content = std::fs::read_to_string(&path)?;
-                let mut pattern_counts: std::collections::HashMap<String, (usize, bool)> = std::collections::HashMap::new();
+                let mut pattern_counts: std::collections::HashMap<String, (usize, bool)> =
+                    std::collections::HashMap::new();
                 let total_lines = content.lines().count();
 
                 for line in content.lines() {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                        let pattern = val.get("pattern")
+                        let pattern = val
+                            .get("pattern")
                             .and_then(|v| v.as_str())
                             .or_else(|| val.get("detail").and_then(|v| v.as_str()))
                             .unwrap_or("unknown")
                             .to_string();
-                        let is_block = val.get("action")
+                        let is_block = val
+                            .get("action")
                             .and_then(|v| v.as_str())
                             .map(|a| a == "block")
                             .unwrap_or(false);
                         let entry = pattern_counts.entry(pattern).or_insert((0, false));
                         entry.0 += 1;
-                        if is_block { entry.1 = true; }
+                        if is_block {
+                            entry.1 = true;
+                        }
                     }
                 }
 
@@ -182,14 +218,21 @@ impl ObservabilityCommands {
                 sorted.sort_by(|a, b| b.1.0.cmp(&a.1.0));
 
                 let filtered: Vec<_> = if *escalated {
-                    sorted.into_iter().filter(|(_, (_, block))| *block).collect()
+                    sorted
+                        .into_iter()
+                        .filter(|(_, (_, block))| *block)
+                        .collect()
                 } else {
                     sorted
                 };
 
                 let shown = filtered.iter().take(*top);
 
-                println!("🛡️  Guard violations: {} total across {} patterns", total_lines, filtered.len());
+                println!(
+                    "🛡️  Guard violations: {} total across {} patterns",
+                    total_lines,
+                    filtered.len()
+                );
                 if *escalated {
                     println!("   (showing only escalated → block patterns)");
                 }
@@ -227,8 +270,20 @@ fn display_event(line: &str) {
 
         let icon = match ev {
             "gate_block" => "⏳",
-            "guard" => if detail.contains("block") { "💩" } else { "🦨" },
-            "mcp_install" => if detail.contains("fail") { "❌" } else { "✅" },
+            "guard" => {
+                if detail.contains("block") {
+                    "💩"
+                } else {
+                    "🦨"
+                }
+            }
+            "mcp_install" => {
+                if detail.contains("fail") {
+                    "❌"
+                } else {
+                    "✅"
+                }
+            }
             _ => "📌",
         };
 
@@ -239,7 +294,10 @@ fn display_event(line: &str) {
             detail.to_string()
         };
 
-        println!("{} [{}] {} {} (pid={})", icon, short_ts, ev, short_detail, pid);
+        println!(
+            "{} [{}] {} {} (pid={})",
+            icon, short_ts, ev, short_detail, pid
+        );
     } else {
         eprintln!("⚠️  Cannot parse event line: {}", line);
     }

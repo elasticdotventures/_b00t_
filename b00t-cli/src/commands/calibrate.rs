@@ -267,7 +267,11 @@ pub enum CalibrateCommand {
 
 pub fn handle_calibrate(b00t_path: &str, args: &CalibrateArgs) -> Result<()> {
     match &args.cmd {
-        Some(CalibrateCommand::Record { datum_key, cmd, duration_ms }) => {
+        Some(CalibrateCommand::Record {
+            datum_key,
+            cmd,
+            duration_ms,
+        }) => {
             record_timing(datum_key, cmd, *duration_ms)?;
             println!("recorded: {datum_key} cmd={cmd:?} duration={duration_ms}ms");
         }
@@ -286,7 +290,9 @@ pub fn handle_calibrate(b00t_path: &str, args: &CalibrateArgs) -> Result<()> {
                     println!("suggestion_count = {}", suggestions.len());
                     println!();
                     if suggestions.is_empty() {
-                        println!("# All declared tiers match empirical evidence — nothing to calibrate");
+                        println!(
+                            "# All declared tiers match empirical evidence — nothing to calibrate"
+                        );
                     }
                     for s in &suggestions {
                         println!("[[calibrate.suggestion]]");

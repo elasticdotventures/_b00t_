@@ -4,16 +4,20 @@ fn main() {
     let timestamp = chrono();
     let git_hash = git_short_hash();
     let version = env!("CARGO_PKG_VERSION");
-    
+
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let dest = std::path::Path::new(&out_dir).join("build_info.rs");
-    
-    std::fs::write(&dest, format!(
-        r#"pub const BUILD_TIMESTAMP: &str = "{timestamp}";
+
+    std::fs::write(
+        &dest,
+        format!(
+            r#"pub const BUILD_TIMESTAMP: &str = "{timestamp}";
 pub const GIT_HASH: &str = "{git_hash}";
 pub const VERSION: &str = "{version}";
 "#,
-    )).unwrap();
+        ),
+    )
+    .unwrap();
 }
 
 fn chrono() -> String {

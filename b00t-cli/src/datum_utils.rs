@@ -215,7 +215,9 @@ fn git_b00t_attributes(datum_path: &Path) -> Result<HashMap<String, String>> {
                 gix_attributes::StateRef::Set => "set".to_string(),
                 gix_attributes::StateRef::Unset => "unset".to_string(),
                 gix_attributes::StateRef::Unspecified => "unspecified".to_string(),
-                gix_attributes::StateRef::Value(value) => value.as_bstr().to_str_lossy().into_owned(),
+                gix_attributes::StateRef::Value(value) => {
+                    value.as_bstr().to_str_lossy().into_owned()
+                }
             };
             attrs.insert(key.to_string(), value);
         }

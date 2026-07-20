@@ -493,8 +493,7 @@ pub fn generate_deployment(capsule: &CapsuleDefinition) -> String {
     });
 
     if let Some(ref sa) = capsule.spec.service_account {
-        deployment["spec"]["template"]["spec"]["serviceAccountName"] =
-            serde_json::json!(sa);
+        deployment["spec"]["template"]["spec"]["serviceAccountName"] = serde_json::json!(sa);
     }
 
     serde_yaml::to_string(&deployment).expect("valid Deployment YAML")
@@ -562,8 +561,8 @@ mod tests {
     fn crd_yaml_is_valid_yaml() {
         let yaml = generate_crd_yaml();
         // Parsing back as a generic YAML value validates structural correctness.
-        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml)
-            .expect("CRD YAML must be valid");
+        let parsed: serde_yaml::Value =
+            serde_yaml::from_str(&yaml).expect("CRD YAML must be valid");
         assert_eq!(
             parsed["kind"],
             serde_yaml::Value::String("CustomResourceDefinition".into())
@@ -624,8 +623,7 @@ mod tests {
         ];
         for phase in &phases {
             // YAML round-trip
-            let yaml =
-                serde_yaml::to_string(phase).expect("phase serialization must succeed");
+            let yaml = serde_yaml::to_string(phase).expect("phase serialization must succeed");
             let back: CapsuleStatusPhase =
                 serde_yaml::from_str(&yaml).expect("phase deserialization must succeed");
             assert_eq!(
@@ -648,7 +646,10 @@ mod tests {
         let back: CapsuleDefinition =
             capsule_from_yaml(&yaml).expect("deserialization must succeed");
 
-        assert_eq!(back.status.phase, CapsuleStatusPhase::Failed("timeout".into()));
+        assert_eq!(
+            back.status.phase,
+            CapsuleStatusPhase::Failed("timeout".into())
+        );
         assert_eq!(back.status.current_stage, Some("encode".into()));
         assert_eq!(back.status.observed_generation, 3);
     }
@@ -664,15 +665,17 @@ mod tests {
         };
 
         let yaml = serde_yaml::to_string(&condition).expect("serialization");
-        let back: CapsuleCondition =
-            serde_yaml::from_str(&yaml).expect("deserialization");
+        let back: CapsuleCondition = serde_yaml::from_str(&yaml).expect("deserialization");
 
         assert_eq!(back.type_, "Ready");
         assert_eq!(back.reason, "StageCompleted");
         assert_eq!(back.status, "True");
 
         // Verify the serde rename: YAML should use `type` not `type_`.
-        assert!(yaml.contains("type:"), "YAML should contain 'type:' field, got:\n{yaml}");
+        assert!(
+            yaml.contains("type:"),
+            "YAML should contain 'type:' field, got:\n{yaml}"
+        );
     }
 
     // ── Deployment manifest ──────────────────────────────────────────────
@@ -710,7 +713,10 @@ mod tests {
         let mut capsule = test_capsule();
         capsule.spec.service_account = Some("custom-sa".into());
         let yaml = generate_deployment(&capsule);
-        assert!(yaml.contains("custom-sa"), "Deployment should reference the service account");
+        assert!(
+            yaml.contains("custom-sa"),
+            "Deployment should reference the service account"
+        );
     }
 
     #[test]
@@ -728,7 +734,10 @@ mod tests {
     fn deployment_sets_namespace_from_metadata() {
         let capsule = test_capsule(); // namespace = Some("default")
         let yaml = generate_deployment(&capsule);
-        assert!(yaml.contains("namespace: default"), "Deployment should inherit capsule namespace");
+        assert!(
+            yaml.contains("namespace: default"),
+            "Deployment should inherit capsule namespace"
+        );
     }
 
     #[test]
@@ -736,7 +745,10 @@ mod tests {
         let mut capsule = test_capsule();
         capsule.metadata.namespace = None;
         let yaml = generate_deployment(&capsule);
-        assert!(yaml.contains("namespace: default"), "Deployment should fall back to 'default' namespace");
+        assert!(
+            yaml.contains("namespace: default"),
+            "Deployment should fall back to 'default' namespace"
+        );
     }
 
     #[test]
@@ -744,7 +756,10 @@ mod tests {
         let mut capsule = test_capsule();
         capsule.spec.replicas = 3;
         let yaml = generate_deployment(&capsule);
-        assert!(yaml.contains("replicas: 3"), "Deployment replicas should match spec");
+        assert!(
+            yaml.contains("replicas: 3"),
+            "Deployment replicas should match spec"
+        );
     }
 
     #[test]
@@ -784,8 +799,14 @@ mod tests {
         };
         let yaml = serde_yaml::to_string(&cond).unwrap();
         // The serde rename should make it serialize as `type` not `type_`.
-        assert!(yaml.contains("type:"), "yaml must contain 'type:' field: {yaml}");
-        assert!(!yaml.contains("type_:"), "yaml must NOT contain 'type_:' field: {yaml}");
+        assert!(
+            yaml.contains("type:"),
+            "yaml must contain 'type:' field: {yaml}"
+        );
+        assert!(
+            !yaml.contains("type_:"),
+            "yaml must NOT contain 'type_:' field: {yaml}"
+        );
 
         let back: CapsuleCondition = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(back.type_, "Ready");

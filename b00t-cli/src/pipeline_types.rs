@@ -46,7 +46,10 @@ impl StagePort {
     pub fn compatible_with(&self, other: &StagePort) -> bool {
         self.direction != other.direction
             && (self.media_type == other.media_type
-                || matches!((&self.media_type, &other.media_type), (PortMediaType::Bytes, _) | (_, PortMediaType::Bytes)))
+                || matches!(
+                    (&self.media_type, &other.media_type),
+                    (PortMediaType::Bytes, _) | (_, PortMediaType::Bytes)
+                ))
     }
 }
 
@@ -107,10 +110,19 @@ pub struct CapsuleProfile {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PipelineError {
     InputValidation(String),
-    ResourceExhausted { needed: String, available: String },
+    ResourceExhausted {
+        needed: String,
+        available: String,
+    },
     StageCrashed(String),
-    Timeout { stage: String, elapsed_ms: u64 },
-    MediaTypeMismatch { expected: PortMediaType, got: PortMediaType },
+    Timeout {
+        stage: String,
+        elapsed_ms: u64,
+    },
+    MediaTypeMismatch {
+        expected: PortMediaType,
+        got: PortMediaType,
+    },
     TranscodeError(String),
 }
 
@@ -225,8 +237,7 @@ impl StageSpec {
     /// chosen strategy.
     pub fn with_flow_control(mut self, strategy: crate::pipeline_flowctl::FlowStrategy) -> Self {
         self.flow_control = Some(crate::pipeline_flowctl::StageFlowConfig::new(
-            &self.name,
-            strategy,
+            &self.name, strategy,
         ));
         self
     }
@@ -296,32 +307,50 @@ fn default_conversions() -> Vec<((PortMediaType, PortMediaType), ConversionEntry
         // Video → Image: ffmpeg frame extraction (lossy: drops temporal dimension)
         (
             (PortMediaType::Video, PortMediaType::Image),
-            ConversionEntry { stage_name: "ffmpeg-frame-extract", lossy: true },
+            ConversionEntry {
+                stage_name: "ffmpeg-frame-extract",
+                lossy: true,
+            },
         ),
         // Audio → Json: speech-to-text transcript (typically non-lossy for content)
         (
             (PortMediaType::Audio, PortMediaType::Json),
-            ConversionEntry { stage_name: "whisper-transcript", lossy: false },
+            ConversionEntry {
+                stage_name: "whisper-transcript",
+                lossy: false,
+            },
         ),
         // Json → Parquet: columnar sink for structured data (non-lossy)
         (
             (PortMediaType::Json, PortMediaType::Parquet),
-            ConversionEntry { stage_name: "parquet-sink", lossy: false },
+            ConversionEntry {
+                stage_name: "parquet-sink",
+                lossy: false,
+            },
         ),
         // Video → Bytes: raw bitstream packaging (non-lossy)
         (
             (PortMediaType::Video, PortMediaType::Bytes),
-            ConversionEntry { stage_name: "video-to-bytes", lossy: false },
+            ConversionEntry {
+                stage_name: "video-to-bytes",
+                lossy: false,
+            },
         ),
         // Image → Bytes: raw pixel/serialized packaging (non-lossy)
         (
             (PortMediaType::Image, PortMediaType::Bytes),
-            ConversionEntry { stage_name: "image-to-bytes", lossy: false },
+            ConversionEntry {
+                stage_name: "image-to-bytes",
+                lossy: false,
+            },
         ),
         // Audio → Bytes: raw waveform packaging (non-lossy)
         (
             (PortMediaType::Audio, PortMediaType::Bytes),
-            ConversionEntry { stage_name: "audio-to-bytes", lossy: false },
+            ConversionEntry {
+                stage_name: "audio-to-bytes",
+                lossy: false,
+            },
         ),
     ]
 }
@@ -560,9 +589,7 @@ impl PipelineDag {
 
         // Populate adjacency and in-degrees from edges.
         for edge in &self.edges {
-            adj.get_mut(edge.from.as_str())
-                .unwrap()
-                .push(&edge.to);
+            adj.get_mut(edge.from.as_str()).unwrap().push(&edge.to);
             *in_degree.get_mut(edge.to.as_str()).unwrap() += 1;
         }
 
@@ -609,22 +636,15 @@ impl PipelineDag {
             }
         }
 
-        let stage_names: HashSet<&str> =
-            self.stages.iter().map(|s| s.name.as_str()).collect();
+        let stage_names: HashSet<&str> = self.stages.iter().map(|s| s.name.as_str()).collect();
 
         // ── 2. All edge targets refer to existing stages ──
         for edge in &self.edges {
             if !stage_names.contains(edge.from.as_str()) {
-                anyhow::bail!(
-                    "edge source '{}' not found in stages",
-                    edge.from
-                );
+                anyhow::bail!("edge source '{}' not found in stages", edge.from);
             }
             if !stage_names.contains(edge.to.as_str()) {
-                anyhow::bail!(
-                    "edge target '{}' not found in stages",
-                    edge.to
-                );
+                anyhow::bail!("edge target '{}' not found in stages", edge.to);
             }
         }
 
@@ -633,31 +653,17 @@ impl PipelineDag {
             let has_incoming = self.edges.iter().any(|e| e.to == stage.name);
             let has_outgoing = self.edges.iter().any(|e| e.from == stage.name);
             if !has_incoming && !has_outgoing && self.stages.len() > 1 {
-                anyhow::bail!(
-                    "stage '{}' is disconnected (no edges)",
-                    stage.name
-                );
+                anyhow::bail!("stage '{}' is disconnected (no edges)", stage.name);
             }
         }
 
         // ── 4. No dangling ports ──
         for edge in &self.edges {
             if let Some(ref port) = edge.via_port {
-                let src = self
-                    .stages
-                    .iter()
-                    .find(|s| s.name == edge.from)
-                    .unwrap();
-                let dst = self
-                    .stages
-                    .iter()
-                    .find(|s| s.name == edge.to)
-                    .unwrap();
+                let src = self.stages.iter().find(|s| s.name == edge.from).unwrap();
+                let dst = self.stages.iter().find(|s| s.name == edge.to).unwrap();
 
-                let src_has_port = src
-                    .output_ports
-                    .iter()
-                    .any(|p| p == port);
+                let src_has_port = src.output_ports.iter().any(|p| p == port);
                 if !src_has_port {
                     anyhow::bail!(
                         "edge from '{}' references port {:?} not found in output ports",
@@ -667,8 +673,7 @@ impl PipelineDag {
                 }
 
                 let dst_has_port = dst.input_ports.iter().any(|p| {
-                    p.direction == PortDirection::Input
-                        && p.media_type == port.media_type
+                    p.direction == PortDirection::Input && p.media_type == port.media_type
                 });
                 if !dst_has_port {
                     anyhow::bail!(
@@ -781,7 +786,13 @@ impl PipelineDag {
 
         for stage in &self.stages {
             if !visited.contains(stage.name.as_str()) {
-                if let Some(cycle) = dfs(&stage.name, &self.edges, &mut visited, &mut in_stack, &mut path) {
+                if let Some(cycle) = dfs(
+                    &stage.name,
+                    &self.edges,
+                    &mut visited,
+                    &mut in_stack,
+                    &mut path,
+                ) {
                     return Some(cycle);
                 }
             }
@@ -806,35 +817,71 @@ mod tests {
 
     #[test]
     fn stage_port_compatible_direct() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Video, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
         assert!(out.compatible_with(&inp));
     }
 
     #[test]
     fn stage_port_incompatible_same_direction() {
-        let a = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Video, description: None };
-        let b = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Video, description: None };
+        let a = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let b = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
         assert!(!a.compatible_with(&b));
     }
 
     #[test]
     fn stage_port_bytes_compatible_with_any() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Bytes, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Json, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Bytes,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Json,
+            description: None,
+        };
         assert!(out.compatible_with(&inp));
     }
 
     #[test]
     fn stage_port_incompatible_type_mismatch() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Audio, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Audio,
+            description: None,
+        };
         assert!(!out.compatible_with(&inp));
     }
 
     #[test]
     fn port_serialize_round_trip() {
-        let p = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Json, description: Some("test".into()) };
+        let p = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Json,
+            description: Some("test".into()),
+        };
         let back: StagePort = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(p, back);
     }
@@ -843,36 +890,91 @@ mod tests {
 
     #[test]
     fn resource_fits_basic() {
-        let req = ResourceRequirements { min_ram_gb: 4.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None };
-        let host = HostResources { ram_gb: 8.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 4 };
+        let req = ResourceRequirements {
+            min_ram_gb: 4.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 8.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
         assert!(req.fits_on(&host));
     }
 
     #[test]
     fn resource_fails_ram() {
-        let req = ResourceRequirements { min_ram_gb: 32.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None };
-        let host = HostResources { ram_gb: 16.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 4 };
+        let req = ResourceRequirements {
+            min_ram_gb: 32.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 16.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
         assert!(!req.fits_on(&host));
     }
 
     #[test]
     fn resource_fails_gpu() {
-        let req = ResourceRequirements { min_ram_gb: 1.0, min_vram_gb: 8.0, requires_gpu: true, cpu_cores: None, scratch_disk_gb: None };
-        let host = HostResources { ram_gb: 16.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 4 };
+        let req = ResourceRequirements {
+            min_ram_gb: 1.0,
+            min_vram_gb: 8.0,
+            requires_gpu: true,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 16.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
         assert!(!req.fits_on(&host));
     }
 
     #[test]
     fn resource_fits_gpu() {
-        let req = ResourceRequirements { min_ram_gb: 1.0, min_vram_gb: 8.0, requires_gpu: true, cpu_cores: None, scratch_disk_gb: None };
-        let host = HostResources { ram_gb: 16.0, vram_gb: 16.0, gpu_count: 1, cpu_cores: 8 };
+        let req = ResourceRequirements {
+            min_ram_gb: 1.0,
+            min_vram_gb: 8.0,
+            requires_gpu: true,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 16.0,
+            vram_gb: 16.0,
+            gpu_count: 1,
+            cpu_cores: 8,
+        };
         assert!(req.fits_on(&host));
     }
 
     #[test]
     fn resource_fails_cpu_cores() {
-        let req = ResourceRequirements { min_ram_gb: 1.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: Some(16), scratch_disk_gb: None };
-        let host = HostResources { ram_gb: 64.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 8 };
+        let req = ResourceRequirements {
+            min_ram_gb: 1.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: Some(16),
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 64.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 8,
+        };
         assert!(!req.fits_on(&host));
     }
 
@@ -881,7 +983,13 @@ mod tests {
         let p = CapsuleProfile {
             name: "test".into(),
             ports: vec![],
-            resources: ResourceRequirements { min_ram_gb: 1.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
+            resources: ResourceRequirements {
+                min_ram_gb: 1.0,
+                min_vram_gb: 0.0,
+                requires_gpu: false,
+                cpu_cores: None,
+                scratch_disk_gb: None,
+            },
             image: Some("alpine:latest".into()),
             timeout_seconds: Some(300),
         };
@@ -900,8 +1008,14 @@ mod tests {
 
     #[test]
     fn resource_exhausted_holds_needed_and_available() {
-        let err = PipelineError::ResourceExhausted { needed: "512 MiB".into(), available: "256 MiB".into() };
-        assert_eq!(format!("{err:?}"), "ResourceExhausted { needed: \"512 MiB\", available: \"256 MiB\" }");
+        let err = PipelineError::ResourceExhausted {
+            needed: "512 MiB".into(),
+            available: "256 MiB".into(),
+        };
+        assert_eq!(
+            format!("{err:?}"),
+            "ResourceExhausted { needed: \"512 MiB\", available: \"256 MiB\" }"
+        );
     }
 
     #[test]
@@ -919,11 +1033,32 @@ mod tests {
     #[test]
     fn variant_name_all() {
         for (e, n) in [
-            (PipelineError::InputValidation("x".into()), "InputValidation"),
-            (PipelineError::ResourceExhausted { needed: "a".into(), available: "b".into() }, "ResourceExhausted"),
+            (
+                PipelineError::InputValidation("x".into()),
+                "InputValidation",
+            ),
+            (
+                PipelineError::ResourceExhausted {
+                    needed: "a".into(),
+                    available: "b".into(),
+                },
+                "ResourceExhausted",
+            ),
             (PipelineError::StageCrashed("x".into()), "StageCrashed"),
-            (PipelineError::Timeout { stage: "x".into(), elapsed_ms: 1 }, "Timeout"),
-            (PipelineError::MediaTypeMismatch { expected: PortMediaType::Json, got: PortMediaType::Bytes }, "MediaTypeMismatch"),
+            (
+                PipelineError::Timeout {
+                    stage: "x".into(),
+                    elapsed_ms: 1,
+                },
+                "Timeout",
+            ),
+            (
+                PipelineError::MediaTypeMismatch {
+                    expected: PortMediaType::Json,
+                    got: PortMediaType::Bytes,
+                },
+                "MediaTypeMismatch",
+            ),
             (PipelineError::TranscodeError("x".into()), "TranscodeError"),
         ] {
             assert_eq!(e.variant_name(), n);
@@ -931,67 +1066,147 @@ mod tests {
     }
 
     #[test]
-    fn glob_exact() { assert!(glob_match("TranscodeError", "TranscodeError")); assert!(!glob_match("TranscodeError", "Timeout")); }
+    fn glob_exact() {
+        assert!(glob_match("TranscodeError", "TranscodeError"));
+        assert!(!glob_match("TranscodeError", "Timeout"));
+    }
     #[test]
-    fn glob_prefix() { assert!(glob_match("Transcode*", "TranscodeError")); assert!(!glob_match("Transcode*", "Timeout")); }
+    fn glob_prefix() {
+        assert!(glob_match("Transcode*", "TranscodeError"));
+        assert!(!glob_match("Transcode*", "Timeout"));
+    }
     #[test]
-    fn glob_catch_all() { assert!(glob_match("*", "InputValidation")); assert!(glob_match("*", "Anything")); }
+    fn glob_catch_all() {
+        assert!(glob_match("*", "InputValidation"));
+        assert!(glob_match("*", "Anything"));
+    }
     #[test]
-    fn glob_empty() { assert!(!glob_match("", "TranscodeError")); }
+    fn glob_empty() {
+        assert!(!glob_match("", "TranscodeError"));
+    }
 
     #[test]
     fn route_exact_match() {
-        let r = ErrorRoute { match_pattern: "TranscodeError".into(), route_to_stage: "r".into(), max_retries: 3, backoff_ms: 100, fallback_output: None, retry_count: 0 };
+        let r = ErrorRoute {
+            match_pattern: "TranscodeError".into(),
+            route_to_stage: "r".into(),
+            max_retries: 3,
+            backoff_ms: 100,
+            fallback_output: None,
+            retry_count: 0,
+        };
         assert!(r.matches(&PipelineError::TranscodeError("bad".into())));
-        assert!(!r.matches(&PipelineError::Timeout { stage: "t".into(), elapsed_ms: 1 }));
+        assert!(!r.matches(&PipelineError::Timeout {
+            stage: "t".into(),
+            elapsed_ms: 1
+        }));
     }
 
     #[test]
     fn route_glob_match() {
-        let r = ErrorRoute { match_pattern: "Transcode*".into(), route_to_stage: "r".into(), max_retries: 3, backoff_ms: 100, fallback_output: None, retry_count: 0 };
+        let r = ErrorRoute {
+            match_pattern: "Transcode*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 3,
+            backoff_ms: 100,
+            fallback_output: None,
+            retry_count: 0,
+        };
         assert!(r.matches(&PipelineError::TranscodeError("x".into())));
-        assert!(!r.matches(&PipelineError::Timeout { stage: "x".into(), elapsed_ms: 1 }));
+        assert!(!r.matches(&PipelineError::Timeout {
+            stage: "x".into(),
+            elapsed_ms: 1
+        }));
     }
 
     #[test]
     fn route_catch_all() {
-        let r = ErrorRoute { match_pattern: "*".into(), route_to_stage: "r".into(), max_retries: 0, backoff_ms: 0, fallback_output: None, retry_count: 0 };
+        let r = ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 0,
+            backoff_ms: 0,
+            fallback_output: None,
+            retry_count: 0,
+        };
         assert!(r.matches(&PipelineError::InputValidation("x".into())));
         assert!(r.matches(&PipelineError::TranscodeError("x".into())));
     }
 
     #[test]
     fn retry_within_limit() {
-        let mut r = ErrorRoute { match_pattern: "*".into(), route_to_stage: "r".into(), max_retries: 3, backoff_ms: 100, fallback_output: None, retry_count: 0 };
-        assert!(r.can_retry()); assert_eq!(r.retries_left(), 3);
-        r.record_retry(); assert!(r.can_retry()); assert_eq!(r.retries_left(), 2);
-        r.record_retry(); assert!(r.can_retry()); assert_eq!(r.retries_left(), 1);
-        r.record_retry(); assert!(!r.can_retry()); assert_eq!(r.retries_left(), 0);
+        let mut r = ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 3,
+            backoff_ms: 100,
+            fallback_output: None,
+            retry_count: 0,
+        };
+        assert!(r.can_retry());
+        assert_eq!(r.retries_left(), 3);
+        r.record_retry();
+        assert!(r.can_retry());
+        assert_eq!(r.retries_left(), 2);
+        r.record_retry();
+        assert!(r.can_retry());
+        assert_eq!(r.retries_left(), 1);
+        r.record_retry();
+        assert!(!r.can_retry());
+        assert_eq!(r.retries_left(), 0);
     }
 
     #[test]
     fn retry_exhausted() {
-        let mut r = ErrorRoute { match_pattern: "*".into(), route_to_stage: "r".into(), max_retries: 2, backoff_ms: 100, fallback_output: None, retry_count: 0 };
-        r.record_retry(); r.record_retry();
-        assert!(!r.can_retry()); assert_eq!(r.retries_left(), 0);
+        let mut r = ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 2,
+            backoff_ms: 100,
+            fallback_output: None,
+            retry_count: 0,
+        };
+        r.record_retry();
+        r.record_retry();
+        assert!(!r.can_retry());
+        assert_eq!(r.retries_left(), 0);
     }
 
     #[test]
     fn retry_zero_max() {
-        let r = ErrorRoute { match_pattern: "*".into(), route_to_stage: "r".into(), max_retries: 0, backoff_ms: 0, fallback_output: None, retry_count: 0 };
-        assert!(!r.can_retry()); assert_eq!(r.retries_left(), 0);
+        let r = ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 0,
+            backoff_ms: 0,
+            fallback_output: None,
+            retry_count: 0,
+        };
+        assert!(!r.can_retry());
+        assert_eq!(r.retries_left(), 0);
     }
 
     #[test]
     fn serialize_round_trip() {
-        let err = PipelineError::Timeout { stage: "encode".into(), elapsed_ms: 5000 };
-        let back: PipelineError = serde_json::from_str(&serde_json::to_string(&err).unwrap()).unwrap();
+        let err = PipelineError::Timeout {
+            stage: "encode".into(),
+            elapsed_ms: 5000,
+        };
+        let back: PipelineError =
+            serde_json::from_str(&serde_json::to_string(&err).unwrap()).unwrap();
         assert_eq!(err, back);
     }
 
     #[test]
     fn serialize_skips_retry_count() {
-        let r = ErrorRoute { match_pattern: "*".into(), route_to_stage: "r".into(), max_retries: 3, backoff_ms: 100, fallback_output: None, retry_count: 5 };
+        let r = ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "r".into(),
+            max_retries: 3,
+            backoff_ms: 100,
+            fallback_output: None,
+            retry_count: 5,
+        };
         assert!(!serde_json::to_string(&r).unwrap().contains("retry_count"));
     }
 
@@ -1003,7 +1218,11 @@ mod tests {
 
     #[test]
     fn stage_port_enum() {
-        let p = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Video, description: Some("in".into()) };
+        let p = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Video,
+            description: Some("in".into()),
+        };
         assert_eq!(p.direction, PortDirection::Input);
         assert_eq!(p.media_type, PortMediaType::Video);
     }
@@ -1049,8 +1268,21 @@ mod tests {
 
     #[test]
     fn port_media_type_all() {
-        let v = format!("{:?}", vec![PortMediaType::Video,PortMediaType::Audio,PortMediaType::Image,PortMediaType::Json,PortMediaType::Parquet,PortMediaType::Bytes,PortMediaType::Error]);
-        for t in &["Video","Audio","Image","Json","Parquet","Bytes","Error"] {
+        let v = format!(
+            "{:?}",
+            vec![
+                PortMediaType::Video,
+                PortMediaType::Audio,
+                PortMediaType::Image,
+                PortMediaType::Json,
+                PortMediaType::Parquet,
+                PortMediaType::Bytes,
+                PortMediaType::Error
+            ]
+        );
+        for t in &[
+            "Video", "Audio", "Image", "Json", "Parquet", "Bytes", "Error",
+        ] {
             assert!(v.contains(t), "missing {t}");
         }
     }
@@ -1059,23 +1291,47 @@ mod tests {
 
     #[test]
     fn negotiate_direct_match_same_type() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Audio, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Audio, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Audio,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Audio,
+            description: None,
+        };
         assert_eq!(can_negotiate(&out, &inp), NegotiationResult::Direct);
     }
 
     #[test]
     fn negotiate_direct_match_bytes_wildcard() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Bytes, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Json, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Bytes,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Json,
+            description: None,
+        };
         assert_eq!(can_negotiate(&out, &inp), NegotiationResult::Direct);
     }
 
     #[test]
     fn negotiate_convertible_lossy_false() {
         // Audio → Json via whisper-transcript (non-lossy)
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Audio, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Json, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Audio,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Json,
+            description: None,
+        };
         match can_negotiate(&out, &inp) {
             NegotiationResult::Convertible { via_stage, lossy } => {
                 assert!(!lossy, "whisper-transcript should be non-lossy");
@@ -1088,8 +1344,16 @@ mod tests {
     #[test]
     fn negotiate_convertible_lossy_true() {
         // Video → Image via ffmpeg-frame-extract (lossy: drops temporal dimension)
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Image, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Image,
+            description: None,
+        };
         match can_negotiate(&out, &inp) {
             NegotiationResult::Convertible { via_stage, lossy } => {
                 assert!(lossy, "ffmpeg-frame-extract should be lossy");
@@ -1102,12 +1366,26 @@ mod tests {
     #[test]
     fn negotiate_incompatible_undefined_conversion() {
         // Video → Audio has no registered conversion
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None };
-        let inp = StagePort { direction: PortDirection::Input, media_type: PortMediaType::Audio, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Input,
+            media_type: PortMediaType::Audio,
+            description: None,
+        };
         match can_negotiate(&out, &inp) {
             NegotiationResult::Incompatible(reason) => {
-                assert!(reason.contains("Video"), "reason should mention Video: {reason}");
-                assert!(reason.contains("Audio"), "reason should mention Audio: {reason}");
+                assert!(
+                    reason.contains("Video"),
+                    "reason should mention Video: {reason}"
+                );
+                assert!(
+                    reason.contains("Audio"),
+                    "reason should mention Audio: {reason}"
+                );
             }
             other => panic!("expected Incompatible, got {other:?}"),
         }
@@ -1115,8 +1393,16 @@ mod tests {
 
     #[test]
     fn negotiate_incompatible_same_direction() {
-        let out = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None };
-        let inp = StagePort { direction: PortDirection::Output, media_type: PortMediaType::Image, description: None };
+        let out = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Video,
+            description: None,
+        };
+        let inp = StagePort {
+            direction: PortDirection::Output,
+            media_type: PortMediaType::Image,
+            description: None,
+        };
         match can_negotiate(&out, &inp) {
             NegotiationResult::Incompatible(reason) => {
                 assert!(reason.contains("same direction"), "reason: {reason}");
@@ -1129,7 +1415,10 @@ mod tests {
     fn negotiate_result_serialize_round_trip() {
         let cases: Vec<NegotiationResult> = vec![
             NegotiationResult::Direct,
-            NegotiationResult::Convertible { via_stage: "ffmpeg-frame-extract".into(), lossy: true },
+            NegotiationResult::Convertible {
+                via_stage: "ffmpeg-frame-extract".into(),
+                lossy: true,
+            },
             NegotiationResult::Incompatible("no route".into()),
         ];
         for r in &cases {
@@ -1146,29 +1435,65 @@ mod tests {
             StageSpec {
                 name: "video-source".into(),
                 profile: CapsuleProfile {
-                    name: "video-source".into(), ports: vec![],
-                    resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
-                    image: None, timeout_seconds: None,
+                    name: "video-source".into(),
+                    ports: vec![],
+                    resources: ResourceRequirements {
+                        min_ram_gb: 0.0,
+                        min_vram_gb: 0.0,
+                        requires_gpu: false,
+                        cpu_cores: None,
+                        scratch_disk_gb: None,
+                    },
+                    image: None,
+                    timeout_seconds: None,
                 },
                 input_ports: vec![],
-                output_ports: vec![StagePort { direction: PortDirection::Output, media_type: PortMediaType::Video, description: None }],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
+                output_ports: vec![StagePort {
+                    direction: PortDirection::Output,
+                    media_type: PortMediaType::Video,
+                    description: None,
+                }],
+                error_routes: vec![],
+                env: None,
+                checkpoint_interval_seconds: None,
+                secret_refs: None,
+                flow_control: None,
             },
             StageSpec {
                 name: "image-processor".into(),
                 profile: CapsuleProfile {
-                    name: "image-processor".into(), ports: vec![],
-                    resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
-                    image: None, timeout_seconds: None,
+                    name: "image-processor".into(),
+                    ports: vec![],
+                    resources: ResourceRequirements {
+                        min_ram_gb: 0.0,
+                        min_vram_gb: 0.0,
+                        requires_gpu: false,
+                        cpu_cores: None,
+                        scratch_disk_gb: None,
+                    },
+                    image: None,
+                    timeout_seconds: None,
                 },
-                input_ports: vec![StagePort { direction: PortDirection::Input, media_type: PortMediaType::Image, description: None }],
+                input_ports: vec![StagePort {
+                    direction: PortDirection::Input,
+                    media_type: PortMediaType::Image,
+                    description: None,
+                }],
                 output_ports: vec![],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
+                error_routes: vec![],
+                env: None,
+                checkpoint_interval_seconds: None,
+                secret_refs: None,
+                flow_control: None,
             },
         ];
         auto_insert_conversions(&mut stages);
         assert_eq!(stages.len(), 3, "should have inserted one conversion stage");
-        assert!(stages[1].name.starts_with("auto-conv-"), "conversion stage name: {}", stages[1].name);
+        assert!(
+            stages[1].name.starts_with("auto-conv-"),
+            "conversion stage name: {}",
+            stages[1].name
+        );
         // Verify ports are wired correctly
         assert_eq!(stages[1].input_ports[0].media_type, PortMediaType::Video);
         assert_eq!(stages[1].output_ports[0].media_type, PortMediaType::Image);
@@ -1176,21 +1501,47 @@ mod tests {
 
     // ── #724 tests: PipelineDag ──
 
-    fn make_stage(name: &str, input_types: &[PortMediaType], output_types: &[PortMediaType]) -> StageSpec {
+    fn make_stage(
+        name: &str,
+        input_types: &[PortMediaType],
+        output_types: &[PortMediaType],
+    ) -> StageSpec {
         StageSpec {
             name: name.into(),
             profile: CapsuleProfile {
-                name: name.into(), ports: vec![],
-                resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
-                image: None, timeout_seconds: None,
+                name: name.into(),
+                ports: vec![],
+                resources: ResourceRequirements {
+                    min_ram_gb: 0.0,
+                    min_vram_gb: 0.0,
+                    requires_gpu: false,
+                    cpu_cores: None,
+                    scratch_disk_gb: None,
+                },
+                image: None,
+                timeout_seconds: None,
             },
-            input_ports: input_types.iter().map(|mt| StagePort {
-                direction: PortDirection::Input, media_type: mt.clone(), description: None,
-            }).collect(),
-            output_ports: output_types.iter().map(|mt| StagePort {
-                direction: PortDirection::Output, media_type: mt.clone(), description: None,
-            }).collect(),
-            error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
+            input_ports: input_types
+                .iter()
+                .map(|mt| StagePort {
+                    direction: PortDirection::Input,
+                    media_type: mt.clone(),
+                    description: None,
+                })
+                .collect(),
+            output_ports: output_types
+                .iter()
+                .map(|mt| StagePort {
+                    direction: PortDirection::Output,
+                    media_type: mt.clone(),
+                    description: None,
+                })
+                .collect(),
+            error_routes: vec![],
+            env: None,
+            checkpoint_interval_seconds: None,
+            secret_refs: None,
+            flow_control: None,
         }
     }
 
@@ -1204,8 +1555,10 @@ mod tests {
         ];
         let dag = PipelineDag::build(stages).unwrap();
         assert_eq!(dag.edges.len(), 2);
-        assert_eq!(dag.edges[0].from, "A"); assert_eq!(dag.edges[0].to, "B");
-        assert_eq!(dag.edges[1].from, "B"); assert_eq!(dag.edges[1].to, "C");
+        assert_eq!(dag.edges[0].from, "A");
+        assert_eq!(dag.edges[0].to, "B");
+        assert_eq!(dag.edges[1].from, "B");
+        assert_eq!(dag.edges[1].to, "C");
         assert_eq!(dag.entry_points, vec!["A"]);
         assert_eq!(dag.exit_points, vec!["C"]);
         // Execution order: A → B → C
@@ -1259,7 +1612,10 @@ mod tests {
             make_stage("B", &[PortMediaType::Video], &[PortMediaType::Bytes]),
         ];
         let err = PipelineDag::build(stages).unwrap_err();
-        assert!(err.to_string().contains("cycle"), "expected cycle error, got: {err}");
+        assert!(
+            err.to_string().contains("cycle"),
+            "expected cycle error, got: {err}"
+        );
     }
 
     #[test]
@@ -1281,7 +1637,10 @@ mod tests {
             make_stage("dup", &[PortMediaType::Bytes], &[]),
         ];
         let err = PipelineDag::build(stages).unwrap_err();
-        assert!(err.to_string().contains("duplicate"), "expected duplicate name error, got: {err}");
+        assert!(
+            err.to_string().contains("duplicate"),
+            "expected duplicate name error, got: {err}"
+        );
     }
 
     #[test]
@@ -1295,7 +1654,10 @@ mod tests {
         let dag = PipelineDag::build(stages).unwrap();
         // Build succeeds (acyclic), but validate catches the disconnected stage
         let err = dag.validate().unwrap_err();
-        assert!(err.to_string().contains("disconnected"), "expected disconnected error, got: {err}");
+        assert!(
+            err.to_string().contains("disconnected"),
+            "expected disconnected error, got: {err}"
+        );
     }
 
     #[test]
@@ -1305,28 +1667,59 @@ mod tests {
             StageSpec {
                 name: "audio-source".into(),
                 profile: CapsuleProfile {
-                    name: "audio-source".into(), ports: vec![],
-                    resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
-                    image: None, timeout_seconds: None,
+                    name: "audio-source".into(),
+                    ports: vec![],
+                    resources: ResourceRequirements {
+                        min_ram_gb: 0.0,
+                        min_vram_gb: 0.0,
+                        requires_gpu: false,
+                        cpu_cores: None,
+                        scratch_disk_gb: None,
+                    },
+                    image: None,
+                    timeout_seconds: None,
                 },
                 input_ports: vec![],
-                output_ports: vec![StagePort { direction: PortDirection::Output, media_type: PortMediaType::Audio, description: None }],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
+                output_ports: vec![StagePort {
+                    direction: PortDirection::Output,
+                    media_type: PortMediaType::Audio,
+                    description: None,
+                }],
+                error_routes: vec![],
+                env: None,
+                checkpoint_interval_seconds: None,
+                secret_refs: None,
+                flow_control: None,
             },
             StageSpec {
                 name: "audio-processor".into(),
                 profile: CapsuleProfile {
-                    name: "audio-processor".into(), ports: vec![],
-                    resources: ResourceRequirements { min_ram_gb: 0.0, min_vram_gb: 0.0, requires_gpu: false, cpu_cores: None, scratch_disk_gb: None },
-                    image: None, timeout_seconds: None,
+                    name: "audio-processor".into(),
+                    ports: vec![],
+                    resources: ResourceRequirements {
+                        min_ram_gb: 0.0,
+                        min_vram_gb: 0.0,
+                        requires_gpu: false,
+                        cpu_cores: None,
+                        scratch_disk_gb: None,
+                    },
+                    image: None,
+                    timeout_seconds: None,
                 },
-                input_ports: vec![StagePort { direction: PortDirection::Input, media_type: PortMediaType::Audio, description: None }],
+                input_ports: vec![StagePort {
+                    direction: PortDirection::Input,
+                    media_type: PortMediaType::Audio,
+                    description: None,
+                }],
                 output_ports: vec![],
-                error_routes: vec![], env: None, checkpoint_interval_seconds: None, secret_refs: None, flow_control: None,
+                error_routes: vec![],
+                env: None,
+                checkpoint_interval_seconds: None,
+                secret_refs: None,
+                flow_control: None,
             },
         ];
         auto_insert_conversions(&mut stages);
         assert_eq!(stages.len(), 2, "direct match should not insert conversion");
     }
-
 }

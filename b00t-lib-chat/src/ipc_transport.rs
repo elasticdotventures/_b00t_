@@ -8,8 +8,8 @@ use crate::error::ChatResult;
 use crate::message::ChatMessage;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use ufo_types::{Stereotyped, UfoStereotype};
 use std::fmt::Debug;
+use ufo_types::{Stereotyped, UfoStereotype};
 
 /// Core transport trait for sending/receiving messages.
 ///

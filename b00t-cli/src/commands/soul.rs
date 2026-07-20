@@ -18,17 +18,17 @@
 //! - GET    /healthz              → `{"status": "ok"}`
 
 use anyhow::{Context as _, Result, bail};
-use clap::Parser;
 use b00t_c0re_lib::events::write_event;
 use b00t_c0re_lib::soul_dataframerr::{
-    AlarmAggregate, FrameCursor, SoulAlarm, SoulColumn, SoulDataFramerr,
-    SoulDataFramerrRegistry, SoulValue,
+    AlarmAggregate, FrameCursor, SoulAlarm, SoulColumn, SoulDataFramerr, SoulDataFramerrRegistry,
+    SoulValue,
 };
+use clap::Parser;
 
-use crate::memory_provider::{FileMemory, MemoryProvider, active_soul_path, detect_provider, soul_path};
-use crate::soul_writer::{
-    SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir,
+use crate::memory_provider::{
+    FileMemory, MemoryProvider, active_soul_path, detect_provider, soul_path,
 };
+use crate::soul_writer::{SoulMemoryWriter, active_soul_dir, global_soul_dir, local_soul_dir};
 
 #[derive(Parser)]
 pub enum SoulCommands {
@@ -129,34 +129,44 @@ pub enum SoulCommands {
         agent: Option<String>,
         #[clap(long, help = "List log entries instead of appending")]
         list: bool,
-        #[clap(long, default_value = "40", help = "Number of entries to show with --list")]
+        #[clap(
+            long,
+            default_value = "40",
+            help = "Number of entries to show with --list"
+        )]
         tail: usize,
         #[clap(long, help = "Filter by scope with --list")]
         filter_scope: Option<String>,
     },
 
     // ── DataFramerr ───────────────────────────────────────────────────────────
-
-    #[clap(name = "table-create", about = "Create a typed table in soul DataFramerr")]
+    #[clap(
+        name = "table-create",
+        about = "Create a typed table in soul DataFramerr"
+    )]
     TableCreate {
         #[clap(help = "Table name")]
         name: String,
-        #[clap(help = "Column definitions: 'name:type' or 'name:type?' (nullable). Types: text int float cake bool timestamp token json")]
+        #[clap(
+            help = "Column definitions: 'name:type' or 'name:type?' (nullable). Types: text int float cake bool timestamp token json"
+        )]
         columns: Vec<String>,
     },
 
-    #[clap(name = "table-list", about = "List all DataFramerr tables in active soul")]
+    #[clap(
+        name = "table-list",
+        about = "List all DataFramerr tables in active soul"
+    )]
     TableList,
 
     #[clap(name = "table-show", about = "Show schema + row count for a table")]
-    TableShow {
-        name: String,
-    },
+    TableShow { name: String },
 
-    #[clap(name = "table-drop", about = "Drop a table and all its rows (irreversible)")]
-    TableDrop {
-        name: String,
-    },
+    #[clap(
+        name = "table-drop",
+        about = "Drop a table and all its rows (irreversible)"
+    )]
+    TableDrop { name: String },
 
     #[clap(name = "frame-insert", about = "Append a row to a DataFramerr table")]
     FrameInsert {
@@ -167,10 +177,7 @@ pub enum SoulCommands {
     },
 
     #[clap(name = "frame-get", about = "Fetch a single row by id")]
-    FrameGet {
-        table: String,
-        id: u64,
-    },
+    FrameGet { table: String, id: u64 },
 
     #[clap(name = "frame-dump", about = "Dump rows in tabular format")]
     FrameDump {
@@ -180,20 +187,16 @@ pub enum SoulCommands {
     },
 
     #[clap(name = "cursor-create", about = "Create a durable cursor on a table")]
-    CursorCreate {
-        name: String,
-        table: String,
-    },
+    CursorCreate { name: String, table: String },
 
-    #[clap(name = "cursor-next", about = "Advance cursor and print next row (exit 1 at EOF)")]
-    CursorNext {
-        name: String,
-    },
+    #[clap(
+        name = "cursor-next",
+        about = "Advance cursor and print next row (exit 1 at EOF)"
+    )]
+    CursorNext { name: String },
 
     #[clap(name = "cursor-reset", about = "Rewind cursor to frame 0")]
-    CursorReset {
-        name: String,
-    },
+    CursorReset { name: String },
 
     #[clap(name = "cursor-list", about = "List all cursors and positions")]
     CursorList,
@@ -204,26 +207,32 @@ pub enum SoulCommands {
         table: String,
         column: String,
         condition: String,
-        #[clap(long, default_value = "sum", help = "Aggregate: sum | avg | count | per_frame")]
+        #[clap(
+            long,
+            default_value = "sum",
+            help = "Aggregate: sum | avg | count | per_frame"
+        )]
         aggregate: String,
         #[clap(long, help = "Event name to emit when alarm fires")]
         emit: String,
     },
 
-    #[clap(name = "alarm-check", about = "Evaluate all alarms on a table; print fired events")]
-    AlarmCheck {
-        table: String,
-    },
+    #[clap(
+        name = "alarm-check",
+        about = "Evaluate all alarms on a table; print fired events"
+    )]
+    AlarmCheck { table: String },
 
     #[clap(name = "alarm-list", about = "List all registered alarms")]
     AlarmList,
 
     #[clap(name = "alarm-rm", about = "Remove a named alarm")]
-    AlarmRm {
-        name: String,
-    },
+    AlarmRm { name: String },
 
-    #[clap(name = "token-encode", about = "ObfuscatedStr encode (XOR+base64, agent-identity keyed)")]
+    #[clap(
+        name = "token-encode",
+        about = "ObfuscatedStr encode (XOR+base64, agent-identity keyed)"
+    )]
     TokenEncode {
         plaintext: String,
         #[clap(long, default_value = "", help = "Context key (e.g. table name)")]
@@ -355,34 +364,53 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
 
         SoulCommands::Where => soul_where(),
 
-        SoulCommands::Log { message, scope, result, agent, list, tail, filter_scope } => {
-            soul_log(message.as_deref(), scope, result, agent.as_deref(), *list, *tail, filter_scope.as_deref())
-        }
+        SoulCommands::Log {
+            message,
+            scope,
+            result,
+            agent,
+            list,
+            tail,
+            filter_scope,
+        } => soul_log(
+            message.as_deref(),
+            scope,
+            result,
+            agent.as_deref(),
+            *list,
+            *tail,
+            filter_scope.as_deref(),
+        ),
 
         // ── DataFramerr ───────────────────────────────────────────────────────
         SoulCommands::TableCreate { name, columns } => df_table_create(name, columns),
-        SoulCommands::TableList                     => df_table_list(),
-        SoulCommands::TableShow { name }            => df_table_show(name),
-        SoulCommands::TableDrop { name }            => df_table_drop(name),
+        SoulCommands::TableList => df_table_list(),
+        SoulCommands::TableShow { name } => df_table_show(name),
+        SoulCommands::TableDrop { name } => df_table_drop(name),
 
         SoulCommands::FrameInsert { table, fields } => df_frame_insert(table, fields),
-        SoulCommands::FrameGet { table, id }        => df_frame_get(table, *id),
-        SoulCommands::FrameDump { table, last }     => df_frame_dump(table, *last),
+        SoulCommands::FrameGet { table, id } => df_frame_get(table, *id),
+        SoulCommands::FrameDump { table, last } => df_frame_dump(table, *last),
 
-        SoulCommands::CursorCreate { name, table }  => df_cursor_create(name, table),
-        SoulCommands::CursorNext { name }           => df_cursor_next(name),
-        SoulCommands::CursorReset { name }          => df_cursor_reset(name),
-        SoulCommands::CursorList                    => df_cursor_list(),
+        SoulCommands::CursorCreate { name, table } => df_cursor_create(name, table),
+        SoulCommands::CursorNext { name } => df_cursor_next(name),
+        SoulCommands::CursorReset { name } => df_cursor_reset(name),
+        SoulCommands::CursorList => df_cursor_list(),
 
-        SoulCommands::AlarmSet { name, table, column, condition, aggregate, emit } => {
-            df_alarm_set(name, table, column, condition, aggregate, emit)
-        }
-        SoulCommands::AlarmCheck { table }          => df_alarm_check(table),
-        SoulCommands::AlarmList                     => df_alarm_list(),
-        SoulCommands::AlarmRm { name }              => df_alarm_rm(name),
+        SoulCommands::AlarmSet {
+            name,
+            table,
+            column,
+            condition,
+            aggregate,
+            emit,
+        } => df_alarm_set(name, table, column, condition, aggregate, emit),
+        SoulCommands::AlarmCheck { table } => df_alarm_check(table),
+        SoulCommands::AlarmList => df_alarm_list(),
+        SoulCommands::AlarmRm { name } => df_alarm_rm(name),
 
         SoulCommands::TokenEncode { plaintext, context } => df_token_encode(plaintext, context),
-        SoulCommands::TokenDecode { token, context }     => df_token_decode(token, context),
+        SoulCommands::TokenDecode { token, context } => df_token_decode(token, context),
     }
 }
 
@@ -690,9 +718,17 @@ fn soul_log(
                 let ts = entry.get("ts").and_then(|v| v.as_str()).unwrap_or("?");
                 let sc = entry.get("scope").and_then(|v| v.as_str()).unwrap_or("?");
                 let ag = entry.get("agent").and_then(|v| v.as_str()).unwrap_or("?");
-                let re = entry.get("result").and_then(|v| v.as_str()).unwrap_or("info");
+                let re = entry
+                    .get("result")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("info");
                 let msg = entry.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                let icon = match re { "ok" => "✅", "fail" => "❌", "warn" => "⚠️ ", _ => "ℹ️ " };
+                let icon = match re {
+                    "ok" => "✅",
+                    "fail" => "❌",
+                    "warn" => "⚠️ ",
+                    _ => "ℹ️ ",
+                };
                 println!("{icon} [{ts}] ({sc}/{ag}) {msg}");
             }
         }
@@ -718,7 +754,10 @@ fn soul_log(
         .with_context(|| format!("create soul dir {}", soul_dir.display()))?;
 
     use std::io::Write;
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
     writeln!(f, "{}", serde_json::to_string(&entry)?)?;
 
     println!("ops: [{scope}] {msg}");
@@ -987,8 +1026,8 @@ pub(crate) fn load_soul_doc() -> Result<toml::Table> {
     if !path.exists() {
         return Ok(toml::Table::new());
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     text.parse::<toml::Table>()
         .with_context(|| format!("parse TOML {}", path.display()))
 }
@@ -1020,7 +1059,9 @@ fn save_registry(mut doc: toml::Table, reg: &SoulDataFramerrRegistry) -> Result<
 
 /// Read-modify-write helper.
 fn with_registry<F>(f: F) -> Result<()>
-where F: FnOnce(&mut SoulDataFramerrRegistry) -> Result<()> {
+where
+    F: FnOnce(&mut SoulDataFramerrRegistry) -> Result<()>,
+{
     let doc = load_soul_doc()?;
     let mut reg = load_registry(&doc)?;
     f(&mut reg)?;
@@ -1031,7 +1072,8 @@ where F: FnOnce(&mut SoulDataFramerrRegistry) -> Result<()> {
 fn parse_fields(fields: &[String]) -> Result<std::collections::BTreeMap<String, SoulValue>> {
     let mut map = std::collections::BTreeMap::new();
     for f in fields {
-        let (k, v) = f.split_once('=')
+        let (k, v) = f
+            .split_once('=')
             .ok_or_else(|| anyhow::anyhow!("field must be 'key=value', got: {f}"))?;
         // Infer type: bool → int → float → text
         let val = if v == "true" {
@@ -1060,14 +1102,16 @@ fn agent_id() -> String {
 // ── table commands ────────────────────────────────────────────────────────────
 
 fn df_table_create(name: &str, columns: &[String]) -> Result<()> {
-    let cols: Vec<SoulColumn> = columns.iter()
+    let cols: Vec<SoulColumn> = columns
+        .iter()
         .map(|s| SoulColumn::parse(s))
         .collect::<Result<_>>()?;
     with_registry(|reg| {
         if reg.tables.contains_key(name) {
             bail!("table '{name}' already exists; use frame-insert to add rows");
         }
-        reg.tables.insert(name.to_string(), SoulDataFramerr::new(name, cols.clone()));
+        reg.tables
+            .insert(name.to_string(), SoulDataFramerr::new(name, cols.clone()));
         println!("table '{name}' created ({} columns)", cols.len());
         Ok(())
     })
@@ -1083,9 +1127,16 @@ fn df_table_list() -> Result<()> {
     println!("{:<24} {:>6}  columns", "table", "rows");
     println!("{}", "-".repeat(42));
     for (name, df) in &reg.tables {
-        println!("{:<24} {:>6}  {}", name, df.rows.len(),
-            df.columns.iter().map(|c| format!("{}:{}", c.name,
-                format!("{:?}", c.col_type).to_lowercase())).collect::<Vec<_>>().join(", "));
+        println!(
+            "{:<24} {:>6}  {}",
+            name,
+            df.rows.len(),
+            df.columns
+                .iter()
+                .map(|c| format!("{}:{}", c.name, format!("{:?}", c.col_type).to_lowercase()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     Ok(())
 }
@@ -1093,7 +1144,9 @@ fn df_table_list() -> Result<()> {
 fn df_table_show(name: &str) -> Result<()> {
     let doc = load_soul_doc()?;
     let reg = load_registry(&doc)?;
-    let df = reg.tables.get(name)
+    let df = reg
+        .tables
+        .get(name)
         .ok_or_else(|| anyhow::anyhow!("no table '{name}'"))?;
     println!("table: {name}");
     println!("rows:  {}", df.rows.len());
@@ -1106,8 +1159,15 @@ fn df_table_show(name: &str) -> Result<()> {
     if !alarms.is_empty() {
         println!("alarms:");
         for a in alarms {
-            println!("  {} — {} {} {} ({:?}) → {}", a.name, a.column, a.condition,
-                format!("{:?}", a.aggregate).to_lowercase(), a.aggregate, a.emit);
+            println!(
+                "  {} — {} {} {} ({:?}) → {}",
+                a.name,
+                a.column,
+                a.condition,
+                format!("{:?}", a.aggregate).to_lowercase(),
+                a.aggregate,
+                a.emit
+            );
         }
     }
     Ok(())
@@ -1130,8 +1190,9 @@ fn df_table_drop(name: &str) -> Result<()> {
 fn df_frame_insert(table: &str, fields: &[String]) -> Result<()> {
     let field_map = parse_fields(fields)?;
     with_registry(|reg| {
-        let df = reg.tables.get_mut(table)
-            .ok_or_else(|| anyhow::anyhow!("no table '{table}' — run: b00t soul table-create {table}"))?;
+        let df = reg.tables.get_mut(table).ok_or_else(|| {
+            anyhow::anyhow!("no table '{table}' — run: b00t soul table-create {table}")
+        })?;
         let id = df.insert(field_map)?;
         println!("inserted frame {id} into '{table}'");
         Ok(())
@@ -1141,10 +1202,18 @@ fn df_frame_insert(table: &str, fields: &[String]) -> Result<()> {
 fn df_frame_get(table: &str, id: u64) -> Result<()> {
     let doc = load_soul_doc()?;
     let reg = load_registry(&doc)?;
-    let df = reg.tables.get(table)
+    let df = reg
+        .tables
+        .get(table)
         .ok_or_else(|| anyhow::anyhow!("no table '{table}'"))?;
-    let row = df.get(id).ok_or_else(|| anyhow::anyhow!("no frame {id} in '{table}'"))?;
-    println!("id: {}  created_at: {}", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%SZ"));
+    let row = df
+        .get(id)
+        .ok_or_else(|| anyhow::anyhow!("no frame {id} in '{table}'"))?;
+    println!(
+        "id: {}  created_at: {}",
+        row.id,
+        row.created_at.format("%Y-%m-%dT%H:%M:%SZ")
+    );
     for (k, v) in &row.fields {
         println!("  {} = {:?}", k, v);
     }
@@ -1154,11 +1223,13 @@ fn df_frame_get(table: &str, id: u64) -> Result<()> {
 fn df_frame_dump(table: &str, last: Option<usize>) -> Result<()> {
     let doc = load_soul_doc()?;
     let reg = load_registry(&doc)?;
-    let df = reg.tables.get(table)
+    let df = reg
+        .tables
+        .get(table)
         .ok_or_else(|| anyhow::anyhow!("no table '{table}'"))?;
     let rows: Vec<_> = match last {
         Some(n) => df.rows.iter().rev().take(n).rev().collect(),
-        None    => df.rows.iter().collect(),
+        None => df.rows.iter().collect(),
     };
     if rows.is_empty() {
         println!("(no rows in '{table}')");
@@ -1167,18 +1238,24 @@ fn df_frame_dump(table: &str, last: Option<usize>) -> Result<()> {
     // collect all column keys in order
     let cols: Vec<&str> = df.columns.iter().map(|c| c.name.as_str()).collect();
     print!("{:>4}  {:19}", "id", "created_at");
-    for c in &cols { print!("  {:<16}", c); }
+    for c in &cols {
+        print!("  {:<16}", c);
+    }
     println!();
     println!("{}", "-".repeat(4 + 2 + 19 + cols.len() * 18));
     for row in rows {
-        print!("{:>4}  {}", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%S"));
+        print!(
+            "{:>4}  {}",
+            row.id,
+            row.created_at.format("%Y-%m-%dT%H:%M:%S")
+        );
         for c in &cols {
             match row.fields.get(*c) {
-                Some(SoulValue::Bool(b))  => print!("  {:<16}", b),
-                Some(SoulValue::Int(i))   => print!("  {:<16}", i),
+                Some(SoulValue::Bool(b)) => print!("  {:<16}", b),
+                Some(SoulValue::Int(i)) => print!("  {:<16}", i),
                 Some(SoulValue::Float(f)) => print!("  {:<16.4}", f),
-                Some(SoulValue::Text(s))  => print!("  {:<16}", &s[..s.len().min(16)]),
-                None                      => print!("  {:<16}", "-"),
+                Some(SoulValue::Text(s)) => print!("  {:<16}", &s[..s.len().min(16)]),
+                None => print!("  {:<16}", "-"),
             }
         }
         println!();
@@ -1193,7 +1270,8 @@ fn df_cursor_create(name: &str, table: &str) -> Result<()> {
         if !reg.tables.contains_key(table) {
             bail!("no table '{table}'");
         }
-        reg.cursors.insert(name.to_string(), FrameCursor::new(table));
+        reg.cursors
+            .insert(name.to_string(), FrameCursor::new(table));
         println!("cursor '{name}' created on table '{table}' at frame 0");
         Ok(())
     })
@@ -1202,14 +1280,21 @@ fn df_cursor_create(name: &str, table: &str) -> Result<()> {
 fn df_cursor_next(name: &str) -> Result<()> {
     let doc = load_soul_doc()?;
     let mut reg = load_registry(&doc)?;
-    let cursor = reg.cursors.get_mut(name)
-        .ok_or_else(|| anyhow::anyhow!("no cursor '{name}' — run: b00t soul cursor-create {name} <table>"))?;
+    let cursor = reg.cursors.get_mut(name).ok_or_else(|| {
+        anyhow::anyhow!("no cursor '{name}' — run: b00t soul cursor-create {name} <table>")
+    })?;
     let table_name = cursor.table.clone();
-    let df = reg.tables.get_mut(&table_name)
+    let df = reg
+        .tables
+        .get_mut(&table_name)
         .ok_or_else(|| anyhow::anyhow!("cursor '{name}' points to missing table '{table_name}'"))?;
     match cursor.next(df) {
         Some(row) => {
-            println!("frame {} ({})", row.id, row.created_at.format("%Y-%m-%dT%H:%M:%SZ"));
+            println!(
+                "frame {} ({})",
+                row.id,
+                row.created_at.format("%Y-%m-%dT%H:%M:%SZ")
+            );
             for (k, v) in &row.fields {
                 println!("  {} = {:?}", k, v);
             }
@@ -1224,7 +1309,9 @@ fn df_cursor_next(name: &str) -> Result<()> {
 
 fn df_cursor_reset(name: &str) -> Result<()> {
     with_registry(|reg| {
-        let cursor = reg.cursors.get_mut(name)
+        let cursor = reg
+            .cursors
+            .get_mut(name)
             .ok_or_else(|| anyhow::anyhow!("no cursor '{name}'"))?;
         cursor.reset();
         println!("cursor '{name}' reset to frame 0");
@@ -1249,19 +1336,30 @@ fn df_cursor_list() -> Result<()> {
 
 // ── alarm commands ────────────────────────────────────────────────────────────
 
-fn df_alarm_set(name: &str, table: &str, column: &str, condition: &str, aggregate: &str, emit: &str) -> Result<()> {
+fn df_alarm_set(
+    name: &str,
+    table: &str,
+    column: &str,
+    condition: &str,
+    aggregate: &str,
+    emit: &str,
+) -> Result<()> {
     let agg = match aggregate {
-        "sum"       => AlarmAggregate::Sum,
-        "avg"       => AlarmAggregate::Avg,
-        "count"     => AlarmAggregate::Count,
+        "sum" => AlarmAggregate::Sum,
+        "avg" => AlarmAggregate::Avg,
+        "count" => AlarmAggregate::Count,
         "per_frame" => AlarmAggregate::PerFrame,
-        other       => bail!("unknown aggregate '{other}'; valid: sum avg count per_frame"),
+        other => bail!("unknown aggregate '{other}'; valid: sum avg count per_frame"),
     };
     with_registry(|reg| {
         reg.alarms.retain(|a| a.name != name);
         reg.alarms.push(SoulAlarm {
-            name: name.to_string(), table: table.to_string(), column: column.to_string(),
-            condition: condition.to_string(), aggregate: agg, emit: emit.to_string(),
+            name: name.to_string(),
+            table: table.to_string(),
+            column: column.to_string(),
+            condition: condition.to_string(),
+            aggregate: agg,
+            emit: emit.to_string(),
         });
         println!("alarm '{name}' set on {table}.{column} {condition} → {emit}");
         Ok(())
@@ -1271,7 +1369,9 @@ fn df_alarm_set(name: &str, table: &str, column: &str, condition: &str, aggregat
 fn df_alarm_check(table: &str) -> Result<()> {
     let doc = load_soul_doc()?;
     let reg = load_registry(&doc)?;
-    let fired: Vec<_> = reg.alarms.iter()
+    let fired: Vec<_> = reg
+        .alarms
+        .iter()
         .filter(|a| a.table == table)
         .filter(|a| reg.tables.get(table).map(|df| a.check(df)).unwrap_or(false))
         .collect();
@@ -1279,9 +1379,15 @@ fn df_alarm_check(table: &str) -> Result<()> {
         println!("no alarms fired for '{table}'");
     } else {
         for a in &fired {
-            let detail = format!("table={table} column={} condition={}", a.column, a.condition);
+            let detail = format!(
+                "table={table} column={} condition={}",
+                a.column, a.condition
+            );
             write_event(&a.emit, &detail);
-            println!("ALARM: {} → {} (event written to events.jsonl)", a.name, a.emit);
+            println!(
+                "ALARM: {} → {} (event written to events.jsonl)",
+                a.name, a.emit
+            );
         }
     }
     Ok(())
@@ -1295,8 +1401,10 @@ fn df_alarm_list() -> Result<()> {
         return Ok(());
     }
     for a in &reg.alarms {
-        println!("{}: {}.{} {} ({:?}) → {}", a.name, a.table, a.column,
-            a.condition, a.aggregate, a.emit);
+        println!(
+            "{}: {}.{} {} ({:?}) → {}",
+            a.name, a.table, a.column, a.condition, a.aggregate, a.emit
+        );
     }
     Ok(())
 }

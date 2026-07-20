@@ -4,10 +4,10 @@
 
 use std::collections::HashMap;
 
+use crate::Embedding;
+use crate::layer::LayerDescriptor;
 use crate::layer::stack::LayerStack;
 use crate::layer::trait_def::TensorSource;
-use crate::layer::LayerDescriptor;
-use crate::Embedding;
 
 /// Router strategy: how query embeddings map to layer activations.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,12 +61,17 @@ impl LayerRouter {
     /// Route a search query to the best matching layers.
     /// The query embedding is compared against each registered layer's
     /// domain fingerprint via cosine similarity. Top-k are composed.
-    pub async fn route(&self, query_embedding: &Embedding, max_layers: usize) -> Vec<LayerDescriptor> {
+    pub async fn route(
+        &self,
+        query_embedding: &Embedding,
+        max_layers: usize,
+    ) -> Vec<LayerDescriptor> {
         match self.strategy {
-            RouterStrategy::CosineTopK | RouterStrategy::Threshold(_) => {
-                self.stack.compose(query_embedding, max_layers).await
-                    .unwrap_or_default()
-            }
+            RouterStrategy::CosineTopK | RouterStrategy::Threshold(_) => self
+                .stack
+                .compose(query_embedding, max_layers)
+                .await
+                .unwrap_or_default(),
         }
     }
 
@@ -90,7 +95,9 @@ impl LayerRouter {
         Fut: std::future::Future<Output = Result<Embedding, anyhow::Error>>,
     {
         // Hash for cache (simplified — use first 8 bytes of text hash)
-        let hash: u64 = text.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+        let hash: u64 = text
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
 
         // Embed the text
         let embedding = if let Some(cached) = self.embed_cache.get(&hash) {

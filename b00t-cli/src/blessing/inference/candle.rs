@@ -164,7 +164,7 @@ impl LLMInference for CandleBackend {
 
 #[cfg(feature = "candle")]
 /// A loaded Candle model that holds weights, tokenizer, and device in memory.
-/// Load the model once via `CandleModel::load()`, then call `generate()` 
+/// Load the model once via `CandleModel::load()`, then call `generate()`
 /// multiple times without re-downloading or rebuilding the computation graph.
 pub struct CandleModel {
     model: candle_transformers::models::qwen2::Model,
@@ -178,7 +178,7 @@ impl CandleModel {
     /// Load Qwen2.5-0.5B-Instruct from HuggingFace hub (cached after first download).
     /// Returns a model singleton that can generate text without re-initializing.
     pub fn load() -> Result<Self> {
-        use candle_core::{Device, DType};
+        use candle_core::{DType, Device};
         use candle_nn::VarBuilder;
         use candle_transformers::models::qwen2::{Config, Model};
         use hf_hub::api::sync::Api;
@@ -194,29 +194,34 @@ impl CandleModel {
         let api = Api::new().map_err(|e| anyhow!("HF Hub init: {e}"))?;
         let repo = api.model("Qwen/Qwen2.5-0.5B-Instruct".to_string());
 
-        let tokenizer_path = repo.get("tokenizer.json")
+        let tokenizer_path = repo
+            .get("tokenizer.json")
             .map_err(|e| anyhow!("Download tokenizer.json: {e}"))?;
-        let tokenizer = Tokenizer::from_file(tokenizer_path)
-            .map_err(|e| anyhow!("Tokenizer load: {e}"))?;
+        let tokenizer =
+            Tokenizer::from_file(tokenizer_path).map_err(|e| anyhow!("Tokenizer load: {e}"))?;
         let eos_id = tokenizer.token_to_id("<|im_end|>").unwrap_or(151645);
 
-        let config_path = repo.get("config.json")
+        let config_path = repo
+            .get("config.json")
             .map_err(|e| anyhow!("Download config.json: {e}"))?;
         let config_str = std::fs::read_to_string(config_path)?;
-        let config: Config = serde_json::from_str(&config_str)
-            .map_err(|e| anyhow!("Parse Qwen2 config: {e}"))?;
+        let config: Config =
+            serde_json::from_str(&config_str).map_err(|e| anyhow!("Parse Qwen2 config: {e}"))?;
 
         let vb = if let Ok(path) = repo.get("model.safetensors") {
             unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }
                 .map_err(|e| anyhow!("Load model.safetensors: {e}"))?
         } else {
-            let index_path = repo.get("model.safetensors.index.json")
+            let index_path = repo
+                .get("model.safetensors.index.json")
                 .map_err(|e| anyhow!("No model.safetensors or index.json: {e}"))?;
             let index_content = std::fs::read_to_string(index_path)?;
             let index: serde_json::Value = serde_json::from_str(&index_content)?;
-            let weight_map = index["weight_map"].as_object()
+            let weight_map = index["weight_map"]
+                .as_object()
                 .ok_or_else(|| anyhow!("Missing weight_map in index.json"))?;
-            let mut shards: Vec<std::path::PathBuf> = weight_map.values()
+            let mut shards: Vec<std::path::PathBuf> = weight_map
+                .values()
                 .filter_map(|v| v.as_str())
                 .map(|f| repo.get(f).unwrap_or_else(|_| std::path::PathBuf::from(f)))
                 .collect();
@@ -226,10 +231,14 @@ impl CandleModel {
                 .map_err(|e| anyhow!("Load {} shard files: {e}", shards.len()))?
         };
 
-        let model = Model::new(&config, vb)
-            .map_err(|e| anyhow!("Build Qwen2 model: {e}"))?;
+        let model = Model::new(&config, vb).map_err(|e| anyhow!("Build Qwen2 model: {e}"))?;
 
-        Ok(Self { model, tokenizer, device, eos_id })
+        Ok(Self {
+            model,
+            tokenizer,
+            device,
+            eos_id,
+        })
     }
 
     /// Generate text from a prompt using the already-loaded model.
@@ -238,9 +247,12 @@ impl CandleModel {
         use candle_core::Tensor;
 
         let formatted = format!(
-            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            prompt
         );
-        let encoding = self.tokenizer.encode(formatted, true)
+        let encoding = self
+            .tokenizer
+            .encode(formatted, true)
             .map_err(|e| anyhow!("Tokenize: {e}"))?;
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
         let input_len = input_ids.len();
@@ -258,27 +270,36 @@ impl CandleModel {
                     .unsqueeze(0)?
             };
 
-            let logits = self.model.forward(&input, i, None::<&candle_core::Tensor>)
+            let logits = self
+                .model
+                .forward(&input, i, None::<&candle_core::Tensor>)
                 .map_err(|e| anyhow!("Forward pass step {i}: {e}"))?;
 
-            let next_logit = logits.squeeze(0)
+            let next_logit = logits
+                .squeeze(0)
                 .map_err(|e| anyhow!("Squeeze batch dim step {i}: {e}"))?;
             let seq_len = next_logit.dims()[0];
-            let next_logit = next_logit.narrow(0, seq_len - 1, 1)
+            let next_logit = next_logit
+                .narrow(0, seq_len - 1, 1)
                 .map_err(|e| anyhow!("Narrow last token step {i}: {e}"))?
                 .squeeze(0)
                 .map_err(|e| anyhow!("Squeeze seq dim step {i}: {e}"))?;
 
-            next_token = next_logit.argmax(0)
+            next_token = next_logit
+                .argmax(0)
                 .map_err(|e| anyhow!("Argmax step {i}: {e}"))?
                 .to_scalar::<u32>()
                 .map_err(|e| anyhow!("Token scalar step {i}: {e}"))?;
             tokens.push(next_token);
-            if next_token == self.eos_id { break; }
+            if next_token == self.eos_id {
+                break;
+            }
         }
 
         let generated = &tokens[input_len..];
-        let output = self.tokenizer.decode(generated, true)
+        let output = self
+            .tokenizer
+            .decode(generated, true)
             .map_err(|e| anyhow!("Decode output: {e}"))?;
         Ok(output.trim().to_string())
     }
@@ -291,7 +312,9 @@ static CANDLE_MODEL: std::sync::OnceLock<std::sync::Mutex<Option<CandleModel>>> 
 
 fn get_candle_model() -> Result<std::sync::MutexGuard<'static, Option<CandleModel>>> {
     let lock = CANDLE_MODEL.get_or_init(|| std::sync::Mutex::new(None));
-    let mut guard = lock.lock().map_err(|e| anyhow!("candle model lock poisoned: {e}"))?;
+    let mut guard = lock
+        .lock()
+        .map_err(|e| anyhow!("candle model lock poisoned: {e}"))?;
     if guard.is_none() {
         let model = CandleModel::load()?;
         *guard = Some(model);

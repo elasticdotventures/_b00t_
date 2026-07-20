@@ -19,7 +19,7 @@
 //! 🤓 Schema constrains FORM, never truth — string free slots still need
 //! their solver/gate audit (see grammar-verify::audit-free-slots).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Which inference server the request is bound for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +53,12 @@ impl Backend {
 /// Existing constraint fields are left untouched (the client's own constraint
 /// wins — same non-hijack posture as the verify tool loop). Returns true when
 /// the request was modified.
-pub fn constrain_request(request: &mut Value, name: &str, schema: &Value, backend: Backend) -> bool {
+pub fn constrain_request(
+    request: &mut Value,
+    name: &str,
+    schema: &Value,
+    backend: Backend,
+) -> bool {
     let has_own_constraint = !request["response_format"].is_null()
         || !request["json_schema"].is_null()
         || !request["guided_json"].is_null()
@@ -111,7 +116,12 @@ mod tests {
             (Backend::Vllm, "guided_json", "json_schema"),
         ] {
             let mut req = json!({"model": "ch0nky", "messages": []});
-            assert!(constrain_request(&mut req, "sudo", &disposition_schema(), backend));
+            assert!(constrain_request(
+                &mut req,
+                "sudo",
+                &disposition_schema(),
+                backend
+            ));
             assert_eq!(req["response_format"]["type"], "json_schema");
             assert_eq!(req["response_format"]["json_schema"]["name"], "sudo");
             assert_eq!(req["response_format"]["json_schema"]["strict"], true);
@@ -123,7 +133,12 @@ mod tests {
     #[test]
     fn auto_stamps_all_dialects() {
         let mut req = json!({"model": "m", "messages": []});
-        assert!(constrain_request(&mut req, "s", &disposition_schema(), Backend::Auto));
+        assert!(constrain_request(
+            &mut req,
+            "s",
+            &disposition_schema(),
+            Backend::Auto
+        ));
         assert!(!req["response_format"].is_null());
         assert!(!req["json_schema"].is_null());
         assert!(!req["guided_json"].is_null());
@@ -134,7 +149,12 @@ mod tests {
         // Non-hijack: a request already carrying any constraint field is untouched.
         for own in ["response_format", "json_schema", "guided_json", "grammar"] {
             let mut req = json!({"model": "m", "messages": [], own: {"theirs": true}});
-            assert!(!constrain_request(&mut req, "s", &disposition_schema(), Backend::Auto));
+            assert!(!constrain_request(
+                &mut req,
+                "s",
+                &disposition_schema(),
+                Backend::Auto
+            ));
             assert_eq!(req[own], json!({"theirs": true}), "{own} clobbered");
             assert!(req["messages"].as_array().unwrap().is_empty());
         }
@@ -142,8 +162,14 @@ mod tests {
 
     #[test]
     fn detect_backend_from_upstream() {
-        assert_eq!(Backend::detect("http://127.0.0.1:5273/v1 llama-server"), Backend::LlamaCpp);
-        assert_eq!(Backend::detect("http://vllm.b00t-inference:8001/v1"), Backend::Vllm);
+        assert_eq!(
+            Backend::detect("http://127.0.0.1:5273/v1 llama-server"),
+            Backend::LlamaCpp
+        );
+        assert_eq!(
+            Backend::detect("http://vllm.b00t-inference:8001/v1"),
+            Backend::Vllm
+        );
         assert_eq!(Backend::detect("https://api.openai.com/v1"), Backend::Auto);
     }
 }

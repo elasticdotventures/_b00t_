@@ -18,7 +18,7 @@ use crate::scheduler::schema::{
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::{types::ValueRef, Row};
+use rusqlite::{Row, types::ValueRef};
 use serde_json::Value;
 
 // ── Helper: parse a JSON array TEXT column into Vec<String> ────────────────────
@@ -71,11 +71,7 @@ fn opt_str<'a>(row: &'a Row, idx: usize) -> Result<Option<&'a str>> {
         ValueRef::Text(t) => {
             let s = std::str::from_utf8(t)
                 .with_context(|| format!("non-utf8 text in column {}", idx))?;
-            if s.is_empty() {
-                Ok(None)
-            } else {
-                Ok(Some(s))
-            }
+            if s.is_empty() { Ok(None) } else { Ok(Some(s)) }
         }
         _ => Ok(None),
     }

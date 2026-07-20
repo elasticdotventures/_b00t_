@@ -162,10 +162,11 @@ pub fn parse_entries_from_content(content: &'static str) -> Vec<EmojiEntry> {
     let mut entries = Vec::new();
 
     // Find the mdtable header
-    let header_pos = match content.find("| literal | shortcode | g0spell | tier | action | description |") {
-        Some(p) => p,
-        None => return entries,
-    };
+    let header_pos =
+        match content.find("| literal | shortcode | g0spell | tier | action | description |") {
+            Some(p) => p,
+            None => return entries,
+        };
 
     // Find the separator row + skip it
     let after_header = &content[header_pos..];
@@ -337,8 +338,22 @@ mod tests {
     #[test]
     fn test_lookup_literal() {
         let entries = vec![
-            EmojiEntry { literal: "🦨", shortcode: ":skunk:", g0spell: "skunk", tier: 1, action: "warn+redirect", description: "First" },
-            EmojiEntry { literal: "💩", shortcode: ":poop:", g0spell: "antipattern", tier: 2, action: "block+escalate", description: "Repeat" },
+            EmojiEntry {
+                literal: "🦨",
+                shortcode: ":skunk:",
+                g0spell: "skunk",
+                tier: 1,
+                action: "warn+redirect",
+                description: "First",
+            },
+            EmojiEntry {
+                literal: "💩",
+                shortcode: ":poop:",
+                g0spell: "antipattern",
+                tier: 2,
+                action: "block+escalate",
+                description: "Repeat",
+            },
         ];
         let reg = EmojiRegistry {
             schema_version: 1,
@@ -352,9 +367,14 @@ mod tests {
 
     #[test]
     fn test_lookup_shortcode() {
-        let entries = vec![
-            EmojiEntry { literal: "🦨", shortcode: ":skunk:", g0spell: "skunk", tier: 1, action: "warn+redirect", description: "First" },
-        ];
+        let entries = vec![EmojiEntry {
+            literal: "🦨",
+            shortcode: ":skunk:",
+            g0spell: "skunk",
+            tier: 1,
+            action: "warn+redirect",
+            description: "First",
+        }];
         let reg = EmojiRegistry {
             schema_version: 1,
             entries: Box::leak(entries.into_boxed_slice()),
@@ -366,9 +386,14 @@ mod tests {
 
     #[test]
     fn test_lookup_g0spell() {
-        let entries = vec![
-            EmojiEntry { literal: "🚫", shortcode: ":block:", g0spell: "block", tier: 0, action: "deny", description: "Permanent" },
-        ];
+        let entries = vec![EmojiEntry {
+            literal: "🚫",
+            shortcode: ":block:",
+            g0spell: "block",
+            tier: 0,
+            action: "deny",
+            description: "Permanent",
+        }];
         let reg = EmojiRegistry {
             schema_version: 1,
             entries: Box::leak(entries.into_boxed_slice()),
@@ -381,9 +406,30 @@ mod tests {
     #[test]
     fn test_filter_tier() {
         let entries = vec![
-            EmojiEntry { literal: "✅", shortcode: ":pass:", g0spell: "pass", tier: 0, action: "ok", description: "Pass" },
-            EmojiEntry { literal: "🦨", shortcode: ":skunk:", g0spell: "skunk", tier: 1, action: "warn+redirect", description: "First" },
-            EmojiEntry { literal: "💩", shortcode: ":poop:", g0spell: "antipattern", tier: 2, action: "block+escalate", description: "Repeat" },
+            EmojiEntry {
+                literal: "✅",
+                shortcode: ":pass:",
+                g0spell: "pass",
+                tier: 0,
+                action: "ok",
+                description: "Pass",
+            },
+            EmojiEntry {
+                literal: "🦨",
+                shortcode: ":skunk:",
+                g0spell: "skunk",
+                tier: 1,
+                action: "warn+redirect",
+                description: "First",
+            },
+            EmojiEntry {
+                literal: "💩",
+                shortcode: ":poop:",
+                g0spell: "antipattern",
+                tier: 2,
+                action: "block+escalate",
+                description: "Repeat",
+            },
         ];
         let reg = EmojiRegistry {
             schema_version: 1,
@@ -398,7 +444,14 @@ mod tests {
 
     #[test]
     fn test_display_entry() {
-        let entry = EmojiEntry { literal: "🦨", shortcode: ":skunk:", g0spell: "skunk", tier: 1, action: "warn+redirect", description: "First offense" };
+        let entry = EmojiEntry {
+            literal: "🦨",
+            shortcode: ":skunk:",
+            g0spell: "skunk",
+            tier: 1,
+            action: "warn+redirect",
+            description: "First offense",
+        };
         let display = format!("{}", entry);
         assert!(display.contains("🦨"));
         assert!(display.contains(":skunk:"));
@@ -409,15 +462,25 @@ mod tests {
     fn test_emoji_registry_macro_points_to_real_file() {
         // This tests that the macro compiles and the file exists
         let reg = emoji_registry!();
-        assert!(reg.len() >= 9, "Expected at least 9 emoji entries, got {}", reg.len());
+        assert!(
+            reg.len() >= 9,
+            "Expected at least 9 emoji entries, got {}",
+            reg.len()
+        );
 
         // Verify the file has :skunk: and :poop:
         let skunk = reg.lookup_shortcode(":skunk:");
-        assert!(skunk.is_some(), ":skunk: should exist in the real registry file");
+        assert!(
+            skunk.is_some(),
+            ":skunk: should exist in the real registry file"
+        );
         assert_eq!(skunk.unwrap().literal, "🦨");
 
         let poop = reg.lookup_shortcode(":poop:");
-        assert!(poop.is_some(), ":poop: should exist in the real registry file");
+        assert!(
+            poop.is_some(),
+            ":poop: should exist in the real registry file"
+        );
         assert_eq!(poop.unwrap().literal, "💩");
 
         // Verify escalation tier semantics

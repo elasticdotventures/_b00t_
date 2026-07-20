@@ -68,13 +68,18 @@ impl std::error::Error for MermaidParseError {}
 fn role_from_label(label: &str) -> VisualizationRole {
     let lower = label.to_lowercase().replace('_', " ");
     // Process-specific roles first (more precise matches)
-    if lower.contains("ingest") || lower.contains("load") || lower.contains("parse")
-        || lower.contains("extract") || lower.contains("docling")
+    if lower.contains("ingest")
+        || lower.contains("load")
+        || lower.contains("parse")
+        || lower.contains("extract")
+        || lower.contains("docling")
     {
         VisualizationRole::Ingest
     } else if lower.contains("valid") || lower.contains("verify") || lower.contains("check") {
         VisualizationRole::Validate
-    } else if lower.contains("classif") || lower.contains("categor") || lower.contains("tag")
+    } else if lower.contains("classif")
+        || lower.contains("categor")
+        || lower.contains("tag")
         || lower.contains("label")
     {
         VisualizationRole::Classify
@@ -87,33 +92,53 @@ fn role_from_label(label: &str) -> VisualizationRole {
     } else if lower.contains("decis") || lower.contains("if") || lower.contains("branch") {
         VisualizationRole::Decision
     // Generic semantic categories (fallback after process roles)
-    } else if lower.contains("source") || lower.contains("statement") || lower.contains("blake3")
-        || lower.contains("document") || lower.contains("file")
+    } else if lower.contains("source")
+        || lower.contains("statement")
+        || lower.contains("blake3")
+        || lower.contains("document")
+        || lower.contains("file")
     {
         VisualizationRole::Data
-    } else if lower.contains("llm") || lower.contains("ai") || lower.contains("gpt")
-        || lower.contains("phi") || lower.contains("reasoning") || lower.contains("model")
+    } else if lower.contains("llm")
+        || lower.contains("ai")
+        || lower.contains("gpt")
+        || lower.contains("phi")
+        || lower.contains("reasoning")
+        || lower.contains("model")
     {
         VisualizationRole::Intelligence
-    } else if lower.contains("legal") || lower.contains("rule") || lower.contains("constraint")
-        || lower.contains("law") || lower.contains("solver") || lower.contains("registry")
+    } else if lower.contains("legal")
+        || lower.contains("rule")
+        || lower.contains("constraint")
+        || lower.contains("law")
+        || lower.contains("solver")
+        || lower.contains("registry")
     {
         VisualizationRole::Rule
-    } else if lower.contains("security") || lower.contains("auth") || lower.contains("credential")
-        || lower.contains("guard") || lower.contains("safety")
+    } else if lower.contains("security")
+        || lower.contains("auth")
+        || lower.contains("credential")
+        || lower.contains("guard")
+        || lower.contains("safety")
     {
         VisualizationRole::Security
-    } else if lower.contains("human") || lower.contains("operator") || lower.contains("reviewer")
+    } else if lower.contains("human")
+        || lower.contains("operator")
+        || lower.contains("reviewer")
         || lower.contains("accountant")
     {
         VisualizationRole::Human
     } else if lower.contains("storage") || lower.contains("database") || lower.contains("store") {
         VisualizationRole::Storage
-    } else if lower.contains("report") || lower.contains("export") || lower.contains("summary")
+    } else if lower.contains("report")
+        || lower.contains("export")
+        || lower.contains("summary")
         || lower.contains("chart")
     {
         VisualizationRole::Report
-    } else if lower.contains("event") || lower.contains("notify") || lower.contains("alert")
+    } else if lower.contains("event")
+        || lower.contains("notify")
+        || lower.contains("alert")
         || lower.contains("hook")
     {
         VisualizationRole::Event
@@ -177,7 +202,9 @@ pub fn parse_mermaid(text: &str) -> Result<InvariantGraph, MermaidParseError> {
                 if from_id.is_empty() || to_id.is_empty() {
                     return Err(MermaidParseError::InvalidEdgeSyntax(line.to_string()));
                 }
-                edges.push(InvariantEdge::new(&from_id, &to_id).with_label(label.unwrap_or_default()));
+                edges.push(
+                    InvariantEdge::new(&from_id, &to_id).with_label(label.unwrap_or_default()),
+                );
                 seen_ids.insert(from_id);
                 seen_ids.insert(to_id);
             }
@@ -500,9 +527,7 @@ pub fn scene_to_gltf_data_uri(
     Ok(format!("data:model/gltf+json;base64,{encoded}"))
 }
 
-pub fn graph_to_isometric_response(
-    graph: &InvariantGraph,
-) -> Result<serde_json::Value, String> {
+pub fn graph_to_isometric_response(graph: &InvariantGraph) -> Result<serde_json::Value, String> {
     let positions = kasuari_layout(graph)?;
     let svg = render_svg(graph, &positions);
     let gltf = scene_to_gltf_data_uri(graph, &positions).ok();
@@ -571,10 +596,7 @@ pub fn find_connected_components(graph: &InvariantGraph) -> Vec<Vec<String>> {
     components
 }
 
-pub fn build_container_graph(
-    graph: &InvariantGraph,
-    components: &[Vec<String>],
-) -> InvariantGraph {
+pub fn build_container_graph(graph: &InvariantGraph, components: &[Vec<String>]) -> InvariantGraph {
     let node_to_comp: std::collections::HashMap<&str, usize> = components
         .iter()
         .enumerate()
@@ -591,11 +613,17 @@ pub fn build_container_graph(
             format!("{} nodes", ids.len())
         };
         let cid = format!("__container_{}", i);
-        container_graph = container_graph
-            .with_node(
-                InvariantNode::new(cid.clone(), label, role)
-                    .with_invariant(format!("{} nodes: {}", ids.len(), ids.iter().take(5).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")))
-            );
+        container_graph = container_graph.with_node(
+            InvariantNode::new(cid.clone(), label, role).with_invariant(format!(
+                "{} nodes: {}",
+                ids.len(),
+                ids.iter()
+                    .take(5)
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        );
     }
 
     let mut seen_edges = std::collections::HashSet::new();
@@ -608,7 +636,11 @@ pub fn build_container_graph(
                 if !seen_edges.contains(&key) {
                     seen_edges.insert(key);
                     let label = if components[fc].len() + components[tc].len() > 1 {
-                        Some(format!("{}↔{} edges", components[fc].len(), components[tc].len()))
+                        Some(format!(
+                            "{}↔{} edges",
+                            components[fc].len(),
+                            components[tc].len()
+                        ))
                     } else {
                         None
                     };
@@ -645,7 +677,8 @@ pub fn build_component_subgraph(
     component_ids: &[String],
     index: usize,
 ) -> InvariantGraph {
-    let id_set: std::collections::HashSet<&str> = component_ids.iter().map(|s| s.as_str()).collect();
+    let id_set: std::collections::HashSet<&str> =
+        component_ids.iter().map(|s| s.as_str()).collect();
     let mut sub = InvariantGraph::new(format!("{}_{}", graph.name, index));
     for node in &graph.nodes {
         if id_set.contains(node.id.as_str()) {
@@ -678,9 +711,8 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
         .take(50)
         .map(|(i, ids)| {
             let sub = build_component_subgraph(graph, ids, i);
-            let svg = graph_to_isometric_svg(&sub).unwrap_or_else(|e| {
-                format!("<svg><text fill='red'>{}</text></svg>", e)
-            });
+            let svg = graph_to_isometric_svg(&sub)
+                .unwrap_or_else(|e| format!("<svg><text fill='red'>{}</text></svg>", e));
             serde_json::json!({
                 "id": format!("__container_{}", i),
                 "nodes": ids.len(),
@@ -694,7 +726,10 @@ pub fn graph_to_container_response(graph: &InvariantGraph) -> Result<serde_json:
     if let Some(obj) = response.as_object_mut() {
         obj.insert("components".to_string(), serde_json::json!(subgraphs));
         obj.insert("grouped".to_string(), serde_json::json!(true));
-        obj.insert("total_components".to_string(), serde_json::json!(components.len()));
+        obj.insert(
+            "total_components".to_string(),
+            serde_json::json!(components.len()),
+        );
     }
     Ok(response)
 }
@@ -709,8 +744,7 @@ mod mermaid_native {
     use crate::{InvariantEdge, InvariantGraph, InvariantNode};
 
     pub fn parse_mermaid_mmdr(text: &str) -> Result<InvariantGraph, String> {
-        let parsed =
-            mermaid_rs_renderer::parse_mermaid_strict(text).map_err(|e| e.to_string())?;
+        let parsed = mermaid_rs_renderer::parse_mermaid_strict(text).map_err(|e| e.to_string())?;
         let mut graph = InvariantGraph::new("mmdr");
         for (id, node) in &parsed.graph.nodes {
             graph = graph.with_node(InvariantNode::new(
@@ -744,8 +778,16 @@ fn base64_encode(input: &str) -> String {
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(chars[((triple >> 18) & 0x3f) as usize] as char);
         result.push(chars[((triple >> 12) & 0x3f) as usize] as char);
-        result.push(if chunk.len() > 1 { chars[((triple >> 6) & 0x3f) as usize] } else { b'=' } as char);
-        result.push(if chunk.len() > 2 { chars[(triple & 0x3f) as usize] } else { b'=' } as char);
+        result.push(if chunk.len() > 1 {
+            chars[((triple >> 6) & 0x3f) as usize]
+        } else {
+            b'='
+        } as char);
+        result.push(if chunk.len() > 2 {
+            chars[(triple & 0x3f) as usize]
+        } else {
+            b'='
+        } as char);
     }
     result
 }
@@ -822,9 +864,7 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
         solver
             .add_constraints([
                 vars.x | GE(Strength::REQUIRED) | 0.0,
-                vars.z
-                    | EQ(Strength::REQUIRED)
-                    | (layer * LAYER_SPACING),
+                vars.z | EQ(Strength::REQUIRED) | (layer * LAYER_SPACING),
                 vars.y | EQ(Strength::REQUIRED) | 0.0,
             ])
             .map_err(|e| format!("constraint error: {e:?}"))?;
@@ -843,7 +883,9 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
         }
 
         for (i, id) in ids.iter().enumerate() {
-            if i == 0 { continue; }
+            if i == 0 {
+                continue;
+            }
             if let Some(vars) = node_vars.get(id) {
                 let pref_x = (*layer as f64) * 0.5 * NODE_SPACING + i as f64 * NODE_SPACING;
                 solver
@@ -857,9 +899,7 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
                 let a_vars = &node_vars[&ids[i]];
                 let b_vars = &node_vars[&ids[j]];
                 solver
-                    .add_constraint(
-                        (b_vars.x - a_vars.x) | GE(Strength::REQUIRED) | MIN_X_DIST,
-                    )
+                    .add_constraint((b_vars.x - a_vars.x) | GE(Strength::REQUIRED) | MIN_X_DIST)
                     .map_err(|e| format!("constraint error: {e:?}"))?;
             }
         }
@@ -873,9 +913,9 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
                 (node_vars.get(&edge.from), node_vars.get(&edge.to))
             {
                 solver
-                    .add_constraints([
-                        to_vars.z | GE(Strength::STRONG) | (from_vars.z + LAYER_SPACING),
-                    ])
+                    .add_constraints([to_vars.z
+                        | GE(Strength::STRONG)
+                        | (from_vars.z + LAYER_SPACING)])
                     .map_err(|e| format!("constraint error: {e:?}"))?;
             }
         }
@@ -884,14 +924,12 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
         {
             solver
                 .add_constraint(
-                    (to_vars.x - from_vars.x) | LE(Strength::MEDIUM)
-                        | (3.0 * NODE_SPACING),
+                    (to_vars.x - from_vars.x) | LE(Strength::MEDIUM) | (3.0 * NODE_SPACING),
                 )
                 .map_err(|e| format!("constraint error: {e:?}"))?;
             solver
                 .add_constraint(
-                    (from_vars.x - to_vars.x) | LE(Strength::MEDIUM)
-                        | (3.0 * NODE_SPACING),
+                    (from_vars.x - to_vars.x) | LE(Strength::MEDIUM) | (3.0 * NODE_SPACING),
                 )
                 .map_err(|e| format!("constraint error: {e:?}"))?;
         }
@@ -900,9 +938,7 @@ fn kasuari_layout(graph: &InvariantGraph) -> Result<HashMap<String, (f64, f64, f
     for node in &graph.nodes {
         let vars = &node_vars[&node.id];
         solver
-            .add_constraint(
-                vars.x | LE(Strength::REQUIRED) | (layer_count * NODE_SPACING * 3.0),
-            )
+            .add_constraint(vars.x | LE(Strength::REQUIRED) | (layer_count * NODE_SPACING * 3.0))
             .map_err(|e| format!("constraint error: {e:?}"))?;
     }
 
@@ -990,9 +1026,7 @@ fn assign_layers(graph: &InvariantGraph) -> HashMap<String, usize> {
 ///   - `"satisfies|FAIL|..."` — with pipe-delimited status
 fn is_satisfies_edge(label: &str) -> bool {
     let lower = label.to_lowercase();
-    lower == "satisfies"
-        || lower.starts_with("satisfies:")
-        || lower.starts_with("satisfies|")
+    lower == "satisfies" || lower.starts_with("satisfies:") || lower.starts_with("satisfies|")
 }
 
 /// Determine the stroke colour for a satisfies edge based on its status payload.
@@ -1028,10 +1062,7 @@ fn group_by_layer(
     groups
 }
 
-fn render_svg(
-    graph: &InvariantGraph,
-    positions: &HashMap<String, (f64, f64, f64)>,
-) -> String {
+fn render_svg(graph: &InvariantGraph, positions: &HashMap<String, (f64, f64, f64)>) -> String {
     let scale = 0.6;
     let ox = 400.0;
     let oy = 80.0;
@@ -1079,7 +1110,12 @@ fn render_svg(
                 let status_color = satisfies_status_color(label);
                 let d = format!(
                     "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
-                    sx1, sy1, mid, midy - 15.0, sx2, sy2
+                    sx1,
+                    sy1,
+                    mid,
+                    midy - 15.0,
+                    sx2,
+                    sy2
                 );
                 svg.push_str(&format!(
                     r##"<path d="{}" stroke="{}" stroke-width="1.5" stroke-dasharray="6,4" fill="none" opacity="0.7"/>"##,
@@ -1099,8 +1135,7 @@ fn render_svg(
                 }
             } else {
                 // Regular edge — existing behaviour unchanged
-                let _color = if let Some(from_node) =
-                    graph.nodes.iter().find(|n| n.id == edge.from)
+                let _color = if let Some(from_node) = graph.nodes.iter().find(|n| n.id == edge.from)
                 {
                     from_node.role.color()
                 } else {
@@ -1108,7 +1143,12 @@ fn render_svg(
                 };
                 let d = format!(
                     "M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}",
-                    sx1, sy1, mid, midy - 15.0, sx2, sy2
+                    sx1,
+                    sy1,
+                    mid,
+                    midy - 15.0,
+                    sx2,
+                    sy2
                 );
                 let edge_label = edge.label.as_ref().map(|l| l.as_str()).unwrap_or("");
                 let status = satisfies_status_color(edge_label);
@@ -1141,7 +1181,10 @@ fn render_svg(
                 node.label.clone()
             };
 
-            let layer = positions.get(&node.id).map(|&(_, _, z)| z as i32).unwrap_or(0);
+            let layer = positions
+                .get(&node.id)
+                .map(|&(_, _, z)| z as i32)
+                .unwrap_or(0);
             svg.push_str(&format!(
                 r##"<g transform="translate({:.1},{:.1})" class="iso-node" data-node-id="{}" data-node-role="{}" data-node-layer="{}">"##,
                 sx - hw, sy - hh,
@@ -1186,7 +1229,9 @@ fn render_svg(
             let poly = node.role.polygon();
             let mut points = String::new();
             for (i, &(px, py)) in poly.iter().enumerate() {
-                if i > 0 { points.push(' '); }
+                if i > 0 {
+                    points.push(' ');
+                }
                 let sx = hw + px as f64 * hw;
                 let sy = hh + py as f64 * hh;
                 points.push_str(&format!("{sx:.1},{sy:.1}"));
@@ -1257,7 +1302,8 @@ mod tests {
 
     #[test]
     fn parse_paren_node_syntax() {
-        let mermaid = "flowchart TD\n    thing(\"A Thing\")\n    other(\"Other\")\n    thing --> other";
+        let mermaid =
+            "flowchart TD\n    thing(\"A Thing\")\n    other(\"Other\")\n    thing --> other";
         let graph = parse_mermaid(mermaid).expect("parse");
         assert_eq!(graph.nodes.len(), 2);
         let labels: Vec<&str> = graph.nodes.iter().map(|n| n.label.as_str()).collect();
@@ -1267,10 +1313,7 @@ mod tests {
 
     #[test]
     fn role_detection() {
-        assert_eq!(
-            role_from_label("ingest docs"),
-            VisualizationRole::Ingest
-        );
+        assert_eq!(role_from_label("ingest docs"), VisualizationRole::Ingest);
         assert_eq!(
             role_from_label("validate input"),
             VisualizationRole::Validate
@@ -1279,18 +1322,12 @@ mod tests {
             role_from_label("classify transaction"),
             VisualizationRole::Classify
         );
-        assert_eq!(
-            role_from_label("review output"),
-            VisualizationRole::Review
-        );
+        assert_eq!(role_from_label("review output"), VisualizationRole::Review);
         assert_eq!(
             role_from_label("reconcile accounts"),
             VisualizationRole::Reconcile
         );
-        assert_eq!(
-            role_from_label("commit result"),
-            VisualizationRole::Commit
-        );
+        assert_eq!(role_from_label("commit result"), VisualizationRole::Commit);
         assert_eq!(
             role_from_label("decision point"),
             VisualizationRole::Decision
@@ -1306,16 +1343,8 @@ mod tests {
     #[test]
     fn layout_produces_positions() {
         let graph = InvariantGraph::new("test")
-            .with_node(InvariantNode::new(
-                "a",
-                "Alpha",
-                VisualizationRole::Ingest,
-            ))
-            .with_node(InvariantNode::new(
-                "b",
-                "Beta",
-                VisualizationRole::Validate,
-            ))
+            .with_node(InvariantNode::new("a", "Alpha", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Validate))
             .with_edge(InvariantEdge::new("a", "b"));
 
         let positions = kasuari_layout(&graph).expect("layout");
@@ -1324,25 +1353,14 @@ mod tests {
         assert!(positions.contains_key("b"));
         let (_, _, z_a) = positions["a"];
         let (_, _, z_b) = positions["b"];
-        assert!(
-            z_b >= z_a,
-            "target should be at same or later Z layer"
-        );
+        assert!(z_b >= z_a, "target should be at same or later Z layer");
     }
 
     #[test]
     fn svg_output_contains_elements() {
         let graph = InvariantGraph::new("svg-test")
-            .with_node(InvariantNode::new(
-                "x",
-                "X Node",
-                VisualizationRole::Ingest,
-            ))
-            .with_node(InvariantNode::new(
-                "y",
-                "Y Node",
-                VisualizationRole::Commit,
-            ))
+            .with_node(InvariantNode::new("x", "X Node", VisualizationRole::Ingest))
+            .with_node(InvariantNode::new("y", "Y Node", VisualizationRole::Commit))
             .with_edge(InvariantEdge::new("x", "y"));
 
         let svg = graph_to_isometric_svg(&graph).expect("svg");
@@ -1404,11 +1422,7 @@ mod tests {
         let satisfies_count = graph
             .edges
             .iter()
-            .filter(|e| {
-                e.label
-                    .as_deref()
-                    .is_some_and(|l| is_satisfies_edge(l))
-            })
+            .filter(|e| e.label.as_deref().is_some_and(|l| is_satisfies_edge(l)))
             .count();
         assert!(
             satisfies_count >= 1,
@@ -1429,8 +1443,14 @@ mod tests {
                 .with_edge(InvariantEdge::new("a", "b").with_label("satisfies: PASS"));
             let svg = graph_to_isometric_svg(&graph).expect("svg pass");
             assert!(svg.contains("#16a34a"), "PASS edge should be green");
-            assert!(svg.contains("satisfies: …"), "PASS label should be truncated");
-            assert!(svg.contains("stroke-dasharray"), "satisfies edge should be dashed");
+            assert!(
+                svg.contains("satisfies: …"),
+                "PASS label should be truncated"
+            );
+            assert!(
+                svg.contains("stroke-dasharray"),
+                "satisfies edge should be dashed"
+            );
         }
 
         // Test FAIL → red
@@ -1441,7 +1461,10 @@ mod tests {
                 .with_edge(InvariantEdge::new("a", "b").with_label("satisfies|FAIL|s.355-305"));
             let svg = graph_to_isometric_svg(&graph).expect("svg fail");
             assert!(svg.contains("#dc2626"), "FAIL edge should be red");
-            assert!(svg.contains("stroke-dasharray"), "satisfies edge should be dashed");
+            assert!(
+                svg.contains("stroke-dasharray"),
+                "satisfies edge should be dashed"
+            );
         }
 
         // Test bare satisfies → blue
@@ -1451,7 +1474,10 @@ mod tests {
                 .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
                 .with_edge(InvariantEdge::new("a", "b").with_label("satisfies"));
             let svg = graph_to_isometric_svg(&graph).expect("svg bare");
-            assert!(svg.contains("#3b82f6"), "unqualified satisfies edge should be blue");
+            assert!(
+                svg.contains("#3b82f6"),
+                "unqualified satisfies edge should be blue"
+            );
         }
 
         // Test unknown → yellow
@@ -1461,7 +1487,10 @@ mod tests {
                 .with_node(InvariantNode::new("b", "Beta", VisualizationRole::Step))
                 .with_edge(InvariantEdge::new("a", "b").with_label("satisfies: ?"));
             let svg = graph_to_isometric_svg(&graph).expect("svg unknown");
-            assert!(svg.contains("#eab308"), "UNKNOWN satisfies edge should be yellow");
+            assert!(
+                svg.contains("#eab308"),
+                "UNKNOWN satisfies edge should be yellow"
+            );
         }
     }
 

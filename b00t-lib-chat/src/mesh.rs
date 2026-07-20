@@ -35,17 +35,17 @@ use crate::hive_transport::MemoryHiveTransport;
 use crate::ipc_transport::{AgentEndpoint, AgentEvent, AgentWatcher, DiscoverableTransport};
 use crate::ledgrrr::{FinopsCode, Ledgrrr, UsageReceipt};
 use crate::message::ChatMessage;
-use ufo_types::{Stereotyped, UfoStereotype};
 use async_trait::async_trait;
-use futures::stream::BoxStream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
+use ufo_types::{Stereotyped, UfoStereotype};
 
 #[cfg(feature = "nats")]
 use crate::hive_transport::NatsHiveTransport;
@@ -383,7 +383,10 @@ impl NatsMeshNode {
     /// application frames into the inbox. Re-gossip and discovery replies are
     /// published back through the same broker-neutral transport — no NATS reply
     /// semantics are assumed.
-    fn forward_stream(&self, mut stream: BoxStream<'static, Vec<u8>>) -> tokio::task::JoinHandle<()> {
+    fn forward_stream(
+        &self,
+        mut stream: BoxStream<'static, Vec<u8>>,
+    ) -> tokio::task::JoinHandle<()> {
         let inbox_tx = self.inbox_tx.clone();
         let transport = self.transport.clone();
         let agent_id = self.config.agent_id.clone();
@@ -407,7 +410,11 @@ impl NatsMeshNode {
                         let seq = g.next_seq(&p.agent_id);
                         g.ingest(p.clone(), seq, 0);
                     }
-                    MeshFrame::Gossip { presence, seq, hops } => {
+                    MeshFrame::Gossip {
+                        presence,
+                        seq,
+                        hops,
+                    } => {
                         // Accept if newer; re-gossip with decremented budget.
                         let forward = {
                             let mut g = peers.write().await;
@@ -424,7 +431,11 @@ impl NatsMeshNode {
                             }
                         }
                     }
-                    MeshFrame::DiscoveryReply { endpoint, role, skills } => {
+                    MeshFrame::DiscoveryReply {
+                        endpoint,
+                        role,
+                        skills,
+                    } => {
                         if endpoint.agent_id != agent_id {
                             let mut g = peers.write().await;
                             let seq = g.next_seq(&endpoint.agent_id);
@@ -549,7 +560,8 @@ impl NatsMeshNode {
     /// then collect replies for the configured timeout. Gossip advertisements
     /// received meanwhile also populate the peer table.
     pub async fn discover(&self) -> ChatResult<Vec<AgentEndpoint>> {
-        self.discover_with_timeout(self.config.discover_timeout).await
+        self.discover_with_timeout(self.config.discover_timeout)
+            .await
     }
 
     /// Discover peers, waiting up to `timeout` for fresh replies.
@@ -621,8 +633,11 @@ impl NatsMeshNode {
     pub async fn send(&self, to_agent: &str, message: &ChatMessage) -> ChatResult<()> {
         let frame = MeshFrame::Direct(message.clone());
         let payload = serde_json::to_vec(&frame)?;
-        self.transport.publish(&node_subject(to_agent), &payload).await?;
-        self.record_usage(&self.config.project, "nats.send", 1).await?;
+        self.transport
+            .publish(&node_subject(to_agent), &payload)
+            .await?;
+        self.record_usage(&self.config.project, "nats.send", 1)
+            .await?;
         Ok(())
     }
 
@@ -712,7 +727,10 @@ mod tests {
     #[test]
     fn subjects_are_well_formed() {
         assert_eq!(node_subject("alpha"), "b00t.hive.mesh.node.alpha");
-        assert_eq!(channel_subject("mission.x"), "b00t.hive.mesh.channel.mission.x");
+        assert_eq!(
+            channel_subject("mission.x"),
+            "b00t.hive.mesh.channel.mission.x"
+        );
     }
 
     #[test]
@@ -728,12 +746,13 @@ mod tests {
         };
         assert_eq!(presence.ufo_stereotype().to_string(), "Kind:AgentPresence");
         assert_eq!(
-            MeshFrame::Presence(presence.clone()).ufo_stereotype().to_string(),
+            MeshFrame::Presence(presence.clone())
+                .ufo_stereotype()
+                .to_string(),
             "Relator:hive-mesh-frame"
         );
-        let node = NatsMeshNode::new(
-            MeshNodeConfig::new("a", "nats://localhost:4222").with_project("p"),
-        );
+        let node =
+            NatsMeshNode::new(MeshNodeConfig::new("a", "nats://localhost:4222").with_project("p"));
         assert_eq!(node.ufo_stereotype().to_string(), "Role:hive-node");
     }
 

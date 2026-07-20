@@ -47,16 +47,18 @@ impl UfoStereotype {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeweyNumber {
-    pub category: String,   // PRD, LEARN, PATTERN, SCHEMA, CASE-STUDY
-    pub domain: String,     // ARCH, DATA, AI, SECURITY, DESIGN, OPS
-    pub sequence: u32,      // 001-999
-    pub title: String,      // human-readable slug
+    pub category: String, // PRD, LEARN, PATTERN, SCHEMA, CASE-STUDY
+    pub domain: String,   // ARCH, DATA, AI, SECURITY, DESIGN, OPS
+    pub sequence: u32,    // 001-999
+    pub title: String,    // human-readable slug
 }
 
 impl DeweyNumber {
     pub fn parse(raw: &str) -> Option<Self> {
         let parts: Vec<&str> = raw.split('.').collect();
-        if parts.len() < 4 { return None; }
+        if parts.len() < 4 {
+            return None;
+        }
         Some(Self {
             category: parts[0].to_uppercase(),
             domain: parts[1].to_uppercase(),
@@ -66,7 +68,10 @@ impl DeweyNumber {
     }
 
     pub fn to_string(&self) -> String {
-        format!("{}.{}.{:03}.{}", self.category, self.domain, self.sequence, self.title)
+        format!(
+            "{}.{}.{:03}.{}",
+            self.category, self.domain, self.sequence, self.title
+        )
     }
 }
 
@@ -142,17 +147,30 @@ pub struct PrdDatum {
 }
 
 impl AbstractDocument for PrdDatum {
-    fn catalog_number(&self) -> &DeweyNumber { &self.catalog }
-    fn title(&self) -> &str { &self.title }
-    fn summary(&self) -> &str { &self.summary }
-    fn ufo_stereotype(&self) -> UfoStereotype { self.ufo_stereotype }
+    fn catalog_number(&self) -> &DeweyNumber {
+        &self.catalog
+    }
+    fn title(&self) -> &str {
+        &self.title
+    }
+    fn summary(&self) -> &str {
+        &self.summary
+    }
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        self.ufo_stereotype
+    }
 
     fn required_stanzas() -> &'static [&'static str] {
         &["[prd.overview]", "[prd.acceptance]"]
     }
 
     fn optional_stanzas() -> &'static [&'static str] {
-        &["[prd.dependencies]", "[prd.risks]", "[prd.references]", "[prd.author]"]
+        &[
+            "[prd.dependencies]",
+            "[prd.risks]",
+            "[prd.references]",
+            "[prd.author]",
+        ]
     }
 }
 
@@ -164,7 +182,11 @@ pub fn validate_stanzas(toml_content: &str, required: &[&str]) -> Result<(), Vec
             missing.push(stanza.to_string());
         }
     }
-    if missing.is_empty() { Ok(()) } else { Err(missing) }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(missing)
+    }
 }
 
 /// Auto-classify an orphan datum by UFO stereotype + suggest parent/treatment.
@@ -197,17 +219,26 @@ pub fn classify_orphan(
     }
 
     // Endurants — tools, agents, services
-    if lower.contains(".cli") || lower.contains(".mcp") || lower.contains(".agent")
-        || lower.contains(".ai") || lower.contains(".docker") || lower.contains(".k8s")
-        || lower.contains(".hive") || lower.contains(".stack") || lower.contains(".job")
+    if lower.contains(".cli")
+        || lower.contains(".mcp")
+        || lower.contains(".agent")
+        || lower.contains(".ai")
+        || lower.contains(".docker")
+        || lower.contains(".k8s")
+        || lower.contains(".hive")
+        || lower.contains(".stack")
+        || lower.contains(".job")
     {
         let parent = find_best_parent(label, existing_endurants);
         return (UfoStereotype::Endurant, None, parent);
     }
 
     // Moments — configurations, quality attributes
-    if lower.contains("config") || lower.contains("gate") || lower.contains("guard")
-        || lower.contains("skill.source") || lower.contains("budget")
+    if lower.contains("config")
+        || lower.contains("gate")
+        || lower.contains("guard")
+        || lower.contains("skill.source")
+        || lower.contains("budget")
     {
         return (UfoStereotype::Moment, None, None);
     }
@@ -220,12 +251,24 @@ pub fn classify_orphan(
 fn catalog_for(category: &str, label: &str) -> Option<DeweyNumber> {
     let slug: String = label
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '.' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '.'
+            }
+        })
         .collect();
     let parts: Vec<&str> = slug.split('.').collect();
-    let domain = parts.get(1).map(|s| s.to_uppercase()).unwrap_or_else(|| "GEN".into());
+    let domain = parts
+        .get(1)
+        .map(|s| s.to_uppercase())
+        .unwrap_or_else(|| "GEN".into());
     let seq = (label.as_bytes().iter().map(|&b| b as u32).sum::<u32>() % 999) + 1;
-    let title = parts.get(2).map(|s| s.to_uppercase()).unwrap_or_else(|| "UNTITLED".into());
+    let title = parts
+        .get(2)
+        .map(|s| s.to_uppercase())
+        .unwrap_or_else(|| "UNTITLED".into());
     Some(DeweyNumber {
         category: category.to_string(),
         domain,
@@ -240,10 +283,16 @@ fn find_best_parent(label: &str, candidates: &[String]) -> Option<String> {
     for c in candidates {
         let c_lower = c.to_lowercase();
         // Score by keyword overlap: how many words in the candidate appear in the label
-        let score = c_lower.split(|ch: char| !ch.is_alphanumeric())
+        let score = c_lower
+            .split(|ch: char| !ch.is_alphanumeric())
             .filter(|w| w.len() >= 2 && lower.contains(w))
-            .count() * 10
-            + c_lower.chars().zip(lower.chars()).take_while(|(a, b)| a == b).count();
+            .count()
+            * 10
+            + c_lower
+                .chars()
+                .zip(lower.chars())
+                .take_while(|(a, b)| a == b)
+                .count();
         if score > 0 && score >= best.map(|(s, _)| s).unwrap_or(0) {
             best = Some((score, c));
         }
@@ -269,7 +318,12 @@ pub fn curate_orphans(
     let endurant_names: Vec<String> = nodes
         .iter()
         .filter(|n| connected.contains(n.get("id").and_then(|v| v.as_str()).unwrap_or("")))
-        .map(|n| n.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string())
+        .map(|n| {
+            n.get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
         .collect();
 
     nodes
@@ -319,8 +373,7 @@ mod curation_tests {
     #[test]
     fn classifies_cli_as_endurant_with_parent_suggestion() {
         let parents = vec!["b00t.cli".into(), "git.cli".into(), "gh.cli".into()];
-        let (stereotype, _, parent) =
-            classify_orphan("gh-issues.agent\nAgent", &parents);
+        let (stereotype, _, parent) = classify_orphan("gh-issues.agent\nAgent", &parents);
         assert_eq!(stereotype, UfoStereotype::Endurant);
         // Should match gh.cli (prefix overlap)
         assert_eq!(parent, Some("gh.cli".into()));
@@ -346,9 +399,7 @@ mod curation_tests {
             serde_json::json!({"id": "a", "label": "Tool A", "role": "task"}),
             serde_json::json!({"id": "b", "label": "Tool B", "role": "ingest"}),
         ];
-        let edges = vec![
-            serde_json::json!({"from": "a", "to": "b", "label": "depends_on"}),
-        ];
+        let edges = vec![serde_json::json!({"from": "a", "to": "b", "label": "depends_on"})];
         let result = curate_orphans(&nodes, &edges);
         // Both are connected → no orphans
         assert!(result.is_empty());
@@ -387,7 +438,8 @@ mod tests {
             name: "PRD-ARCH-005".into(),
             catalog: DeweyNumber::parse("PRD.ARCH.005.MBSE-VISUALIZATION").unwrap(),
             title: "MBSE Visualization".into(),
-            summary: "Requirements for isometric model-based systems engineering visualization".into(),
+            summary: "Requirements for isometric model-based systems engineering visualization"
+                .into(),
             ufo_stereotype: UfoStereotype::Endurant,
             domain: "architecture".into(),
             status: DocumentStatus::Draft,
@@ -400,7 +452,10 @@ mod tests {
             author: None,
         };
         assert_eq!(prd.title(), "MBSE Visualization");
-        assert_eq!(prd.catalog_number().to_string(), "PRD.ARCH.005.MBSE-VISUALIZATION");
+        assert_eq!(
+            prd.catalog_number().to_string(),
+            "PRD.ARCH.005.MBSE-VISUALIZATION"
+        );
         assert_eq!(prd.ufo_stereotype(), UfoStereotype::Endurant);
         assert!(PrdDatum::required_stanzas().contains(&"[prd.overview]"));
         assert!(PrdDatum::optional_stanzas().contains(&"[prd.risks]"));

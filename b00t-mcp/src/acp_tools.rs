@@ -1,8 +1,8 @@
 //! MCP Tools for ACP Hive Communication
-//! 
+//!
 //! Provides MCP tools that enable agents to participate in coordinated hive missions.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::acp_hive::AcpHiveClient;
-use b00t_chat::{fetch_jwt_from_website, AcpJwtValidator};
+use b00t_chat::{AcpJwtValidator, fetch_jwt_from_website};
 
 /// Global hive client registry for MCP agents
 type HiveRegistry = Arc<Mutex<HashMap<String, AcpHiveClient>>>;
@@ -93,15 +93,18 @@ pub struct HiveShowParams {
 pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
     let uuid_str = uuid::Uuid::new_v4().to_string();
     let agent_id = format!("mcp_agent_{}", &uuid_str[..8]);
-    let namespace = params.namespace.unwrap_or_else(|| {
-        get_hive_namespace(&params.role)
-    });
+    let namespace = params
+        .namespace
+        .unwrap_or_else(|| get_hive_namespace(&params.role));
     let nats_url = params.nats_url.unwrap_or_else(|| {
         std::env::var("NATS_URL")
             .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
     });
 
-    info!("🐝 MCP agent {} joining hive mission: {}", agent_id, params.mission_id);
+    info!(
+        "🐝 MCP agent {} joining hive mission: {}",
+        agent_id, params.mission_id
+    );
 
     // 🔐 JWT Security: Fetch JWT from b00t-website for namespace authentication
     let jwt_token = fetch_jwt_for_hive_operation(&params.role, &namespace).await?;
@@ -113,8 +116,10 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
         params.mission_id.clone(),
         namespace.clone(),
         nats_url,
-    ).await.context("Failed to join hive mission")?;
-    
+    )
+    .await
+    .context("Failed to join hive mission")?;
+
     // Set JWT token for security
     if jwt_token != "development_mode_no_jwt" {
         client.set_jwt_token(jwt_token.clone());
@@ -146,15 +151,18 @@ pub async fn acp_hive_join(params: JoinHiveParams) -> Result<String> {
 pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
     let uuid_str = uuid::Uuid::new_v4().to_string();
     let agent_id = format!("mcp_leader_{}", &uuid_str[..8]);
-    let namespace = params.namespace.unwrap_or_else(|| {
-        get_hive_namespace(&params.role)
-    });
+    let namespace = params
+        .namespace
+        .unwrap_or_else(|| get_hive_namespace(&params.role));
     let nats_url = params.nats_url.unwrap_or_else(|| {
         std::env::var("NATS_URL")
             .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
     });
 
-    info!("🐝 MCP agent {} creating hive mission: {}", agent_id, params.mission_id);
+    info!(
+        "🐝 MCP agent {} creating hive mission: {}",
+        agent_id, params.mission_id
+    );
 
     // 🔐 JWT Security: Fetch JWT from b00t-website for namespace authentication
     let jwt_token = fetch_jwt_for_hive_operation(&params.role, &namespace).await?;
@@ -168,13 +176,10 @@ pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
     );
 
     // Create hive client with JWT authentication
-    let mut client = AcpHiveClient::new(
-        agent_id.clone(),
-        params.role.clone(),
-        mission,
-        nats_url,
-    ).await.context("Failed to create hive mission")?;
-    
+    let mut client = AcpHiveClient::new(agent_id.clone(), params.role.clone(), mission, nats_url)
+        .await
+        .context("Failed to create hive mission")?;
+
     // Set JWT token for security
     if jwt_token != "development_mode_no_jwt" {
         client.set_jwt_token(jwt_token.clone());
@@ -207,9 +212,10 @@ pub async fn acp_hive_create(params: CreateHiveParams) -> Result<String> {
 /// MCP tool: Send status update to hive
 pub async fn acp_hive_status(params: HiveStatusParams) -> Result<String> {
     let mut registry = HIVE_CLIENTS.lock().await;
-    
+
     if let Some(client) = registry.get_mut(&params.mission_id) {
-        client.send_status(&params.description, params.payload)
+        client
+            .send_status(&params.description, params.payload)
             .await
             .context("Failed to send status to hive")?;
 
@@ -224,16 +230,20 @@ pub async fn acp_hive_status(params: HiveStatusParams) -> Result<String> {
 
         Ok(serde_json::to_string_pretty(&response)?)
     } else {
-        Err(anyhow::anyhow!("No active hive client for mission: {}", params.mission_id))
+        Err(anyhow::anyhow!(
+            "No active hive client for mission: {}",
+            params.mission_id
+        ))
     }
 }
 
 /// MCP tool: Propose action to hive
 pub async fn acp_hive_propose(params: HiveProposeParams) -> Result<String> {
     let mut registry = HIVE_CLIENTS.lock().await;
-    
+
     if let Some(client) = registry.get_mut(&params.mission_id) {
-        client.propose_action(&params.action, params.payload)
+        client
+            .propose_action(&params.action, params.payload)
             .await
             .context("Failed to propose action to hive")?;
 
@@ -248,21 +258,29 @@ pub async fn acp_hive_propose(params: HiveProposeParams) -> Result<String> {
 
         Ok(serde_json::to_string_pretty(&response)?)
     } else {
-        Err(anyhow::anyhow!("No active hive client for mission: {}", params.mission_id))
+        Err(anyhow::anyhow!(
+            "No active hive client for mission: {}",
+            params.mission_id
+        ))
     }
 }
 
 /// MCP tool: Wait for step synchronization
 pub async fn acp_hive_sync(params: HiveStepSyncParams) -> Result<String> {
     let mut registry = HIVE_CLIENTS.lock().await;
-    
+
     if let Some(client) = registry.get_mut(&params.mission_id) {
         let timeout = params.timeout_seconds.unwrap_or(60);
-        
-        info!("🐝 Agent {} waiting for step sync to step {} (timeout: {}s)", 
-              client.agent_id(), params.target_step, timeout);
 
-        let hive_status = client.wait_for_step_sync(params.target_step, timeout)
+        info!(
+            "🐝 Agent {} waiting for step sync to step {} (timeout: {}s)",
+            client.agent_id(),
+            params.target_step,
+            timeout
+        );
+
+        let hive_status = client
+            .wait_for_step_sync(params.target_step, timeout)
             .await
             .context("Step synchronization failed or timed out")?;
 
@@ -279,16 +297,20 @@ pub async fn acp_hive_sync(params: HiveStepSyncParams) -> Result<String> {
 
         Ok(serde_json::to_string_pretty(&response)?)
     } else {
-        Err(anyhow::anyhow!("No active hive client for mission: {}", params.mission_id))
+        Err(anyhow::anyhow!(
+            "No active hive client for mission: {}",
+            params.mission_id
+        ))
     }
 }
 
 /// MCP tool: Signal ready for next step
 pub async fn acp_hive_ready(params: HiveStepSyncParams) -> Result<String> {
     let mut registry = HIVE_CLIENTS.lock().await;
-    
+
     if let Some(client) = registry.get_mut(&params.mission_id) {
-        client.signal_step_ready(params.target_step)
+        client
+            .signal_step_ready(params.target_step)
             .await
             .context("Failed to signal step readiness")?;
 
@@ -302,18 +324,23 @@ pub async fn acp_hive_ready(params: HiveStepSyncParams) -> Result<String> {
 
         Ok(serde_json::to_string_pretty(&response)?)
     } else {
-        Err(anyhow::anyhow!("No active hive client for mission: {}", params.mission_id))
+        Err(anyhow::anyhow!(
+            "No active hive client for mission: {}",
+            params.mission_id
+        ))
     }
 }
 
 /// MCP tool: Show hive status and participating agents
 pub async fn acp_hive_show(params: HiveShowParams) -> Result<String> {
     let mut registry = HIVE_CLIENTS.lock().await;
-    
+
     if let Some(mission_id) = params.mission_id {
         // Show specific mission
         if let Some(client) = registry.get_mut(&mission_id) {
-            let status = client.get_hive_status().await
+            let status = client
+                .get_hive_status()
+                .await
                 .context("Failed to get hive status")?;
 
             let response = serde_json::json!({
@@ -326,12 +353,15 @@ pub async fn acp_hive_show(params: HiveShowParams) -> Result<String> {
 
             Ok(serde_json::to_string_pretty(&response)?)
         } else {
-            Err(anyhow::anyhow!("No active hive client for mission: {}", mission_id))
+            Err(anyhow::anyhow!(
+                "No active hive client for mission: {}",
+                mission_id
+            ))
         }
     } else {
         // Show all active missions
         let mut missions = Vec::new();
-        
+
         for (mission_id, client) in registry.iter() {
             missions.push(serde_json::json!({
                 "mission_id": mission_id,
@@ -354,7 +384,7 @@ pub async fn acp_hive_show(params: HiveShowParams) -> Result<String> {
 pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
     if let Some(mission_id) = params.mission_id {
         let mut registry = HIVE_CLIENTS.lock().await;
-        
+
         if let Some(mut client) = registry.remove(&mission_id) {
             // Send leaving status before disconnecting
             if let Err(e) = client.send_status("leaving_mission", None).await {
@@ -370,7 +400,10 @@ pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
 
             Ok(serde_json::to_string_pretty(&response)?)
         } else {
-            Err(anyhow::anyhow!("No active hive client for mission: {}", mission_id))
+            Err(anyhow::anyhow!(
+                "No active hive client for mission: {}",
+                mission_id
+            ))
         }
     } else {
         Err(anyhow::anyhow!("Mission ID is required to leave hive"))
@@ -379,8 +412,7 @@ pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
 
 /// Helper to get NATS URL from environment or default
 pub fn get_nats_url() -> String {
-    std::env::var("NATS_URL")
-        .unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
+    std::env::var("NATS_URL").unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
 }
 
 /// Helper to get current hive namespace for a given role
@@ -395,13 +427,16 @@ async fn fetch_jwt_for_hive_operation(role: &str, namespace: &str) -> Result<Str
         info!("Using JWT from B00T_HIVE_JWT environment variable");
         return Ok(jwt);
     }
-    
+
     if let Ok(session_token) = std::env::var("B00T_SESSION_TOKEN") {
         let website_url = std::env::var("B00T_WEBSITE_URL")
             .unwrap_or_else(|_| "https://b00t.promptexecution.com".to_string());
-        
-        info!("Fetching JWT from b00t-website for role: {}, namespace: {}", role, namespace);
-        
+
+        info!(
+            "Fetching JWT from b00t-website for role: {}, namespace: {}",
+            role, namespace
+        );
+
         match fetch_jwt_from_website(&website_url, &session_token, role).await {
             Ok(jwt) => {
                 // Validate JWT and ensure namespace matches
@@ -413,12 +448,13 @@ async fn fetch_jwt_for_hive_operation(role: &str, namespace: &str) -> Result<Str
                         } else {
                             return Err(anyhow::anyhow!(
                                 "JWT namespace '{}' does not match requested namespace '{}'",
-                                security_ctx.namespace, namespace
+                                security_ctx.namespace,
+                                namespace
                             ));
                         }
                     }
                 }
-                
+
                 // Return JWT even if validation fails (for development)
                 warn!("JWT validation failed, continuing in development mode");
                 return Ok(jwt);
@@ -428,11 +464,11 @@ async fn fetch_jwt_for_hive_operation(role: &str, namespace: &str) -> Result<Str
             }
         }
     }
-    
+
     // For development: continue without JWT
     warn!("No JWT available - running in development mode (INSECURE)");
     warn!("Set B00T_HIVE_JWT or B00T_SESSION_TOKEN environment variable for production");
-    
+
     Ok("development_mode_no_jwt".to_string())
 }
 

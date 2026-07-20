@@ -205,7 +205,10 @@ impl Task {
 impl TaskState {
     /// Returns `true` if this state is terminal (task cannot progress further).
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TaskState::Completed | TaskState::Failed | TaskState::Canceled)
+        matches!(
+            self,
+            TaskState::Completed | TaskState::Failed | TaskState::Canceled
+        )
     }
 }
 
@@ -333,8 +336,8 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip() {
-        let task = Task::new("code-gen", serde_json::json!({"lang": "rust"}), "alice")
-            .with_priority(100);
+        let task =
+            Task::new("code-gen", serde_json::json!({"lang": "rust"}), "alice").with_priority(100);
         let json = serde_json::to_string_pretty(&task).unwrap();
         let deserialized: Task = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, task.id);

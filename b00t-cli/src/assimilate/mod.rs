@@ -3,12 +3,12 @@
 //! Orchestrates: ContentRouter → ConceptExtractor → CrawlEngine → IndexDispatcher
 //! Activated by `b00t grok assimilate --enhanced`.
 
-pub mod content_router;
 pub mod concept_extractor;
+pub mod content_router;
 pub mod crawl_engine;
 pub mod domain_router;
-pub mod pdf_extractor;
 pub mod index_dispatcher;
+pub mod pdf_extractor;
 
 use anyhow::Result;
 use crawl_engine::{CrawlConfig, CrawledDoc};
@@ -72,14 +72,19 @@ pub async fn run_enhanced(
 
     // Crawl links if depth > 0
     if config.max_depth > 0 && !extraction.links.is_empty() {
-        eprintln!("→ crawling {} link(s), depth≤{}, same-origin", extraction.links.len(), config.max_depth);
+        eprintln!(
+            "→ crawling {} link(s), depth≤{}, same-origin",
+            extraction.links.len(),
+            config.max_depth
+        );
         let crawl_cfg = CrawlConfig {
             seed_url: source.to_string(),
             max_depth: config.max_depth,
             max_pages: config.max_pages,
             delay_ms: config.delay_ms,
         };
-        let crawled = crawl_engine::crawl(&extraction.links, &crawl_cfg, &router, &extractor).await?;
+        let crawled =
+            crawl_engine::crawl(&extraction.links, &crawl_cfg, &router, &extractor).await?;
         all_docs.extend(crawled);
     }
 

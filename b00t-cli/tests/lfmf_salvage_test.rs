@@ -29,16 +29,30 @@ fn word_count(s: &str) -> usize {
 
 #[test]
 fn salvage_cases_from_fixture() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lfmf_salvage_cases.json");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lfmf_salvage_cases.json");
     let fixture: Fixture =
         serde_json::from_str(&std::fs::read_to_string(&path).expect("fixture readable"))
             .expect("fixture parses");
 
     for case in &fixture.cases {
-        let parsed = parse_lesson_salvage(&case.raw, &word_count, fixture.topic_max, fixture.body_max);
-        assert_eq!(parsed.topic, case.topic, "topic mismatch in case '{}'", case.name);
-        assert_eq!(parsed.body, case.body, "body mismatch in case '{}'", case.name);
-        assert_eq!(parsed.salvage, case.salvage, "salvage mismatch in case '{}'", case.name);
+        let parsed =
+            parse_lesson_salvage(&case.raw, &word_count, fixture.topic_max, fixture.body_max);
+        assert_eq!(
+            parsed.topic, case.topic,
+            "topic mismatch in case '{}'",
+            case.name
+        );
+        assert_eq!(
+            parsed.body, case.body,
+            "body mismatch in case '{}'",
+            case.name
+        );
+        assert_eq!(
+            parsed.salvage, case.salvage,
+            "salvage mismatch in case '{}'",
+            case.name
+        );
         // Payload preservation invariant: every input word survives somewhere in topic+body
         for word in case.raw.split_whitespace().map(|w| w.trim_matches(':')) {
             if word.is_empty() {

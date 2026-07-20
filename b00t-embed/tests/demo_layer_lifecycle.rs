@@ -12,15 +12,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use b00t_embed::Embedding;
+use b00t_embed::layer::LayerStatus;
 use b00t_embed::layer::bouncer::LayerGateKeeper;
 use b00t_embed::layer::source::InlineSource;
 use b00t_embed::layer::stack::{LayerStack, TensorRegistry};
-use b00t_embed::layer::LayerStatus;
-use b00t_embed::Embedding;
 
+use candle_core::Module;
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarMap;
-use candle_core::Module;
 use std::sync::Mutex;
 
 /// Print a section header for the demo output
@@ -37,7 +37,11 @@ fn make_code_layer() -> InlineSource {
     // "token_embd" weights shaped [vocab_size, hidden_dim]
     tensors.insert(
         "bert.embeddings.word_embeddings.weight".into(),
-        Tensor::new(&[[1.0f32, 0.1, 0.1], [0.9, 0.2, 0.1], [0.8, 0.3, 0.2]], &Device::Cpu).unwrap(),
+        Tensor::new(
+            &[[1.0f32, 0.1, 0.1], [0.9, 0.2, 0.1], [0.8, 0.3, 0.2]],
+            &Device::Cpu,
+        )
+        .unwrap(),
     );
     tensors.insert(
         "bert.pooler.dense.weight".into(),
@@ -48,8 +52,7 @@ fn make_code_layer() -> InlineSource {
         Tensor::new(&[0.1f32], &Device::Cpu).unwrap(),
     );
     // Domain fingerprint: biased toward first dimension (code features)
-    InlineSource::new("code-embed", tensors, 3, "bert")
-        .with_fingerprint(vec![0.95, 0.15, 0.10])
+    InlineSource::new("code-embed", tensors, 3, "bert").with_fingerprint(vec![0.95, 0.15, 0.10])
 }
 
 fn make_text_layer() -> InlineSource {
@@ -57,7 +60,11 @@ fn make_text_layer() -> InlineSource {
     let mut tensors = HashMap::new();
     tensors.insert(
         "bert.embeddings.word_embeddings.weight".into(),
-        Tensor::new(&[[0.5f32, 0.5, 0.5], [0.4, 0.6, 0.4], [0.6, 0.4, 0.6]], &Device::Cpu).unwrap(),
+        Tensor::new(
+            &[[0.5f32, 0.5, 0.5], [0.4, 0.6, 0.4], [0.6, 0.4, 0.6]],
+            &Device::Cpu,
+        )
+        .unwrap(),
     );
     tensors.insert(
         "bert.pooler.dense.weight".into(),
@@ -68,8 +75,7 @@ fn make_text_layer() -> InlineSource {
         Tensor::new(&[0.0f32], &Device::Cpu).unwrap(),
     );
     // Domain fingerprint: uniform across all dimensions (general text)
-    InlineSource::new("text-embed", tensors, 3, "bert")
-        .with_fingerprint(vec![0.50, 0.50, 0.50])
+    InlineSource::new("text-embed", tensors, 3, "bert").with_fingerprint(vec![0.50, 0.50, 0.50])
 }
 
 fn make_math_layer() -> InlineSource {
@@ -77,7 +83,11 @@ fn make_math_layer() -> InlineSource {
     let mut tensors = HashMap::new();
     tensors.insert(
         "bert.embeddings.word_embeddings.weight".into(),
-        Tensor::new(&[[0.1f32, 0.9, 0.1], [0.2, 0.8, 0.2], [0.3, 0.7, 0.3]], &Device::Cpu).unwrap(),
+        Tensor::new(
+            &[[0.1f32, 0.9, 0.1], [0.2, 0.8, 0.2], [0.3, 0.7, 0.3]],
+            &Device::Cpu,
+        )
+        .unwrap(),
     );
     tensors.insert(
         "bert.pooler.dense.weight".into(),
@@ -88,8 +98,7 @@ fn make_math_layer() -> InlineSource {
         Tensor::new(&[0.5f32], &Device::Cpu).unwrap(),
     );
     // Domain fingerprint: biased toward second dimension (math features)
-    InlineSource::new("math-embed", tensors, 3, "bert")
-        .with_fingerprint(vec![0.10, 0.95, 0.10])
+    InlineSource::new("math-embed", tensors, 3, "bert").with_fingerprint(vec![0.10, 0.95, 0.10])
 }
 
 #[tokio::test]
@@ -142,21 +151,32 @@ async fn demo_layer_lifecycle() {
     let code_query = Embedding {
         data: vec![0.95f32, 0.10, 0.05],
     };
-    println!("    Query embedding: [{:.2}, {:.2}, {:.2}]  (code-domain bias)", 
-        code_query.data[0], code_query.data[1], code_query.data[2]);
+    println!(
+        "    Query embedding: [{:.2}, {:.2}, {:.2}]  (code-domain bias)",
+        code_query.data[0], code_query.data[1], code_query.data[2]
+    );
 
     let code_result = stack.compose(&code_query, 2).await;
     println!("\n    Compose result (max_active=2):");
     match code_result {
         Ok(descriptors) => {
             for d in &descriptors {
-                let status_icon = if matches!(d.status, LayerStatus::Active) { "●" } else { "○" };
-                println!("      {status_icon} {} | relevance={:.4} | dim={} | arch={} | status={}",
-                    d.id, d.relevance_score, d.embedding_dim, d.model_architecture, d.status);
+                let status_icon = if matches!(d.status, LayerStatus::Active) {
+                    "●"
+                } else {
+                    "○"
+                };
+                println!(
+                    "      {status_icon} {} | relevance={:.4} | dim={} | arch={} | status={}",
+                    d.id, d.relevance_score, d.embedding_dim, d.model_architecture, d.status
+                );
             }
             // First should be code-embed (highest relevance)
-            assert_eq!(descriptors[0].id.as_str(), "code-embed",
-                "code-embed should rank highest for code-domain query");
+            assert_eq!(
+                descriptors[0].id.as_str(),
+                "code-embed",
+                "code-embed should rank highest for code-domain query"
+            );
             println!("    ✓ code-embed activated as highest-relevance layer");
         }
         Err(e) => println!("    ✗ compose failed: {e}"),
@@ -164,7 +184,10 @@ async fn demo_layer_lifecycle() {
 
     // Show active layers
     let active = stack.active_layers().await;
-    println!("    Active layers: {:?}", active.iter().map(|id| id.as_str()).collect::<Vec<_>>());
+    println!(
+        "    Active layers: {:?}",
+        active.iter().map(|id| id.as_str()).collect::<Vec<_>>()
+    );
 
     // ── Step 4: Show VarMap state ──
     heading(4, "Inspect VarMap state after code-domain composition");
@@ -181,10 +204,14 @@ async fn demo_layer_lifecycle() {
             let vals = flat.to_vec1::<f32>().unwrap();
             print!("    {name}: shape={dims:?} data=[");
             for (i, v) in vals.iter().enumerate().take(6) {
-                if i > 0 { print!(", "); }
+                if i > 0 {
+                    print!(", ");
+                }
                 print!("{v:.4}");
             }
-            if vals.len() > 6 { print!(", ..."); }
+            if vals.len() > 6 {
+                print!(", ...");
+            }
             println!("]");
         }
     }
@@ -198,27 +225,43 @@ async fn demo_layer_lifecycle() {
     let math_query = Embedding {
         data: vec![0.10f32, 0.95, 0.05],
     };
-    println!("    Query embedding: [{:.2}, {:.2}, {:.2}]  (math-domain bias)",
-        math_query.data[0], math_query.data[1], math_query.data[2]);
+    println!(
+        "    Query embedding: [{:.2}, {:.2}, {:.2}]  (math-domain bias)",
+        math_query.data[0], math_query.data[1], math_query.data[2]
+    );
 
     let math_result = stack.compose(&math_query, 2).await;
     match math_result {
         Ok(descriptors) => {
             for d in &descriptors {
-                let status_icon = if matches!(d.status, LayerStatus::Active) { "●" } else { "○" };
-                println!("      {status_icon} {} | relevance={:.4} | dim={} | arch={} | status={}",
-                    d.id, d.relevance_score, d.embedding_dim, d.model_architecture, d.status);
+                let status_icon = if matches!(d.status, LayerStatus::Active) {
+                    "●"
+                } else {
+                    "○"
+                };
+                println!(
+                    "      {status_icon} {} | relevance={:.4} | dim={} | arch={} | status={}",
+                    d.id, d.relevance_score, d.embedding_dim, d.model_architecture, d.status
+                );
             }
-            assert_eq!(descriptors[0].id.as_str(), "math-embed",
-                "math-embed should rank highest for math-domain query");
+            assert_eq!(
+                descriptors[0].id.as_str(),
+                "math-embed",
+                "math-embed should rank highest for math-domain query"
+            );
             println!("    ✓ math-embed activated; code-embed deactivated");
         }
         Err(e) => println!("    ✗ recompose failed: {e}"),
     }
 
     let active_after = stack.active_layers().await;
-    println!("    Active layers after swap: {:?}", 
-        active_after.iter().map(|id| id.as_str()).collect::<Vec<_>>());
+    println!(
+        "    Active layers after swap: {:?}",
+        active_after
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>()
+    );
 
     // ── Step 6: Verify VarMap reflects new layer ──
     heading(6, "Verify VarMap reflects swapped tensor weights");
@@ -233,7 +276,9 @@ async fn demo_layer_lifecycle() {
             let vals = flat.to_vec1::<f32>().unwrap();
             print!("    {name}: shape={dims:?} data=[");
             for (i, v) in vals.iter().enumerate().take(4) {
-                if i > 0 { print!(", "); }
+                if i > 0 {
+                    print!(", ");
+                }
                 print!("{v:.4}");
             }
             println!("]");
@@ -256,12 +301,21 @@ async fn demo_layer_lifecycle() {
     }
 
     let final_active = stack.active_layers().await;
-    println!("    Active layers: {:?}", final_active.iter().map(|id| id.as_str()).collect::<Vec<_>>());
+    println!(
+        "    Active layers: {:?}",
+        final_active
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>()
+    );
     assert!(final_active.is_empty(), "all layers should be deactivated");
     println!("    ✓ All layers deactivated — clean state");
 
     // ── Step 8: Model forward-pass — prove output changes after layer swap ──
-    heading(8, "Model forward-pass: prove output changes after VarMap layer swap");
+    heading(
+        8,
+        "Model forward-pass: prove output changes after VarMap layer swap",
+    );
 
     // Build a Candle model backed by the VarMap and prove runtime tensor injection.
     //
@@ -289,8 +343,10 @@ async fn demo_layer_lifecycle() {
 
         // Forward pass with default (initialized) weights
         let default_out = linear.forward(&input).unwrap().to_vec2::<f32>().unwrap();
-        println!("    Default model output: [{:.4}, {:.4}]",
-            default_out[0][0], default_out[0][1]);
+        println!(
+            "    Default model output: [{:.4}, {:.4}]",
+            default_out[0][0], default_out[0][1]
+        );
 
         // Use VarMap::set_one() to swap weights in-place.
         // This calls Var::set() which changes the tensor storage that the
@@ -305,8 +361,10 @@ async fn demo_layer_lifecycle() {
         }
 
         let code_out = linear.forward(&input).unwrap().to_vec2::<f32>().unwrap();
-        println!("    Code-layer output: [{:.4}, {:.4}]  (code bias=0.50↑)",
-            code_out[0][0], code_out[0][1]);
+        println!(
+            "    Code-layer output: [{:.4}, {:.4}]  (code bias=0.50↑)",
+            code_out[0][0], code_out[0][1]
+        );
 
         // Swap to "math" weights via set_one()
         {
@@ -318,8 +376,10 @@ async fn demo_layer_lifecycle() {
         }
 
         let math_out = linear.forward(&input).unwrap().to_vec2::<f32>().unwrap();
-        println!("    Math-layer output: [{:.4}, {:.4}]  (math bias=0.80↑)",
-            math_out[0][0], math_out[0][1]);
+        println!(
+            "    Math-layer output: [{:.4}, {:.4}]  (math bias=0.80↑)",
+            math_out[0][0], math_out[0][1]
+        );
 
         println!();
         // If outputs are the same, it means Tensor::clone() detaches from Var.
@@ -331,18 +391,31 @@ async fn demo_layer_lifecycle() {
         // that share storage, enabling true runtime weight injection.
         let changed = default_out != code_out || code_out != math_out;
         if changed {
-            println!("    ✓ VarMap::set_one() changed model output — runtime tensor injection CONFIRMED");
-            println!("      default: [{:.4}, {:.4}] → code: [{:.4}, {:.4}] → math: [{:.4}, {:.4}]",
-                default_out[0][0], default_out[0][1],
-                code_out[0][0], code_out[0][1],
-                math_out[0][0], math_out[0][1]);
+            println!(
+                "    ✓ VarMap::set_one() changed model output — runtime tensor injection CONFIRMED"
+            );
+            println!(
+                "      default: [{:.4}, {:.4}] → code: [{:.4}, {:.4}] → math: [{:.4}, {:.4}]",
+                default_out[0][0],
+                default_out[0][1],
+                code_out[0][0],
+                code_out[0][1],
+                math_out[0][0],
+                math_out[0][1]
+            );
         } else {
             println!("    ℹ VarMap::set_one() did not change model output (deep copy behavior)");
-            println!("      default = code = math = [{:.4}, {:.4}]",
-                default_out[0][0], default_out[0][1]);
+            println!(
+                "      default = code = math = [{:.4}, {:.4}]",
+                default_out[0][0], default_out[0][1]
+            );
             println!("    → This is expected with Candle's Tensor::clone() (detached from Var).");
-            println!("    → True runtime injection requires VarMap-backed tensors that share storage.");
-            println!("    → Solution: use `Var::from_tensor(tensor.make_var()?)` for model weights.");
+            println!(
+                "    → True runtime injection requires VarMap-backed tensors that share storage."
+            );
+            println!(
+                "    → Solution: use `Var::from_tensor(tensor.make_var()?)` for model weights."
+            );
             println!("    → For now, TensorRegistry + VarMap storage proves the mechanism at the");
             println!("      tensor level (verified in Step 4/6 — VarMap contents changed).");
         }
@@ -365,9 +438,15 @@ async fn demo_layer_lifecycle() {
     println!("    All layer transitions logged to /tmp/b00t-embed-demo-audit.jsonl");
     println!();
     println!("    Gate decisions:");
-    println!("      ✓ code-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)");
-    println!("      ✓ text-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)");
-    println!("      ✓ math-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)");
+    println!(
+        "      ✓ code-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)"
+    );
+    println!(
+        "      ✓ text-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)"
+    );
+    println!(
+        "      ✓ math-embed  → pre-load  pass (tensor-shape-check, resource-check, arch-check)"
+    );
     println!("      • post-swap checks passed for all 3 layer activations");
 
     // ── Summary ──
@@ -389,7 +468,10 @@ async fn demo_layer_lifecycle() {
     println!();
 
     // ── Step 10: Epoch integration tests (P1-P5) ──
-    heading(10, "Epoch integration: P1 compose_layers bridge, P2 LayerRouter, P3 LayerAgent, P5 MergeStrategy");
+    heading(
+        10,
+        "Epoch integration: P1 compose_layers bridge, P2 LayerRouter, P3 LayerAgent, P5 MergeStrategy",
+    );
 
     // P1: compose_layers bridge — VarMap::set_one() changes model forward pass.
     // This was proven in Step 8. Verify explicitly here with the same mechanism
@@ -409,12 +491,18 @@ async fn demo_layer_lifecycle() {
         // P1 bridge: load layer tensors → VarMap::set_one → forward pass changes
         {
             let mut vm = test_varmap.lock().unwrap();
-            let _ = vm.set_one("proj.weight", &Tensor::new(&[[5.0f32, 0.0]], &Device::Cpu).unwrap());
+            let _ = vm.set_one(
+                "proj.weight",
+                &Tensor::new(&[[5.0f32, 0.0]], &Device::Cpu).unwrap(),
+            );
             let _ = vm.set_one("proj.bias", &Tensor::new(&[2.0f32], &Device::Cpu).unwrap());
         }
         let after = linear.forward(&input).unwrap().to_vec2::<f32>().unwrap()[0][0];
         assert_ne!(base, after, "P1: VarMap set_one must change forward output");
-        println!("    ✓ P1: compose_layers bridge proven — base={:.4} after={:.4}", base, after);
+        println!(
+            "    ✓ P1: compose_layers bridge proven — base={:.4} after={:.4}",
+            base, after
+        );
     }
 
     // P2: LayerRouter with cosine similarity routing
@@ -427,20 +515,36 @@ async fn demo_layer_lifecycle() {
 
         // Register 3 layers via router
         let mut router_mut = router; // consume for mut access
-        for (name, fp) in &[("code", vec![0.9f32, 0.1]), ("text", vec![0.5f32, 0.5]), ("math", vec![0.1f32, 0.9])] {
+        for (name, fp) in &[
+            ("code", vec![0.9f32, 0.1]),
+            ("text", vec![0.5f32, 0.5]),
+            ("math", vec![0.1f32, 0.9]),
+        ] {
             let mut tensors = std::collections::HashMap::new();
-            tensors.insert("weight".into(), Tensor::new(&[[1.0f32]], &Device::Cpu).unwrap());
+            tensors.insert(
+                "weight".into(),
+                Tensor::new(&[[1.0f32]], &Device::Cpu).unwrap(),
+            );
             let src = b00t_embed::layer::source::InlineSource::new(*name, tensors, 2, "test")
                 .with_fingerprint(fp.clone());
             router_mut.register_source(Box::new(src));
         }
 
         // Route a code-biased query
-        let code_query = b00t_embed::Embedding { data: vec![0.95f32, 0.10] };
+        let code_query = b00t_embed::Embedding {
+            data: vec![0.95f32, 0.10],
+        };
         let descs = router_mut.route(&code_query, 2).await;
         assert!(!descs.is_empty(), "P2: router must return descriptors");
-        assert_eq!(descs[0].id.as_str(), "code", "P2: code-biased query must route to code layer");
-        println!("    ✓ P2: LayerRouter routed code query → {} (rel={:.4})", descs[0].id, descs[0].relevance_score);
+        assert_eq!(
+            descs[0].id.as_str(),
+            "code",
+            "P2: code-biased query must route to code layer"
+        );
+        println!(
+            "    ✓ P2: LayerRouter routed code query → {} (rel={:.4})",
+            descs[0].id, descs[0].relevance_score
+        );
     }
 
     // P3: LayerAgent cycle with bouncer gates
@@ -451,14 +555,19 @@ async fn demo_layer_lifecycle() {
         let stack = b00t_embed::layer::stack::LayerStack::new(reg, gatekeeper);
         let agent = LayerAgent::new(stack, 2);
 
-        let query_emb = b00t_embed::Embedding { data: vec![0.5f32; 4] };
+        let query_emb = b00t_embed::Embedding {
+            data: vec![0.5f32; 4],
+        };
         let result = agent.cycle("test query", &query_emb).await;
         match result {
             Ok(cycle) => {
                 assert_eq!(cycle.query, "test query");
                 assert_eq!(cycle.bouncer_decision, "pass");
-                println!("    ✓ P3: LayerAgent cycle completed in {}ms with {} activated",
-                    cycle.cycle_time_ms, cycle.activated_layers.len());
+                println!(
+                    "    ✓ P3: LayerAgent cycle completed in {}ms with {} activated",
+                    cycle.cycle_time_ms,
+                    cycle.activated_layers.len()
+                );
             }
             Err(e) => println!("    ℹ P3: Agent cycle (expected with no layers): {e}"),
         }
@@ -472,10 +581,18 @@ async fn demo_layer_lifecycle() {
         let stack = b00t_embed::layer::stack::LayerStack::new(reg, gatekeeper);
 
         // Test that all strategies can be set without error
-        let _last = stack.clone().with_merge_strategy(MergeStrategy::LastWriterWins);
-        let _weighted = stack.clone().with_merge_strategy(MergeStrategy::RelevanceWeighted);
-        let _tiers = stack.clone().with_merge_strategy(MergeStrategy::PriorityTiers);
-        println!("    ✓ P5: MergeStrategy variants accepted (LastWriterWins, RelevanceWeighted, PriorityTiers)");
+        let _last = stack
+            .clone()
+            .with_merge_strategy(MergeStrategy::LastWriterWins);
+        let _weighted = stack
+            .clone()
+            .with_merge_strategy(MergeStrategy::RelevanceWeighted);
+        let _tiers = stack
+            .clone()
+            .with_merge_strategy(MergeStrategy::PriorityTiers);
+        println!(
+            "    ✓ P5: MergeStrategy variants accepted (LastWriterWins, RelevanceWeighted, PriorityTiers)"
+        );
     }
 
     println!();
@@ -488,12 +605,15 @@ async fn demo_layer_lifecycle() {
     println!("║  ✓ P4: GGUFSource keep_quantized flag exists                ║");
     println!("║  ✓ P5: MergeStrategy variants accepted                      ║");
     // ── Step 11: Wave 2 — load extracted layer files through SafetensorsSource ──
-    heading(11, "Wave 2: Load extracted Qwen3 head layers from /tmp/qwen3-layers/");
+    heading(
+        11,
+        "Wave 2: Load extracted Qwen3 head layers from /tmp/qwen3-layers/",
+    );
 
     let layer_dir = std::path::Path::new("/tmp/qwen3-layers");
     if layer_dir.exists() {
-        use b00t_embed::layer::source::SafetensorsSource;
         use b00t_embed::layer::TensorSpec;
+        use b00t_embed::layer::source::SafetensorsSource;
 
         let reg = make_test_registry();
         let gatekeeper = b00t_embed::layer::bouncer::LayerGateKeeper::new(false);
@@ -509,7 +629,9 @@ async fn demo_layer_lifecycle() {
         let mut registered = 0;
         for (name, filename) in &layer_files {
             let path = layer_dir.join(filename);
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
             let specs = vec![
                 TensorSpec::new("embed_tokens.weight", vec![151669, 1024], "F32"),
                 TensorSpec::new("norm.weight", vec![1024], "F32"),
@@ -522,18 +644,33 @@ async fn demo_layer_lifecycle() {
         if registered >= 3 {
             // Route a code-biased query (uses dim-based heuristic since safetensors
             // sources don't have domain fingerprints by default)
-            let code_query = b00t_embed::Embedding { data: vec![0.95f32; 1024] };
+            let code_query = b00t_embed::Embedding {
+                data: vec![0.95f32; 1024],
+            };
             let descs = router_mut.route(&code_query, 2).await;
-            assert!(!descs.is_empty(), "Wave 2: router must return descriptors from safetensors layers");
-            println!("    ✓ Wave 2: {} safetensors layers loaded and composed", registered);
+            assert!(
+                !descs.is_empty(),
+                "Wave 2: router must return descriptors from safetensors layers"
+            );
+            println!(
+                "    ✓ Wave 2: {} safetensors layers loaded and composed",
+                registered
+            );
             for d in &descs {
-                println!("      {}: relevance={:.4}, source={}", d.id, d.relevance_score, d.source_kind);
+                println!(
+                    "      {}: relevance={:.4}, source={}",
+                    d.id, d.relevance_score, d.source_kind
+                );
             }
         } else {
-            println!("    ℹ Wave 2: extracted layer files not found (run `just qwen3-extract-heads` first)");
+            println!(
+                "    ℹ Wave 2: extracted layer files not found (run `just qwen3-extract-heads` first)"
+            );
         }
     } else {
-        println!("    ℹ Wave 2: /tmp/qwen3-layers/ not found (run `just qwen3-extract-heads` first)");
+        println!(
+            "    ℹ Wave 2: /tmp/qwen3-layers/ not found (run `just qwen3-extract-heads` first)"
+        );
     }
 
     println!();
@@ -550,9 +687,9 @@ async fn demo_layer_lifecycle() {
 
 /// Helper: creates a test TensorRegistry (used by epoch integration tests).
 fn make_test_registry() -> b00t_embed::layer::stack::TensorRegistry {
+    use candle_nn::VarMap;
     use std::sync::Arc;
     use std::sync::Mutex;
-    use candle_nn::VarMap;
     let varmap = Arc::new(Mutex::new(VarMap::new()));
     b00t_embed::layer::stack::TensorRegistry::new(
         varmap,

@@ -14,7 +14,7 @@
 //! via a single-byte code written to the pre-fork pipe.
 
 use crate::{IsolationConfig, RuntimeConfig};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use std::ffi::CString;
 
 /// Fork, launch sandboxed child, wait, run post-hook.
@@ -36,8 +36,14 @@ pub fn spawn_sandboxed(config: &RuntimeConfig, passthrough_args: &[String]) -> R
     }
 
     let iso = config.isolation.clone();
-    let cwd = iso.as_ref().and_then(|i| i.cwd.clone()).map(|s| CString::new(s).expect("cwd has null"));
-    let hostname = iso.as_ref().and_then(|i| i.hostname.clone()).map(|s| CString::new(s).expect("hostname has null"));
+    let cwd = iso
+        .as_ref()
+        .and_then(|i| i.cwd.clone())
+        .map(|s| CString::new(s).expect("cwd has null"));
+    let hostname = iso
+        .as_ref()
+        .and_then(|i| i.hostname.clone())
+        .map(|s| CString::new(s).expect("hostname has null"));
 
     // Build NULL-terminated argv pointer array for execvp (CString is 16B, char* is 8B)
     let mut c_argv_ptrs: Vec<*const libc::c_char> = c_args.iter().map(|s| s.as_ptr()).collect();
@@ -58,13 +64,25 @@ pub fn spawn_sandboxed(config: &RuntimeConfig, passthrough_args: &[String]) -> R
         // ═══════ CHILD — syscalls only, no heap allocation ═══════
         unsafe { libc::close(pipe_fds[0]) };
 
-        let result = child_sandbox(&iso, cwd.as_deref(), hostname.as_deref(), &c_binary, c_argv_ptrs.as_ptr());
+        let result = child_sandbox(
+            &iso,
+            cwd.as_deref(),
+            hostname.as_deref(),
+            &c_binary,
+            c_argv_ptrs.as_ptr(),
+        );
 
         let err_byte: u8 = match result {
             Ok(()) => 0, // execvp failed (it doesn't return on success)
             Err(code) => code,
         };
-        unsafe { libc::write(pipe_fds[1], &err_byte as *const u8 as *const libc::c_void, 1) };
+        unsafe {
+            libc::write(
+                pipe_fds[1],
+                &err_byte as *const u8 as *const libc::c_void,
+                1,
+            )
+        };
         let exit = if err_byte == 0 { 126 } else { err_byte as i32 };
         unsafe { libc::_exit(exit) };
     }
@@ -125,10 +143,7 @@ fn child_sandbox(
     }
 
     unsafe {
-        libc::execvp(
-            binary.as_ptr(),
-            argv_ptrs,
-        );
+        libc::execvp(binary.as_ptr(), argv_ptrs);
     }
 
     Ok(())
@@ -137,10 +152,18 @@ fn child_sandbox(
 fn child_enter_namespaces(iso: &IsolationConfig) -> Result<(), u8> {
     let mut ns_flags = libc::CLONE_NEWNS;
 
-    if !iso.share_pid.unwrap_or(false) { ns_flags |= libc::CLONE_NEWPID; }
-    if !iso.share_net.unwrap_or(true)  { ns_flags |= libc::CLONE_NEWNET; }
-    if !iso.share_ipc.unwrap_or(false) { ns_flags |= libc::CLONE_NEWIPC; }
-    if !iso.share_uts.unwrap_or(false) { ns_flags |= libc::CLONE_NEWUTS; }
+    if !iso.share_pid.unwrap_or(false) {
+        ns_flags |= libc::CLONE_NEWPID;
+    }
+    if !iso.share_net.unwrap_or(true) {
+        ns_flags |= libc::CLONE_NEWNET;
+    }
+    if !iso.share_ipc.unwrap_or(false) {
+        ns_flags |= libc::CLONE_NEWIPC;
+    }
+    if !iso.share_uts.unwrap_or(false) {
+        ns_flags |= libc::CLONE_NEWUTS;
+    }
 
     if unsafe { libc::unshare(ns_flags) } != 0 {
         return Err(1);
@@ -157,7 +180,8 @@ fn child_mount_root() -> Result<(), u8> {
             libc::MS_REC | libc::MS_PRIVATE,
             std::ptr::null(),
         )
-    } != 0 {
+    } != 0
+    {
         return Err(2);
     }
     Ok(())
@@ -173,15 +197,32 @@ fn child_apply_mounts(mounts: &[crate::MountEntry]) -> Result<(), u8> {
             "proc" => child_bind_mount(b"proc\0", &dest, 0, 7)?,
             "dev" => child_bind_mount(b"devtmpfs\0", &dest, 0, 8)?,
             "ro-bind" => {
-                child_bind_mount(src.as_bytes_with_nul(), &dest, libc::MS_BIND | libc::MS_REC, 9)?;
+                child_bind_mount(
+                    src.as_bytes_with_nul(),
+                    &dest,
+                    libc::MS_BIND | libc::MS_REC,
+                    9,
+                )?;
                 let ro_flags = libc::MS_BIND | libc::MS_REMOUNT | libc::MS_RDONLY;
                 if unsafe {
-                    libc::mount(std::ptr::null(), dest.as_ptr(), std::ptr::null(), ro_flags, std::ptr::null())
-                } != 0 {
+                    libc::mount(
+                        std::ptr::null(),
+                        dest.as_ptr(),
+                        std::ptr::null(),
+                        ro_flags,
+                        std::ptr::null(),
+                    )
+                } != 0
+                {
                     return Err(9);
                 }
             }
-            _ => child_bind_mount(src.as_bytes_with_nul(), &dest, libc::MS_BIND | libc::MS_REC, 10)?,
+            _ => child_bind_mount(
+                src.as_bytes_with_nul(),
+                &dest,
+                libc::MS_BIND | libc::MS_REC,
+                10,
+            )?,
         }
     }
     Ok(())
@@ -201,7 +242,8 @@ fn child_bind_mount(
             flags,
             std::ptr::null(),
         )
-    } != 0 {
+    } != 0
+    {
         return Err(err_code);
     }
     Ok(())
@@ -303,13 +345,7 @@ fn child_drop_capabilities(iso: &IsolationConfig) {
     for &(_name, cap_val) in ALL_CAPS {
         if !retain.contains(_name) {
             unsafe {
-                libc::prctl(
-                    libc::PR_CAPBSET_DROP,
-                    cap_val as libc::c_ulong,
-                    0,
-                    0,
-                    0,
-                );
+                libc::prctl(libc::PR_CAPBSET_DROP, cap_val as libc::c_ulong, 0, 0, 0);
             }
         }
     }
@@ -347,7 +383,11 @@ mod tests {
     #[test]
     fn test_resolve_binary_absolute_path() {
         let result = resolve_binary("/bin/sh");
-        assert!(result.is_ok(), "resolve_binary(\"/bin/sh\") failed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "resolve_binary(\"/bin/sh\") failed: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -359,9 +399,15 @@ mod tests {
     #[test]
     fn test_resolve_binary_relative() {
         let result = resolve_binary("./nonexistent");
-        assert!(result.is_err(), "expected error for relative nonexistent binary");
+        assert!(
+            result.is_err(),
+            "expected error for relative nonexistent binary"
+        );
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("not found"), "error should mention 'not found': {err}");
+        assert!(
+            err.contains("not found"),
+            "error should mention 'not found': {err}"
+        );
     }
 
     #[test]
@@ -377,6 +423,9 @@ mod tests {
     fn test_spawn_sandboxed_binary_not_found() {
         let config = empty_runtime_config("__nonexistent_binary_xyz__");
         let result = spawn_sandboxed(&config, &[]);
-        assert!(result.is_err(), "expected error for nonexistent binary, got: {result:?}");
+        assert!(
+            result.is_err(),
+            "expected error for nonexistent binary, got: {result:?}"
+        );
     }
 }

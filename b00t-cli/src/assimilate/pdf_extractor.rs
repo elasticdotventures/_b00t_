@@ -71,11 +71,13 @@ pub fn extract_pdf_url(url: &str) -> Result<String> {
 // ── docling via podman ─────────────────────────────────────────────────────
 
 fn try_docling_file(path: &str) -> Result<String> {
-    let abs_path = std::fs::canonicalize(path)
-        .map_err(|e| anyhow!("canonicalize path: {e}"))?;
+    let abs_path = std::fs::canonicalize(path).map_err(|e| anyhow!("canonicalize path: {e}"))?;
     let mount = format!("{}:/input.pdf:ro", abs_path.display());
 
-    run_docling_container(&["-f", "/input.pdf", "--output-format", "markdown"], Some(&mount))
+    run_docling_container(
+        &["-f", "/input.pdf", "--output-format", "markdown"],
+        Some(&mount),
+    )
 }
 
 fn try_docling_url(url: &str) -> Result<String> {
@@ -122,7 +124,11 @@ fn run_docling_container(args: &[&str], mount: Option<&str>) -> Result<String> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail: Vec<&str> = stderr.lines().take(5).collect();
-        bail!("podman exited {:?}: {}", output.status.code(), detail.join("; "));
+        bail!(
+            "podman exited {:?}: {}",
+            output.status.code(),
+            detail.join("; ")
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -136,8 +142,7 @@ fn run_docling_container(args: &[&str], mount: Option<&str>) -> Result<String> {
 // ── raglite fallback ────────────────────────────────────────────────────────
 
 fn try_raglite_file(path: &str) -> Result<String> {
-    let abs_path = std::fs::canonicalize(path)
-        .map_err(|e| anyhow!("canonicalize path: {e}"))?;
+    let abs_path = std::fs::canonicalize(path).map_err(|e| anyhow!("canonicalize path: {e}"))?;
     let abs_str = abs_path.display().to_string();
 
     run_raglite_python(&abs_str)
@@ -200,7 +205,11 @@ except Exception as e:
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail: Vec<&str> = stderr.lines().take(3).collect();
-        bail!("raglite/python exited {:?}: {}", output.status.code(), detail.join("; "));
+        bail!(
+            "raglite/python exited {:?}: {}",
+            output.status.code(),
+            detail.join("; ")
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();

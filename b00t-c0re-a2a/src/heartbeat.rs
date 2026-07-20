@@ -105,9 +105,7 @@ impl Heartbeat {
 
         for url in &destinations {
             if let Err(e) = A2aHttpTransport::send_task(url, &task).await {
-                eprintln!(
-                    "[heartbeat] failed to send heartbeat to {url}: {e}"
-                );
+                eprintln!("[heartbeat] failed to send heartbeat to {url}: {e}");
             }
         }
     }
@@ -122,13 +120,11 @@ mod tests {
 
     #[test]
     fn test_build_payload() {
-        let registry = Arc::new(Mutex::new(HiveRegistry::new(
-            AgentCard::new(
-                "test-hive",
-                "Test hive",
-                Url::parse("http://localhost:9999").unwrap(),
-            ),
-        )));
+        let registry = Arc::new(Mutex::new(HiveRegistry::new(AgentCard::new(
+            "test-hive",
+            "Test hive",
+            Url::parse("http://localhost:9999").unwrap(),
+        ))));
         let skill_reg = Arc::new(SkillRegistry::new());
         let transport = Arc::new(A2aHttpTransport::new(skill_reg, 0));
 
@@ -150,13 +146,11 @@ mod tests {
 
     #[test]
     fn test_build_payload_uptime_increases() {
-        let registry = Arc::new(Mutex::new(HiveRegistry::new(
-            AgentCard::new(
-                "uptime-hive",
-                "Uptime test",
-                Url::parse("http://localhost:9999").unwrap(),
-            ),
-        )));
+        let registry = Arc::new(Mutex::new(HiveRegistry::new(AgentCard::new(
+            "uptime-hive",
+            "Uptime test",
+            Url::parse("http://localhost:9999").unwrap(),
+        ))));
         let skill_reg = Arc::new(SkillRegistry::new());
         let transport = Arc::new(A2aHttpTransport::new(skill_reg, 0));
 

@@ -523,10 +523,7 @@ mod tests {
     fn test_not_urgent_important_hook_menu() {
         let json = eisenhower_route_impl(false, true);
         assert!(json.contains("hook"), "Expected Hook: {json}");
-        assert!(
-            json.contains("menu-interaction"),
-            "Expected reason: {json}"
-        );
+        assert!(json.contains("menu-interaction"), "Expected reason: {json}");
     }
 
     #[test]

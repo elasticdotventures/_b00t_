@@ -7,8 +7,8 @@
 use anyhow::{Context as AnyhowContext, Result};
 use b00t_c0re_gov::store::ContextStore;
 use b00t_c0re_gov::types::{AgentContext, HookToken, HookType};
-use clap::Parser;
 use chrono::Utc;
+use clap::Parser;
 use uuid::Uuid;
 
 /// Gate value that distinguishes manual context saves from hook-triggered snapshots.
@@ -60,9 +60,19 @@ pub enum ContextCommands {
 
 pub fn handle_context_command(cmd: &ContextCommands) -> Result<()> {
     match cmd {
-        ContextCommands::Save { agent_id, task, message, continuation, ttl } => {
-            handle_save(agent_id.as_deref(), task.as_deref(), message.as_deref(), continuation.as_deref(), *ttl)
-        }
+        ContextCommands::Save {
+            agent_id,
+            task,
+            message,
+            continuation,
+            ttl,
+        } => handle_save(
+            agent_id.as_deref(),
+            task.as_deref(),
+            message.as_deref(),
+            continuation.as_deref(),
+            *ttl,
+        ),
         ContextCommands::List { verbose } => handle_list(*verbose),
         ContextCommands::Show { id } => handle_show(id),
         ContextCommands::Resume { id, delete } => handle_resume(id, *delete),
@@ -113,7 +123,9 @@ fn handle_save(
         reasoning: message.unwrap_or("").to_string(),
         created_at: Utc::now(),
         hook_token: token.clone(),
-        continuation: continuation.unwrap_or("resume from context snapshot").to_string(),
+        continuation: continuation
+            .unwrap_or("resume from context snapshot")
+            .to_string(),
     };
 
     store.save(&token, &ctx).context("failed to save context")?;
@@ -155,7 +167,10 @@ fn handle_list(verbose: bool) -> Result<()> {
                 println!("  task:     {}", ctx.task);
                 println!("  message:  {}", token.description);
                 println!("  resume:   {}", ctx.continuation);
-                println!("  created:  {}", token.created_at.format("%Y-%m-%d %H:%M:%S"));
+                println!(
+                    "  created:  {}",
+                    token.created_at.format("%Y-%m-%d %H:%M:%S")
+                );
                 if let Some(ttl) = token.ttl_ms {
                     let age = (Utc::now() - token.created_at).num_seconds() as u64;
                     let remaining = ttl.saturating_sub(age * 1000) / 1000;
@@ -172,11 +187,7 @@ fn handle_list(verbose: bool) -> Result<()> {
             } else {
                 format!("{}s", age.num_seconds())
             };
-            println!("{}  {:>6}  {}",
-                token.id,
-                age_str,
-                token.description,
-            );
+            println!("{}  {:>6}  {}", token.id, age_str, token.description,);
         }
     }
 
@@ -195,8 +206,14 @@ fn handle_show(id: &str) -> Result<()> {
     println!("gate:         {}", ctx.gate);
     println!("continuation: {}", ctx.continuation);
     println!("reasoning:    {}", ctx.reasoning);
-    println!("result:       {}", serde_json::to_string_pretty(&ctx.result_so_far)?);
-    println!("created:      {}", ctx.created_at.format("%Y-%m-%d %H:%M:%S"));
+    println!(
+        "result:       {}",
+        serde_json::to_string_pretty(&ctx.result_so_far)?
+    );
+    println!(
+        "created:      {}",
+        ctx.created_at.format("%Y-%m-%d %H:%M:%S")
+    );
     if let Some(ttl) = ctx.hook_token.ttl_ms {
         let age = (Utc::now() - ctx.created_at).num_seconds() as u64;
         let remaining = (ttl.saturating_sub(age * 1000)) / 1000;
@@ -222,7 +239,10 @@ fn handle_resume(id: &str, delete: bool) -> Result<()> {
     println!("  {}", ctx.reasoning.replace('\n', "\n  "));
     println!();
     println!("context:");
-    println!("  {}", serde_json::to_string_pretty(&ctx.result_so_far)?.replace('\n', "\n  "));
+    println!(
+        "  {}",
+        serde_json::to_string_pretty(&ctx.result_so_far)?.replace('\n', "\n  ")
+    );
 
     if delete {
         store.delete(&uuid).context("failed to delete context")?;
@@ -262,7 +282,9 @@ fn handle_compact(message: Option<&str>) -> Result<()> {
         continuation: "restore compacted context and continue".to_string(),
     };
 
-    store.save(&token, &ctx).context("failed to save compacted context")?;
+    store
+        .save(&token, &ctx)
+        .context("failed to save compacted context")?;
 
     println!("/compact");
     println!();
@@ -271,7 +293,10 @@ fn handle_compact(message: Option<&str>) -> Result<()> {
     println!();
     println!("context window compacted. session state preserved.");
     println!("agent MUST issue /compact to clear context window.");
-    println!("on resume, restore with: b00t context resume {} --delete", id);
+    println!(
+        "on resume, restore with: b00t context resume {} --delete",
+        id
+    );
 
     Ok(())
 }
@@ -324,7 +349,13 @@ mod tests {
         }
     }
 
-    fn test_context(token: &HookToken, agent: &str, task: &str, message: &str, continuation: &str) -> AgentContext {
+    fn test_context(
+        token: &HookToken,
+        agent: &str,
+        task: &str,
+        message: &str,
+        continuation: &str,
+    ) -> AgentContext {
         AgentContext {
             agent_id: agent.to_string(),
             task: task.to_string(),
@@ -342,7 +373,13 @@ mod tests {
         let (store, _tmp) = test_store();
         let id = Uuid::new_v4();
         let token = test_token(id, "test context", None);
-        let ctx = test_context(&token, "test-agent", "test task", "hello world", "resume_here");
+        let ctx = test_context(
+            &token,
+            "test-agent",
+            "test task",
+            "hello world",
+            "resume_here",
+        );
 
         store.save(&token, &ctx).expect("save");
         let loaded = store.load_by_id(&id).expect("load").expect("found");
@@ -418,7 +455,17 @@ mod tests {
         store.save(&token, &ctx).expect("save after crash");
 
         // tmp should be gone, json exists
-        assert!(!tmp.path().join("hooks").join(format!("{}.json.tmp", id)).exists());
-        assert!(tmp.path().join("hooks").join(format!("{}.json", id)).exists());
+        assert!(
+            !tmp.path()
+                .join("hooks")
+                .join(format!("{}.json.tmp", id))
+                .exists()
+        );
+        assert!(
+            tmp.path()
+                .join("hooks")
+                .join(format!("{}.json", id))
+                .exists()
+        );
     }
 }

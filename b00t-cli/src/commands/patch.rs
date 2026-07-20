@@ -42,7 +42,11 @@ pub fn handle_patch_command(cmd: &PatchCommands) -> Result<()> {
             let patch = SemanticPatch::from_disk(&path, proposed)?;
             patch.display();
         }
-        PatchCommands::Apply { path, proposed, yes } => {
+        PatchCommands::Apply {
+            path,
+            proposed,
+            yes,
+        } => {
             let proposed = resolve_proposed(proposed)?;
             let patch = SemanticPatch::from_disk(&path, &proposed)?;
             patch.display();

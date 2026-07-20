@@ -74,7 +74,9 @@ impl RuntimeAdapter for OpenCodeAdapter {
         // in the plugin array, merged into ~/.config/opencode/opencode.json.
         let fragment_path = ctx.source_root.join("settings_fragment.json");
         if !fragment_path.exists() {
-            eprintln!("⚠️  No settings_fragment.json for OpenCode runtime — skipping hook registration");
+            eprintln!(
+                "⚠️  No settings_fragment.json for OpenCode runtime — skipping hook registration"
+            );
             return Ok(());
         }
 
@@ -82,12 +84,18 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let plugin_file = "rustfmt-post-edit.ts";
         let src_plugin = plugins_src.join(plugin_file);
         if !src_plugin.exists() {
-            eprintln!("⚠️  Plugin source not found: {} — skipping", src_plugin.display());
+            eprintln!(
+                "⚠️  Plugin source not found: {} — skipping",
+                src_plugin.display()
+            );
             return Ok(());
         }
 
         // Global plugins dir: ~/.config/opencode/plugins/
-        let plugins_dir = ctx.config.hooks_dir().parent()
+        let plugins_dir = ctx
+            .config
+            .hooks_dir()
+            .parent()
             .map(|p| p.join("plugins"))
             .unwrap_or_else(|| ctx.config.hooks_dir().join("../plugins"));
         std::fs::create_dir_all(&plugins_dir)
@@ -102,8 +110,13 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let fragment_str = std::fs::read_to_string(&fragment_path)?
             .replace("{{PLUGINS_DIR}}", &plugins_dir.display().to_string());
 
-        let fragment: serde_json::Value = serde_json::from_str(&fragment_str)
-            .with_context(|| format!("Failed to parse settings_fragment.json: {}", fragment_path.display()))?;
+        let fragment: serde_json::Value =
+            serde_json::from_str(&fragment_str).with_context(|| {
+                format!(
+                    "Failed to parse settings_fragment.json: {}",
+                    fragment_path.display()
+                )
+            })?;
 
         let mut settings: serde_json::Value = if settings_path.exists() {
             let content = std::fs::read_to_string(&settings_path)?;
@@ -117,7 +130,9 @@ impl RuntimeAdapter for OpenCodeAdapter {
             (&mut settings, &fragment)
         {
             for (key, fval) in f_map {
-                if key == "_note" { continue; }
+                if key == "_note" {
+                    continue;
+                }
                 if key == "plugin" {
                     // Array-merge: extend existing plugin list without duplicates.
                     let existing = s_map

@@ -211,7 +211,10 @@ pub struct PipelineLogsArgs {
     #[clap(long, help = "Filter by log level (info, warn, error, debug)")]
     pub level: Option<LogLevel>,
 
-    #[clap(long, help = "Show entries since RFC 3339 timestamp (e.g. 2026-07-12T00:00:00Z)")]
+    #[clap(
+        long,
+        help = "Show entries since RFC 3339 timestamp (e.g. 2026-07-12T00:00:00Z)"
+    )]
     pub since: Option<String>,
 
     #[clap(long, help = "Maximum number of entries to return")]
@@ -302,14 +305,19 @@ fn print_log_table(entries: &[PipelineLogEntry]) {
     // Header row.
     println!(
         "{:<ts_width$}  {:<lvl_width$}  {:<stage_width$}  MESSAGE",
-        "TIMESTAMP", "LEVEL", "STAGE",
+        "TIMESTAMP",
+        "LEVEL",
+        "STAGE",
         ts_width = ts_width,
         lvl_width = lvl_width,
         stage_width = stage_width,
     );
     println!(
         "{:-<ts_width$}  {:-<lvl_width$}  {:-<stage_width$}  {:-<30}",
-        "", "", "", "",
+        "",
+        "",
+        "",
+        "",
         ts_width = ts_width,
         lvl_width = lvl_width,
         stage_width = stage_width,
@@ -357,8 +365,20 @@ mod tests {
     #[test]
     fn test_store_and_query_all() {
         let store = VecLogStore::new();
-        store.store(make_entry("pipe-1", "build", LogLevel::Info, "started", Utc::now()));
-        store.store(make_entry("pipe-1", "test", LogLevel::Warn, "flake", Utc::now()));
+        store.store(make_entry(
+            "pipe-1",
+            "build",
+            LogLevel::Info,
+            "started",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "pipe-1",
+            "test",
+            LogLevel::Warn,
+            "flake",
+            Utc::now(),
+        ));
         let results = store.query(&PipelineLogQuery::default());
         assert_eq!(results.len(), 2);
     }
@@ -380,8 +400,20 @@ mod tests {
     #[test]
     fn test_query_by_pipeline_name() {
         let store = VecLogStore::new();
-        store.store(make_entry("my-pipeline::uuid1", "build", LogLevel::Info, "ok", Utc::now()));
-        store.store(make_entry("other-pipe::uuid2", "build", LogLevel::Info, "ok", Utc::now()));
+        store.store(make_entry(
+            "my-pipeline::uuid1",
+            "build",
+            LogLevel::Info,
+            "ok",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "other-pipe::uuid2",
+            "build",
+            LogLevel::Info,
+            "ok",
+            Utc::now(),
+        ));
         let q = PipelineLogQuery {
             pipeline_name: Some("my-pipeline".into()),
             ..Default::default()
@@ -394,8 +426,20 @@ mod tests {
     #[test]
     fn test_query_by_stage() {
         let store = VecLogStore::new();
-        store.store(make_entry("p1", "build", LogLevel::Info, "building", Utc::now()));
-        store.store(make_entry("p1", "test", LogLevel::Info, "testing", Utc::now()));
+        store.store(make_entry(
+            "p1",
+            "build",
+            LogLevel::Info,
+            "building",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "p1",
+            "test",
+            LogLevel::Info,
+            "testing",
+            Utc::now(),
+        ));
         let q = PipelineLogQuery {
             stage_name: Some("build".into()),
             ..Default::default()
@@ -408,8 +452,20 @@ mod tests {
     #[test]
     fn test_query_by_level() {
         let store = VecLogStore::new();
-        store.store(make_entry("p1", "s1", LogLevel::Info, "info msg", Utc::now()));
-        store.store(make_entry("p1", "s2", LogLevel::Error, "err msg", Utc::now()));
+        store.store(make_entry(
+            "p1",
+            "s1",
+            LogLevel::Info,
+            "info msg",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "p1",
+            "s2",
+            LogLevel::Error,
+            "err msg",
+            Utc::now(),
+        ));
         let q = PipelineLogQuery {
             level: Some(LogLevel::Error),
             ..Default::default()
@@ -452,9 +508,27 @@ mod tests {
     #[test]
     fn test_query_multiple_filters() {
         let store = VecLogStore::new();
-        store.store(make_entry("pipe-a::r1", "build", LogLevel::Info, "ok", Utc::now()));
-        store.store(make_entry("pipe-a::r1", "build", LogLevel::Error, "fail", Utc::now()));
-        store.store(make_entry("pipe-b::r2", "build", LogLevel::Info, "ok", Utc::now()));
+        store.store(make_entry(
+            "pipe-a::r1",
+            "build",
+            LogLevel::Info,
+            "ok",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "pipe-a::r1",
+            "build",
+            LogLevel::Error,
+            "fail",
+            Utc::now(),
+        ));
+        store.store(make_entry(
+            "pipe-b::r2",
+            "build",
+            LogLevel::Info,
+            "ok",
+            Utc::now(),
+        ));
         // Filter by pipeline-name AND level.
         let q = PipelineLogQuery {
             pipeline_name: Some("pipe-a".into()),

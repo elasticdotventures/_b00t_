@@ -1,11 +1,7 @@
-use crate::{
-    ACPMessage, StepBarrier,
-    ChatError, ChatResult, JsonValue,
-    ChatClient,
-};
+use crate::{ACPMessage, ChatClient, ChatError, ChatResult, JsonValue, StepBarrier};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{timeout, Duration, sleep};
+use tokio::time::{Duration, sleep, timeout};
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
@@ -22,8 +18,7 @@ pub struct AgentConfig {
 impl AgentConfig {
     pub fn new(agent_id: String, nats_url: String, namespace: String) -> Self {
         let nats_url = if nats_url.is_empty() {
-            std::env::var("NATS_URL")
-                .unwrap_or_else(|_| "nats://localhost:4222".to_string())
+            std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string())
         } else {
             nats_url
         };
@@ -42,8 +37,14 @@ impl AgentConfig {
         }
     }
 
-    pub fn with_role(mut self, role: String) -> Self { self.role = role; self }
-    pub fn with_timeout(mut self, timeout_ms: u64) -> Self { self.timeout_ms = timeout_ms; self }
+    pub fn with_role(mut self, role: String) -> Self {
+        self.role = role;
+        self
+    }
+    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = timeout_ms;
+        self
+    }
 
     pub fn from_env(agent_id: String, namespace: String) -> Self {
         Self::new(agent_id, String::new(), namespace)
@@ -83,9 +84,10 @@ impl Agent {
             config.nats_password.clone(),
         )?;
 
-        let step_barrier = Arc::new(Mutex::new(
-            StepBarrier::new(vec![config.agent_id.clone()], config.timeout_ms)
-        ));
+        let step_barrier = Arc::new(Mutex::new(StepBarrier::new(
+            vec![config.agent_id.clone()],
+            config.timeout_ms,
+        )));
 
         info!("Agent '{}' initialized on NATS", config.agent_id);
 
@@ -99,7 +101,9 @@ impl Agent {
 
     pub async fn start(&self) -> ChatResult<()> {
         let mut running = self.running.lock().await;
-        if *running { return Ok(()); }
+        if *running {
+            return Ok(());
+        }
         *running = true;
         info!("Agent '{}' started", self.config.agent_id);
         Ok(())
@@ -151,15 +155,21 @@ impl Agent {
             loop {
                 {
                     let barrier = self.step_barrier.lock().await;
-                    if barrier.is_step_complete(step) { return Ok(()); }
+                    if barrier.is_step_complete(step) {
+                        return Ok(());
+                    }
                     let pending = barrier.pending_agents(step);
                     if !pending.is_empty() {
-                        debug!("Waiting for agents to complete step {}: {:?}", step, pending);
+                        debug!(
+                            "Waiting for agents to complete step {}: {:?}",
+                            step, pending
+                        );
                     }
                 }
                 sleep(Duration::from_millis(100)).await;
             }
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(Ok(())) => Ok(()),
@@ -168,7 +178,10 @@ impl Agent {
                 warn!("Step {} timed out", step);
                 let mut barrier = self.step_barrier.lock().await;
                 barrier.force_advance_step();
-                Err(ChatError::Other(format!("Step {} timed out after {}ms", step, self.config.timeout_ms)))
+                Err(ChatError::Other(format!(
+                    "Step {} timed out after {}ms",
+                    step, self.config.timeout_ms
+                )))
             }
         }
     }
@@ -194,8 +207,12 @@ impl Agent {
         self.publish_acp(message).await
     }
 
-    pub fn config(&self) -> &AgentConfig { &self.config }
-    pub fn client(&self) -> &ChatClient { &self.client }
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+    pub fn client(&self) -> &ChatClient {
+        &self.client
+    }
 
     async fn publish_acp(&self, message: &ACPMessage) -> ChatResult<()> {
         let payload = serde_json::to_vec(message)?;

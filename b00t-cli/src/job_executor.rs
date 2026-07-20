@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::task::JoinSet;
 
-use crate::commands::provider::{get_provider, BatchJobSpec, ComputeProvider, JobHandle};
+use crate::commands::provider::{BatchJobSpec, ComputeProvider, JobHandle, get_provider};
 use crate::datum_job::{JobDatum, JobStep, JobTask};
 
 /// Bash command task for apalis execution
@@ -400,14 +400,7 @@ async fn execute_python_step(
         .with_context(|| format!("pip install {} failed", requirement))?;
     }
 
-    run_shell(
-        project_root,
-        cwd,
-        "python3",
-        &[script.to_string()],
-        env,
-    )
-    .await?;
+    run_shell(project_root, cwd, "python3", &[script.to_string()], env).await?;
 
     checkpoint_if_needed(project_root, job_name, step)
 }
@@ -857,11 +850,7 @@ description = "sleep step 2"
 type = "bash"
 command = "sleep 0.2"
 "#;
-        fs::write(
-            b00t_dir.join("test-sequential-timing.job.toml"),
-            job_toml,
-        )
-        .unwrap();
+        fs::write(b00t_dir.join("test-sequential-timing.job.toml"), job_toml).unwrap();
 
         let executor = JobExecutor::new(project_root).await.unwrap();
 
@@ -890,8 +879,8 @@ command = "sleep 0.2"
 #[cfg(test)]
 mod provider_bridge_tests {
     use super::*;
-    use async_trait::async_trait;
     use crate::commands::provider::{EndpointConfig, EndpointHandle, TrainingJobSpec};
+    use async_trait::async_trait;
     use std::collections::VecDeque;
     use std::sync::Mutex;
 
@@ -1033,7 +1022,10 @@ mod provider_bridge_tests {
     fn failure_status_detection() {
         assert!(is_failure_status("failed"));
         assert!(is_failure_status("dead"));
-        assert!(!is_failure_status("exited"), "bare 'exited' has no exit code available, treat as success");
+        assert!(
+            !is_failure_status("exited"),
+            "bare 'exited' has no exit code available, treat as success"
+        );
         assert!(!is_failure_status("completed"));
     }
 }

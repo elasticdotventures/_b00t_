@@ -10,9 +10,9 @@
 //! b00t-cli data inspect records.jsonl --sample 10
 //! ```
 
-use crate::commands::fabric_cmd::{handle_fabric_command, FabricCommands};
+use crate::commands::fabric_cmd::{FabricCommands, handle_fabric_command};
 use crate::datum_schema::{CellValue, FocusJsonlSequence};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -36,7 +36,11 @@ pub enum DataCommands {
 pub fn handle_data_command(args: &DataCommands) -> Result<()> {
     match args {
         DataCommands::Fabric(fabric_args) => handle_fabric_command(fabric_args),
-        DataCommands::Inspect { path, headers: show_headers, sample } => {
+        DataCommands::Inspect {
+            path,
+            headers: show_headers,
+            sample,
+        } => {
             let path_str = path.to_string_lossy().to_string();
 
             let mut seq = FocusJsonlSequence::open(&path_str)
@@ -78,7 +82,10 @@ pub fn handle_data_command(args: &DataCommands) -> Result<()> {
                     let null_flag = if h.nullable { "nullable" } else { "required" };
                     println!(
                         "   [{:3}] {:<30} {:8} ({})",
-                        h.ordinal, h.name, format!("{:?}", h.data_type), null_flag
+                        h.ordinal,
+                        h.name,
+                        format!("{:?}", h.data_type),
+                        null_flag
                     );
                 }
                 println!();
@@ -90,12 +97,18 @@ pub fn handle_data_command(args: &DataCommands) -> Result<()> {
                 let null_flag = if h.nullable { "nullable" } else { "required" };
                 println!(
                     "   [{:3}] {:<30} {:8} ({})",
-                    h.ordinal, h.name, format!("{:?}", h.data_type), null_flag
+                    h.ordinal,
+                    h.name,
+                    format!("{:?}", h.data_type),
+                    null_flag
                 );
             }
             println!();
 
-            println!("── Sample ({} rows) ──────────────────────────────", (*sample).min(total_rows));
+            println!(
+                "── Sample ({} rows) ──────────────────────────────",
+                (*sample).min(total_rows)
+            );
             for (i, frame) in sample_rows.iter().enumerate() {
                 if let Some(row) = frame.rows.first() {
                     println!("   Row {}:", i + 1);

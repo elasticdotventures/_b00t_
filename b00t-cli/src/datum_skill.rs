@@ -508,9 +508,18 @@ output_types = [".rs"]
         let config: crate::UnifiedConfig = toml::from_str(skill_toml).unwrap();
         let datum = SkillDatum { datum: config.b00t };
         let recipe = datum.emit_just_recipe().expect("should emit recipe");
-        assert!(recipe.contains("skill-my-skill:"), "recipe name uses dashes: {recipe}");
-        assert!(recipe.contains("b00t learn my.skill"), "recipe invokes learn: {recipe}");
-        assert!(recipe.contains("Does the thing"), "recipe includes description: {recipe}");
+        assert!(
+            recipe.contains("skill-my-skill:"),
+            "recipe name uses dashes: {recipe}"
+        );
+        assert!(
+            recipe.contains("b00t learn my.skill"),
+            "recipe invokes learn: {recipe}"
+        );
+        assert!(
+            recipe.contains("Does the thing"),
+            "recipe includes description: {recipe}"
+        );
     }
 
     #[test]

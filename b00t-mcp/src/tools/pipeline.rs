@@ -66,8 +66,7 @@ impl McpReflection for BPipelineCommand {
         action_prop.insert(
             "description".to_string(),
             Value::String(
-                "Action: list (no pipeline required), run, validate, inspect, cost"
-                    .to_string(),
+                "Action: list (no pipeline required), run, validate, inspect, cost".to_string(),
             ),
         );
         properties.insert("action".to_string(), Value::Object(action_prop));
@@ -78,8 +77,7 @@ impl McpReflection for BPipelineCommand {
         pipeline_prop.insert(
             "description".to_string(),
             Value::String(
-                "Pipeline datum name. Required for: run, validate, inspect, cost"
-                    .to_string(),
+                "Pipeline datum name. Required for: run, validate, inspect, cost".to_string(),
             ),
         );
         properties.insert("pipeline".to_string(), Value::Object(pipeline_prop));
@@ -108,17 +106,25 @@ impl McpReflection for BPipelineCommand {
 
 impl McpExecutor for BPipelineCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> anyhow::Result<String> {
-        let action = params.get("action").and_then(|v| v.as_str()).ok_or_else(
-            || anyhow::anyhow!("b00t_pipeline requires 'action' field (list|run|validate|inspect|cost)"),
-        )?;
+        let action = params
+            .get("action")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "b00t_pipeline requires 'action' field (list|run|validate|inspect|cost)"
+                )
+            })?;
 
         match action {
             "list" => exec_pipeline_list(),
             "run" => {
-                let pipeline = params
-                    .get("pipeline")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("b00t_pipeline run requires 'pipeline' field"))?;
+                let pipeline =
+                    params
+                        .get("pipeline")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("b00t_pipeline run requires 'pipeline' field")
+                        })?;
                 let stages = params
                     .get("params")
                     .and_then(|v| v.as_str())
@@ -128,10 +134,13 @@ impl McpExecutor for BPipelineCommand {
                 exec_pipeline_run(pipeline, &stages)
             }
             "validate" => {
-                let pipeline = params
-                    .get("pipeline")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("b00t_pipeline validate requires 'pipeline' field"))?;
+                let pipeline =
+                    params
+                        .get("pipeline")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("b00t_pipeline validate requires 'pipeline' field")
+                        })?;
                 exec_pipeline_validate(pipeline)
             }
             "inspect" => {
@@ -139,10 +148,13 @@ impl McpExecutor for BPipelineCommand {
                 exec_pipeline_inspect(pipeline)
             }
             "cost" => {
-                let pipeline = params
-                    .get("pipeline")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("b00t_pipeline cost requires 'pipeline' field"))?;
+                let pipeline =
+                    params
+                        .get("pipeline")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("b00t_pipeline cost requires 'pipeline' field")
+                        })?;
                 exec_pipeline_cost(pipeline)
             }
             other => anyhow::bail!(
@@ -217,7 +229,10 @@ fn exec_pipeline_inspect(name: Option<&str>) -> anyhow::Result<String> {
     let listing = String::from_utf8_lossy(&output.stdout).to_string();
     match name {
         Some(pname) => {
-            let filtered: Vec<&str> = listing.lines().filter(|line| line.contains(pname)).collect();
+            let filtered: Vec<&str> = listing
+                .lines()
+                .filter(|line| line.contains(pname))
+                .collect();
             if filtered.is_empty() {
                 Ok(format!(
                     "Pipeline '{pname}' not found.\nDiscovered pipelines:\n{listing}"

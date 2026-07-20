@@ -3,10 +3,10 @@
 //! Implements all MCP agent coordination commands using the b00t-c0re-lib
 //! agent coordination infrastructure.
 
-use anyhow::Result;
-use b00t_c0re_lib::AgentManager;
 use crate::calorie_tracker::CalorieTracker;
 use crate::governance::GovernanceRuntime;
+use anyhow::Result;
+use b00t_c0re_lib::AgentManager;
 use b00t_c0re_lib::agent_coordination::{
     AgentCoordinator, AgentMetadata, MessageFilter, RequestUrgency, TaskCompletionStatus,
     TaskPriority,
@@ -110,7 +110,10 @@ pub enum AgentCommands {
         #[arg(help = "Task description — used to discover capable agents")]
         task: String,
 
-        #[arg(long, help = "Preferred agent name (skip discovery, delegate directly)")]
+        #[arg(
+            long,
+            help = "Preferred agent name (skip discovery, delegate directly)"
+        )]
         agent: Option<String>,
 
         #[arg(long, help = "Task ID (auto-generated if not set)")]
@@ -123,7 +126,11 @@ pub enum AgentCommands {
         )]
         priority: String,
 
-        #[arg(long, help = "Timeout in seconds for each stage", default_value = "300")]
+        #[arg(
+            long,
+            help = "Timeout in seconds for each stage",
+            default_value = "300"
+        )]
         timeout: u64,
 
         #[arg(long, help = "Output in JSON format")]
@@ -238,10 +245,16 @@ pub enum AgentCommands {
         #[arg(long, help = "Path to agent TOML (overrides auto-discovery)")]
         config: Option<PathBuf>,
 
-        #[arg(long, help = "Inject skill instructions into task context (skill name)")]
+        #[arg(
+            long,
+            help = "Inject skill instructions into task context (skill name)"
+        )]
         skill: Option<String>,
 
-        #[arg(long, help = "Inject role constraints into task context (role datum name)")]
+        #[arg(
+            long,
+            help = "Inject role constraints into task context (role datum name)"
+        )]
         role: Option<String>,
     },
 
@@ -323,7 +336,17 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             priority,
             timeout,
             json,
-        } => handle_dispatch(task.as_str(), &agent, &task_id, priority.as_str(), timeout, json).await,
+        } => {
+            handle_dispatch(
+                task.as_str(),
+                &agent,
+                &task_id,
+                priority.as_str(),
+                timeout,
+                json,
+            )
+            .await
+        }
 
         AgentCommands::Complete {
             captain,
@@ -371,7 +394,16 @@ pub async fn handle_agent_command(cmd: AgentCommands) -> Result<()> {
             config,
             skill,
             role,
-        } => handle_invoke(&agent, &prompt, config.as_deref(), skill.as_deref(), role.as_deref()).await,
+        } => {
+            handle_invoke(
+                &agent,
+                &prompt,
+                config.as_deref(),
+                skill.as_deref(),
+                role.as_deref(),
+            )
+            .await
+        }
 
         AgentCommands::Ralph {
             tool,
@@ -419,8 +451,10 @@ async fn handle_workers(json: bool) -> Result<()> {
             } else {
                 agent.capabilities.join(", ")
             };
-            println!("  {:<20} role={:<12} status={} caps=[{}]",
-                agent.agent_id, agent.agent_role, agent.status, caps);
+            println!(
+                "  {:<20} role={:<12} status={} caps=[{}]",
+                agent.agent_id, agent.agent_role, agent.status, caps
+            );
         }
     }
     Ok(())
@@ -579,7 +613,10 @@ async fn handle_discover(
             } else {
                 String::new()
             };
-            println!("🤖 {}{} ({})", agent.agent_id, subtype_label, agent.agent_role);
+            println!(
+                "🤖 {}{} ({})",
+                agent.agent_id, subtype_label, agent.agent_role
+            );
             println!("   Skills: {}", agent.capabilities.join(", "));
             if let Some(crew) = agent.crew {
                 println!("   Crew: {}", crew);
@@ -960,11 +997,7 @@ async fn handle_capability(capabilities: &str, description: &str, urgency_str: &
         let local = discover_local_agents();
         let matched: Vec<_> = local
             .iter()
-            .filter(|a| {
-                required_caps
-                    .iter()
-                    .all(|c| a.capabilities.contains(c))
-            })
+            .filter(|a| required_caps.iter().all(|c| a.capabilities.contains(c)))
             .collect();
         if matched.is_empty() {
             println!("No agents responded (Redis may be unavailable; no local match)");
@@ -1107,8 +1140,8 @@ async fn handle_invoke(
     skill: Option<&str>,
     role: Option<&str>,
 ) -> Result<()> {
-    use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
     use b00t_c0re_gov::errors::GovernanceError;
+    use b00t_c0re_lib::agent_manager::{AgentManager, invoke_agent_executor};
 
     // Reject agent names with path separators or characters that could escape the store dir.
     // Allowed: alphanumeric, dash, underscore, dot (no slashes, backslashes, or null bytes).
@@ -1453,8 +1486,7 @@ fn load_role_hint(role_name: &str) -> String {
 mod tests {
     use super::{
         build_enriched_description, build_ralph_command_args, build_shell_ralph_command_args,
-        resolve_ralph_task_id, score_agent_for_task, discover_agent_for_task,
-        uses_shell_ralph,
+        discover_agent_for_task, resolve_ralph_task_id, score_agent_for_task, uses_shell_ralph,
     };
 
     #[test]
@@ -1602,7 +1634,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nats-operator.cli.tomllmd");
         let mut f = std::fs::File::create(&path).unwrap();
-        write!(f, "name = \"nats-operator\"\ndescription = \"NATS deployment agent\"\ntype = \"cli\"").unwrap();
+        write!(
+            f,
+            "name = \"nats-operator\"\ndescription = \"NATS deployment agent\"\ntype = \"cli\""
+        )
+        .unwrap();
 
         let result = discover_agent_for_task("deploy NATS cluster", dir.path());
         assert!(result.is_some(), "should find nats-operator");
@@ -1630,7 +1666,11 @@ mod tests {
 
         let path2 = dir.path().join("generic-worker.cli.tomllmd");
         let mut f2 = std::fs::File::create(&path2).unwrap();
-        write!(f2, "name = \"generic-worker\"\ndescription = \"handles NATS messaging\"\ntype = \"cli\"").unwrap();
+        write!(
+            f2,
+            "name = \"generic-worker\"\ndescription = \"handles NATS messaging\"\ntype = \"cli\""
+        )
+        .unwrap();
 
         let result = discover_agent_for_task("deploy nats cluster", dir.path());
         assert!(result.is_some());

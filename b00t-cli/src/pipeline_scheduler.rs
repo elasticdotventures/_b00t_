@@ -29,18 +29,11 @@ pub struct HostInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ScheduleDecision {
     /// Stage is allocated to this host with a fitness score (0.0–1.0).
-    Allocate {
-        host: String,
-        score: f64,
-    },
+    Allocate { host: String, score: f64 },
     /// Stage cannot fit on any available host.
-    NoFit {
-        reason: String,
-    },
+    NoFit { reason: String },
     /// Stage could fit but is deferred (e.g. dependency not yet scheduled).
-    Deferred {
-        reason: String,
-    },
+    Deferred { reason: String },
 }
 
 /// Scheduling outcome for a single stage.
@@ -87,8 +80,16 @@ fn score_fit(req: &ResourceRequirements, host: &HostResources) -> f64 {
     // VRAM ratio (only matters when the host has vram or the stage needs it)
     if host.vram_gb > 0.0 || req.min_vram_gb > 0.0 {
         dims += 1;
-        let available = if host.vram_gb > 0.0 { host.vram_gb } else { 0.0 };
-        let needed = if req.min_vram_gb > 0.0 { req.min_vram_gb } else { 0.0 };
+        let available = if host.vram_gb > 0.0 {
+            host.vram_gb
+        } else {
+            0.0
+        };
+        let needed = if req.min_vram_gb > 0.0 {
+            req.min_vram_gb
+        } else {
+            0.0
+        };
         total += if available > 0.0 {
             (available - needed).min(available) / available
         } else if needed == 0.0 {
@@ -156,7 +157,9 @@ impl Scheduler for GreedyScheduler {
                 let reason = build_no_fit_reason(req, hosts);
                 mapping.push(ScheduleResult {
                     stage_name: stage.name.clone(),
-                    decision: ScheduleDecision::NoFit { reason: reason.clone() },
+                    decision: ScheduleDecision::NoFit {
+                        reason: reason.clone(),
+                    },
                     alternatives: vec![],
                 });
                 unassigned.push(stage.name.clone());
@@ -180,7 +183,11 @@ impl Scheduler for GreedyScheduler {
         }
 
         PipelineSchedule {
-            overall_score: if allocated > 0 { score_sum / allocated as f64 } else { 0.0 },
+            overall_score: if allocated > 0 {
+                score_sum / allocated as f64
+            } else {
+                0.0
+            },
             mapping,
             unassigned,
         }
@@ -205,7 +212,9 @@ impl Scheduler for BinpackScheduler {
         indexed.sort_by(|(_, a), (_, b)| {
             let a_demand = resource_demand(&a.profile.resources);
             let b_demand = resource_demand(&b.profile.resources);
-            b_demand.partial_cmp(&a_demand).unwrap_or(std::cmp::Ordering::Equal)
+            b_demand
+                .partial_cmp(&a_demand)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Track remaining resources per host as we pack.
@@ -239,11 +248,7 @@ impl Scheduler for BinpackScheduler {
                         .filter(|&&i| req.fits_on(&remaining[i].1))
                         .map(|&i| remaining[i].0.clone())
                         .collect();
-                    assignments[*orig_idx] = Some((
-                        remaining[hi].0.clone(),
-                        score,
-                        alternatives,
-                    ));
+                    assignments[*orig_idx] = Some((remaining[hi].0.clone(), score, alternatives));
                     // Deduct used resources (simple subtraction — no fragmentation model).
                     let (_, ref mut res) = remaining[hi];
                     res.ram_gb = (res.ram_gb - req.min_ram_gb).max(0.0);
@@ -323,7 +328,11 @@ impl Scheduler for BinpackScheduler {
             .collect();
 
         PipelineSchedule {
-            overall_score: if allocated > 0 { score_sum / allocated as f64 } else { 0.0 },
+            overall_score: if allocated > 0 {
+                score_sum / allocated as f64
+            } else {
+                0.0
+            },
             mapping,
             unassigned,
         }
@@ -447,10 +456,7 @@ pub fn handle_schedule_command(
 /// Format a PipelineSchedule as a human-readable string.
 fn format_schedule(pipeline_name: &str, schedule: &PipelineSchedule) -> String {
     let mut out = String::new();
-    out.push_str(&format!(
-        "Pipeline Schedule: {}\n",
-        pipeline_name
-    ));
+    out.push_str(&format!("Pipeline Schedule: {}\n", pipeline_name));
     out.push_str(&format!(
         "Overall Score: {:.3}  |  Unassigned: {}\n\n",
         schedule.overall_score,
@@ -521,7 +527,13 @@ mod tests {
         }
     }
 
-    fn make_host(name: &str, ram_gb: f64, vram_gb: f64, gpu_count: u32, cpu_cores: u32) -> HostInfo {
+    fn make_host(
+        name: &str,
+        ram_gb: f64,
+        vram_gb: f64,
+        gpu_count: u32,
+        cpu_cores: u32,
+    ) -> HostInfo {
         HostInfo {
             name: name.to_string(),
             resources: HostResources {
@@ -584,12 +596,18 @@ mod tests {
     #[test]
     fn multiple_stages_spread_across_hosts() {
         let req_a = ResourceRequirements {
-            min_ram_gb: 8.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 8.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
         let req_b = ResourceRequirements {
-            min_ram_gb: 4.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 4.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
 
         let host_a = make_host("big-host", 32.0, 0.0, 0, 16);
@@ -614,8 +632,11 @@ mod tests {
         // Four small stages that could fit on 2 hosts — greedy will spread,
         // binpack will concentrate.
         let req = ResourceRequirements {
-            min_ram_gb: 6.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 6.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
 
         let hosts = vec![
@@ -665,12 +686,18 @@ mod tests {
 
         // Now test with uneven stages where binpack should definitely differ:
         let big_req = ResourceRequirements {
-            min_ram_gb: 12.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 12.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
         let small_req = ResourceRequirements {
-            min_ram_gb: 2.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 2.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
 
         let uneven_stages = vec![
@@ -716,14 +743,22 @@ mod tests {
         // Greedy (stateless) puts every stage on the single best-fitting host;
         // binpack (stateful with resource tracking) spills to thin-node when
         // fat-node fills up. The strategies MUST produce different distributions.
-        let greedy_map: Vec<Option<&str>> = greedy_u.mapping.iter().map(|r| match &r.decision {
-            ScheduleDecision::Allocate { host, .. } => Some(host.as_str()),
-            _ => None,
-        }).collect();
-        let binpack_map: Vec<Option<&str>> = binpack_u.mapping.iter().map(|r| match &r.decision {
-            ScheduleDecision::Allocate { host, .. } => Some(host.as_str()),
-            _ => None,
-        }).collect();
+        let greedy_map: Vec<Option<&str>> = greedy_u
+            .mapping
+            .iter()
+            .map(|r| match &r.decision {
+                ScheduleDecision::Allocate { host, .. } => Some(host.as_str()),
+                _ => None,
+            })
+            .collect();
+        let binpack_map: Vec<Option<&str>> = binpack_u
+            .mapping
+            .iter()
+            .map(|r| match &r.decision {
+                ScheduleDecision::Allocate { host, .. } => Some(host.as_str()),
+                _ => None,
+            })
+            .collect();
         assert_ne!(
             greedy_map, binpack_map,
             "greedy and binpack should produce different host assignments for uneven stages"
@@ -763,7 +798,12 @@ mod tests {
     fn host_info_serialize_round_trip() {
         let host = HostInfo {
             name: "test-host".into(),
-            resources: HostResources { ram_gb: 32.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 16 },
+            resources: HostResources {
+                ram_gb: 32.0,
+                vram_gb: 0.0,
+                gpu_count: 0,
+                cpu_cores: 16,
+            },
             labels: HashMap::from([("rack".into(), "A1".into())]),
         };
         let json = serde_json::to_string(&host).unwrap();
@@ -775,9 +815,16 @@ mod tests {
     #[test]
     fn schedule_decision_serialize_round_trip() {
         let cases: Vec<ScheduleDecision> = vec![
-            ScheduleDecision::Allocate { host: "node-1".into(), score: 0.85 },
-            ScheduleDecision::NoFit { reason: "needs GPU".into() },
-            ScheduleDecision::Deferred { reason: "waiting on upstream".into() },
+            ScheduleDecision::Allocate {
+                host: "node-1".into(),
+                score: 0.85,
+            },
+            ScheduleDecision::NoFit {
+                reason: "needs GPU".into(),
+            },
+            ScheduleDecision::Deferred {
+                reason: "waiting on upstream".into(),
+            },
         ];
         for d in &cases {
             let json = serde_json::to_string(d).unwrap();
@@ -796,7 +843,10 @@ mod tests {
         let schedule = PipelineSchedule {
             mapping: vec![ScheduleResult {
                 stage_name: "encode".into(),
-                decision: ScheduleDecision::Allocate { host: "gpu-1".into(), score: 0.9 },
+                decision: ScheduleDecision::Allocate {
+                    host: "gpu-1".into(),
+                    score: 0.9,
+                },
                 alternatives: vec!["gpu-2".into()],
             }],
             overall_score: 0.9,
@@ -813,23 +863,42 @@ mod tests {
     #[test]
     fn score_fit_perfect_match_is_one() {
         let req = ResourceRequirements {
-            min_ram_gb: 8.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: Some(4), scratch_disk_gb: None,
+            min_ram_gb: 8.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: Some(4),
+            scratch_disk_gb: None,
         };
-        let host = HostResources { ram_gb: 8.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 4 };
+        let host = HostResources {
+            ram_gb: 8.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
         // When exact match, remaining = 0, so ram score = (8-8)/8 = 0, cpu score = (4-4)/4 = 0.
         // So score should be 0.0 (no headroom).
         let score = score_fit(&req, &host);
-        assert!((score - 0.0).abs() < 1e-6, "expected 0.0 for exact match, got {score}");
+        assert!(
+            (score - 0.0).abs() < 1e-6,
+            "expected 0.0 for exact match, got {score}"
+        );
     }
 
     #[test]
     fn score_fit_ample_headroom() {
         let req = ResourceRequirements {
-            min_ram_gb: 2.0, min_vram_gb: 0.0, requires_gpu: false,
-            cpu_cores: None, scratch_disk_gb: None,
+            min_ram_gb: 2.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
         };
-        let host = HostResources { ram_gb: 16.0, vram_gb: 0.0, gpu_count: 0, cpu_cores: 8 };
+        let host = HostResources {
+            ram_gb: 16.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 8,
+        };
         let score = score_fit(&req, &host);
         // (16-2)/16 = 0.875
         assert!((score - 0.875).abs() < 1e-6, "expected ~0.875, got {score}");

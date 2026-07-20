@@ -8,8 +8,8 @@
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -773,7 +773,9 @@ pub fn load_session_guards() -> Vec<HiveGuard> {
         message: Option<String>,
         threshold: Option<u32>,
     }
-    fn default_sg_action() -> String { "warn".to_string() }
+    fn default_sg_action() -> String {
+        "warn".to_string()
+    }
 
     let path = session_guards_path();
     let content = match std::fs::read_to_string(&path) {
@@ -901,7 +903,9 @@ impl GuardViolationCounter {
         }
         // Also write to unified events.jsonl with consistent schema
         let home = std::env::var("HOME").unwrap_or_default();
-        let events_path = std::path::Path::new(&home).join(".b00t").join("events.jsonl");
+        let events_path = std::path::Path::new(&home)
+            .join(".b00t")
+            .join("events.jsonl");
         if let Some(parent) = events_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -1032,7 +1036,9 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     // Register regex_match(cmd, pattern) for guard pattern matching.
     // Allows guards like: pattern = { rhai = "regex_match(cmd, 'git checkout -b (feat|fix)/')" }
     engine.register_fn("regex_match", |s: &str, pattern: &str| -> bool {
-        Regex::new(pattern).map(|re| re.is_match(s)).unwrap_or(false)
+        Regex::new(pattern)
+            .map(|re| re.is_match(s))
+            .unwrap_or(false)
     });
     let mut scope = Scope::new();
     scope.push("cmd", command.to_string());
@@ -1049,8 +1055,14 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     let mut script = String::new();
     let mut macro_vec: Vec<(&String, &String)> = context.rhai_macros.iter().collect();
     macro_vec.sort_by(|(_, a_expr), (_, b_expr)| {
-        let a_dep = context.rhai_macros.keys().any(|k| a_expr.contains(k.as_str()));
-        let b_dep = context.rhai_macros.keys().any(|k| b_expr.contains(k.as_str()));
+        let a_dep = context
+            .rhai_macros
+            .keys()
+            .any(|k| a_expr.contains(k.as_str()));
+        let b_dep = context
+            .rhai_macros
+            .keys()
+            .any(|k| b_expr.contains(k.as_str()));
         a_dep.cmp(&b_dep)
     });
     for (name, macro_expr) in &macro_vec {
@@ -1499,11 +1511,7 @@ fn dpkg_version(pkg: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v)
-    }
+    if v.is_empty() { None } else { Some(v) }
 }
 
 fn find_active_downloads() -> Vec<String> {
@@ -1583,13 +1591,19 @@ mod tests {
 
     #[test]
     fn accelerator_summary_with_vram() {
-        assert_eq!(gpu("RTX 3090", 24576, 8000).summary(), "RTX 3090 — 8000MB free / 24576MB total");
+        assert_eq!(
+            gpu("RTX 3090", 24576, 8000).summary(),
+            "RTX 3090 — 8000MB free / 24576MB total"
+        );
     }
 
     #[test]
     fn accelerator_summary_without_vram() {
         // NPU / iGPU: no VRAM → name only
-        assert_eq!(npu("Rockchip RKNPU2 NPU (2.3.0)").summary(), "Rockchip RKNPU2 NPU (2.3.0)");
+        assert_eq!(
+            npu("Rockchip RKNPU2 NPU (2.3.0)").summary(),
+            "Rockchip RKNPU2 NPU (2.3.0)"
+        );
     }
 
     #[test]
@@ -1597,9 +1611,12 @@ mod tests {
         // RK3588 node: an NPU + an integrated Mali (no VRAM). Legacy fields stay None
         // because no GPU has its own VRAM — gate logic must not falsely report free VRAM.
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let accels = vec![npu("RKNPU2"), mali];
         let (name, total, free) = derive_legacy_gpu_fields(&accels);
@@ -1631,13 +1648,19 @@ mod tests {
     #[test]
     fn snapshot_summary_line_counts_accelerators() {
         let snap = SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
             accelerators: vec![gpu("Mali", 0, 0), npu("RKNPU2")],
             cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
             timestamp: "t".into(),
         };
         assert!(snap.summary_line().contains("1gpu/1npu"));
@@ -1647,18 +1670,29 @@ mod tests {
     fn fingerprint_is_stable_and_sorted() {
         // a Mali iGPU (as probe_mali() would emit) + an RKNN NPU
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         // same hardware → same fingerprint, regardless of accel vector order
         let mk = |accels: Vec<Accelerator>| SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 1.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
-            accelerators: accels, cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+            ram_total_gb: 16.0,
+            ram_available_gb: 1.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
+            accelerators: accels,
+            cpu_cores: 8,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
+            timestamp: "t".into(),
         };
         let a = mk(vec![npu("RKNPU2"), mali.clone()]);
         let b = mk(vec![mali, npu("RKNPU2")]);
@@ -1674,12 +1708,20 @@ mod tests {
         // free RAM differs wildly between two captures of the same hardware →
         // fingerprint must be identical (it tracks total, not free).
         let base = || SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
-            accelerators: vec![npu("RKNPU2")], cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
+            accelerators: vec![npu("RKNPU2")],
+            cpu_cores: 8,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
+            timestamp: "t".into(),
         };
         let mut loaded = base();
         loaded.ram_available_gb = 2.0; // nearly full RAM
@@ -1689,13 +1731,19 @@ mod tests {
     #[test]
     fn snapshot_summary_line_no_accelerators() {
         let snap = SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
             accelerators: vec![],
             cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
             timestamp: "t".into(),
         };
         assert!(!snap.summary_line().contains("accel"));
@@ -1728,9 +1776,12 @@ mod tests {
     fn satisfies_substring_tokens() {
         // vendor/name/kind substring matching
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali (integrated)".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali (integrated)".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let rknn = npu("Rockchip RKNPU2 NPU (2.3.0)");
         assert!(mali.satisfies("mali"));
@@ -1762,9 +1813,12 @@ mod tests {
     fn satisfies_all_requirements_node_compat() {
         // RK3588 node: Mali + RKNN NPU
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let accels = vec![mali, npu("RKNPU2")];
         // a stack needing an NPU → compatible
@@ -1773,7 +1827,10 @@ mod tests {
         // a stack needing a discrete NVIDIA GPU → NOT compatible (only Mali here)
         assert!(!satisfies_all_requirements(&accels, &["nvidia".into()]));
         // needs both gpu + npu → compatible (Mali covers gpu)
-        assert!(satisfies_all_requirements(&accels, &["gpu".into(), "npu".into()]));
+        assert!(satisfies_all_requirements(
+            &accels,
+            &["gpu".into(), "npu".into()]
+        ));
         // empty requirements → compatible
         assert!(satisfies_all_requirements(&accels, &[]));
     }
@@ -1804,7 +1861,10 @@ mod tests {
             repeat_threshold: None,
         }];
         let ctx = GuardContext::default();
-        matches!(check_guards("rm -rf /", &guards, &ctx), GuardResult::Block { .. });
+        matches!(
+            check_guards("rm -rf /", &guards, &ctx),
+            GuardResult::Block { .. }
+        );
     }
 
     #[test]
@@ -1817,7 +1877,10 @@ mod tests {
             repeat_threshold: None,
         }];
         let ctx = GuardContext::default();
-        matches!(check_guards("cargo build", &guards, &ctx), GuardResult::Allow);
+        matches!(
+            check_guards("cargo build", &guards, &ctx),
+            GuardResult::Allow
+        );
     }
 
     #[test]
@@ -1935,7 +1998,9 @@ mod tests {
                 .and_then(|h| h.get("guards"))
                 .and_then(|g| g.as_array());
 
-            let Some(guard_values) = guards_arr else { continue };
+            let Some(guard_values) = guards_arr else {
+                continue;
+            };
             total_guards += guard_values.len() as u32;
 
             // Extract rhai_macros from datum header, if any
@@ -1974,9 +2039,7 @@ mod tests {
             for (idx, gv) in guard_values.iter().enumerate() {
                 // Determine pattern type
                 let pattern = match gv.get("pattern") {
-                    Some(toml::Value::String(s)) => {
-                        GuardPattern::JsonRegexPattern(s.clone())
-                    }
+                    Some(toml::Value::String(s)) => GuardPattern::JsonRegexPattern(s.clone()),
                     Some(toml::Value::Table(t)) if t.contains_key("rhai") => {
                         let expr = t.get("rhai").unwrap().as_str().unwrap().to_string();
                         rhai_guards += 1;
@@ -1993,7 +2056,8 @@ mod tests {
                 // Validate K0mmand3rStage stage names against known ParseStage values.
                 // Catches typos in TOML stage definitions at test time.
                 if let GuardPattern::K0mmand3rStage(ref stage_guard) = pattern {
-                    if k0mmand3r::parser_stages::ParseStage::from_name(&stage_guard.stage).is_none() {
+                    if k0mmand3r::parser_stages::ParseStage::from_name(&stage_guard.stage).is_none()
+                    {
                         failures.push(format!(
                             "{file_name}[{idx}]: unknown stage '{}' — must be one of: pre_parse, pre_verb, post_verb, pre_params, post_params, pre_content, post_content, post_parse",
                             stage_guard.stage
@@ -2006,16 +2070,24 @@ mod tests {
                     Some("block") => HiveGuardAction::Block,
                     _ => HiveGuardAction::Warn,
                 };
-                let msg = gv.get("message").and_then(|m| m.as_str()).map(|s| s.to_string());
-                let redirect = gv.get("redirect").and_then(|r| r.as_str()).map(|s| s.to_string());
+                let msg = gv
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string());
+                let redirect = gv
+                    .get("redirect")
+                    .and_then(|r| r.as_str())
+                    .map(|s| s.to_string());
 
                 let guard = HiveGuard {
                     pattern: pattern.clone(),
                     action,
                     message: msg,
                     redirect,
-                    repeat_threshold: gv.get("repeat_threshold")
-                        .and_then(|r| r.as_integer()).map(|i| i as u32),
+                    repeat_threshold: gv
+                        .get("repeat_threshold")
+                        .and_then(|r| r.as_integer())
+                        .map(|i| i as u32),
                 };
 
                 // Generate a matching input — extract keywords from the Rhai expression
@@ -2045,7 +2117,9 @@ mod tests {
                                     inter_quote_buf.clear();
                                 }
                                 c if in_quote => current.push(c),
-                                c => { inter_quote_buf.push(c); }
+                                c => {
+                                    inter_quote_buf.push(c);
+                                }
                             }
                         }
                         // Also check for references to macro names: pip_guard, docker_guard, etc.
@@ -2054,11 +2128,15 @@ mod tests {
                         let mut keyword_cmd: Option<String> = None;
                         for keyword in &keywords {
                             let cmd = match keyword.as_str() {
-                                "pip" | "pip3" | "npm" | "conda" => format!("{keyword} install somepackage"),
+                                "pip" | "pip3" | "npm" | "conda" => {
+                                    format!("{keyword} install somepackage")
+                                }
                                 "docker" => "docker run nginx".to_string(),
                                 "git" => "git push --force origin main".to_string(),
                                 "brew" => "brew install ffmpeg".to_string(),
-                                "huggingface-cli" => "huggingface-cli download some-model".to_string(),
+                                "huggingface-cli" => {
+                                    "huggingface-cli download some-model".to_string()
+                                }
                                 "rm" => "rm -rf /tmp/cache".to_string(),
                                 "ulimit" => "ulimit -n 65536".to_string(),
                                 _ => continue,
@@ -2081,8 +2159,14 @@ mod tests {
                                     let mut cur = String::new();
                                     for ch in macro_expr.chars() {
                                         match ch {
-                                            '"' if !in_q => { in_q = true; cur.clear(); }
-                                            '"' if in_q => { in_q = false; macro_keywords.push(cur.clone()); }
+                                            '"' if !in_q => {
+                                                in_q = true;
+                                                cur.clear();
+                                            }
+                                            '"' if in_q => {
+                                                in_q = false;
+                                                macro_keywords.push(cur.clone());
+                                            }
                                             c if in_q => cur.push(c),
                                             _ => {}
                                         }
@@ -2138,9 +2222,9 @@ mod tests {
                         match_cmd.clone(),
                         "git checkout master".to_string(),
                         "git push --force origin main".to_string(),
-                        "git commit -m 'simple message'".to_string(),   // no : for guard 19
+                        "git commit -m 'simple message'".to_string(), // no : for guard 19
                         "git checkout -b feat/new-thing".to_string(),
-                        "git checkout -b main".to_string(),   // no / — matches guard 18
+                        "git checkout -b main".to_string(), // no / — matches guard 18
                         "git merge feature-branch".to_string(),
                     ]
                 } else {
@@ -2156,7 +2240,8 @@ mod tests {
                 // K0mmand3rStage guards can't be tested via check_guards (they return false
                 // since they're parser-stage hooks). Skip the match assertion for them.
                 if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
-                    let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
+                    let matched =
+                        matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
                     if !matched {
                         failures.push(format!(
                             "{}[{}]: expected match for pattern={:?}, got Allow",
@@ -2188,14 +2273,21 @@ mod tests {
         }
 
         // Report results
-        assert!(total_guards > 0, "no guards found — are hive-guards.hive.toml files shipped?");
+        assert!(
+            total_guards > 0,
+            "no guards found — are hive-guards.hive.toml files shipped?"
+        );
         eprintln!(
             "✅ guard coverage: {total_guards} guards scanned, {rhai_guards} rhai expressions, {mat} failures",
             total_guards = total_guards,
             rhai_guards = rhai_guards,
             mat = failures.len(),
         );
-        assert!(failures.is_empty(), "guard failures:\n  {}", failures.join("\n  "));
+        assert!(
+            failures.is_empty(),
+            "guard failures:\n  {}",
+            failures.join("\n  ")
+        );
     }
 
     #[test]
@@ -2235,9 +2327,15 @@ message = "ledgerr-mcp requires supervised execution"
         assert_eq!(profile.resources_ram_gb, Some(10.0));
         assert_eq!(profile.resources_gpu_mb, Some(8000));
         assert_eq!(profile.guards.len(), 2);
-        assert_eq!(profile.guards[0].pattern, GuardPattern::JsonRegexPattern("pip install".to_string()));
         assert_eq!(
-            profile.rhai_macros.get("ledgerr_mcp_guard").map(String::as_str),
+            profile.guards[0].pattern,
+            GuardPattern::JsonRegexPattern("pip install".to_string())
+        );
+        assert_eq!(
+            profile
+                .rhai_macros
+                .get("ledgerr_mcp_guard")
+                .map(String::as_str),
             Some("cmd.contains(\"ledgerr-mcp\")")
         );
         let ctx = GuardContext {

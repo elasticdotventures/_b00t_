@@ -9,15 +9,15 @@ pub mod derive_mcp;
 pub mod github_auth;
 pub mod mcp_registry_tools;
 pub mod mcp_tools;
-pub mod soul_dataframerr_tools;
 pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
+pub mod rag_mcp_tools;
 pub mod schema_constraint;
+pub mod server_llm;
+pub mod soul_dataframerr_tools;
 pub mod tools;
 pub mod verify_tool_loop;
-pub mod rag_mcp_tools;
-pub mod server_llm;
 
 pub use acl::{AclConfig, AclFilter, Policy};
 pub use mcp_server_rusty::B00tMcpServerRusty;

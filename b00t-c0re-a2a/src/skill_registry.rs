@@ -37,10 +37,8 @@ impl SkillRegistry {
     ///
     /// If a skill with the same ID already exists, it is overwritten.
     pub fn register(&mut self, skill: Skill, handler: SkillHandler) {
-        self.skills.insert(
-            skill.id.clone(),
-            RegisteredSkill { skill, handler },
-        );
+        self.skills
+            .insert(skill.id.clone(), RegisteredSkill { skill, handler });
     }
 
     /// Execute a task by dispatching it to the registered skill handler.
@@ -121,9 +119,16 @@ mod tests {
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
 
-        let handler: SkillHandler = Arc::new(|_task| Ok(Task::new("s1", serde_json::json!({}), "test")));
+        let handler: SkillHandler =
+            Arc::new(|_task| Ok(Task::new("s1", serde_json::json!({}), "test")));
         registry.register(
-            Skill::new("s1", "Greeter", "Greets the user", serde_json::json!({}), serde_json::json!({})),
+            Skill::new(
+                "s1",
+                "Greeter",
+                "Greets the user",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ),
             handler,
         );
 
@@ -153,7 +158,13 @@ mod tests {
         });
 
         registry.register(
-            Skill::new("calculator", "Calculator", "Does math", serde_json::json!({}), serde_json::json!({})),
+            Skill::new(
+                "calculator",
+                "Calculator",
+                "Does math",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ),
             handler,
         );
 
@@ -179,7 +190,13 @@ mod tests {
         let mut registry = SkillRegistry::new();
         let handler: SkillHandler = Arc::new(|t| Ok(t));
         registry.register(
-            Skill::new("code-gen", "Code Gen", "Generates code", serde_json::json!({"type": "object"}), serde_json::json!({"type": "string"})),
+            Skill::new(
+                "code-gen",
+                "Code Gen",
+                "Generates code",
+                serde_json::json!({"type": "object"}),
+                serde_json::json!({"type": "string"}),
+            ),
             handler,
         );
 
@@ -195,7 +212,13 @@ mod tests {
         let mut registry = SkillRegistry::new();
         let handler: SkillHandler = Arc::new(|t| Ok(t));
         registry.register(
-            Skill::new("temp", "Temp", "Temporary", serde_json::json!({}), serde_json::json!({})),
+            Skill::new(
+                "temp",
+                "Temp",
+                "Temporary",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ),
             handler,
         );
         assert!(registry.has_skill("temp"));
@@ -211,10 +234,19 @@ mod tests {
     fn test_handler_error_propagation() {
         let mut registry = SkillRegistry::new();
         let handler: SkillHandler = Arc::new(|_task| {
-            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "handler failed")) as Box<dyn std::error::Error>)
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "handler failed",
+            )) as Box<dyn std::error::Error>)
         });
         registry.register(
-            Skill::new("failing", "Failing", "Always fails", serde_json::json!({}), serde_json::json!({})),
+            Skill::new(
+                "failing",
+                "Failing",
+                "Always fails",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ),
             handler,
         );
 

@@ -111,11 +111,17 @@ impl ConceptExtractor {
             .map_err(|e| anyhow!("sm0l request failed: {e}"))?;
 
         if !resp.status().is_success() {
-            bail!("sm0l HTTP {}: {}", resp.status(), resp.text().await.unwrap_or_default());
+            bail!(
+                "sm0l HTTP {}: {}",
+                resp.status(),
+                resp.text().await.unwrap_or_default()
+            );
         }
 
-        let resp_json: serde_json::Value =
-            resp.json().await.map_err(|e| anyhow!("failed to parse sm0l response: {e}"))?;
+        let resp_json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| anyhow!("failed to parse sm0l response: {e}"))?;
 
         let content = resp_json["choices"][0]["message"]["content"]
             .as_str()

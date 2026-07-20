@@ -142,11 +142,15 @@ pub fn record_satisfies_with_influence(
     scored_sources: &[(String, f64)],
 ) -> Result<()> {
     let receipt = b00t_c0re_lib::store::put_influence(skill, scored_sources)?;
-    let weights: Vec<InfluenceWeight> = receipt.sources.iter().map(|s| InfluenceWeight {
-        source_key: s.source_key.clone(),
-        ratio: s.ratio,
-        score: s.score,
-    }).collect();
+    let weights: Vec<InfluenceWeight> = receipt
+        .sources
+        .iter()
+        .map(|s| InfluenceWeight {
+            source_key: s.source_key.clone(),
+            ratio: s.ratio,
+            score: s.score,
+        })
+        .collect();
 
     let mut rec = EvidenceRecord::satisfies(skill, constraint);
     rec.influence = Some(weights);
@@ -159,9 +163,7 @@ pub fn record_satisfies_with_influence(
 pub fn record_satisfies(skill: &str, constraint: &str) -> Result<()> {
     let existing = read_evidence().unwrap_or_default();
     let already = existing.iter().any(|r| {
-        r.subject == skill
-            && r.predicate == "satisfies"
-            && r.object.as_str() == Some(constraint)
+        r.subject == skill && r.predicate == "satisfies" && r.object.as_str() == Some(constraint)
     });
     if !already {
         append_evidence(&EvidenceRecord::satisfies(skill, constraint))?;
@@ -272,7 +274,11 @@ pub enum EvidenceCommand {
     },
     #[clap(about = "Prune old evidence and edge records by TTL (NS-5)")]
     Prune {
-        #[clap(long, default_value = "168", help = "Max age in hours (default: 7 days)")]
+        #[clap(
+            long,
+            default_value = "168",
+            help = "Max age in hours (default: 7 days)"
+        )]
         max_age_hours: u64,
         #[clap(long, help = "Prune edges.jsonl too (default: false)")]
         edges: bool,
@@ -299,7 +305,11 @@ pub enum EvidenceCommand {
 
 pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
     match &args.cmd {
-        EvidenceCommand::Record { skill, constraint, agent_id } => {
+        EvidenceCommand::Record {
+            skill,
+            constraint,
+            agent_id,
+        } => {
             let mut rec = EvidenceRecord::satisfies(skill, constraint);
             rec.agent_id = agent_id.clone();
             append_evidence(&rec)?;
@@ -317,20 +327,39 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
                     println!("[evidence]");
                     println!("total = {}", all.len());
                     for r in &all {
-                        println!("# {} {} {:?} ({})", r.subject, r.predicate, r.object, r.timestamp);
+                        println!(
+                            "# {} {} {:?} ({})",
+                            r.subject, r.predicate, r.object, r.timestamp
+                        );
                     }
                 }
             }
         }
-        EvidenceCommand::Prune { max_age_hours, edges: prune_edges_too } => {
+        EvidenceCommand::Prune {
+            max_age_hours,
+            edges: prune_edges_too,
+        } => {
             let pruned_facts = prune_evidence(*max_age_hours)?;
-            let pruned_edges = if *prune_edges_too { prune_edges(*max_age_hours)? } else { 0 };
-            println!("pruned: {pruned_facts} fact(s), {pruned_edges} edge(s) older than {max_age_hours}h");
+            let pruned_edges = if *prune_edges_too {
+                prune_edges(*max_age_hours)?
+            } else {
+                0
+            };
+            println!(
+                "pruned: {pruned_facts} fact(s), {pruned_edges} edge(s) older than {max_age_hours}h"
+            );
         }
-        EvidenceCommand::Edge { from, predicate, to, meta } => {
+        EvidenceCommand::Edge {
+            from,
+            predicate,
+            to,
+            meta,
+        } => {
             let metadata = meta
                 .as_deref()
-                .map(|s| serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.to_string())))
+                .map(|s| {
+                    serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.to_string()))
+                })
                 .unwrap_or(serde_json::Value::Null);
             record_edge(from, predicate, to, metadata)?;
             println!("recorded edge: {from} --[{predicate}]--> {to}");
@@ -352,7 +381,10 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
                         } else {
                             format!(" meta={}", e.metadata)
                         };
-                        println!("# {} --[{}]--> {}{} ({})", e.from, e.predicate, e.to, meta_str, e.timestamp);
+                        println!(
+                            "# {} --[{}]--> {}{} ({})",
+                            e.from, e.predicate, e.to, meta_str, e.timestamp
+                        );
                     }
                 }
             }
@@ -435,7 +467,10 @@ mod tests {
             EvidenceRecord::satisfies("other.skill", "constraint-b"),
             EvidenceRecord::satisfies("target.skill", "constraint-c"),
         ];
-        let chain: Vec<&EvidenceRecord> = records.iter().filter(|r| r.subject == "target.skill").collect();
+        let chain: Vec<&EvidenceRecord> = records
+            .iter()
+            .filter(|r| r.subject == "target.skill")
+            .collect();
         assert_eq!(chain.len(), 2);
         assert!(chain.iter().all(|r| r.subject == "target.skill"));
     }
@@ -458,7 +493,12 @@ mod tests {
 // All are idempotent (same from+predicate+to → skip).
 
 /// NS-4: Record delegates_to(agent → agent) edge for A2A routing audit.
-pub fn record_delegates_to(from_agent: &str, to_agent: &str, skill: &str, task_id: &str) -> Result<()> {
+pub fn record_delegates_to(
+    from_agent: &str,
+    to_agent: &str,
+    skill: &str,
+    task_id: &str,
+) -> Result<()> {
     record_edge(
         from_agent,
         "delegates_to",
@@ -487,10 +527,7 @@ pub fn record_trained_on(model_id: &str, corpus_sha: &str, layer: u8) -> Result<
 
 /// NS-8: Record generated(datum_key → topic) fact from gap_detect/kreuzberg/artifact.
 pub fn record_generated(datum_key: &str, topic: &str, via: &str) -> Result<()> {
-    record_satisfies(
-        datum_key,
-        &format!("generated:topic:{topic}:via:{via}"),
-    )
+    record_satisfies(datum_key, &format!("generated:topic:{topic}:via:{via}"))
 }
 
 /// NS-9: Record isA(datum_key → UFO_stereotype) fact from DatumType classification.
@@ -500,14 +537,15 @@ pub fn record_is_a(datum_key: &str, ufo_stereotype: &str) -> Result<()> {
 
 /// NS-10: Record audited_by(satisfies_record → iso_standard_id) for compliance.
 pub fn record_audited_by(record_id: &str, iso_standard_id: &str) -> Result<()> {
-    record_satisfies(
-        record_id,
-        &format!("audited_by:{iso_standard_id}"),
-    )
+    record_satisfies(record_id, &format!("audited_by:{iso_standard_id}"))
 }
 
 /// NS-11: Record participates_in(agent → process_step) edge for pipeline audit.
-pub fn record_participates_in(agent_id: &str, process_step: &str, metadata: serde_json::Value) -> Result<()> {
+pub fn record_participates_in(
+    agent_id: &str,
+    process_step: &str,
+    metadata: serde_json::Value,
+) -> Result<()> {
     record_edge(agent_id, "participates_in", process_step, metadata)
 }
 
@@ -601,11 +639,16 @@ pub fn read_edges() -> Result<Vec<EdgeRecord>> {
 }
 
 /// Record a directed edge (idempotent: skips same from+predicate+to already in log).
-pub fn record_edge(from: &str, predicate: &str, to: &str, metadata: serde_json::Value) -> Result<()> {
+pub fn record_edge(
+    from: &str,
+    predicate: &str,
+    to: &str,
+    metadata: serde_json::Value,
+) -> Result<()> {
     let existing = read_edges().unwrap_or_default();
-    let already = existing.iter().any(|r| {
-        r.from == from && r.predicate == predicate && r.to == to
-    });
+    let already = existing
+        .iter()
+        .any(|r| r.from == from && r.predicate == predicate && r.to == to);
     if !already {
         let rec = EdgeRecord::new(from, predicate, to).with_metadata(metadata);
         append_edge(&rec)?;
@@ -655,7 +698,10 @@ mod edge_tests {
     fn edge_record_null_metadata_is_omitted_in_json() {
         let e = EdgeRecord::new("a", "p", "b");
         let json = serde_json::to_string(&e).unwrap();
-        assert!(!json.contains("metadata"), "null metadata should be omitted");
+        assert!(
+            !json.contains("metadata"),
+            "null metadata should be omitted"
+        );
     }
 
     #[test]
@@ -665,7 +711,10 @@ mod edge_tests {
             EdgeRecord::new("c", "discovers", "d"),
             EdgeRecord::new("e", "delegates_to", "f"),
         ];
-        let delegates: Vec<&EdgeRecord> = edges.iter().filter(|r| r.predicate == "delegates_to").collect();
+        let delegates: Vec<&EdgeRecord> = edges
+            .iter()
+            .filter(|r| r.predicate == "delegates_to")
+            .collect();
         assert_eq!(delegates.len(), 2);
         assert!(delegates.iter().all(|r| r.predicate == "delegates_to"));
     }

@@ -42,14 +42,13 @@ fn echo_registry() -> SkillRegistry {
 
 /// Helper: create a sample agent card.
 fn sample_card(name: &str, url: &Url) -> AgentCard {
-    AgentCard::new(name, &format!("Agent {name}"), url.clone())
-        .with_skill(Skill::new(
-            "ping",
-            "Ping",
-            "Ping test",
-            serde_json::json!({}),
-            serde_json::json!({}),
-        ))
+    AgentCard::new(name, &format!("Agent {name}"), url.clone()).with_skill(Skill::new(
+        "ping",
+        "Ping",
+        "Ping test",
+        serde_json::json!({}),
+        serde_json::json!({}),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -99,8 +98,15 @@ async fn test_remote_task_execution() {
         .expect("send_task should succeed");
 
     // The task should have been executed (Completed or at least processed)
-    assert_ne!(result.state, TaskState::Submitted, "task should have been processed");
-    assert!(result.artifacts.len() >= 1, "should have at least one artifact");
+    assert_ne!(
+        result.state,
+        TaskState::Submitted,
+        "task should have been processed"
+    );
+    assert!(
+        result.artifacts.len() >= 1,
+        "should have at least one artifact"
+    );
 
     handle.abort();
 }
@@ -164,7 +170,10 @@ async fn test_hive_discovery() {
 
     // We should have found the agent in hive-b (remote)
     let found_remote = agents.iter().any(|(hive_id, _)| hive_id != "local");
-    assert!(found_remote, "should have found the translate agent remotely");
+    assert!(
+        found_remote,
+        "should have found the translate agent remotely"
+    );
 
     handle_a.abort();
     handle_b.abort();
@@ -181,13 +190,19 @@ async fn test_prune_stale() {
     registry.add_remote(
         "fresh-hive".to_string(),
         Url::parse("http://fresh:8080").unwrap(),
-        vec![sample_card("fresh-agent", &Url::parse("http://fresh:8080").unwrap())],
+        vec![sample_card(
+            "fresh-agent",
+            &Url::parse("http://fresh:8080").unwrap(),
+        )],
     );
 
     registry.add_remote(
         "stale-hive".to_string(),
         Url::parse("http://stale:8080").unwrap(),
-        vec![sample_card("stale-agent", &Url::parse("http://stale:8080").unwrap())],
+        vec![sample_card(
+            "stale-agent",
+            &Url::parse("http://stale:8080").unwrap(),
+        )],
     );
 
     // Set the stale hive's last_seen to the past (2 hours ago)

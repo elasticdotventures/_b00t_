@@ -1,15 +1,15 @@
 //! ACP Hive Communication for MCP Agents
-//! 
-//! Enables MCP agents to participate in coordinated hive missions using the 
+//!
+//! Enables MCP agents to participate in coordinated hive missions using the
 //! Agent Coordination Protocol (ACP) StepSync Protocol.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use b00t_chat::{ACPMessage, Agent, AgentConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
-use tracing::{info, warn, debug};
-use b00t_chat::{Agent, AgentConfig, ACPMessage};
+use tracing::{debug, info, warn};
 
 /// Hive mission configuration for ACP coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,16 +77,13 @@ impl AcpHiveClient {
         nats_url: String,
     ) -> Result<Self> {
         // Create agent configuration for hive communication
-        let config = AgentConfig::new(
-            agent_id.clone(),
-            nats_url,
-            mission.namespace.clone(),
-        )
-        .with_role(role.clone())
-        .with_timeout(30000);
+        let config = AgentConfig::new(agent_id.clone(), nats_url, mission.namespace.clone())
+            .with_role(role.clone())
+            .with_timeout(30000);
 
         // Initialize ACP agent
-        let agent = Agent::new(config).await
+        let agent = Agent::new(config)
+            .await
             .context("Failed to initialize ACP agent")?;
 
         // Initialize agent status
@@ -110,8 +107,10 @@ impl AcpHiveClient {
             step_complete: false,
         };
 
-        info!("🐝 Initialized ACP hive client for agent {} in mission {}", 
-              agent_id, mission.mission_id);
+        info!(
+            "🐝 Initialized ACP hive client for agent {} in mission {}",
+            agent_id, mission.mission_id
+        );
 
         Ok(Self {
             agent,
@@ -123,7 +122,11 @@ impl AcpHiveClient {
     }
 
     /// Send status update to the hive
-    pub async fn send_status(&mut self, description: &str, payload: Option<serde_json::Value>) -> Result<()> {
+    pub async fn send_status(
+        &mut self,
+        description: &str,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let payload = payload.unwrap_or_else(|| {
             serde_json::json!({
                 "description": description,
@@ -140,10 +143,15 @@ impl AcpHiveClient {
             payload,
         );
 
-        info!("🐝 Sending hive status: {} (step {})", description, self.agent_status.step);
-        
+        info!(
+            "🐝 Sending hive status: {} (step {})",
+            description, self.agent_status.step
+        );
+
         // Send via ACP agent (stub for now)
-        self.agent.send_message(&message.subject(), &message).await
+        self.agent
+            .send_message(&message.subject(), &message)
+            .await
             .context("Failed to send status to hive")?;
 
         // Update local status
@@ -154,7 +162,11 @@ impl AcpHiveClient {
     }
 
     /// Propose an action to the hive
-    pub async fn propose_action(&mut self, action: &str, payload: Option<serde_json::Value>) -> Result<()> {
+    pub async fn propose_action(
+        &mut self,
+        action: &str,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let mut proposal_payload = payload.unwrap_or_else(|| serde_json::json!({}));
         proposal_payload["action"] = serde_json::json!(action);
         proposal_payload["mission_id"] = serde_json::json!(self.mission.mission_id);
@@ -167,20 +179,32 @@ impl AcpHiveClient {
             proposal_payload,
         );
 
-        info!("🐝 Proposing action to hive: {} (step {})", action, self.agent_status.step);
+        info!(
+            "🐝 Proposing action to hive: {} (step {})",
+            action, self.agent_status.step
+        );
 
-        self.agent.send_message(&message.subject(), &message).await
+        self.agent
+            .send_message(&message.subject(), &message)
+            .await
             .context("Failed to propose action to hive")?;
 
         Ok(())
     }
 
     /// Wait for step synchronization - blocks until all agents are ready for next step
-    pub async fn wait_for_step_sync(&mut self, target_step: u64, timeout_seconds: u64) -> Result<HiveStatus> {
+    pub async fn wait_for_step_sync(
+        &mut self,
+        target_step: u64,
+        timeout_seconds: u64,
+    ) -> Result<HiveStatus> {
         let start_time = Instant::now();
         let timeout_duration = Duration::from_secs(timeout_seconds);
 
-        info!("🐝 Waiting for step sync: target step {} (timeout: {}s)", target_step, timeout_seconds);
+        info!(
+            "🐝 Waiting for step sync: target step {} (timeout: {}s)",
+            target_step, timeout_seconds
+        );
 
         loop {
             // Check if we've timed out
@@ -196,18 +220,20 @@ impl AcpHiveClient {
                 // Check if step is complete
                 if self.hive_status.step_complete && self.hive_status.current_step >= target_step {
                     info!("🐝 Step {} synchronized! All agents ready", target_step);
-                    
+
                     // Advance our local step
                     self.agent_status.step = target_step + 1;
-                    
+
                     return Ok(self.hive_status.clone());
                 }
 
                 // Report progress
                 let ready_count = self.hive_status.agents_ready.len();
                 let total_count = self.hive_status.agents.len();
-                debug!("🐝 Step sync progress: {}/{} agents ready for step {}", 
-                       ready_count, total_count, target_step);
+                debug!(
+                    "🐝 Step sync progress: {}/{} agents ready for step {}",
+                    ready_count, total_count, target_step
+                );
             }
 
             // Wait before checking again
@@ -217,14 +243,13 @@ impl AcpHiveClient {
 
     /// Signal readiness for next step
     pub async fn signal_step_ready(&mut self, step: u64) -> Result<()> {
-        let message = ACPMessage::step_complete(
-            self.agent_status.agent_id.clone(),
-            step,
-        );
+        let message = ACPMessage::step_complete(self.agent_status.agent_id.clone(), step);
 
         info!("🐝 Signaling ready for step {}", step);
 
-        self.agent.send_message(&message.subject(), &message).await
+        self.agent
+            .send_message(&message.subject(), &message)
+            .await
             .context("Failed to signal step readiness")?;
 
         self.agent_status.step = step;
@@ -239,8 +264,11 @@ impl AcpHiveClient {
     /// Check hive status by listening for recent messages
     async fn check_hive_status(&mut self) -> Result<HiveStatus> {
         // Listen for recent messages from all agents in the hive
-        let subject_pattern = format!("{}.acp.{}.>", self.mission.namespace, self.agent_status.step);
-        
+        let subject_pattern = format!(
+            "{}.acp.{}.>",
+            self.mission.namespace, self.agent_status.step
+        );
+
         debug!("🐝 Checking hive status with pattern: {}", subject_pattern);
 
         // For now, simulate hive status (stub implementation)
@@ -265,14 +293,17 @@ impl AcpHiveClient {
                         last_seen: chrono::Utc::now(),
                         role: "worker".to_string(),
                     };
-                    updated_status.agents.insert(other_agent_id.clone(), other_status);
+                    updated_status
+                        .agents
+                        .insert(other_agent_id.clone(), other_status);
                     updated_status.agents_ready.push(other_agent_id);
                 }
             }
         }
 
         // Check if step is complete (all expected agents are ready)
-        updated_status.step_complete = updated_status.agents_ready.len() >= self.mission.expected_agents;
+        updated_status.step_complete =
+            updated_status.agents_ready.len() >= self.mission.expected_agents;
 
         self.hive_status = updated_status.clone();
         Ok(updated_status)
@@ -314,14 +345,17 @@ impl AcpHiveClient {
         };
 
         let mut client = Self::new(agent_id, role, mission, nats_url).await?;
-        
+
         // Announce joining the mission
         client.send_status("joined_mission", None).await?;
-        
+
         // Update mission details from hive
         client.check_hive_status().await?;
 
-        info!("🐝 Agent {} joined mission {}", client.agent_status.agent_id, client.mission.mission_id);
+        info!(
+            "🐝 Agent {} joined mission {}",
+            client.agent_status.agent_id, client.mission.mission_id
+        );
 
         Ok(client)
     }
@@ -344,8 +378,10 @@ impl AcpHiveClient {
     /// Set JWT token for NATS authentication
     pub fn set_jwt_token(&mut self, jwt_token: String) {
         self.jwt_token = Some(jwt_token);
-        info!("🔐 JWT token set for agent {} in mission {}", 
-              self.agent_status.agent_id, self.mission.mission_id);
+        info!(
+            "🔐 JWT token set for agent {} in mission {}",
+            self.agent_status.agent_id, self.mission.mission_id
+        );
     }
 
     /// Get JWT token
@@ -363,8 +399,7 @@ impl AcpHiveClient {
 impl AcpHiveClient {
     /// Convert hive status to JSON for MCP responses
     pub fn hive_status_to_json(&self) -> Result<String> {
-        serde_json::to_string_pretty(&self.hive_status)
-            .context("Failed to serialize hive status")
+        serde_json::to_string_pretty(&self.hive_status).context("Failed to serialize hive status")
     }
 
     /// Get agent summary for MCP display

@@ -72,7 +72,11 @@ impl AgentStore {
                     Ok(card) => cards.push(card),
                     Err(e) => {
                         // Skip malformed files but surface the error
-                        eprintln!("Warning: skipping malformed agent card at {}: {}", path.display(), e);
+                        eprintln!(
+                            "Warning: skipping malformed agent card at {}: {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
             }
@@ -100,9 +104,10 @@ impl AgentStore {
         Ok(cards
             .into_iter()
             .filter(|card| {
-                card.skills
-                    .iter()
-                    .any(|s| s.name.to_lowercase().contains(&skill_lower) || s.id.to_lowercase() == skill_lower)
+                card.skills.iter().any(|s| {
+                    s.name.to_lowercase().contains(&skill_lower)
+                        || s.id.to_lowercase() == skill_lower
+                })
             })
             .collect())
     }
@@ -120,7 +125,13 @@ impl AgentStore {
         // Sanitize name for filesystem safety: replace non-alphanumeric chars
         let safe_name: String = name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         self.dir.join(format!("{}.json", safe_name))
     }
@@ -131,7 +142,9 @@ impl Default for AgentStore {
         // Best-effort default — panics if no home dir is available.
         // Use `new()` for a fallible version.
         let dir = dirs_data_dir().unwrap_or_else(|_| PathBuf::from("/tmp/b00t/agents"));
-        Self { dir: dir.join("b00t").join("agents") }
+        Self {
+            dir: dir.join("b00t").join("agents"),
+        }
     }
 }
 
@@ -143,8 +156,14 @@ fn dirs_data_dir() -> A2AResult<PathBuf> {
         // Fallback: use XDG_DATA_HOME or temp
         std::env::var("XDG_DATA_HOME")
             .map(PathBuf::from)
-            .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".local").join("share")))
-            .map_err(|_| A2AError::RuntimeError("Cannot determine data directory. Set HOME or XDG_DATA_HOME.".to_string()))
+            .or_else(|_| {
+                std::env::var("HOME").map(|h| PathBuf::from(h).join(".local").join("share"))
+            })
+            .map_err(|_| {
+                A2AError::RuntimeError(
+                    "Cannot determine data directory. Set HOME or XDG_DATA_HOME.".to_string(),
+                )
+            })
     }
 }
 
@@ -159,13 +178,19 @@ mod dirs {
         std::env::var("XDG_DATA_HOME")
             .ok()
             .map(PathBuf::from)
-            .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".local").join("share")))
+            .or_else(|| {
+                std::env::var("HOME")
+                    .ok()
+                    .map(|h| PathBuf::from(h).join(".local").join("share"))
+            })
     }
 
     #[cfg(not(target_os = "linux"))]
     pub fn data_dir() -> Option<PathBuf> {
         // Fallback: use HOME
-        std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".local").join("share"))
+        std::env::var("HOME")
+            .ok()
+            .map(|h| PathBuf::from(h).join(".local").join("share"))
     }
 }
 
@@ -190,7 +215,13 @@ mod tests {
     fn sample_card(name: &str) -> AgentCard {
         let url = Url::parse("stdio://test").unwrap();
         AgentCard::new(name, &format!("Agent {}", name), url)
-            .with_skill(Skill::new("s1", "Skill 1", "Does stuff", serde_json::json!({}), serde_json::json!({})))
+            .with_skill(Skill::new(
+                "s1",
+                "Skill 1",
+                "Does stuff",
+                serde_json::json!({}),
+                serde_json::json!({}),
+            ))
             .with_auth(AuthenticationScheme::none())
     }
 
@@ -266,7 +297,12 @@ mod tests {
         let dir_path = tmpdir.join("agents");
         let entries: Vec<_> = std::fs::read_dir(&dir_path).unwrap().collect();
         assert_eq!(entries.len(), 1);
-        let fname = entries[0].as_ref().unwrap().file_name().into_string().unwrap();
+        let fname = entries[0]
+            .as_ref()
+            .unwrap()
+            .file_name()
+            .into_string()
+            .unwrap();
         assert!(!fname.contains('!'));
         assert!(fname.ends_with(".json"));
     }

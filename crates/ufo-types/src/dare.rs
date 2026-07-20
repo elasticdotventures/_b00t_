@@ -38,8 +38,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::stereotype::{Stereotyped, UfoStereotype};
 use crate::satisfies::{IsoAuditable, Satisfies, SatisfiesResult};
+use crate::stereotype::{Stereotyped, UfoStereotype};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // OODA Phase — state machine
@@ -187,7 +187,12 @@ impl OodaTransition {
     }
 
     /// Create a rejected transition.
-    pub fn rejected(event: OodaEvent, from: OodaPhase, to: OodaPhase, reason: impl Into<String>) -> Self {
+    pub fn rejected(
+        event: OodaEvent,
+        from: OodaPhase,
+        to: OodaPhase,
+        reason: impl Into<String>,
+    ) -> Self {
         Self {
             event,
             from,
@@ -203,7 +208,10 @@ impl OodaTransition {
 pub enum OodaStateMachineError {
     /// The requested transition is not valid from the current phase.
     #[error("invalid transition: {event} not valid from {current}")]
-    InvalidTransition { event: OodaEvent, current: OodaPhase },
+    InvalidTransition {
+        event: OodaEvent,
+        current: OodaPhase,
+    },
 
     /// A guard condition blocked the transition.
     #[error("guard blocked {event} from {from} → {to}: {reason}")]
@@ -502,8 +510,7 @@ impl<D: DaredDocument> OodaStateMachine<D> {
     /// Returns true if the state machine has reached the Verify phase
     /// and all acceptance criteria pass.
     pub fn is_complete(&self) -> bool {
-        self.current_phase() == OodaPhase::Verify
-            && self.proposal.validate().is_ok()
+        self.current_phase() == OodaPhase::Verify && self.proposal.validate().is_ok()
     }
 
     /// Rollback to a previous phase in history.
@@ -533,8 +540,13 @@ impl<D: DaredDocument> OodaStateMachine<D> {
                 if t.accepted {
                     format!("{}: {} → {}", t.event, t.from, t.to)
                 } else {
-                    format!("{}: {} → {} [BLOCKED: {}]", t.event, t.from, t.to,
-                        t.rejection_reason.as_deref().unwrap_or("unknown"))
+                    format!(
+                        "{}: {} → {} [BLOCKED: {}]",
+                        t.event,
+                        t.from,
+                        t.to,
+                        t.rejection_reason.as_deref().unwrap_or("unknown")
+                    )
                 }
             })
             .collect();
@@ -700,7 +712,9 @@ pub enum DaredValidationError {
     MissingSection(String),
 
     /// No alternatives were considered (must have at least one).
-    #[error("no alternatives listed — DARED requires at least one Alternative with a rejection reason")]
+    #[error(
+        "no alternatives listed — DARED requires at least one Alternative with a rejection reason"
+    )]
     NoAlternatives,
 
     /// A risk has no mitigation.
@@ -708,7 +722,9 @@ pub enum DaredValidationError {
     UnmitigatedRisk { risk: String },
 
     /// No executive decision artifacts declared.
-    #[error("no executive decision artifacts declared — DARED requires at least one persistent artifact")]
+    #[error(
+        "no executive decision artifacts declared — DARED requires at least one persistent artifact"
+    )]
     NoExecutiveDecisionArtifacts,
 
     /// An acceptance criterion is missing or empty.
@@ -716,7 +732,9 @@ pub enum DaredValidationError {
     EmptyAcceptanceCriterion { index: usize },
 
     /// Summary field is empty (set/category-theoretic label required).
-    #[error("executive decision summary is empty — DARED requires a set/category-theoretic summary")]
+    #[error(
+        "executive decision summary is empty — DARED requires a set/category-theoretic summary"
+    )]
     EmptySummary,
 }
 
@@ -760,9 +778,7 @@ pub trait DaredDocument: Stereotyped {
         let mut errors = Vec::new();
 
         if self.decision().what.is_empty() {
-            errors.push(DaredValidationError::MissingSection(
-                "Decision.what".into(),
-            ));
+            errors.push(DaredValidationError::MissingSection("Decision.what".into()));
         }
 
         if self.alternatives().is_empty() {
@@ -982,9 +998,7 @@ impl Satisfies<DaredAcceptanceCriteria> for DaredProposal {
             ));
         }
 
-        if !criteria.require_mitigations
-            || self.risks.iter().all(|r| !r.mitigation.is_empty())
-        {
+        if !criteria.require_mitigations || self.risks.iter().all(|r| !r.mitigation.is_empty()) {
             score += 1.0;
         } else {
             let unmitigated: Vec<_> = self
@@ -1088,7 +1102,11 @@ mod tests {
             "zero migration cost",
             "doesn't solve the problem",
         ))
-        .with_risk(sample_risk("josh maturity", RiskSeverity::High, "pin to known-good SHA"))
+        .with_risk(sample_risk(
+            "josh maturity",
+            RiskSeverity::High,
+            "pin to known-good SHA",
+        ))
     }
 
     // ── UFO grounding tests ──
@@ -1180,9 +1198,10 @@ mod tests {
         let mut p = valid_proposal();
         p.decision.what = String::new();
         let errs = p.validate().unwrap_err();
-        assert!(errs
-            .iter()
-            .any(|e| matches!(e, DaredValidationError::MissingSection(_))));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DaredValidationError::MissingSection(_)))
+        );
     }
 
     #[test]
@@ -1194,7 +1213,10 @@ mod tests {
             sample_executive_decision(),
         );
         let errs = p.validate().unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, DaredValidationError::NoAlternatives)));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DaredValidationError::NoAlternatives))
+        );
     }
 
     #[test]
@@ -1202,9 +1224,10 @@ mod tests {
         let mut p = valid_proposal();
         p.risks[0].mitigation = String::new();
         let errs = p.validate().unwrap_err();
-        assert!(errs
-            .iter()
-            .any(|e| matches!(e, DaredValidationError::UnmitigatedRisk { .. })));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DaredValidationError::UnmitigatedRisk { .. }))
+        );
     }
 
     #[test]
@@ -1213,9 +1236,10 @@ mod tests {
         p.executive_decision.artifacts.clear();
         p.executive_decision.removed.clear();
         let errs = p.validate().unwrap_err();
-        assert!(errs
-            .iter()
-            .any(|e| matches!(e, DaredValidationError::NoExecutiveDecisionArtifacts)));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DaredValidationError::NoExecutiveDecisionArtifacts))
+        );
     }
 
     #[test]
@@ -1223,7 +1247,10 @@ mod tests {
         let mut p = valid_proposal();
         p.executive_decision.summary = String::new();
         let errs = p.validate().unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, DaredValidationError::EmptySummary)));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DaredValidationError::EmptySummary))
+        );
     }
 
     #[test]
@@ -1417,12 +1444,27 @@ mod tests {
 
     #[test]
     fn ooda_event_target_mapping() {
-        assert_eq!(OodaEvent::Discover.target(OodaPhase::Decide), Some(OodaPhase::Observe));
-        assert_eq!(OodaEvent::Discover.target(OodaPhase::Act), Some(OodaPhase::Observe));
-        assert_eq!(OodaEvent::Decide.target(OodaPhase::Orient), Some(OodaPhase::Decide));
-        assert_eq!(OodaEvent::Reject.target(OodaPhase::Verify), Some(OodaPhase::Decide));
+        assert_eq!(
+            OodaEvent::Discover.target(OodaPhase::Decide),
+            Some(OodaPhase::Observe)
+        );
+        assert_eq!(
+            OodaEvent::Discover.target(OodaPhase::Act),
+            Some(OodaPhase::Observe)
+        );
+        assert_eq!(
+            OodaEvent::Decide.target(OodaPhase::Orient),
+            Some(OodaPhase::Decide)
+        );
+        assert_eq!(
+            OodaEvent::Reject.target(OodaPhase::Verify),
+            Some(OodaPhase::Decide)
+        );
         assert_eq!(OodaEvent::Execute.target(OodaPhase::Orient), None); // can't Execute from Orient
-        assert_eq!(OodaEvent::Retry.target(OodaPhase::Act), Some(OodaPhase::Act));
+        assert_eq!(
+            OodaEvent::Retry.target(OodaPhase::Act),
+            Some(OodaPhase::Act)
+        );
         assert_eq!(OodaEvent::Cancel.target(OodaPhase::Observe), None);
     }
 

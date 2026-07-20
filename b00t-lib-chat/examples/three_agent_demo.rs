@@ -4,9 +4,9 @@
 //! showing how unread messages surface inside the b00t MCP runtime.
 
 use b00t_chat::{ChatInbox, ChatMessage};
-use rand::{thread_rng, Rng};
-use tokio::time::{sleep, Duration};
-use tracing::{info, Level};
+use rand::{Rng, thread_rng};
+use tokio::time::{Duration, sleep};
+use tracing::{Level, info};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -59,7 +59,11 @@ impl HiveRegistry {
     /// the hive.
     pub async fn discover_remote(&mut self, url: &Url) -> Result<(), Box<dyn std::error::Error>> {
         let cards = A2aHttpTransport::discover_remote(url).await?;
-        let id = format!("{}:{}", url.host_str().unwrap_or("unknown"), url.port().unwrap_or(80));
+        let id = format!(
+            "{}:{}",
+            url.host_str().unwrap_or("unknown"),
+            url.port().unwrap_or(80)
+        );
         self.add_remote(id, url.clone(), cards);
         Ok(())
     }
@@ -127,7 +131,8 @@ impl HiveRegistry {
     pub fn prune_stale(&mut self, max_age: Duration) -> usize {
         let now = Instant::now();
         let before = self.remote_hives.len();
-        self.remote_hives.retain(|_, hive| now.duration_since(hive.last_seen) < max_age);
+        self.remote_hives
+            .retain(|_, hive| now.duration_since(hive.last_seen) < max_age);
         before - self.remote_hives.len()
     }
 

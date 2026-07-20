@@ -18,7 +18,12 @@ const ACTIVE_MODEL_FILE: &str = "active-model";
 const DEFAULT_IMAGE: &str = "vllm/vllm-openai:latest";
 const DEFAULT_DTYPE: &str = "float16";
 const DEFAULT_PORT: u16 = 8000;
-const MODEL_SUFFIXES: [&str; 4] = [".model.toml", ".ai_model.toml", ".model.ai.toml", ".model.ai.tomllmd"];
+const MODEL_SUFFIXES: [&str; 4] = [
+    ".model.toml",
+    ".ai_model.toml",
+    ".model.ai.toml",
+    ".model.ai.tomllmd",
+];
 
 /// Container runtime selection: prefer docker as safe default, with optional podman support.
 /// Podman uses CDI spec: --device nvidia.com/gpu=all --security-opt=label=disable

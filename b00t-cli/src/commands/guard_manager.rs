@@ -166,7 +166,13 @@ impl GuardCommands {
                     println!();
                     for (src, pat) in &guard_patterns {
                         let count = counts.get(pat).copied().unwrap_or(0);
-                        let icon = if count > 1 { "💩" } else if count > 0 { "🦨" } else { "✅" };
+                        let icon = if count > 1 {
+                            "💩"
+                        } else if count > 0 {
+                            "🦨"
+                        } else {
+                            "✅"
+                        };
                         println!("  {} [{src}] {pat}  ({count} violations)", icon);
                     }
                 }
@@ -196,11 +202,7 @@ impl GuardCommands {
                             .map(|p| pat.contains(p.as_str()))
                             .unwrap_or(false);
                     if matches {
-                        writeln!(
-                            file,
-                            "{}",
-                            serde_json::json!({"pattern": pat, "count": 0})
-                        )?;
+                        writeln!(file, "{}", serde_json::json!({"pattern": pat, "count": 0}))?;
                         reset_count += 1;
                     }
                 }
@@ -213,7 +215,12 @@ impl GuardCommands {
                 Ok(())
             }
 
-            GuardCommands::Add { pattern, action, message, threshold } => {
+            GuardCommands::Add {
+                pattern,
+                action,
+                message,
+                threshold,
+            } => {
                 let valid_actions = ["warn", "block", "redirect"];
                 if !valid_actions.contains(&action.as_str()) {
                     anyhow::bail!("Invalid action '{}'. Use: warn | block | redirect", action);
@@ -370,9 +377,24 @@ mod tests {
     #[test]
     fn test_session_guard_action_mapping() {
         let entries = vec![
-            SessionGuardEntry { pattern: "a".to_string(), action: "block".to_string(), message: None, threshold: None },
-            SessionGuardEntry { pattern: "b".to_string(), action: "redirect".to_string(), message: None, threshold: None },
-            SessionGuardEntry { pattern: "c".to_string(), action: "warn".to_string(), message: None, threshold: None },
+            SessionGuardEntry {
+                pattern: "a".to_string(),
+                action: "block".to_string(),
+                message: None,
+                threshold: None,
+            },
+            SessionGuardEntry {
+                pattern: "b".to_string(),
+                action: "redirect".to_string(),
+                message: None,
+                threshold: None,
+            },
+            SessionGuardEntry {
+                pattern: "c".to_string(),
+                action: "warn".to_string(),
+                message: None,
+                threshold: None,
+            },
         ];
         let json = serde_json::to_string(&entries).unwrap();
         std::fs::write(session_guards_path(), &json).unwrap_or(());
