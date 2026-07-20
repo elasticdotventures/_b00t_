@@ -141,8 +141,15 @@ async fn main() -> Result<()> {
 
     // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
     //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
-    if let Err(e) = spawn_registry_bridges_on_startup().await {
-        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+    //    Skipped in stdio mode: it syncs over the network and shells out to `npx`
+    //    for every stdio-transport registry entry (some gated behind paid/x402
+    //    credentials), which previously blocked the Claude Code handshake past
+    //    its 30s connect timeout. Stdio mode is a single-client tool proxy, not
+    //    a hive notification relay — this only belongs to the HTTP/daemon modes.
+    if !is_stdio_mode || is_llm_mode {
+        if let Err(e) = spawn_registry_bridges_on_startup().await {
+            eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+        }
     }
 
     if is_stdio_mode && !is_llm_mode {
