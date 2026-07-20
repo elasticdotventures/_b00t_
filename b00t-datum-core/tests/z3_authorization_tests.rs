@@ -5,7 +5,7 @@
 //! 2. Graceful degradation when z3 binary is absent
 //! 3. Authorization-level constraint checks (complexity, tier gates)
 
-use b00t_datum_core::edl::{check_z3_syntax, EdlQuery, EdlTagFilter};
+use b00t_datum_core::edl::{EdlQuery, EdlTagFilter, check_z3_syntax};
 use b00t_datum_core::index::DatumIndexEntry;
 
 fn make_entry(tier: &str, complexity: u8, tags: &[&str]) -> DatumIndexEntry {
@@ -41,19 +41,13 @@ fn z3_syntax_rejects_empty() {
 #[test]
 fn z3_syntax_rejects_unbalanced_open() {
     let err = check_z3_syntax("(= tier \"sm0l\"").unwrap_err();
-    assert!(
-        err.to_string().contains("unclosed"),
-        "got: {err}"
-    );
+    assert!(err.to_string().contains("unclosed"), "got: {err}");
 }
 
 #[test]
 fn z3_syntax_rejects_unbalanced_close() {
     let err = check_z3_syntax("= tier \"sm0l\")").unwrap_err();
-    assert!(
-        err.to_string().contains("unbalanced"),
-        "got: {err}"
-    );
+    assert!(err.to_string().contains("unbalanced"), "got: {err}");
 }
 
 #[test]
@@ -130,7 +124,9 @@ fn auth_chonky_tier_access_control() {
         datum_type: None,
         tier: None,
         complexity_max: Some(5),
-        z3_constraint: Some("(and (<= complexity 5) (or (= type_tags \"prd\") (= type_tags \"pattern\")))".into()),
+        z3_constraint: Some(
+            "(and (<= complexity 5) (or (= type_tags \"prd\") (= type_tags \"pattern\")))".into(),
+        ),
     };
     assert!(gate.validate_z3_syntax().is_ok());
 
@@ -167,7 +163,11 @@ fn auth_sm0l_tier_blocks_frontier() {
 fn z3_subprocess_not_found_returns_clear_error() {
     // This tests the error message when z3 is not in PATH.
     // If z3 IS available, we skip this test gracefully.
-    if std::process::Command::new("z3").arg("--version").output().is_ok() {
+    if std::process::Command::new("z3")
+        .arg("--version")
+        .output()
+        .is_ok()
+    {
         // z3 is available; skip the "not found" test path
         return;
     }

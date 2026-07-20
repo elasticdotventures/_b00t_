@@ -41,8 +41,14 @@ mod nats_integration {
         )
         .with_priority("high");
 
-        client.send_task(&task).await.expect("task send should succeed");
-        println!("Task dispatched: {} -> {}, id={}", task.from_agent, task.to_agent, task.task_id);
+        client
+            .send_task(&task)
+            .await
+            .expect("task send should succeed");
+        println!(
+            "Task dispatched: {} -> {}, id={}",
+            task.from_agent, task.to_agent, task.task_id
+        );
     }
 
     #[tokio::test]
@@ -56,15 +62,13 @@ mod nats_integration {
         .expect("create NATS client");
 
         // Subscribe first
-        let mut rx = client.subscribe_tasks("sm3lly").await.expect("subscribe tasks");
+        let mut rx = client
+            .subscribe_tasks("sm3lly")
+            .await
+            .expect("subscribe tasks");
 
         // Send a task
-        let task = TaskMessage::new(
-            "test",
-            "fung1",
-            "sm3lly",
-            json!({"msg": "ping"}),
-        );
+        let task = TaskMessage::new("test", "fung1", "sm3lly", json!({"msg": "ping"}));
         client.send_task(&task).await.expect("send task");
 
         // Receive it
@@ -73,7 +77,10 @@ mod nats_integration {
                 assert_eq!(received.from_agent, "fung1");
                 assert_eq!(received.to_agent, "sm3lly");
                 assert_eq!(received.action, "test");
-                println!("Task received OK: {} -> {} ({})", received.from_agent, received.to_agent, received.task_id);
+                println!(
+                    "Task received OK: {} -> {} ({})",
+                    received.from_agent, received.to_agent, received.task_id
+                );
             }
             Ok(None) => panic!("Task channel closed"),
             Err(_) => panic!("Task receive timed out — is NATS running?"),

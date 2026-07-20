@@ -7,33 +7,34 @@
 //! - `/ws` → WebSocket for live twin simulation updates
 
 use axum::{
+    Router,
     body::Body,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         Path, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, Method, StatusCode, Uri},
     response::{Html, IntoResponse, Response},
     routing::get,
-    Router,
 };
-use tower_http::services::ServeDir;
 use b00t_admin::{
-    DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen,
-    registered_type_names,
+    DigitalTwin, PipelineStateSnapshot, TypeSchema, WasmCodegen, registered_type_names,
 };
-use b00t_l3dg3rr_viz::isometric::{parse_mermaid, graph_to_isometric_response, graph_to_container_response, filter_orphans};
+use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 #[cfg(feature = "mermaid-native")]
 use b00t_l3dg3rr_viz::isometric::render_mermaid_native;
+use b00t_l3dg3rr_viz::isometric::{
+    filter_orphans, graph_to_container_response, graph_to_isometric_response, parse_mermaid,
+};
 use b00t_l3dg3rr_viz::tax_lawyer_demo;
-use b00t_c0re_lib::doc_pipeline::FullPipelineResult;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
 use reqwest::Client as ReqwestClient;
+use tower_http::services::ServeDir;
 
 mod graph_json;
 include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
-use b00t_l3dg3rr_viz::{InvariantGraph};
+use b00t_l3dg3rr_viz::InvariantGraph;
 
 fn filter_orphans_from_mermaid(mermaid: &str) -> InvariantGraph {
     match parse_mermaid(mermaid) {
@@ -66,8 +67,7 @@ impl Default for AdminConfig {
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(31337),
-            admin_host: std::env::var("ADMIN_HOST")
-                .unwrap_or_else(|_| "0.0.0.0".to_string()),
+            admin_host: std::env::var("ADMIN_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
         }
     }
 }
@@ -135,16 +135,58 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
     let (fields, mermaid, ufo, has_codegen) = match name {
         "DocumentSource" => (
             vec![
-                field("source_id", "String", false, false, "Unique identifier (e.g., arxiv:2404.17842)"),
+                field(
+                    "source_id",
+                    "String",
+                    false,
+                    false,
+                    "Unique identifier (e.g., arxiv:2404.17842)",
+                ),
                 field("title", "String", false, false, "Human-readable title"),
                 field("authors", "Vec<String>", false, true, "Author list"),
-                field("abstract_text", "String", false, false, "Full abstract or summary"),
-                field("url", "Option<String>", true, false, "Canonical URL to the source"),
-                field("pdf_url", "Option<String>", true, false, "Direct PDF/download URL"),
-                field("fetched_at", "DateTime", false, false, "When the document was fetched"),
-                field("content_hash", "Option<String>", true, false, "SHA-256 content hash"),
+                field(
+                    "abstract_text",
+                    "String",
+                    false,
+                    false,
+                    "Full abstract or summary",
+                ),
+                field(
+                    "url",
+                    "Option<String>",
+                    true,
+                    false,
+                    "Canonical URL to the source",
+                ),
+                field(
+                    "pdf_url",
+                    "Option<String>",
+                    true,
+                    false,
+                    "Direct PDF/download URL",
+                ),
+                field(
+                    "fetched_at",
+                    "DateTime",
+                    false,
+                    false,
+                    "When the document was fetched",
+                ),
+                field(
+                    "content_hash",
+                    "Option<String>",
+                    true,
+                    false,
+                    "SHA-256 content hash",
+                ),
                 field("format", "DocumentFormat", false, false, "Original format"),
-                field("metadata", "HashMap<String,String>", false, true, "Additional metadata"),
+                field(
+                    "metadata",
+                    "HashMap<String,String>",
+                    false,
+                    true,
+                    "Additional metadata",
+                ),
             ],
             "classDiagram\n    class DocumentSource {\n        +String source_id\n        +String title\n        +Vec~String~ authors\n        +String abstract_text\n        +Option~String~ url\n        +Option~String~ pdf_url\n        +DateTime fetched_at\n        +Option~String~ content_hash\n        +DocumentFormat format\n        +HashMap~String,String~ metadata\n    }",
             "Endurant",
@@ -152,17 +194,83 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
         ),
         "Evidence" => (
             vec![
-                field("evidence_id", "String", false, false, "Unique evidence identifier"),
-                field("chunk_id", "String", false, false, "Back-reference to source chunk"),
-                field("source_id", "String", false, false, "Back-reference to source document"),
-                field("statement", "String", false, false, "The extracted statement/claim/fact"),
-                field("evidence_type", "EvidenceType", false, false, "Classification of evidence"),
-                field("confidence", "f32", false, false, "Confidence in extraction [0.0, 1.0]"),
-                field("extraction_method", "String", false, false, "Method used for extraction"),
-                field("source_quote", "String", false, false, "Verbatim quote from source"),
-                field("line_range", "Option<(usize,usize)>", true, false, "Line range in source"),
-                field("provenance", "ProvenancePointer", false, false, "Proxy-pointer for RAG"),
-                field("extracted_at", "DateTime", false, false, "When the evidence was extracted"),
+                field(
+                    "evidence_id",
+                    "String",
+                    false,
+                    false,
+                    "Unique evidence identifier",
+                ),
+                field(
+                    "chunk_id",
+                    "String",
+                    false,
+                    false,
+                    "Back-reference to source chunk",
+                ),
+                field(
+                    "source_id",
+                    "String",
+                    false,
+                    false,
+                    "Back-reference to source document",
+                ),
+                field(
+                    "statement",
+                    "String",
+                    false,
+                    false,
+                    "The extracted statement/claim/fact",
+                ),
+                field(
+                    "evidence_type",
+                    "EvidenceType",
+                    false,
+                    false,
+                    "Classification of evidence",
+                ),
+                field(
+                    "confidence",
+                    "f32",
+                    false,
+                    false,
+                    "Confidence in extraction [0.0, 1.0]",
+                ),
+                field(
+                    "extraction_method",
+                    "String",
+                    false,
+                    false,
+                    "Method used for extraction",
+                ),
+                field(
+                    "source_quote",
+                    "String",
+                    false,
+                    false,
+                    "Verbatim quote from source",
+                ),
+                field(
+                    "line_range",
+                    "Option<(usize,usize)>",
+                    true,
+                    false,
+                    "Line range in source",
+                ),
+                field(
+                    "provenance",
+                    "ProvenancePointer",
+                    false,
+                    false,
+                    "Proxy-pointer for RAG",
+                ),
+                field(
+                    "extracted_at",
+                    "DateTime",
+                    false,
+                    false,
+                    "When the evidence was extracted",
+                ),
             ],
             "classDiagram\n    class Evidence {\n        +String evidence_id\n        +String chunk_id\n        +String source_id\n        +String statement\n        +EvidenceType evidence_type\n        +f32 confidence\n        +String extraction_method\n        +String source_quote\n        +Option~Pair~ line_range\n        +ProvenancePointer provenance\n        +DateTime extracted_at\n    }",
             "Relator",
@@ -170,19 +278,97 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
         ),
         "Requirement" => (
             vec![
-                field("req_id", "String", false, false, "Unique requirement identifier"),
-                field("text", "String", false, false, "Human-readable requirement text"),
-                field("req_type", "RequirementType", false, false, "SysMLv2 / ReqIF type"),
-                field("priority", "u8", false, false, "Priority (1 = highest, 5 = lowest)"),
-                field("rationale", "Option<String>", true, false, "Why this requirement exists"),
-                field("derived_from", "Vec<String>", false, true, "Evidence IDs supporting this req"),
-                field("satisfies", "Vec<String>", false, true, "Requirements this one traces to"),
-                field("verified_by", "Option<String>", true, false, "Verification method"),
-                field("status", "RequirementStatus", false, false, "Lifecycle status"),
-                field("source_id", "String", false, false, "Source document this was derived from"),
-                field("reqif", "Option<ReqIFMetadata>", true, false, "ReqIF interchange metadata"),
-                field("sysml_stereotype", "Option<SysMLv2Stereotype>", true, false, "SysMLv2 stereotype"),
-                field("created_at", "DateTime", false, false, "When the requirement was created"),
+                field(
+                    "req_id",
+                    "String",
+                    false,
+                    false,
+                    "Unique requirement identifier",
+                ),
+                field(
+                    "text",
+                    "String",
+                    false,
+                    false,
+                    "Human-readable requirement text",
+                ),
+                field(
+                    "req_type",
+                    "RequirementType",
+                    false,
+                    false,
+                    "SysMLv2 / ReqIF type",
+                ),
+                field(
+                    "priority",
+                    "u8",
+                    false,
+                    false,
+                    "Priority (1 = highest, 5 = lowest)",
+                ),
+                field(
+                    "rationale",
+                    "Option<String>",
+                    true,
+                    false,
+                    "Why this requirement exists",
+                ),
+                field(
+                    "derived_from",
+                    "Vec<String>",
+                    false,
+                    true,
+                    "Evidence IDs supporting this req",
+                ),
+                field(
+                    "satisfies",
+                    "Vec<String>",
+                    false,
+                    true,
+                    "Requirements this one traces to",
+                ),
+                field(
+                    "verified_by",
+                    "Option<String>",
+                    true,
+                    false,
+                    "Verification method",
+                ),
+                field(
+                    "status",
+                    "RequirementStatus",
+                    false,
+                    false,
+                    "Lifecycle status",
+                ),
+                field(
+                    "source_id",
+                    "String",
+                    false,
+                    false,
+                    "Source document this was derived from",
+                ),
+                field(
+                    "reqif",
+                    "Option<ReqIFMetadata>",
+                    true,
+                    false,
+                    "ReqIF interchange metadata",
+                ),
+                field(
+                    "sysml_stereotype",
+                    "Option<SysMLv2Stereotype>",
+                    true,
+                    false,
+                    "SysMLv2 stereotype",
+                ),
+                field(
+                    "created_at",
+                    "DateTime",
+                    false,
+                    false,
+                    "When the requirement was created",
+                ),
             ],
             "classDiagram\n    class Requirement {\n        +String req_id\n        +String text\n        +RequirementType req_type\n        +u8 priority\n        +Option~String~ rationale\n        +Vec~String~ derived_from\n        +Vec~String~ satisfies\n        +Option~String~ verified_by\n        +RequirementStatus status\n        +String source_id\n        +Option~ReqIFMetadata~ reqif\n        +Option~SysMLv2Stereotype~ sysml_stereotype\n        +DateTime created_at\n    }",
             "Endurant+Role",
@@ -190,16 +376,70 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
         ),
         "SemanticChunk" => (
             vec![
-                field("chunk_id", "String", false, false, "Unique chunk identifier"),
-                field("source_id", "String", false, false, "Back-reference to parent document"),
-                field("chunk_index", "usize", false, false, "0-based index in chunk sequence"),
+                field(
+                    "chunk_id",
+                    "String",
+                    false,
+                    false,
+                    "Unique chunk identifier",
+                ),
+                field(
+                    "source_id",
+                    "String",
+                    false,
+                    false,
+                    "Back-reference to parent document",
+                ),
+                field(
+                    "chunk_index",
+                    "usize",
+                    false,
+                    false,
+                    "0-based index in chunk sequence",
+                ),
                 field("content", "String", false, false, "Chunk text content"),
-                field("topic_tags", "Vec<String>", false, true, "Topic tags for filtering"),
-                field("embedding", "Vec<f32>", false, true, "Semantic embedding vector"),
-                field("embedding_model", "Option<String>", true, false, "Model used for embedding"),
-                field("confidence", "f32", false, false, "Chunk quality confidence [0.0, 1.0]"),
-                field("created_at", "DateTime", false, false, "When the chunk was created"),
-                field("metadata", "ChunkMetadata", false, false, "Additional chunk metadata"),
+                field(
+                    "topic_tags",
+                    "Vec<String>",
+                    false,
+                    true,
+                    "Topic tags for filtering",
+                ),
+                field(
+                    "embedding",
+                    "Vec<f32>",
+                    false,
+                    true,
+                    "Semantic embedding vector",
+                ),
+                field(
+                    "embedding_model",
+                    "Option<String>",
+                    true,
+                    false,
+                    "Model used for embedding",
+                ),
+                field(
+                    "confidence",
+                    "f32",
+                    false,
+                    false,
+                    "Chunk quality confidence [0.0, 1.0]",
+                ),
+                field(
+                    "created_at",
+                    "DateTime",
+                    false,
+                    false,
+                    "When the chunk was created",
+                ),
+                field(
+                    "metadata",
+                    "ChunkMetadata",
+                    false,
+                    false,
+                    "Additional chunk metadata",
+                ),
             ],
             "classDiagram\n    class SemanticChunk {\n        +String chunk_id\n        +String source_id\n        +usize chunk_index\n        +String content\n        +Vec~String~ topic_tags\n        +Vec~f32~ embedding\n        +Option~String~ embedding_model\n        +f32 confidence\n        +DateTime created_at\n        +ChunkMetadata metadata\n    }",
             "Perdurant",
@@ -207,14 +447,62 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
         ),
         "FullPipelineResult" => (
             vec![
-                field("source", "DocumentSource", false, false, "Original document source"),
-                field("chunks", "Vec<SemanticChunk>", false, true, "Semantic chunks extracted"),
-                field("evidences", "Vec<Evidence>", false, true, "Evidence items extracted"),
-                field("requirements", "Vec<Requirement>", false, true, "Requirements derived"),
-                field("fol_formulas", "Vec<SerializableFOLFormula>", false, true, "FOL formulas"),
-                field("pipeline_version", "String", false, false, "Pipeline version"),
-                field("executed_at", "DateTime", false, false, "When the pipeline executed"),
-                field("total_duration_ms", "u64", false, false, "Total execution time ms"),
+                field(
+                    "source",
+                    "DocumentSource",
+                    false,
+                    false,
+                    "Original document source",
+                ),
+                field(
+                    "chunks",
+                    "Vec<SemanticChunk>",
+                    false,
+                    true,
+                    "Semantic chunks extracted",
+                ),
+                field(
+                    "evidences",
+                    "Vec<Evidence>",
+                    false,
+                    true,
+                    "Evidence items extracted",
+                ),
+                field(
+                    "requirements",
+                    "Vec<Requirement>",
+                    false,
+                    true,
+                    "Requirements derived",
+                ),
+                field(
+                    "fol_formulas",
+                    "Vec<SerializableFOLFormula>",
+                    false,
+                    true,
+                    "FOL formulas",
+                ),
+                field(
+                    "pipeline_version",
+                    "String",
+                    false,
+                    false,
+                    "Pipeline version",
+                ),
+                field(
+                    "executed_at",
+                    "DateTime",
+                    false,
+                    false,
+                    "When the pipeline executed",
+                ),
+                field(
+                    "total_duration_ms",
+                    "u64",
+                    false,
+                    false,
+                    "Total execution time ms",
+                ),
             ],
             "classDiagram\n    class FullPipelineResult {\n        +DocumentSource source\n        +Vec~SemanticChunk~ chunks\n        +Vec~Evidence~ evidences\n        +Vec~Requirement~ requirements\n        +Vec~SerializableFOLFormula~ fol_formulas\n        +String pipeline_version\n        +DateTime executed_at\n        +u64 total_duration_ms\n    }",
             "Endurant",
@@ -226,7 +514,9 @@ fn build_type_schema(name: &str) -> Option<TypeSchema> {
                 name: name.to_string(),
                 module_path: format!("b00t_c0re_lib::doc_pipeline::{name}"),
                 json_schema: serde_json::json!({"type": "object", "title": name}),
-                mermaid_diagram: format!("classDiagram\n    class {name} {{\n        +... fields\n    }}"),
+                mermaid_diagram: format!(
+                    "classDiagram\n    class {name} {{\n        +... fields\n    }}"
+                ),
                 fields: vec![],
                 ufo_stereotype: None,
                 has_wasm_codegen: false,
@@ -274,9 +564,16 @@ fn field(
 fn rust_to_json_type(rust_type: &str) -> &str {
     match rust_type {
         s if s.starts_with("String") => "string",
-        s if s.starts_with("u8") || s.starts_with("u16") || s.starts_with("u32")
-            || s.starts_with("u64") || s.starts_with("usize") || s.starts_with("i64")
-            || s.starts_with("i32") => "integer",
+        s if s.starts_with("u8")
+            || s.starts_with("u16")
+            || s.starts_with("u32")
+            || s.starts_with("u64")
+            || s.starts_with("usize")
+            || s.starts_with("i64")
+            || s.starts_with("i32") =>
+        {
+            "integer"
+        }
         s if s.starts_with("f32") || s.starts_with("f64") => "number",
         s if s.starts_with("bool") => "boolean",
         s if s.starts_with("Vec") || s.starts_with("HashMap") => "array",
@@ -315,7 +612,8 @@ async fn wasm_handler() -> impl IntoResponse {
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "WASM SPA not built. Run: just build-wasm".to_string(),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -347,12 +645,29 @@ async fn datum_health_handler() -> impl IntoResponse {
                 Ok(json) => {
                     let servers = json.get("servers").cloned().unwrap_or_default();
                     let total = servers.as_array().map(|a| a.len()).unwrap_or(0);
-                    let errors: Vec<_> = servers.as_array().map(|a| {
-                        a.iter().filter(|s| s.get("error").and_then(|e| e.as_str()).is_some()).cloned().collect::<Vec<_>>()
-                    }).unwrap_or_default();
-                    let not_installed: Vec<_> = servers.as_array().map(|a| {
-                        a.iter().filter(|s| !s.get("is_installed").unwrap_or(&serde_json::Value::Bool(false)).as_bool().unwrap_or(false)).cloned().collect::<Vec<_>>()
-                    }).unwrap_or_default();
+                    let errors: Vec<_> = servers
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter(|s| s.get("error").and_then(|e| e.as_str()).is_some())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let not_installed: Vec<_> = servers
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter(|s| {
+                                    !s.get("is_installed")
+                                        .unwrap_or(&serde_json::Value::Bool(false))
+                                        .as_bool()
+                                        .unwrap_or(false)
+                                })
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
                     axum::Json(serde_json::json!({
                         "total": total,
                         "healthy": total.saturating_sub(errors.len()).saturating_sub(not_installed.len()),
@@ -375,14 +690,18 @@ async fn graph_health_handler() -> impl IntoResponse {
         .map(|p| p.to_string_lossy().replace('/', "-").to_string())
         .unwrap_or_default();
     let output = std::process::Command::new("codebase-memory-mcp")
-        .args(["cli", "get_graph_schema", &format!("{{\"project\":\"{project_name}\"}}")])
+        .args([
+            "cli",
+            "get_graph_schema",
+            &format!("{{\"project\":\"{project_name}\"}}"),
+        ])
         .output();
     let kg = match output {
         Ok(out) if out.status.success() => {
             let body = String::from_utf8_lossy(&out.stdout);
             serde_json::from_str::<serde_json::Value>(&body).unwrap_or_default()
         }
-        _ => serde_json::json!({"status": "offline"})
+        _ => serde_json::json!({"status": "offline"}),
     };
     axum::Json(serde_json::json!({
         "knowledge_graph": kg,
@@ -392,8 +711,14 @@ async fn graph_health_handler() -> impl IntoResponse {
 
 /// Join multiple mermaid diagram strings into a single fenced block with --- separators.
 fn join_mermaid(diagrams: &[String]) -> String {
-    let blocks: Vec<_> = diagrams.iter()
-        .map(|m| m.trim_start_matches("```mermaid\n").trim_end_matches("\n```").trim().to_string())
+    let blocks: Vec<_> = diagrams
+        .iter()
+        .map(|m| {
+            m.trim_start_matches("```mermaid\n")
+                .trim_end_matches("\n```")
+                .trim()
+                .to_string()
+        })
         .collect();
     format!("```mermaid\n{}\n```", blocks.join("\n\n---\n\n"))
 }
@@ -404,15 +729,21 @@ fn join_mermaid(diagrams: &[String]) -> String {
 async fn viz_isometric_handler(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    let hide_orphans = params
+        .get("hide_orphans")
+        .map(|v| v == "true")
+        .unwrap_or(false);
     let output = std::process::Command::new("b00t-cli")
         .args(["viz", "entangle", "--format", "mermaid"])
         .output();
-    let raw = output.ok()
+    let raw = output
+        .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .unwrap_or_default()
-        .replace("```mermaid\n", "").replace("\n```", "")
-        .replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD");
+        .replace("```mermaid\n", "")
+        .replace("\n```", "")
+        .replace("graph LR", "flowchart LR")
+        .replace("graph TD", "flowchart TD");
 
     match parse_mermaid(&raw) {
         Ok(mut graph) => {
@@ -432,11 +763,13 @@ async fn viz_isometric_handler(
                 Err(_) => {
                     // Direct layout failed (>40 nodes). Try container grouping.
                     graph_to_container_response(&graph)
-                        .unwrap_or_else(|e| serde_json::json!({
-                            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-                            "format": "isometric",
-                            "error": e
-                        }))
+                        .unwrap_or_else(|e| {
+                            serde_json::json!({
+                                "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                                "format": "isometric",
+                                "error": e
+                            })
+                        })
                         .into()
                 }
             }
@@ -452,11 +785,13 @@ async fn viz_isometric_handler(
 /// GET `/api/admin/viz/isometric/demo` — Tax-Lawyer demonstration graph
 async fn viz_isometric_demo_handler() -> impl IntoResponse {
     let graph = tax_lawyer_demo();
-    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| serde_json::json!({
-        "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-        "format": "isometric",
-        "error": e
-    })))
+    axum::Json(graph_to_isometric_response(&graph).unwrap_or_else(|e| {
+        serde_json::json!({
+            "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+            "format": "isometric",
+            "error": e
+        })
+    }))
 }
 
 /// POST `/api/admin/viz/mermaid/render` — Server-side Mermaid SVG rendering
@@ -471,10 +806,12 @@ async fn viz_mermaid_render_handler(
     {
         match render_mermaid_native(text) {
             Ok(svg) => return axum::Json(serde_json::json!({"svg": svg})),
-            Err(e) => return axum::Json(serde_json::json!({
-                "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
-                "error": e,
-            })),
+            Err(e) => {
+                return axum::Json(serde_json::json!({
+                    "svg": format!("<svg><text fill='red'>{}</text></svg>", e),
+                    "error": e,
+                }));
+            }
         }
     }
     #[cfg(not(feature = "mermaid-native"))]
@@ -618,10 +955,7 @@ async fn type_detail_handler(
                 "codegen": wasm_sample,
             })))
         }
-        None => Err((
-            StatusCode::NOT_FOUND,
-            format!("Type '{name}' not found"),
-        )),
+        None => Err((StatusCode::NOT_FOUND, format!("Type '{name}' not found"))),
     }
 }
 
@@ -676,10 +1010,7 @@ async fn proxy_handler(
                 .body(Body::from(resp_body))
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?)
         }
-        Err(e) => Err((
-            StatusCode::BAD_GATEWAY,
-            format!("Proxy error: {e}"),
-        )),
+        Err(e) => Err((StatusCode::BAD_GATEWAY, format!("Proxy error: {e}"))),
     }
 }
 
@@ -718,7 +1049,8 @@ async fn handle_ws(socket: WebSocket, state: Arc<Mutex<AppState>>) {
                 let mut app = state.lock().await;
                 match text.as_str() {
                     "tick" => {
-                        app.twin.tick::<fn(&FullPipelineResult) -> FullPipelineResult>(None);
+                        app.twin
+                            .tick::<fn(&FullPipelineResult) -> FullPipelineResult>(None);
                     }
                     "rollback" => {
                         let idx = app.twin.history_len().saturating_sub(1);
@@ -749,7 +1081,8 @@ async fn handle_ws(socket: WebSocket, state: Arc<Mutex<AppState>>) {
 /// GET `/api/admin/simulate/tick` — Advance simulation one step
 async fn simulate_tick_handler(State(state): State<Arc<Mutex<AppState>>>) -> impl IntoResponse {
     let mut app = state.lock().await;
-    app.twin.tick::<fn(&FullPipelineResult) -> FullPipelineResult>(None);
+    app.twin
+        .tick::<fn(&FullPipelineResult) -> FullPipelineResult>(None);
     axum::Json(serde_json::json!({
         "tick": app.twin.tick_count(),
         "history_len": app.twin.history_len(),
@@ -765,7 +1098,8 @@ async fn simulate_state_handler(State(state): State<Arc<Mutex<AppState>>>) -> im
 /// GET `/api/admin/health` — System health metrics
 async fn health_metrics_handler() -> impl IntoResponse {
     let uptime = std::process::Command::new("uptime")
-        .output().ok()
+        .output()
+        .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .unwrap_or_default()
         .trim()
@@ -773,7 +1107,8 @@ async fn health_metrics_handler() -> impl IntoResponse {
 
     let memory = std::process::Command::new("free")
         .arg("-h")
-        .output().ok()
+        .output()
+        .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .unwrap_or_default();
 
@@ -781,8 +1116,7 @@ async fn health_metrics_handler() -> impl IntoResponse {
         .map(|n| n.get())
         .unwrap_or(0);
 
-    let load_avg = std::fs::read_to_string("/proc/loadavg")
-        .unwrap_or_default();
+    let load_avg = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
 
     axum::Json(serde_json::json!({
         "status": "operational",
@@ -803,8 +1137,8 @@ async fn health_metrics_handler() -> impl IntoResponse {
 /// GET `/api/admin/processes` — Hive process NodeGraph (SysMLv2/KerML visual)
 async fn processes_handler() -> impl IntoResponse {
     use b00t_c0re_lib::pipeline_nodes::{
-        build_graph_from_pipeline, ChunkNode, EvidenceNode, FetchNode,
-        LegislationChunker, RequirementsNode,
+        ChunkNode, EvidenceNode, FetchNode, LegislationChunker, RequirementsNode,
+        build_graph_from_pipeline,
     };
 
     // Document evidence pipeline (generic)
@@ -851,7 +1185,10 @@ async fn processes_handler() -> impl IntoResponse {
 async fn viz_entangle_handler(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    let hide_orphans = params
+        .get("hide_orphans")
+        .map(|v| v == "true")
+        .unwrap_or(false);
     viz_output("entangle", hide_orphans)
 }
 
@@ -859,7 +1196,10 @@ async fn viz_entangle_handler(
 async fn viz_task_handler(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let hide_orphans = params.get("hide_orphans").map(|v| v == "true").unwrap_or(false);
+    let hide_orphans = params
+        .get("hide_orphans")
+        .map(|v| v == "true")
+        .unwrap_or(false);
     viz_output("task", hide_orphans)
 }
 
@@ -886,12 +1226,21 @@ fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
         .args(["viz", subcommand, "--format", "mermaid"])
         .output()
         .ok()
-        .and_then(|o| o.status.success().then(|| {
-            let raw = String::from_utf8_lossy(&o.stdout).to_string();
-            let cleaned = raw.replace("```mermaid\n", "").replace("\n```", "").trim().to_string();
-            // Mermaid v11 dropped `graph` syntax — must use `flowchart`
-            cleaned.replace("graph LR", "flowchart LR").replace("graph TD", "flowchart TD").replace("graph RL", "flowchart RL")
-        }))
+        .and_then(|o| {
+            o.status.success().then(|| {
+                let raw = String::from_utf8_lossy(&o.stdout).to_string();
+                let cleaned = raw
+                    .replace("```mermaid\n", "")
+                    .replace("\n```", "")
+                    .trim()
+                    .to_string();
+                // Mermaid v11 dropped `graph` syntax — must use `flowchart`
+                cleaned
+                    .replace("graph LR", "flowchart LR")
+                    .replace("graph TD", "flowchart TD")
+                    .replace("graph RL", "flowchart RL")
+            })
+        })
         .unwrap_or_default();
 
     let mermaid = if hide_orphans && !mermaid.is_empty() {
@@ -904,7 +1253,11 @@ fn viz_output(subcommand: &str, hide_orphans: bool) -> impl IntoResponse {
         .args(["viz", subcommand, "--format", "svg"])
         .output()
         .ok()
-        .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).to_string()))
+        .and_then(|o| {
+            o.status
+                .success()
+                .then(|| String::from_utf8_lossy(&o.stdout).to_string())
+        })
         .unwrap_or_default();
 
     axum::Json(serde_json::json!({
@@ -2141,11 +2494,15 @@ async fn main() {
         // WASM SPA (next-gen)
         .route("/wasm", get(wasm_handler))
         .route("/wasm/{*path}", get(wasm_handler))
-        .nest_service("/wasm/wasm", ServeDir::new(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent().unwrap_or(std::path::Path::new("."))
-                .join("b00t-ui-wasm/dist/wasm")
-        ))
+        .nest_service(
+            "/wasm/wasm",
+            ServeDir::new(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .join("b00t-ui-wasm/dist/wasm"),
+            ),
+        )
         // Health check
         .route("/health", get(health_handler))
         .route("/healthz", get(health_handler))
@@ -2164,18 +2521,37 @@ async fn main() {
         .route("/api/admin/processes", get(processes_handler))
         // API — visualizations
         .route("/api/admin/viz/entangle", get(viz_entangle_handler))
-        .route("/api/admin/viz/entangle/json", get(graph_json::entangle_json_handler))
+        .route(
+            "/api/admin/viz/entangle/json",
+            get(graph_json::entangle_json_handler),
+        )
         .route("/api/admin/viz/task", get(viz_task_handler))
-        .route("/api/admin/viz/state-machine", get(viz_state_machine_handler))
+        .route(
+            "/api/admin/viz/state-machine",
+            get(viz_state_machine_handler),
+        )
         .route("/api/admin/viz/isometric", get(viz_isometric_handler))
-        .route("/api/admin/viz/isometric/demo", get(viz_isometric_demo_handler))
-        .route("/api/admin/viz/mermaid/render", get(viz_mermaid_render_handler).post(viz_mermaid_render_handler))
+        .route(
+            "/api/admin/viz/isometric/demo",
+            get(viz_isometric_demo_handler),
+        )
+        .route(
+            "/api/admin/viz/mermaid/render",
+            get(viz_mermaid_render_handler).post(viz_mermaid_render_handler),
+        )
         // WebSocket
         .route("/ws", get(ws_handler))
         // Reverse proxy — catch-all /v1/*
-        .route("/v1/{*path}", get(proxy_handler).post(proxy_handler).put(proxy_handler)
-            .patch(proxy_handler).delete(proxy_handler).head(proxy_handler)
-            .options(proxy_handler))
+        .route(
+            "/v1/{*path}",
+            get(proxy_handler)
+                .post(proxy_handler)
+                .put(proxy_handler)
+                .patch(proxy_handler)
+                .delete(proxy_handler)
+                .head(proxy_handler)
+                .options(proxy_handler),
+        )
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state);
 
@@ -2230,17 +2606,42 @@ mod html_sanity_tests {
     fn required_elements_exist() {
         let h = test_html();
         // Sidebar sections
-        for id in &["section-pipeline", "section-types", "section-sim", "section-viz"] {
+        for id in &[
+            "section-pipeline",
+            "section-types",
+            "section-sim",
+            "section-viz",
+        ] {
             assert!(h.contains(id), "Missing sidebar section: {id}");
         }
         // Viz dropdown
         assert!(h.contains("viz-select"), "Missing viz dropdown");
-        for opt in &["entangle", "task", "state-machine", "pipeline", "ato", "isometric", "kg"] {
-            assert!(h.contains(&format!("\"{opt}\"")), "Missing viz option: {opt}");
+        for opt in &[
+            "entangle",
+            "task",
+            "state-machine",
+            "pipeline",
+            "ato",
+            "isometric",
+            "kg",
+        ] {
+            assert!(
+                h.contains(&format!("\"{opt}\"")),
+                "Missing viz option: {opt}"
+            );
         }
         // JS functions
-        for fn_name in &["toggleSection", "renderMermaid", "loadKnowledgeGraph", "beat", "onVizSelect"] {
-            assert!(h.contains(&format!("function {fn_name}")), "Missing JS function: {fn_name}");
+        for fn_name in &[
+            "toggleSection",
+            "renderMermaid",
+            "loadKnowledgeGraph",
+            "beat",
+            "onVizSelect",
+        ] {
+            assert!(
+                h.contains(&format!("function {fn_name}")),
+                "Missing JS function: {fn_name}"
+            );
         }
         // Panels
         for panel in &["pipeline-panel", "type-panel", "sim-panel", "viz-panel"] {

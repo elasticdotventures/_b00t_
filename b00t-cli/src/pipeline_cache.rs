@@ -431,10 +431,7 @@ impl TimeoutPredictor {
     ///
     /// Older entries beyond `max_records_per_stage` are evicted (FIFO).
     pub fn record(&mut self, timing: StageTiming) {
-        let entries = self
-            .history
-            .entry(timing.stage_name.clone())
-            .or_default();
+        let entries = self.history.entry(timing.stage_name.clone()).or_default();
         entries.push(timing);
         while entries.len() > self.max_records_per_stage {
             entries.remove(0);
@@ -564,7 +561,11 @@ mod tests {
         assert_eq!(key1, key2, "keys for same input must match");
         assert!(cache.contains(&key2), "cache should contain the key");
         let result = cache.get(&key2);
-        assert_eq!(result, Some(b"cached-output" as &[u8]), "cached value mismatch");
+        assert_eq!(
+            result,
+            Some(b"cached-output" as &[u8]),
+            "cached value mismatch"
+        );
     }
 
     // ── ContentCache: different input produces new result ─────────────
@@ -580,7 +581,10 @@ mod tests {
 
         cache.set(key_a.clone(), b"output-A".to_vec());
         assert!(cache.contains(&key_a));
-        assert!(!cache.contains(&key_b), "different input should not be cached");
+        assert!(
+            !cache.contains(&key_b),
+            "different input should not be cached"
+        );
     }
 
     // ── ContentCache: cache key changes with params ──────────────────
@@ -670,7 +674,11 @@ mod tests {
         cache.set(key.clone(), b"new".to_vec());
 
         let result = cache.get(&key);
-        assert_eq!(result, Some(b"new" as &[u8]), "overwritten value should be 'new'");
+        assert_eq!(
+            result,
+            Some(b"new" as &[u8]),
+            "overwritten value should be 'new'"
+        );
         assert_eq!(cache.len(), 1, "overwrite should not increase entry count");
     }
 
@@ -691,7 +699,11 @@ mod tests {
     #[test]
     fn cache_min_capacity_one() {
         let cache = ContentCache::new(0);
-        assert_eq!(cache.max_entries(), 1, "zero max_entries should be clamped to 1");
+        assert_eq!(
+            cache.max_entries(),
+            1,
+            "zero max_entries should be clamped to 1"
+        );
     }
 
     // ── TimeoutPredictor: record and predict from history ────────────
@@ -887,9 +899,19 @@ mod tests {
         }
         // Only the last 2 should remain.
         let hist = predictor.stage_history("fifo").unwrap();
-        assert_eq!(hist.len(), 2, "should retain only max_records_per_stage entries");
-        assert_eq!(hist[0].input_size_bytes, 3, "oldest surviving entry should have input_size=3");
-        assert_eq!(hist[1].input_size_bytes, 4, "newest entry should have input_size=4");
+        assert_eq!(
+            hist.len(),
+            2,
+            "should retain only max_records_per_stage entries"
+        );
+        assert_eq!(
+            hist[0].input_size_bytes, 3,
+            "oldest surviving entry should have input_size=3"
+        );
+        assert_eq!(
+            hist[1].input_size_bytes, 4,
+            "newest entry should have input_size=4"
+        );
     }
 
     // ── TimeoutPredictor: single data point uses average ─────────────
@@ -917,8 +939,8 @@ mod tests {
 
     use crate::pipeline_executor::PipelineExecutor;
     use crate::pipeline_types::{
-        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements,
-        StagePort, StageSpec,
+        CapsuleProfile, PipelineDag, PortDirection, PortMediaType, ResourceRequirements, StagePort,
+        StageSpec,
     };
 
     fn make_stage(name: &str) -> StageSpec {
@@ -967,13 +989,17 @@ mod tests {
         let cached = CachedExecutor::new(executor);
 
         // First run — cache miss, stage executes.
-        let report1 = cached.execute_cached("run-1", Some(b"input-data".to_vec())).await;
+        let report1 = cached
+            .execute_cached("run-1", Some(b"input-data".to_vec()))
+            .await;
         assert_eq!(report1.status, RunStatus::Completed);
         assert_eq!(report1.stages.len(), 1);
         let output1 = report1.stages[0].output.as_ref().unwrap().clone();
 
         // Second run with same input — cache hit, output should be identical.
-        let report2 = cached.execute_cached("run-1", Some(b"input-data".to_vec())).await;
+        let report2 = cached
+            .execute_cached("run-1", Some(b"input-data".to_vec()))
+            .await;
         assert_eq!(report2.status, RunStatus::Completed);
         assert_eq!(report2.stages.len(), 1);
         let output2 = report2.stages[0].output.as_ref().unwrap();
@@ -987,11 +1013,15 @@ mod tests {
         let cached = CachedExecutor::new(executor);
 
         // Run with input-A.
-        let report_a = cached.execute_cached("run-a", Some(b"input-A".to_vec())).await;
+        let report_a = cached
+            .execute_cached("run-a", Some(b"input-A".to_vec()))
+            .await;
         let output_a = report_a.stages[0].output.as_ref().unwrap().clone();
 
         // Run with input-B.
-        let report_b = cached.execute_cached("run-b", Some(b"input-B".to_vec())).await;
+        let report_b = cached
+            .execute_cached("run-b", Some(b"input-B".to_vec()))
+            .await;
         let output_b = report_b.stages[0].output.as_ref().unwrap().clone();
 
         // Different inputs → different outputs (because the stage appends its

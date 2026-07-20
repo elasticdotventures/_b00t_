@@ -47,8 +47,7 @@ pub fn check_command_available(command: &str) -> bool {
 fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
     if spec.starts_with('~') {
         let home = std::env::var("HOME").unwrap_or_default();
-        std::path::Path::new(&home)
-            .join(spec.strip_prefix("~/").unwrap_or(spec))
+        std::path::Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
     } else {
         std::path::Path::new(spec).to_path_buf()
     }
@@ -65,10 +64,7 @@ pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
             }
         }
         "env" => {
-            if std::env::var(spec)
-                .ok()
-                .map_or(false, |v| !v.is_empty())
-            {
+            if std::env::var(spec).ok().map_or(false, |v| !v.is_empty()) {
                 return "pass";
             }
             // check .env in workspace root
@@ -145,8 +141,7 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
                             .unwrap_or_else(|| std::path::PathBuf::from("."))
                     }
                 };
-                base.join(&expanded).exists()
-                    || std::path::Path::new(&expanded).exists()
+                base.join(&expanded).exists() || std::path::Path::new(&expanded).exists()
             };
             if !exists {
                 passed = false;

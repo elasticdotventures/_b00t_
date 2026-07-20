@@ -9,8 +9,9 @@ struct KubeClient {
 
 impl KubeClient {
     async fn new() -> Result<Self> {
-        let client = kube::Client::try_default().await
-            .context("failed to create kube client — is kubectl configured? (check ~/.kube/config)")?;
+        let client = kube::Client::try_default().await.context(
+            "failed to create kube client — is kubectl configured? (check ~/.kube/config)",
+        )?;
         Ok(KubeClient { client })
     }
 
@@ -18,45 +19,77 @@ impl KubeClient {
     async fn list_pods(&self, namespace: Option<&str>, all: bool) -> Result<Vec<PodSummary>> {
         use kube::api::ListParams;
         let ns = namespace.unwrap_or("default");
-        let api: kube::Api<k8s_openapi::api::core::v1::Pod> = kube::Api::namespaced(self.client.clone(), ns);
-        let pods = api.list(&ListParams::default()).await
+        let api: kube::Api<k8s_openapi::api::core::v1::Pod> =
+            kube::Api::namespaced(self.client.clone(), ns);
+        let pods = api
+            .list(&ListParams::default())
+            .await
             .context("failed to list pods")?;
-        Ok(pods.items.into_iter()
-            .filter(|p| all || p.metadata.labels.as_ref()
-                .map(|l| l.contains_key("app.kubernetes.io/managed-by") || l.contains_key("b00t.io/managed"))
-                .unwrap_or(false))
+        Ok(pods
+            .items
+            .into_iter()
+            .filter(|p| {
+                all || p
+                    .metadata
+                    .labels
+                    .as_ref()
+                    .map(|l| {
+                        l.contains_key("app.kubernetes.io/managed-by")
+                            || l.contains_key("b00t.io/managed")
+                    })
+                    .unwrap_or(false)
+            })
             .map(|p| {
                 let name = p.metadata.name.unwrap_or_default();
-                let status = p.status.as_ref()
+                let status = p
+                    .status
+                    .as_ref()
                     .and_then(|s| s.phase.as_deref())
                     .unwrap_or("Unknown")
                     .to_string();
                 let namespace = p.metadata.namespace.unwrap_or_default();
-                let ready = p.status.as_ref()
+                let ready = p
+                    .status
+                    .as_ref()
                     .and_then(|s| s.container_statuses.as_ref())
                     .map(|cs| cs.iter().filter(|c| c.ready).count())
                     .unwrap_or(0);
-                let total = p.status.as_ref()
+                let total = p
+                    .status
+                    .as_ref()
                     .and_then(|s| s.container_statuses.as_ref())
                     .map(|cs| cs.len())
                     .unwrap_or(0);
-                PodSummary { name, namespace, status, ready, total }
+                PodSummary {
+                    name,
+                    namespace,
+                    status,
+                    ready,
+                    total,
+                }
             })
             .collect())
     }
 
     /// Get logs for a specific pod.
-    async fn get_logs(&self, pod_name: &str, namespace: Option<&str>, previous: bool) -> Result<()> {
+    async fn get_logs(
+        &self,
+        pod_name: &str,
+        namespace: Option<&str>,
+        previous: bool,
+    ) -> Result<()> {
         use kube::api::LogParams;
         let ns = namespace.unwrap_or("default");
-        let api: kube::Api<k8s_openapi::api::core::v1::Pod> = kube::Api::namespaced(self.client.clone(), ns);
+        let api: kube::Api<k8s_openapi::api::core::v1::Pod> =
+            kube::Api::namespaced(self.client.clone(), ns);
         let params = LogParams {
             follow: false, // streaming follow requires async stdout, deferred to Task 4.4
             previous,
             ..LogParams::default()
         };
-        let logs = api.logs(pod_name, &params).await
-            .context(format!("failed to get logs for pod '{pod_name}' in namespace '{ns}'"))?;
+        let logs = api.logs(pod_name, &params).await.context(format!(
+            "failed to get logs for pod '{pod_name}' in namespace '{ns}'"
+        ))?;
         print!("{}", logs);
         Ok(())
     }
@@ -147,11 +180,14 @@ pub enum K8sCommands {
 
 impl K8sCommands {
     pub fn execute(&self, _path: &str) -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()
-            .context("failed to create async runtime")?;
+        let rt = tokio::runtime::Runtime::new().context("failed to create async runtime")?;
 
         match self {
-            K8sCommands::List { namespace, all, json } => {
+            K8sCommands::List {
+                namespace,
+                all,
+                json,
+            } => {
                 let client = rt.block_on(KubeClient::new())?;
                 let pods = rt.block_on(client.list_pods(namespace.as_deref(), *all))?;
                 if *json {
@@ -159,15 +195,25 @@ impl K8sCommands {
                 } else if pods.is_empty() {
                     println!("no pods found");
                 } else {
-                    println!("{:<40} {:<15} {:<12} {:<8}", "NAME", "NAMESPACE", "STATUS", "READY");
+                    println!(
+                        "{:<40} {:<15} {:<12} {:<8}",
+                        "NAME", "NAMESPACE", "STATUS", "READY"
+                    );
                     for pod in &pods {
-                        println!("{:<40} {:<15} {:<12} {}/{}",
-                            pod.name, pod.namespace, pod.status, pod.ready, pod.total);
+                        println!(
+                            "{:<40} {:<15} {:<12} {}/{}",
+                            pod.name, pod.namespace, pod.status, pod.ready, pod.total
+                        );
                     }
                 }
                 Ok(())
             }
-            K8sCommands::Logs { pod_name, namespace, follow: _, previous } => {
+            K8sCommands::Logs {
+                pod_name,
+                namespace,
+                follow: _,
+                previous,
+            } => {
                 let client = rt.block_on(KubeClient::new())?;
                 rt.block_on(client.get_logs(pod_name, namespace.as_deref(), *previous))
             }

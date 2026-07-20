@@ -24,6 +24,7 @@ npm install -g @qwen-code/qwen-code@latest
 version = "qwen --version"
 version_regex = '([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)'
 
+# <|🦨: aspirational — node.cli datum never authored (3 datums depend on node.js); _b00t_#850, #163 |>
 depends_on = ["node.cli"]
 
 entangled_mcp = ["qwen-code.mcp"]

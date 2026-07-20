@@ -90,12 +90,12 @@ name = "GitHub: istefox/obsidian-mcp-connector (alternative)"
 url = "https://github.com/istefox/obsidian-mcp-connector"
 
 [[b00t.references]]
-name = "claudian — Claude desktop integration for Obsidian"
-url = "https://github.com/your/claudian-repo"
+name = "claudian — Claude Code extension for Obsidian"
+url = "https://github.com/yishentu/claudian"
 
 [[b00t.references]]
-name = "claude-obsidian — Obsidian plugin for Claude Code"
-url = "https://github.com/your/claude-obsidian-repo"
+name = "claude-obsidian — Claude ↔ Obsidian bridge"
+url = "https://github.com/AgriciDaniel/claude-obsidian"
 
 [[b00t.references]]
 name = "MCP Remote (npm)"

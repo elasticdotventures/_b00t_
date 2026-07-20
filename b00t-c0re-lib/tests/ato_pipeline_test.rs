@@ -4,7 +4,9 @@
 //! Uses stubs and offline fallback paths — no network required.
 
 use b00t_c0re_lib::ato_client::{AtoAct, AtoClient};
-use b00t_c0re_lib::pipeline_nodes::{EvidenceNode, LegislationChunker, PipelineNode, RequirementsNode};
+use b00t_c0re_lib::pipeline_nodes::{
+    EvidenceNode, LegislationChunker, PipelineNode, RequirementsNode,
+};
 
 /// Full pipeline: stub DocumentSource → chunks → evidence → requirements
 #[test]
@@ -19,10 +21,15 @@ fn test_ato_pipeline_stub_itaa1997() {
     let chunker = LegislationChunker;
     let chunks = chunker.execute(source.clone());
 
-    assert!(!chunks.is_empty(), "chunker must produce at least one chunk");
+    assert!(
+        !chunks.is_empty(),
+        "chunker must produce at least one chunk"
+    );
     for chunk in &chunks {
-        assert_eq!(chunk.source_id, source.source_id,
-            "chunk.source_id must match DocumentSource.source_id");
+        assert_eq!(
+            chunk.source_id, source.source_id,
+            "chunk.source_id must match DocumentSource.source_id"
+        );
         assert!(!chunk.content.is_empty(), "chunk content must not be empty");
     }
 
@@ -30,18 +37,31 @@ fn test_ato_pipeline_stub_itaa1997() {
     let evidence_node = EvidenceNode;
     let evidence = evidence_node.execute(chunks.clone());
 
-    assert!(!evidence.is_empty(), "evidence must be produced from chunks");
+    assert!(
+        !evidence.is_empty(),
+        "evidence must be produced from chunks"
+    );
     for ev in &evidence {
-        assert!(!ev.statement.is_empty(), "evidence statement must not be empty");
-        assert!(ev.source_id.contains("ato:") || ev.chunk_id.contains("ato:"),
-            "evidence must cite ATO source: source_id={} chunk_id={}", ev.source_id, ev.chunk_id);
+        assert!(
+            !ev.statement.is_empty(),
+            "evidence statement must not be empty"
+        );
+        assert!(
+            ev.source_id.contains("ato:") || ev.chunk_id.contains("ato:"),
+            "evidence must cite ATO source: source_id={} chunk_id={}",
+            ev.source_id,
+            ev.chunk_id
+        );
     }
 
     // Stage 4: RequirementsNode
     let req_node = RequirementsNode;
     let requirements = req_node.execute(evidence);
 
-    assert!(!requirements.is_empty(), "requirements must be derived from evidence");
+    assert!(
+        !requirements.is_empty(),
+        "requirements must be derived from evidence"
+    );
     for req in &requirements {
         assert!(!req.text.is_empty(), "requirement text must not be empty");
     }
@@ -50,7 +70,12 @@ fn test_ato_pipeline_stub_itaa1997() {
 #[test]
 fn test_all_ato_acts_produce_stubs() {
     let client = AtoClient::default();
-    let acts = [AtoAct::Itaa1997, AtoAct::Itaa1936, AtoAct::GstAct, AtoAct::FbtAct];
+    let acts = [
+        AtoAct::Itaa1997,
+        AtoAct::Itaa1936,
+        AtoAct::GstAct,
+        AtoAct::FbtAct,
+    ];
     for act in &acts {
         let source = client.source_stub(act);
         assert!(source.url.is_some());
@@ -69,7 +94,7 @@ fn test_legislation_chunker_fallback_on_no_url() {
         title: "Test Act".into(),
         authors: vec![],
         abstract_text: "Section 1. This is the preamble. Section 2. This is section two.".into(),
-        url: None,  // no URL → must use fallback
+        url: None, // no URL → must use fallback
         pdf_url: None,
         fetched_at: Utc::now(),
         content_hash: None,
@@ -78,7 +103,11 @@ fn test_legislation_chunker_fallback_on_no_url() {
     };
 
     let chunks = LegislationChunker.execute(source.clone());
-    assert_eq!(chunks.len(), 1, "no-URL fallback must produce exactly one abstract chunk");
+    assert_eq!(
+        chunks.len(),
+        1,
+        "no-URL fallback must produce exactly one abstract chunk"
+    );
     assert_eq!(chunks[0].source_id, "ato:test");
     assert!(chunks[0].content.contains("preamble"));
 }
@@ -95,11 +124,13 @@ fn test_pipeline_provenance_chain() {
     let requirements = RequirementsNode.execute(evidence.clone());
 
     // Every requirement must trace back to evidence from this source
-    let has_ato_provenance = evidence.iter().any(|ev| {
-        ev.source_id.contains(&source_id) || ev.chunk_id.contains(&source_id)
-    });
+    let has_ato_provenance = evidence
+        .iter()
+        .any(|ev| ev.source_id.contains(&source_id) || ev.chunk_id.contains(&source_id));
     for req in &requirements {
-        assert!(has_ato_provenance || !req.text.is_empty(),
-            "provenance chain must be traceable to source");
+        assert!(
+            has_ato_provenance || !req.text.is_empty(),
+            "provenance chain must be traceable to source"
+        );
     }
 }

@@ -1,7 +1,7 @@
 /// Visible semantic patch: produces a unified diff before any file write.
 ///
 /// Pattern: show diff → confirm → write. Prevents silent overwrites.
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 
 pub struct SemanticPatch {
@@ -12,22 +12,32 @@ pub struct SemanticPatch {
 }
 
 impl SemanticPatch {
-    pub fn new(path: impl Into<PathBuf>, original: impl Into<String>, proposed: impl Into<String>) -> Result<Self> {
+    pub fn new(
+        path: impl Into<PathBuf>,
+        original: impl Into<String>,
+        proposed: impl Into<String>,
+    ) -> Result<Self> {
         let path = path.into();
         let original = original.into();
         let proposed = proposed.into();
 
         // Guard: reject non-UTF-8 content early
         if original.contains('\0') || proposed.contains('\0') {
-            bail!("binary content detected in {}, cannot produce semantic patch", path.display());
+            bail!(
+                "binary content detected in {}, cannot produce semantic patch",
+                path.display()
+            );
         }
 
         let patch = diffy::create_patch(&original, &proposed);
-        let unified_diff = diffy::PatchFormatter::new()
-            .fmt_patch(&patch)
-            .to_string();
+        let unified_diff = diffy::PatchFormatter::new().fmt_patch(&patch).to_string();
 
-        Ok(Self { path, original, proposed, unified_diff })
+        Ok(Self {
+            path,
+            original,
+            proposed,
+            unified_diff,
+        })
     }
 
     /// Load original from disk, diff against proposed string.
@@ -71,8 +81,8 @@ impl SemanticPatch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write as _;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn identical_files_produce_no_diff() {

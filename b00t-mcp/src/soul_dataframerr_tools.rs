@@ -14,18 +14,29 @@ fn run_soul(args: &[&str]) -> Result<String> {
     let mut cmd = std::process::Command::new("b00t-cli");
     cmd.arg("soul");
     cmd.args(args);
-    let out = cmd.output().map_err(|e| anyhow::anyhow!("b00t-cli soul: {e}"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| anyhow::anyhow!("b00t-cli soul: {e}"))?;
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     if !out.status.success() {
-        let msg = if stderr.is_empty() { stdout.clone() } else { stderr };
-        return Err(anyhow::anyhow!("b00t-cli soul {}: {}", args.first().unwrap_or(&""), msg.trim()));
+        let msg = if stderr.is_empty() {
+            stdout.clone()
+        } else {
+            stderr
+        };
+        return Err(anyhow::anyhow!(
+            "b00t-cli soul {}: {}",
+            args.first().unwrap_or(&""),
+            msg.trim()
+        ));
     }
     Ok(stdout)
 }
 
 fn str_param<'a>(params: &'a HashMap<String, Value>, key: &str) -> Result<&'a str> {
-    params.get(key)
+    params
+        .get(key)
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("required param '{key}' missing or not a string"))
 }
@@ -44,16 +55,25 @@ pub struct SoulTableCreateCommand {
 }
 
 impl McpReflection for SoulTableCreateCommand {
-    fn mcp_tool_name() -> String { "soul_table_create".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "table-create".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_table_create".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "table-create".into()]
+    }
 }
 
 impl McpExecutor for SoulTableCreateCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let name = str_param(params, "name")?;
-        let columns: Vec<String> = params.get("columns")
+        let columns: Vec<String> = params
+            .get("columns")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut args: Vec<&str> = vec!["table-create", name];
         let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
@@ -68,8 +88,12 @@ impl McpExecutor for SoulTableCreateCommand {
 pub struct SoulTableListCommand;
 
 impl McpReflection for SoulTableListCommand {
-    fn mcp_tool_name() -> String { "soul_table_list".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "table-list".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_table_list".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "table-list".into()]
+    }
 }
 
 impl McpExecutor for SoulTableListCommand {
@@ -91,24 +115,30 @@ pub struct SoulRowInsertCommand {
 }
 
 impl McpReflection for SoulRowInsertCommand {
-    fn mcp_tool_name() -> String { "soul_row_insert".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "frame-insert".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_row_insert".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "frame-insert".into()]
+    }
 }
 
 impl McpExecutor for SoulRowInsertCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let table = str_param(params, "table")?;
-        let fields_obj = params.get("fields")
+        let fields_obj = params
+            .get("fields")
             .and_then(|v| v.as_object())
             .ok_or_else(|| anyhow::anyhow!("soul_row_insert requires fields: object"))?;
         // Build "key=value" pairs
-        let pairs: Vec<String> = fields_obj.iter()
+        let pairs: Vec<String> = fields_obj
+            .iter()
             .map(|(k, v)| {
                 let val = match v {
-                    Value::Bool(b)   => b.to_string(),
+                    Value::Bool(b) => b.to_string(),
                     Value::Number(n) => n.to_string(),
                     Value::String(s) => s.clone(),
-                    other            => other.to_string(),
+                    other => other.to_string(),
                 };
                 format!("{k}={val}")
             })
@@ -132,8 +162,12 @@ pub struct SoulRowQueryCommand {
 }
 
 impl McpReflection for SoulRowQueryCommand {
-    fn mcp_tool_name() -> String { "soul_row_query".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "frame-dump".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_row_query".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "frame-dump".into()]
+    }
 }
 
 impl McpExecutor for SoulRowQueryCommand {
@@ -158,8 +192,12 @@ pub struct SoulCursorCreateCommand {
 }
 
 impl McpReflection for SoulCursorCreateCommand {
-    fn mcp_tool_name() -> String { "soul_cursor_create".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "cursor-create".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_cursor_create".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "cursor-create".into()]
+    }
 }
 
 impl McpExecutor for SoulCursorCreateCommand {
@@ -180,8 +218,12 @@ pub struct SoulCursorNextCommand {
 }
 
 impl McpReflection for SoulCursorNextCommand {
-    fn mcp_tool_name() -> String { "soul_cursor_next".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "cursor-next".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_cursor_next".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "cursor-next".into()]
+    }
 }
 
 impl McpExecutor for SoulCursorNextCommand {
@@ -210,8 +252,12 @@ pub struct SoulCursorResetCommand {
 }
 
 impl McpReflection for SoulCursorResetCommand {
-    fn mcp_tool_name() -> String { "soul_cursor_reset".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "cursor-reset".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_cursor_reset".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "cursor-reset".into()]
+    }
 }
 
 impl McpExecutor for SoulCursorResetCommand {
@@ -235,20 +281,36 @@ pub struct SoulAlarmSetCommand {
 }
 
 impl McpReflection for SoulAlarmSetCommand {
-    fn mcp_tool_name() -> String { "soul_alarm_set".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "alarm-set".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_alarm_set".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "alarm-set".into()]
+    }
 }
 
 impl McpExecutor for SoulAlarmSetCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        let name      = str_param(params, "name")?;
-        let table     = str_param(params, "table")?;
-        let column    = str_param(params, "column")?;
+        let name = str_param(params, "name")?;
+        let table = str_param(params, "table")?;
+        let column = str_param(params, "column")?;
         let condition = str_param(params, "condition")?;
-        let aggregate = params.get("aggregate").and_then(|v| v.as_str()).unwrap_or("sum");
-        let emit      = str_param(params, "emit")?;
-        run_soul(&["alarm-set", name, table, column, condition,
-                   "--aggregate", aggregate, "--emit", emit])
+        let aggregate = params
+            .get("aggregate")
+            .and_then(|v| v.as_str())
+            .unwrap_or("sum");
+        let emit = str_param(params, "emit")?;
+        run_soul(&[
+            "alarm-set",
+            name,
+            table,
+            column,
+            condition,
+            "--aggregate",
+            aggregate,
+            "--emit",
+            emit,
+        ])
     }
 }
 
@@ -260,8 +322,12 @@ pub struct SoulAlarmCheckCommand {
 }
 
 impl McpReflection for SoulAlarmCheckCommand {
-    fn mcp_tool_name() -> String { "soul_alarm_check".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "alarm-check".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_alarm_check".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "alarm-check".into()]
+    }
 }
 
 impl McpExecutor for SoulAlarmCheckCommand {
@@ -280,13 +346,17 @@ pub struct SoulTokenEncodeCommand {
 }
 
 impl McpReflection for SoulTokenEncodeCommand {
-    fn mcp_tool_name() -> String { "soul_token_encode".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "token-encode".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_token_encode".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "token-encode".into()]
+    }
 }
 
 impl McpExecutor for SoulTokenEncodeCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        let pt  = str_param(params, "plaintext")?;
+        let pt = str_param(params, "plaintext")?;
         let ctx = params.get("context").and_then(|v| v.as_str()).unwrap_or("");
         run_soul(&["token-encode", pt, "--context", ctx])
     }
@@ -300,14 +370,18 @@ pub struct SoulTokenDecodeCommand {
 }
 
 impl McpReflection for SoulTokenDecodeCommand {
-    fn mcp_tool_name() -> String { "soul_token_decode".to_string() }
-    fn command_path() -> Vec<String> { vec!["soul".into(), "token-decode".into()] }
+    fn mcp_tool_name() -> String {
+        "soul_token_decode".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec!["soul".into(), "token-decode".into()]
+    }
 }
 
 impl McpExecutor for SoulTokenDecodeCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let token = str_param(params, "token")?;
-        let ctx   = params.get("context").and_then(|v| v.as_str()).unwrap_or("");
+        let ctx = params.get("context").and_then(|v| v.as_str()).unwrap_or("");
         run_soul(&["token-decode", token, "--context", ctx])
     }
 }

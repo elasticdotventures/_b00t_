@@ -311,14 +311,8 @@ mod tests {
 
     #[test]
     fn ifrs9_sections_are_correct() {
-        assert_eq!(
-            Ifrs9Classification::Fvpl.ifrs_section(),
-            "IFRS 9 §4.1.4"
-        );
-        assert_eq!(
-            Ifrs9Classification::Fvoci.ifrs_section(),
-            "IFRS 9 §4.1.2A"
-        );
+        assert_eq!(Ifrs9Classification::Fvpl.ifrs_section(), "IFRS 9 §4.1.4");
+        assert_eq!(Ifrs9Classification::Fvoci.ifrs_section(), "IFRS 9 §4.1.2A");
         assert_eq!(
             Ifrs9Classification::AmortizedCost.ifrs_section(),
             "IFRS 9 §4.1.2"
@@ -359,7 +353,10 @@ mod tests {
     fn ifrs9_display() {
         assert_eq!(Ifrs9Classification::Fvpl.to_string(), "FVPL");
         assert_eq!(Ifrs9Classification::Fvoci.to_string(), "FVOCI");
-        assert_eq!(Ifrs9Classification::AmortizedCost.to_string(), "AmortizedCost");
+        assert_eq!(
+            Ifrs9Classification::AmortizedCost.to_string(),
+            "AmortizedCost"
+        );
     }
 
     #[test]

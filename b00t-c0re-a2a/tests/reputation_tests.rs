@@ -47,7 +47,10 @@ fn test_reputation_from_completions() {
 
     // Verify clamping
     rep.record_completion();
-    assert!((rep.score - 10.0).abs() < 1e-6, "score should not exceed 10.0");
+    assert!(
+        (rep.score - 10.0).abs() < 1e-6,
+        "score should not exceed 10.0"
+    );
 }
 
 #[test]
@@ -63,11 +66,17 @@ fn test_reputation_from_abandons() {
         rep.record_abandon();
     }
     assert_eq!(rep.missions_abandoned, 5);
-    assert!((rep.score - (-10.0)).abs() < 1e-6, "score should floor at -10.0");
+    assert!(
+        (rep.score - (-10.0)).abs() < 1e-6,
+        "score should floor at -10.0"
+    );
 
     // Verify clamping
     rep.record_abandon();
-    assert!((rep.score - (-10.0)).abs() < 1e-6, "score should not go below -10.0");
+    assert!(
+        (rep.score - (-10.0)).abs() < 1e-6,
+        "score should not go below -10.0"
+    );
 }
 
 #[test]
@@ -101,9 +110,9 @@ fn test_mixed_reputation_events() {
     // Complete a few missions
     rep.record_completion(); // +1.0 => 1.0
     rep.record_completion(); // +1.0 => 2.0
-    rep.record_abandon();    // -2.0 => 0.0
-    rep.endorse();           // +1.5 => 1.5
-    rep.record_ballast();    // -3.0 => -1.5
+    rep.record_abandon(); // -2.0 => 0.0
+    rep.endorse(); // +1.5 => 1.5
+    rep.record_ballast(); // -3.0 => -1.5
 
     assert_eq!(rep.missions_completed, 2);
     assert_eq!(rep.missions_abandoned, 1);
@@ -194,8 +203,14 @@ fn test_high_reputation_outranks_partial_skill_match() {
 
     // Agent A (2/3 skills, neutral) should rank above Agent B (1/3 skills, max rep)
     // A: 0.6167 > B: 0.5333
-    let pos_a = ranked.iter().position(|(a, _)| a.name == "agent-a").unwrap();
-    let pos_b = ranked.iter().position(|(a, _)| a.name == "agent-b").unwrap();
+    let pos_a = ranked
+        .iter()
+        .position(|(a, _)| a.name == "agent-a")
+        .unwrap();
+    let pos_b = ranked
+        .iter()
+        .position(|(a, _)| a.name == "agent-b")
+        .unwrap();
     assert!(
         pos_a < pos_b,
         "Agent A (2/3 skills, neutral rep) should outrank Agent B (1/3 skills, max rep)"

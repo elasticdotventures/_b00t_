@@ -1,6 +1,6 @@
 use crate::pipeline_types::*;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 // ── Trait ────────────────────────────────────────────────────────────────────
 
@@ -19,13 +19,13 @@ pub trait ToKerML {
 impl ToKerML for PortMediaType {
     fn to_kerml(&self) -> String {
         match self {
-            PortMediaType::Video   => "Video".into(),
-            PortMediaType::Audio   => "Audio".into(),
-            PortMediaType::Image   => "Image".into(),
-            PortMediaType::Json    => "Json".into(),
+            PortMediaType::Video => "Video".into(),
+            PortMediaType::Audio => "Audio".into(),
+            PortMediaType::Image => "Image".into(),
+            PortMediaType::Json => "Json".into(),
             PortMediaType::Parquet => "Parquet".into(),
-            PortMediaType::Bytes   => "Bytes".into(),
-            PortMediaType::Error   => "Error".into(),
+            PortMediaType::Bytes => "Bytes".into(),
+            PortMediaType::Error => "Error".into(),
         }
     }
 }
@@ -35,7 +35,7 @@ impl ToKerML for PortMediaType {
 impl ToKerML for StagePort {
     fn to_kerml(&self) -> String {
         let dir = match self.direction {
-            PortDirection::Input  => "input",
+            PortDirection::Input => "input",
             PortDirection::Output => "output",
         };
         let mt = self.media_type.to_kerml();
@@ -55,9 +55,7 @@ impl ToKerML for CapsuleProfile {
         let mut out = String::new();
 
         // Resource constraint block
-        out.push_str(&format!(
-            "    constraint ResourceReq_{} {{\n", self.name
-        ));
+        out.push_str(&format!("    constraint ResourceReq_{} {{\n", self.name));
         out.push_str(&format!(
             "        min_ram_gb <= available_ram_gb; /* {} GB */\n",
             self.resources.min_ram_gb
@@ -72,10 +70,7 @@ impl ToKerML for CapsuleProfile {
             out.push_str("        requires_gpu == true;\n");
         }
         if let Some(cores) = self.resources.cpu_cores {
-            out.push_str(&format!(
-                "        cpu_cores >= {};\n",
-                cores
-            ));
+            out.push_str(&format!("        cpu_cores >= {};\n", cores));
         }
         out.push_str("    }\n");
 
@@ -98,7 +93,10 @@ impl ToKerML for PipelineError {
                 format!("InputValidation(\"{}\")", msg)
             }
             PipelineError::ResourceExhausted { needed, available } => {
-                format!("ResourceExhausted(needed: \"{}\", available: \"{}\")", needed, available)
+                format!(
+                    "ResourceExhausted(needed: \"{}\", available: \"{}\")",
+                    needed, available
+                )
             }
             PipelineError::StageCrashed(stage) => {
                 format!("StageCrashed(\"{}\")", stage)
@@ -107,7 +105,11 @@ impl ToKerML for PipelineError {
                 format!("Timeout(stage: \"{}\", elapsed_ms: {})", stage, elapsed_ms)
             }
             PipelineError::MediaTypeMismatch { expected, got } => {
-                format!("MediaTypeMismatch(expected: {}, got: {})", expected.to_kerml(), got.to_kerml())
+                format!(
+                    "MediaTypeMismatch(expected: {}, got: {})",
+                    expected.to_kerml(),
+                    got.to_kerml()
+                )
             }
             PipelineError::TranscodeError(msg) => {
                 format!("TranscodeError(\"{}\")", msg)
@@ -143,7 +145,11 @@ impl ToKerML for ErrorRoute {
              {spaces}}}\n\
              {spaces}}}",
             pattern.replace('*', "star").replace('%', "pct"),
-            pattern, route_to, retries, backoff, fallback,
+            pattern,
+            route_to,
+            retries,
+            backoff,
+            fallback,
             spaces = "        "
         )
     }
@@ -179,8 +185,10 @@ impl ToKerML for StageSpec {
         let profile_kerml = self.profile.to_kerml();
         // Only include the constraint block part, not port defs (those are on the stage itself)
         for line in profile_kerml.lines() {
-            if line.contains("constraint") || line.contains("min_ram_gb")
-                || line.contains("min_vram_gb") || line.contains("requires_gpu")
+            if line.contains("constraint")
+                || line.contains("min_ram_gb")
+                || line.contains("min_vram_gb")
+                || line.contains("requires_gpu")
                 || line.contains("cpu_cores")
             {
                 out.push_str("        ");
@@ -201,7 +209,10 @@ impl ToKerML for StageSpec {
 
         // Checkpoint interval
         if let Some(ckpt) = self.checkpoint_interval_seconds {
-            out.push_str(&format!("        // checkpoint_interval_seconds: {}\n", ckpt));
+            out.push_str(&format!(
+                "        // checkpoint_interval_seconds: {}\n",
+                ckpt
+            ));
         }
 
         out.push_str("    }\n");
@@ -296,9 +307,15 @@ pub fn kerml_to_file(dag: &PipelineDag, path: &Path) -> std::io::Result<()> {
 /// Render a `ResourceRequirements` block as a KerML constraint definition.
 fn resource_to_kerml(name: &str, res: &ResourceRequirements) -> String {
     let mut out = format!("    constraint {} {{\n", sanitize_name(name));
-    out.push_str(&format!("        min_ram_gb <= available_ram_gb;  // {} GB\n", res.min_ram_gb));
+    out.push_str(&format!(
+        "        min_ram_gb <= available_ram_gb;  // {} GB\n",
+        res.min_ram_gb
+    ));
     if res.min_vram_gb > 0.0 {
-        out.push_str(&format!("        min_vram_gb <= available_vram_gb;  // {} GB\n", res.min_vram_gb));
+        out.push_str(&format!(
+            "        min_vram_gb <= available_vram_gb;  // {} GB\n",
+            res.min_vram_gb
+        ));
     }
     if res.requires_gpu {
         out.push_str("        requires_gpu == true;\n");
@@ -313,7 +330,13 @@ fn resource_to_kerml(name: &str, res: &ResourceRequirements) -> String {
 /// Replace characters unsuitable for KerML identifiers with safe alternatives.
 fn sanitize_name(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -325,7 +348,11 @@ mod tests {
 
     // ── Helper: build a minimal StageSpec ──────────────────────────────────
 
-    fn make_stage(name: &str, input_types: &[PortMediaType], output_types: &[PortMediaType]) -> StageSpec {
+    fn make_stage(
+        name: &str,
+        input_types: &[PortMediaType],
+        output_types: &[PortMediaType],
+    ) -> StageSpec {
         StageSpec {
             name: name.into(),
             profile: CapsuleProfile {
@@ -428,8 +455,16 @@ mod tests {
             retry_count: 0,
         };
         let kerml = route.to_kerml();
-        assert!(kerml.contains("action ErrorRoute_TranscodeError"), "got: {}", kerml);
-        assert!(kerml.contains("route_to = \"transcode-fallback\""), "got: {}", kerml);
+        assert!(
+            kerml.contains("action ErrorRoute_TranscodeError"),
+            "got: {}",
+            kerml
+        );
+        assert!(
+            kerml.contains("route_to = \"transcode-fallback\""),
+            "got: {}",
+            kerml
+        );
         assert!(kerml.contains("retry_limit = 3"), "got: {}", kerml);
         assert!(kerml.contains("backoff_ms = 1000"), "got: {}", kerml);
     }
@@ -497,26 +532,38 @@ mod tests {
         assert!(kerml.contains("min_ram_gb"), "missing RAM constraint");
         assert!(kerml.contains("cpu_cores"), "missing CPU constraint");
         // Image comment
-        assert!(kerml.contains("image: alpine:latest"), "missing image comment");
-        assert!(kerml.contains("timeout_seconds: 300"), "missing timeout comment");
+        assert!(
+            kerml.contains("image: alpine:latest"),
+            "missing image comment"
+        );
+        assert!(
+            kerml.contains("timeout_seconds: 300"),
+            "missing timeout comment"
+        );
     }
 
     #[test]
     fn stage_spec_renders_error_routes() {
         let mut stage = make_stage("Encode", &[PortMediaType::Video], &[PortMediaType::Bytes]);
-        stage.error_routes = vec![
-            ErrorRoute {
-                match_pattern: "TranscodeError".into(),
-                route_to_stage: "transcode-fallback".into(),
-                max_retries: 2,
-                backoff_ms: 500,
-                fallback_output: None,
-                retry_count: 0,
-            },
-        ];
+        stage.error_routes = vec![ErrorRoute {
+            match_pattern: "TranscodeError".into(),
+            route_to_stage: "transcode-fallback".into(),
+            max_retries: 2,
+            backoff_ms: 500,
+            fallback_output: None,
+            retry_count: 0,
+        }];
         let kerml = stage.to_kerml();
-        assert!(kerml.contains("action ErrorRoute_TranscodeError"), "got: {}", kerml);
-        assert!(kerml.contains("route_to = \"transcode-fallback\""), "got: {}", kerml);
+        assert!(
+            kerml.contains("action ErrorRoute_TranscodeError"),
+            "got: {}",
+            kerml
+        );
+        assert!(
+            kerml.contains("route_to = \"transcode-fallback\""),
+            "got: {}",
+            kerml
+        );
     }
 
     // ── PipelineError tests ────────────────────────────────────────────────
@@ -524,15 +571,39 @@ mod tests {
     #[test]
     fn pipeline_error_renders_variant_names() {
         let variants: Vec<(PipelineError, &str)> = vec![
-            (PipelineError::InputValidation("bad".into()), "InputValidation"),
-            (PipelineError::ResourceExhausted { needed: "8GB".into(), available: "4GB".into() }, "ResourceExhausted"),
-            (PipelineError::StageCrashed("encoder".into()), "StageCrashed"),
-            (PipelineError::Timeout { stage: "encode".into(), elapsed_ms: 5000 }, "Timeout"),
             (
-                PipelineError::MediaTypeMismatch { expected: PortMediaType::Json, got: PortMediaType::Bytes },
+                PipelineError::InputValidation("bad".into()),
+                "InputValidation",
+            ),
+            (
+                PipelineError::ResourceExhausted {
+                    needed: "8GB".into(),
+                    available: "4GB".into(),
+                },
+                "ResourceExhausted",
+            ),
+            (
+                PipelineError::StageCrashed("encoder".into()),
+                "StageCrashed",
+            ),
+            (
+                PipelineError::Timeout {
+                    stage: "encode".into(),
+                    elapsed_ms: 5000,
+                },
+                "Timeout",
+            ),
+            (
+                PipelineError::MediaTypeMismatch {
+                    expected: PortMediaType::Json,
+                    got: PortMediaType::Bytes,
+                },
                 "MediaTypeMismatch",
             ),
-            (PipelineError::TranscodeError("codec".into()), "TranscodeError"),
+            (
+                PipelineError::TranscodeError("codec".into()),
+                "TranscodeError",
+            ),
         ];
         for (err, name) in &variants {
             let kerml = err.to_kerml();
@@ -546,14 +617,21 @@ mod tests {
     fn full_pipeline_renders_valid_kerml_package() {
         let stages = vec![
             make_stage("Ingest", &[], &[PortMediaType::Video]),
-            make_stage("Transcode", &[PortMediaType::Video], &[PortMediaType::Audio]),
+            make_stage(
+                "Transcode",
+                &[PortMediaType::Video],
+                &[PortMediaType::Audio],
+            ),
             make_stage("Publish", &[PortMediaType::Audio], &[]),
         ];
         let dag = PipelineDag::build(stages).unwrap();
         let kerml = pipeline_to_kerml(&dag);
 
         // Package wrapper
-        assert!(kerml.starts_with("package "), "must start with package decl");
+        assert!(
+            kerml.starts_with("package "),
+            "must start with package decl"
+        );
         assert!(kerml.contains("import ScalarValues::*;"), "missing import");
         assert!(kerml.contains("import SI::*;"), "missing SI import");
 
@@ -563,11 +641,20 @@ mod tests {
         assert!(kerml.contains("part def Publish"), "missing Publish");
 
         // Connections
-        assert!(kerml.contains("connect Ingest.p to Transcode.p;"), "missing Ingest→Transcode edge");
-        assert!(kerml.contains("connect Transcode.p to Publish.p;"), "missing Transcode→Publish edge");
+        assert!(
+            kerml.contains("connect Ingest.p to Transcode.p;"),
+            "missing Ingest→Transcode edge"
+        );
+        assert!(
+            kerml.contains("connect Transcode.p to Publish.p;"),
+            "missing Transcode→Publish edge"
+        );
 
         // Closing brace
-        assert!(kerml.trim_end().ends_with('}'), "must end with closing brace");
+        assert!(
+            kerml.trim_end().ends_with('}'),
+            "must end with closing brace"
+        );
     }
 
     #[test]
@@ -595,17 +682,18 @@ mod tests {
     #[test]
     fn pipeline_with_error_routes_renders_actions() {
         let mut stage = make_stage("Processor", &[PortMediaType::Bytes], &[PortMediaType::Json]);
-        stage.error_routes = vec![
-            ErrorRoute {
-                match_pattern: "*".into(),
-                route_to_stage: "dead-letter".into(),
-                max_retries: 3,
-                backoff_ms: 1000,
-                fallback_output: None,
-                retry_count: 0,
-            },
+        stage.error_routes = vec![ErrorRoute {
+            match_pattern: "*".into(),
+            route_to_stage: "dead-letter".into(),
+            max_retries: 3,
+            backoff_ms: 1000,
+            fallback_output: None,
+            retry_count: 0,
+        }];
+        let stages = vec![
+            stage,
+            make_stage("dead-letter", &[PortMediaType::Error], &[]),
         ];
-        let stages = vec![stage, make_stage("dead-letter", &[PortMediaType::Error], &[])];
         let dag = PipelineDag::build(stages).unwrap();
         let kerml = pipeline_to_kerml(&dag);
         assert!(kerml.contains("action ErrorRoute_star"), "got: {}", kerml);
@@ -645,7 +733,11 @@ mod tests {
 
         kerml_to_file(&dag, &path).unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("part def Only"), "expected overwritten content, got: {}", content);
+        assert!(
+            content.contains("part def Only"),
+            "expected overwritten content, got: {}",
+            content
+        );
     }
 
     // ── CapsuleProfile tests ───────────────────────────────────────────────

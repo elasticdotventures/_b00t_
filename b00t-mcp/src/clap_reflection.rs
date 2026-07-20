@@ -198,77 +198,90 @@ impl McpCommandRegistry {
     /// Splits query on whitespace. First token is treated as a potential
     /// category/path prefix; remaining tokens match name/description.
     /// Returns top `limit` results sorted by relevance score.
-    pub fn search_tools(&self, query: &str, category: Option<&str>, limit: usize) -> Vec<SearchResult> {
+    pub fn search_tools(
+        &self,
+        query: &str,
+        category: Option<&str>,
+        limit: usize,
+    ) -> Vec<SearchResult> {
         let tools = self.get_tools();
         let query_lower = query.to_lowercase();
         let tokens: Vec<&str> = query_lower.split_whitespace().collect();
 
-        let mut scored: Vec<(i32, SearchResult)> = tools.into_iter().map(|tool| {
-            let name = tool.name.as_ref().to_lowercase();
-            let desc = tool.description.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
+        let mut scored: Vec<(i32, SearchResult)> = tools
+            .into_iter()
+            .map(|tool| {
+                let name = tool.name.as_ref().to_lowercase();
+                let desc = tool
+                    .description
+                    .as_ref()
+                    .map(|d| d.to_lowercase())
+                    .unwrap_or_default();
 
-            // Derive category from name: b00t_<category>_<cmd>
-            let derived_category = name.split('_').nth(1).unwrap_or("").to_string();
+                // Derive category from name: b00t_<category>_<cmd>
+                let derived_category = name.split('_').nth(1).unwrap_or("").to_string();
 
-            let mut score: i32 = 0;
+                let mut score: i32 = 0;
 
-            if let Some(cat_filter) = category {
-                let cat_lower = cat_filter.to_lowercase();
-                if derived_category == cat_lower {
-                    score += 50;
-                }
-            }
-
-            if !tokens.is_empty() {
-                // First token: category/path prefix match
-                let first = tokens[0];
-                if derived_category == first {
-                    score += 40;
-                } else if name.contains(&format!("b00t_{first}_")) {
-                    score += 25;
-                }
-
-                // Remaining tokens: name/description match
-                for token in &tokens[1..] {
-                    if name.contains(token) {
-                        score += 30;
-                    }
-                    if desc.contains(token) {
-                        score += 10;
+                if let Some(cat_filter) = category {
+                    let cat_lower = cat_filter.to_lowercase();
+                    if derived_category == cat_lower {
+                        score += 50;
                     }
                 }
 
-                // If only one token, also score it against name/desc
-                if tokens.len() == 1 {
-                    if name.contains(first) {
-                        score += 30;
+                if !tokens.is_empty() {
+                    // First token: category/path prefix match
+                    let first = tokens[0];
+                    if derived_category == first {
+                        score += 40;
+                    } else if name.contains(&format!("b00t_{first}_")) {
+                        score += 25;
                     }
-                    if desc.contains(first) {
-                        score += 10;
+
+                    // Remaining tokens: name/description match
+                    for token in &tokens[1..] {
+                        if name.contains(token) {
+                            score += 30;
+                        }
+                        if desc.contains(token) {
+                            score += 10;
+                        }
+                    }
+
+                    // If only one token, also score it against name/desc
+                    if tokens.len() == 1 {
+                        if name.contains(first) {
+                            score += 30;
+                        }
+                        if desc.contains(first) {
+                            score += 10;
+                        }
                     }
                 }
-            }
 
-            // Exact name match bonus
-            if name == query_lower {
-                score += 100;
-            }
+                // Exact name match bonus
+                if name == query_lower {
+                    score += 100;
+                }
 
-            let result = SearchResult {
-                name: tool.name.as_ref().to_string(),
-                description: tool.description.as_ref().map(|s| s.to_string()),
-                category: derived_category,
-                schema: tool.input_schema.as_ref().clone(),
-            };
+                let result = SearchResult {
+                    name: tool.name.as_ref().to_string(),
+                    description: tool.description.as_ref().map(|s| s.to_string()),
+                    category: derived_category,
+                    schema: tool.input_schema.as_ref().clone(),
+                };
 
-            (score, result)
-        }).collect();
+                (score, result)
+            })
+            .collect();
 
         // Sort by score descending
         scored.sort_by(|a, b| b.0.cmp(&a.0));
 
         // Take top limit with positive scores
-        scored.into_iter()
+        scored
+            .into_iter()
             .filter(|(score, _)| *score > 0)
             .take(limit)
             .map(|(_, result)| result)
@@ -309,7 +322,11 @@ impl McpCommandRegistryBuilder {
     /// Register a callback to fire after successful execution of `tool_name`.
     ///
     /// Primary use: fire `notifications/tools/list_changed` after stack load/unload.
-    pub fn add_post_hook(&mut self, tool_name: &str, hook: Arc<dyn Fn() + Send + Sync>) -> &mut Self {
+    pub fn add_post_hook(
+        &mut self,
+        tool_name: &str,
+        hook: Arc<dyn Fn() + Send + Sync>,
+    ) -> &mut Self {
         self.post_hooks.insert(tool_name.to_string(), hook);
         self
     }

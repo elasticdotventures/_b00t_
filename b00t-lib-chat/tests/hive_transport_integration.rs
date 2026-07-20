@@ -6,7 +6,7 @@
 //! peers learn each other via gossip + query/reply, and direct send/recv works.
 
 use b00t_chat::hive_transport::MemoryHiveTransport;
-use b00t_chat::mesh::{MeshNodeConfig, MeshFrame, NatsMeshNode};
+use b00t_chat::mesh::{MeshFrame, MeshNodeConfig, NatsMeshNode};
 use std::sync::Arc;
 use tokio::time::Duration;
 
@@ -35,13 +35,25 @@ async fn memory_transport_mesh_discovers_via_gossip() {
     b.announce().await.unwrap();
     tokio::time::sleep(Duration::from_millis(150)).await;
 
-    let discovered = a.discover_with_timeout(Duration::from_millis(500)).await.unwrap();
+    let discovered = a
+        .discover_with_timeout(Duration::from_millis(500))
+        .await
+        .unwrap();
     let ids: Vec<&str> = discovered.iter().map(|e| e.agent_id.as_str()).collect();
-    assert!(ids.contains(&"bravo"), "alpha should discover bravo via gossip: {ids:?}");
+    assert!(
+        ids.contains(&"bravo"),
+        "alpha should discover bravo via gossip: {ids:?}"
+    );
 
-    let discovered_b = b.discover_with_timeout(Duration::from_millis(500)).await.unwrap();
+    let discovered_b = b
+        .discover_with_timeout(Duration::from_millis(500))
+        .await
+        .unwrap();
     let ids_b: Vec<&str> = discovered_b.iter().map(|e| e.agent_id.as_str()).collect();
-    assert!(ids_b.contains(&"alpha"), "bravo should discover alpha: {ids_b:?}");
+    assert!(
+        ids_b.contains(&"alpha"),
+        "bravo should discover alpha: {ids_b:?}"
+    );
 
     a.close().await.unwrap();
     b.close().await.unwrap();

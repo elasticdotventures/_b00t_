@@ -12,9 +12,9 @@
 //   5. Output as JSON for ontology graph construction (Phase 3)
 //      or feed directly to codebase-memory-mcp index_repository (Phase 4)
 
-pub mod walker;
 pub mod extract;
 pub mod ontology;
+pub mod walker;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -107,9 +107,17 @@ pub struct TraitInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TraitItem {
-    Function { signature: String, has_default: bool },
-    Type { name: String },
-    Const { name: String, ty: String },
+    Function {
+        signature: String,
+        has_default: bool,
+    },
+    Type {
+        name: String,
+    },
+    Const {
+        name: String,
+        ty: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,7 +217,11 @@ mod tests {
     fn test_run_extraction_creates_json() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("src")).unwrap();
-        std::fs::write(dir.path().join("src/lib.rs"), "pub fn greet() -> String { \"hi\".into() }").unwrap();
+        std::fs::write(
+            dir.path().join("src/lib.rs"),
+            "pub fn greet() -> String { \"hi\".into() }",
+        )
+        .unwrap();
 
         let result = run_extraction(dir.path().to_str().unwrap()).unwrap();
         assert_eq!(result.file_count, 1);

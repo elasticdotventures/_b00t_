@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use b00t_c0re_gov::gates::eisenhower::EisenhowerGate;
-use b00t_c0re_gov::traits::*;
 use b00t_c0re_a2a::agent_card::Skill;
 use b00t_c0re_a2a::skill_registry::SkillRegistry;
 use b00t_c0re_a2a::task::Task;
+use b00t_c0re_gov::gates::eisenhower::EisenhowerGate;
+use b00t_c0re_gov::traits::*;
 
 /// Register all governance gates as A2A skills.
 /// Each gate becomes a callable skill that other agents can invoke.
@@ -196,11 +196,7 @@ mod tests {
         register_governance_skills(&mut registry);
 
         // Empty input: defaults to (0.5, 0.5) => Do quadrant => allow
-        let task = Task::new(
-            "gov/eisenhower-check",
-            serde_json::json!({}),
-            "test-agent",
-        );
+        let task = Task::new("gov/eisenhower-check", serde_json::json!({}), "test-agent");
 
         let result = registry.execute(&task).unwrap();
         let artifact = &result.artifacts[0];

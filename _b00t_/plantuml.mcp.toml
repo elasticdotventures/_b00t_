@@ -3,6 +3,7 @@ name = "plantuml"
 type = "mcp"
 hint = "PlantUML MCP server for diagram generation (SVG, PNG) via b00t jobs and TOGAF workflows"
 
+# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
 entangled_cli = ["plantuml.cli"]
 lfmf_category = "plantuml-mcp"
 

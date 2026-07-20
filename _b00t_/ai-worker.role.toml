@@ -9,6 +9,7 @@ depends_on = ["worker.role", "ai-finetune.skill", "hf.cli", "just.cli"]
 skills = [
     "ai-finetune",
     "datum-authoring",
+    # <|🦨: aspirational — cognitive-tier-routing/stateless-scoring skill datums not yet authored; referenced by 4 roles per #163; roadmap _b00t_#850 |>
     "cognitive-tier-routing",
     "stateless-scoring",
 ]

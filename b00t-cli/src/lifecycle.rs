@@ -1,10 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 
-use crate::{
-    AiConfig, BootDatum, DatumType, RuntimeConfig,
-    SessionState, UnifiedConfig,
-};
+use crate::{AiConfig, BootDatum, DatumType, RuntimeConfig, SessionState, UnifiedConfig};
 
 // ── Config creation ────────────────────────────────────────────────────
 
@@ -89,7 +86,10 @@ pub fn find_project_b00t() -> Option<std::path::PathBuf> {
     loop {
         let marker = current.join(".git").join("🥾.tomllmd");
         if marker.exists() {
-            return current.join("_b00t_").is_dir().then(|| current.join("_b00t_"));
+            return current
+                .join("_b00t_")
+                .is_dir()
+                .then(|| current.join("_b00t_"));
         }
         if current.join(".git").exists() {
             break;
@@ -185,8 +185,11 @@ pub fn get_config(
             for ext in [".tomllmd", ".tomllm", ".toml"] {
                 let p = dir.join(format!("{}{}{}", command, base, ext));
                 if p.exists() {
-                    let filename =
-                        p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                    let filename = p
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_string();
                     let content = std::fs::read_to_string(&p)?;
                     let mut config: UnifiedConfig = toml::from_str(&content)?;
                     crate::datum_utils::apply_git_attributes_to_config(&mut config, &p);
@@ -220,8 +223,10 @@ pub fn get_mcp_config(name: &str, path: &str) -> Result<BootDatum> {
         );
     }
 
-    let content = std::fs::read_to_string(&path_buf)
-        .context(format!("Failed to read MCP config from {}", path_buf.display()))?;
+    let content = std::fs::read_to_string(&path_buf).context(format!(
+        "Failed to read MCP config from {}",
+        path_buf.display()
+    ))?;
 
     let mut config: UnifiedConfig =
         toml::from_str(&content).context("Failed to parse MCP config TOML")?;
@@ -251,8 +256,10 @@ pub fn load_runtime_datum(name: &str, path: &str) -> Result<RuntimeConfig> {
         )
     })?;
 
-    let content = std::fs::read_to_string(&file_path)
-        .context(format!("Failed to read runtime config from {}", file_path.display()))?;
+    let content = std::fs::read_to_string(&file_path).context(format!(
+        "Failed to read runtime config from {}",
+        file_path.display()
+    ))?;
     let config: UnifiedConfig =
         toml::from_str(&content).context(format!("Failed to parse {}", file_path.display()))?;
 
@@ -339,8 +346,7 @@ impl SessionState {
     }
 
     pub fn get_session_file_path() -> Result<std::path::PathBuf> {
-        let session_id =
-            std::env::var("B00T_SESSION_ID").unwrap_or_else(|_| "current".to_string());
+        let session_id = std::env::var("B00T_SESSION_ID").unwrap_or_else(|_| "current".to_string());
         let tmp_dir = std::env::temp_dir();
         Ok(tmp_dir.join(format!("b00t_session_{}.json", session_id)))
     }
@@ -348,8 +354,7 @@ impl SessionState {
     pub fn load() -> Result<Self> {
         let path = Self::get_session_file_path()?;
         if path.exists() {
-            let content =
-                std::fs::read_to_string(&path).context("Failed to read session file")?;
+            let content = std::fs::read_to_string(&path).context("Failed to read session file")?;
             serde_json::from_str(&content).context("Failed to parse session file")
         } else {
             Ok(Self::new(std::env::var("_B00T_Agent").ok()))
@@ -358,8 +363,7 @@ impl SessionState {
 
     pub fn save(&self) -> Result<()> {
         let path = Self::get_session_file_path()?;
-        let content =
-            serde_json::to_string_pretty(self).context("Failed to serialize session")?;
+        let content = serde_json::to_string_pretty(self).context("Failed to serialize session")?;
         std::fs::write(&path, content).context("Failed to write session file")?;
         Ok(())
     }

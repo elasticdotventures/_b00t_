@@ -102,7 +102,10 @@ pub fn validate_pipeline(name: &str, b00t_path: &str) -> anyhow::Result<Validate
         for err in &edge_target_errors {
             push_or_create_validation(
                 &mut stage_validations,
-                &dag.stages.first().map(|s| s.name.as_str()).unwrap_or("(pipeline)"),
+                &dag.stages
+                    .first()
+                    .map(|s| s.name.as_str())
+                    .unwrap_or("(pipeline)"),
                 &[err.clone()],
                 &[],
             );
@@ -115,13 +118,11 @@ pub fn validate_pipeline(name: &str, b00t_path: &str) -> anyhow::Result<Validate
         let cycle_err = format!("cycle detected in DAG: {}", cycle_path);
         total_errors += 1;
         // Attach to the first stage in the cycle
-        let first_in_cycle = cycle.first().cloned().unwrap_or_else(|| "(pipeline)".into());
-        push_or_create_validation(
-            &mut stage_validations,
-            &first_in_cycle,
-            &[cycle_err],
-            &[],
-        );
+        let first_in_cycle = cycle
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "(pipeline)".into());
+        push_or_create_validation(&mut stage_validations, &first_in_cycle, &[cycle_err], &[]);
     }
 
     // ── Rule 5: Resource requirement sanity ───────────────────────────────
@@ -139,8 +140,10 @@ pub fn validate_pipeline(name: &str, b00t_path: &str) -> anyhow::Result<Validate
     }
 
     // ── Fill in stages with no validation issues ──────────────────────────
-    let validated_names: HashSet<String> =
-        stage_validations.iter().map(|v| v.stage_name.clone()).collect();
+    let validated_names: HashSet<String> = stage_validations
+        .iter()
+        .map(|v| v.stage_name.clone())
+        .collect();
     let mut clean_stages: Vec<StageValidation> = dag
         .stages
         .iter()
@@ -160,7 +163,12 @@ pub fn validate_pipeline(name: &str, b00t_path: &str) -> anyhow::Result<Validate
         .enumerate()
         .map(|(i, s)| (s.name.as_str(), i))
         .collect();
-    stage_validations.sort_by_key(|v| order.get(v.stage_name.as_str()).copied().unwrap_or(usize::MAX));
+    stage_validations.sort_by_key(|v| {
+        order
+            .get(v.stage_name.as_str())
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
 
     let passed = total_errors == 0;
 
@@ -199,11 +207,12 @@ fn validate_unique_stage_names(dag: &PipelineDag) -> Vec<(String, Vec<String>)> 
 
 fn validate_port_media_types(dag: &PipelineDag) -> Vec<(String, Vec<String>)> {
     let mut result: Vec<(String, Vec<String>)> = Vec::new();
-    let valid_types: HashSet<&str> =
-        ["Video", "Audio", "Image", "Json", "Parquet", "Bytes", "Error"]
-            .iter()
-            .cloned()
-            .collect();
+    let valid_types: HashSet<&str> = [
+        "Video", "Audio", "Image", "Json", "Parquet", "Bytes", "Error",
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     for stage in &dag.stages {
         let mut errors = Vec::new();
@@ -262,7 +271,10 @@ fn validate_resource_sanity(dag: &PipelineDag) -> Vec<(String, Vec<String>)> {
             errors.push(format!("min_ram_gb ({}) cannot be negative", r.min_ram_gb));
         }
         if r.min_vram_gb < 0.0 {
-            errors.push(format!("min_vram_gb ({}) cannot be negative", r.min_vram_gb));
+            errors.push(format!(
+                "min_vram_gb ({}) cannot be negative",
+                r.min_vram_gb
+            ));
         }
         if let Some(cores) = r.cpu_cores {
             if cores == 0 {
@@ -392,8 +404,8 @@ pub fn print_validate_report(report: &ValidateReport) {
 mod tests {
     use super::*;
     use crate::pipeline_types::{
-        CapsuleProfile, ErrorRoute, PipelineEdge, PortDirection, PortMediaType, ResourceRequirements,
-        StagePort, StageSpec,
+        CapsuleProfile, ErrorRoute, PipelineEdge, PortDirection, PortMediaType,
+        ResourceRequirements, StagePort, StageSpec,
     };
 
     fn spec(name: &str) -> StageSpec {
@@ -471,7 +483,12 @@ mod tests {
             to: "nonexistent".into(),
             via_port: None,
         }];
-        let dag = PipelineDag { stages, edges, entry_points: vec!["a".into()], exit_points: vec!["nonexistent".into()] };
+        let dag = PipelineDag {
+            stages,
+            edges,
+            entry_points: vec!["a".into()],
+            exit_points: vec!["nonexistent".into()],
+        };
         let errors = validate_edge_targets(&dag);
         assert!(!errors.is_empty());
         assert!(errors[0].contains("nonexistent"));
@@ -488,10 +505,23 @@ mod tests {
     fn test_detect_cycle_present() {
         let stages = vec![spec("a"), spec("b")];
         let edges = vec![
-            PipelineEdge { from: "a".into(), to: "b".into(), via_port: None },
-            PipelineEdge { from: "b".into(), to: "a".into(), via_port: None },
+            PipelineEdge {
+                from: "a".into(),
+                to: "b".into(),
+                via_port: None,
+            },
+            PipelineEdge {
+                from: "b".into(),
+                to: "a".into(),
+                via_port: None,
+            },
         ];
-        let dag = PipelineDag { stages, edges, entry_points: vec![], exit_points: vec![] };
+        let dag = PipelineDag {
+            stages,
+            edges,
+            entry_points: vec![],
+            exit_points: vec![],
+        };
         assert!(dag.detect_cycle().is_some());
     }
 

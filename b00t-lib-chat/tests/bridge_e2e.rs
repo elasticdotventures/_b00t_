@@ -5,7 +5,8 @@
 #[cfg(test)]
 mod phase3_bridge_e2e {
     use b00t_chat::{
-        AssignmentEngine, AssignmentRule, ChatClient, NotificationMessage, TaskTemplate, TriggerKind,
+        AssignmentEngine, AssignmentRule, ChatClient, NotificationMessage, TaskTemplate,
+        TriggerKind,
     };
     use serde_json::json;
     use std::time::Duration;
@@ -65,7 +66,12 @@ mod phase3_bridge_e2e {
             .expect("should receive task");
 
         assert_eq!(task.action, "index");
-        assert!(task.payload["path"].as_str().unwrap().contains("/data/report.pdf"));
+        assert!(
+            task.payload["path"]
+                .as_str()
+                .unwrap()
+                .contains("/data/report.pdf")
+        );
 
         engine.stop().await;
     }
@@ -78,36 +84,32 @@ mod phase3_bridge_e2e {
         let engine = AssignmentEngine::new(client.transport().clone());
 
         engine
-            .add_rule(
-                AssignmentRule::new(
-                    "gmail-handler",
-                    "Handle gmail events",
-                    TriggerKind::Event,
-                    "b00t.notify.gmail.>",
-                    TaskTemplate {
-                        to_agent: "email-bot".into(),
-                        action: "process".into(),
-                        payload_template: json!({"source": "gmail"}),
-                    },
-                ),
-            )
+            .add_rule(AssignmentRule::new(
+                "gmail-handler",
+                "Handle gmail events",
+                TriggerKind::Event,
+                "b00t.notify.gmail.>",
+                TaskTemplate {
+                    to_agent: "email-bot".into(),
+                    action: "process".into(),
+                    payload_template: json!({"source": "gmail"}),
+                },
+            ))
             .await
             .unwrap();
 
         engine
-            .add_rule(
-                AssignmentRule::new(
-                    "slack-handler",
-                    "Handle slack events",
-                    TriggerKind::Event,
-                    "b00t.notify.slack.>",
-                    TaskTemplate {
-                        to_agent: "chat-bot".into(),
-                        action: "process".into(),
-                        payload_template: json!({"source": "slack"}),
-                    },
-                ),
-            )
+            .add_rule(AssignmentRule::new(
+                "slack-handler",
+                "Handle slack events",
+                TriggerKind::Event,
+                "b00t.notify.slack.>",
+                TaskTemplate {
+                    to_agent: "chat-bot".into(),
+                    action: "process".into(),
+                    payload_template: json!({"source": "slack"}),
+                },
+            ))
             .await
             .unwrap();
 
@@ -124,18 +126,32 @@ mod phase3_bridge_e2e {
             .expect("subscribe chat");
 
         client
-            .publish_notification(&NotificationMessage::new("gmail", "new_email", json!({"id": 1})))
+            .publish_notification(&NotificationMessage::new(
+                "gmail",
+                "new_email",
+                json!({"id": 1}),
+            ))
             .await
             .expect("publish gmail");
 
         client
-            .publish_notification(&NotificationMessage::new("slack", "new_dm", json!({"id": 2})))
+            .publish_notification(&NotificationMessage::new(
+                "slack",
+                "new_dm",
+                json!({"id": 2}),
+            ))
             .await
             .expect("publish slack");
 
         let timeout = Duration::from_secs(3);
-        let t1 = tokio::time::timeout(timeout, email_rx.recv()).await.expect("timeout").expect("email task");
-        let t2 = tokio::time::timeout(timeout, chat_rx.recv()).await.expect("timeout").expect("slack task");
+        let t1 = tokio::time::timeout(timeout, email_rx.recv())
+            .await
+            .expect("timeout")
+            .expect("email task");
+        let t2 = tokio::time::timeout(timeout, chat_rx.recv())
+            .await
+            .expect("timeout")
+            .expect("slack task");
 
         assert_eq!(t1.to_agent, "email-bot");
         assert_eq!(t2.to_agent, "chat-bot");

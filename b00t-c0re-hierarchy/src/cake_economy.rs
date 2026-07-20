@@ -274,12 +274,7 @@ impl CakeLedger {
         from.cake_balance -= amount;
         to.cake_balance += amount;
 
-        let tx = CakeTransaction::new(
-            from.id.clone(),
-            to.id.clone(),
-            amount,
-            reason.to_string(),
-        )?;
+        let tx = CakeTransaction::new(from.id.clone(), to.id.clone(), amount, reason.to_string())?;
         self.transactions.push(tx.clone());
         Ok(tx)
     }
@@ -365,7 +360,9 @@ mod tests {
         let mut alice = make_agent("alice", 100.0, true);
         let mut bob = make_agent("bob", 0.0, true);
 
-        let tx = ledger.transfer(&mut alice, &mut bob, 40.0, "Payment").unwrap();
+        let tx = ledger
+            .transfer(&mut alice, &mut bob, 40.0, "Payment")
+            .unwrap();
         assert_eq!(alice.cake_balance, 60.0);
         assert_eq!(bob.cake_balance, 40.0);
         assert_eq!(ledger.total_supply(), 0.0); // no net change
@@ -396,7 +393,9 @@ mod tests {
         let mut alice = make_agent("alice", 5.0, true);
         let mut bob = make_agent("bob", 0.0, true);
 
-        let err = ledger.transfer(&mut alice, &mut bob, 10.0, "Fail").unwrap_err();
+        let err = ledger
+            .transfer(&mut alice, &mut bob, 10.0, "Fail")
+            .unwrap_err();
         assert!(matches!(err, CakeError::InsufficientBalance { .. }));
     }
 
@@ -432,13 +431,17 @@ mod tests {
         // Self-transfer: use two agents with same id to check id-based detection
         let mut dup = make_agent("alice", 100.0, true);
         assert!(matches!(
-            ledger.transfer(&mut agent, &mut dup, 10.0, "Self").unwrap_err(),
+            ledger
+                .transfer(&mut agent, &mut dup, 10.0, "Self")
+                .unwrap_err(),
             CakeError::SelfTransfer(_)
         ));
         // NaN in transfer
         let mut bob = make_agent("bob", 0.0, true);
         assert!(matches!(
-            ledger.transfer(&mut agent, &mut bob, f64::NAN, "NaN transfer").unwrap_err(),
+            ledger
+                .transfer(&mut agent, &mut bob, f64::NAN, "NaN transfer")
+                .unwrap_err(),
             CakeError::InvalidAmount(_)
         ));
     }
@@ -458,11 +461,15 @@ mod tests {
             CakeError::AgentDead(_)
         ));
         assert!(matches!(
-            ledger.transfer(&mut dead, &mut alive, 10.0, "Dead send").unwrap_err(),
+            ledger
+                .transfer(&mut dead, &mut alive, 10.0, "Dead send")
+                .unwrap_err(),
             CakeError::AgentDead(_)
         ));
         assert!(matches!(
-            ledger.transfer(&mut alive, &mut dead, 10.0, "Send to dead").unwrap_err(),
+            ledger
+                .transfer(&mut alive, &mut dead, 10.0, "Send to dead")
+                .unwrap_err(),
             CakeError::AgentDead(_)
         ));
     }

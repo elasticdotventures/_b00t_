@@ -5,8 +5,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig, K0mmand3rDatumConfig,
-    KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods, OrchestrationConfig,
-    PipelineConfig, PolysemeConfig, RuntimeConfig, UsageExample,
+    KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods, OrchestrationConfig, PipelineConfig,
+    PolysemeConfig, RuntimeConfig, UsageExample,
 };
 
 // warn-once registry — one warning per unknown datum type string per process
@@ -14,16 +14,33 @@ static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock
 
 /// Returns true if the value is a well-known content tag (not a typed datum).
 fn is_known_content_tag(s: &str) -> bool {
-    matches!(s, "okr" | "prd" | "pattern" | "datum" | "reference" | "learn" | "hardware" | "tomllmd"
-        | "specification" | "topic" | "soul" | "install" | "github_org" | "ai_provider" | "pyinfra" | "wow")
+    matches!(
+        s,
+        "okr"
+            | "prd"
+            | "pattern"
+            | "datum"
+            | "reference"
+            | "learn"
+            | "hardware"
+            | "tomllmd"
+            | "specification"
+            | "topic"
+            | "soul"
+            | "install"
+            | "github_org"
+            | "ai_provider"
+            | "pyinfra"
+            | "wow"
+    )
 }
 
 /// Load incubating datum types from a runtime‑defined datum.
 fn get_incubating_set() -> &'static HashSet<String> {
     static SET: OnceLock<HashSet<String>> = OnceLock::new();
     SET.get_or_init(|| {
-        let base_path = std::env::var("_B00T_Path")
-            .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+        let base_path =
+            std::env::var("_B00T_Path").unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
         let expanded = shellexpand::tilde(&base_path).to_string();
         let file_path = std::path::Path::new(&expanded).join("incubating.tomllm");
         if let Ok(content) = std::fs::read_to_string(&file_path) {
@@ -56,8 +73,8 @@ where
         None => Ok(None),
         Some(value) if value == "model" => Ok(Some(DatumType::Ai)),
         Some(value) => {
-            let resolved = DatumType::from_type_token(&value)
-                .or_else(|| handle_incubating_type(&value));
+            let resolved =
+                DatumType::from_type_token(&value).or_else(|| handle_incubating_type(&value));
 
             if resolved.is_none()
                 && !is_known_content_tag(&value)
@@ -66,8 +83,8 @@ where
                     .map(|v| v != "0")
                     .unwrap_or(true)
             {
-                let warned = DATUM_TYPE_WARNED
-                    .get_or_init(|| std::sync::Mutex::new(HashSet::new()));
+                let warned =
+                    DATUM_TYPE_WARNED.get_or_init(|| std::sync::Mutex::new(HashSet::new()));
                 if let Ok(mut set) = warned.lock() {
                     if set.insert(value.clone()) {
                         eprintln!(

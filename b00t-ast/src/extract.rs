@@ -35,17 +35,26 @@ struct ElementCollector {
 }
 
 impl ElementCollector {
-    fn add(&mut self, kind: CodeElementKind, name: &str, start: usize, end: usize, visibility: String, attrs: &[Attribute]) {
-        let qualified = if self.current_module.is_empty() || name.starts_with(|c: char| c.is_uppercase()) {
-            // Top-level items and uppercase names use simple path
-            if self.current_module.is_empty() {
-                name.to_string()
+    fn add(
+        &mut self,
+        kind: CodeElementKind,
+        name: &str,
+        start: usize,
+        end: usize,
+        visibility: String,
+        attrs: &[Attribute],
+    ) {
+        let qualified =
+            if self.current_module.is_empty() || name.starts_with(|c: char| c.is_uppercase()) {
+                // Top-level items and uppercase names use simple path
+                if self.current_module.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{}::{}", self.current_module, name)
+                }
             } else {
                 format!("{}::{}", self.current_module, name)
-            }
-        } else {
-            format!("{}::{}", self.current_module, name)
-        };
+            };
 
         let doc_comment = extract_doc_comment(attrs);
 
@@ -106,7 +115,9 @@ fn extract_doc_comment(attrs: &[Attribute]) -> String {
     docs.join("\n")
 }
 
-fn extract_fn_params(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::Token![,]>) -> Vec<FnParam> {
+fn extract_fn_params(
+    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::Token![,]>,
+) -> Vec<FnParam> {
     inputs
         .iter()
         .filter_map(|arg| match arg {
@@ -160,7 +171,11 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                         generics: extract_generics(&sig.generics),
                         params,
                         return_type,
-                        attributes: func.attrs.iter().map(|a| quote::quote!(#a).to_string()).collect(),
+                        attributes: func
+                            .attrs
+                            .iter()
+                            .map(|a| quote::quote!(#a).to_string())
+                            .collect(),
                     }),
                     &sig.ident.to_string(),
                     start,
@@ -188,7 +203,11 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     CodeElementKind::Struct(StructInfo {
                         fields,
                         generics: extract_generics(&st.generics),
-                        attributes: st.attrs.iter().map(|a| quote::quote!(#a).to_string()).collect(),
+                        attributes: st
+                            .attrs
+                            .iter()
+                            .map(|a| quote::quote!(#a).to_string())
+                            .collect(),
                     }),
                     &st.ident.to_string(),
                     start,
@@ -208,7 +227,11 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                                 .named
                                 .iter()
                                 .map(|f| FnParam {
-                                    name: f.ident.as_ref().map(|i| i.to_string()).unwrap_or_default(),
+                                    name: f
+                                        .ident
+                                        .as_ref()
+                                        .map(|i| i.to_string())
+                                        .unwrap_or_default(),
                                     ty: quote::quote!(#f.ty).to_string(),
                                 })
                                 .collect(),
@@ -234,7 +257,11 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
                     CodeElementKind::Enum(EnumInfo {
                         variants,
                         generics: extract_generics(&en.generics),
-                        attributes: en.attrs.iter().map(|a| quote::quote!(#a).to_string()).collect(),
+                        attributes: en
+                            .attrs
+                            .iter()
+                            .map(|a| quote::quote!(#a).to_string())
+                            .collect(),
                     }),
                     &en.ident.to_string(),
                     start,
@@ -288,7 +315,10 @@ impl<'ast> syn::visit::Visit<'ast> for ElementCollector {
 
             Item::Impl(imp) => {
                 let self_ty = quote::quote!(#imp.self_ty).to_string();
-                let trait_name = imp.trait_.as_ref().map(|(_, tr, _)| quote::quote!(#tr).to_string());
+                let trait_name = imp
+                    .trait_
+                    .as_ref()
+                    .map(|(_, tr, _)| quote::quote!(#tr).to_string());
 
                 let items: Vec<String> = imp
                     .items

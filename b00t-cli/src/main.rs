@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
+use b00t_cli::UnifiedConfig;
 use b00t_cli::exit_code;
 use b00t_cli::k0mmand3r::K0mmand;
-use b00t_cli::UnifiedConfig;
-use b00t_cli::{load_datum_providers, whoami, SessionState};
+use b00t_cli::{SessionState, load_datum_providers, whoami};
 
 /// Exit with code, printing error context to stderr.
 fn die(code: i32, msg: impl std::fmt::Display) -> ! {
@@ -73,9 +73,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // Import datum types from lib.rs (already declared there as pub mod)
-use b00t_cli::commands::cake::{handle_cake_command, CakeArgs};
-use b00t_cli::commands::learn::{handle_learn, LearnArgs};
-use b00t_cli::commands::maintenance::{handle_maintenance_command, MaintenanceArgs};
+use b00t_cli::commands::cake::{CakeArgs, handle_cake_command};
+use b00t_cli::commands::learn::{LearnArgs, handle_learn};
+use b00t_cli::commands::maintenance::{MaintenanceArgs, handle_maintenance_command};
 use b00t_cli::datum_ai::AiDatum;
 use b00t_cli::datum_ai_model::ModelDatumEntry;
 use b00t_cli::datum_apt::AptDatum;
@@ -106,7 +106,7 @@ use b00t_cli::commands::{
     provider::ProviderCommands,
     K8sCommands,
     LifecycleCommands, McpCommands, ModelCommands,
-    ObservabilityCommands, OntologyCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
+    ObservabilityCommands, OntologyCommands, PythonCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
     runpod::RunpodCommands,
     TaskCommands,
@@ -120,9 +120,9 @@ use b00t_cli::commands::uninstall::uninstall_datum;
 
 // Re-export commonly used functions for datum modules
 pub use b00t_cli::{
-    claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp, gemini_install_mcp,
-    get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files, mcp_add_json, mcp_list,
-    mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp, DatumType,
+    DatumType, claude_code_install_mcp, codex_install_mcp, dotmcpjson_install_mcp,
+    gemini_install_mcp, get_config, get_expanded_path, get_mcp_config, get_mcp_toml_files,
+    mcp_add_json, mcp_list, mcp_output, mcp_remove, opencode_install_mcp, vscode_install_mcp,
 };
 
 mod integration_tests;
@@ -272,9 +272,7 @@ The system will:
         #[clap(subcommand)]
         mcp_command: McpCommands,
     },
-    #[clap(
-        about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)"
-    )]
+    #[clap(about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)")]
     Maintenance {
         #[command(flatten)]
         maintenance_args: MaintenanceArgs,
@@ -578,6 +576,11 @@ The system will:
     Viz {
         #[clap(subcommand)]
         viz_command: VizCommands,
+    },
+    #[clap(about = "Python version management — query PYTHON-MINIMUM datum")]
+    Python {
+        #[clap(subcommand)]
+        python_command: PythonCommands,
     },
     #[clap(about = "Tutorial progression tracking for role-based datum onboarding")]
     Tutorial {
@@ -2071,7 +2074,9 @@ async fn main() {
                                 }
                             }
                         }
-                        eprintln!("  Run with explicit command (e.g. `b00t run {candidate}` for runtime, `b00t cli check {candidate}` for cli)");
+                        eprintln!(
+                            "  Run with explicit command (e.g. `b00t run {candidate}` for runtime, `b00t cli check {candidate}` for cli)"
+                        );
                         std::process::exit(0);
                     }
 
@@ -2748,6 +2753,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Python { python_command }) => {
+            if let Err(e) = python_command.execute(&cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Lfmf {
             positional_tool,
             positional_lesson,
@@ -2910,8 +2921,8 @@ async fn main() {
                     println!("focus_balance: {:.2}", status.focus_balance);
                 }
                 ExperimentCommands::History { limit, json } => {
-                    use b00t_cli::commands::focus::handle_focus_command;
                     use b00t_cli::commands::focus::FocusCommands;
+                    use b00t_cli::commands::focus::handle_focus_command;
                     let args = FocusCommands::History {
                         limit: *limit,
                         json: *json,
@@ -3148,7 +3159,9 @@ async fn main() {
                     if !datum_exists {
                         eprintln!(
                             "no datum found for target '{}' in {} — try 'b00t quick-install {}' without --target",
-                            t, expanded.display(), name
+                            t,
+                            expanded.display(),
+                            name
                         );
                         std::process::exit(1);
                     }
@@ -3174,7 +3187,8 @@ async fn main() {
                         None => {
                             eprintln!(
                                 "no agent runtime datum found in {} — try 'b00t quick-install {} --target opencode'",
-                                expanded.display(), name
+                                expanded.display(),
+                                name
                             );
                             std::process::exit(1);
                         }

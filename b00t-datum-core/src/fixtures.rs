@@ -21,14 +21,12 @@ macro_rules! b00t_datum {
     ($rel:literal) => {{
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let path = base.join($rel);
-        $crate::TomllmDoc::from_path(&path)
-            .expect(concat!("b00t_datum! failed to load: ", $rel))
+        $crate::TomllmDoc::from_path(&path).expect(concat!("b00t_datum! failed to load: ", $rel))
     }};
     // Absolute path
     (abs $abs:literal) => {{
         let path = std::path::Path::new($abs);
-        $crate::TomllmDoc::from_path(path)
-            .expect(concat!("b00t_datum! failed to load: ", $abs))
+        $crate::TomllmDoc::from_path(path).expect(concat!("b00t_datum! failed to load: ", $abs))
     }};
 }
 

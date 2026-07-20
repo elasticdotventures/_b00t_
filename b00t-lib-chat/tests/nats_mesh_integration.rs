@@ -40,7 +40,10 @@ async fn two_node_mesh_discovers_and_exchanges() {
     // Let presence heartbeats land before querying.
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    let peers = a.discover_with_timeout(Duration::from_secs(2)).await.unwrap();
+    let peers = a
+        .discover_with_timeout(Duration::from_secs(2))
+        .await
+        .unwrap();
     assert!(
         peers.iter().any(|p| p.agent_id == "itest-b"),
         "a should discover b"

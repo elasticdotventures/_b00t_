@@ -2,12 +2,11 @@
 // A query agent receives a search query, runs bouncer gates, triggers
 // embed_anything → LayerRouter → LayerStack::compose(), verifies output.
 
+use crate::Embedding;
 use crate::layer::bouncer::LayerGateKeeper;
 use crate::layer::router::LayerRouter;
 use crate::layer::stack::LayerStack;
 use crate::layer::{LayerDescriptor, LayerError};
-use crate::Embedding;
-
 
 /// Result of a single agent cycle.
 pub struct AgentCycleResult {
@@ -60,10 +59,7 @@ impl LayerAgent {
             "agent",
         );
         self.gatekeeper
-            .validate_pre_load(
-                &crate::layer::LayerId::new("agent-query"),
-                &inline_src,
-            )
+            .validate_pre_load(&crate::layer::LayerId::new("agent-query"), &inline_src)
             .await
             .map_err(|e| LayerError::gate_rejected("input", e.to_string()))?;
 

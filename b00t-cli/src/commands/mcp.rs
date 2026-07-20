@@ -286,7 +286,9 @@ fn handle_boot(
     let datum_exists = expanded.join(format!("{}.cli.toml", target)).exists()
         || expanded.join(format!("{}.runtime.toml", target)).exists()
         || expanded.join(format!("{}.cli.tomllmd", target)).exists()
-        || expanded.join(format!("{}.runtime.tomllmd", target)).exists()
+        || expanded
+            .join(format!("{}.runtime.tomllmd", target))
+            .exists()
         || expanded.join(format!("{}.cli.tomllm", target)).exists()
         || expanded.join(format!("{}.runtime.tomllm", target)).exists();
 
@@ -326,7 +328,11 @@ fn handle_boot(
     };
     if let Some(ref cfg_path) = cfg_path {
         if !cfg_path.exists() {
-            anyhow::bail!("config not found for '{}' at {}", target, cfg_path.display());
+            anyhow::bail!(
+                "config not found for '{}' at {}",
+                target,
+                cfg_path.display()
+            );
         }
         let content = std::fs::read_to_string(cfg_path)
             .map_err(|e| anyhow::anyhow!("read {}: {}", cfg_path.display(), e))?;
@@ -347,7 +353,13 @@ fn handle_boot(
             "claudecode" | "claude" => crate::claude_code_install_mcp("b00t-mcp", path)?,
             "vscode" => crate::vscode_install_mcp("b00t-mcp", path)?,
             "codex" => {
-                crate::codex_install_mcp("b00t-mcp", path, crate::utils::is_git_repo(), None, false)?;
+                crate::codex_install_mcp(
+                    "b00t-mcp",
+                    path,
+                    crate::utils::is_git_repo(),
+                    None,
+                    false,
+                )?;
             }
             "gemini" | "geminicli" => {
                 crate::gemini_install_mcp("b00t-mcp", path, false)?;
@@ -412,8 +424,6 @@ fn handle_boot(
     eprintln!("[boot] complete");
     Ok(())
 }
-
-
 
 impl McpCommands {
     pub async fn execute_async(&self, path: &str) -> Result<()> {
@@ -596,17 +606,13 @@ impl McpCommands {
                             *httpstream,
                         )
                     }
-                    McpInstallTarget::Opencode => {
-                        crate::opencode_install_mcp(
-                            name,
-                            path,
-                            stdio_command.as_deref(),
-                            *httpstream,
-                        )
-                    }
-                    McpInstallTarget::Stdout => {
-                        crate::mcp_output(path, false, name)
-                    }
+                    McpInstallTarget::Opencode => crate::opencode_install_mcp(
+                        name,
+                        path,
+                        stdio_command.as_deref(),
+                        *httpstream,
+                    ),
+                    McpInstallTarget::Stdout => crate::mcp_output(path, false, name),
                 }
             }
             McpCommands::Sync {

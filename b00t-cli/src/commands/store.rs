@@ -9,7 +9,10 @@ pub enum StoreCommands {
     Put {
         #[clap(help = "File to store")]
         file: PathBuf,
-        #[clap(long, help = "Ontology class (b00t:TrainingCorpus, b00t:FineTunedModel, etc.)")]
+        #[clap(
+            long,
+            help = "Ontology class (b00t:TrainingCorpus, b00t:FineTunedModel, etc.)"
+        )]
         class: String,
         #[clap(long, help = "Consumer identifier (agent or MCP server name)")]
         consumer: String,
@@ -49,13 +52,20 @@ pub enum StoreCommands {
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
-    let (k, v) = s.split_once('=').ok_or_else(|| format!("expected KEY=VALUE, got: {}", s))?;
+    let (k, v) = s
+        .split_once('=')
+        .ok_or_else(|| format!("expected KEY=VALUE, got: {}", s))?;
     Ok((k.to_string(), v.to_string()))
 }
 
 pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
     match cmd {
-        StoreCommands::Put { file, class, consumer, tag } => {
+        StoreCommands::Put {
+            file,
+            class,
+            consumer,
+            tag,
+        } => {
             let tags: BTreeMap<String, String> = tag.iter().cloned().collect();
             let entry = b00t_c0re_lib::store::put(file, class, consumer, &tags)?;
             println!("{}", entry.key);
@@ -77,7 +87,8 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
             } else {
                 println!("Stored objects:");
                 for e in &entries {
-                    let tags: Vec<String> = e.tags.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+                    let tags: Vec<String> =
+                        e.tags.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
                     println!(
                         "  {}  {}  {}  {}  {}B  [{}]",
                         e.key,

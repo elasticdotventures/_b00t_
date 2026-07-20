@@ -3,6 +3,7 @@ name = "rustfs-mcp"
 type = "mcp"
 hint = "RustFS distributed object storage MCP server for S3-compatible storage operations"
 
+# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
 entangled_cli = ["rustfs-mcp.cli"]
 lfmf_category = "rustfs"
 

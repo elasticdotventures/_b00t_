@@ -236,12 +236,7 @@ pub struct SudoEscalationAlert {
 impl SudoEscalationAlert {
     /// Build the webhook payload — separate from the HTTP fire so payload
     /// construction is unit-testable without a network.
-    pub fn new(
-        command: &str,
-        justification: &str,
-        cited_commits: &[String],
-        reason: &str,
-    ) -> Self {
+    pub fn new(command: &str, justification: &str, cited_commits: &[String], reason: &str) -> Self {
         Self {
             event: "sudo_grant_escalation".to_string(),
             command: command.to_string(),
@@ -269,7 +264,12 @@ impl SudoEscalationAlert {
 /// `B00T_N8N_WEBHOOK_URL` still honored); if neither is set, skip with a
 /// single stderr note — same "don't gate on the webhook" policy as
 /// `BudgetController::send_alert` when its `webhook_url` is `None`.
-pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &[String], reason: &str) {
+pub fn fire_sudo_escalation(
+    command: &str,
+    justification: &str,
+    cited_commits: &[String],
+    reason: &str,
+) {
     let Ok(webhook_url) =
         std::env::var("B00T_N8N_WEBHOOK").or_else(|_| std::env::var("B00T_N8N_WEBHOOK_URL"))
     else {
@@ -291,7 +291,10 @@ pub fn fire_sudo_escalation(command: &str, justification: &str, cited_commits: &
             if resp.status().is_success() {
                 Ok(())
             } else {
-                Err(format!("sudo-escalation webhook returned {}", resp.status()))
+                Err(format!(
+                    "sudo-escalation webhook returned {}",
+                    resp.status()
+                ))
             }
         })
     });
@@ -360,7 +363,8 @@ impl ChonkyModelGate {
     pub fn select(&self) -> ChonkyModelSelection {
         // Env override takes precedence
         if let Ok(m) = std::env::var("B00T_AI_CH0NKY_MODEL") {
-            let base = std::env::var("B00T_AI_CH0NKY_BASE").unwrap_or_else(|_| self.local_base.clone());
+            let base =
+                std::env::var("B00T_AI_CH0NKY_BASE").unwrap_or_else(|_| self.local_base.clone());
             return ChonkyModelSelection {
                 model: m,
                 base_url: base,
@@ -374,7 +378,9 @@ impl ChonkyModelGate {
             .ok()
             .and_then(|s| s.gpu_free_mb);
 
-        let is_local_available = gpu_free_mb.map(|mb| mb >= self.gpu_threshold_mb).unwrap_or(false);
+        let is_local_available = gpu_free_mb
+            .map(|mb| mb >= self.gpu_threshold_mb)
+            .unwrap_or(false);
 
         if is_local_available {
             ChonkyModelSelection {
@@ -404,7 +410,9 @@ impl ChonkyModelGate {
 }
 
 fn shlex_quote(s: &str) -> String {
-    if s.chars().all(|c| c.is_alphanumeric() || "-_:/=.".contains(c)) {
+    if s.chars()
+        .all(|c| c.is_alphanumeric() || "-_:/=.".contains(c))
+    {
         s.to_string()
     } else {
         format!("'{}'", s.replace('\'', "'\\''"))
@@ -525,7 +533,10 @@ mod tests {
 
     #[test]
     fn test_ch0nky_gate_env_override() {
-        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CH0NKY_ENV_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         unsafe { std::env::set_var("B00T_AI_CH0NKY_MODEL", "test-model") };
         unsafe { std::env::set_var("B00T_AI_CH0NKY_BASE", "http://test:8000/v1") };
         let gate = ChonkyModelGate::default();
@@ -539,7 +550,10 @@ mod tests {
 
     #[test]
     fn test_ch0nky_gate_fable_fallback_when_gpu_unavailable() {
-        let _guard = CH0NKY_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CH0NKY_ENV_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         unsafe { std::env::remove_var("B00T_AI_CH0NKY_MODEL") };
         let gate = ChonkyModelGate {
             gpu_threshold_mb: u32::MAX, // force fallback by setting impossible threshold
@@ -575,7 +589,10 @@ mod tests {
         let json = serde_json::to_value(&alert).unwrap();
         assert_eq!(json["event"], "sudo_grant_escalation");
         assert_eq!(json["command"], "sudo systemctl restart k0scontroller");
-        assert_eq!(json["justification"], "kubelet device-plugin registration wedged");
+        assert_eq!(
+            json["justification"],
+            "kubelet device-plugin registration wedged"
+        );
         assert_eq!(json["cited_commits"][0], "deadbeef");
         assert_eq!(json["reason"], "blast radius ambiguous");
         // ts present and RFC 3339-parseable

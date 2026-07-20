@@ -140,10 +140,7 @@ fn handle_status(json_output: bool) -> Result<()> {
             println!("  Local IPs:      {}", iface_ips.join(", "));
         }
         if !ports.is_empty() {
-            println!(
-                "  Listening:      {} port(s)",
-                ports.len()
-            );
+            println!("  Listening:      {} port(s)", ports.len());
             for chunk in ports.chunks(16) {
                 let vals: Vec<String> = chunk.iter().map(|p| p.to_string()).collect();
                 println!("    ports:        {}", vals.join(", "));

@@ -199,10 +199,7 @@ impl CliExecutor for PipelineDatum {
             ));
         }
         if self.stages.is_empty() {
-            return Err(anyhow!(
-                "pipeline '{}' declares no stages",
-                self.datum.name
-            ));
+            return Err(anyhow!("pipeline '{}' declares no stages", self.datum.name));
         }
 
         let selected = self.resolve_selected_stages(args)?;

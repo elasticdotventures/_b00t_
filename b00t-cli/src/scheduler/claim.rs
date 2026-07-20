@@ -15,7 +15,7 @@ use crate::scheduler::convert::row_to_schedule_def_direct;
 use crate::scheduler::schema::{ScheduleDef, ScheduleKind};
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use uuid::Uuid;
 
 // ── Claim result ───────────────────────────────────────────────────────────────

@@ -1,17 +1,16 @@
 //! Unified visualization command.
 
 use crate::blessing::BlessingGraph;
-use crate::commands::task::load_store;
-use crate::datum_utils::{DatumGraph, build_datum_graph, graph_neighbors};
 use crate::commands::pipeline::discover_pipeline_datums;
+use crate::commands::task::load_store;
 use crate::datum_pipeline::PipelineDatum;
+use crate::datum_utils::{DatumGraph, build_datum_graph, graph_neighbors};
 use crate::pipeline_types::{PipelineDag, StageSpec};
 use crate::pipeline_viz;
 use crate::viz::{
-    SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_rhai_dsl,
-    blessing_to_scene, datum_graph_to_mermaid, datum_graph_to_rhai_dsl,
-    datum_graph_to_scene, scene_to_ascii, scene_to_cytoscape, scene_to_owl2,
-    scene_to_svg, scene_to_sysmlv2, tasks_to_mermaid,
+    SceneGraph, SceneTheme, blessing_to_mermaid, blessing_to_rhai_dsl, blessing_to_scene,
+    datum_graph_to_mermaid, datum_graph_to_rhai_dsl, datum_graph_to_scene, scene_to_ascii,
+    scene_to_cytoscape, scene_to_owl2, scene_to_svg, scene_to_sysmlv2, tasks_to_mermaid,
     tasks_to_rhai_dsl, tasks_to_scene,
 };
 use anyhow::{Context, Result};
@@ -70,12 +69,7 @@ pub enum VizCommands {
     Pipeline {
         #[clap(help = "Pipeline datum name to visualize")]
         name: String,
-        #[clap(
-            long,
-            value_enum,
-            default_value = "mermaid",
-            help = "Output format"
-        )]
+        #[clap(long, value_enum, default_value = "mermaid", help = "Output format")]
         format: PipelineVizFormat,
         #[clap(long, short, help = "Write output to file instead of stdout")]
         output: Option<PathBuf>,
@@ -151,7 +145,11 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
             )?;
             emit(rendered, output)
         }
-        VizCommands::Pipeline { name, format, output } => {
+        VizCommands::Pipeline {
+            name,
+            format,
+            output,
+        } => {
             let pipelines = discover_pipeline_datums(path)?;
             let (_key, datum, file_path) = pipelines
                 .into_iter()
@@ -197,12 +195,7 @@ pub fn handle_viz_command(path: &str, command: &VizCommands) -> Result<()> {
     }
 }
 
-fn render(
-    format: VizFormat,
-    mermaid: String,
-    rhai: String,
-    scene: SceneGraph,
-) -> Result<String> {
+fn render(format: VizFormat, mermaid: String, rhai: String, scene: SceneGraph) -> Result<String> {
     match format {
         VizFormat::Isometric | VizFormat::Svg => Ok(scene_to_svg(&scene, &SceneTheme::default())),
         VizFormat::Mermaid => Ok(format!("```mermaid\n{}```\n", mermaid)),

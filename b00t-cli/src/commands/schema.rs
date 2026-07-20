@@ -7,7 +7,7 @@
 //! ```
 
 use crate::datum_schema::{AbDataHeader, AbDataSchema, DataType, FocusSchema};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -47,8 +47,7 @@ pub fn handle_schema_diff(path: &str, schema_a: &str, schema_b: &str) -> Result<
     for name in &common {
         let ha = map_a.get(name).unwrap();
         let hb = map_b.get(name).unwrap();
-        if ha.data_type != hb.data_type || ha.nullable != hb.nullable || ha.ordinal != hb.ordinal
-        {
+        if ha.data_type != hb.data_type || ha.nullable != hb.nullable || ha.ordinal != hb.ordinal {
             changed.push((name, ha, hb));
         }
     }
@@ -130,7 +129,13 @@ pub fn handle_schema_import(path: &str, name: &str, output: Option<PathBuf>) -> 
         let nullable = col["nullable"].as_bool().unwrap_or(true);
         let description = col["description"].as_str().unwrap_or("");
 
-        headers.push(AbDataHeader::new(col_name, json_type_to_data_type(col_type), nullable, description, i));
+        headers.push(AbDataHeader::new(
+            col_name,
+            json_type_to_data_type(col_type),
+            nullable,
+            description,
+            i,
+        ));
     }
 
     // Build the output path

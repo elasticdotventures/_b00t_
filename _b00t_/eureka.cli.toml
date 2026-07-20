@@ -8,6 +8,7 @@ install = { cargo = "eureka" }
 update = "cargo install eureka --force"
 version = "eureka --version"
 version_regex = 'eureka (\d+\.\d+\.\d+)'
+# <|🦨: repoint-candidate — cargo.cli never authored; rust.cli/rustc.cli exist; #163 |>
 depends_on = ["cargo.cli", "git.cli"]
 
 [b00t.skill]

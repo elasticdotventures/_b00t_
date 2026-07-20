@@ -99,30 +99,17 @@ impl MaintenanceLayer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MaintenanceAction {
     /// Re-run the installer for a specific check (from INSTALLER-CAPABILITY)
-    RemediateInstaller {
-        check_name: String,
-    },
+    RemediateInstaller { check_name: String },
     /// Update an upstream vendor pin
-    UpdateVendor {
-        vendor_name: String,
-    },
+    UpdateVendor { vendor_name: String },
     /// File a GitHub issue with title and body
-    FileIssue {
-        title: String,
-        body: String,
-    },
+    FileIssue { title: String, body: String },
     /// Run an audit against a specific layer
-    RunAudit {
-        layer: MaintenanceLayer,
-    },
+    RunAudit { layer: MaintenanceLayer },
     /// Log a message without taking remediation action
-    LogOnly {
-        message: String,
-    },
+    LogOnly { message: String },
     /// Escalate a finding to the operator (highest priority)
-    Escalate {
-        reason: String,
-    },
+    Escalate { reason: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -281,9 +268,8 @@ impl MaintenanceEngine {
         let duration_ms = start.elapsed().as_millis() as u64;
 
         // Collate results
-        let (actions_taken, actions_failed): (Vec<_>, Vec<_>) = action_results
-            .into_iter()
-            .partition(|r| r.success);
+        let (actions_taken, actions_failed): (Vec<_>, Vec<_>) =
+            action_results.into_iter().partition(|r| r.success);
 
         let pass_count = layer_results.iter().filter(|r| r.passed).count() as u32;
         let fail_count = layer_results.iter().filter(|r| !r.passed).count() as u32;
@@ -427,10 +413,7 @@ impl MaintenanceEngine {
                 ),
                 "WARN" => (
                     MaintenanceAction::FileIssue {
-                        title: format!(
-                            "Maintenance: {:?} layer findings",
-                            layer_result.layer
-                        ),
+                        title: format!("Maintenance: {:?} layer findings", layer_result.layer),
                         body: format!(
                             "Layer: {:?}\nSeverity: {}\nFindings: {}\nGate: {}",
                             layer_result.layer,

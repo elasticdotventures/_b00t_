@@ -18,7 +18,7 @@
 
 use crate::pipeline_nats::{NatsSubscription, NatsTransport};
 use crate::pipeline_types::StageSpec;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -133,14 +133,14 @@ impl JwtConfig {
         // ── 2. Decode and validate header ──
         let header_bytes = base64url_decode(header_b64)
             .context("failed to decode JWT header (invalid base64url)")?;
-        let _header: serde_json::Value = serde_json::from_slice(&header_bytes)
-            .context("invalid JWT header JSON")?;
+        let _header: serde_json::Value =
+            serde_json::from_slice(&header_bytes).context("invalid JWT header JSON")?;
 
         // ── 3. Decode and validate claims ──
         let claims_bytes = base64url_decode(claims_b64)
             .context("failed to decode JWT claims (invalid base64url)")?;
-        let claims_json: serde_json::Value = serde_json::from_slice(&claims_bytes)
-            .context("invalid JWT claims JSON")?;
+        let claims_json: serde_json::Value =
+            serde_json::from_slice(&claims_bytes).context("invalid JWT claims JSON")?;
 
         let sub = claims_json["sub"]
             .as_str()
@@ -163,11 +163,7 @@ impl JwtConfig {
 
         // ── 4. Validate issuer ──
         if iss != self.issuer {
-            bail!(
-                "issuer mismatch: expected '{}', got '{}'",
-                self.issuer,
-                iss
-            );
+            bail!("issuer mismatch: expected '{}', got '{}'", self.issuer, iss);
         }
 
         // ── 5. Validate temporal bounds ──
@@ -199,8 +195,8 @@ pub fn issue_stage_credentials(config: &JwtConfig, stage: &StageSpec) -> Result<
     let jwt = config.issue_token(&stage.name, &stage.name)?;
     let exp_ts = epoch_seconds()? + config.ttl_seconds as i64;
 
-    let expires_at = DateTime::from_timestamp(exp_ts, 0)
-        .context("failed to compute expiry timestamp")?;
+    let expires_at =
+        DateTime::from_timestamp(exp_ts, 0).context("failed to compute expiry timestamp")?;
 
     Ok(StageCredentials {
         stage_name: stage.name.clone(),
@@ -317,8 +313,7 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
 // URL-safe base64 with '-' instead of '+' and '_' instead of '/'.
 // No padding characters ('=') are emitted by the encoder.
 
-const BASE64URL_CHARS: &[u8] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const BASE64URL_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /// Encode bytes as URL-safe base64 (no padding).
 fn base64url_encode(data: &[u8]) -> String {
@@ -371,8 +366,16 @@ fn base64url_decode(input: &str) -> Result<Vec<u8>> {
 
         let c0 = clean[i] as u32;
         let c1 = clean[i + 1] as u32;
-        let c2 = if remaining > 2 { clean[i + 2] as u32 } else { 0 };
-        let c3 = if remaining > 3 { clean[i + 3] as u32 } else { 0 };
+        let c2 = if remaining > 2 {
+            clean[i + 2] as u32
+        } else {
+            0
+        };
+        let c3 = if remaining > 3 {
+            clean[i + 3] as u32
+        } else {
+            0
+        };
 
         let triple = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
 
@@ -422,7 +425,9 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 mod tests {
     use super::*;
     use crate::pipeline_nats::MockNatsTransport;
-    use crate::pipeline_types::{CapsuleProfile, PortDirection, PortMediaType, ResourceRequirements};
+    use crate::pipeline_types::{
+        CapsuleProfile, PortDirection, PortMediaType, ResourceRequirements,
+    };
 
     fn test_config() -> JwtConfig {
         JwtConfig {
@@ -581,9 +586,7 @@ mod tests {
             .publish(subject, payload)
             .expect("publish should succeed");
 
-        let received = sub
-            .next()
-            .expect("should receive a message after publish");
+        let received = sub.next().expect("should receive a message after publish");
 
         // The authenticated transport strips the JWT prefix, so the
         // subscriber should see the original payload.
@@ -608,10 +611,7 @@ mod tests {
 
         assert_eq!(claims.stage, "decoder");
         assert_eq!(claims.iss, "pipeline-orchestrator");
-        assert!(
-            claims.exp > claims.nbf,
-            "expiry must be after not-before"
-        );
+        assert!(claims.exp > claims.nbf, "expiry must be after not-before");
     }
 
     // ── 7. issue_stage_credentials produces valid credentials ────────────
@@ -674,9 +674,7 @@ mod tests {
             ttl_seconds: 3600,
         };
 
-        let token = issuer_a
-            .issue_token("stage", "sub")
-            .expect("issue token");
+        let token = issuer_a.issue_token("stage", "sub").expect("issue token");
 
         // Same secret key but different issuer — should fail.
         let err = issuer_b
@@ -708,11 +706,7 @@ mod tests {
             let encoded = base64url_encode(input);
             let decoded = base64url_decode(&encoded)
                 .unwrap_or_else(|e| panic!("decode failed for {:?}: {e}", input));
-            assert_eq!(
-                &decoded, input,
-                "round-trip failed for {:02x?}",
-                input
-            );
+            assert_eq!(&decoded, input, "round-trip failed for {:02x?}", input);
         }
     }
 

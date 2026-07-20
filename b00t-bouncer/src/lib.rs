@@ -190,13 +190,14 @@ impl Bouncer {
     /// Input gate implementations
     fn sanitize(input: &str) -> Result<(), anyhow::Error> {
         // Check for shell injection patterns
-        let injection_patterns = [
-            ";", "|", "&", "`", "$(", ")", "{", "}", "'", "\"", "\\",
-        ];
+        let injection_patterns = [";", "|", "&", "`", "$(", ")", "{", "}", "'", "\"", "\\"];
 
         for pattern in &injection_patterns {
             if input.contains(pattern) {
-                return Err(anyhow::anyhow!("shell injection pattern detected: {}", pattern));
+                return Err(anyhow::anyhow!(
+                    "shell injection pattern detected: {}",
+                    pattern
+                ));
             }
         }
 
@@ -206,12 +207,20 @@ impl Bouncer {
     fn check_credentials(input: &str) -> Result<(), anyhow::Error> {
         // Check for credential exposure
         let credential_patterns = [
-            "password", "secret", "token", "api_key", "apikey", "credential",
+            "password",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+            "credential",
         ];
 
         for pattern in &credential_patterns {
             if input.to_lowercase().contains(pattern) {
-                return Err(anyhow::anyhow!("potential credential exposure: {}", pattern));
+                return Err(anyhow::anyhow!(
+                    "potential credential exposure: {}",
+                    pattern
+                ));
             }
         }
 
@@ -220,9 +229,7 @@ impl Bouncer {
 
     fn check_permissions(input: &str) -> Result<(), anyhow::Error> {
         // Check for permission violations
-        let restricted_actions = [
-            "rm -rf /", "sudo", "chmod 777", "chown root",
-        ];
+        let restricted_actions = ["rm -rf /", "sudo", "chmod 777", "chown root"];
 
         for action in &restricted_actions {
             if input.contains(action) {
@@ -255,13 +262,14 @@ impl Bouncer {
 
     fn security_scan(output: &str) -> Result<(), anyhow::Error> {
         // Security scan for output
-        let security_patterns = [
-            "password", "secret", "token", "api_key", "credential",
-        ];
+        let security_patterns = ["password", "secret", "token", "api_key", "credential"];
 
         for pattern in &security_patterns {
             if output.to_lowercase().contains(pattern) {
-                return Err(anyhow::anyhow!("potential credential in output: {}", pattern));
+                return Err(anyhow::anyhow!(
+                    "potential credential in output: {}",
+                    pattern
+                ));
             }
         }
 

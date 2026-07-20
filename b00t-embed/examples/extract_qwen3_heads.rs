@@ -26,7 +26,10 @@ const VOCAB_SIZE: usize = 151669; // actual embed_tokens dim[0]
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    let out_dir = args.get(1).map(|s| PathBuf::from(s)).unwrap_or_else(|| PathBuf::from("/tmp/qwen3-layers"));
+    let out_dir = args
+        .get(1)
+        .map(|s| PathBuf::from(s))
+        .unwrap_or_else(|| PathBuf::from("/tmp/qwen3-layers"));
     std::fs::create_dir_all(&out_dir)?;
 
     println!("╔═══════════════════════════════════════════════════════════════╗");
@@ -41,11 +44,17 @@ fn main() -> anyhow::Result<()> {
     let repo = client.model(owner, name);
     let weights_path = repo.download_file().filename("model.safetensors").send()?;
     let config_path = repo.download_file().filename("config.json").send()?;
-    println!("  ✓ Downloaded model.safetensors ({})", weights_path.display());
+    println!(
+        "  ✓ Downloaded model.safetensors ({})",
+        weights_path.display()
+    );
     println!("  ✓ Downloaded config.json ({})", config_path.display());
 
     // Validate: file exists and is readable
-    assert!(weights_path.exists(), "Bouncer gate: weights file must exist");
+    assert!(
+        weights_path.exists(),
+        "Bouncer gate: weights file must exist"
+    );
     assert!(config_path.exists(), "Bouncer gate: config file must exist");
     println!("  ✓ Bouncer gate 1a: HF download validated");
 
@@ -55,9 +64,7 @@ fn main() -> anyhow::Result<()> {
     let target_dtype = DType::F32;
 
     // Use MmapedSafetensors to read tensor metadata without loading everything
-    let tensors = unsafe {
-        candle_core::safetensors::MmapedSafetensors::new(&weights_path)?
-    };
+    let tensors = unsafe { candle_core::safetensors::MmapedSafetensors::new(&weights_path)? };
 
     // Extract specific head tensors
     // Qwen3 embedding model stores tensors with these names.
@@ -65,7 +72,7 @@ fn main() -> anyhow::Result<()> {
     // norm.weight: [hidden_size] = [1024] (final layer norm)
     let head_tensor_names = [
         "embed_tokens.weight",
-        "norm.weight",       // final layer norm, not model.norm.weight
+        "norm.weight", // final layer norm, not model.norm.weight
     ];
 
     let mut extracted = HashMap::new();
@@ -73,18 +80,19 @@ fn main() -> anyhow::Result<()> {
         match tensors.load(name, &device) {
             Ok(tensor) => {
                 // Cast to F32 for consistent handling (model may be BF16/F16)
-                let tensor = tensor.to_dtype(target_dtype)
+                let tensor = tensor
+                    .to_dtype(target_dtype)
                     .map_err(|e| anyhow::anyhow!("dtype cast: {e}"))?;
                 let dims = tensor.dims();
-                println!("  ✓ Loaded {name}: shape={dims:?}, dtype={:?}", tensor.dtype());
+                println!(
+                    "  ✓ Loaded {name}: shape={dims:?}, dtype={:?}",
+                    tensor.dtype()
+                );
                 extracted.insert(name.to_string(), tensor);
             }
             Err(e) => {
                 // Try alternative naming patterns for different model versions
-                let alt_names = [
-                    &format!("transformer.{name}"),
-                    &format!("{name}"),
-                ];
+                let alt_names = [&format!("transformer.{name}"), &format!("{name}")];
                 let mut found = false;
                 for alt in &alt_names {
                     if let Ok(t) = tensors.load(alt, &device) {
@@ -102,8 +110,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Validate: at least embed_tokens.weight must be present
-    assert!(extracted.contains_key("embed_tokens.weight"),
-        "Bouncer gate: embed_tokens.weight must be extractable");
+    assert!(
+        extracted.contains_key("embed_tokens.weight"),
+        "Bouncer gate: embed_tokens.weight must be extractable"
+    );
     println!("  ✓ Bouncer gate 1b: head tensor extraction validated");
 
     // ── Wave 1c: Export each head tensor as standalone safetensors layer file ──
@@ -125,7 +135,9 @@ fn main() -> anyhow::Result<()> {
             let n = flat.len();
             let half = n / 2;
             let mut data = flat;
-            for i in 0..half { data[i] *= 1.5; }
+            for i in 0..half {
+                data[i] *= 1.5;
+            }
             Ok(Tensor::from_vec(data, dims, t.device())?)
         }),
         ("math", |t: &Tensor| -> anyhow::Result<Tensor> {
@@ -134,7 +146,9 @@ fn main() -> anyhow::Result<()> {
             let n = flat.len();
             let half = n / 2;
             let mut data = flat;
-            for i in half..n { data[i] *= 1.5; }
+            for i in half..n {
+                data[i] *= 1.5;
+            }
             Ok(Tensor::from_vec(data, dims, t.device())?)
         }),
         ("biol", |t: &Tensor| -> anyhow::Result<Tensor> {
@@ -142,7 +156,8 @@ fn main() -> anyhow::Result<()> {
             let flat = t.flatten_all()?.to_vec1::<f32>()?;
             Ok(Tensor::from_vec(
                 flat.into_iter().map(|x| x * 1.2).collect(),
-                dims, t.device(),
+                dims,
+                t.device(),
             )?)
         }),
     ];
@@ -161,16 +176,27 @@ fn main() -> anyhow::Result<()> {
     // Validate: all exported files are loadable
     for entry in std::fs::read_dir(&out_dir)? {
         let path = entry?.path();
-        if path.extension().map(|e| e == "safetensors").unwrap_or(false) {
+        if path
+            .extension()
+            .map(|e| e == "safetensors")
+            .unwrap_or(false)
+        {
             let reloaded = unsafe { candle_core::safetensors::MmapedSafetensors::new(&path)? };
             let count = reloaded.tensors().len();
-            println!("  ✓ Verified loadable: {} ({} tensors)", path.display(), count);
+            println!(
+                "  ✓ Verified loadable: {} ({} tensors)",
+                path.display(),
+                count
+            );
         }
     }
     println!("  ✓ Bouncer gate 1c: all exported files validated as loadable safetensors");
 
     println!("\n╔═══════════════════════════════════════════════════════════════╗");
-    println!("║  Wave 1 COMPLETE: {} head layer files exported", domains.len() + 1);
+    println!(
+        "║  Wave 1 COMPLETE: {} head layer files exported",
+        domains.len() + 1
+    );
     println!("║  Output directory: {}", out_dir.display());
     println!("║                                                             ║");
     println!("║  Next: just qwen3-embed-test to validate compose pipeline   ║");

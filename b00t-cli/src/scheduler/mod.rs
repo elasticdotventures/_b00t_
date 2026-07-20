@@ -19,6 +19,6 @@ pub mod convert;
 pub mod schema;
 
 // Re-export top-level types for convenient `use b00t_cli::scheduler::*;`
-pub use claim::{try_claim, ClaimResult};
+pub use claim::{ClaimResult, try_claim};
 pub use convert::*;
 pub use schema::*;

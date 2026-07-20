@@ -70,9 +70,17 @@ fn mermaid_roundtrip_is_pure() {
 fn satisfies_edges_are_pure() {
     let graph = InvariantGraph::new("constraints")
         .with_node(InvariantNode::new("r", "Rule", VisualizationRole::Rule))
-        .with_node(InvariantNode::new("t", "Transaction", VisualizationRole::Data))
+        .with_node(InvariantNode::new(
+            "t",
+            "Transaction",
+            VisualizationRole::Data,
+        ))
         .with_edge(InvariantEdge::new("r", "t").with_label("satisfies: PASS"))
-        .with_node(InvariantNode::new("f", "Failed", VisualizationRole::Decision))
+        .with_node(InvariantNode::new(
+            "f",
+            "Failed",
+            VisualizationRole::Decision,
+        ))
         .with_edge(InvariantEdge::new("r", "f").with_label("satisfies|FAIL|s38-190"));
     let ms = assert_pure(&graph, 10);
     assert!(ms < 500, "satisfies_edges: {ms}ms exceeds 500ms budget");
@@ -80,10 +88,10 @@ fn satisfies_edges_are_pure() {
 
 #[test]
 fn different_graphs_produce_different_svg() {
-    let a = InvariantGraph::new("a")
-        .with_node(InvariantNode::new("x", "X", VisualizationRole::Step));
-    let b = InvariantGraph::new("b")
-        .with_node(InvariantNode::new("y", "Y", VisualizationRole::Ingest));
+    let a =
+        InvariantGraph::new("a").with_node(InvariantNode::new("x", "X", VisualizationRole::Step));
+    let b =
+        InvariantGraph::new("b").with_node(InvariantNode::new("y", "Y", VisualizationRole::Ingest));
     assert_ne!(
         hash_of(&graph_to_isometric_svg(&a).unwrap()),
         hash_of(&graph_to_isometric_svg(&b).unwrap()),
@@ -98,8 +106,11 @@ fn empty_and_single_node_render() {
     assert!(svg.contains("<svg"));
     assert!(svg.contains("No nodes"));
 
-    let single = InvariantGraph::new("one")
-        .with_node(InvariantNode::new("solo", "Solo", VisualizationRole::Step));
+    let single = InvariantGraph::new("one").with_node(InvariantNode::new(
+        "solo",
+        "Solo",
+        VisualizationRole::Step,
+    ));
     let svg = graph_to_isometric_svg(&single).expect("single render");
     assert!(svg.contains("<svg"));
 }

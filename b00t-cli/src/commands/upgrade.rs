@@ -97,11 +97,18 @@ pub struct UpgradeReport {
 
 #[derive(Debug, Parser)]
 pub struct UpgradeArgs {
-    #[clap(long, default_value = "all", help = "Upgrade scope: all|binary|mcp|hooks|settings")]
+    #[clap(
+        long,
+        default_value = "all",
+        help = "Upgrade scope: all|binary|mcp|hooks|settings"
+    )]
     pub scope: UpgradeScope,
     #[clap(long, help = "Plan only; apply no changes")]
     pub dry_run: bool,
-    #[clap(long, help = "Route compile tasks to ch0nky GPU tier via b00t job delegate")]
+    #[clap(
+        long,
+        help = "Route compile tasks to ch0nky GPU tier via b00t job delegate"
+    )]
     pub delegate: bool,
     #[clap(long, help = "Emit structured JSON report")]
     pub json: bool,
@@ -152,7 +159,12 @@ impl UpgradeArgs {
         for action in &actions {
             let result = execute_action(action, self.delegate)?;
             let status = if result.success { "✅" } else { "❌" };
-            println!("  {} {} ({}ms)", status, action_description(action), result.duration_ms);
+            println!(
+                "  {} {} ({}ms)",
+                status,
+                action_description(action),
+                result.duration_ms
+            );
             if !result.detail.is_empty() {
                 println!("     {}", result.detail);
             }
@@ -173,10 +185,7 @@ impl UpgradeArgs {
             pre.b00t_cli_version.as_deref().unwrap_or("?"),
             post.b00t_cli_version.as_deref().unwrap_or("?")
         );
-        println!(
-            "  elapsed:  {}ms",
-            t0.elapsed().as_millis()
-        );
+        println!("  elapsed:  {}ms", t0.elapsed().as_millis());
 
         if self.json {
             let report = UpgradeReport {
@@ -242,9 +251,7 @@ fn assess_state() -> Result<SystemState> {
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| {
-            v["hooks"].as_object().map(|h| h.keys().cloned().collect())
-        })
+        .and_then(|v| v["hooks"].as_object().map(|h| h.keys().cloned().collect()))
         .unwrap_or_default();
 
     // Discover hooks b00t knows about from _b00t_ hook datums
@@ -292,7 +299,9 @@ fn plan_actions(state: &SystemState, scope: &UpgradeScope) -> Vec<UpgradeAction>
 
     if do_mcp {
         // 🤓 Claude stores MCP names verbatim from install; check both short and suffixed forms
-        let has_b00t_mcp = state.mcp_servers_registered.iter()
+        let has_b00t_mcp = state
+            .mcp_servers_registered
+            .iter()
             .any(|n| n == "b00t-mcp" || n == "b00t-mcp-mcp");
         if !has_b00t_mcp {
             actions.push(UpgradeAction::SyncMcpServer {
@@ -300,7 +309,9 @@ fn plan_actions(state: &SystemState, scope: &UpgradeScope) -> Vec<UpgradeAction>
                 action: McpAction::Install,
             });
         }
-        let has_cbm = state.mcp_servers_registered.iter()
+        let has_cbm = state
+            .mcp_servers_registered
+            .iter()
             .any(|n| n == "codebase-memory" || n == "codebase-memory-mcp");
         if !has_cbm {
             actions.push(UpgradeAction::SyncMcpServer {
@@ -316,9 +327,7 @@ fn plan_actions(state: &SystemState, scope: &UpgradeScope) -> Vec<UpgradeAction>
             if !state.hooks_registered.contains(hook) {
                 // Only auto-register if b00t has a datum for it
                 if hook_has_datum(hook) {
-                    actions.push(UpgradeAction::InstallHook {
-                        name: hook.clone(),
-                    });
+                    actions.push(UpgradeAction::InstallHook { name: hook.clone() });
                 }
             }
         }
@@ -344,15 +353,23 @@ fn execute_action(action: &UpgradeAction, delegate: bool) -> Result<UpgradeResul
                 run_cmd("b00t-cli", &["version", "upgrade"])
             }
         }
-        UpgradeAction::SyncMcpServer { name, action: mcp_action } => match mcp_action {
+        UpgradeAction::SyncMcpServer {
+            name,
+            action: mcp_action,
+        } => match mcp_action {
             McpAction::Install | McpAction::Update => {
                 run_cmd("b00t-cli", &["app", "claudecode", "mcp", "install", name])
             }
             McpAction::Remove => run_cmd("b00t-cli", &["mcp", "remove", name]),
         },
-        UpgradeAction::InstallHook { name } => {
-            run_cmd("b00t-cli", &["cli", "install", &format!("claude-code-hooks-{}", name.to_lowercase())])
-        }
+        UpgradeAction::InstallHook { name } => run_cmd(
+            "b00t-cli",
+            &[
+                "cli",
+                "install",
+                &format!("claude-code-hooks-{}", name.to_lowercase()),
+            ],
+        ),
         UpgradeAction::UpdateSettings { key, new, .. } => {
             (true, format!("settings.{key} = {new}")) // settings updated via claudecode mcp install
         }
@@ -429,7 +446,14 @@ fn print_state_summary(s: &SystemState) {
     let hook_count = s.hooks_registered.len();
     println!("  b00t-cli:  {current} (latest: {latest})");
     println!("  claude:    {claude}");
-    println!("  mcp:       {mcp_count} registered {}", s.mcp_servers_registered.join(", ").chars().take(60).collect::<String>());
+    println!(
+        "  mcp:       {mcp_count} registered {}",
+        s.mcp_servers_registered
+            .join(", ")
+            .chars()
+            .take(60)
+            .collect::<String>()
+    );
     println!("  hooks:     {hook_count} registered");
     if s.upgrade_available {
         println!("  ⚠️ upgrade available: {current} → {latest}");
@@ -474,7 +498,10 @@ mod tests {
             upgrade_available: false,
         };
         let actions = plan_actions(&state, &UpgradeScope::All);
-        assert!(actions.is_empty(), "expected no actions when fully up-to-date");
+        assert!(
+            actions.is_empty(),
+            "expected no actions when fully up-to-date"
+        );
     }
 
     #[test]
@@ -491,7 +518,9 @@ mod tests {
         };
         let actions = plan_actions(&state, &UpgradeScope::Binary);
         assert_eq!(actions.len(), 1);
-        assert!(matches!(&actions[0], UpgradeAction::UpgradeBinary { from, to } if from == "0.8.0" && to == "0.8.1"));
+        assert!(
+            matches!(&actions[0], UpgradeAction::UpgradeBinary { from, to } if from == "0.8.0" && to == "0.8.1")
+        );
     }
 
     #[test]
@@ -507,7 +536,11 @@ mod tests {
             upgrade_available: false,
         };
         let actions = plan_actions(&state, &UpgradeScope::Mcp);
-        assert!(actions.iter().any(|a| matches!(a, UpgradeAction::SyncMcpServer { name, .. } if name == "b00t-mcp")));
+        assert!(
+            actions.iter().any(
+                |a| matches!(a, UpgradeAction::SyncMcpServer { name, .. } if name == "b00t-mcp")
+            )
+        );
     }
 
     #[test]
@@ -517,7 +550,10 @@ mod tests {
 
     #[test]
     fn action_description_readable() {
-        let a = UpgradeAction::UpgradeBinary { from: "0.8.0".into(), to: "0.8.1".into() };
+        let a = UpgradeAction::UpgradeBinary {
+            from: "0.8.0".into(),
+            to: "0.8.1".into(),
+        };
         assert!(action_description(&a).contains("0.8.0"));
         assert!(action_description(&a).contains("0.8.1"));
     }

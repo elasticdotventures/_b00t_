@@ -1,5 +1,5 @@
-use crate::layer::trait_def::TensorSource;
 use crate::Embedding;
+use crate::layer::trait_def::TensorSource;
 use crate::layer::{LayerError, LayerId};
 
 use async_trait::async_trait;
@@ -375,9 +375,15 @@ impl LayerGateKeeper {
         }
         println!("    Gate audit log ({} entries):", entries.len());
         for entry in &entries {
-            let icon = if entry.decision == "pass" { "✓" } else { "✗" };
-            println!("      {icon} layer={} gate={} phase={} reason={}",
-                entry.layer_id, entry.gate, entry.phase, entry.reason);
+            let icon = if entry.decision == "pass" {
+                "✓"
+            } else {
+                "✗"
+            };
+            println!(
+                "      {icon} layer={} gate={} phase={} reason={}",
+                entry.layer_id, entry.gate, entry.phase, entry.reason
+            );
         }
     }
 }
@@ -385,14 +391,18 @@ impl LayerGateKeeper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layer::source::SafetensorsSource;
     use crate::layer::TensorSpec;
+    use crate::layer::source::SafetensorsSource;
 
     fn dummy_source(embedding_dim: usize) -> SafetensorsSource {
         SafetensorsSource::new(
             "test-layer",
             "/tmp/test.safetensors",
-            vec![TensorSpec::new("test.weight", vec![embedding_dim, 768], "F32")],
+            vec![TensorSpec::new(
+                "test.weight",
+                vec![embedding_dim, 768],
+                "F32",
+            )],
             embedding_dim,
             "bert",
         )
@@ -440,7 +450,11 @@ mod tests {
         let bad_after = Embedding {
             data: vec![0.2; 512],
         };
-        assert!(gate.verify_post_swap(&id, &before, &bad_after).await.is_err());
+        assert!(
+            gate.verify_post_swap(&id, &before, &bad_after)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

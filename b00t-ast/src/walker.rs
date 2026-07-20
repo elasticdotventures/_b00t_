@@ -3,8 +3,8 @@
 // Directory walker — traverses project trees, finds .rs files,
 // applies .gitignore-style patterns, filters test/build directories.
 
-use crate::extract;
 use crate::CodeElement;
+use crate::extract;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -46,7 +46,10 @@ pub fn collect_source_files(root: &Path, config: &WalkConfig) -> Vec<PathBuf> {
             let name = e.file_name().to_str().unwrap_or("");
             // Skip excluded directories
             if e.file_type().is_dir() {
-                !config.exclude_dirs.iter().any(|ex| name == ex.as_str() || e.path().to_string_lossy().contains(ex))
+                !config
+                    .exclude_dirs
+                    .iter()
+                    .any(|ex| name == ex.as_str() || e.path().to_string_lossy().contains(ex))
             } else {
                 true
             }

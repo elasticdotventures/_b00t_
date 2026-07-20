@@ -148,7 +148,10 @@ pub async fn handle_lfmf_advice(path: &str, tool: &str, query: Option<&str>) -> 
             LfmfOutcome::NoResults,
             query.map(String::from),
         ));
-        eprintln!("(no lessons recorded for '{}' yet — seed with: b00t lfmf {} \"<lesson>\")", tool, tool);
+        eprintln!(
+            "(no lessons recorded for '{}' yet — seed with: b00t lfmf {} \"<lesson>\")",
+            tool, tool
+        );
         return Ok(());
     }
 

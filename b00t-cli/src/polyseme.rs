@@ -42,10 +42,9 @@ pub fn load_polyseme_refs(name: &str, path: &str) -> Result<Vec<PolysemeRef>> {
             break;
         }
     }
-    let file_path = found
-        .ok_or_else(|| anyhow::anyhow!("polyseme datum '{name}' not found"))?;
-    let content = std::fs::read_to_string(&file_path)
-        .context(format!("read {}", file_path.display()))?;
+    let file_path = found.ok_or_else(|| anyhow::anyhow!("polyseme datum '{name}' not found"))?;
+    let content =
+        std::fs::read_to_string(&file_path).context(format!("read {}", file_path.display()))?;
     let config: UnifiedConfig =
         toml::from_str(&content).context(format!("parse {}", file_path.display()))?;
     Ok(config

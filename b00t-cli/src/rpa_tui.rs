@@ -7,9 +7,11 @@
 //! - Curation: saving/loading command sequences as scripts
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::ExecutableCommand;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use nucleo::Matcher;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -29,19 +31,84 @@ pub struct RpaCommand {
 
 /// Built-in RPA command palette.
 pub static COMMAND_PALETTE: &[RpaCommand] = &[
-    RpaCommand { action: "navigate", selector: "", args: "<url>", description: "Navigate to a URL" },
-    RpaCommand { action: "click", selector: "css", args: "<selector>", description: "Click an element" },
-    RpaCommand { action: "type", selector: "css", args: "<selector> <text>", description: "Type text into an input" },
-    RpaCommand { action: "evaluate", selector: "", args: "<js>", description: "Execute JavaScript" },
-    RpaCommand { action: "wait_for", selector: "css", args: "<selector>", description: "Wait for element to appear" },
-    RpaCommand { action: "get_text", selector: "", args: "", description: "Get page text content" },
-    RpaCommand { action: "screenshot", selector: "", args: "<file.png>", description: "Take a screenshot" },
-    RpaCommand { action: "screenshot", selector: "", args: "<file.png>", description: "Take a screenshot of current page" },
-    RpaCommand { action: "list_pages", selector: "", args: "", description: "List all open tabs" },
-    RpaCommand { action: "close", selector: "", args: "", description: "Close current page" },
-    RpaCommand { action: "save_script", selector: "", args: "<name>", description: "Save current sequence as script" },
-    RpaCommand { action: "load_script", selector: "", args: "<name>", description: "Load a saved script" },
-    RpaCommand { action: "run_script", selector: "", args: "<name>", description: "Run a saved script" },
+    RpaCommand {
+        action: "navigate",
+        selector: "",
+        args: "<url>",
+        description: "Navigate to a URL",
+    },
+    RpaCommand {
+        action: "click",
+        selector: "css",
+        args: "<selector>",
+        description: "Click an element",
+    },
+    RpaCommand {
+        action: "type",
+        selector: "css",
+        args: "<selector> <text>",
+        description: "Type text into an input",
+    },
+    RpaCommand {
+        action: "evaluate",
+        selector: "",
+        args: "<js>",
+        description: "Execute JavaScript",
+    },
+    RpaCommand {
+        action: "wait_for",
+        selector: "css",
+        args: "<selector>",
+        description: "Wait for element to appear",
+    },
+    RpaCommand {
+        action: "get_text",
+        selector: "",
+        args: "",
+        description: "Get page text content",
+    },
+    RpaCommand {
+        action: "screenshot",
+        selector: "",
+        args: "<file.png>",
+        description: "Take a screenshot",
+    },
+    RpaCommand {
+        action: "screenshot",
+        selector: "",
+        args: "<file.png>",
+        description: "Take a screenshot of current page",
+    },
+    RpaCommand {
+        action: "list_pages",
+        selector: "",
+        args: "",
+        description: "List all open tabs",
+    },
+    RpaCommand {
+        action: "close",
+        selector: "",
+        args: "",
+        description: "Close current page",
+    },
+    RpaCommand {
+        action: "save_script",
+        selector: "",
+        args: "<name>",
+        description: "Save current sequence as script",
+    },
+    RpaCommand {
+        action: "load_script",
+        selector: "",
+        args: "<name>",
+        description: "Load a saved script",
+    },
+    RpaCommand {
+        action: "run_script",
+        selector: "",
+        args: "<name>",
+        description: "Run a saved script",
+    },
 ];
 
 /// Curation entry — a user-selected sequence of commands.
@@ -100,24 +167,38 @@ impl RpaTuiState {
         let all: Vec<(usize, &'static RpaCommand)> = COMMAND_PALETTE.iter().enumerate().collect();
         if self.search.is_empty() {
             self.filtered_commands = all;
-            self.selected = self.selected.min(self.filtered_commands.len().saturating_sub(1));
+            self.selected = self
+                .selected
+                .min(self.filtered_commands.len().saturating_sub(1));
             self.list_state.select(Some(self.selected));
             return;
         }
         let mut scored: Vec<(u32, usize, &'static RpaCommand)> = Vec::new();
         let search_lower = self.search.to_lowercase();
         for (i, cmd) in &all {
-            let text = format!("{} {} {} {}", cmd.action, cmd.selector, cmd.args, cmd.description);
+            let text = format!(
+                "{} {} {} {}",
+                cmd.action, cmd.selector, cmd.args, cmd.description
+            );
             let text_lower = text.to_lowercase();
             // Prefix/substring match as simple fuzzy
             if text_lower.contains(&search_lower) {
-                let score = if text_lower.starts_with(&search_lower) { 100 } else { 50 };
+                let score = if text_lower.starts_with(&search_lower) {
+                    100
+                } else {
+                    50
+                };
                 scored.push((score, *i, cmd));
             }
         }
         scored.sort_by(|a, b| b.0.cmp(&a.0));
         self.filtered_commands = scored.into_iter().map(|(_, i, c)| (i, c)).collect();
-        self.selected = if self.filtered_commands.is_empty() { 0 } else { self.selected.min(self.filtered_commands.len().saturating_sub(1)) };
+        self.selected = if self.filtered_commands.is_empty() {
+            0
+        } else {
+            self.selected
+                .min(self.filtered_commands.len().saturating_sub(1))
+        };
         self.list_state.select(Some(self.selected));
     }
 
@@ -144,7 +225,10 @@ pub fn run_curation_menu() -> Result<Vec<ScriptStep>> {
     Ok(state.curated.clone())
 }
 
-fn run_tui_loop(mut terminal: Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>, state: &mut RpaTuiState) -> Result<()> {
+fn run_tui_loop(
+    mut terminal: Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>,
+    state: &mut RpaTuiState,
+) -> Result<()> {
     loop {
         terminal.draw(|f| render_ui(f, state))?;
 
@@ -155,7 +239,10 @@ fn run_tui_loop(mut terminal: Terminal<ratatui::backend::CrosstermBackend<io::St
             match key.code {
                 KeyCode::Esc => break,
                 KeyCode::Enter => {
-                    let action = state.selected_cmd().map(|c| c.action.to_string()).unwrap_or_default();
+                    let action = state
+                        .selected_cmd()
+                        .map(|c| c.action.to_string())
+                        .unwrap_or_default();
                     if let Some(cmd) = state.selected_cmd() {
                         let step = ScriptStep {
                             action: cmd.action.to_string(),
@@ -202,10 +289,10 @@ fn render_ui(frame: &mut Frame, state: &RpaTuiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // search bar
-            Constraint::Min(1),     // command list
-            Constraint::Length(3),  // curated list
-            Constraint::Length(1),  // status bar
+            Constraint::Length(3), // search bar
+            Constraint::Min(1),    // command list
+            Constraint::Length(3), // curated list
+            Constraint::Length(1), // status bar
         ])
         .split(area);
 
@@ -216,8 +303,11 @@ fn render_ui(frame: &mut Frame, state: &RpaTuiState) {
     } else {
         format!("🔍 {}", state.search)
     };
-    let search = Paragraph::new(Span::styled(search_text, Style::default().fg(Color::Cyan)))
-        .block(Block::default().borders(Borders::ALL).title(" Search Commands "));
+    let search = Paragraph::new(Span::styled(search_text, Style::default().fg(Color::Cyan))).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Search Commands "),
+    );
     frame.render_widget(search, chunks[0]);
 
     // Command list
@@ -228,7 +318,11 @@ fn render_ui(frame: &mut Frame, state: &RpaTuiState) {
             let text = format!(
                 " {} {} {}  {}",
                 cmd.action,
-                if cmd.selector.is_empty() { "".to_string() } else { format!("[{}]", cmd.selector) },
+                if cmd.selector.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("[{}]", cmd.selector)
+                },
                 cmd.args,
                 cmd.description,
             );
@@ -262,12 +356,22 @@ fn render_ui(frame: &mut Frame, state: &RpaTuiState) {
             .collect();
         steps.join("  →  ")
     };
-    let curated = Paragraph::new(Span::styled(curated_text, Style::default().fg(Color::Green)))
-        .block(Block::default().borders(Borders::ALL).title(format!(" Script ({} steps) ", state.curated.len())));
+    let curated = Paragraph::new(Span::styled(
+        curated_text,
+        Style::default().fg(Color::Green),
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" Script ({} steps) ", state.curated.len())),
+    );
     frame.render_widget(curated, chunks[2]);
 
     // Status bar
-    let status = Paragraph::new(Span::styled(&state.status, Style::default().fg(Color::Yellow)));
+    let status = Paragraph::new(Span::styled(
+        &state.status,
+        Style::default().fg(Color::Yellow),
+    ));
     frame.render_widget(status, chunks[3]);
 }
 
@@ -275,6 +379,12 @@ fn render_ui(frame: &mut Frame, state: &RpaTuiState) {
 pub fn print_script(script: &[ScriptStep]) {
     println!("📋 RPA Script ({} steps):", script.len());
     for (i, step) in script.iter().enumerate() {
-        println!("  {}. {} {} {}", i + 1, step.action, step.selector, step.args);
+        println!(
+            "  {}. {} {} {}",
+            i + 1,
+            step.action,
+            step.selector,
+            step.args
+        );
     }
 }
