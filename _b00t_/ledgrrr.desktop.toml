@@ -1,0 +1,44 @@
+# ledgrrr.desktop.toml — native Windows desktop packaging target (PRD-10 §3.2).
+# @tribal: `type = "vendor"` — this datum tracks a vendored-but-not-yet-built
+#   packaging target (MSIX/external-location installer), not a runnable
+#   binary. `detect` intentionally fails until the installer project exists;
+#   do NOT change this to a fake-success check just to turn the datum green.
+
+[b00t]
+name = "ledgrrr"
+type = "vendor"
+hint = "Native Windows installer target for the ledgrrr desktop stack (ledgrrr-service.exe, ledgrrr-tray.exe, ledgrrr-mcp.exe, model/runtime assets, WebView2 prereqs). Missing — PRD-10 §3.2/§8. MCPB is explicitly not this installer (PRD-10 §10)."
+depends_on = ["ledgrrr.cli", "ledgrrr.mcp", "ledgrrr.service"]
+
+detect = [
+    "test -f vendor/ledgrrr/installer/ledgrrr.wxs || test -f vendor/ledgrrr/installer/AppxManifest.xml",
+    "echo 'not-built'",
+]
+
+[b00t.install]
+status = "missing"
+privilege_required = "elevated"
+owns = [
+  "ledgrrr-service.exe",
+  "ledgrrr-tray.exe",
+  "ledgrrr-mcp.exe",
+  "local model/runtime assets",
+  "Start Menu entries",
+  "repair/uninstall registration",
+  "update channel metadata",
+]
+
+[[b00t.references]]
+name = "PRD-10 §3.2 Native Windows Installer"
+url = "vendor/ledgrrr/PRD-10.md"
+
+[[b00t.references]]
+name = "PRD-10 §8 CI and Release Requirements"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr desktop installer — MSIX/native Windows package, not yet built
+# tags: vendor, windows, installer, msix, prd-10
+# tier: frontier
+# cmds: none — no installer artifact exists yet
+# complexity: 8
