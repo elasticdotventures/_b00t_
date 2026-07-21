@@ -7,6 +7,7 @@ hint = "Hive operator role: MCP assimilation, crew dispatch, resource-gated mult
 depends_on = ["b00t.cli", "just.cli", "git.cli", "gh.cli", "python.cli"]
 
 skills = [
+    # <|🦨: aspirational — next 8 skill datums never authored; roadmap _b00t_#850, triage #163 |>
     "mcp-assimilation",
     "crew-scaling",
     "k0mmand3r-dispatch",
@@ -15,6 +16,7 @@ skills = [
     "langchain-tool-routing",
     "handoff",
     "sm0l",
+    # <|🦨: repoint-candidate — datum-authoring.skill exists; #163 |>
     "datum",
     "wrkflw.cli",
     "karpathy-autoresearch",

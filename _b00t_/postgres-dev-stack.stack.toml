@@ -6,6 +6,7 @@ hint = "Full PostgreSQL development environment with pgAdmin and Redis"
 # Stack members - datums that will be installed together
 members = [
     "postgres-enhanced.docker",
+    # <|🦨: aspirational — pgadmin.docker container datum never authored; author to complete stack; _b00t_#850, #163 |>
     "pgadmin.docker",
     "redis.docker",
 ]
