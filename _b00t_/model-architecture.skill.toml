@@ -1,0 +1,15 @@
+# 🦨 unfinished — the ai-wizard role and its fine-tuning practice are early/aspirational in this hive
+[b00t]
+name = "model-architecture"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Understand the model architecture being fine-tuned (layers, attention, context length) well enough to pick sane LoRA targets"
+keywords = ["model", "architecture", "fine-tuning", "ml"]
+
+[b00t.learn]
+content = """
+Model-architecture literacy for the ai-wizard role: knowing which
+layers/modules a given base model exposes for LoRA adaptation before
+setting hyperparameters. Backed by `b00t-cli model` (AI model datum
+management) and `finetune.hive.toml`.
+"""

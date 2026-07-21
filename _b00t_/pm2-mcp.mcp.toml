@@ -3,7 +3,6 @@ name = "pm2-mcp"
 type = "mcp"
 hint = "PM2 process manager MCP — start/stop/restart/status/logs for b00t background services"
 
-entangled_cli = ["pm2-mcp.cli"]
 icon = "⚡"
 tier = "dev"
 status = "active"

@@ -3,7 +3,6 @@ name = "arbor"
 type = "mcp"
 hint = "Arbor — native agentic coding desktop (worktrees, terminals, diffs, MCP)"
 
-entangled_cli = ["arbor.cli"]
 requires_sudo = false
 
 [[b00t.mcp.stdio]]

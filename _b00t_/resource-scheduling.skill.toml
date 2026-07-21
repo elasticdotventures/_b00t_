@@ -1,0 +1,16 @@
+# 🦨 unfinished — budget/scheduler/runpod commands exist but cross-resource scheduling logic as described here is not confirmed implemented
+[b00t]
+name = "resource-scheduling"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Allocate budget/compute/time across competing tasks by priority and availability, not first-come-first-served"
+keywords = ["resource", "scheduling", "budget", "allocation"]
+
+[b00t.learn]
+content = """
+Resource scheduling covers both compute (RunPod GPU pods, training
+jobs) and attention/token budget. Backed by `b00t-cli budget`
+(budget-aware scheduling and tracking), `b00t-cli scheduler`
+(SQLite-backed job scheduler), and `b00t-cli runpod` for GPU cloud
+allocation.
+"""

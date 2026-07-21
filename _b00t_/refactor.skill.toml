@@ -1,0 +1,14 @@
+[b00t]
+name = "refactor"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Restructure existing code without changing its observable behavior — verified by the same tests passing before and after"
+keywords = ["refactor", "restructure", "code-quality"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: change code structure/naming/organization
+while keeping behavior identical, proven by an unchanged test-pass
+result before and after. Never bundle a refactor with a behavior
+change in the same edit.
+"""

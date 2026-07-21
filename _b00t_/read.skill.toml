@@ -1,0 +1,13 @@
+[b00t]
+name = "read"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Read a file's contents before editing it — the mandatory precondition for every Edit action in this hive's tooling"
+keywords = ["read", "file", "inspect"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: inspect a file's current content. Required
+before `Edit` in this hive's tool contract — you cannot safely change what
+you have not read.
+"""

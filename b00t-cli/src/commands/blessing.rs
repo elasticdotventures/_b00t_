@@ -13,8 +13,9 @@
 //! ```
 
 use crate::datum_utils::get_all_datums;
-use crate::DatumType;
+use crate::{BootDatum, DatumType};
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 fn find_b00t_dir() -> Result<PathBuf> {
@@ -130,28 +131,54 @@ fn list_roles(b00t_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Resolve the datum for a role name.
+///
+/// Datum keys are `<name>.<type>` derived from filename (e.g.
+/// `operator.role.toml` -> key `"operator.role"`), so a bare role name
+/// like `"operator"` never matches the map directly except by luck — that
+/// was the bug here: `--role operator` silently returned an empty
+/// manifest despite `operator.role.toml` having real `depends_on`, while
+/// `--role executive` only worked because a workaround bare-named
+/// `executive.toml` happened to exist alongside the real
+/// `executive.role.toml`.
+///
+/// Priority:
+///   1. exact `"{role}.role"` — the canonical role-datum key.
+///   2. exact bare `role` — legacy/non-standard datum naming.
+///   3. any key starting with `"{role}."`, preferring one whose
+///      `datum_type` is `Role`; candidates are sorted by key first so the
+///      result is deterministic regardless of `HashMap` iteration order.
+///
+/// Never falls back to "any Role-typed datum in the store" — a role
+/// lookup that finds no match for `role` returns `None`, not an
+/// unrelated role's manifest. Returning the wrong role's tool-
+/// authorization manifest is worse than returning none.
+fn find_role_datum<'a>(datums: &'a HashMap<String, BootDatum>, role: &str) -> Option<&'a BootDatum> {
+    if let Some(d) = datums.get(&format!("{role}.role")) {
+        return Some(d);
+    }
+    if let Some(d) = datums.get(role) {
+        return Some(d);
+    }
+    let prefix = format!("{role}.");
+    let mut candidates: Vec<(&String, &BootDatum)> =
+        datums.iter().filter(|(k, _)| k.starts_with(&prefix)).collect();
+    candidates.sort_by(|(a, _), (b, _)| a.cmp(b));
+    candidates
+        .iter()
+        .find(|(_, d)| {
+            d.datum_type
+                .as_ref()
+                .map(|t| matches!(t, DatumType::Role))
+                .unwrap_or(false)
+        })
+        .or_else(|| candidates.first())
+        .map(|(_, d)| *d)
+}
+
 fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
     let datums = get_all_datums(b00t_path)?;
-
-    // Find role datum — prefer typed Role, then exact match, then prefix match.
-    // Mirror whoami.rs load_role_datum() type-preference behaviour.
-    let role_datum = datums
-        .get(role)
-        .or_else(|| {
-            // Prefer any datum whose datum_type is Role
-            datums.values().find(|d| {
-                d.datum_type
-                    .as_ref()
-                    .map(|t| matches!(t, DatumType::Role))
-                    .unwrap_or(false)
-            })
-        })
-        .or_else(|| {
-            datums
-                .iter()
-                .find(|(k, _)| k.starts_with(role))
-                .map(|(_, v)| v)
-        });
+    let role_datum = find_role_datum(&datums, role);
 
     let direct_deps: Vec<String> = role_datum
         .and_then(|d| d.depends_on.clone())
@@ -282,5 +309,63 @@ mod tests {
         let rust = datums.get("rust.skill").unwrap();
         let expected = vec!["cargo.*".to_string(), "rustfmt".to_string()];
         assert_eq!(rust.unlocks.as_deref(), Some(expected.as_slice()));
+    }
+
+    /// Regression test for the "operator" bug: a role that exists ONLY as
+    /// `<name>.role.toml` (no bare `<name>.toml` workaround file) must
+    /// still resolve to its real depends_on via the exact `"{role}.role"`
+    /// key, not silently come back empty.
+    #[test]
+    fn test_find_role_datum_resolves_canonical_role_key_without_bare_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        fs::write(
+            dir.path().join("operator.role.toml"),
+            "[b00t]\nname = \"operator\"\ntype = \"role\"\nhint = \"Operator\"\ndepends_on = [\"git.cli\"]\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("git.cli.toml"),
+            "[b00t]\nname = \"git\"\ntype = \"cli\"\nhint = \"Git\"\nunlocks = [\"git *\"]\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums(&path).unwrap();
+        let found = find_role_datum(&datums, "operator").expect("operator role must resolve");
+        assert_eq!(found.depends_on.as_deref(), Some(["git.cli".to_string()].as_slice()));
+    }
+
+    /// Regression test: with multiple Role-typed datums in the store,
+    /// requesting one role must never silently return a different role's
+    /// manifest (the old unfiltered `datums.values().find(Role)` fallback
+    /// could do exactly that).
+    #[test]
+    fn test_find_role_datum_does_not_cross_contaminate_between_roles() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        fs::write(
+            dir.path().join("frontend.role.toml"),
+            "[b00t]\nname = \"frontend\"\ntype = \"role\"\nhint = \"Frontend\"\ndepends_on = [\"npm.cli\"]\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("backend.role.toml"),
+            "[b00t]\nname = \"backend\"\ntype = \"role\"\nhint = \"Backend\"\ndepends_on = [\"cargo.cli\"]\n",
+        )
+        .unwrap();
+
+        let datums = get_all_datums(&path).unwrap();
+        let frontend = find_role_datum(&datums, "frontend").expect("frontend role must resolve");
+        assert_eq!(frontend.depends_on.as_deref(), Some(["npm.cli".to_string()].as_slice()));
+        let backend = find_role_datum(&datums, "backend").expect("backend role must resolve");
+        assert_eq!(backend.depends_on.as_deref(), Some(["cargo.cli".to_string()].as_slice()));
+    }
+
+    #[test]
+    fn test_find_role_datum_unknown_role_returns_none_not_a_guess() {
+        let dir = TempDir::new().unwrap();
+        let path = make_b00t(&dir);
+        let datums = get_all_datums(&path).unwrap();
+        assert!(find_role_datum(&datums, "totally-unknown-role").is_none());
     }
 }

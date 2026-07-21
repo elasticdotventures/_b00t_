@@ -1,0 +1,16 @@
+# 🦨 unfinished — composite of agent/crew/task commands; the 'supervision' half specifically is not confirmed as implemented behavior
+[b00t]
+name = "sub-agent delegation and supervision"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Spawn a sub-agent for an independent unit of work, then supervise it to completion rather than doing the work directly"
+keywords = ["sub-agent", "delegation", "supervision", "orchestration"]
+
+[b00t.learn]
+content = """
+Delegation-first orchestration: an orchestrator role spawns sub-agents
+for independent, parallelizable work and supervises them to completion —
+checking in, not micromanaging. Backed by `b00t-cli agent`
+(coordination/management), `b00t-cli crew` (Operator-Player-Captain
+hierarchy), and `b00t-cli task`/`job` for tracking delegated work.
+"""

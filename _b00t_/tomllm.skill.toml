@@ -1,0 +1,17 @@
+[b00t]
+name = "tomllm"
+type = "skill"
+type_tags = ["transferable"]
+hint = "The .tomllm/.tomllmd compound document format — valid TOML plus enriched # comment conventions and summary-level distillation (verbatim/executive/epigram)"
+keywords = ["tomllm", "tomllmd", "format", "compound-document"]
+
+[b00t.learn]
+content = """
+.tomllm = valid TOML + `# @tribal:`/`# 🤓` (non-obvious knowledge) and
+`# @example:` conventions, tail-mapped with a `# b00t:map v1` block
+(summary/tags/tier/cmds/complexity). `.tomllmd` extends this into a
+compound document format that can merge multiple datums at different
+summary levels (verbatim/executive/epigram) into one higher-order
+meta-learn datum. Used pervasively across this store (e.g.
+qwen-code.cli.tomllm, wow-check.wow.tomllmd).
+"""

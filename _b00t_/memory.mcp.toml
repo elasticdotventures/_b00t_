@@ -3,8 +3,6 @@ name = "memory"
 type = "mcp"
 hint = "MCP server"
 
-entangled_cli = ["memory.cli"]
-
 [[b00t.mcp.stdio]]
 transport = "stdio"
 command = "npx"

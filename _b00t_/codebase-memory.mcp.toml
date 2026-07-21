@@ -3,7 +3,6 @@ name = "codebase-memory"
 type = "mcp"
 hint = "Codebase memory MCP server - knowledge graph for code indexing, search, and analysis"
 
-entangled_cli = ["codebase-memory.cli"]
 # 🤓 upstream package version 0.8.1. Literal `version` removed from here: it
 #    collided with the version-detection command below (duplicate [b00t] key →
 #    TOML parse error: "Failed to parse MCP config TOML"). Keep ONE version key.

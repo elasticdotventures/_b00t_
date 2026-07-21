@@ -3,7 +3,6 @@ name = "ledgrrr-mcp"
 type = "mcp"
 hint = "MCP server"
 
-entangled_cli = ["ledgrrr-mcp.cli"]
 requires_sudo = false
 
 [[b00t.mcp.stdio]]

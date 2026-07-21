@@ -3,8 +3,6 @@ name = "crawl4ai-mcp"
 type = "mcp"
 hint = "MCP server"
 
-entangled_cli = ["crawl4ai-mcp.cli"]
-
 [b00t.env]
 CRAWL4AI_MCP_LOG = "INFO"
 

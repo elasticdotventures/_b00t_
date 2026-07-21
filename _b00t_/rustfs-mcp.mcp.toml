@@ -3,7 +3,6 @@ name = "rustfs-mcp"
 type = "mcp"
 hint = "RustFS distributed object storage MCP server for S3-compatible storage operations"
 
-entangled_cli = ["rustfs-mcp.cli"]
 lfmf_category = "rustfs"
 
 [b00t.learn]

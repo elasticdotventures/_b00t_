@@ -1,0 +1,16 @@
+[b00t]
+name = "role-scoped capability loading"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Load only the blessings/skills a role is authorized for — no learning without authorization, no authorization without the role's manifest"
+keywords = ["role", "blessing", "capability", "authorization", "scoping"]
+
+[b00t.learn]
+content = """
+A role's capability surface is not implicit — it comes from
+`b00t-cli blessing --manifest --role=<R>`, which walks the role's
+`depends_on` graph to produce a tool-authorization manifest. Learning a
+skill datum unlocks the tools in its `unlocks` field; no learning means no
+authorization. An orchestrator must load capabilities per-role, not grant
+everything to every sub-agent.
+"""

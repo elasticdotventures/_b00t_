@@ -1,0 +1,17 @@
+[b00t]
+name = "datum"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Read/write/validate typed .toml capability records in _b00t_/ — the hive's single source of truth for what tools, skills, roles, and agents exist"
+keywords = ["datum", "b00t", "capability", "toml", "cmdb"]
+
+[b00t.learn]
+content = """
+The datum system is the hive CMDB: every CLI/MCP/skill/role/agent is a
+typed `[b00t]` TOML record under `_b00t_/`, subject-keyed as
+`<name>.<type>`. Backed by the full `b00t-cli datum` command family
+(show/tree/search/filter/graph/neighbors/validate/scaffold/...). Always
+run `datum validate --graph` after adding or editing a datum's
+depends_on/skills/entangled_* references — dangling references block the
+commit-hook gate.
+"""

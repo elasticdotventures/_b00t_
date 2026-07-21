@@ -1,0 +1,15 @@
+[b00t]
+name = "sm0l"
+type = "skill"
+type_tags = ["transferable"]
+hint = "The cheapest cognitive tier (qwen2.5-3B, haiku) — tests, lint, classify, grep; output contract is PASS or FAIL with a 5-line excerpt"
+keywords = ["sm0l", "tier", "cheap-model", "cognitive-tier"]
+
+[b00t.learn]
+content = """
+sm0l is the smallest cognitive tier in the hive's routing table (see
+[[cognitive-tier-routing]]): reserved for mechanical, low-judgment tasks
+(tests, lint, classify, grep) with a strict `PASS` or `FAIL: <5-line
+excerpt>` output contract — never given a task that needs judgment or
+novel design.
+"""

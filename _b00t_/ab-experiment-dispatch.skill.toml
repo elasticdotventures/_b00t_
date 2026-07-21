@@ -1,0 +1,13 @@
+[b00t]
+name = "ab-experiment-dispatch"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Dispatch an A/B experiment across parallel sub-agents with stateless scoring, instead of running variants serially"
+keywords = ["ab-testing", "experiment", "dispatch", "parallel"]
+
+[b00t.learn]
+content = """
+Backed directly by `b00t-cli experiment` ("Dispatch A/B experiments
+with parallel sub-agents and stateless scoring") — the canonical way this
+hive compares two approaches empirically rather than by opinion.
+"""

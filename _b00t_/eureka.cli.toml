@@ -8,7 +8,7 @@ install = { cargo = "eureka" }
 update = "cargo install eureka --force"
 version = "eureka --version"
 version_regex = 'eureka (\d+\.\d+\.\d+)'
-depends_on = ["cargo.cli", "git.cli"]
+depends_on = ["rustc.cli", "git.cli"]
 
 [b00t.skill]
 type_tags = ["cli", "productivity", "notes", "ideas", "git", "markdown", "rust"]

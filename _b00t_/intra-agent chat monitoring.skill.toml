@@ -1,0 +1,15 @@
+[b00t]
+name = "intra-agent chat monitoring"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Watch the Agent Coordination Protocol (ACP) message stream between agents for stalls, errors, or governance violations"
+keywords = ["chat", "monitoring", "acp", "agent-coordination"]
+
+[b00t.learn]
+content = """
+Intra-agent chat monitoring watches the message stream agents use to
+coordinate with each other (not user-facing chat) for stalled
+conversations, error loops, or policy violations. Backed by `b00t-cli
+chat` ("Agent Coordination Protocol (ACP) - send messages to agents") and
+`b00t-cli observability` for violation telemetry.
+"""

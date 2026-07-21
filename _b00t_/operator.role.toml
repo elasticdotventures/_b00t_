@@ -13,7 +13,7 @@ skills = [
     "hive-cmdb-query",
     "one-pizza-team-enforcement",
     "langchain-tool-routing",
-    "bouncer",
+    "handoff",
     "sm0l",
     "datum",
     "wrkflw.cli",

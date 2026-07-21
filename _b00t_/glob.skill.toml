@@ -1,0 +1,13 @@
+[b00t]
+name = "glob"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Find files by name/path pattern before reading or editing them, instead of guessing paths"
+keywords = ["glob", "file", "search", "pattern"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: locate files by name/path pattern (e.g.
+`src/**/*.rs`) as the first step before Read/Edit, rather than guessing a
+single path.
+"""

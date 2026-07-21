@@ -1,0 +1,33 @@
+# node.cli.toml — minimal reference datum for the Node.js runtime.
+# @tribal: created to close dangling `depends_on = ["node.cli"]`/["node"]
+#   references (geminicli.cli, zellij-mcp-server.mcp, qwen-code.cli) found
+#   during a datum-graph audit. No install script is fabricated here — Node
+#   version management (nvm/fnm/pkgx/system package manager) is an
+#   environment choice, not something b00t should silently pick for you.
+
+[b00t]
+name = "node"
+type = "cli"
+hint = "Node.js JavaScript runtime — required by several npx/npm-based MCP servers in this store."
+version = "node --version"
+version_regex = 'v(\d+\.\d+\.\d+)'
+docs = "https://nodejs.org/en/download"
+
+[validate]
+command = "node --version"
+regex = "^v\\d+"
+
+[[usage]]
+description = "Check Node.js version"
+command = "node --version"
+
+[[usage]]
+description = "Check npm version"
+command = "npm --version"
+
+# b00t:map v1
+# summary: node — minimal detect-only datum, no fabricated install script
+# tags: node, nodejs, npm, npx, runtime, cli
+# tier: sm0l
+# cmds: node --version
+# complexity: 1
