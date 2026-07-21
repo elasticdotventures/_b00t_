@@ -1,0 +1,17 @@
+# 🦨 unfinished — b00t-cli crew exists; no confirmed enforcement of any team-size cap
+[b00t]
+name = "one-pizza-team-enforcement"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Keep a crew small enough that one pizza feeds it — cap crew/agent-team size rather than letting delegation sprawl"
+keywords = ["crew", "team-size", "scaling", "constraint"]
+
+[b00t.learn]
+content = """
+Adapts Amazon's "two-pizza team" rule to agent crews: an operator
+enforces a hard cap on how many concurrent agents/sub-agents a crew grows
+to, preventing coordination overhead from outgrowing the value of
+parallel work. Enforced alongside `b00t-cli crew` (Operator-Player-Captain
+hierarchy) and any `hive.exclusion.group` constraints in the active hive
+profile.
+"""

@@ -1,0 +1,16 @@
+# 🦨 unfinished — same as model-architecture — ai-wizard practice is early/aspirational
+[b00t]
+name = "lora-hyperparams"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Pick LoRA rank/alpha/dropout/target-modules for a fine-tuning run based on the base model and dataset size, not defaults copied blindly"
+keywords = ["lora", "hyperparameters", "fine-tuning", "ml"]
+
+[b00t.learn]
+content = """
+LoRA hyperparameter selection (rank, alpha, dropout, target modules,
+learning rate) for the ai-wizard role's fine-tuning work. Backed by
+`b00t-cli provider` ("Multi-provider compute — inference endpoints +
+training jobs (runpod, hf)") and the existing `ai-finetune.skill.toml`
+methodology skill.
+"""

@@ -1,0 +1,15 @@
+# 🦨 unfinished — generic executive principle; no single tool backs this directly
+[b00t]
+name = "delegation-first decision-making"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Default to delegating a task to a sub-agent or specialist tool before doing it yourself — direct execution is the fallback, not the default"
+keywords = ["delegation", "decision-making", "executive", "orchestration"]
+
+[b00t.learn]
+content = """
+An executive's default decision on receiving a task is "who/what
+should do this" (Codex, Gemini, a sm0l/ch0nky sub-agent, a `just`
+recipe) before "should I do this myself". Backed by `b00t-cli agent`,
+`b00t-cli crew`, and `b00t-cli task` for dispatch.
+"""

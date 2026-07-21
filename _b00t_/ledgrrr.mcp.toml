@@ -1,0 +1,60 @@
+# ledgrrr.mcp.toml — the Claude Desktop MCPB controller surface (PRD-10 §3.1).
+# @tribal: NOT the same MCP surface as ledgrrr.cli's [b00t.providers.mcp]
+#   block (tool_prefix "ledgerr_", binary ledgerr-mcp-server — the domain
+#   bookkeeping tools). This datum is the desktop/controller binary
+#   ledgrrr-mcp, tool_prefix "ledgrrr_", vendored at
+#   vendor/ledgrrr/crates/ledgerr-desktop-agent/. It inspects/plans local
+#   host state; it is explicitly NOT the privileged installer (PRD-10 §10).
+
+[b00t]
+name = "ledgrrr"
+type = "mcp"
+hint = "Claude Desktop MCPB controller — status/plan/render/simulate/export-office over stdio JSON-RPC. Thin wrapper; delegates domain work to ledgerr_* tools, never installs privileged state itself."
+depends_on = ["ledgrrr.cli"]
+
+[b00t.learn]
+topic = "ledgrrr-desktop-agent"
+auto_digest = false
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+command = "ledgrrr-mcp"
+
+[b00t.providers.mcp]
+tool_prefix = "ledgrrr_"
+tools = [
+  "ledgrrr_status",
+  "ledgrrr_install_plan",
+  "ledgrrr_install_desktop",
+  "ledgrrr_start_service",
+  "ledgrrr_stop_service",
+  "ledgrrr_open_tray",
+  "ledgrrr_render_diagram",
+  "ledgrrr_simulate_pipeline",
+  "ledgrrr_export_office_artifact",
+  "ledgrrr_repair",
+  "ledgrrr_uninstall",
+]
+
+[[b00t.usage]]
+description = "Build the controller binary from the vendored checkout"
+command = "cd vendor/ledgrrr && cargo build -p ledgerr-desktop-agent --bin ledgrrr-mcp"
+
+[[b00t.usage]]
+description = "Run stdio transport locally"
+command = "vendor/ledgrrr/target/debug/ledgrrr-mcp"
+
+[[b00t.usage]]
+description = "Register with Claude Desktop (stdio) — Phase 1, pre-MCPB packaging"
+command = "claude mcp add ledgrrr -- vendor/ledgrrr/target/debug/ledgrrr-mcp"
+
+[[b00t.references]]
+name = "PRD-10: Desktop Agent, MCPB Bootstrapper, Office Playbook, Local Simulation Runtime"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr-mcp controller — Claude Desktop stdio MCP surface, plan-first for privileged actions
+# tags: mcp, desktop, controller, claude, stdio, prd-10
+# tier: ch0nky
+# cmds: vendor/ledgrrr/target/debug/ledgrrr-mcp
+# complexity: 4

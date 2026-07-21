@@ -953,13 +953,13 @@ async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
         RunpodSubCommands::Status { id } => {
             let pod = client.get_pod(&id, Default::default()).await?;
             let st = pod.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-            let cost = pod.cost_per_hr.unwrap_or(0.0);
+            let cost = pod.cost_per_hr;
             println!("pod={id}  status={st}  cost_per_hr=${cost:.2}");
         }
         RunpodSubCommands::List => {
             for p in client.list_pods(Default::default()).await? {
                 let st = p.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-                let cost = p.cost_per_hr.unwrap_or(0.0);
+                let cost = p.cost_per_hr;
                 println!("{}  {st}  ${cost:.2}/hr", p.id);
             }
         }

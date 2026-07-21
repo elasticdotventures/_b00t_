@@ -1,0 +1,17 @@
+# 🦨 unfinished — composite inference from experiment+crew/agent; the stated concurrency-ceiling enforcement is not confirmed implemented
+[b00t]
+name = "parallel agent fan-out"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Dispatch the same or related work to multiple sub-agents concurrently, then collect and reconcile their results"
+keywords = ["parallel", "agent", "fan-out", "concurrency", "delegation"]
+
+[b00t.learn]
+content = """
+Fan-out dispatches independent units of work to multiple sub-agents at
+once rather than serially, then reconciles results. Backed by
+`b00t-cli experiment` ("Dispatch A/B experiments with parallel
+sub-agents") and `b00t-cli crew`/`agent` for general multi-agent
+coordination. Respect the hive's stated concurrency ceiling (e.g. "at
+most 2 concurrent sub-agents") — fan-out is not unlimited.
+"""

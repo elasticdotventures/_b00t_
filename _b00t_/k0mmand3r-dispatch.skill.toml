@@ -1,0 +1,14 @@
+[b00t]
+name = "k0mmand3r-dispatch"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Dispatch a structured command through the k0mmand3r crate's parser/dispatch pipeline instead of hand-rolled argv parsing"
+keywords = ["k0mmand3r", "dispatch", "command", "rust"]
+
+[b00t.learn]
+content = """
+k0mmand3r is a workspace crate (`~/.dotfiles/k0mmand3r`) providing
+structured command parsing/dispatch used across the hive's Rust tooling.
+Operators route command execution through it rather than re-implementing
+argv parsing per tool.
+"""

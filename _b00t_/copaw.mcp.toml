@@ -3,8 +3,6 @@ name = "copaw"
 type = "mcp"
 hint = "Copaw memory provider - PDF, chat, agent memory via MCP. Preferred b00t memory backend when available. See: https://copaw.agentscope.io/docs/memory"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["copaw.cli"]
 desires = "latest"
 
 install = '''

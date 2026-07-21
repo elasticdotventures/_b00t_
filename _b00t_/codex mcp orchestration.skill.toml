@@ -1,0 +1,13 @@
+[b00t]
+name = "codex mcp orchestration"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Route heavy implementation work to Codex via MCP rather than implementing it directly in the executive's own context"
+keywords = ["codex", "mcp", "orchestration", "delegation"]
+
+[b00t.learn]
+content = """
+Delegating implementation-heavy work to Codex through the hive's
+existing openai-codex-mcp.mcp datum, keeping the executive role focused on
+decisions rather than code authorship.
+"""

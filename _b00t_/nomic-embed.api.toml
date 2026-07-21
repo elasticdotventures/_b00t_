@@ -7,8 +7,7 @@ desires = "latest"
 protocol = "openai-embeddings-v1"
 implements = ["openai-compat-base"]
 
-# <|🦨: repoint-candidate — llama-server never authored; llama-cpp-server.container exists; #163 |>
-depends_on = ["llama-server"]
+depends_on = ["llama-cpp-server.container"]
 
 [b00t.provides]
 capability = "embeddings"

@@ -3,8 +3,6 @@ name = "pm2-mcp"
 type = "mcp"
 hint = "PM2 process manager MCP — start/stop/restart/status/logs for b00t background services"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["pm2-mcp.cli"]
 icon = "⚡"
 tier = "dev"
 status = "active"

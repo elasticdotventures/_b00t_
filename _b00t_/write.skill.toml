@@ -1,0 +1,13 @@
+[b00t]
+name = "write"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Create a new file with fully-specified content — the coding-agent primitive underlying most specialist.role tasks"
+keywords = ["write", "file", "create"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: create a new file with complete content in one
+shot. In this hive it maps to the agent host's `Write` tool, used when no
+prior version of the file exists (prefer `Edit` for existing files).
+"""

@@ -1,0 +1,13 @@
+[b00t]
+name = "code"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Write new implementation code that satisfies a stated requirement, following the codebase's existing conventions"
+keywords = ["code", "implementation", "development"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: author new code (as opposed to `refactor`,
+which restructures existing code without changing behavior, or `debug`,
+which diagnoses failures).
+"""

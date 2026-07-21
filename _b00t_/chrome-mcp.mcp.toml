@@ -3,9 +3,6 @@ name = "chrome-mcp"
 type = "mcp"
 hint = "Chrome DevTools automation via local CDP bridge"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["chrome-mcp.cli"]
-
 [[b00t.mcp.stdio]]
 requires = ["node"]
 transport = "stdio"

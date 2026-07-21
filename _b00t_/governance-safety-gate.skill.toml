@@ -1,0 +1,14 @@
+[b00t]
+name = "governance-safety-gate"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Block a privileged or destructive action until it passes the hive's governance/safety gate — never silently bypass"
+keywords = ["governance", "safety", "gate", "guard"]
+
+[b00t.learn]
+content = """
+Every privileged or destructive worker action must clear a
+governance/safety gate before executing, not after. Backed by
+`b00t-cli guard` (guard management — list/reset/add session guards) and
+`b00t-cli gates` (list `[[b00t.gate]]` declarations across MCP datums).
+"""

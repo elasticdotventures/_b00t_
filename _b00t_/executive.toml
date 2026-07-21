@@ -12,7 +12,7 @@ skills = [
     "parallel agent fan-out",
     "context budget tracking",
     "compliance enforcement",
-    "tdd/verification gating",
+    "tdd-verification-gating",
 ]
 compliance = [
     "Delegate >50 LOC or research tasks to Codex/Gemini via b00t MCP",

@@ -14,7 +14,7 @@ skills = [
     "hive-cmdb-query",
     "one-pizza-team-enforcement",
     "langchain-tool-routing",
-    "bouncer",
+    "handoff",
     "sm0l",
     # <|🦨: repoint-candidate — datum-authoring.skill exists; #163 |>
     "datum",

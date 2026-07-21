@@ -1,0 +1,29 @@
+# Renamed from "bouncer" (skill-naming layer only) to match current
+# multi-agent nomenclature: control/context transfer between agents, or
+# between an agent and a validation boundary, is called a "handoff" (OpenAI
+# Agents SDK / Swarm usage). The underlying b00t-cli command is still
+# literally named `bouncer` ([b00t.agent.bouncer] tables, `b00t-cli bouncer`
+# subcommand) — that is a separate, larger rename NOT done here.
+# 🦨 unfinished — CLI/command surface still says "bouncer"; only the skill
+#    concept name changed. Renaming b00t-cli itself needs its own PR.
+
+[b00t]
+name = "handoff"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Hand off control/context to another agent or to a validation boundary at a trust edge — currently implemented via the bouncer input/output gate mechanism"
+keywords = ["handoff", "bouncer", "gatekeeper", "validation", "guard", "boundary", "agent-transfer"]
+
+[b00t.learn]
+content = """
+Handoff: transferring control (or validating a transfer) at a trust
+boundary — agent-to-agent, agent-to-human, or input/output crossing into a
+downstream system. Today this hive implements the validation side of
+handoff via the bouncer pattern: `b00t-cli bouncer` (validate/audit/config)
+and `[b00t.agent.bouncer]` input/output gate tables on individual agent
+datums (see alpha.agent.toml, operator.agent.toml). The agent-to-agent
+control-transfer side (as in OpenAI's Agents SDK "handoff" primitive) is
+not yet a first-class b00t-cli concept — routing a task to a different
+agent today goes through `b00t-cli agent`/`crew`/`task`, not a dedicated
+handoff verb.
+"""

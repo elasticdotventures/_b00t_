@@ -1,0 +1,36 @@
+# ledgrrr.service.toml — Phase 1 user-level background runtime (PRD-10 §3.2).
+# @tribal: this is NOT an OS service registration yet. `type = "runtime"`
+#   because today it is a plain spawned/killed child process with a
+#   heartbeat file, controlled by ledgrrr.mcp's start/stop tools. Real
+#   systemd unit / Windows Service Control Manager registration is native
+#   installer scope (PRD-10 §3.2, §7) and does not exist yet — do not
+#   promote this datum's semantics past what ledgrrr_status actually
+#   measures (pid liveness + heartbeat freshness).
+
+[b00t]
+name = "ledgrrr"
+type = "runtime"
+hint = "ledgrrr-service — user-level long-lived heartbeat process. Phase 1 has no OS service manager; start/stop/status flow through ledgrrr_start_service/ledgrrr_stop_service/ledgrrr_status."
+depends_on = ["ledgrrr.mcp"]
+
+[b00t.runtime]
+binary = "ledgrrr-service"
+
+[[b00t.usage]]
+description = "Build the service binary from the vendored checkout"
+command = "cd vendor/ledgrrr && cargo build -p ledgerr-desktop-agent --bin ledgrrr-service"
+
+[[b00t.usage]]
+description = "Start via the controller (preferred — updates the heartbeat contract)"
+command = "b00t exec ledgrrr_start_service"
+
+[[b00t.references]]
+name = "PRD-10 §3.2 Native Windows Installer"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr-service — Phase 1 user-level heartbeat process, no OS service manager yet
+# tags: runtime, service, heartbeat, prd-10
+# tier: sm0l
+# cmds: b00t exec ledgrrr_start_service
+# complexity: 2

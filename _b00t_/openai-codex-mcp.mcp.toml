@@ -3,8 +3,6 @@ name = "openai-codex-mcp"
 type = "mcp"
 hint = "OpenAI Codex MCP server for agentic AI coding sessions"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["openai-codex-mcp.cli"]
 lfmf_category = "codex"
 
 [b00t.learn]

@@ -1,0 +1,14 @@
+# 🦨 unfinished — same as model-architecture — ai-wizard practice is early/aspirational
+[b00t]
+name = "hf-ecosystem"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Navigate the Hugging Face model/dataset/training ecosystem (hub, transformers, PEFT) when a provider job targets hf"
+keywords = ["huggingface", "hf", "ml-ecosystem", "training"]
+
+[b00t.learn]
+content = """
+HuggingFace-ecosystem literacy for provider-backed training/inference
+jobs. Backed by `b00t-cli provider` ("Multi-provider compute — inference
+endpoints + training jobs (runpod, hf)") — the `hf` provider target.
+"""

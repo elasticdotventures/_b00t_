@@ -3,8 +3,6 @@ name = "firecrawl"
 type = "mcp"
 hint = "Web scraping and crawling MCP server - cloud and self-hosted support"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["firecrawl.cli"]
 requires_sudo = false
 
 [[b00t.mcp.stdio]]

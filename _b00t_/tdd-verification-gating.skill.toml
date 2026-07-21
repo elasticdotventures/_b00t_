@@ -1,0 +1,16 @@
+[b00t]
+name = "tdd-verification-gating"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Write the failing test first; a task is not done until tests pass and the verification command's evidence line is pasted — never claim solved without running it"
+keywords = ["tdd", "verification", "gating", "checkpoint", "evidence"]
+
+[b00t.learn]
+content = """
+TDD-first + verification gating is a Core Law (see hive CLAUDE.md): red
+test before implementation, and closing a task requires executing its
+declared verification handler and pasting the PASS/FAIL evidence line
+verbatim. Backed operationally by `b00t-cli checkpoint` (commit + run
+tests) and the `contract` command family (deterministic service-contract
+handlers with evidence).
+"""

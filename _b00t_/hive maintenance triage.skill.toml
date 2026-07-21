@@ -1,0 +1,14 @@
+[b00t]
+name = "hive maintenance triage"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Diagnose which hive maintenance signal (exercise reminder, governance boot check, research queue item) actually needs action now"
+keywords = ["hive", "maintenance", "triage"]
+
+[b00t.learn]
+content = """
+Triage for the hive maintenance daemon's output — deciding which
+maintenance signal (exercise reminders, governance boot checks, research
+queue backlog) is actionable now versus safely deferrable. Backed by
+`b00t-cli maintenance`.
+"""

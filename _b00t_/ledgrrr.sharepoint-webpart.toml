@@ -1,0 +1,28 @@
+# ledgrrr.sharepoint-webpart.toml — SharePoint SPFx rendering surface (PRD-10 §3.3).
+# @tribal: `type = "overlay"` — same rationale as ledgrrr.office-addin: this
+#   renders published playbook artifacts inside SharePoint pages, it does
+#   not own the artifacts. Missing — no SPFx package exists yet, and
+#   deploying/testing needs a real SharePoint tenant.
+
+[b00t]
+name = "ledgrrr"
+type = "overlay"
+hint = "SharePoint SPFx web part that renders published ledgrrr playbook artifacts on SharePoint pages/libraries. Missing — needs an SPFx package + a SharePoint tenant to deploy against (PRD-10 §3.3, §9)."
+depends_on = ["ledgrrr.mcp"]
+
+[b00t.overlay]
+status = "missing"
+host_surface = "sharepoint"
+publishes = "read-only render of artifacts exported via ledgrrr_export_office_artifact"
+requires_external = ["SharePoint tenant", "SPFx toolchain (Node/Yeoman/gulp)"]
+
+[[b00t.references]]
+name = "PRD-10 §3.3 Microsoft 365 Surfaces"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr SharePoint web part — SPFx render surface, missing, needs SharePoint tenant
+# tags: overlay, sharepoint, spfx, prd-10
+# tier: frontier
+# cmds: none — no SPFx package exists yet
+# complexity: 6

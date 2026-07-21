@@ -1,0 +1,15 @@
+[b00t]
+name = "compliance enforcement"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Enforce guard/gate policy before privileged or destructive actions execute — backed by b00t-cli guard, bouncer, and observability"
+keywords = ["compliance", "enforcement", "guard", "policy", "audit"]
+
+[b00t.learn]
+content = """
+Compliance enforcement is not a separate subsystem — it is the composition
+of `b00t-cli guard` (session/agent authority gates), `b00t-cli bouncer`
+(input/output validation), and `b00t-cli observability` (guard-violation
+telemetry). An executive role enforces compliance by routing privileged
+actions through these three rather than trusting agent self-report.
+"""

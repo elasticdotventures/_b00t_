@@ -30,7 +30,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # Avoid recursive submodule checkout because orphan gitlinks can
+          # break CI checkout before tests run — see rust-k0mmand3r.yml.
           submodules: false
+
+      - name: Init required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 vendor/tomllm vendor/irontology-mcp vendor/embed-anything-b00t vendor/ledgrrr vendor/runpod-sdk
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

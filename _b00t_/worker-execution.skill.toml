@@ -1,0 +1,15 @@
+# 🦨 unfinished — references ooda, which per the operator isn't fully figured out yet for scripting harnesses
+[b00t]
+name = "worker-execution"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Execute one delegated unit of work to completion and report a compressed PASS/FAIL result to the caller, not a narrative"
+keywords = ["worker", "execution", "task", "delegation"]
+
+[b00t.learn]
+content = """
+A worker's job is narrow: take one dispatched task, run it to
+completion, and hand back a compressed result (evidence line, diff, or
+structured decision) — not a running commentary. Backed by
+`b00t-cli task`/`job`/`ooda` for dispatch and lifecycle tracking.
+"""

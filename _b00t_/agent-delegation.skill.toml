@@ -1,0 +1,15 @@
+# 🦨 unfinished — generic composite of agent/task/job commands, not a single verified feature
+[b00t]
+name = "agent-delegation"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Assign a unit of work to the agent/sub-agent best suited for it, and track it through to completion"
+keywords = ["agent", "delegation", "task-assignment"]
+
+[b00t.learn]
+content = """
+Executive-level agent delegation: choosing which agent (sub-agent,
+Codex, Gemini, a `just` recipe) should own a unit of work, and tracking it
+via `b00t-cli agent`/`task`/`job` rather than losing track once
+delegated.
+"""

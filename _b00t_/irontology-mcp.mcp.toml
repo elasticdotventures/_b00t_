@@ -3,8 +3,6 @@ name = "irontology-mcp"
 type = "mcp"
 hint = "Enterprise knowledge ingestion and ontology discovery MCP server"
 
-# <|🦨: aspirational — companion .cli datum never authored; the .mcp datum is the tool surface; roadmap _b00t_#850, triage #163 |>
-entangled_cli = ["irontology-mcp.cli"]
 requires_sudo = false
 
 [[b00t.mcp.stdio]]

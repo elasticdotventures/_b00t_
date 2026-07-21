@@ -1,0 +1,29 @@
+# ledgrrr.office-addin.toml — OneNote/Office task pane surface (PRD-10 §3.3).
+# @tribal: `type = "overlay"` — an Office add-in overlays generated/refreshed
+#   diagram artifacts onto Office UI; ledgrrr's local service remains the
+#   source of truth. Missing — no manifest, no task-pane build exists yet.
+#   Requires a real Microsoft 365 tenant to deploy/test; out of scope for a
+#   local-only Phase 1 build.
+
+[b00t]
+name = "ledgrrr"
+type = "overlay"
+hint = "OneNote/Office task pane for generating, previewing, inserting, and refreshing ledgrrr playbook diagram artifacts. Missing — needs Office add-in manifest + task-pane build + a Microsoft 365 tenant to deploy against (PRD-10 §3.3, §9)."
+depends_on = ["ledgrrr.mcp"]
+
+[b00t.overlay]
+status = "missing"
+host_surface = "onenote+office"
+publishes = "versioned diagram/playbook artifacts via ledgrrr_export_office_artifact"
+requires_external = ["Microsoft 365 developer tenant", "Office add-in centralized deployment"]
+
+[[b00t.references]]
+name = "PRD-10 §3.3 Microsoft 365 Surfaces"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr Office add-in — OneNote task pane, missing, needs M365 tenant
+# tags: overlay, office, onenote, addin, prd-10
+# tier: frontier
+# cmds: none — no manifest/build exists yet
+# complexity: 6

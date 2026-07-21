@@ -4,12 +4,10 @@ trigger_words = ["implement", "refactor", "debug", "build", "delegate", "sm0l", 
 type = "role"
 hint = "Hive specialist role: sm0l-tier subagent with delegate skill, CMDB hygiene, 🍰 cake accrual"
 
-# <|🦨: repoint-candidate — cargo.cli never authored; rust.cli/rustc.cli exist; _b00t_#850, #163 |>
-depends_on = ["playbook.skill", "delegate.skill", "opencode.agent", "b00t.cli", "git.cli", "just.cli", "bash.cli", "cargo.cli"]
+depends_on = ["playbook.skill", "delegate.skill", "opencode.agent", "b00t.cli", "git.cli", "just.cli", "bash.cli", "rustc.cli"]
 
 skills = [
     "delegate",
-    # <|🦨: prose-logical — code/refactor/debug/edit/read/write/glob are tool-capability names, not datum keys; #163 |>
     "code",
     "refactor",
     "debug",
@@ -20,7 +18,6 @@ skills = [
     "grep.cli",
     "glob",
     "task.cli",
-    # <|🦨: repoint-candidate — datum-authoring.skill exists; #163 |>
     "datum",
     "mece",
 ]
