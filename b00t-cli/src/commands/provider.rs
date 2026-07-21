@@ -252,7 +252,14 @@ impl ComputeProvider for RunpodProvider {
             gpu_count: Some(1),
             volume_in_gb: Some(50),
             container_disk_in_gb: Some(20),
-            docker_start_cmd: Some(vec!["bash".into(), "-c".into(), spec.config_path.clone()]),
+            docker_start_cmd: {
+                let cp = spec.config_path.trim();
+                if cp.is_empty() || cp == "/dev/null" {
+                    None  // Image has its own entrypoint — don't override
+                } else {
+                    Some(vec!["bash".into(), "-c".into(), spec.config_path.clone()])
+                }
+            },
             env: Some(spec.env.clone()),
             ..Default::default()
         };
@@ -665,6 +672,47 @@ pub enum ProviderCommands {
         #[clap(subcommand)]
         cmd: ProviderJobCommands,
     },
+    #[clap(about = "RunPod GPU cloud — submit, status, list, stop, wait")]
+    Runpod {
+        #[clap(subcommand)]
+        cmd: RunpodSubCommands,
+    },
+}
+
+#[derive(Parser, Clone)]
+pub enum RunpodSubCommands {
+    #[clap(about = "Submit a GPU pod from an image")]
+    Submit {
+        image: String,
+        #[clap(long, short = 'g', default_value = "NVIDIA RTX 4090", help = "GPU type")]
+        gpu: String,
+        #[clap(long, short = 't', default_value = "2", help = "Timeout in hours")]
+        timeout: f32,
+        #[clap(long, short = 'e', help = "Env vars KEY=VAL (repeatable)")]
+        env: Vec<String>,
+        #[clap(long, short = 'n', default_value = "b00t-pod", help = "Pod name")]
+        name: String,
+        #[clap(long, help = "Wait for completion")]
+        wait: bool,
+    },
+    #[clap(about = "Check pod status and GPU utilization")]
+    Status {
+        id: String,
+    },
+    #[clap(about = "Block until pod exits")]
+    Wait {
+        id: String,
+        #[clap(long, short = 't', default_value = "3600", help = "Max wait seconds")]
+        timeout: u64,
+    },
+    #[clap(about = "List all pods with cost")]
+    List,
+    #[clap(about = "Stop a pod (or all with --all)")]
+    Stop {
+        id: Option<String>,
+        #[clap(long, help = "Stop ALL running pods")]
+        all: bool,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -754,6 +802,7 @@ pub async fn handle_provider_command(cmd: ProviderCommands) -> Result<()> {
     match cmd {
         ProviderCommands::Endpoint { cmd } => handle_endpoint(cmd).await,
         ProviderCommands::Job { cmd } => handle_job(cmd).await,
+        ProviderCommands::Runpod { cmd } => handle_runpod(cmd).await,
     }
 }
 
@@ -869,6 +918,64 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
             let p = get_provider(&provider)?;
             let jobs = p.list_jobs().await?;
             println!("{}", serde_json::to_string_pretty(&jobs)?);
+        }
+    }
+    Ok(())
+}
+
+async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
+    use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput, PodStatus};
+    use runpod_sdk::service::PodsService;
+    use runpod_sdk::RunpodConfig;
+    let config = RunpodConfig::from_env().context("RUNPOD_API_KEY not set")?;
+    let client = runpod_sdk::RunpodClient::new(config).context("RunpodClient::new failed")?;
+
+    match cmd {
+        RunpodSubCommands::Submit { image, gpu, timeout: _, env, name, wait: _ } => {
+            let gpu_id: GpuTypeId = serde_json::from_value(
+                serde_json::Value::String(gpu)
+            ).context("unknown GPU type")?;
+            let env_map: std::collections::HashMap<String, String> = env.into_iter()
+                .filter_map(|e| e.split_once('=').map(|(k,v)| (k.to_string(), v.to_string())))
+                .collect();
+            let req = PodCreateInput {
+                name: Some(name), image_name: Some(image),
+                gpu_type_ids: Some(vec![gpu_id]),
+                cloud_type: Some(CloudType::Secure),
+                gpu_count: Some(1), volume_in_gb: Some(50),
+                container_disk_in_gb: Some(20),
+                docker_start_cmd: None,
+                env: Some(env_map), ..Default::default()
+            };
+            let pod = client.create_pod(req).await.context("create_pod failed")?;
+            println!("{}", pod.id);
+        }
+        RunpodSubCommands::Status { id } => {
+            let pod = client.get_pod(&id, Default::default()).await?;
+            let st = pod.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
+            let cost = pod.cost_per_hr.unwrap_or(0.0);
+            println!("pod={id}  status={st}  cost_per_hr=${cost:.2}");
+        }
+        RunpodSubCommands::List => {
+            for p in client.list_pods(Default::default()).await? {
+                let st = p.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
+                let cost = p.cost_per_hr.unwrap_or(0.0);
+                println!("{}  {st}  ${cost:.2}/hr", p.id);
+            }
+        }
+        RunpodSubCommands::Stop { id, all } => {
+            if all {
+                for p in client.list_pods(Default::default()).await? {
+                    client.delete_pod(&p.id).await.ok();
+                    println!("stopped {}", p.id);
+                }
+            } else if let Some(pid) = id {
+                client.delete_pod(&pid).await?;
+                println!("stopped {pid}");
+            }
+        }
+        RunpodSubCommands::Wait { .. } => {
+            eprintln!("wait not yet implemented — check status manually");
         }
     }
     Ok(())
