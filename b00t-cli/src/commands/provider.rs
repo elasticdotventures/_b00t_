@@ -119,7 +119,11 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
         "runpod" => Ok(Box::new(RunpodProvider::new()?)),
         "hf" => Ok(Box::new(HfProvider::new())),
         "local" => Ok(Box::new(LocalProvider::new())),
-        other => bail!("unknown provider '{}'; supported: runpod, hf, local", other),
+        "dstack" => Ok(Box::new(DstackProvider::new())),
+        other => bail!(
+            "unknown provider '{}'; supported: runpod, hf, local, dstack",
+            other
+        ),
     }
 }
 
@@ -878,6 +882,11 @@ pub enum ProviderCommands {
         #[clap(subcommand)]
         cmd: RunpodSubCommands,
     },
+    #[clap(about = "dstack — persistent volumes, dev-environment lifecycle")]
+    Dstack {
+        #[clap(subcommand)]
+        cmd: DstackSubCommands,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -913,6 +922,22 @@ pub enum RunpodSubCommands {
         id: Option<String>,
         #[clap(long, help = "Stop ALL running pods")]
         all: bool,
+    },
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum DstackSubCommands {
+    #[clap(about = "Ensure a persistent volume exists (idempotent)")]
+    EnsureVolume {
+        name: String,
+        #[clap(long, help = "Volume size in GB")]
+        size_gb: u32,
+        #[clap(long, help = "dstack region")]
+        region: String,
+    },
+    #[clap(about = "Stop a named dev-environment/service run")]
+    StopDevEnvironment {
+        name: String,
     },
 }
 
@@ -1004,6 +1029,7 @@ pub async fn handle_provider_command(cmd: ProviderCommands) -> Result<()> {
         ProviderCommands::Endpoint { cmd } => handle_endpoint(cmd).await,
         ProviderCommands::Job { cmd } => handle_job(cmd).await,
         ProviderCommands::Runpod { cmd } => handle_runpod(cmd).await,
+        ProviderCommands::Dstack { cmd } => handle_dstack(cmd).await,
     }
 }
 
@@ -1183,6 +1209,21 @@ async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
     Ok(())
 }
 
+async fn handle_dstack(cmd: DstackSubCommands) -> Result<()> {
+    let provider = DstackProvider::new();
+    match cmd {
+        DstackSubCommands::EnsureVolume { name, size_gb, region } => {
+            provider.ensure_volume(&name, size_gb, &region)?;
+            println!("volume {name} ready ({size_gb}GB, {region})");
+        }
+        DstackSubCommands::StopDevEnvironment { name } => {
+            provider.stop_dev_environment(&name)?;
+            println!("stopped dev-environment {name}");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod batch_job_tests {
     use super::*;
@@ -1342,5 +1383,54 @@ mod batch_job_tests {
         };
         let yaml = dstack_task_yaml("b00t-job-def", &spec);
         assert!(!yaml.contains("volumes:"));
+    }
+
+    #[test]
+    fn dstack_subcommands_parses_ensure_volume() {
+        let cmd = DstackSubCommands::try_parse_from([
+            "dstack",
+            "ensure-volume",
+            "b00t-mesh-cache",
+            "--size-gb",
+            "100",
+            "--region",
+            "eu-central-1",
+        ])
+        .expect("ensure-volume should parse: positional name, --size-gb, --region");
+        match cmd {
+            DstackSubCommands::EnsureVolume { name, size_gb, region } => {
+                assert_eq!(name, "b00t-mesh-cache");
+                assert_eq!(size_gb, 100);
+                assert_eq!(region, "eu-central-1");
+            }
+            _ => panic!("expected EnsureVolume variant"),
+        }
+    }
+
+    #[test]
+    fn dstack_subcommands_parses_stop_dev_environment() {
+        let cmd = DstackSubCommands::try_parse_from([
+            "dstack",
+            "stop-dev-environment",
+            "my-env",
+        ])
+        .expect("stop-dev-environment should parse: positional name");
+        match cmd {
+            DstackSubCommands::StopDevEnvironment { name } => {
+                assert_eq!(name, "my-env");
+            }
+            _ => panic!("expected StopDevEnvironment variant"),
+        }
+    }
+
+    #[test]
+    fn dstack_subcommands_ensure_volume_requires_size_gb_and_region() {
+        let err = DstackSubCommands::try_parse_from([
+            "dstack",
+            "ensure-volume",
+            "b00t-mesh-cache",
+        ])
+        .unwrap_err();
+        assert!(err.to_string().contains("size-gb") || err.to_string().contains("required"));
     }
 }
