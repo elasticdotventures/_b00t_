@@ -3,6 +3,7 @@ use clap::Parser;
 use regex::Regex;
 use std::collections::HashMap;
 
+use crate::load_all_datums_from_dir;
 use crate::datum_stack::StackDatum;
 use crate::dependency_resolver::DependencyResolver;
 use crate::hive::{SystemSnapshot, activate_profile, load_profile};
@@ -284,7 +285,7 @@ fn validate_stack(name: &str, path: &str) -> Result<()> {
     println!("🔍 Validating stack '{}'...", name);
 
     // Load all available datums
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
 
     // Validate members exist
     let errors = stack.validate_members(&available_datums)?;
@@ -314,7 +315,7 @@ fn validate_all_stacks(path: &str) -> Result<()> {
 
     println!("🔍 Validating {} stacks...\n", stack_paths.len());
 
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
     let mut total_errors = 0;
 
     for stack_path in stack_paths {
@@ -361,7 +362,7 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
     let stack = StackDatum::from_file(&stack_path)?;
 
     // Load available datums to build dependency resolver
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
 
     // Build resolver with borrowed references
     let datum_refs: HashMap<String, &BootDatum> = available_datums
@@ -394,7 +395,7 @@ fn install_stack(name: &str, path: &str, dry_run: bool) -> Result<()> {
 }
 
 fn install_datums_by_pattern(pattern: &str, path: &str, dry_run: bool) -> Result<()> {
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
     let regex = build_pattern_regex(pattern)?;
     let matched_keys: Vec<String> = available_datums
         .keys()
@@ -448,7 +449,7 @@ fn generate_compose(name: &str, path: &str, output_file: Option<&str>) -> Result
     }
 
     let stack = StackDatum::from_file(&stack_path)?;
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
 
     let compose_yaml = stack.generate_docker_compose(&available_datums)?;
 
@@ -551,7 +552,7 @@ fn generate_k8s_via_kompose(
     }
 
     let stack = StackDatum::from_file(&stack_path)?;
-    let available_datums = load_all_datums(path)?;
+    let available_datums = load_all_datums_from_dir(&get_expanded_path(path)?)?;
 
     println!(
         "🔄 Converting stack '{}' to k8s manifests via kompose...",
@@ -891,46 +892,6 @@ fn stack_deactivate(profile: &str, path: &str, dry_run: bool) -> Result<()> {
 }
 
 /// Helper: Load all datums from _b00t_ directory
-fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
-    let mut datums = HashMap::new();
-    let b00t_dir = get_expanded_path(path)?;
-
-    if !b00t_dir.exists() {
-        return Ok(datums);
-    }
-
-    for entry in std::fs::read_dir(&b00t_dir)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.is_file() {
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                // Skip stack files themselves
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-
-                // Load other datum types
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<crate::UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(datums)
-}
 
 #[cfg(test)]
 mod tests {
