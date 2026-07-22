@@ -533,13 +533,48 @@ async fn poll_until_terminal(provider: &dyn ComputeProvider, handle: &JobHandle)
     }
 }
 
-/// Submit `spec` via `provider` and poll until terminal. Split out from
-/// `execute_provider_step` (which resolves the provider by name through
-/// `get_provider`) so tests can inject a fake `ComputeProvider` directly —
-/// `commands/provider.rs` has no pre-existing test-double pattern for the
-/// trait (checked its own test module: none use one), so this is a minimal
-/// one scoped to this bridge.
-async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec) -> Result<()> {
+/// Enforces `JobStep.output_contract` (format documented in datum_job.rs as
+/// `"PASS|FAIL:<5lines>"`). A step with no contract always passes — this
+/// only tightens behavior for steps that opt in. `job_output` is the job's
+/// captured stdout (or `result.json` contents, read by the caller); the last
+/// non-empty line must start with `PASS` or `FAIL:`.
+fn evaluate_output_contract(contract: Option<&str>, job_output: &str) -> Result<()> {
+    let Some(_contract) = contract else {
+        return Ok(());
+    };
+    let last_line = job_output
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("");
+    if last_line.trim() == "PASS" {
+        return Ok(());
+    }
+    if let Some(detail) = last_line.trim().strip_prefix("FAIL:") {
+        anyhow::bail!("job output_contract reported FAIL:{}", detail);
+    }
+    anyhow::bail!(
+        "job declared an output_contract but its last output line was not PASS/FAIL: got '{}'",
+        last_line
+    );
+}
+
+/// Submit `step.batch` via `provider` and poll until terminal. Split out
+/// from `execute_provider_step` (which resolves the provider by name
+/// through `get_provider`) so tests can inject a fake `ComputeProvider`
+/// directly — `commands/provider.rs` has no pre-existing test-double
+/// pattern for the trait (checked its own test module: none use one), so
+/// this is a minimal one scoped to this bridge. Takes the whole `step`
+/// (not just its `batch` spec) so it can also read `step.output_contract`
+/// after the terminal status is reached.
+async fn dispatch_batch_job(provider: &dyn ComputeProvider, step: &JobStep) -> Result<()> {
+    let spec = step.batch.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "step '{}' has a backend but no [b00t.job.steps.batch] spec",
+            step.name
+        )
+    })?;
+
     let handle = provider
         .submit_batch_job(spec)
         .await
@@ -556,6 +591,14 @@ async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec)
         );
     }
 
+    if step.output_contract.is_some() {
+        let job_output = provider
+            .job_status(&handle)
+            .await
+            .context("re-reading job status for output_contract evaluation")?;
+        evaluate_output_contract(step.output_contract.as_deref(), &job_output)?;
+    }
+
     Ok(())
 }
 
@@ -563,18 +606,10 @@ async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec)
 /// local shell-out. Requires `step.batch` to be set (the `BatchJobSpec` to
 /// submit) — `step.task` is ignored in this path.
 async fn execute_provider_step(backend: &str, step: &JobStep) -> Result<()> {
-    let spec = step.batch.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "step '{}' declares backend '{}' but has no [b00t.job.steps.batch] spec",
-            step.name,
-            backend
-        )
-    })?;
-
     let provider =
         get_provider(backend).with_context(|| format!("resolving backend '{}'", backend))?;
 
-    dispatch_batch_job(provider.as_ref(), spec).await
+    dispatch_batch_job(provider.as_ref(), step).await
 }
 
 /// Run a single step: dispatch via `ComputeProvider` if `step.backend` is
@@ -1019,10 +1054,57 @@ mod provider_bridge_tests {
         }
     }
 
+    /// Builds a `JobStep` wrapping `sample_spec()`, with `output_contract`
+    /// overridable per test.
+    fn sample_step(output_contract: Option<&str>) -> JobStep {
+        JobStep {
+            name: "sample-step".to_string(),
+            description: "sample step for dispatch_batch_job tests".to_string(),
+            checkpoint: None,
+            depends_on: vec![],
+            task: JobTask::Bash {
+                command: "echo hi".to_string(),
+                cwd: None,
+                timeout_ms: None,
+                env: std::collections::HashMap::new(),
+            },
+            condition: None,
+            artifacts: None,
+            cognitive_tier: None,
+            output_contract: output_contract.map(|s| s.to_string()),
+            backend: Some("fake".to_string()),
+            batch: Some(sample_spec()),
+        }
+    }
+
+    #[test]
+    fn evaluate_output_contract_rejects_missing_pass_fail_marker() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "some log line\nno marker here");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn evaluate_output_contract_accepts_pass_marker() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "running tests...\nPASS");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn evaluate_output_contract_surfaces_fail_detail() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "running tests...\nFAIL: assertion mismatch at line 42");
+        let err = result.expect_err("FAIL: line should error");
+        assert!(err.to_string().contains("assertion mismatch at line 42"));
+    }
+
+    #[test]
+    fn evaluate_output_contract_none_always_passes() {
+        assert!(evaluate_output_contract(None, "anything at all").is_ok());
+    }
+
     #[tokio::test]
     async fn dispatch_batch_job_succeeds_on_immediate_terminal_status() {
         let provider = FakeProvider::with_statuses(&["exited"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
     }
 
@@ -1031,15 +1113,41 @@ mod provider_bridge_tests {
         // Non-terminal statuses first — proves this actually loops rather
         // than trusting the first `job_status` response.
         let provider = FakeProvider::with_statuses(&["running", "running", "exited"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
     }
 
     #[tokio::test]
     async fn dispatch_batch_job_fails_on_failure_status() {
         let provider = FakeProvider::with_statuses(&["failed"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_enforces_output_contract_pass() {
+        // Terminal status first, then a second `job_status` call (the
+        // output_contract re-read) returns the job's captured output.
+        let provider = FakeProvider::with_statuses(&["exited", "running tests...\nPASS"]);
+        let step = sample_step(Some("PASS|FAIL:<5lines>"));
+        let result = dispatch_batch_job(&provider, &step).await;
+        assert!(result.is_ok(), "expected success, got: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_enforces_output_contract_fail() {
+        let provider = FakeProvider::with_statuses(&[
+            "exited",
+            "running tests...\nFAIL: assertion mismatch at line 42",
+        ]);
+        let step = sample_step(Some("PASS|FAIL:<5lines>"));
+        let result = dispatch_batch_job(&provider, &step).await;
+        let err = result.expect_err("output_contract FAIL should error even though status was a success terminal status");
+        assert!(
+            err.to_string().contains("assertion mismatch at line 42"),
+            "unexpected error: {}",
+            err
+        );
     }
 
     #[tokio::test]
