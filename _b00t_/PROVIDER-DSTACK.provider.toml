@@ -32,10 +32,13 @@
 #           b00t-cli provider dstack ensure-volume|stop-dev-environment
 
 [b00t]
-name        = "PROVIDER-DSTACK"
-type        = "api"
-hint        = "dstack multi-cloud GPU orchestration provider — CLI shell-out backend for ComputeProvider, with persistent-volume support for repeated iteration"
-type_tags   = ["provider", "training", "batch", "gpu", "cloud", "multi-cloud", "orchestration"]
+name          = "PROVIDER-DSTACK"
+type          = "api"
+hint          = "dstack multi-cloud GPU orchestration provider — CLI shell-out backend for ComputeProvider, with persistent-volume support for repeated iteration"
+type_tags     = ["provider", "training", "batch", "gpu", "cloud", "multi-cloud", "orchestration"]
+install       = { uv_tool = "dstack[all]", binary = "dstack" }
+version       = "dstack --version"
+version_regex = '(\d+\.\d+\.\d+)'
 
 [resource]
 name        = "dstack"
