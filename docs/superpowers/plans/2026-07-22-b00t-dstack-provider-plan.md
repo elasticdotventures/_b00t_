@@ -1082,6 +1082,38 @@ Record the final output of both commands verbatim as the closing evidence for th
 
 ---
 
+## Task 11: Report and recommendations — multi-cloud backend options
+
+**Files:** none (research/report task, no code)
+
+Per operator request 2026-07-22: before wiring more cloud backends into dstack, produce a factual report (not a guess) on what's already authorized on this host, what app4dog's existing multi-cloud Terraform infrastructure actually provisions, and what dstack itself requires per cloud — then recommend whether/how to expand beyond RunPod.
+
+- [x] **Step 1: Confirm live cloud CLI auth on this host**
+
+Ran `which az gcloud aws terraform tofu` and one identity check per cloud (`az account show`, `gcloud config list`, `aws sts get-caller-identity`). Result: all three clouds are installed and already authenticated on this host (not hypothetical).
+
+- [x] **Step 2: Survey app4dog's existing multi-cloud Terraform footprint**
+
+`app4dog/terraform` symlinks to `~/promptexecution/infrastructure/terraform/app4dog/` — a real, actively-used OpenTofu stack with `aws`/`azurerm`/`google`/`cloudflare` providers. Surveyed actual `resource "..."` blocks (not just provider declarations) in the cloud/ML-adjacent files: `cloud_run.tf`, `azure_app4dog.tf`, `cvat_hitl.tf`, `ecr_image_segmenter.tf`, `image-segmenter.tf`, `r2_gameplay.tf`. Finding: none of it is GPU compute — it's app hosting, DNS/storage, CI registries, and one annotation tool (CVAT on Azure Container Apps).
+
+- [x] **Step 3: Verify dstack's actual per-cloud requirements (not assumed)**
+
+Fetched dstack's server config docs specifically for AWS/GCP/Azure backend credential and infra requirements. Finding: all three self-provision by default (same model as RunPod) — no pre-existing Terraform-managed VPC/IAM is required, though optionally supported.
+
+- [x] **Step 4: Write the report**
+
+Written to `docs/superpowers/plans/2026-07-22-dstack-multicloud-backend-report.md`. Recommendation: stay RunPod-only for this plan (no existing GPU infra to integrate with, and dstack would create new disconnected resources per cloud if pointed at Azure/GCP/AWS today); flagged GCP Cloud Run's newer GPU support as a future option worth a look (not scoped here); flagged `ecr_image_segmenter.tf`'s actual runtime target as an open question independent of this plan (registry + CI push IAM exist, but no confirmed compute in that Terraform — may be a second, currently-undocumented ML-pipeline compute path).
+
+- [x] **Step 5: Commit**
+
+```bash
+cd ~/.b00t
+git add docs/superpowers/plans/2026-07-22-dstack-multicloud-backend-report.md
+git commit -m "docs: multi-cloud backend report for dstack provider — recommend RunPod-only for now"
+```
+
+---
+
 # b00t:map v1
 # summary: Implementation plan for DstackProvider — 10 tasks covering CLI install/fixture capture, provider methods, get_provider routing, bucket-aware polling, output_contract enforcement, datum, and cloud_mesh.sh migration
 # tags: provider, dstack, orchestration, plan, gpu, multi-cloud
