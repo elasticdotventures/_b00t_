@@ -1107,15 +1107,32 @@ mod provider_bridge_tests {
 
     #[tokio::test]
     async fn poll_until_terminal_allows_long_pending_but_short_running_budget() {
-        // 40 pending polls (would have exceeded the old flat 50-cap alongside
-        // real polls) followed by running -> done should still succeed.
-        let mut statuses: Vec<&str> = vec!["run=x status=pending"; 40];
+        // 100 pending polls: old flat PROVIDER_MAX_POLLS=50 would have
+        // errored out well before this (50 < 100 pending polls alone,
+        // before even reaching running/done). New PENDING_MAX_POLLS=150
+        // tolerates it. Followed by running -> done should still succeed.
+        let mut statuses: Vec<&str> = vec!["run=x status=pending"; 100];
         statuses.push("run=x status=running");
         statuses.push("run=x status=done");
         let provider = FakeProvider::with_statuses(&statuses);
         let handle = JobHandle { id: "x".into(), provider: "dstack".into() };
         let result = poll_until_terminal(&provider, &handle).await;
         assert!(result.is_ok(), "expected success, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_errors_after_running_budget_exceeded() {
+        // A job stuck in "running" past RUNNING_MAX_POLLS=50 with no
+        // terminal status ever appearing must error, not loop forever.
+        let statuses: Vec<&str> = vec!["run=x status=running"; 60];
+        let provider = FakeProvider::with_statuses(&statuses);
+        let handle = JobHandle { id: "x".into(), provider: "dstack".into() };
+        let result = poll_until_terminal(&provider, &handle).await;
+        let err = result.expect_err("expected running-budget error");
+        assert!(
+            err.to_string().contains("still running"),
+            "expected a running-budget error message, got: {err}"
+        );
     }
 }
 
