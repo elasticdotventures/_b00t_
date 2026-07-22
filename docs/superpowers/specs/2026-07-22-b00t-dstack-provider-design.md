@@ -74,6 +74,8 @@ dstack's run states map onto three buckets our poller needs:
 
 Container exit code 0 means "the process didn't crash," not "the test passed." Job entrypoints write a terminal line b00t already standardizes on (`whoami`'s Cognitive Tiers table: `PASS` or `FAIL: <5-line excerpt>`) to stdout or a `result.json` in the job's workspace mount. `DstackProvider::job_status` reads that once the run reaches `done`/`failed` and folds it into the returned status, so a job that exits 0 but never asserted PASS is reported as indeterminate rather than silently treated as success (closing the gap `is_failure_status`'s doc comment already flags: "none of the providers expose an exit code... a bare 'exited' is treated as success rather than guessed at").
 
+**Why not just route to MLflow?** b00t already runs MLflow for local training (`_b00t_/learn/hf-jobs-mlflow.md`: tracking server at `http://192.168.1.137:30803`, a LAN NodePort on the local k8s box), but that note documents it as **unreachable from any cloud GPU worker** — HF Jobs cloud runs already hit `ConnectTimeoutError` against it and fall back to `report_to: "none"`. The same LAN-reachability constraint applies to RunPod and any dstack-orchestrated cloud backend. So cloud jobs today have zero run-tracking of any kind, MLflow included — that's a direct contributor to "can't reliably classify pass/fail," independent of the polling bug. Exposing the tracking server publicly is a separate security/ops decision, out of scope here; the stdout/`result.json` contract above is deliberately push-free (the provider reads it back directly) so it works the same whether the job ran on the LAN or in someone else's cloud.
+
 ---
 
 ## Testing Strategy
