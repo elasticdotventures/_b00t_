@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::task::JoinSet;
 
-use crate::commands::provider::{BatchJobSpec, ComputeProvider, JobHandle, get_provider};
+use crate::commands::provider::{ComputeProvider, JobHandle, get_provider};
 use crate::datum_job::{JobDatum, JobStep, JobTask};
 
 /// Bash command task for apalis execution
@@ -976,7 +976,7 @@ command = "sleep 0.2"
 #[cfg(test)]
 mod provider_bridge_tests {
     use super::*;
-    use crate::commands::provider::{EndpointConfig, EndpointHandle, TrainingJobSpec};
+    use crate::commands::provider::{BatchJobSpec, EndpointConfig, EndpointHandle, TrainingJobSpec};
     use async_trait::async_trait;
     use std::collections::VecDeque;
     use std::sync::Mutex;
