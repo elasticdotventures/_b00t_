@@ -38,16 +38,25 @@ dstack --version
 
 Expected: prints a version string (confirms install; `which dstack` currently returns "not found" on this machine per the spec's investigation).
 
-- [ ] **Step 2: Configure a backend and start the server**
+- [ ] **Step 2: Configure a single backend and start the server**
 
-Follow `https://dstack.ai/docs/reference/server/config.yml` to configure at least one real cloud backend (or a local backend if testing without cloud credentials), then:
+dstack needs exactly one configured backend to start — not credentials for every supported cloud. Reuse the `RUNPOD_API_KEY` already set up for `RunpodProvider` (per `PROVIDER-RUNPOD.provider.tomllmd`) so this doesn't require a new credential:
 
 ```bash
+mkdir -p ~/.dstack/server
+cat > ~/.dstack/server/config.yml <<EOF
+projects:
+  - name: b00t
+    backends:
+      - type: runpod
+        creds:
+          api_key: "${RUNPOD_API_KEY}"
+EOF
 dstack server &
 dstack init
 ```
 
-Expected: server starts, `dstack init` completes without error in the current directory.
+Expected: server starts, `dstack init` completes without error in the current directory. This step (and Step 3's job submission, which touches real cloud spend) is the one part of this task a human must do — a subagent should not be dispatched to configure cloud credentials or spend money unattended.
 
 - [ ] **Step 3: Submit a trivial task and capture the apply output**
 
@@ -610,16 +619,39 @@ cd ~/.b00t && cargo test -p b00t-cli poll_until_terminal_allows_long_pending_but
 
 Expected: FAIL — old flat `PROVIDER_MAX_POLLS=50` cap trips (42 polls needed, but only if `PROVIDER_POLL_INTERVAL`/count aren't yet bucket-aware; confirm the failure mode matches "did not reach a terminal status" before proceeding).
 
-- [ ] **Step 3: Implement bucket-aware polling**
+- [ ] **Step 3: Implement bucket-aware polling, and fix `PROVIDER_POLL_INTERVAL` for production**
 
-Replace the existing `poll_until_terminal` function body:
+Per operator review 2026-07-22: the existing `PROVIDER_POLL_INTERVAL = 200ms` was sized for fast offline tests, but it's the same constant real cloud polling uses — hitting a real provider's status API 5x/second is too aggressive. Split it by build config so production polls realistically without slowing the test suite:
+
+Find the existing constant near the top of this file's poll-related section:
+
+```rust
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const PROVIDER_MAX_POLLS: u32 = 50;
+```
+
+Replace with:
+
+```rust
+#[cfg(not(test))]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_secs(2);
+#[cfg(test)]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(20);
+```
+
+(`PROVIDER_MAX_POLLS` is removed entirely — superseded by `PENDING_MAX_POLLS`/`RUNNING_MAX_POLLS` below. If anything else in this file still references `PROVIDER_MAX_POLLS`, update it to the appropriate bucket constant instead.)
+
+Then replace the existing `poll_until_terminal` function body:
 
 ```rust
 /// Poll budgets are asymmetric: `Pending` (still pulling/provisioning) gets
 /// a much longer budget than `Running`, because cold starts are legitimately
 /// slow and provider-dependent, while a job that's already `Running` should
 /// be making progress — see the spec's state-aware timeout rationale.
-const PENDING_MAX_POLLS: u32 = 300; // 300 * 200ms = 60s test-speed; real providers see the same ratio scaled by their own poll interval
+/// At production's 2s interval: 150 polls = 5 minutes pending, 50 polls =
+/// 100 seconds running. At test's 20ms interval, both budgets resolve in
+/// well under a second of real wall-clock time.
+const PENDING_MAX_POLLS: u32 = 150;
 const RUNNING_MAX_POLLS: u32 = 50;
 
 async fn poll_until_terminal(provider: &dyn ComputeProvider, handle: &JobHandle) -> Result<String> {
