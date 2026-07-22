@@ -31,10 +31,11 @@
 # b00t CLI: b00t provider job submit-batch|status|cancel|list --provider dstack
 #           b00t-cli provider dstack ensure-volume|stop-dev-environment
 
-[b00t.schema]
-version   = "1"
-type      = "api"
-type_tags = ["provider", "training", "batch", "gpu", "cloud", "multi-cloud", "orchestration"]
+[b00t]
+name        = "PROVIDER-DSTACK"
+type        = "api"
+hint        = "dstack multi-cloud GPU orchestration provider — CLI shell-out backend for ComputeProvider, with persistent-volume support for repeated iteration"
+type_tags   = ["provider", "training", "batch", "gpu", "cloud", "multi-cloud", "orchestration"]
 
 [resource]
 name        = "dstack"
