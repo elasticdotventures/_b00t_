@@ -493,7 +493,11 @@ impl DstackProvider {
         std::fs::write(&tmp, yaml).context("writing dstack volume config")?;
         let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
         let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
-        let _ = std::fs::remove_file(&tmp);
+        // Cleanup is best-effort — a failure to remove the temp file must not
+        // fail the volume application itself.
+        if let Err(err) = std::fs::remove_file(&tmp) {
+            tracing::warn!("failed to remove temp dstack volume config {tmp:?}: {err}");
+        }
         result.map(|_| ())
     }
 
@@ -506,6 +510,19 @@ impl DstackProvider {
         self.run_dstack(&["stop", name, "-y"])?;
         Ok(())
     }
+}
+
+/// Generates a `type: volume` dstack config — a persistent volume that
+/// survives across separate `dstack apply` runs (verified against dstack's
+/// docs: "Volumes enable data persistence between runs of dev environments,
+/// tasks, and services"). Call once per volume name; re-applying an
+/// existing volume name is idempotent per dstack's own `apply` semantics
+/// (not re-verified here — Task 1's fixture capture should confirm this
+/// once real dstack access exists).
+fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
+    format!(
+        "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
+    )
 }
 
 /// Pure YAML builder, split out so tests can assert the exact task config
@@ -523,19 +540,6 @@ impl DstackProvider {
 /// from a `commands:` block? We don't know it yet, so `commands:` below is a
 /// minimal placeholder rather than a guessed-at incantation. Revisit once
 /// dstack CLI access is available.
-/// Generates a `type: volume` dstack config — a persistent volume that
-/// survives across separate `dstack apply` runs (verified against dstack's
-/// docs: "Volumes enable data persistence between runs of dev environments,
-/// tasks, and services"). Call once per volume name; re-applying an
-/// existing volume name is idempotent per dstack's own `apply` semantics
-/// (not re-verified here — Task 1's fixture capture should confirm this
-/// once real dstack access exists).
-fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
-    format!(
-        "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
-    )
-}
-
 fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     let mut env_lines = String::new();
     env_lines.push_str(&format!(
