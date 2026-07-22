@@ -69,6 +69,12 @@ pub struct TrainingJobSpec {
     pub timeout_hours: f32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VolumeMount {
+    pub name: String,
+    pub path: String,
+}
+
 /// A generic containerized batch job — the image carries its own entrypoint,
 /// unlike `TrainingJobSpec` which always drives a fine-tuning script.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,6 +86,8 @@ pub struct BatchJobSpec {
     pub env: std::collections::HashMap<String, String>,
     pub flavor: String,
     pub timeout_hours: f32,
+    #[serde(default)]
+    pub volumes: Vec<VolumeMount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -475,6 +483,29 @@ impl DstackProvider {
         }
         Ok(String::from_utf8_lossy(&out.stdout).to_string())
     }
+
+    /// Applies a `type: volume` config — idempotent per dstack's own
+    /// `apply` semantics. Call once before submitting jobs that reference
+    /// this volume by name.
+    pub fn ensure_volume(&self, name: &str, size_gb: u32, region: &str) -> Result<()> {
+        let yaml = dstack_volume_yaml(name, size_gb, region);
+        let tmp = std::env::temp_dir().join(format!("{name}.volume.dstack.yml"));
+        std::fs::write(&tmp, yaml).context("writing dstack volume config")?;
+        let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
+        let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
+        let _ = std::fs::remove_file(&tmp);
+        result.map(|_| ())
+    }
+
+    /// Stops a named dev-environment/service run — the lifecycle/cost-control
+    /// counterpart to a persistent (non-auto-terminating) resource. Distinct
+    /// from `cancel_job` (which targets task/batch runs via `JobHandle`) —
+    /// dev-environments are addressed by name, not a `JobHandle`, since they
+    /// aren't created through `submit_batch_job`.
+    pub fn stop_dev_environment(&self, name: &str) -> Result<()> {
+        self.run_dstack(&["stop", name, "-y"])?;
+        Ok(())
+    }
 }
 
 /// Pure YAML builder, split out so tests can assert the exact task config
@@ -492,6 +523,19 @@ impl DstackProvider {
 /// from a `commands:` block? We don't know it yet, so `commands:` below is a
 /// minimal placeholder rather than a guessed-at incantation. Revisit once
 /// dstack CLI access is available.
+/// Generates a `type: volume` dstack config — a persistent volume that
+/// survives across separate `dstack apply` runs (verified against dstack's
+/// docs: "Volumes enable data persistence between runs of dev environments,
+/// tasks, and services"). Call once per volume name; re-applying an
+/// existing volume name is idempotent per dstack's own `apply` semantics
+/// (not re-verified here — Task 1's fixture capture should confirm this
+/// once real dstack access exists).
+fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
+    format!(
+        "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
+    )
+}
+
 fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     let mut env_lines = String::new();
     env_lines.push_str(&format!(
@@ -506,8 +550,17 @@ fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     for (key, value) in &spec.env {
         env_lines.push_str(&format!("  {key}: \"{value}\"\n"));
     }
+
+    let mut volumes_block = String::new();
+    if !spec.volumes.is_empty() {
+        volumes_block.push_str("volumes:\n");
+        for v in &spec.volumes {
+            volumes_block.push_str(&format!("  - name: {}\n    path: {}\n", v.name, v.path));
+        }
+    }
+
     format!(
-        "type: task\nname: {name}\nimage: {image}\ncommands:\n  # 🤓 dstack's exact entrypoint-invocation convention from commands:\n  # is unverified — placeholder until Task 3 has real dstack access.\n  - echo starting\nenv:\n{env_lines}",
+        "type: task\nname: {name}\nimage: {image}\ncommands:\n  # 🤓 dstack's exact entrypoint-invocation convention from commands:\n  # is unverified — placeholder until Task 3 has real dstack access.\n  - echo starting\nenv:\n{env_lines}{volumes_block}",
         image = spec.image,
     )
 }
@@ -542,6 +595,7 @@ impl ComputeProvider for DstackProvider {
             env: Default::default(),
             flavor: spec.flavor.clone(),
             timeout_hours: spec.timeout_hours,
+            volumes: vec![],
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
         submit_dstack_yaml(self, &name, &yaml)
@@ -1035,6 +1089,7 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
                 env: env_map,
                 flavor,
                 timeout_hours,
+                volumes: vec![],
             };
             let handle = p.submit_batch_job(&spec).await?;
             println!("{}", serde_json::to_string_pretty(&handle)?);
@@ -1137,6 +1192,7 @@ mod batch_job_tests {
             env,
             flavor: "a10g-small".to_string(),
             timeout_hours: 1.0,
+            volumes: vec![],
         }
     }
 
@@ -1232,6 +1288,7 @@ mod batch_job_tests {
             env,
             flavor: "RTX_4090".into(),
             timeout_hours: 2.0,
+            volumes: vec![],
         };
         let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
         assert!(yaml.contains("type: task"));
@@ -1241,5 +1298,45 @@ mod batch_job_tests {
         assert!(yaml.contains("B00T_JOB_CONFIG_PATH: \"/workspace/request.json\""));
         assert!(yaml.contains("B00T_JOB_FLAVOR: \"RTX_4090\""));
         assert!(yaml.contains("B00T_JOB_TIMEOUT_HOURS: \"2\""));
+    }
+
+    #[test]
+    fn dstack_volume_yaml_includes_size_and_region() {
+        let yaml = dstack_volume_yaml("b00t-mesh-cache", 100, "eu-central-1");
+        assert!(yaml.contains("type: volume"));
+        assert!(yaml.contains("name: b00t-mesh-cache"));
+        assert!(yaml.contains("size: 100GB"));
+        assert!(yaml.contains("region: eu-central-1"));
+    }
+
+    #[test]
+    fn dstack_task_yaml_attaches_volumes_when_present() {
+        let mut env = std::collections::HashMap::new();
+        let spec = BatchJobSpec {
+            image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
+            config_path: "/workspace/request.json".into(),
+            env,
+            flavor: "RTX_4090".into(),
+            timeout_hours: 2.0,
+            volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
+        };
+        let yaml = dstack_task_yaml("b00t-job-abc", &spec);
+        assert!(yaml.contains("volumes:"));
+        assert!(yaml.contains("- name: b00t-mesh-cache"));
+        assert!(yaml.contains("path: /cache"));
+    }
+
+    #[test]
+    fn dstack_task_yaml_omits_volumes_block_when_empty() {
+        let spec = BatchJobSpec {
+            image: "ubuntu:24.04".into(),
+            config_path: "/dev/null".into(),
+            env: Default::default(),
+            flavor: "cpu".into(),
+            timeout_hours: 1.0,
+            volumes: vec![],
+        };
+        let yaml = dstack_task_yaml("b00t-job-def", &spec);
+        assert!(!yaml.contains("volumes:"));
     }
 }

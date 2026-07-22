@@ -953,6 +953,7 @@ mod provider_bridge_tests {
             env: std::collections::HashMap::new(),
             flavor: "local-gpu".to_string(),
             timeout_hours: 1.0,
+            volumes: vec![],
         }
     }
 
