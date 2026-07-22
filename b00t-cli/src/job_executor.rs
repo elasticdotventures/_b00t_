@@ -405,14 +405,15 @@ async fn execute_python_step(
     checkpoint_if_needed(project_root, job_name, step)
 }
 
-/// Poll interval / attempt budget for provider job-status polling. Kept
-/// small so tests (which use a fake `ComputeProvider` reporting a terminal
-/// status immediately) run fast offline. Real cloud jobs (RunPod/HF) take
-/// much longer than this budget to finish — this MVP bridge does not yet
-/// distinguish "still running, check back later" from "gave up"; it simply
-/// errors out after the budget is exhausted.
-const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(200);
-const PROVIDER_MAX_POLLS: u32 = 50;
+/// Poll interval for provider job-status polling. Production polls a real
+/// cloud API, so this is deliberately slow (2s) to avoid hammering it;
+/// tests use a fake `ComputeProvider` and want fast offline runs, so the
+/// test-mode interval is much shorter. See `PENDING_MAX_POLLS`/
+/// `RUNNING_MAX_POLLS` below for the attempt budgets.
+#[cfg(not(test))]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_secs(2);
+#[cfg(test)]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum JobStatusBucket {
@@ -492,20 +493,44 @@ fn is_failure_status(status: &str) -> bool {
         .any(|marker| s.contains(marker))
 }
 
+/// Poll budgets are asymmetric: `Pending` (still pulling/provisioning) gets
+/// a much longer budget than `Running`, because cold starts are legitimately
+/// slow and provider-dependent, while a job that's already `Running` should
+/// be making progress — see the spec's state-aware timeout rationale.
+/// At production's 2s interval: 150 polls = 5 minutes pending, 50 polls =
+/// 100 seconds running. At test's 20ms interval, both budgets resolve in
+/// well under a second of real wall-clock time.
+const PENDING_MAX_POLLS: u32 = 150;
+const RUNNING_MAX_POLLS: u32 = 50;
+
 async fn poll_until_terminal(provider: &dyn ComputeProvider, handle: &JobHandle) -> Result<String> {
-    for _ in 0..PROVIDER_MAX_POLLS {
+    let mut pending_polls = 0u32;
+    let mut running_polls = 0u32;
+    loop {
         let status = provider.job_status(handle).await?;
-        if is_terminal_status(&status) {
-            return Ok(status);
+        match classify_status(&status) {
+            JobStatusBucket::Terminal => return Ok(status),
+            JobStatusBucket::Pending => {
+                pending_polls += 1;
+                if pending_polls > PENDING_MAX_POLLS {
+                    anyhow::bail!(
+                        "job {} (provider={}) still pending after {} polls",
+                        handle.id, handle.provider, PENDING_MAX_POLLS
+                    );
+                }
+            }
+            JobStatusBucket::Running => {
+                running_polls += 1;
+                if running_polls > RUNNING_MAX_POLLS {
+                    anyhow::bail!(
+                        "job {} (provider={}) still running after {} polls with no terminal status",
+                        handle.id, handle.provider, RUNNING_MAX_POLLS
+                    );
+                }
+            }
         }
         tokio::time::sleep(PROVIDER_POLL_INTERVAL).await;
     }
-    anyhow::bail!(
-        "job {} (provider={}) did not reach a terminal status after {} polls",
-        handle.id,
-        handle.provider,
-        PROVIDER_MAX_POLLS
-    );
 }
 
 /// Submit `spec` via `provider` and poll until terminal. Split out from
@@ -1078,6 +1103,19 @@ mod provider_bridge_tests {
         assert_eq!(classify_status("run=x status=terminated"), JobStatusBucket::Terminal);
         // existing RunPod/HF/local markers still classify as Terminal
         assert_eq!(classify_status("pod=x status=Exited"), JobStatusBucket::Terminal);
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_allows_long_pending_but_short_running_budget() {
+        // 40 pending polls (would have exceeded the old flat 50-cap alongside
+        // real polls) followed by running -> done should still succeed.
+        let mut statuses: Vec<&str> = vec!["run=x status=pending"; 40];
+        statuses.push("run=x status=running");
+        statuses.push("run=x status=done");
+        let provider = FakeProvider::with_statuses(&statuses);
+        let handle = JobHandle { id: "x".into(), provider: "dstack".into() };
+        let result = poll_until_terminal(&provider, &handle).await;
+        assert!(result.is_ok(), "expected success, got {result:?}");
     }
 }
 
