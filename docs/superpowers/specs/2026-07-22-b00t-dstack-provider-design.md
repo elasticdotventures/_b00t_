@@ -10,8 +10,10 @@
 
 1. Add a `DstackProvider: ComputeProvider` backed by the `dstack` CLI, giving b00t a real multi-cloud job backend (RunPod becomes one of dstack's backends, not a hard dependency).
 2. Replace status-guessing with dstack's native run-state machine (submitted → provisioning → pulling → running → done/failed), which finally distinguishes "still pulling" from "stuck" from "dead" — RunPod's bare pod API cannot do this (its `desired_status` enum is only `Running | Exited | Terminated`).
-3. Define a PASS/FAIL evidence contract at the provider layer so `b00t provider job status` reports the job's actual test outcome, not just container lifecycle state — this is the "reliably classifying tests as correct or incorrect" requirement, and it's a gap today regardless of provider.
+3. Implement enforcement of `JobStep.output_contract` for provider-dispatched steps, so `b00t provider job status` reports the job's actual test outcome, not just container lifecycle state — this is the "reliably classifying tests as correct or incorrect" requirement, and it's a gap today regardless of provider.
 4. Route `cloud_mesh.sh` (and the future Sapiens2 container job) through the new provider instead of one-shot-submit-then-manual-poll.
+
+**Composability note:** the "wrap dstack in procedural steps that run before/after" requirement is *already* satisfied by the existing `.job.toml` pipeline system in `b00t-cli/src/datum_job.rs` — `JobStep.depends_on` (DAG ordering), `JobCondition.when` (`always`/`on_success`/`on_failure`/`on_previous`), and `JobStep.backend`/`batch` (dispatch a step through `ComputeProvider::submit_batch_job` instead of a local shell-out) together already give pre/post-step composability around any provider-dispatched job. This design does not build a new hook system — it registers `"dstack"` as an accepted `backend` value and implements the `output_contract` enforcement that field's own doc comment admits is missing ("does not, by itself, guarantee such enforcement"). Once both land, a `.job.toml` author gets composable dstack steps for free via machinery that already exists.
 
 ---
 
@@ -19,9 +21,10 @@
 
 **In scope:**
 - `DstackProvider` implementing the existing `ComputeProvider` trait (`b00t-cli/src/commands/provider.rs`): `submit_batch_job`, `submit_training_job`, `job_status`, `cancel_job`, `list_jobs`
-- `get_provider()` routing for `"dstack"`
+- `get_provider()` routing for `"dstack"`, and `JobStep.backend`'s doc comment updated to list it as accepted
 - `PROVIDER-DSTACK.provider.tomllmd` datum, following the existing `PROVIDER-RUNPOD` / `PROVIDER-HF` convention
 - A job-status contract that surfaces a real `PASS` / `FAIL: <detail>` / `RUNNING` / `PULLING` state, not just raw provider lifecycle strings — extends the `is_terminal_status`/`is_failure_status` helpers in `job_executor.rs`
+- Actual enforcement of `JobStep.output_contract` for provider-dispatched steps: parse the terminal `PASS`/`FAIL:` line (or `result.json`) and gate `JobCondition.when = "on_success"/"on_failure"` evaluation on it, not just on container exit
 - `cloud_mesh.sh` updated to submit via the new provider and either watch synchronously or print a real status command
 - `just ai-finetune::*` recipes gain a working `ORCHESTRATOR=dstack` path (currently a documented no-op)
 
@@ -55,7 +58,15 @@ _b00t_/datums/PROVIDER-DSTACK.provider.tomllmd
 app4dog/game-play/pipelines/photo-critter/cloud_mesh.sh
                                    ← submit via `b00t provider job submit-batch --provider dstack`,
                                      replace "monitor manually" footer with a real watch/status call
+
+b00t-cli/src/datum_job.rs
+  JobStep.backend                 ← doc comment gains "dstack" as an accepted value (already
+                                     structurally supports it — no schema change)
+  JobStep.output_contract         ← unchanged schema; this design implements the enforcement
+                                     its own doc comment says doesn't exist yet
 ```
+
+Nothing new needed for step composability itself — `JobStep.depends_on` + `JobCondition.when` already let a `.job.toml` author sequence bash/python steps before and after a `backend = "dstack"` step, gated on its outcome, once `output_contract` enforcement is real.
 
 ### Status model
 
@@ -70,9 +81,9 @@ dstack's run states map onto three buckets our poller needs:
 
 `job_status()` returns a structured status (not the current ad-hoc string) so `poll_until_terminal` can apply a *state-aware* timeout: generous while `pending` (cold starts are provider-dependent and can legitimately take minutes), tight once `running` (a job that's actually running should be making progress or emitting the PASS/FAIL contract below).
 
-### PASS/FAIL evidence contract
+### `output_contract` enforcement (PASS/FAIL evidence)
 
-Container exit code 0 means "the process didn't crash," not "the test passed." Job entrypoints write a terminal line b00t already standardizes on (`whoami`'s Cognitive Tiers table: `PASS` or `FAIL: <5-line excerpt>`) to stdout or a `result.json` in the job's workspace mount. `DstackProvider::job_status` reads that once the run reaches `done`/`failed` and folds it into the returned status, so a job that exits 0 but never asserted PASS is reported as indeterminate rather than silently treated as success (closing the gap `is_failure_status`'s doc comment already flags: "none of the providers expose an exit code... a bare 'exited' is treated as success rather than guessed at").
+Container exit code 0 means "the process didn't crash," not "the test passed." `JobStep.output_contract` already documents the intended format (`"PASS|FAIL:<5lines>"`, matching `whoami`'s Cognitive Tiers table) but its doc comment admits enforcement doesn't exist. This design implements it: job entrypoints write that terminal line to stdout or a `result.json` in the job's workspace mount; `DstackProvider::job_status` reads it once the run reaches `done`/`failed` and folds it into the returned status, so a job that exits 0 but never asserted PASS is reported as indeterminate rather than silently treated as success (closing the gap `is_failure_status`'s doc comment separately flags: "none of the providers expose an exit code... a bare 'exited' is treated as success rather than guessed at"). `poll_until_terminal` (or its replacement) then gates `JobCondition.when = "on_success"/"on_failure"` on this parsed outcome, not on container exit alone — this is what makes downstream steps in a `.job.toml` pipeline actually trustworthy.
 
 **Why not just route to MLflow?** b00t already runs MLflow for local training (`_b00t_/learn/hf-jobs-mlflow.md`: tracking server at `http://192.168.1.137:30803`, a LAN NodePort on the local k8s box), but that note documents it as **unreachable from any cloud GPU worker** — HF Jobs cloud runs already hit `ConnectTimeoutError` against it and fall back to `report_to: "none"`. The same LAN-reachability constraint applies to RunPod and any dstack-orchestrated cloud backend. So cloud jobs today have zero run-tracking of any kind, MLflow included — that's a direct contributor to "can't reliably classify pass/fail," independent of the polling bug. Exposing the tracking server publicly is a separate security/ops decision, out of scope here; the stdout/`result.json` contract above is deliberately push-free (the provider reads it back directly) so it works the same whether the job ran on the LAN or in someone else's cloud.
 
