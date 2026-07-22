@@ -438,8 +438,11 @@ fn classify_status(status: &str) -> JobStatusBucket {
     if s.contains("status=running") {
         return JobStatusBucket::Running;
     }
-    // Check dstack terminal states explicitly
-    if s.contains("status=done") || s.contains("status=failed") || s.contains("status=terminated") {
+    // "done" is dstack-specific and not one of is_terminal_status's markers;
+    // "failed"/"terminated" ARE already markers there, so they're left to
+    // the fallback below rather than re-checked here (composes with
+    // is_terminal_status instead of duplicating its logic).
+    if s.contains("status=done") {
         return JobStatusBucket::Terminal;
     }
     if is_terminal_status(&s) {
