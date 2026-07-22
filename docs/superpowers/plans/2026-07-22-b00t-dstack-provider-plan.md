@@ -1082,6 +1082,344 @@ Record the final output of both commands verbatim as the closing evidence for th
 
 ---
 
+## Task 11: Report and recommendations — multi-cloud backend options
+
+**Files:** none (research/report task, no code)
+
+Per operator request 2026-07-22: before wiring more cloud backends into dstack, produce a factual report (not a guess) on what's already authorized on this host, what app4dog's existing multi-cloud Terraform infrastructure actually provisions, and what dstack itself requires per cloud — then recommend whether/how to expand beyond RunPod.
+
+- [x] **Step 1: Confirm live cloud CLI auth on this host**
+
+Ran `which az gcloud aws terraform tofu` and one identity check per cloud (`az account show`, `gcloud config list`, `aws sts get-caller-identity`). Result: all three clouds are installed and already authenticated on this host (not hypothetical).
+
+- [x] **Step 2: Survey app4dog's existing multi-cloud Terraform footprint**
+
+`app4dog/terraform` symlinks to `~/promptexecution/infrastructure/terraform/app4dog/` — a real, actively-used OpenTofu stack with `aws`/`azurerm`/`google`/`cloudflare` providers. Surveyed actual `resource "..."` blocks (not just provider declarations) in the cloud/ML-adjacent files: `cloud_run.tf`, `azure_app4dog.tf`, `cvat_hitl.tf`, `ecr_image_segmenter.tf`, `image-segmenter.tf`, `r2_gameplay.tf`. Finding: none of it is GPU compute — it's app hosting, DNS/storage, CI registries, and one annotation tool (CVAT on Azure Container Apps).
+
+- [x] **Step 3: Verify dstack's actual per-cloud requirements (not assumed)**
+
+Fetched dstack's server config docs specifically for AWS/GCP/Azure backend credential and infra requirements. Finding: all three self-provision by default (same model as RunPod) — no pre-existing Terraform-managed VPC/IAM is required, though optionally supported.
+
+- [x] **Step 4: Write the report**
+
+Written to `docs/superpowers/plans/2026-07-22-dstack-multicloud-backend-report.md`. Recommendation: stay RunPod-only for this plan (no existing GPU infra to integrate with, and dstack would create new disconnected resources per cloud if pointed at Azure/GCP/AWS today); flagged GCP Cloud Run's newer GPU support as a future option worth a look (not scoped here); flagged `ecr_image_segmenter.tf`'s actual runtime target as an open question independent of this plan (registry + CI push IAM exist, but no confirmed compute in that Terraform — may be a second, currently-undocumented ML-pipeline compute path).
+
+- [x] **Step 5: Commit**
+
+```bash
+cd ~/.b00t
+git add docs/superpowers/plans/2026-07-22-dstack-multicloud-backend-report.md
+git commit -m "docs: multi-cloud backend report for dstack provider — recommend RunPod-only for now"
+```
+
+---
+## Task 12: Persistent volume support (TRIZ-resolved cold-boot fix, buckets 1+2+4+5)
+
+**Files:**
+- Modify: `b00t-cli/src/commands/provider.rs`
+
+**Interfaces:**
+- Consumes: `dstack_task_yaml` (Task 2), `DstackProvider::run_dstack` (Task 2).
+- Produces: `BatchJobSpec.volumes: Vec<VolumeMount>` (new field, additive — `Default` keeps existing callers working), `DstackProvider::ensure_volume(name, size_gb, region) -> Result<()>`, `DstackProvider::stop_dev_environment(name) -> Result<()>`.
+
+Per operator TRIZ analysis 2026-07-22: Task 2's `submit_batch_job` always creates a fresh pod per job (dstack's `type: task`, no volume) — correct for genuinely one-off jobs, but the wrong pattern for "repetitive types of jobs" (the operator's own framing) where cold image/dependency pull dominates cycle time and burns budget with nothing to show for it. dstack's real `type: volume` primitive (verified against docs, not guessed) persists data — pip caches, model weights, pre-pulled datasets — across separate `dstack apply` runs. This task adds that as an *additional* capability alongside Task 2's existing one-shot mode, not a replacement.
+
+- [ ] **Step 1: Write the failing test for volume YAML generation**
+
+```rust
+#[test]
+fn dstack_volume_yaml_includes_size_and_region() {
+    let yaml = dstack_volume_yaml("b00t-mesh-cache", 100, "eu-central-1");
+    assert!(yaml.contains("type: volume"));
+    assert!(yaml.contains("name: b00t-mesh-cache"));
+    assert!(yaml.contains("size: 100GB"));
+    assert!(yaml.contains("region: eu-central-1"));
+}
+
+#[test]
+fn dstack_task_yaml_attaches_volumes_when_present() {
+    let mut env = std::collections::HashMap::new();
+    let spec = BatchJobSpec {
+        image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
+        config_path: "/workspace/request.json".into(),
+        env,
+        flavor: "RTX_4090".into(),
+        timeout_hours: 2.0,
+        volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
+    };
+    let yaml = dstack_task_yaml("b00t-job-abc", &spec);
+    assert!(yaml.contains("volumes:"));
+    assert!(yaml.contains("- name: b00t-mesh-cache"));
+    assert!(yaml.contains("path: /cache"));
+}
+
+#[test]
+fn dstack_task_yaml_omits_volumes_block_when_empty() {
+    let spec = BatchJobSpec {
+        image: "ubuntu:24.04".into(),
+        config_path: "/dev/null".into(),
+        env: Default::default(),
+        flavor: "cpu".into(),
+        timeout_hours: 1.0,
+        volumes: vec![],
+    };
+    let yaml = dstack_task_yaml("b00t-job-def", &spec);
+    assert!(!yaml.contains("volumes:"));
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+cd ~/.b00t/.worktrees/feature/dstack-provider && cargo test -p b00t-cli --lib dstack_volume -- --nocapture
+cargo test -p b00t-cli --lib dstack_task_yaml_attaches_volumes -- --nocapture
+cargo test -p b00t-cli --lib dstack_task_yaml_omits_volumes -- --nocapture
+```
+
+Expected: FAIL — `dstack_volume_yaml` not found; `BatchJobSpec` has no `volumes` field yet (this will also fail to compile until `volumes` is added everywhere `BatchJobSpec` is constructed — see Step 3's note on other call sites).
+
+- [ ] **Step 3: Add `VolumeMount`, extend `BatchJobSpec`, implement `dstack_volume_yaml`, extend `dstack_task_yaml`**
+
+Add near `BatchJobSpec`'s definition:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VolumeMount {
+    pub name: String,
+    pub path: String,
+}
+```
+
+Add `volumes: Vec<VolumeMount>` as a new field on `BatchJobSpec` (with `#[serde(default)]` so existing serialized specs without it still deserialize). **This is a breaking change to every existing `BatchJobSpec { ... }` struct literal in this file and its tests (Task 2's tests, `RunpodProvider`/`HfProvider`/`LocalProvider` construction sites) — find every one with `grep -n "BatchJobSpec {" b00t-cli/src/commands/provider.rs` and add `volumes: vec![]` (or `Default::default()` where the literal already uses struct-update syntax) to each. Do not skip any — a missed site is a compile error, not a silent bug, so the compiler will catch it, but check anyway before assuming Step 4 will pass.**
+
+Add near `dstack_task_yaml`:
+
+```rust
+/// Generates a `type: volume` dstack config — a persistent volume that
+/// survives across separate `dstack apply` runs (verified against dstack's
+/// docs: "Volumes enable data persistence between runs of dev environments,
+/// tasks, and services"). Call once per volume name; re-applying an
+/// existing volume name is idempotent per dstack's own `apply` semantics
+/// (not re-verified here — Task 1's fixture capture should confirm this
+/// once real dstack access exists).
+fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
+    format!(
+        "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
+    )
+}
+```
+
+Modify `dstack_task_yaml` to append a `volumes:` block only when `spec.volumes` is non-empty:
+
+```rust
+fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
+    let mut env_lines = String::new();
+    for (key, value) in &spec.env {
+        env_lines.push_str(&format!("  {key}: \"{value}\"\n"));
+    }
+    env_lines.push_str(&format!("  B00T_JOB_CONFIG_PATH: \"{}\"\n", spec.config_path));
+    env_lines.push_str(&format!("  B00T_JOB_FLAVOR: \"{}\"\n", spec.flavor));
+    env_lines.push_str(&format!("  B00T_JOB_TIMEOUT_HOURS: \"{}\"\n", spec.timeout_hours));
+
+    let mut volumes_block = String::new();
+    if !spec.volumes.is_empty() {
+        volumes_block.push_str("volumes:\n");
+        for v in &spec.volumes {
+            volumes_block.push_str(&format!("  - name: {}\n    path: {}\n", v.name, v.path));
+        }
+    }
+
+    format!(
+        "type: task\nname: {name}\nimage: {image}\n# 🤓 OPEN QUESTION: exact dstack entrypoint-invocation convention\n# unverified pending real CLI access (Task 1) — see Task 2's fix commit.\ncommands:\n  - echo starting\nenv:\n{env_lines}{volumes_block}",
+        image = spec.image,
+    )
+}
+```
+
+(Adjust to match whatever `dstack_task_yaml`'s exact current body looks like after Task 2's fix round — read the file first, don't assume this snippet's surrounding lines are verbatim-current.)
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+cd ~/.b00t/.worktrees/feature/dstack-provider && cargo test -p b00t-cli --lib dstack -- --nocapture
+```
+
+Expected: all `dstack`-prefixed tests PASS, including Task 2's original tests (unaffected by the additive `volumes` field).
+
+- [ ] **Step 5: Add `ensure_volume` and `stop_dev_environment` to `DstackProvider`**
+
+```rust
+impl DstackProvider {
+    /// Applies a `type: volume` config — idempotent per dstack's own
+    /// `apply` semantics. Call once before submitting jobs that reference
+    /// this volume by name.
+    pub fn ensure_volume(&self, name: &str, size_gb: u32, region: &str) -> Result<()> {
+        let yaml = dstack_volume_yaml(name, size_gb, region);
+        let tmp = std::env::temp_dir().join(format!("{name}.volume.dstack.yml"));
+        std::fs::write(&tmp, yaml).context("writing dstack volume config")?;
+        let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
+        let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
+        let _ = std::fs::remove_file(&tmp);
+        result.map(|_| ())
+    }
+
+    /// Stops a named dev-environment/service run — the lifecycle/cost-control
+    /// counterpart to a persistent (non-auto-terminating) resource. Distinct
+    /// from `cancel_job` (which targets task/batch runs via `JobHandle`) —
+    /// dev-environments are addressed by name, not a `JobHandle`, since they
+    /// aren't created through `submit_batch_job`.
+    pub fn stop_dev_environment(&self, name: &str) -> Result<()> {
+        self.run_dstack(&["stop", name, "-y"])?;
+        Ok(())
+    }
+}
+```
+
+- [ ] **Step 6: Run the full lib suite**
+
+```bash
+cd ~/.b00t/.worktrees/feature/dstack-provider && cargo test -p b00t-cli --lib -- --nocapture
+```
+
+Expected: 1324+ passed (accounting for the new tests) / 1 pre-existing unrelated failure (`hive::tests::test_guard_expr_coverage_all_shipped_datums`).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add b00t-cli/src/commands/provider.rs
+git commit -m "feat: add dstack volume support (BatchJobSpec.volumes, ensure_volume, stop_dev_environment)"
+```
+
+---
+
+## Task 13: `.job.toml` pattern for warm-dispatch (buckets 1+2+4 composed)
+
+**Files:**
+- Create: `_b00t_/mesh3d-cloud-warm.job.toml`
+
+**Interfaces:**
+- Consumes: `backend = "dstack"` + `[b00t.job.steps.batch.volumes]` (Task 12).
+
+Demonstrates the actual cycle-time fix as a runnable pattern, not just library code: a one-time `provision-cache` step (`ensure_volume`, run once) feeds a repeatable `mesh3d-generate-warm` step that attaches the same volume — subsequent runs skip re-pulling whatever's already cached on it. This is additive to `mesh3d-cloud.job.toml` (Task 9), not a replacement — Task 9's job stays the reference for one-off submission; this one is for the repeated-iteration case the operator specifically flagged as the budget-burning path.
+
+- [ ] **Step 1: Author the job definition**
+
+```toml
+# _b00t_/mesh3d-cloud-warm.job.toml
+[b00t]
+name = "mesh3d-cloud-warm"
+parent = "wrkflw.cli"
+type = "job"
+hint = "Pixal3D cloud batch job against a pre-staged persistent dstack volume — avoids re-pulling image/deps per run for repeated iteration"
+version = "0.1.0"
+depends_on = []
+
+[b00t.job]
+description = "Provision (idempotent) a persistent volume once, then dispatch mesh3d jobs that reuse it"
+tags = ["mesh3d", "pixal3d", "dstack", "app4dog", "volume", "cycle-time"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "off"
+continue_on_failure = false
+
+[[b00t.job.steps]]
+name = "resource-gate"
+description = "Dry-run the existing mesh3d-batch hive resource gate before spending cloud time/money"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t hive plan mesh3d-batch"
+
+[[b00t.job.steps]]
+name = "provision-cache"
+description = "Ensure the persistent volume exists (idempotent, safe to run every invocation)"
+depends_on = ["resource-gate"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t-cli provider dstack ensure-volume --name b00t-mesh-cache --size-gb 100 --region eu-central-1"
+
+[[b00t.job.steps]]
+name = "mesh3d-generate-warm"
+description = "Submit Pixal3D GLB generation against the pre-staged volume"
+depends_on = ["provision-cache"]
+backend = "dstack"
+output_contract = "PASS|FAIL:<5lines>"
+
+[b00t.job.steps.batch]
+image = "docker.io/elasticdotventures/mesh-runner:v6"
+config_path = "/workspace/request.json"
+flavor = "RTX_4090"
+timeout_hours = 2.0
+
+[[b00t.job.steps.batch.volumes]]
+name = "b00t-mesh-cache"
+path = "/cache"
+
+[b00t.job.steps.condition]
+when = "on_success"
+
+[b00t.job.env]
+MESH_RESOLUTION = "1024"
+MESH_LOW_VRAM = "true"
+```
+
+Note: `b00t-cli provider dstack ensure-volume` referenced in `provision-cache` doesn't exist as a CLI subcommand yet — `Task 12` only adds `DstackProvider::ensure_volume` as a Rust method, not a CLI-exposed command. **This step will fail until that CLI wiring is added.** Flagging honestly rather than fabricating a working command: either add the subcommand (small addition to `ProviderCommands`/`RunpodSubCommands`-equivalent enum for dstack, following that existing pattern) as part of this task, or change `provision-cache`'s task to call the Rust method some other way. Resolve this concretely during implementation, not by guessing here.
+
+- [ ] **Step 2: Validate the job definition parses**
+
+```bash
+cd ~/.b00t && b00t-cli job plan mesh3d-cloud-warm
+```
+
+Expected: prints the three-step plan with no parse errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add _b00t_/mesh3d-cloud-warm.job.toml
+git commit -m "feat: add mesh3d-cloud-warm.job.toml — persistent-volume pattern for repeated iteration"
+```
+
+---
+
+## Task 14: Lifecycle/cost control (bucket 5)
+
+**Files:**
+- Modify: `_b00t_/datums/PROVIDER-DSTACK.provider.tomllmd`
+
+**Interfaces:** none (documentation-only — this task closes an operational gap, not a code gap).
+
+A persistent volume/dev-environment costs money while idle, unlike Task 2's ephemeral one-shot pods which terminate on their own. This is a real, named risk the MECE decomposition surfaces (bucket 5) — not solving it in code (dstack's `inactivity_duration` field handles auto-shutdown for dev-environments; volumes themselves bill for storage, not compute, while idle, which is a materially smaller ongoing cost than a lingering GPU instance).
+
+- [ ] **Step 1: Add operational guidance to the datum**
+
+Add a new `[resource.cost_control]` section to `PROVIDER-DSTACK.provider.tomllmd` (from Task 8):
+
+```toml
+[resource.cost_control]
+# 🤓 volumes bill for storage only while idle (cheap); dev-environments bill
+#    for compute while idle unless inactivity_duration is set — always set it.
+volume_idle_cost = "storage-rate only, no compute charge"
+dev_environment_default = "set inactivity_duration on every dev-environment config — no default auto-shutdown otherwise"
+
+[[resource.usages]]
+description = "Stop a dev-environment / warm task run explicitly"
+command = "b00t-cli provider job cancel --provider dstack <run-name>"
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+cd ~/.b00t
+git add _b00t_/datums/PROVIDER-DSTACK.provider.tomllmd
+git commit -m "docs: add cost-control guidance for persistent dstack volumes/dev-environments"
+```
+
+---
+
+
 # b00t:map v1
 # summary: Implementation plan for DstackProvider — 10 tasks covering CLI install/fixture capture, provider methods, get_provider routing, bucket-aware polling, output_contract enforcement, datum, and cloud_mesh.sh migration
 # tags: provider, dstack, orchestration, plan, gpu, multi-cloud
