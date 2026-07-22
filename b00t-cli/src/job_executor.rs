@@ -414,6 +414,40 @@ async fn execute_python_step(
 const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const PROVIDER_MAX_POLLS: u32 = 50;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JobStatusBucket {
+    /// Provider is still allocating/pulling — dstack's pending/submitted/
+    /// provisioning, or any provider's equivalent. Not stuck by itself;
+    /// generous timeout applies here (see poll_until_terminal).
+    Pending,
+    /// Job is actively executing.
+    Running,
+    /// Success or failure, no further state changes expected.
+    Terminal,
+}
+
+/// Buckets a raw provider status string. dstack states (pending, submitted,
+/// provisioning, running, terminating, terminated, failed, done) are checked
+/// first since they're unambiguous; falls back to the existing substring
+/// markers for RunPod/HF/local providers.
+fn classify_status(status: &str) -> JobStatusBucket {
+    let s = status.to_lowercase();
+    if s.contains("status=pending") || s.contains("status=submitted") || s.contains("status=provisioning") {
+        return JobStatusBucket::Pending;
+    }
+    if s.contains("status=running") {
+        return JobStatusBucket::Running;
+    }
+    // Check dstack terminal states explicitly
+    if s.contains("status=done") || s.contains("status=failed") || s.contains("status=terminated") {
+        return JobStatusBucket::Terminal;
+    }
+    if is_terminal_status(&s) {
+        return JobStatusBucket::Terminal;
+    }
+    JobStatusBucket::Pending
+}
+
 /// True if `status` looks like a finished (success or failure) job.
 ///
 /// There is no single terminal-status convention shared across providers —
@@ -1028,6 +1062,19 @@ mod provider_bridge_tests {
             "bare 'exited' has no exit code available, treat as success"
         );
         assert!(!is_failure_status("completed"));
+    }
+
+    #[test]
+    fn classify_status_buckets_dstack_states_correctly() {
+        assert_eq!(classify_status("run=x status=pending"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=submitted"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=provisioning"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=running"), JobStatusBucket::Running);
+        assert_eq!(classify_status("run=x status=done"), JobStatusBucket::Terminal);
+        assert_eq!(classify_status("run=x status=failed"), JobStatusBucket::Terminal);
+        assert_eq!(classify_status("run=x status=terminated"), JobStatusBucket::Terminal);
+        // existing RunPod/HF/local markers still classify as Terminal
+        assert_eq!(classify_status("pod=x status=Exited"), JobStatusBucket::Terminal);
     }
 }
 
