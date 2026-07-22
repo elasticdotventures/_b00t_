@@ -452,6 +452,139 @@ impl ComputeProvider for HfProvider {
     }
 }
 
+// ── dstack provider ────────────────────────────────────────────────────────
+
+pub struct DstackProvider;
+
+impl DstackProvider {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn run_dstack(&self, args: &[&str]) -> Result<String> {
+        let out = Command::new("dstack")
+            .args(args)
+            .output()
+            .context("dstack CLI not found — run: uv tool install 'dstack[all]'")?;
+        if !out.status.success() {
+            bail!(
+                "dstack {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    }
+}
+
+/// Pure YAML builder, split out so tests can assert the exact task config
+/// without the `dstack` CLI installed — same rationale as `hf_batch_args`.
+/// The image's own ENTRYPOINT runs; `config_path` is passed through as the
+/// entrypoint's argument, same convention as `RunpodProvider`/`HfProvider`.
+fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
+    let mut env_lines = String::new();
+    for (key, value) in &spec.env {
+        env_lines.push_str(&format!("  {key}: \"{value}\"\n"));
+    }
+    format!(
+        "type: task\nname: {name}\nimage: {image}\ncommands:\n  - exec \"$@\" -- {config_path}\nenv:\n{env_lines}",
+        image = spec.image,
+        config_path = spec.config_path,
+    )
+}
+
+#[async_trait]
+impl ComputeProvider for DstackProvider {
+    fn name(&self) -> &str {
+        "dstack"
+    }
+
+    async fn deploy_inference_endpoint(&self, _cfg: &EndpointConfig) -> Result<EndpointHandle> {
+        bail!("dstack provider does not yet support inference endpoints in b00t (batch/training jobs only) — use provider=runpod")
+    }
+
+    async fn endpoint_status(&self, _id: &str) -> Result<EndpointHandle> {
+        bail!("dstack provider has no endpoint management yet; use provider=runpod")
+    }
+
+    async fn teardown_endpoint(&self, _id: &str) -> Result<()> {
+        bail!("dstack provider has no endpoint management yet; use provider=runpod")
+    }
+
+    async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
+        Ok(vec![])
+    }
+
+    async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
+        let name = format!("b00t-train-{}", uuid_suffix());
+        let batch_spec = BatchJobSpec {
+            image: spec.image.clone(),
+            config_path: spec.config_path.clone(),
+            env: Default::default(),
+            flavor: spec.flavor.clone(),
+            timeout_hours: spec.timeout_hours,
+        };
+        let yaml = dstack_task_yaml(&name, &batch_spec);
+        submit_dstack_yaml(self, &name, &yaml)
+    }
+
+    async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
+        let name = format!("b00t-job-{}", uuid_suffix());
+        let yaml = dstack_task_yaml(&name, spec);
+        submit_dstack_yaml(self, &name, &yaml)
+    }
+
+    async fn job_status(&self, handle: &JobHandle) -> Result<String> {
+        todo_task3_job_status(self, handle)
+    }
+
+    async fn cancel_job(&self, handle: &JobHandle) -> Result<()> {
+        self.run_dstack(&["stop", &handle.id, "-y"])?;
+        Ok(())
+    }
+
+    async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
+        todo_task3_list_jobs(self)
+    }
+}
+
+fn uuid_suffix() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    format!(
+        "{:x}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+}
+
+/// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
+/// Split out so submit_batch_job/submit_training_job share one path.
+fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
+    let tmp = std::env::temp_dir().join(format!("{name}.dstack.yml"));
+    std::fs::write(&tmp, yaml).context("writing dstack task config")?;
+    provider.run_dstack(&[
+        "apply",
+        "-f",
+        tmp.to_str().unwrap(),
+        "-y",
+        "-d",
+    ])?;
+    Ok(JobHandle {
+        id: name.to_string(),
+        provider: "dstack".into(),
+    })
+}
+
+fn todo_task3_job_status(_provider: &DstackProvider, _handle: &JobHandle) -> Result<String> {
+    unimplemented!("implemented in Task 3 against the captured dstack ps --json fixture")
+}
+
+fn todo_task3_list_jobs(_provider: &DstackProvider) -> Result<Vec<JobHandle>> {
+    unimplemented!("implemented in Task 3 against the captured dstack ps --json fixture")
+}
+
 // ── Local (podman/docker) provider ────────────────────────────────────────────
 
 /// Label attached to every container this provider starts, so `list_jobs`/
@@ -1077,5 +1210,24 @@ mod batch_job_tests {
     fn local_batch_args_rejects_relative_path() {
         let spec = sample_spec("img:latest", "relative/path/req.json");
         assert!(local_batch_args("b00t-batch-test", &ContainerRuntime::Podman, &spec).is_err());
+    }
+
+    #[test]
+    fn dstack_task_yaml_includes_image_env_and_command() {
+        let mut env = std::collections::HashMap::new();
+        env.insert("MESH_GPU".to_string(), "auto".to_string());
+        let spec = BatchJobSpec {
+            image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
+            config_path: "/workspace/request.json".into(),
+            env,
+            flavor: "RTX_4090".into(),
+            timeout_hours: 2.0,
+        };
+        let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
+        assert!(yaml.contains("type: task"));
+        assert!(yaml.contains("name: b00t-job-abc123"));
+        assert!(yaml.contains("image: docker.io/elasticdotventures/mesh-runner:v6"));
+        assert!(yaml.contains("MESH_GPU: \"auto\""));
+        assert!(yaml.contains("/workspace/request.json"));
     }
 }
