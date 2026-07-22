@@ -336,3 +336,4 @@ vendor/pi-mono/
 .b00t/verification-artifacts.jsonl
 /target
 vscode.🆚/vscode-docs/
+.worktrees
