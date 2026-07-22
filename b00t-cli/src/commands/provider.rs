@@ -479,17 +479,36 @@ impl DstackProvider {
 
 /// Pure YAML builder, split out so tests can assert the exact task config
 /// without the `dstack` CLI installed — same rationale as `hf_batch_args`.
-/// The image's own ENTRYPOINT runs; `config_path` is passed through as the
-/// entrypoint's argument, same convention as `RunpodProvider`/`HfProvider`.
+///
+/// `config_path`, `flavor`, and `timeout_hours` are passed through as plain
+/// environment variables (`B00T_JOB_CONFIG_PATH`, `B00T_JOB_FLAVOR`,
+/// `B00T_JOB_TIMEOUT_HOURS`) rather than encoded into `commands:` or a
+/// `resources:` block — env vars are a construct we've confirmed dstack
+/// supports, unlike command-passthrough or GPU-selector YAML syntax, which
+/// we have not yet verified against a real dstack instance.
+///
+/// 🤓 OPEN QUESTION for Task 3 (needs real dstack access to resolve): what is
+/// dstack's actual convention for invoking a task container's own ENTRYPOINT
+/// from a `commands:` block? We don't know it yet, so `commands:` below is a
+/// minimal placeholder rather than a guessed-at incantation. Revisit once
+/// dstack CLI access is available.
 fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     let mut env_lines = String::new();
+    env_lines.push_str(&format!(
+        "  B00T_JOB_CONFIG_PATH: \"{}\"\n",
+        spec.config_path
+    ));
+    env_lines.push_str(&format!("  B00T_JOB_FLAVOR: \"{}\"\n", spec.flavor));
+    env_lines.push_str(&format!(
+        "  B00T_JOB_TIMEOUT_HOURS: \"{}\"\n",
+        spec.timeout_hours
+    ));
     for (key, value) in &spec.env {
         env_lines.push_str(&format!("  {key}: \"{value}\"\n"));
     }
     format!(
-        "type: task\nname: {name}\nimage: {image}\ncommands:\n  - exec \"$@\" -- {config_path}\nenv:\n{env_lines}",
+        "type: task\nname: {name}\nimage: {image}\ncommands:\n  # 🤓 dstack's exact entrypoint-invocation convention from commands:\n  # is unverified — placeholder until Task 3 has real dstack access.\n  - echo starting\nenv:\n{env_lines}",
         image = spec.image,
-        config_path = spec.config_path,
     )
 }
 
@@ -516,7 +535,7 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
-        let name = format!("b00t-train-{}", uuid_suffix());
+        let name = format!("b00t-train-{}", uuid::Uuid::new_v4());
         let batch_spec = BatchJobSpec {
             image: spec.image.clone(),
             config_path: spec.config_path.clone(),
@@ -529,7 +548,7 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
-        let name = format!("b00t-job-{}", uuid_suffix());
+        let name = format!("b00t-job-{}", uuid::Uuid::new_v4());
         let yaml = dstack_task_yaml(&name, spec);
         submit_dstack_yaml(self, &name, &yaml)
     }
@@ -548,29 +567,20 @@ impl ComputeProvider for DstackProvider {
     }
 }
 
-fn uuid_suffix() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    format!(
-        "{:x}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
-
 /// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
 /// Split out so submit_batch_job/submit_training_job share one path.
 fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
     let tmp = std::env::temp_dir().join(format!("{name}.dstack.yml"));
     std::fs::write(&tmp, yaml).context("writing dstack task config")?;
-    provider.run_dstack(&[
-        "apply",
-        "-f",
-        tmp.to_str().unwrap(),
-        "-y",
-        "-d",
-    ])?;
+    let tmp_path = tmp
+        .to_str()
+        .context("temp file path is not valid UTF-8")?;
+    provider.run_dstack(&["apply", "-f", tmp_path, "-y", "-d"])?;
+    // Cleanup is best-effort — a failure to remove the temp file must not
+    // fail the job submission itself.
+    if let Err(err) = std::fs::remove_file(&tmp) {
+        tracing::warn!("failed to remove temp dstack task config {tmp:?}: {err}");
+    }
     Ok(JobHandle {
         id: name.to_string(),
         provider: "dstack".into(),
@@ -1228,6 +1238,8 @@ mod batch_job_tests {
         assert!(yaml.contains("name: b00t-job-abc123"));
         assert!(yaml.contains("image: docker.io/elasticdotventures/mesh-runner:v6"));
         assert!(yaml.contains("MESH_GPU: \"auto\""));
-        assert!(yaml.contains("/workspace/request.json"));
+        assert!(yaml.contains("B00T_JOB_CONFIG_PATH: \"/workspace/request.json\""));
+        assert!(yaml.contains("B00T_JOB_FLAVOR: \"RTX_4090\""));
+        assert!(yaml.contains("B00T_JOB_TIMEOUT_HOURS: \"2\""));
     }
 }
