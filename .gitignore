@@ -336,6 +336,11 @@ vendor/pi-mono/
 .b00t/verification-artifacts.jsonl
 .b00t/jobs/
 **/.b00t/jobs/
+
+# DstackProvider scratch configs — written into the invocation CWD (dstack's
+# own `apply` requires the config file to be inside CWD's subtree), best-
+# effort cleaned up after each `dstack apply`; ignored as a safety net.
+.*.dstack.yml
 /target
 vscode.🆚/vscode-docs/
 .worktrees

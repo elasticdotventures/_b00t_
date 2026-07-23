@@ -493,7 +493,7 @@ impl DstackProvider {
     /// this volume by name.
     pub fn ensure_volume(&self, name: &str, size_gb: u32, region: &str) -> Result<()> {
         let yaml = dstack_volume_yaml(name, size_gb, region);
-        let tmp = std::env::temp_dir().join(format!("{name}.volume.dstack.yml"));
+        let tmp = dstack_scratch_config_path(name, "volume")?;
         std::fs::write(&tmp, yaml).context("writing dstack volume config")?;
         let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
         let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
@@ -529,7 +529,7 @@ impl DstackProvider {
     /// every submission rather than tracking whether it already ran.
     pub fn ensure_fleet(&self, name: &str) -> Result<()> {
         let yaml = dstack_fleet_yaml(name);
-        let tmp = std::env::temp_dir().join(format!("{name}.fleet.dstack.yml"));
+        let tmp = dstack_scratch_config_path(name, "fleet")?;
         std::fs::write(&tmp, yaml).context("writing dstack fleet config")?;
         let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
         let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
@@ -577,16 +577,22 @@ fn dstack_fleet_yaml(name: &str) -> String {
 ///
 /// `config_path`, `flavor`, and `timeout_hours` are passed through as plain
 /// environment variables (`B00T_JOB_CONFIG_PATH`, `B00T_JOB_FLAVOR`,
-/// `B00T_JOB_TIMEOUT_HOURS`) rather than encoded into `commands:` or a
-/// `resources:` block — env vars are a construct we've confirmed dstack
-/// supports, unlike command-passthrough or GPU-selector YAML syntax, which
-/// we have not yet verified against a real dstack instance.
+/// `B00T_JOB_TIMEOUT_HOURS`) — env vars are a construct we've confirmed
+/// dstack supports.
 ///
-/// 🤓 OPEN QUESTION for Task 3 (needs real dstack access to resolve): what is
-/// dstack's actual convention for invoking a task container's own ENTRYPOINT
-/// from a `commands:` block? We don't know it yet, so `commands:` below is a
-/// minimal placeholder rather than a guessed-at incantation. Revisit once
-/// dstack CLI access is available.
+/// **Resolved via Task 10's live e2e test** (was an open question until real
+/// dstack access existed): dstack's own `TaskConfiguration` model requires
+/// "either `commands` or `image` must be set", not both — `commands:` is
+/// optional whenever `image:` is present, in which case dstack runs the
+/// image's own ENTRYPOINT/CMD. `BatchJobSpec` carries no command-override
+/// field (the intended architecture is that job images — e.g.
+/// `mesh-runner:v6` — bake in their own entrypoint that reads
+/// `B00T_JOB_CONFIG_PATH` and emits the PASS/FAIL evidence line), so
+/// `commands:` is deliberately omitted here entirely. An earlier version of
+/// this function emitted a hardcoded `commands: [echo starting]` placeholder
+/// — that was a real bug, not a harmless stopgap: it silently replaced every
+/// real image's actual entrypoint with a no-op on every single submission,
+/// discovered only by running a real submission against a real image.
 fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     let mut env_lines = String::new();
     env_lines.push_str(&format!(
@@ -611,7 +617,7 @@ fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
     }
 
     format!(
-        "type: task\nname: {name}\nimage: {image}\ncommands:\n  # 🤓 dstack's exact entrypoint-invocation convention from commands:\n  # is unverified — placeholder until Task 3 has real dstack access.\n  - echo starting\nenv:\n{env_lines}{volumes_block}",
+        "type: task\nname: {name}\nimage: {image}\nenv:\n{env_lines}{volumes_block}",
         image = spec.image,
     )
 }
@@ -639,7 +645,7 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
-        let name = format!("b00t-train-{}", uuid::Uuid::new_v4());
+        let name = format!("b00t-train-{}", dstack_short_id());
         let batch_spec = BatchJobSpec {
             image: spec.image.clone(),
             config_path: spec.config_path.clone(),
@@ -653,7 +659,7 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
-        let name = format!("b00t-job-{}", uuid::Uuid::new_v4());
+        let name = format!("b00t-job-{}", dstack_short_id());
         let yaml = dstack_task_yaml(&name, spec);
         submit_dstack_yaml(self, &name, &yaml)
     }
@@ -683,6 +689,40 @@ impl ComputeProvider for DstackProvider {
     }
 }
 
+/// Resolves the scratch-file path for a generated dstack config, rooted at
+/// the current working directory rather than the system temp dir.
+///
+/// Verified via a real, live `dstack apply` invocation (Task 10 e2e smoke
+/// test): dstack's own `apply` command computes
+/// `configuration_path.absolute().relative_to(Path.cwd())` and errors —
+/// before ever making a network call — if the config file isn't inside the
+/// CWD's subtree ("... is not in the subpath of ..."). System temp dirs
+/// (`/tmp` on Linux) are essentially never a subpath of an arbitrary
+/// invocation's CWD, so every dstack config write in this provider
+/// (`ensure_volume`, `ensure_fleet`, `submit_dstack_yaml`) must live under
+/// CWD. Uses a dotfile-prefixed name to avoid cluttering directory
+/// listings; all three call sites already best-effort `remove_file` it
+/// after `apply` runs.
+/// Generates a short, lowercase-hex ID safe to embed in a dstack resource
+/// name. Verified via a real, live `dstack apply` invocation (Task 10 e2e
+/// smoke test): dstack rejects any `name:` not matching
+/// `^[a-z][a-z0-9-]{1,40}$` (max 41 characters total) with "Resource name
+/// should match regex ...". A full UUID (36 chars) pushed
+/// `b00t-job-<uuid>` to 45 characters — always over the limit, so every
+/// `submit_batch_job`/`submit_training_job` call failed unconditionally
+/// before this fix. 12 hex characters (48 bits) keeps collision risk
+/// negligible for this provider's job volumes while leaving headroom under
+/// the 41-char cap for any prefix used here (`b00t-job-`, `b00t-train-`).
+fn dstack_short_id() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
+}
+
+fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::PathBuf> {
+    let cwd = std::env::current_dir()
+        .context("resolving current directory for dstack config scratch file")?;
+    Ok(cwd.join(format!(".{name}.{suffix}.dstack.yml")))
+}
+
 /// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
 /// Split out so submit_batch_job/submit_training_job share one path.
 /// Ensures the shared autoscaling fleet exists first — see
@@ -692,7 +732,7 @@ fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Resu
     provider
         .ensure_fleet(SHARED_FLEET_NAME)
         .context("ensuring shared dstack fleet exists before task submission")?;
-    let tmp = std::env::temp_dir().join(format!("{name}.dstack.yml"));
+    let tmp = dstack_scratch_config_path(name, "task")?;
     std::fs::write(&tmp, yaml).context("writing dstack task config")?;
     let tmp_path = tmp
         .to_str()
@@ -1442,6 +1482,12 @@ mod batch_job_tests {
         assert!(yaml.contains("B00T_JOB_CONFIG_PATH: \"/workspace/request.json\""));
         assert!(yaml.contains("B00T_JOB_FLAVOR: \"RTX_4090\""));
         assert!(yaml.contains("B00T_JOB_TIMEOUT_HOURS: \"2\""));
+        // Task 10 regression guard: `commands:` must be omitted so dstack
+        // runs the image's own ENTRYPOINT/CMD — an earlier version hardcoded
+        // `commands: [echo starting]` here, which silently discarded every
+        // real image's actual behavior on every submission (found via a
+        // live e2e run, not by inspection).
+        assert!(!yaml.contains("commands:"));
     }
 
     #[test]
@@ -1479,6 +1525,19 @@ mod batch_job_tests {
         let parsed_missing = parse_dstack_ps_json(json, Some("no-such-run"))
             .expect("fixture should still parse with a non-matching filter");
         assert!(parsed_missing.is_empty());
+    }
+
+    #[test]
+    fn dstack_short_id_keeps_job_and_train_names_within_dstack_name_limit() {
+        // dstack's real name regex, confirmed live: ^[a-z][a-z0-9-]{1,40}$
+        // (max 41 chars total, lowercase alphanumeric + hyphen only).
+        let re = regex::Regex::new("^[a-z][a-z0-9-]{1,40}$").unwrap();
+        for _ in 0..20 {
+            let job_name = format!("b00t-job-{}", dstack_short_id());
+            let train_name = format!("b00t-train-{}", dstack_short_id());
+            assert!(re.is_match(&job_name), "job name violates dstack regex: {job_name}");
+            assert!(re.is_match(&train_name), "train name violates dstack regex: {train_name}");
+        }
     }
 
     #[test]
