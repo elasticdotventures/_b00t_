@@ -689,20 +689,6 @@ impl ComputeProvider for DstackProvider {
     }
 }
 
-/// Resolves the scratch-file path for a generated dstack config, rooted at
-/// the current working directory rather than the system temp dir.
-///
-/// Verified via a real, live `dstack apply` invocation (Task 10 e2e smoke
-/// test): dstack's own `apply` command computes
-/// `configuration_path.absolute().relative_to(Path.cwd())` and errors —
-/// before ever making a network call — if the config file isn't inside the
-/// CWD's subtree ("... is not in the subpath of ..."). System temp dirs
-/// (`/tmp` on Linux) are essentially never a subpath of an arbitrary
-/// invocation's CWD, so every dstack config write in this provider
-/// (`ensure_volume`, `ensure_fleet`, `submit_dstack_yaml`) must live under
-/// CWD. Uses a dotfile-prefixed name to avoid cluttering directory
-/// listings; all three call sites already best-effort `remove_file` it
-/// after `apply` runs.
 /// Generates a short, lowercase-hex ID safe to embed in a dstack resource
 /// name. Verified via a real, live `dstack apply` invocation (Task 10 e2e
 /// smoke test): dstack rejects any `name:` not matching
@@ -717,6 +703,20 @@ fn dstack_short_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
 }
 
+/// Resolves the scratch-file path for a generated dstack config, rooted at
+/// the current working directory rather than the system temp dir.
+///
+/// Verified via a real, live `dstack apply` invocation (Task 10 e2e smoke
+/// test): dstack's own `apply` command computes
+/// `configuration_path.absolute().relative_to(Path.cwd())` and errors —
+/// before ever making a network call — if the config file isn't inside the
+/// CWD's subtree ("... is not in the subpath of ..."). System temp dirs
+/// (`/tmp` on Linux) are essentially never a subpath of an arbitrary
+/// invocation's CWD, so every dstack config write in this provider
+/// (`ensure_volume`, `ensure_fleet`, `submit_dstack_yaml`) must live under
+/// CWD. Uses a dotfile-prefixed name to avoid cluttering directory
+/// listings; all three call sites already best-effort `remove_file` it
+/// after `apply` runs.
 fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::PathBuf> {
     let cwd = std::env::current_dir()
         .context("resolving current directory for dstack config scratch file")?;
@@ -1556,7 +1556,7 @@ mod batch_job_tests {
 
     #[test]
     fn dstack_task_yaml_attaches_volumes_when_present() {
-        let mut env = std::collections::HashMap::new();
+        let env = std::collections::HashMap::new();
         let spec = BatchJobSpec {
             image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
             config_path: "/workspace/request.json".into(),

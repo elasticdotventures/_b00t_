@@ -12,6 +12,17 @@
 # file into the dstack container each run is follow-up work. See
 # game-play/pipelines/photo-critter/cloud_mesh.sh for the staging half of
 # this workflow.
+#
+# Second known gap (found during final branch review, not solved here):
+# output_contract below is currently unenforceable-as-passing.
+# JobExecutor::dispatch_batch_job evaluates output_contract against
+# provider.job_status()'s return value, which for DstackProvider is a
+# status string ("run=<id> status=done"), not the job's actual stdout/logs
+# — so this step will always report a contract violation ("last output
+# line was not PASS/FAIL"), even when the underlying dstack job succeeds.
+# Do not treat a FAIL from this specific step as evidence the job failed
+# until job_status is changed to surface real job output. Blocked on the
+# request.json-staging gap above anyway, so not yet exercised for real.
 
 [b00t]
 name = "mesh3d-cloud"
