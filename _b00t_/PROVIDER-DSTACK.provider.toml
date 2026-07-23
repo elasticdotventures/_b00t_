@@ -55,6 +55,23 @@ terminated   = { bucket = "terminal", failure = true }
 failed       = { bucket = "terminal", failure = true }
 done         = { bucket = "terminal", failure = false }
 
+[resource.secrets.runpod_api_key]
+# 🤓 dstack's RunPod backend (verified against installed 0.20.28 source:
+#    core/backends/runpod/models.py's RunpodAPIKeyCreds + server/services/
+#    config.py's plain yaml.safe_load) accepts ONLY a literal creds.api_key
+#    string in ~/.dstack/server/config.yml — no ${VAR} interpolation, no
+#    env-var-chain creds type for this backend. Never hand-author or commit
+#    that file with a literal key. Generate it at runtime with
+#    `just dstack-server-config` (justfile-dstack-sdd.just), which sources
+#    RUNPOD_API_KEY from .env fresh each run. See _b00t_/learn/managing-secrets.md.
+required = true
+source_provider = "dotenv"
+source_path     = ".env"
+source_key      = "RUNPOD_API_KEY"
+delivery_type   = "file"
+delivery_path   = "~/.dstack/server/config.yml"
+delivery_via    = "just dstack-server-config"
+
 [resource.cost_control]
 # 🤓 volumes bill for storage only while idle (cheap); dev-environments bill
 #    for compute while idle unless inactivity_duration is set — always set it.

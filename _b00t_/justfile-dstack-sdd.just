@@ -84,3 +84,34 @@ ledger-append line:
     f="$(git rev-parse --show-toplevel)/.superpowers/sdd/progress.md"
     mkdir -p "$(dirname "$f")"
     echo "{{line}}" >> "$f"
+
+# Generate ~/.dstack/server/config.yml from RUNPOD_API_KEY sourced via dotenv
+# (~/.b00t/.env, gitignored). Never hand-author or commit this file — see
+# _b00t_/learn/managing-secrets.md. dstack's RunPod backend (verified against
+# the installed 0.20.28 source: core/backends/runpod/models.py's
+# RunpodAPIKeyCreds + server/services/config.py's plain yaml.safe_load) only
+# accepts a literal creds.api_key; there is no ${VAR} interpolation and no
+# env-var-chain creds type for this backend, so the key must land in this
+# file at runtime — this recipe is the one place that happens, sourced fresh
+# from .env every run, never pasted or typed literally. Idempotent; 0600.
+dstack-server-config:
+    #!/bin/bash
+    set -euo pipefail
+    root="$(git rev-parse --show-toplevel)"
+    set -a
+    source "$root/.env"
+    set +a
+    : "${RUNPOD_API_KEY:?RUNPOD_API_KEY not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    mkdir -p ~/.dstack/server
+    umask 077
+    printf '%s\n' \
+        'projects:' \
+        '  - name: b00t' \
+        '    backends:' \
+        '      - type: runpod' \
+        '        creds:' \
+        '          type: api_key' \
+        "          api_key: \"$RUNPOD_API_KEY\"" \
+        > ~/.dstack/server/config.yml
+    chmod 600 ~/.dstack/server/config.yml
+    echo "Wrote ~/.dstack/server/config.yml (mode 600, not git-tracked, key sourced from .env)"
