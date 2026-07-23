@@ -334,6 +334,8 @@ vendor/pi-mono/
 .b00t/ledgrrr-mock.jsonl
 .b00t/toolscore/
 .b00t/verification-artifacts.jsonl
+.b00t/jobs/
+**/.b00t/jobs/
 /target
 vscode.🆚/vscode-docs/
 .worktrees
