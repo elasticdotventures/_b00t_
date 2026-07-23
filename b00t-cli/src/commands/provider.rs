@@ -514,6 +514,32 @@ impl DstackProvider {
         self.run_dstack(&["stop", name, "-y"])?;
         Ok(())
     }
+
+    /// Applies a `type: fleet` autoscaling (0..1) config so a task submission
+    /// has capacity to schedule against. dstack 0.20.x requires a matching
+    /// fleet to already exist before any task can be scheduled — verified
+    /// via a live RunPod test (Task 1, see tests/fixtures/dstack_ps_json.
+    /// NOTES.md): submitting a bare task with no fleet fails immediately
+    /// with "No matching fleet found" / FAILED_TO_START_DUE_TO_NO_CAPACITY,
+    /// before the request ever reaches the backend — the older
+    /// per-task-dynamic-pod assumption this provider was originally
+    /// designed against no longer holds. `nodes: 0..1` costs nothing while
+    /// idle. Applying an existing fleet name is idempotent per dstack's own
+    /// `apply` semantics (same as `ensure_volume`) — safe to call before
+    /// every submission rather than tracking whether it already ran.
+    pub fn ensure_fleet(&self, name: &str) -> Result<()> {
+        let yaml = dstack_fleet_yaml(name);
+        let tmp = std::env::temp_dir().join(format!("{name}.fleet.dstack.yml"));
+        std::fs::write(&tmp, yaml).context("writing dstack fleet config")?;
+        let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
+        let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
+        // Cleanup is best-effort — a failure to remove the temp file must not
+        // fail the fleet application itself.
+        if let Err(err) = std::fs::remove_file(&tmp) {
+            tracing::warn!("failed to remove temp dstack fleet config {tmp:?}: {err}");
+        }
+        result.map(|_| ())
+    }
 }
 
 /// Generates a `type: volume` dstack config — a persistent volume that
@@ -527,6 +553,23 @@ fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
     format!(
         "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
     )
+}
+
+/// The shared autoscaling fleet all `DstackProvider` submissions ensure
+/// exists before scheduling a task — one pool, reused across jobs, rather
+/// than a fleet per submission (matches the warm-reuse philosophy behind
+/// Task 12's persistent volumes).
+const SHARED_FLEET_NAME: &str = "b00t-dstack-fleet";
+
+/// Generates a `type: fleet` autoscaling config: `nodes: 0..1` costs nothing
+/// while idle (dstack only provisions compute once a task actually needs
+/// scheduling capacity), `resources: gpu: 1` requests any single GPU rather
+/// than a specific model. Deliberately omits `backends:`/`regions:` so it
+/// matches whatever backend(s) the operator's dstack server config.yml has
+/// configured (runpod today, potentially gcp/azure later) instead of
+/// hardcoding one.
+fn dstack_fleet_yaml(name: &str) -> String {
+    format!("type: fleet\nname: {name}\nnodes: 0..1\nresources:\n  gpu: 1\n")
 }
 
 /// Pure YAML builder, split out so tests can assert the exact task config
@@ -631,7 +674,13 @@ impl ComputeProvider for DstackProvider {
 
 /// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
 /// Split out so submit_batch_job/submit_training_job share one path.
+/// Ensures the shared autoscaling fleet exists first — see
+/// `DstackProvider::ensure_fleet` for why this is required against real
+/// dstack 0.20.x, not optional.
 fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
+    provider
+        .ensure_fleet(SHARED_FLEET_NAME)
+        .context("ensuring shared dstack fleet exists before task submission")?;
     let tmp = std::env::temp_dir().join(format!("{name}.dstack.yml"));
     std::fs::write(&tmp, yaml).context("writing dstack task config")?;
     let tmp_path = tmp
@@ -1352,6 +1401,20 @@ mod batch_job_tests {
         assert!(yaml.contains("name: b00t-mesh-cache"));
         assert!(yaml.contains("size: 100GB"));
         assert!(yaml.contains("region: eu-central-1"));
+    }
+
+    #[test]
+    fn dstack_fleet_yaml_is_autoscaling_zero_to_one_with_gpu() {
+        let yaml = dstack_fleet_yaml("b00t-dstack-fleet");
+        assert!(yaml.contains("type: fleet"));
+        assert!(yaml.contains("name: b00t-dstack-fleet"));
+        assert!(yaml.contains("nodes: 0..1"));
+        assert!(yaml.contains("gpu: 1"));
+        // Deliberately no `backends:`/`regions:` — must match whatever
+        // backend(s) the operator's dstack server config.yml has actually
+        // configured, not hardcode runpod.
+        assert!(!yaml.contains("backends:"));
+        assert!(!yaml.contains("regions:"));
     }
 
     #[test]
