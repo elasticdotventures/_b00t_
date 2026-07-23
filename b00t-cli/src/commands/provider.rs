@@ -1405,7 +1405,7 @@ mod batch_job_tests {
 
     #[test]
     fn dstack_fleet_yaml_is_autoscaling_zero_to_one_with_gpu() {
-        let yaml = dstack_fleet_yaml("b00t-dstack-fleet");
+        let yaml = dstack_fleet_yaml(SHARED_FLEET_NAME);
         assert!(yaml.contains("type: fleet"));
         assert!(yaml.contains("name: b00t-dstack-fleet"));
         assert!(yaml.contains("nodes: 0..1"));
