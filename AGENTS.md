@@ -179,19 +179,19 @@ complexity: 8
 
 ---
 
-## MCP-Down/Type-Up Bridge Pattern (genericized 2026-07-23, `b00t lfmf architecture`)
+## ledgrrr (corrected 2026-07-23)
 
-Two architectural currents, combined:
-- **thin-down**: MCP-facing actions are thin wrappers (<=10 lines) over typed
-  `Satisfies<Constraint>` checks
-- **types-up**: a domain-types crate grounds all concepts in a standard type
-  system (e.g. ISO/ontology stereotypes)
-The `Satisfies<T>` trait is the bridge — its checks emit audit-evidence nodes
-on every pass, giving auditable correctness without bloating action handlers.
-Project-specific PRDs and issue trackers live in that project's own datums —
-check the current repo's `_b00t_/datums/` before assuming this applies.
-`b00t lfmf architecture` holds the durable, repo-agnostic version of this
-lesson.
+`ledgrrr` (github.com/PromptExecution/ledgrrr, vendored at
+`~/.dotfiles/vendor/ledgrrr`) is a real, separate project — a local-first
+bookkeeping/cost-tracking control plane (typed ontology graph + Rhai rules +
+MCP tools + Mermaid/isometric visualization) — co-developed alongside b00t as
+an independently reusable component, and used heavily at PromptExecution.
+
+A prior entry here ("Tax-Lawyer Platform", `Satisfies<Constraint>`/UFO-stereotype
+bridge, PRD-TAX-LAWYER-UFO-SDD.tomllmd, issues #510-#517) was a hallucinated
+architecture summary — none of those names, traits, or issues exist in the
+real repo. Do not cite it. For actual ledgrrr architecture, read its own
+`README.md`/`AGENTS.md` in the vendored checkout, not this file.
 
 ## Playable-First Pattern (genericized 2026-07-23, `b00t lfmf mvp`)
 
