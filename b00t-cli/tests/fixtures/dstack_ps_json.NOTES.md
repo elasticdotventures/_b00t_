@@ -55,15 +55,19 @@ or a follow-up task hits the same wall for genuinely CPU-only workloads.
 
 ## Implication for Task 3 / Task 10 / this branch generally
 
-`submit_batch_job` needs to either (a) ensure a matching fleet exists
-before calling `dstack apply` on the task (mirroring the `ensure_volume`
-pattern already built in Task 12), or (b) document as a hard operator
-prerequisite that a fleet must be provisioned out-of-band first. Not fixed
-in this fixture-capture pass — flagging for explicit scope decision before
-Task 3 (JSON parsing) is dispatched, since Task 3's parser needs to handle
-the *shape* dstack_ps_json.txt shows (`status: "done"`, `termination_reason:
-"all_jobs_done"`, nested `run_spec.configuration`, etc.) regardless of how
-the fleet gap is resolved.
+**Fixed** in commit `bf1a6406`: `DstackProvider::ensure_fleet` (idempotent
+`type: fleet`, `nodes: 0..1` apply, mirroring the existing `ensure_volume`
+pattern) is now called from `submit_dstack_yaml` before every task/training
+submission, against one shared fleet name (`SHARED_FLEET_NAME`). Not
+re-verified against a second live RunPod run (the exact fleet YAML shape
+was already proven working manually during this capture — see above); a
+second live run would be redundant spend for the same already-confirmed
+shape.
+
+Task 3's parser still needs to handle the *shape* `dstack_ps_json.txt`
+shows (`status: "done"`, `termination_reason: "all_jobs_done"`, nested
+`run_spec.configuration`, etc.) — that part of this note stands regardless
+of the fleet fix.
 
 ## Files
 
