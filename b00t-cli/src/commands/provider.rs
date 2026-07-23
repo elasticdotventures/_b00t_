@@ -659,7 +659,16 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
-        todo_task3_job_status(self, handle)
+        let out = self.run_dstack(&["ps", "--json", "-a"])?;
+        let matches = parse_dstack_ps_json(&out, Some(&handle.id))?;
+        // `dstack ps -a` returns full run history, so a re-used run name can
+        // have multiple entries (verified against the real fixture: 4
+        // historical attempts under one name, ordered most-recent-first by
+        // submitted_at) — `.next()` takes the first, i.e. the latest attempt.
+        let (_, status) = matches.into_iter().next().ok_or_else(|| {
+            anyhow::anyhow!("dstack run '{}' not found in `dstack ps`", handle.id)
+        })?;
+        Ok(format!("run={} status={}", handle.id, status))
     }
 
     async fn cancel_job(&self, handle: &JobHandle) -> Result<()> {
@@ -668,7 +677,9 @@ impl ComputeProvider for DstackProvider {
     }
 
     async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
-        todo_task3_list_jobs(self)
+        let out = self.run_dstack(&["ps", "--json", "-a"])?;
+        let matches = parse_dstack_ps_json(&out, None)?;
+        Ok(matches.into_iter().map(|(h, _)| h).collect())
     }
 }
 
@@ -698,12 +709,51 @@ fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Resu
     })
 }
 
-fn todo_task3_job_status(_provider: &DstackProvider, _handle: &JobHandle) -> Result<String> {
-    unimplemented!("implemented in Task 3 against the captured dstack ps --json fixture")
-}
+/// Parse `dstack ps --json -a` output. Field names below are taken from the
+/// real fixture captured in Task 1 against a live dstack 0.20.28 server
+/// (`tests/fixtures/dstack_ps_json.txt`) — the top-level shape is
+/// `{"project": ..., "runs": [...]}`, and each run's display name lives at
+/// `run_spec.run_name`, NOT a top-level `name`/`run_name` key (the original
+/// plan draft guessed the latter before real dstack access was available;
+/// corrected here against the actual captured shape). `status` is a
+/// top-level string on each run object (verified: `"done"` in the fixture).
+fn parse_dstack_ps_json(json: &str, run_name: Option<&str>) -> Result<Vec<(JobHandle, String)>> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).context("parsing dstack ps --json output")?;
+    let runs = value
+        .get("runs")
+        .and_then(|r| r.as_array())
+        .cloned()
+        .or_else(|| value.as_array().cloned())
+        .ok_or_else(|| anyhow::anyhow!("unexpected dstack ps --json shape: {json}"))?;
 
-fn todo_task3_list_jobs(_provider: &DstackProvider) -> Result<Vec<JobHandle>> {
-    unimplemented!("implemented in Task 3 against the captured dstack ps --json fixture")
+    let mut out = Vec::new();
+    for run in runs {
+        let name = run
+            .get("run_spec")
+            .and_then(|rs| rs.get("run_name"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("run entry missing run_spec.run_name field: {run}"))?
+            .to_string();
+        if let Some(filter) = run_name {
+            if name != filter {
+                continue;
+            }
+        }
+        let status = run
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        out.push((
+            JobHandle {
+                id: name,
+                provider: "dstack".into(),
+            },
+            status,
+        ));
+    }
+    Ok(out)
 }
 
 // ── Local (podman/docker) provider ────────────────────────────────────────────
@@ -1401,6 +1451,34 @@ mod batch_job_tests {
         assert!(yaml.contains("name: b00t-mesh-cache"));
         assert!(yaml.contains("size: 100GB"));
         assert!(yaml.contains("region: eu-central-1"));
+    }
+
+    #[test]
+    fn parses_real_dstack_ps_json_fixture() {
+        let json = include_str!("../../tests/fixtures/dstack_ps_json.txt");
+        let parsed = parse_dstack_ps_json(json, None).expect("fixture should parse");
+        assert!(!parsed.is_empty(), "fixture should contain at least one run");
+        let (handle, status) = &parsed[0];
+        assert_eq!(handle.provider, "dstack");
+        assert_eq!(handle.id, "b00t-fixture-capture");
+        assert_eq!(status, "done");
+    }
+
+    #[test]
+    fn parses_real_dstack_ps_json_fixture_filtered_by_run_name() {
+        let json = include_str!("../../tests/fixtures/dstack_ps_json.txt");
+        // The real fixture contains 4 historical runs, all named
+        // "b00t-fixture-capture" (repeated attempts from live troubleshooting
+        // during Task 1's capture — 3 failed before the fleet-ensure fix,
+        // 1 succeeded) — dstack's `ps -a` returns full run history, not just
+        // the latest attempt per name, so filtering by name legitimately
+        // returns multiple entries here.
+        let parsed = parse_dstack_ps_json(json, Some("b00t-fixture-capture"))
+            .expect("fixture should parse");
+        assert_eq!(parsed.len(), 4);
+        let parsed_missing = parse_dstack_ps_json(json, Some("no-such-run"))
+            .expect("fixture should still parse with a non-matching filter");
+        assert!(parsed_missing.is_empty());
     }
 
     #[test]
