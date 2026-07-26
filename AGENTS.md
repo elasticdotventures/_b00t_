@@ -179,32 +179,33 @@ complexity: 8
 
 ---
 
-## Tax-Lawyer Architecture (recorded 2026-06-20)
+## ledgrrr (corrected 2026-07-23)
 
-The Tax-Lawyer Platform combines two architectural currents:
-- **MCP-down**: ledgerr_tax actions are thin wrappers (<=10 lines) over Satisfies<Constraint> checks
-- **UFO-up**: ufo-types crate grounds all domain concepts in UFO stereotypes with ISO standard types
-The Satisfies<T> trait is the bridge — produces arc-kit-au evidence nodes for audit trail.
-See _b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd and issues #510-#517.
+`ledgrrr` (github.com/PromptExecution/ledgrrr, vendored at
+`~/.dotfiles/vendor/ledgrrr`) is a real, separate project — a local-first
+bookkeeping/cost-tracking control plane (typed ontology graph + Rhai rules +
+MCP tools + Mermaid/isometric visualization) — co-developed alongside b00t as
+an independently reusable component, and used heavily at PromptExecution.
 
-## DoggoLingo Playable-First Pattern (recorded 2026-06-30)
+A prior entry here ("Tax-Lawyer Platform", `Satisfies<Constraint>`/UFO-stereotype
+bridge, PRD-TAX-LAWYER-UFO-SDD.tomllmd, issues #510-#517) was a hallucinated
+architecture summary — none of those names, traits, or issues exist in the
+real repo. Do not cite it. For actual ledgrrr architecture, read its own
+`README.md`/`AGENTS.md` in the vendored checkout, not this file.
 
-DoggoLingo is the active App4.Dog acceleration vector.
-Agents MUST prioritize a working local game loop over backend, cloud, or ML architecture.
+## Playable-First Pattern (genericized 2026-07-23, `b00t lfmf mvp`)
 
-P0 is `tap-the-sheep`:
-- one skill: touch target acquisition
-- no backend dependency
-- no treat-dispenser dependency
-- no cloud dependency
-- static or hardcoded sheep asset is acceptable
-- reward is happy audio plus visual motion
+For any playable/interactive product, agents MUST prioritize one working
+end-to-end interaction loop over backend, cloud, or ML architecture:
+- one skill (e.g. touch target acquisition)
+- no backend, treat-dispenser, or cloud dependency
+- a static or hardcoded asset is acceptable for P0
+- reward is immediate audio/visual feedback
 - telemetry is local and JSON-shaped
 
-Before adding ML workflow code, agents MUST check:
-- `._b00t_/doggolingo.stack.tomllm`
-- `docs/DOGGOLINGO_CLEANUP_PLAN.md`
-- `SOUL.tomllm` `[doggolingo]`
-
-ComfyUI work is legacy exploration. Extract stage ideas into typed b00t business logic;
-do not make ComfyUI, workflow JSON, or a persistent ComfyUI server part of the game runtime.
+Infra-before-loop stalls momentum and hides scope creep behind unplayable
+plumbing. Project-specific stack files, cleanup plans, and legacy-exploration
+notes (e.g. workflow-tool experiments) live in that project's own datums —
+check the current repo's `_b00t_/` and `SOUL.tomllm` before adding ML/workflow
+code, not this file. `b00t lfmf mvp` holds the durable, repo-agnostic version
+of this lesson.

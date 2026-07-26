@@ -62,6 +62,7 @@ pub mod datum_job;
 pub mod datum_justfile;
 pub mod datum_pipeline;
 pub mod datum_k8s;
+pub mod datum_podman;
 pub mod datum_mcp;
 pub mod datum_repo;
 pub mod datum_skill;

@@ -82,6 +82,7 @@ use b00t_cli::datum_apt::AptDatum;
 use b00t_cli::datum_bash::BashDatum;
 use b00t_cli::datum_cli::CliDatum;
 use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_podman::PodmanDatum;
 use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
@@ -1111,6 +1112,9 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         DockerDatum,
     >(path, ".docker.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        PodmanDatum,
+    >(path, ".podman.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         VscodeDatum,
     >(path, ".vscode.toml")?));

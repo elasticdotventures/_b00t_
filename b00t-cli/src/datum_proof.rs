@@ -391,6 +391,7 @@ impl BootDatum {
             Some(DatumType::Nix)         => self.prove_nix(),
             Some(DatumType::Vscode)      => self.prove_vscode(),
             Some(DatumType::K8s)         => self.prove_k8s(),
+            Some(DatumType::Podman)      => Ok(()),
             Some(DatumType::Justfile)    => self.prove_justfile(),
             Some(DatumType::Job)         => self.prove_job(),
             Some(DatumType::Stack)       => self.prove_stack(),

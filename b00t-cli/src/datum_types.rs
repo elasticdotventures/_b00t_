@@ -24,6 +24,9 @@ pub enum DatumType {
     Bash,
     Vscode,
     K8s,
+    /// Raw Kubernetes Pod manifest deployed via `podman kube play` — no Helm,
+    /// no docker-compose, no cluster. See datum_podman.rs.
+    Podman,
     Apt,
     Nix,
     Mcp,
@@ -189,6 +192,7 @@ impl DatumType {
         match self {
             Self::K8s
             | Self::Docker
+            | Self::Podman
             | Self::Hardware
             | Self::Overlay
             | Self::Runtime
@@ -309,6 +313,7 @@ impl DatumType {
         Bash        => ["bash"]                      => ".bash",
         Vscode      => ["vscode"]                    => ".vscode",
         K8s         => ["k8s"]                       => ".k8s",
+        Podman      => ["podman", "podman_kube", "kube"] => ".podman",
         Apt         => ["apt"]                       => ".apt",
         Nix         => ["nix"]                       => ".nix",
         Mcp         => ["mcp"]                       => ".mcp",
