@@ -308,3 +308,174 @@ impl BootDatum {
         self.install.as_ref().and_then(InstallSpec::command_string)
     }
 }
+
+/// Scans `dir` (non-recursive) for datum files and loads them into a
+/// `{name}.{type_prefix}` -> `BootDatum` map. The single shared
+/// implementation of the scan itself for `install`/`uninstall`/`stack`/
+/// `cli` — previously each of those four commands hand-rolled its own
+/// near-identical copy, which had silently drifted: three copies derived
+/// the type-name key via `Debug`+lowercase (wrong for multi-word variants —
+/// `HiveProfile` became `"hiveprofile"`, not matching any real file's
+/// `.hive` suffix convention) while a fourth used an ad-hoc serde-snake_case
+/// guess (also wrong: `"hive_profile"`, still not `.hive`).
+/// `DatumType::type_prefix()` is the actual documented single source of
+/// truth (auto-derived from the same `datum_type_table!` macro that defines
+/// each type's real file suffix), so it's the only correct choice here.
+///
+/// Recognizes `.toml`, `.tomllm`, and `.tomllmd` as datum file extensions —
+/// all three are real, currently-used extensions in this repo (e.g.
+/// `_b00t_/datums/*.tomllmd`); a plain `.ends_with(".toml")` check silently
+/// excludes the latter two, since `"foo.tomllmd"` does not end with the
+/// literal substring `".toml"`.
+///
+/// Deliberately takes an already-resolved `&Path`, not a raw path string —
+/// the four callers resolved their base directory differently before this
+/// consolidation (three used plain tilde expansion; `stack.rs` used
+/// `lifecycle::get_expanded_path`'s legacy-directory fallback), and that
+/// divergence predates this function and is each caller's own concern, not
+/// this scan's. Centralizing path resolution too would have silently
+/// changed behavior for whichever callers didn't already use the
+/// fallback-aware version.
+pub fn load_all_datums_from_dir(
+    dir: &std::path::Path,
+) -> anyhow::Result<std::collections::HashMap<String, BootDatum>> {
+    let mut datums = std::collections::HashMap::new();
+
+    if !dir.exists() {
+        return Ok(datums);
+    }
+
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if !entry_path.is_file() {
+            continue;
+        }
+        let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if file_name.ends_with(".stack.toml") {
+            continue;
+        }
+        if !(file_name.ends_with(".toml")
+            || file_name.ends_with(".tomllm")
+            || file_name.ends_with(".tomllmd"))
+        {
+            continue;
+        }
+
+        let Ok(content) = std::fs::read_to_string(&entry_path) else {
+            continue;
+        };
+        let Ok(config) = toml::from_str::<crate::UnifiedConfig>(&content) else {
+            continue;
+        };
+        let datum = config.b00t;
+        let type_prefix = datum
+            .datum_type
+            .as_ref()
+            .map(|t| t.type_prefix().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let key = format!("{}.{}", datum.name, type_prefix);
+        datums.insert(key, datum);
+    }
+
+    Ok(datums)
+}
+
+/// Convenience wrapper matching the original (pre-consolidation) simple
+/// tilde-expansion path resolution used by `install`/`uninstall`/`cli` —
+/// same behavior those three callers already had. `stack.rs` does NOT use
+/// this; it resolves via `lifecycle::get_expanded_path` (legacy-fallback
+/// aware) and calls `load_all_datums_from_dir` directly, preserving its own
+/// pre-existing behavior exactly.
+pub fn load_all_datums(path: &str) -> anyhow::Result<std::collections::HashMap<String, BootDatum>> {
+    let dir = std::path::PathBuf::from(shellexpand::tilde(path).to_string());
+    load_all_datums_from_dir(&dir)
+}
+
+#[cfg(test)]
+mod load_all_datums_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn finds_toml_tomllm_and_tomllmd_extensions() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        fs::write(
+            temp_dir.path().join("alpha.cli.toml"),
+            "[b00t]\nname = \"alpha\"\ntype = \"cli\"\nhint = \"t\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("bravo.cli.tomllm"),
+            "[b00t]\nname = \"bravo\"\ntype = \"cli\"\nhint = \"t\"\n",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("charlie.cli.tomllmd"),
+            "[b00t]\nname = \"charlie\"\ntype = \"cli\"\nhint = \"t\"\n",
+        )
+        .unwrap();
+
+        let datums = load_all_datums(path).unwrap();
+        assert_eq!(
+            datums.len(),
+            3,
+            "expected all three extensions to be found, got: {:?}",
+            datums.keys().collect::<Vec<_>>()
+        );
+        assert!(datums.contains_key("alpha.cli"));
+        assert!(datums.contains_key("bravo.cli"));
+        assert!(datums.contains_key("charlie.cli"));
+    }
+
+    #[test]
+    fn uses_type_prefix_not_debug_lowercase_for_multiword_types() {
+        // Regression test for the pre-consolidation divergence: HiveProfile's
+        // real file-suffix convention is `.hive` (type_prefix()), not
+        // Debug+lowercase's "hiveprofile" or an ad-hoc "hive_profile" guess.
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        fs::write(
+            temp_dir.path().join("mesh3d-batch.hive.toml"),
+            "[b00t]\nname = \"mesh3d-batch\"\ntype = \"hive_profile\"\nhint = \"t\"\n",
+        )
+        .unwrap();
+
+        let datums = load_all_datums(path).unwrap();
+        assert!(
+            datums.contains_key("mesh3d-batch.hive"),
+            "expected key using type_prefix() ('hive'), got: {:?}",
+            datums.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn skips_stack_toml_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+
+        fs::write(
+            temp_dir.path().join("mystack.stack.toml"),
+            "[b00t]\nname = \"mystack\"\ntype = \"stack\"\nhint = \"t\"\n",
+        )
+        .unwrap();
+
+        let datums = load_all_datums(path).unwrap();
+        assert_eq!(datums.len(), 0);
+    }
+
+    #[test]
+    fn empty_directory_returns_empty_map() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+        let datums = load_all_datums(path).unwrap();
+        assert_eq!(datums.len(), 0);
+    }
+}

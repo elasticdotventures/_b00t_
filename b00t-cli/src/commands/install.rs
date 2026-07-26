@@ -1,14 +1,12 @@
+use crate::load_all_datums;
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, UnifiedConfig, evaluate_gates};
+use crate::{BootDatum, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use clap::Parser;
 use duct::cmd;
 use serde_json;
 use shellexpand;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use toml;
 
 #[derive(Parser)]
 pub enum InstallCommands {
@@ -398,45 +396,6 @@ pub fn update_hermes_mcp_config(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Load all datums from the configured path (excluding stack files).
-fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
-    let mut datums = HashMap::new();
-    let b00t_dir = PathBuf::from(shellexpand::tilde(path).to_string());
-
-    if !b00t_dir.exists() {
-        return Ok(datums);
-    }
-
-    for entry in std::fs::read_dir(&b00t_dir)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.is_file() {
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(datums)
-}
 
 #[cfg(test)]
 mod tests {
@@ -527,6 +486,11 @@ hint = "Test datum {}"
         assert!(datums.contains_key("docker.cli"));
         assert_eq!(datums.get("docker.cli").unwrap().name, "docker");
     }
+
+    // `.toml`/`.tomllm`/`.tomllmd` extension coverage and the
+    // type_prefix()-vs-Debug/serde key-derivation regression are now
+    // covered by boot_datum.rs's `load_all_datums_tests` module, since
+    // that's where the shared implementation lives.
 
     #[test]
     fn test_load_all_datums_multiple_datums() {

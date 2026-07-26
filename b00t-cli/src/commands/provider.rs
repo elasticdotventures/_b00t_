@@ -69,6 +69,12 @@ pub struct TrainingJobSpec {
     pub timeout_hours: f32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VolumeMount {
+    pub name: String,
+    pub path: String,
+}
+
 /// A generic containerized batch job — the image carries its own entrypoint,
 /// unlike `TrainingJobSpec` which always drives a fine-tuning script.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,6 +86,8 @@ pub struct BatchJobSpec {
     pub env: std::collections::HashMap<String, String>,
     pub flavor: String,
     pub timeout_hours: f32,
+    #[serde(default)]
+    pub volumes: Vec<VolumeMount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +119,11 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
         "runpod" => Ok(Box::new(RunpodProvider::new()?)),
         "hf" => Ok(Box::new(HfProvider::new())),
         "local" => Ok(Box::new(LocalProvider::new())),
-        other => bail!("unknown provider '{}'; supported: runpod, hf, local", other),
+        "dstack" => Ok(Box::new(DstackProvider::new())),
+        other => bail!(
+            "unknown provider '{}'; supported: runpod, hf, local, dstack",
+            other
+        ),
     }
 }
 
@@ -452,6 +464,338 @@ impl ComputeProvider for HfProvider {
     }
 }
 
+// ── dstack provider ────────────────────────────────────────────────────────
+
+pub struct DstackProvider;
+
+impl DstackProvider {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn run_dstack(&self, args: &[&str]) -> Result<String> {
+        let out = Command::new("dstack")
+            .args(args)
+            .output()
+            .context("dstack CLI not found — run: uv tool install 'dstack[all]'")?;
+        if !out.status.success() {
+            bail!(
+                "dstack {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    }
+
+    /// Applies a `type: volume` config — idempotent per dstack's own
+    /// `apply` semantics. Call once before submitting jobs that reference
+    /// this volume by name.
+    pub fn ensure_volume(&self, name: &str, size_gb: u32, region: &str) -> Result<()> {
+        let yaml = dstack_volume_yaml(name, size_gb, region);
+        let tmp = dstack_scratch_config_path(name, "volume")?;
+        std::fs::write(&tmp, yaml).context("writing dstack volume config")?;
+        let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
+        let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
+        // Cleanup is best-effort — a failure to remove the temp file must not
+        // fail the volume application itself.
+        if let Err(err) = std::fs::remove_file(&tmp) {
+            tracing::warn!("failed to remove temp dstack volume config {tmp:?}: {err}");
+        }
+        result.map(|_| ())
+    }
+
+    /// Stops a named dev-environment/service run — the lifecycle/cost-control
+    /// counterpart to a persistent (non-auto-terminating) resource. Distinct
+    /// from `cancel_job` (which targets task/batch runs via `JobHandle`) —
+    /// dev-environments are addressed by name, not a `JobHandle`, since they
+    /// aren't created through `submit_batch_job`.
+    pub fn stop_dev_environment(&self, name: &str) -> Result<()> {
+        self.run_dstack(&["stop", name, "-y"])?;
+        Ok(())
+    }
+
+    /// Applies a `type: fleet` autoscaling (0..1) config so a task submission
+    /// has capacity to schedule against. dstack 0.20.x requires a matching
+    /// fleet to already exist before any task can be scheduled — verified
+    /// via a live RunPod test (Task 1, see tests/fixtures/dstack_ps_json.
+    /// NOTES.md): submitting a bare task with no fleet fails immediately
+    /// with "No matching fleet found" / FAILED_TO_START_DUE_TO_NO_CAPACITY,
+    /// before the request ever reaches the backend — the older
+    /// per-task-dynamic-pod assumption this provider was originally
+    /// designed against no longer holds. `nodes: 0..1` costs nothing while
+    /// idle. Applying an existing fleet name is idempotent per dstack's own
+    /// `apply` semantics (same as `ensure_volume`) — safe to call before
+    /// every submission rather than tracking whether it already ran.
+    pub fn ensure_fleet(&self, name: &str) -> Result<()> {
+        let yaml = dstack_fleet_yaml(name);
+        let tmp = dstack_scratch_config_path(name, "fleet")?;
+        std::fs::write(&tmp, yaml).context("writing dstack fleet config")?;
+        let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
+        let result = self.run_dstack(&["apply", "-f", path, "-y", "-d"]);
+        // Cleanup is best-effort — a failure to remove the temp file must not
+        // fail the fleet application itself.
+        if let Err(err) = std::fs::remove_file(&tmp) {
+            tracing::warn!("failed to remove temp dstack fleet config {tmp:?}: {err}");
+        }
+        result.map(|_| ())
+    }
+}
+
+/// Generates a `type: volume` dstack config — a persistent volume that
+/// survives across separate `dstack apply` runs (verified against dstack's
+/// docs: "Volumes enable data persistence between runs of dev environments,
+/// tasks, and services"). Call once per volume name; re-applying an
+/// existing volume name is idempotent per dstack's own `apply` semantics
+/// (not re-verified here — Task 1's fixture capture should confirm this
+/// once real dstack access exists).
+fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
+    format!(
+        "type: volume\nname: {name}\nsize: {size_gb}GB\nregion: {region}\n"
+    )
+}
+
+/// The shared autoscaling fleet all `DstackProvider` submissions ensure
+/// exists before scheduling a task — one pool, reused across jobs, rather
+/// than a fleet per submission (matches the warm-reuse philosophy behind
+/// Task 12's persistent volumes).
+const SHARED_FLEET_NAME: &str = "b00t-dstack-fleet";
+
+/// Generates a `type: fleet` autoscaling config: `nodes: 0..1` costs nothing
+/// while idle (dstack only provisions compute once a task actually needs
+/// scheduling capacity), `resources: gpu: 1` requests any single GPU rather
+/// than a specific model. Deliberately omits `backends:`/`regions:` so it
+/// matches whatever backend(s) the operator's dstack server config.yml has
+/// configured (runpod today, potentially gcp/azure later) instead of
+/// hardcoding one.
+fn dstack_fleet_yaml(name: &str) -> String {
+    format!("type: fleet\nname: {name}\nnodes: 0..1\nresources:\n  gpu: 1\n")
+}
+
+/// Pure YAML builder, split out so tests can assert the exact task config
+/// without the `dstack` CLI installed — same rationale as `hf_batch_args`.
+///
+/// `config_path`, `flavor`, and `timeout_hours` are passed through as plain
+/// environment variables (`B00T_JOB_CONFIG_PATH`, `B00T_JOB_FLAVOR`,
+/// `B00T_JOB_TIMEOUT_HOURS`) — env vars are a construct we've confirmed
+/// dstack supports.
+///
+/// **Resolved via Task 10's live e2e test** (was an open question until real
+/// dstack access existed): dstack's own `TaskConfiguration` model requires
+/// "either `commands` or `image` must be set", not both — `commands:` is
+/// optional whenever `image:` is present, in which case dstack runs the
+/// image's own ENTRYPOINT/CMD. `BatchJobSpec` carries no command-override
+/// field (the intended architecture is that job images — e.g.
+/// `mesh-runner:v6` — bake in their own entrypoint that reads
+/// `B00T_JOB_CONFIG_PATH` and emits the PASS/FAIL evidence line), so
+/// `commands:` is deliberately omitted here entirely. An earlier version of
+/// this function emitted a hardcoded `commands: [echo starting]` placeholder
+/// — that was a real bug, not a harmless stopgap: it silently replaced every
+/// real image's actual entrypoint with a no-op on every single submission,
+/// discovered only by running a real submission against a real image.
+fn dstack_task_yaml(name: &str, spec: &BatchJobSpec) -> String {
+    let mut env_lines = String::new();
+    env_lines.push_str(&format!(
+        "  B00T_JOB_CONFIG_PATH: \"{}\"\n",
+        spec.config_path
+    ));
+    env_lines.push_str(&format!("  B00T_JOB_FLAVOR: \"{}\"\n", spec.flavor));
+    env_lines.push_str(&format!(
+        "  B00T_JOB_TIMEOUT_HOURS: \"{}\"\n",
+        spec.timeout_hours
+    ));
+    for (key, value) in &spec.env {
+        env_lines.push_str(&format!("  {key}: \"{value}\"\n"));
+    }
+
+    let mut volumes_block = String::new();
+    if !spec.volumes.is_empty() {
+        volumes_block.push_str("volumes:\n");
+        for v in &spec.volumes {
+            volumes_block.push_str(&format!("  - name: {}\n    path: {}\n", v.name, v.path));
+        }
+    }
+
+    format!(
+        "type: task\nname: {name}\nimage: {image}\nenv:\n{env_lines}{volumes_block}",
+        image = spec.image,
+    )
+}
+
+#[async_trait]
+impl ComputeProvider for DstackProvider {
+    fn name(&self) -> &str {
+        "dstack"
+    }
+
+    async fn deploy_inference_endpoint(&self, _cfg: &EndpointConfig) -> Result<EndpointHandle> {
+        bail!("dstack provider does not yet support inference endpoints in b00t (batch/training jobs only) — use provider=runpod")
+    }
+
+    async fn endpoint_status(&self, _id: &str) -> Result<EndpointHandle> {
+        bail!("dstack provider has no endpoint management yet; use provider=runpod")
+    }
+
+    async fn teardown_endpoint(&self, _id: &str) -> Result<()> {
+        bail!("dstack provider has no endpoint management yet; use provider=runpod")
+    }
+
+    async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
+        Ok(vec![])
+    }
+
+    async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
+        let name = format!("b00t-train-{}", dstack_short_id());
+        let batch_spec = BatchJobSpec {
+            image: spec.image.clone(),
+            config_path: spec.config_path.clone(),
+            env: Default::default(),
+            flavor: spec.flavor.clone(),
+            timeout_hours: spec.timeout_hours,
+            volumes: vec![],
+        };
+        let yaml = dstack_task_yaml(&name, &batch_spec);
+        submit_dstack_yaml(self, &name, &yaml)
+    }
+
+    async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
+        let name = format!("b00t-job-{}", dstack_short_id());
+        let yaml = dstack_task_yaml(&name, spec);
+        submit_dstack_yaml(self, &name, &yaml)
+    }
+
+    async fn job_status(&self, handle: &JobHandle) -> Result<String> {
+        let out = self.run_dstack(&["ps", "--json", "-a"])?;
+        let matches = parse_dstack_ps_json(&out, Some(&handle.id))?;
+        // `dstack ps -a` returns full run history, so a re-used run name can
+        // have multiple entries (verified against the real fixture: 4
+        // historical attempts under one name, ordered most-recent-first by
+        // submitted_at) — `.next()` takes the first, i.e. the latest attempt.
+        let (_, status) = matches.into_iter().next().ok_or_else(|| {
+            anyhow::anyhow!("dstack run '{}' not found in `dstack ps`", handle.id)
+        })?;
+        Ok(format!("run={} status={}", handle.id, status))
+    }
+
+    async fn cancel_job(&self, handle: &JobHandle) -> Result<()> {
+        self.run_dstack(&["stop", &handle.id, "-y"])?;
+        Ok(())
+    }
+
+    async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
+        let out = self.run_dstack(&["ps", "--json", "-a"])?;
+        let matches = parse_dstack_ps_json(&out, None)?;
+        Ok(matches.into_iter().map(|(h, _)| h).collect())
+    }
+}
+
+/// Generates a short, lowercase-hex ID safe to embed in a dstack resource
+/// name. Verified via a real, live `dstack apply` invocation (Task 10 e2e
+/// smoke test): dstack rejects any `name:` not matching
+/// `^[a-z][a-z0-9-]{1,40}$` (max 41 characters total) with "Resource name
+/// should match regex ...". A full UUID (36 chars) pushed
+/// `b00t-job-<uuid>` to 45 characters — always over the limit, so every
+/// `submit_batch_job`/`submit_training_job` call failed unconditionally
+/// before this fix. 12 hex characters (48 bits) keeps collision risk
+/// negligible for this provider's job volumes while leaving headroom under
+/// the 41-char cap for any prefix used here (`b00t-job-`, `b00t-train-`).
+fn dstack_short_id() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
+}
+
+/// Resolves the scratch-file path for a generated dstack config, rooted at
+/// the current working directory rather than the system temp dir.
+///
+/// Verified via a real, live `dstack apply` invocation (Task 10 e2e smoke
+/// test): dstack's own `apply` command computes
+/// `configuration_path.absolute().relative_to(Path.cwd())` and errors —
+/// before ever making a network call — if the config file isn't inside the
+/// CWD's subtree ("... is not in the subpath of ..."). System temp dirs
+/// (`/tmp` on Linux) are essentially never a subpath of an arbitrary
+/// invocation's CWD, so every dstack config write in this provider
+/// (`ensure_volume`, `ensure_fleet`, `submit_dstack_yaml`) must live under
+/// CWD. Uses a dotfile-prefixed name to avoid cluttering directory
+/// listings; all three call sites already best-effort `remove_file` it
+/// after `apply` runs.
+fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::PathBuf> {
+    let cwd = std::env::current_dir()
+        .context("resolving current directory for dstack config scratch file")?;
+    Ok(cwd.join(format!(".{name}.{suffix}.dstack.yml")))
+}
+
+/// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
+/// Split out so submit_batch_job/submit_training_job share one path.
+/// Ensures the shared autoscaling fleet exists first — see
+/// `DstackProvider::ensure_fleet` for why this is required against real
+/// dstack 0.20.x, not optional.
+fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
+    provider
+        .ensure_fleet(SHARED_FLEET_NAME)
+        .context("ensuring shared dstack fleet exists before task submission")?;
+    let tmp = dstack_scratch_config_path(name, "task")?;
+    std::fs::write(&tmp, yaml).context("writing dstack task config")?;
+    let tmp_path = tmp
+        .to_str()
+        .context("temp file path is not valid UTF-8")?;
+    provider.run_dstack(&["apply", "-f", tmp_path, "-y", "-d"])?;
+    // Cleanup is best-effort — a failure to remove the temp file must not
+    // fail the job submission itself.
+    if let Err(err) = std::fs::remove_file(&tmp) {
+        tracing::warn!("failed to remove temp dstack task config {tmp:?}: {err}");
+    }
+    Ok(JobHandle {
+        id: name.to_string(),
+        provider: "dstack".into(),
+    })
+}
+
+/// Parse `dstack ps --json -a` output. Field names below are taken from the
+/// real fixture captured in Task 1 against a live dstack 0.20.28 server
+/// (`tests/fixtures/dstack_ps_json.txt`) — the top-level shape is
+/// `{"project": ..., "runs": [...]}`, and each run's display name lives at
+/// `run_spec.run_name`, NOT a top-level `name`/`run_name` key (the original
+/// plan draft guessed the latter before real dstack access was available;
+/// corrected here against the actual captured shape). `status` is a
+/// top-level string on each run object (verified: `"done"` in the fixture).
+fn parse_dstack_ps_json(json: &str, run_name: Option<&str>) -> Result<Vec<(JobHandle, String)>> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).context("parsing dstack ps --json output")?;
+    let runs = value
+        .get("runs")
+        .and_then(|r| r.as_array())
+        .cloned()
+        .or_else(|| value.as_array().cloned())
+        .ok_or_else(|| anyhow::anyhow!("unexpected dstack ps --json shape: {json}"))?;
+
+    let mut out = Vec::new();
+    for run in runs {
+        let name = run
+            .get("run_spec")
+            .and_then(|rs| rs.get("run_name"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("run entry missing run_spec.run_name field: {run}"))?
+            .to_string();
+        if let Some(filter) = run_name {
+            if name != filter {
+                continue;
+            }
+        }
+        let status = run
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        out.push((
+            JobHandle {
+                id: name,
+                provider: "dstack".into(),
+            },
+            status,
+        ));
+    }
+    Ok(out)
+}
+
 // ── Local (podman/docker) provider ────────────────────────────────────────────
 
 /// Label attached to every container this provider starts, so `list_jobs`/
@@ -677,6 +1021,11 @@ pub enum ProviderCommands {
         #[clap(subcommand)]
         cmd: RunpodSubCommands,
     },
+    #[clap(about = "dstack — persistent volumes, dev-environment lifecycle")]
+    Dstack {
+        #[clap(subcommand)]
+        cmd: DstackSubCommands,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -712,6 +1061,22 @@ pub enum RunpodSubCommands {
         id: Option<String>,
         #[clap(long, help = "Stop ALL running pods")]
         all: bool,
+    },
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum DstackSubCommands {
+    #[clap(about = "Ensure a persistent volume exists (idempotent)")]
+    EnsureVolume {
+        name: String,
+        #[clap(long, help = "Volume size in GB")]
+        size_gb: u32,
+        #[clap(long, help = "dstack region")]
+        region: String,
+    },
+    #[clap(about = "Stop a named dev-environment/service run")]
+    StopDevEnvironment {
+        name: String,
     },
 }
 
@@ -803,6 +1168,7 @@ pub async fn handle_provider_command(cmd: ProviderCommands) -> Result<()> {
         ProviderCommands::Endpoint { cmd } => handle_endpoint(cmd).await,
         ProviderCommands::Job { cmd } => handle_job(cmd).await,
         ProviderCommands::Runpod { cmd } => handle_runpod(cmd).await,
+        ProviderCommands::Dstack { cmd } => handle_dstack(cmd).await,
     }
 }
 
@@ -892,6 +1258,7 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
                 env: env_map,
                 flavor,
                 timeout_hours,
+                volumes: vec![],
             };
             let handle = p.submit_batch_job(&spec).await?;
             println!("{}", serde_json::to_string_pretty(&handle)?);
@@ -981,6 +1348,21 @@ async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
     Ok(())
 }
 
+async fn handle_dstack(cmd: DstackSubCommands) -> Result<()> {
+    let provider = DstackProvider::new();
+    match cmd {
+        DstackSubCommands::EnsureVolume { name, size_gb, region } => {
+            provider.ensure_volume(&name, size_gb, &region)?;
+            println!("volume {name} ready ({size_gb}GB, {region})");
+        }
+        DstackSubCommands::StopDevEnvironment { name } => {
+            provider.stop_dev_environment(&name)?;
+            println!("stopped dev-environment {name}");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod batch_job_tests {
     use super::*;
@@ -994,6 +1376,7 @@ mod batch_job_tests {
             env,
             flavor: "a10g-small".to_string(),
             timeout_hours: 1.0,
+            volumes: vec![],
         }
     }
 
@@ -1077,5 +1460,177 @@ mod batch_job_tests {
     fn local_batch_args_rejects_relative_path() {
         let spec = sample_spec("img:latest", "relative/path/req.json");
         assert!(local_batch_args("b00t-batch-test", &ContainerRuntime::Podman, &spec).is_err());
+    }
+
+    #[test]
+    fn dstack_task_yaml_includes_image_env_and_command() {
+        let mut env = std::collections::HashMap::new();
+        env.insert("MESH_GPU".to_string(), "auto".to_string());
+        let spec = BatchJobSpec {
+            image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
+            config_path: "/workspace/request.json".into(),
+            env,
+            flavor: "RTX_4090".into(),
+            timeout_hours: 2.0,
+            volumes: vec![],
+        };
+        let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
+        assert!(yaml.contains("type: task"));
+        assert!(yaml.contains("name: b00t-job-abc123"));
+        assert!(yaml.contains("image: docker.io/elasticdotventures/mesh-runner:v6"));
+        assert!(yaml.contains("MESH_GPU: \"auto\""));
+        assert!(yaml.contains("B00T_JOB_CONFIG_PATH: \"/workspace/request.json\""));
+        assert!(yaml.contains("B00T_JOB_FLAVOR: \"RTX_4090\""));
+        assert!(yaml.contains("B00T_JOB_TIMEOUT_HOURS: \"2\""));
+        // Task 10 regression guard: `commands:` must be omitted so dstack
+        // runs the image's own ENTRYPOINT/CMD — an earlier version hardcoded
+        // `commands: [echo starting]` here, which silently discarded every
+        // real image's actual behavior on every submission (found via a
+        // live e2e run, not by inspection).
+        assert!(!yaml.contains("commands:"));
+    }
+
+    #[test]
+    fn dstack_volume_yaml_includes_size_and_region() {
+        let yaml = dstack_volume_yaml("b00t-mesh-cache", 100, "eu-central-1");
+        assert!(yaml.contains("type: volume"));
+        assert!(yaml.contains("name: b00t-mesh-cache"));
+        assert!(yaml.contains("size: 100GB"));
+        assert!(yaml.contains("region: eu-central-1"));
+    }
+
+    #[test]
+    fn parses_real_dstack_ps_json_fixture() {
+        let json = include_str!("../../tests/fixtures/dstack_ps_json.txt");
+        let parsed = parse_dstack_ps_json(json, None).expect("fixture should parse");
+        assert!(!parsed.is_empty(), "fixture should contain at least one run");
+        let (handle, status) = &parsed[0];
+        assert_eq!(handle.provider, "dstack");
+        assert_eq!(handle.id, "b00t-fixture-capture");
+        assert_eq!(status, "done");
+    }
+
+    #[test]
+    fn parses_real_dstack_ps_json_fixture_filtered_by_run_name() {
+        let json = include_str!("../../tests/fixtures/dstack_ps_json.txt");
+        // The real fixture contains 4 historical runs, all named
+        // "b00t-fixture-capture" (repeated attempts from live troubleshooting
+        // during Task 1's capture — 3 failed before the fleet-ensure fix,
+        // 1 succeeded) — dstack's `ps -a` returns full run history, not just
+        // the latest attempt per name, so filtering by name legitimately
+        // returns multiple entries here.
+        let parsed = parse_dstack_ps_json(json, Some("b00t-fixture-capture"))
+            .expect("fixture should parse");
+        assert_eq!(parsed.len(), 4);
+        let parsed_missing = parse_dstack_ps_json(json, Some("no-such-run"))
+            .expect("fixture should still parse with a non-matching filter");
+        assert!(parsed_missing.is_empty());
+    }
+
+    #[test]
+    fn dstack_short_id_keeps_job_and_train_names_within_dstack_name_limit() {
+        // dstack's real name regex, confirmed live: ^[a-z][a-z0-9-]{1,40}$
+        // (max 41 chars total, lowercase alphanumeric + hyphen only).
+        let re = regex::Regex::new("^[a-z][a-z0-9-]{1,40}$").unwrap();
+        for _ in 0..20 {
+            let job_name = format!("b00t-job-{}", dstack_short_id());
+            let train_name = format!("b00t-train-{}", dstack_short_id());
+            assert!(re.is_match(&job_name), "job name violates dstack regex: {job_name}");
+            assert!(re.is_match(&train_name), "train name violates dstack regex: {train_name}");
+        }
+    }
+
+    #[test]
+    fn dstack_fleet_yaml_is_autoscaling_zero_to_one_with_gpu() {
+        let yaml = dstack_fleet_yaml(SHARED_FLEET_NAME);
+        assert!(yaml.contains("type: fleet"));
+        assert!(yaml.contains("name: b00t-dstack-fleet"));
+        assert!(yaml.contains("nodes: 0..1"));
+        assert!(yaml.contains("gpu: 1"));
+        // Deliberately no `backends:`/`regions:` — must match whatever
+        // backend(s) the operator's dstack server config.yml has actually
+        // configured, not hardcode runpod.
+        assert!(!yaml.contains("backends:"));
+        assert!(!yaml.contains("regions:"));
+    }
+
+    #[test]
+    fn dstack_task_yaml_attaches_volumes_when_present() {
+        let env = std::collections::HashMap::new();
+        let spec = BatchJobSpec {
+            image: "docker.io/elasticdotventures/mesh-runner:v6".into(),
+            config_path: "/workspace/request.json".into(),
+            env,
+            flavor: "RTX_4090".into(),
+            timeout_hours: 2.0,
+            volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
+        };
+        let yaml = dstack_task_yaml("b00t-job-abc", &spec);
+        assert!(yaml.contains("volumes:"));
+        assert!(yaml.contains("- name: b00t-mesh-cache"));
+        assert!(yaml.contains("path: /cache"));
+    }
+
+    #[test]
+    fn dstack_task_yaml_omits_volumes_block_when_empty() {
+        let spec = BatchJobSpec {
+            image: "ubuntu:24.04".into(),
+            config_path: "/dev/null".into(),
+            env: Default::default(),
+            flavor: "cpu".into(),
+            timeout_hours: 1.0,
+            volumes: vec![],
+        };
+        let yaml = dstack_task_yaml("b00t-job-def", &spec);
+        assert!(!yaml.contains("volumes:"));
+    }
+
+    #[test]
+    fn dstack_subcommands_parses_ensure_volume() {
+        let cmd = DstackSubCommands::try_parse_from([
+            "dstack",
+            "ensure-volume",
+            "b00t-mesh-cache",
+            "--size-gb",
+            "100",
+            "--region",
+            "eu-central-1",
+        ])
+        .expect("ensure-volume should parse: positional name, --size-gb, --region");
+        match cmd {
+            DstackSubCommands::EnsureVolume { name, size_gb, region } => {
+                assert_eq!(name, "b00t-mesh-cache");
+                assert_eq!(size_gb, 100);
+                assert_eq!(region, "eu-central-1");
+            }
+            _ => panic!("expected EnsureVolume variant"),
+        }
+    }
+
+    #[test]
+    fn dstack_subcommands_parses_stop_dev_environment() {
+        let cmd = DstackSubCommands::try_parse_from([
+            "dstack",
+            "stop-dev-environment",
+            "my-env",
+        ])
+        .expect("stop-dev-environment should parse: positional name");
+        match cmd {
+            DstackSubCommands::StopDevEnvironment { name } => {
+                assert_eq!(name, "my-env");
+            }
+            _ => panic!("expected StopDevEnvironment variant"),
+        }
+    }
+
+    #[test]
+    fn dstack_subcommands_ensure_volume_requires_size_gb_and_region() {
+        let err = DstackSubCommands::try_parse_from([
+            "dstack",
+            "ensure-volume",
+            "b00t-mesh-cache",
+        ])
+        .unwrap_err();
+        assert!(err.to_string().contains("size-gb") || err.to_string().contains("required"));
     }
 }

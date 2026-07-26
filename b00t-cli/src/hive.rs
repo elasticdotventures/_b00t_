@@ -2153,10 +2153,23 @@ mod tests {
                             let macro_resolved = if !rhai_macros.is_empty() {
                                 let trimmed = expr.rhai.trim();
                                 if let Some(macro_expr) = rhai_macros.get(trimmed) {
-                                    // Extract quoted strings from the macro definition
+                                    // Extract quoted strings from the macro definition —
+                                    // same negation-skip logic as the outer keyword-extraction
+                                    // loop above: a quoted string appearing inside
+                                    // !cmd.contains("...") must NOT be included in the
+                                    // synthesized match command, or the synthesized command
+                                    // will always fail its own negation clause. This loop was
+                                    // missing that check (only the outer, non-macro-reference
+                                    // path had it), so any bare macro-name-reference guard
+                                    // whose expression combines a positive cmd.contains(...)
+                                    // with a negated !cmd.contains(...) — e.g.
+                                    // podman_build_uncapped/podman_run_uncapped — always
+                                    // synthesized a command containing the negated keyword too,
+                                    // making the guard always evaluate to "Allow" in this test.
                                     let mut macro_keywords: Vec<String> = Vec::new();
                                     let mut in_q = false;
                                     let mut cur = String::new();
+                                    let mut macro_inter_quote_buf = String::new();
                                     for ch in macro_expr.chars() {
                                         match ch {
                                             '"' if !in_q => {
@@ -2165,10 +2178,15 @@ mod tests {
                                             }
                                             '"' if in_q => {
                                                 in_q = false;
-                                                macro_keywords.push(cur.clone());
+                                                let is_negated = macro_inter_quote_buf
+                                                    .contains("!cmd.contains(");
+                                                if !is_negated {
+                                                    macro_keywords.push(cur.clone());
+                                                }
+                                                macro_inter_quote_buf.clear();
                                             }
                                             c if in_q => cur.push(c),
-                                            _ => {}
+                                            c => macro_inter_quote_buf.push(c),
                                         }
                                     }
                                     if !macro_keywords.is_empty() {

@@ -17,10 +17,11 @@
 #
 # b00t CLI: b00t provider endpoint deploy|status|teardown|list --provider runpod
 
-[b00t.schema]
-version   = "1"
-type      = "api"
-type_tags = ["provider", "inference", "training", "gpu", "cloud"]
+[b00t]
+name        = "PROVIDER-RUNPOD"
+type        = "api"
+hint        = "RunPod GPU cloud provider — serverless inference endpoints + on-demand training pods"
+type_tags   = ["provider", "inference", "training", "gpu", "cloud"]
 
 [resource]
 name          = "RunPod GPU Cloud"
