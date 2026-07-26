@@ -7,14 +7,10 @@
 # a one-time `provision-cache` step (`ensure_volume`, idempotent) feeds a
 # repeatable `mesh3d-generate-warm` step that attaches the same volume.
 #
-# Known gap (found during final branch review, shared with mesh3d-cloud.job.toml):
-# any output_contract set on a dstack-backed step here is currently
-# unenforceable-as-passing — JobExecutor::dispatch_batch_job evaluates it
-# against provider.job_status()'s return value (a status string like
-# "run=<id> status=done" for DstackProvider), not the job's actual
-# stdout/logs, so such a step will always report a contract violation even
-# when the underlying dstack job succeeds. Do not treat that as real job
-# failure until job_status surfaces actual output.
+# Local files listed in [b00t.job.steps.batch.inputs] are copied alongside
+# the scratch config before submission — dstack syncs the config directory
+# to the remote, so these files are available inside the container at
+# /workflow/<filename>. See BatchJobSpec.inputs for details.
 
 [b00t]
 name = "mesh3d-cloud-warm"
@@ -70,6 +66,7 @@ image = "docker.io/elasticdotventures/mesh-runner:v6"
 config_path = "/workspace/request.json"
 flavor = "RTX_4090"
 timeout_hours = 2.0
+inputs = ["request.json"]
 
 [b00t.job.steps.batch.env]
 MESH_RESOLUTION = "1024"

@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::process::Command;
 
 /// Minimum free VRAM (MB) required before a local batch job is allowed to start.
@@ -90,6 +91,12 @@ pub struct BatchJobSpec {
     pub gpu_count: u32,
     #[serde(default)]
     pub volumes: Vec<VolumeMount>,
+    /// Local files to copy alongside the scratch config before submission.
+    /// dstack syncs the directory containing the config file, so files
+    /// placed there become available in the remote container. Each entry
+    /// is a path relative to CWD.
+    #[serde(default)]
+    pub inputs: Vec<String>,
 }
 
 fn default_gpu_count() -> u32 { 1 }
@@ -568,8 +575,24 @@ fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
 fn shared_fleet_name() -> String {
     let host = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_default();
-    format!("b00t-dstack-fleet-{host}")
+        .unwrap_or_else(|_| "unknown".into());
+    let sanitized: String = host
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    // Collapse consecutive hyphens and trim leading/trailing hyphens.
+    let collapsed = sanitized
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let host_part = if collapsed.is_empty() {
+        "unknown".into()
+    } else {
+        collapsed.chars().take(23).collect::<String>()
+    };
+    format!("b00t-dstack-fleet-{host_part}")
 }
 
 /// Generates a `type: fleet` autoscaling config: `nodes: 0..1` costs nothing
@@ -667,15 +690,16 @@ impl ComputeProvider for DstackProvider {
             timeout_hours: spec.timeout_hours,
             gpu_count: 1,
             volumes: vec![],
+            inputs: vec![],
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
-        submit_dstack_yaml(self, &name, &yaml, batch_spec.gpu_count)
+        submit_dstack_yaml(self, &name, &yaml, batch_spec.gpu_count, &batch_spec.inputs)
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
         let name = format!("b00t-job-{}", dstack_short_id());
         let yaml = dstack_task_yaml(&name, spec);
-        submit_dstack_yaml(self, &name, &yaml, spec.gpu_count)
+        submit_dstack_yaml(self, &name, &yaml, spec.gpu_count, &spec.inputs)
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
@@ -748,26 +772,42 @@ fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::Pat
 /// Split out so submit_batch_job/submit_training_job share one path.
 /// Ensures the shared autoscaling fleet exists first — see
 /// `DstackProvider::ensure_fleet` for why this is required against real
-/// dstack 0.20.x, not optional.
+/// dstack 0.20.x, not optional. Copies local files listed in `inputs` into
+/// the scratch directory so dstack syncs them to the remote container.
 fn submit_dstack_yaml(
     provider: &DstackProvider,
     name: &str,
     yaml: &str,
     gpu_count: u32,
+    inputs: &[String],
 ) -> Result<JobHandle> {
     provider
         .ensure_fleet(&shared_fleet_name(), gpu_count)
         .context("ensuring shared dstack fleet exists before task submission")?;
-    let tmp = dstack_scratch_config_path(name, "task")?;
-    std::fs::write(&tmp, yaml).context("writing dstack task config")?;
-    let tmp_path = tmp
+    let scratch_dir = dstack_scratch_config_path(name, "task")?;
+    std::fs::write(&scratch_dir, yaml).context("writing dstack task config")?;
+    for input in inputs {
+        let src = std::path::Path::new(input);
+        if !src.exists() {
+            tracing::warn!("dstack input file {input:?} not found — skipping");
+            continue;
+        }
+        let dest = scratch_dir.parent().unwrap_or(&scratch_dir).join(
+            src.file_name()
+                .unwrap_or_else(|| OsStr::new(input)),
+        );
+        if let Err(err) = std::fs::copy(src, &dest) {
+            tracing::warn!("failed to copy dstack input {input:?} to {dest:?}: {err}");
+        }
+    }
+    let tmp_path = scratch_dir
         .to_str()
         .context("temp file path is not valid UTF-8")?;
     provider.run_dstack(&["apply", "-f", tmp_path, "-y", "-d"])?;
     // Cleanup is best-effort — a failure to remove the temp file must not
     // fail the job submission itself.
-    if let Err(err) = std::fs::remove_file(&tmp) {
-        tracing::warn!("failed to remove temp dstack task config {tmp:?}: {err}");
+    if let Err(err) = std::fs::remove_file(&scratch_dir) {
+        tracing::warn!("failed to remove temp dstack task config {scratch_dir:?}: {err}");
     }
     Ok(JobHandle {
         id: name.to_string(),
@@ -1284,7 +1324,9 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
                 env: env_map,
                 flavor,
                 timeout_hours,
+                gpu_count: 1,
                 volumes: vec![],
+                inputs: vec![],
             };
             let handle = p.submit_batch_job(&spec).await?;
             println!("{}", serde_json::to_string_pretty(&handle)?);
@@ -1402,7 +1444,9 @@ mod batch_job_tests {
             env,
             flavor: "a10g-small".to_string(),
             timeout_hours: 1.0,
+            gpu_count: 1,
             volumes: vec![],
+            inputs: vec![],
         }
     }
 
@@ -1498,7 +1542,9 @@ mod batch_job_tests {
             env,
             flavor: "RTX_4090".into(),
             timeout_hours: 2.0,
+            gpu_count: 1,
             volumes: vec![],
+            inputs: vec![],
         };
         let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
         assert!(yaml.contains("type: task"));
@@ -1589,7 +1635,9 @@ mod batch_job_tests {
             env,
             flavor: "RTX_4090".into(),
             timeout_hours: 2.0,
+            gpu_count: 1,
             volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
+            inputs: vec![],
         };
         let yaml = dstack_task_yaml("b00t-job-abc", &spec);
         assert!(yaml.contains("volumes:"));
@@ -1605,7 +1653,9 @@ mod batch_job_tests {
             env: Default::default(),
             flavor: "cpu".into(),
             timeout_hours: 1.0,
+            gpu_count: 1,
             volumes: vec![],
+            inputs: vec![],
         };
         let yaml = dstack_task_yaml("b00t-job-def", &spec);
         assert!(!yaml.contains("volumes:"));
