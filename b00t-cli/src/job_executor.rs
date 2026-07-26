@@ -591,12 +591,20 @@ async fn dispatch_batch_job(provider: &dyn ComputeProvider, step: &JobStep) -> R
         );
     }
 
-    if step.output_contract.is_some() {
-        let job_output = provider
-            .job_status(&handle)
-            .await
-            .context("re-reading job status for output_contract evaluation")?;
-        evaluate_output_contract(step.output_contract.as_deref(), &job_output)?;
+    if let Some(contract) = &step.output_contract {
+        let provider_name = provider.name();
+        if provider_name != "local" {
+            tracing::warn!(
+                "output_contract on provider '{provider_name}' reads job_status() not \
+                 logs — skipping evaluation (see issue #869)"
+            );
+        } else {
+            let job_output = provider
+                .job_status(&handle)
+                .await
+                .context("re-reading job status for output_contract evaluation")?;
+            evaluate_output_contract(Some(contract), &job_output)?;
+        }
     }
 
     Ok(())
@@ -985,12 +993,21 @@ mod provider_bridge_tests {
     /// lets tests assert both immediate-terminal and poll-until-terminal
     /// behavior without a real provider or real wall-clock job duration.
     struct FakeProvider {
+        provider_name: &'static str,
         statuses: Mutex<VecDeque<String>>,
     }
 
     impl FakeProvider {
         fn with_statuses(statuses: &[&str]) -> Self {
             Self {
+                provider_name: "fake",
+                statuses: Mutex::new(statuses.iter().map(|s| s.to_string()).collect()),
+            }
+        }
+
+        fn with_statuses_and_name(statuses: &[&str], name: &'static str) -> Self {
+            Self {
+                provider_name: name,
                 statuses: Mutex::new(statuses.iter().map(|s| s.to_string()).collect()),
             }
         }
@@ -999,7 +1016,7 @@ mod provider_bridge_tests {
     #[async_trait]
     impl ComputeProvider for FakeProvider {
         fn name(&self) -> &str {
-            "fake"
+            self.provider_name
         }
 
         async fn deploy_inference_endpoint(&self, _cfg: &EndpointConfig) -> Result<EndpointHandle> {
@@ -1128,7 +1145,9 @@ mod provider_bridge_tests {
     async fn dispatch_batch_job_enforces_output_contract_pass() {
         // Terminal status first, then a second `job_status` call (the
         // output_contract re-read) returns the job's captured output.
-        let provider = FakeProvider::with_statuses(&["exited", "running tests...\nPASS"]);
+        // Uses name "local" so output_contract evaluation is exercised.
+        let provider =
+            FakeProvider::with_statuses_and_name(&["exited", "running tests...\nPASS"], "local");
         let step = sample_step(Some("PASS|FAIL:<5lines>"));
         let result = dispatch_batch_job(&provider, &step).await;
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
@@ -1136,10 +1155,13 @@ mod provider_bridge_tests {
 
     #[tokio::test]
     async fn dispatch_batch_job_enforces_output_contract_fail() {
-        let provider = FakeProvider::with_statuses(&[
-            "exited",
-            "running tests...\nFAIL: assertion mismatch at line 42",
-        ]);
+        let provider = FakeProvider::with_statuses_and_name(
+            &[
+                "exited",
+                "running tests...\nFAIL: assertion mismatch at line 42",
+            ],
+            "local",
+        );
         let step = sample_step(Some("PASS|FAIL:<5lines>"));
         let result = dispatch_batch_job(&provider, &step).await;
         let err = result.expect_err("output_contract FAIL should error even though status was a success terminal status");
