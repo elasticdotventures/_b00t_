@@ -376,6 +376,8 @@ mod tests {
 
     #[test]
     fn test_session_guard_action_mapping() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("session-guards.json");
         let entries = vec![
             SessionGuardEntry {
                 pattern: "a".to_string(),
@@ -397,10 +399,14 @@ mod tests {
             },
         ];
         let json = serde_json::to_string(&entries).unwrap();
-        std::fs::write(session_guards_path(), &json).unwrap_or(());
-        let guards = crate::hive::load_session_guards();
-        // Don't assert exact count (file may not be writable in test env),
-        // just verify the function doesn't crash and mapping logic is reachable.
-        let _ = guards;
+        std::fs::write(&path, &json).unwrap();
+        let loaded: Vec<SessionGuardEntry> = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded[0].pattern, "a");
+        assert_eq!(loaded[0].action, "block");
+        assert_eq!(loaded[1].pattern, "b");
+        assert_eq!(loaded[1].action, "redirect");
+        assert_eq!(loaded[2].pattern, "c");
+        assert_eq!(loaded[2].action, "warn");
     }
 }
