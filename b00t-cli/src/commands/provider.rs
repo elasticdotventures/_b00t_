@@ -86,9 +86,13 @@ pub struct BatchJobSpec {
     pub env: std::collections::HashMap<String, String>,
     pub flavor: String,
     pub timeout_hours: f32,
+    #[serde(default = "default_gpu_count")]
+    pub gpu_count: u32,
     #[serde(default)]
     pub volumes: Vec<VolumeMount>,
 }
+
+fn default_gpu_count() -> u32 { 1 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobHandle {
@@ -527,8 +531,8 @@ impl DstackProvider {
     /// idle. Applying an existing fleet name is idempotent per dstack's own
     /// `apply` semantics (same as `ensure_volume`) — safe to call before
     /// every submission rather than tracking whether it already ran.
-    pub fn ensure_fleet(&self, name: &str) -> Result<()> {
-        let yaml = dstack_fleet_yaml(name);
+    pub fn ensure_fleet(&self, name: &str, gpu_count: u32) -> Result<()> {
+        let yaml = dstack_fleet_yaml(name, gpu_count);
         let tmp = dstack_scratch_config_path(name, "fleet")?;
         std::fs::write(&tmp, yaml).context("writing dstack fleet config")?;
         let path = tmp.to_str().context("temp file path is not valid UTF-8")?;
@@ -568,8 +572,10 @@ const SHARED_FLEET_NAME: &str = "b00t-dstack-fleet";
 /// matches whatever backend(s) the operator's dstack server config.yml has
 /// configured (runpod today, potentially gcp/azure later) instead of
 /// hardcoding one.
-fn dstack_fleet_yaml(name: &str) -> String {
-    format!("type: fleet\nname: {name}\nnodes: 0..1\nresources:\n  gpu: 1\n")
+fn dstack_fleet_yaml(name: &str, gpu_count: u32) -> String {
+    format!(
+        "type: fleet\nname: {name}\nnodes: 0..1\nresources:\n  gpu: {gpu_count}\n"
+    )
 }
 
 /// Pure YAML builder, split out so tests can assert the exact task config
@@ -652,16 +658,17 @@ impl ComputeProvider for DstackProvider {
             env: Default::default(),
             flavor: spec.flavor.clone(),
             timeout_hours: spec.timeout_hours,
+            gpu_count: 1,
             volumes: vec![],
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
-        submit_dstack_yaml(self, &name, &yaml)
+        submit_dstack_yaml(self, &name, &yaml, batch_spec.gpu_count)
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
         let name = format!("b00t-job-{}", dstack_short_id());
         let yaml = dstack_task_yaml(&name, spec);
-        submit_dstack_yaml(self, &name, &yaml)
+        submit_dstack_yaml(self, &name, &yaml, spec.gpu_count)
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
@@ -728,9 +735,14 @@ fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::Pat
 /// Ensures the shared autoscaling fleet exists first — see
 /// `DstackProvider::ensure_fleet` for why this is required against real
 /// dstack 0.20.x, not optional.
-fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
+fn submit_dstack_yaml(
+    provider: &DstackProvider,
+    name: &str,
+    yaml: &str,
+    gpu_count: u32,
+) -> Result<JobHandle> {
     provider
-        .ensure_fleet(SHARED_FLEET_NAME)
+        .ensure_fleet(SHARED_FLEET_NAME, gpu_count)
         .context("ensuring shared dstack fleet exists before task submission")?;
     let tmp = dstack_scratch_config_path(name, "task")?;
     std::fs::write(&tmp, yaml).context("writing dstack task config")?;
@@ -1542,9 +1554,9 @@ mod batch_job_tests {
 
     #[test]
     fn dstack_fleet_yaml_is_autoscaling_zero_to_one_with_gpu() {
-        let yaml = dstack_fleet_yaml(SHARED_FLEET_NAME);
+        let yaml = dstack_fleet_yaml("test-fleet", 1);
         assert!(yaml.contains("type: fleet"));
-        assert!(yaml.contains("name: b00t-dstack-fleet"));
+        assert!(yaml.contains("name: test-fleet"));
         assert!(yaml.contains("nodes: 0..1"));
         assert!(yaml.contains("gpu: 1"));
         // Deliberately no `backends:`/`regions:` — must match whatever
