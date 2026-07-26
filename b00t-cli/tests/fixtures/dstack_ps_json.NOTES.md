@@ -106,5 +106,3 @@ flagged here as a follow-up rather than done unsupervised. Task 7's
 
 - `dstack_ps_json.txt` — full `dstack ps --json -a` output, single completed
   run, real project state.
-- `dstack_logs_output.txt` — `dstack logs b00t-fixture-capture` output
-  (just `PASS`, the echoed command output).
