@@ -5,24 +5,10 @@
 # PASS/FAIL enforcement all happen inside JobExecutor::run_job — no
 # hand-written bash re-derived per invocation.
 #
-# Known gap (not solved here): dstack_task_yaml (provider.rs) only handles
-# image/env/entrypoint — it does not stage local files (the input photo,
-# request.json) into the remote container. `config_path` below points at
-# where cloud_mesh.sh stages request.json locally; actually getting that
-# file into the dstack container each run is follow-up work. See
-# game-play/pipelines/photo-critter/cloud_mesh.sh for the staging half of
-# this workflow.
-#
-# Second known gap (found during final branch review, not solved here):
-# output_contract below is currently unenforceable-as-passing.
-# JobExecutor::dispatch_batch_job evaluates output_contract against
-# provider.job_status()'s return value, which for DstackProvider is a
-# status string ("run=<id> status=done"), not the job's actual stdout/logs
-# — so this step will always report a contract violation ("last output
-# line was not PASS/FAIL"), even when the underlying dstack job succeeds.
-# Do not treat a FAIL from this specific step as evidence the job failed
-# until job_status is changed to surface real job output. Blocked on the
-# request.json-staging gap above anyway, so not yet exercised for real.
+# Local files listed in [b00t.job.steps.batch.inputs] are copied alongside
+# the scratch config before submission — dstack syncs the config directory
+# to the remote, so these files are available inside the container at
+# /workflow/<filename>. See BatchJobSpec.inputs for details.
 
 [b00t]
 name = "mesh3d-cloud"
@@ -72,6 +58,7 @@ image = "docker.io/elasticdotventures/mesh-runner:v6"
 config_path = "/workspace/request.json"
 flavor = "RTX_4090"
 timeout_hours = 2.0
+inputs = ["request.json"]
 
 [b00t.job.steps.batch.env]
 MESH_RESOLUTION = "1024"

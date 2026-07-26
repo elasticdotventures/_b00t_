@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::process::Command;
 
 /// Minimum free VRAM (MB) required before a local batch job is allowed to start.
@@ -88,6 +89,12 @@ pub struct BatchJobSpec {
     pub timeout_hours: f32,
     #[serde(default)]
     pub volumes: Vec<VolumeMount>,
+    /// Local files to copy alongside the scratch config before submission.
+    /// dstack syncs the directory containing the config file, so files
+    /// placed there become available in the remote container. Each entry
+    /// is a path relative to CWD.
+    #[serde(default)]
+    pub inputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -653,15 +660,16 @@ impl ComputeProvider for DstackProvider {
             flavor: spec.flavor.clone(),
             timeout_hours: spec.timeout_hours,
             volumes: vec![],
+            inputs: vec![],
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
-        submit_dstack_yaml(self, &name, &yaml)
+        submit_dstack_yaml(self, &name, &yaml, &batch_spec.inputs)
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
         let name = format!("b00t-job-{}", dstack_short_id());
         let yaml = dstack_task_yaml(&name, spec);
-        submit_dstack_yaml(self, &name, &yaml)
+        submit_dstack_yaml(self, &name, &yaml, &spec.inputs)
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
@@ -727,21 +735,41 @@ fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::Pat
 /// Split out so submit_batch_job/submit_training_job share one path.
 /// Ensures the shared autoscaling fleet exists first — see
 /// `DstackProvider::ensure_fleet` for why this is required against real
-/// dstack 0.20.x, not optional.
-fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
+/// dstack 0.20.x, not optional. Copies local files listed in `inputs` into
+/// the scratch directory so dstack syncs them to the remote container.
+fn submit_dstack_yaml(
+    provider: &DstackProvider,
+    name: &str,
+    yaml: &str,
+    inputs: &[String],
+) -> Result<JobHandle> {
     provider
         .ensure_fleet(SHARED_FLEET_NAME)
         .context("ensuring shared dstack fleet exists before task submission")?;
-    let tmp = dstack_scratch_config_path(name, "task")?;
-    std::fs::write(&tmp, yaml).context("writing dstack task config")?;
-    let tmp_path = tmp
+    let scratch_dir = dstack_scratch_config_path(name, "task")?;
+    std::fs::write(&scratch_dir, yaml).context("writing dstack task config")?;
+    for input in inputs {
+        let src = std::path::Path::new(input);
+        if !src.exists() {
+            tracing::warn!("dstack input file {input:?} not found — skipping");
+            continue;
+        }
+        let dest = scratch_dir.parent().unwrap_or(&scratch_dir).join(
+            src.file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new(input)),
+        );
+        if let Err(err) = std::fs::copy(src, &dest) {
+            tracing::warn!("failed to copy dstack input {input:?} to {dest:?}: {err}");
+        }
+    }
+    let tmp_path = scratch_dir
         .to_str()
         .context("temp file path is not valid UTF-8")?;
     provider.run_dstack(&["apply", "-f", tmp_path, "-y", "-d"])?;
     // Cleanup is best-effort — a failure to remove the temp file must not
     // fail the job submission itself.
-    if let Err(err) = std::fs::remove_file(&tmp) {
-        tracing::warn!("failed to remove temp dstack task config {tmp:?}: {err}");
+    if let Err(err) = std::fs::remove_file(&scratch_dir) {
+        tracing::warn!("failed to remove temp dstack task config {scratch_dir:?}: {err}");
     }
     Ok(JobHandle {
         id: name.to_string(),
