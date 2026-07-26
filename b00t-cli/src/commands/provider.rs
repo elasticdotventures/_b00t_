@@ -556,10 +556,17 @@ fn dstack_volume_yaml(name: &str, size_gb: u32, region: &str) -> String {
 }
 
 /// The shared autoscaling fleet all `DstackProvider` submissions ensure
-/// exists before scheduling a task — one pool, reused across jobs, rather
-/// than a fleet per submission (matches the warm-reuse philosophy behind
-/// Task 12's persistent volumes).
-const SHARED_FLEET_NAME: &str = "b00t-dstack-fleet";
+/// exists before scheduling a task — one pool per host, reused across
+/// jobs, rather than a fleet per submission (matches the warm-reuse
+/// philosophy behind Task 12's persistent volumes). The hostname suffix
+/// isolates instances so two b00t processes sharing the same dstack
+/// server don't compete for the same fleet's capacity.
+fn shared_fleet_name() -> String {
+    let host = hostname::get()
+        .map(|h| h.to_string_lossy().to_string())
+        .unwrap_or_default();
+    format!("b00t-dstack-fleet-{host}")
+}
 
 /// Generates a `type: fleet` autoscaling config: `nodes: 0..1` costs nothing
 /// while idle (dstack only provisions compute once a task actually needs
@@ -730,7 +737,7 @@ fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::Pat
 /// dstack 0.20.x, not optional.
 fn submit_dstack_yaml(provider: &DstackProvider, name: &str, yaml: &str) -> Result<JobHandle> {
     provider
-        .ensure_fleet(SHARED_FLEET_NAME)
+        .ensure_fleet(&shared_fleet_name())
         .context("ensuring shared dstack fleet exists before task submission")?;
     let tmp = dstack_scratch_config_path(name, "task")?;
     std::fs::write(&tmp, yaml).context("writing dstack task config")?;
@@ -1542,7 +1549,7 @@ mod batch_job_tests {
 
     #[test]
     fn dstack_fleet_yaml_is_autoscaling_zero_to_one_with_gpu() {
-        let yaml = dstack_fleet_yaml(SHARED_FLEET_NAME);
+        let yaml = dstack_fleet_yaml(&shared_fleet_name());
         assert!(yaml.contains("type: fleet"));
         assert!(yaml.contains("name: b00t-dstack-fleet"));
         assert!(yaml.contains("nodes: 0..1"));
