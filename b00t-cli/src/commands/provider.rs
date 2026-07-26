@@ -716,8 +716,15 @@ fn dstack_short_id() -> String {
 /// (`ensure_volume`, `ensure_fleet`, `submit_dstack_yaml`) must live under
 /// CWD. Uses a dotfile-prefixed name to avoid cluttering directory
 /// listings; all three call sites already best-effort `remove_file` it
-/// after `apply` runs.
+/// after `apply` runs. Rejects names containing path separators or `..`
+/// to prevent directory traversal outside CWD.
 fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::PathBuf> {
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        anyhow::bail!(
+            "dstack scratch config name {:?} contains path separator or '..' — rejecting",
+            name
+        );
+    }
     let cwd = std::env::current_dir()
         .context("resolving current directory for dstack config scratch file")?;
     Ok(cwd.join(format!(".{name}.{suffix}.dstack.yml")))
