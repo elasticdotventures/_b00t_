@@ -1,4 +1,4 @@
-# dstack_ps_json.txt / dstack_logs_output.txt — capture notes
+# dstack_ps_json.txt — capture notes
 
 Captured 2026-07-23 against a real dstack 0.20.28 server + real RunPod backend
 (project "b00t"), submitting a trivial `commands: [echo "PASS"]` task with

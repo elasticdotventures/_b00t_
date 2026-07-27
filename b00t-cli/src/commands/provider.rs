@@ -576,10 +576,23 @@ fn shared_fleet_name() -> String {
     let host = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown".into());
+    format!("b00t-dstack-fleet-{}", sanitize_fleet_host_part(&host))
+}
+
+/// Sanitizes an arbitrary hostname down to the `host_part` portion of
+/// `shared_fleet_name`'s dstack fleet name. Only ASCII alphanumerics survive
+/// unchanged (`char::is_ascii_alphanumeric`, not the Unicode-aware
+/// `is_alphanumeric` — non-ASCII hostnames like accented Latin or CJK
+/// characters must not pass through untouched, since dstack's fleet-name
+/// regex `^[a-z][a-z0-9-]{1,40}$` is ASCII-only); everything else becomes a
+/// hyphen, consecutive hyphens collapse, and the result is capped at 23
+/// chars so the full `b00t-dstack-fleet-<host_part>` name stays within
+/// dstack's 41-char limit.
+fn sanitize_fleet_host_part(host: &str) -> String {
     let sanitized: String = host
         .to_ascii_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
     // Collapse consecutive hyphens and trim leading/trailing hyphens.
     let collapsed = sanitized
@@ -587,12 +600,11 @@ fn shared_fleet_name() -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    let host_part = if collapsed.is_empty() {
+    if collapsed.is_empty() {
         "unknown".into()
     } else {
         collapsed.chars().take(23).collect::<String>()
-    };
-    format!("b00t-dstack-fleet-{host_part}")
+    }
 }
 
 /// Generates a `type: fleet` autoscaling config: `nodes: 0..1` costs nothing
@@ -768,6 +780,25 @@ fn dstack_scratch_config_path(name: &str, suffix: &str) -> Result<std::path::Pat
     Ok(cwd.join(format!(".{name}.{suffix}.dstack.yml")))
 }
 
+/// Copies each local file in `inputs` into `dest_dir` so dstack syncs them
+/// to the remote container alongside the task config. A missing input file
+/// or a failed copy fails fast with an `Err` — silently skipping (the prior
+/// behavior: `tracing::warn!` + `continue`) let jobs submit to dstack
+/// without a file they needed, failing opaquely inside the remote container
+/// instead of locally where it's actionable.
+fn copy_dstack_inputs(inputs: &[String], dest_dir: &std::path::Path) -> Result<()> {
+    for input in inputs {
+        let src = std::path::Path::new(input);
+        if !src.exists() {
+            anyhow::bail!("input file {input:?} not found for dstack job submission");
+        }
+        let dest = dest_dir.join(src.file_name().unwrap_or_else(|| OsStr::new(input)));
+        std::fs::copy(src, &dest)
+            .with_context(|| format!("failed to copy dstack input {input:?} to {dest:?}"))?;
+    }
+    Ok(())
+}
+
 /// Write `yaml` to a temp file and `dstack apply -f <file> -y -d` it.
 /// Split out so submit_batch_job/submit_training_job share one path.
 /// Ensures the shared autoscaling fleet exists first — see
@@ -786,20 +817,8 @@ fn submit_dstack_yaml(
         .context("ensuring shared dstack fleet exists before task submission")?;
     let scratch_dir = dstack_scratch_config_path(name, "task")?;
     std::fs::write(&scratch_dir, yaml).context("writing dstack task config")?;
-    for input in inputs {
-        let src = std::path::Path::new(input);
-        if !src.exists() {
-            tracing::warn!("dstack input file {input:?} not found — skipping");
-            continue;
-        }
-        let dest = scratch_dir.parent().unwrap_or(&scratch_dir).join(
-            src.file_name()
-                .unwrap_or_else(|| OsStr::new(input)),
-        );
-        if let Err(err) = std::fs::copy(src, &dest) {
-            tracing::warn!("failed to copy dstack input {input:?} to {dest:?}: {err}");
-        }
-    }
+    let dest_dir = scratch_dir.parent().unwrap_or(&scratch_dir);
+    copy_dstack_inputs(inputs, dest_dir)?;
     let tmp_path = scratch_dir
         .to_str()
         .context("temp file path is not valid UTF-8")?;
@@ -1708,5 +1727,69 @@ mod batch_job_tests {
         ])
         .unwrap_err();
         assert!(err.to_string().contains("size-gb") || err.to_string().contains("required"));
+    }
+
+    #[test]
+    fn sanitize_fleet_host_part_strips_non_ascii_to_valid_dstack_name() {
+        // Regression guard: char::is_alphanumeric() is Unicode-aware and let
+        // accented/CJK characters through untouched, producing a fleet name
+        // that violated dstack's ^[a-z][a-z0-9-]{1,40}$ regex. Non-ASCII
+        // chars must be replaced with '-' like any other punctuation.
+        let host_part = sanitize_fleet_host_part("café-serveur");
+        let name = format!("b00t-dstack-fleet-{host_part}");
+        let re = regex::Regex::new("^[a-z][a-z0-9-]{1,40}$").unwrap();
+        assert!(re.is_match(&name), "fleet name violates dstack regex: {name}");
+        assert_eq!(host_part, "caf-serveur");
+    }
+
+    #[test]
+    fn sanitize_fleet_host_part_strips_cjk_characters() {
+        let host_part = sanitize_fleet_host_part("東京-server");
+        let re = regex::Regex::new("^[a-z0-9-]{1,40}$").unwrap();
+        assert!(re.is_match(&host_part), "host part violates dstack regex: {host_part}");
+        assert!(host_part.is_ascii());
+    }
+
+    #[test]
+    fn dstack_scratch_config_path_rejects_dotdot_traversal() {
+        assert!(dstack_scratch_config_path("../evil", "task").is_err());
+    }
+
+    #[test]
+    fn dstack_scratch_config_path_rejects_path_separator() {
+        assert!(dstack_scratch_config_path("a/b", "task").is_err());
+        assert!(dstack_scratch_config_path("a\\b", "task").is_err());
+    }
+
+    #[test]
+    fn dstack_scratch_config_path_accepts_normal_name() {
+        let path = dstack_scratch_config_path("my-job", "task")
+            .expect("plain name should be accepted");
+        assert!(path.to_string_lossy().contains("my-job"));
+    }
+
+    #[test]
+    fn copy_dstack_inputs_errors_on_missing_input_file() {
+        // Regression guard: a missing input file previously only logged
+        // tracing::warn! and continued, letting the job submit to dstack
+        // without a file it needed. It must now fail fast locally instead.
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("does-not-exist.json");
+        let err = copy_dstack_inputs(&[missing.to_str().unwrap().to_string()], dir.path())
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn copy_dstack_inputs_copies_existing_file_into_dest_dir() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+        let src_file = src_dir.path().join("photo.png");
+        std::fs::write(&src_file, b"fake-image-bytes").unwrap();
+        copy_dstack_inputs(&[src_file.to_str().unwrap().to_string()], dest_dir.path())
+            .expect("existing input file should copy successfully");
+        let copied = dest_dir.path().join("photo.png");
+        assert!(copied.exists());
+        assert_eq!(std::fs::read(&copied).unwrap(), b"fake-image-bytes");
     }
 }
