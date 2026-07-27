@@ -1931,7 +1931,14 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
             .get("argv")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
-        let parts: Vec<&str> = argv.split_whitespace().collect();
+        let parts: Vec<String> = shlex::split(argv).ok_or_else(|| {
+            anyhow::anyhow!(
+                "b00t_exec: invalid argv quoting (unterminated quote or trailing backslash) in: {argv}"
+            )
+        })?;
+        if parts.is_empty() {
+            anyhow::bail!("b00t_exec: argv must not be empty");
+        }
         let output = std::process::Command::new("b00t-cli")
             .args(&parts)
             .output()
@@ -2549,6 +2556,22 @@ mod tests {
     fn test_pipeline_tool_in_catalog() {
         let has_entry = TOOL_CATALOG.iter().any(|e| e.name == "b00t_pipeline");
         assert!(has_entry, "b00t_pipeline must be in TOOL_CATALOG");
+    }
+
+    #[test]
+    fn test_bexec_shlex_tokenizes_quoted_multiword_arg() {
+        let argv = r#"task add "some multi word description""#;
+        let parts = shlex::split(argv).expect("valid shell quoting must tokenize");
+        assert_eq!(parts, vec!["task", "add", "some multi word description"]);
+    }
+
+    #[test]
+    fn test_bexec_shlex_rejects_unterminated_quote() {
+        let argv = r#"task add "unterminated"#;
+        assert!(
+            shlex::split(argv).is_none(),
+            "unterminated quote must fail tokenization, not panic"
+        );
     }
 
     #[test]
