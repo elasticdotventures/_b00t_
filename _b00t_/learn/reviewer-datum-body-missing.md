@@ -1,0 +1,2 @@
+---
+b00t datum show reviewer.role and b00t learn reviewer.role both only surface the one-line 'Hint' summary,: b00t datum show reviewer.role and b00t learn reviewer.role both only surface the one-line 'Hint' summary, not the full role instructions body (MECE+TRIZ+Eureka framework details). Full content only reachable by reading _b00t_/skills/reviewer/SKILL.md directly. Likely same class of bug as whoami-role-resolution — datum body content not being loaded/rendered for role-type datums. <!-- salvaged:no_colon -->
