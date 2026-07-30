@@ -40,6 +40,7 @@ pub mod exit_code {
 pub mod agentic_role;
 pub mod ansible;
 pub mod blessing;
+pub mod virtfs;
 pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;

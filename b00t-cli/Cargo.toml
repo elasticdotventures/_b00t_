@@ -121,6 +121,9 @@ runpod-sdk = { path = "../vendor/runpod-sdk" }
 gix-attributes = "0.33"
 bstr = "1.12"
 
+# virtfs: FUSE mount presenting b00t datums as Claude Code skills (feature-gated)
+fuser = { version = "0.15", optional = true }
+
 # RPA: Browser automation via CDP + ratatui TUI (feature-gated)
 chromiumoxide = { version = "0.9", optional = true }
 futures = "0.3"
@@ -135,6 +138,8 @@ default = []
 # 🤓 rpa: Browser RPA via CDP + ratatui TUI (heavy deps — chromiumoxide, ratatui)
 rpa = ["chromiumoxide", "ratatui", "crossterm", "nucleo", "atty", "base64"]
 rpa-playwright = []  # Playwright subprocess backend (no extra Rust deps)
+# 🤓 virtfs: FUSE mount at ~/.claude/b00t presenting datums as skills (ROADMAP-virtfs.md Phase 1)
+virtfs = ["dep:fuser"]
 # 🤓 dbus: Enable D-Bus IPC via zbus (restored; required by lib.rs, hive.rs, commands/soul.rs)
 dbus = ["b00t-ipc/dbus", "dep:zbus"]
 # 🤓 candle: Enable Candle-based inference (GPU/CPU with CUDA support)
