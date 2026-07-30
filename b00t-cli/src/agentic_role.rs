@@ -221,10 +221,10 @@ pub enum KnownRole {
 impl KnownRole {
     pub fn name(&self) -> &str {
         match self {
-            KnownRole::Worker(_) => Worker::NAME,
-            KnownRole::Executive(_) => Executive::NAME,
-            KnownRole::Operator(_) => Operator::NAME,
-            KnownRole::AppProvider(_) => AppProvider::NAME,
+            KnownRole::Worker(r) => r.as_ref(),
+            KnownRole::Executive(r) => r.as_ref(),
+            KnownRole::Operator(r) => r.as_ref(),
+            KnownRole::AppProvider(r) => r.as_ref(),
         }
     }
 
@@ -423,5 +423,22 @@ mod tests {
             format!("{}", resolve_role(Some("executive".to_string()))),
             "executive"
         );
+    }
+
+    /// Regression for whoami --role=<custom> loading the wrong AGENTS/--role=*.md
+    /// file: any role name outside the 4 sealed HiveCrew variants (worker,
+    /// executive, operator, provider) — e.g. "reviewer", "podman",
+    /// "ux-designer" — falls into KnownRole::resolve's fallback branch,
+    /// which wraps it as KnownRole::Worker(RoleRef::new_owned(name)). The
+    /// actual name IS preserved inside that RoleRef, but .name() used to
+    /// match on the enum variant and return the hardcoded Worker::NAME
+    /// constant instead of reading it — silently collapsing every custom
+    /// role's .name() to "worker".
+    #[test]
+    fn test_custom_role_name_is_preserved_not_collapsed_to_worker() {
+        let role = resolve_role(Some("reviewer".to_string()));
+        assert_eq!(role.name(), "reviewer");
+        assert_eq!(role, "reviewer");
+        assert_eq!(format!("{}", role), "reviewer");
     }
 }
