@@ -23,8 +23,12 @@ serde_json.workspace = true
 anyhow.workspace = true
 toml.workspace = true
 
-# PyO3 for Python bindings
-pyo3 = { version = "0.27", features = ["extension-module"] }
+# PyO3 for Python bindings.
+# abi3-py38: build against the stable ABI floor matching requires-python
+# (>=3.8 in pyproject.toml) — one wheel then works unmodified across every
+# newer CPython 3.x, rather than needing a fresh wheel built per minor
+# version release (3.11/3.12/3.13/3.14/...).
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py38"] }
 
 [build-dependencies]
 pyo3-build-config = "0.27"

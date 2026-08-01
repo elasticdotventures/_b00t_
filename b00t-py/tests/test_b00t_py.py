@@ -1,29 +1,18 @@
 """Tests for b00t-py native Rust bindings.
 
-Loads the native .so module directly under the correct name
-to bypass __init__.py circular import issues.
-
 Run: cd b00t-py && python -m pytest tests/ -v
 """
 
-import importlib.machinery
-import importlib.util
+import importlib
 import json
-import os
-import sys
-
-# Load the native .so with the CORRECT module name that the .so expects
-_so_dir = os.path.join(os.path.dirname(__file__), "..", "python", "b00t_py")
-_so_path = os.path.join(_so_dir, "_core.cpython-313-x86_64-linux-gnu.so")
-
-# Insert the module into sys.modules under its expected name first
-loader = importlib.machinery.ExtensionFileLoader("b00t_py._core", _so_path)
-spec = importlib.machinery.ModuleSpec(name="b00t_py._core", loader=loader, origin=_so_path)
-native = importlib.util.module_from_spec(spec)
-sys.modules["b00t_py._core"] = native
-loader.exec_module(native)
 
 import pytest
+
+# The native extension's actual filename varies by build (Python-version-
+# tagged for a version-specific build, `_core.abi3.so` for an abi3 build) —
+# import by module name rather than hardcoding a filename, exactly like
+# b00t_py/__init__.py's own _get_core() does.
+native = importlib.import_module("b00t_py._core")
 
 
 class TestGuardCheck:

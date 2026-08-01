@@ -20,7 +20,7 @@ def _get_core():
     if _core is not None:
         return _core
     try:
-        _core = importlib.import_module("b00t_py.b00t_py")
+        _core = importlib.import_module("b00t_py._core")
     except ImportError:
         _core = None
     return _core
@@ -33,8 +33,7 @@ def _version() -> str:
 
 from .exceptions import B00tError
 
-# Version info (lazy — avoids import at module level)
-__version__ = "0.7.49"
+__version__ = _version()
 
 
 # ── EmojiRegistry ──────────────────────────────────────────────────────────────
