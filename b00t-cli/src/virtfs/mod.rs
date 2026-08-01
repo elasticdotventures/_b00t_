@@ -3,11 +3,12 @@
 //! top-level directories (skills/, agents/, datums/). Dynamic datum
 //! enumeration is a later phase.
 //!
-//! `tree` (this module's directory-structure logic) is fuser-independent
-//! and always available. The actual `fuser::Filesystem` impl + `b00t mount`
-//! CLI command are NOT yet implemented: this sandbox has no `libfuse3-dev`
-//! (pkg-config can't find fuse3.pc/fuse.pc) and no sudo to install it, so
-//! `fuser`'s build script fails whenever `--features virtfs` is activated —
-//! nothing built against `fuser` here could be verified to compile.
+//! `tree` (directory-structure logic) is fuser-independent and always
+//! available. `fs` (the actual `fuser::Filesystem` impl + mount function)
+//! requires the `virtfs` Cargo feature (needs libfuse3-dev/libfuse-dev at
+//! build time via fuser's build script).
 
 pub mod tree;
+
+#[cfg(feature = "virtfs")]
+pub mod fs;

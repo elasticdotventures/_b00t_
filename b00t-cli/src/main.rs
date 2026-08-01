@@ -386,6 +386,14 @@ The system will:
         #[clap(long, help = "Show capabilities for the specified --agent/--role")]
         capabilities: bool,
     },
+    #[cfg(feature = "virtfs")]
+    #[clap(
+        about = "Mount b00t virtfs at ~/.claude/b00t (Phase 1 skeleton: read-only skills/agents/datums dirs, no dynamic content yet)"
+    )]
+    Mount {
+        #[clap(long, help = "Mount point (default: ~/.claude/b00t)")]
+        mount_point: Option<String>,
+    },
     #[clap(
         name = "k0mmand3r",
         hide = true,
@@ -2317,6 +2325,13 @@ async fn main() {
         }
         Some(Commands::Blessing(blessing_args)) => {
             if let Err(e) = b00t_cli::commands::blessing::handle_blessing(blessing_args) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        #[cfg(feature = "virtfs")]
+        Some(Commands::Mount { mount_point }) => {
+            if let Err(e) = b00t_cli::virtfs::fs::mount(mount_point.clone()) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
