@@ -1,4 +1,4 @@
-//! # b00t-py
+//! # b00t-pyverse
 //!
 //! Python bindings for b00t-cli with native performance using PyO3.
 //!
@@ -8,7 +8,7 @@
 //! # Quick start
 //!
 //! ```python
-//! from b00t_py import EmojiRegistry, check_guards, parse_kmdline
+//! from b00t_pyverse import EmojiRegistry, check_guards, parse_kmdline
 //!
 //! # Emoji lookup — returns literal emoji string
 //! reg = EmojiRegistry()
@@ -38,7 +38,7 @@ use b00t_cli::model_manager::{self, ServeOptions};
 use b00t_cli::{get_expanded_path, mcp_list, mcp_output};
 
 // Python exception for b00t errors
-create_exception!(b00t_py, B00tError, pyo3::exceptions::PyException);
+create_exception!(b00t_pyverse, B00tError, pyo3::exceptions::PyException);
 
 fn to_py_err(prefix: &str, err: anyhow::Error) -> PyErr {
     B00tError::new_err(format!("{}: {}", prefix, err))
@@ -55,7 +55,7 @@ fn to_py_err_serde(prefix: &str, err: serde_json::Error) -> PyErr {
 /// Wraps the compile-time emoji registry for Python.
 ///
 /// ```python
-/// from b00t_py import EmojiRegistry
+/// from b00t_pyverse import EmojiRegistry
 /// reg = EmojiRegistry()
 /// skunk = reg.lookup_shortcode(":skunk:")    # → "🦨"
 /// literal = reg.lookup_literal("🦨")         # → entry dict

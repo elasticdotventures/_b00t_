@@ -223,14 +223,14 @@ defaults = { OPENROUTER_API_BASE = "https://openrouter.ai/api/v1" }
 ### Validation in Python
 
 ```python
-import b00t_py
+import b00t_pyverse
 import os
 
 # Ensure direnv loaded the environment
 assert os.getenv('OPENROUTER_API_KEY'), "Run 'direnv allow' first!"
 
 # Validate via datum system
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 
 if validation["available"]:
     print("✅ OpenRouter environment ready")
@@ -344,14 +344,14 @@ direnv export bash | grep API_KEY
 ### Missing Required Variables
 
 ```python
-import b00t_py
+import b00t_pyverse
 
 # List available providers
-providers = b00t_py.list_ai_providers("~/.dotfiles/_b00t_")
+providers = b00t_pyverse.list_ai_providers("~/.dotfiles/_b00t_")
 print(f"Available: {providers}")
 
 # Check specific provider
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 if not validation["available"]:
     print(f"Missing: {validation['missing_env_vars']}")
 ```
@@ -429,7 +429,7 @@ jobs:
 - `b00t-j0b-py/docs/ENVIRONMENT_SETUP.md` - Complete guide
 - `b00t-j0b-py/.envrc.example` - Template
 - `b00t-j0b-py/.env.example` - API keys template
-- `b00t-py/src/lib.rs` - PyO3 validation functions
+- `b00t-pyverse/src/lib.rs` - PyO3 validation functions
 
 ## Summary
 

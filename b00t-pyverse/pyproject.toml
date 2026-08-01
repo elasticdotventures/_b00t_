@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "b00t-py"
+name = "b00t-pyverse"
 description = "Python bindings for b00t-cli with native performance using PyO3"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -34,7 +34,7 @@ Issues = "https://github.com/elasticdotventures/dotfiles/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "b00t_py._core"
+module-name = "b00t_pyverse._core"
 python-source = "python"
 
 [tool.pytest.ini_options]

@@ -1,5 +1,5 @@
 [package]
-name = "b00t-py"
+name = "b00t-pyverse"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,7 @@ keywords = ["b00t", "python", "bindings", "mcp", "cli"]
 categories = ["api-bindings", "command-line-utilities"]
 
 [lib]
-name = "b00t_py"
+name = "b00t_pyverse"
 crate-type = ["cdylib"]
 
 [dependencies]

@@ -46,8 +46,8 @@ This pattern ensures:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Python code runs                                           │
-│  import b00t_py                                            │
-│  b00t_py.check_provider_env("openrouter")                  │
+│  import b00t_pyverse                                            │
+│  b00t_pyverse.check_provider_env("openrouter")                  │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -216,11 +216,11 @@ print(result.data)
 ### Manual Validation
 
 ```python
-import b00t_py
+import b00t_pyverse
 import os
 
 # Check if provider environment is valid
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 
 if validation["available"]:
     print("✅ OpenRouter environment ready")
@@ -239,7 +239,7 @@ b00t-j0b-py/
 ├── .env.example        # ← Template showing required keys
 └── src/
     └── b00t_j0b_py/
-        └── pydantic_ai_integration.py  # ← Uses b00t_py to validate
+        └── pydantic_ai_integration.py  # ← Uses b00t_pyverse to validate
 
 ~/.dotfiles/_b00t_/
 ├── openrouter.ai.toml       # ← Specifies required env vars
@@ -320,14 +320,14 @@ direnv export bash | grep API_KEY
 ### Missing Required Variables
 
 ```python
-import b00t_py
+import b00t_pyverse
 
 # Check which providers are available
-providers = b00t_py.list_ai_providers("~/.dotfiles/_b00t_")
+providers = b00t_pyverse.list_ai_providers("~/.dotfiles/_b00t_")
 print(f"Available providers: {providers}")
 
 # Check specific provider
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 if not validation["available"]:
     print(f"Missing: {validation['missing_env_vars']}")
 ```
