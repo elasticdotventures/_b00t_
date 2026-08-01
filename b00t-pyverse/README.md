@@ -1,4 +1,4 @@
-# b00t-py
+# b00t-pyverse
 
 Python bindings for b00t-cli with native performance using PyO3.
 
@@ -17,28 +17,24 @@ This package provides high-performance Python bindings for the b00t ecosystem, o
 ## Installation
 
 ```bash
-pip install b00t-py
+pip install b00t-pyverse
 ```
 
 ## Quick Start
 
 ```python
-import b00t
+import b00t_pyverse as b00t
 
-# List MCP servers
-servers = b00t.mcp().list()
-print(servers)
-
-# Get MCP server output
-output = b00t.mcp().servers(["github", "filesystem"]).output()
-print(output)
+# List MCP servers (prints the listing; returns a status string)
+b00t.mcp().list()
 
 # AI provider management
 providers = b00t.ai().list()
+print(providers)
 
 # CLI tool detection
-version = b00t.cli().detect("node")
-print(f"Node.js version: {version}")
+result = b00t.cli().detect("node")
+print(result)
 ```
 
 ## Performance Comparison

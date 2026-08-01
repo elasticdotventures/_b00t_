@@ -66,9 +66,9 @@ def list_available_models():
                 print(f"  ❌ {provider}: missing {missing}")
         except:
             # Provider doesn't have a test model, check directly
-            import b00t_py
+            import b00t_pyverse
             try:
-                status = b00t_py.check_provider_env(provider)
+                status = b00t_pyverse.check_provider_env(provider)
                 if status["available"]:
                     print(f"  ✅ {provider}: ready")
                 else:
@@ -242,13 +242,13 @@ def cost_optimized_workflow():
 if __name__ == "__main__":
     import sys
 
-    # Check if b00t_py is available
+    # Check if b00t_pyverse is available
     try:
-        import b00t_py
-        print(f"✅ b00t_py available (version: {b00t_py.version()})")
+        import b00t_pyverse
+        print(f"✅ b00t_pyverse available (version: {b00t_pyverse.version()})")
     except ImportError:
-        print("❌ b00t_py not available!")
-        print("   Install: cd ../b00t-py && maturin develop")
+        print("❌ b00t_pyverse not available!")
+        print("   Install: cd ../b00t-pyverse && maturin develop")
         sys.exit(1)
 
     print("\n" + "="*60)

@@ -1,4 +1,4 @@
-"""b00t-py: High-performance Python bindings for b00t-cli
+"""b00t-pyverse: High-performance Python bindings for b00t-cli
 
 Provides native Rust performance for b00t ecosystem operations:
   - EmojiRegistry: compile-time emoji lookup (shortcode, g0spell, literal)
@@ -12,7 +12,7 @@ import json
 import importlib
 
 # Lazy-load the native _core module on first access to avoid circular import
-# between b00t_py (the package __init__.py) and b00t_py._core (the native .so).
+# between b00t_pyverse (the package __init__.py) and b00t_pyverse._core (the native .so).
 _core = None
 
 def _get_core():
@@ -20,7 +20,7 @@ def _get_core():
     if _core is not None:
         return _core
     try:
-        _core = importlib.import_module("b00t_py._core")
+        _core = importlib.import_module("b00t_pyverse._core")
     except ImportError:
         _core = None
     return _core
@@ -54,7 +54,7 @@ class EmojiRegistry:
     def __init__(self):
         c = _get_core()
         if c is None:
-            raise B00tError("Native b00t_py module not available")
+            raise B00tError("Native b00t_pyverse module not available")
         self._inner = c.EmojiRegistry()
 
     def lookup_shortcode(self, shortcode: str) -> Optional[str]:
@@ -134,7 +134,7 @@ def check_guards(
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available. Install with: pip install b00t-py")
+        raise B00tError("Native b00t_pyverse module not available. Install with: pip install b00t-pyverse")
     return json.loads(c.check_guards_py(command, guards, context))
 
 
@@ -152,7 +152,7 @@ def guard_check(command: str, guards_json: Optional[str] = None) -> Dict[str, An
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.guard_check(command, guards_json))
 
 
@@ -160,7 +160,7 @@ def guard_violations() -> Dict[str, int]:
     """Get current violation counts for all guard patterns."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.guard_violations())
 
 
@@ -168,7 +168,7 @@ def guard_reset(pattern_key: str) -> str:
     """Reset violation count for a guard pattern."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return c.guard_reset(pattern_key)
 
 
@@ -176,7 +176,7 @@ def guard_coverage() -> str:
     """Run guard coverage scan description."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return c.guard_coverage()
 
 
@@ -190,7 +190,7 @@ def emoji_lookup(key: str) -> Dict[str, Any]:
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.emoji_lookup(key))
 
 
@@ -198,7 +198,7 @@ def emoji_list() -> List[Dict[str, Any]]:
     """List all emoji registry entries."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.emoji_list())
 
 
@@ -217,7 +217,7 @@ def register_stage_guard(stage: str, callback) -> Dict[str, Any]:
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.register_stage_guard_py(stage, callback))
 
 
@@ -236,7 +236,7 @@ def parse_kmdline(input_str: str) -> Dict[str, Any]:
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return c.parse_kmdline(input_str)
 
 
@@ -247,7 +247,7 @@ def parse_k0mmand3r(input_str: str) -> Dict[str, Any]:
     """
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return json.loads(c.parse_k0mmand3r(input_str))
 
 
@@ -257,7 +257,7 @@ def mcp_list(path: str = "~/.dotfiles/_b00t_", json_output: bool = False) -> str
     """List all MCP servers available in the b00t configuration."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return c.mcp_list_py(path, json_output)
 
 
@@ -265,7 +265,7 @@ def mcp_output(servers: str, path: str = "~/.dotfiles/_b00t_", json_format: bool
     """Get MCP server output in specified format."""
     c = _get_core()
     if c is None:
-        raise B00tError("Native b00t_py module not available")
+        raise B00tError("Native b00t_pyverse module not available")
     return c.mcp_output_py(servers, path, json_format)
 
 

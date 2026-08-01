@@ -1839,7 +1839,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "b00t-py"
+name = "b00t-pyverse"
 version = "0.10.2"
 dependencies = [
  "anyhow",

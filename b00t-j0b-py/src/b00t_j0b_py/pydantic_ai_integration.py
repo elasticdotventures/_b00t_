@@ -25,16 +25,16 @@ from pydantic_ai.models import Model, KnownModelName
 import asyncio
 import os
 
-# Try to import b00t_py for datum access
+# Try to import b00t_pyverse (as b00t_py) for datum access
 try:
-    import b00t_py
-    HAS_B00T_PY = True
+    import b00t_pyverse as b00t_py
+    HAS_B00T_PYVERSE = True
 except ImportError:
-    HAS_B00T_PY = False
+    HAS_B00T_PYVERSE = False
     import warnings
     warnings.warn(
-        "b00t_py not available. Datum-based provider discovery disabled. "
-        "Install: cd ../b00t-py && maturin develop"
+        "b00t_pyverse not available. Datum-based provider discovery disabled. "
+        "Install: cd ../b00t-pyverse && maturin develop"
     )
 
 
@@ -71,10 +71,10 @@ def get_model_string_from_datum(model_datum_name: str) -> str:
         ValueError: If datum not found or invalid
         EnvironmentError: If required env vars not set
     """
-    if not HAS_B00T_PY:
+    if not HAS_B00T_PYVERSE:
         raise ImportError(
-            "b00t_py required for datum-based provider discovery. "
-            "Install: cd ../b00t-py && maturin develop"
+            "b00t_pyverse required for datum-based provider discovery. "
+            "Install: cd ../b00t-pyverse && maturin develop"
         )
 
     # Load model datum via Rust
@@ -171,7 +171,7 @@ def list_available_models() -> List[str]:
     Returns:
         List of model names that can be used with create_agent_from_datum()
     """
-    if not HAS_B00T_PY:
+    if not HAS_B00T_PYVERSE:
         return []
 
     try:
@@ -186,7 +186,7 @@ def list_available_providers() -> List[str]:
     Returns:
         List of provider names
     """
-    if not HAS_B00T_PY:
+    if not HAS_B00T_PYVERSE:
         return []
 
     try:
@@ -214,7 +214,7 @@ def select_best_model(
         >>> model = select_best_model(capability="reasoning", prefer_local=False)
         >>> agent = create_agent_from_datum(model)
     """
-    if not HAS_B00T_PY:
+    if not HAS_B00T_PYVERSE:
         return None
 
     models = list_available_models()

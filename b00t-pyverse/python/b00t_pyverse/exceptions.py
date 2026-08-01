@@ -1,5 +1,5 @@
 """
-Exception classes for b00t-py
+Exception classes for b00t-pyverse
 """
 
 class B00tError(Exception):

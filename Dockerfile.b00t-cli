@@ -42,7 +42,7 @@ COPY b00t-l3dg3rr-viz/ ./b00t-l3dg3rr-viz/
 COPY b00t-lib-chat/ ./b00t-lib-chat/
 COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-mcp-npm/ ./b00t-mcp-npm/
-COPY b00t-py/ ./b00t-py/
+COPY b00t-pyverse/ ./b00t-pyverse/
 COPY k0mmand3r/ ./k0mmand3r/
 COPY pm2-tasker/ ./pm2-tasker/
 COPY vendor/irontology-mcp/ ./vendor/irontology-mcp/

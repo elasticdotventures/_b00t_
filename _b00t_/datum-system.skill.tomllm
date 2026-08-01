@@ -165,19 +165,19 @@ hint = "Helps work with the b00t datum system - TOML-based configuration for AI 
 # ### Manual Validation via PyO3
 # 
 # ```python
-# import b00t_py
+# import b00t_pyverse
 # 
 # # Load datum from Rust (DRY - no Python duplication)
-# datum = b00t_py.load_ai_model_datum("qwen-2.5-72b", "~/.dotfiles/_b00t_")
+# datum = b00t_pyverse.load_ai_model_datum("qwen-2.5-72b", "~/.dotfiles/_b00t_")
 # 
 # # Validate environment
-# validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+# validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 # if not validation["available"]:
 #     print(f"Missing: {validation['missing_env_vars']}")
 # 
 # # List available providers and models
-# providers = b00t_py.list_ai_providers("~/.dotfiles/_b00t_")
-# models = b00t_py.list_ai_models("~/.dotfiles/_b00t_")
+# providers = b00t_pyverse.list_ai_providers("~/.dotfiles/_b00t_")
+# models = b00t_pyverse.list_ai_models("~/.dotfiles/_b00t_")
 # ```
 # 
 # ## Workflow
@@ -202,10 +202,10 @@ hint = "Helps work with the b00t datum system - TOML-based configuration for AI 
 # 
 # ```bash
 # # Via Python
-# python3 -c "import b00t_py; print(b00t_py.list_ai_providers('~/.dotfiles/_b00t_'))"
+# python3 -c "import b00t_pyverse; print(b00t_pyverse.list_ai_providers('~/.dotfiles/_b00t_'))"
 # 
 # # Check specific provider
-# python3 -c "import b00t_py; print(b00t_py.check_provider_env('openrouter', '~/.dotfiles/_b00t_'))"
+# python3 -c "import b00t_pyverse; print(b00t_pyverse.check_provider_env('openrouter', '~/.dotfiles/_b00t_'))"
 # ```
 # 
 # ## DRY Philosophy
@@ -225,7 +225,7 @@ hint = "Helps work with the b00t datum system - TOML-based configuration for AI 
 # ## File Locations
 # 
 # - **Datums**: `~/.dotfiles/_b00t_/*.ai.toml` and `~/.dotfiles/_b00t_/*.ai_model.toml`
-# - **PyO3 bindings**: `b00t-py/src/lib.rs` (Rust functions exposed to Python)
+# - **PyO3 bindings**: `b00t-pyverse/src/lib.rs` (Rust functions exposed to Python)
 # - **Python integration**: `b00t-j0b-py/src/b00t_j0b_py/pydantic_ai_integration.py`
 # - **Environment values**: `.env` (gitignored, loaded via direnv)
 # - **Environment template**: `b00t-j0b-py/.env.example`
@@ -288,7 +288,7 @@ hint = "Helps work with the b00t datum system - TOML-based configuration for AI 
 # - `docs/ENVIRONMENT_SETUP.md` - Environment variable pattern
 # - `docs/PYDANTIC_AI_ANALYSIS.md` - Pydantic-AI integration
 # - `b00t-c0re-lib/src/datum_ai_model.rs` - Rust datum implementation
-# - `b00t-py/src/lib.rs` - PyO3 bindings
+# - `b00t-pyverse/src/lib.rs` - PyO3 bindings
 
 # b00t:map v1
 # summary: Helps work with the b00t datum system - TOML-based configuration for AI models, (salvaged from YAML-frontmatter .toml)

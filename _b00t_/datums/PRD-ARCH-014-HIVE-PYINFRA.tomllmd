@@ -22,7 +22,7 @@ tier   = "frontier"
 #     abstraction (deploy_file, inventory, extra_args, data_overrides)
 # (d) Ouroboros CLI — `b00t pyinfra run` mirrors `b00t ansible run`
 # (e) Fleet inventory connector — pyinfra discovers b00t hive nodes via Redis
-# (f) b00t-py wheel → pyinfra operations → b00t-cli on remote hosts
+# (f) b00t-pyverse wheel → pyinfra operations → b00t-cli on remote hosts
 #
 # ANSIBLE EXIT STRATEGY: pyinfra can do everything ansible does for b00t's scope
 # (container management, system state, datum deployment). Ansible remains for
@@ -192,11 +192,11 @@ command = "b00t stack pyinfra --run script <deploy.py> | --run datum <name>"
 [ouroboros]
 description = '''
 The Ouroboros is the self-referential call chain:
-  b00t (Rust) → b00t-py (wheel) → pyinfra (Python) → SSH → b00t-cli (Rust)
+  b00t (Rust) → b00t-pyverse (wheel) → pyinfra (Python) → SSH → b00t-cli (Rust)
 
 This is NOT circular dependency. Each layer owns a distinct responsibility:
   1. b00t (Rust) — knowledge graph, datum store, state management
-  2. b00t-py (PyO3 wheel) — Rust→Python bridge, exposes b00t API to Python
+  2. b00t-pyverse (PyO3 wheel) — Rust→Python bridge, exposes b00t API to Python
   3. pyinfra operations — idempotent fleet operations yielding StringCommands
   4. SSH transport — agentless execution on remote hosts
   5. Remote b00t-cli — local container lifecycle, system state
@@ -222,7 +222,7 @@ $ b00t pyinfra run --datum hive-upgrade
 
 # ─── 8. Pyinfra Operation Modules ────────────────────────────────────────────
 [pyinfra_operations]
-description = "Python operations packaged in b00t-py wheel, importable by pyinfra"
+description = "Python operations packaged in b00t-pyverse wheel, importable by pyinfra"
 package = "b00t.operations"  # ships inside b00t PyPI wheel
 dependencies = ["pyinfra>=3.4"]
 
@@ -321,8 +321,8 @@ phases = [
   "6. _b00t_/pyinfra.cli.toml runtime datum",
   "7. _b00t_/pyinfra.stack.toml stack datum",
   "8. justfile recipes (install, upgrade, run)",
-  "9. b00t-py operations module (Python, in b00t-py/)",
-  "10. b00t-py inventory connector (Python, in b00t-py/)",
+  "9. b00t-pyverse operations module (Python, in b00t-pyverse/)",
+  "10. b00t-pyverse inventory connector (Python, in b00t-pyverse/)",
   "11. Example deploy + inventory Python files (pyinfra/)",
   "12. PRD-ARCH-014 acceptance criteria validation",
 ]
@@ -347,7 +347,7 @@ Mitigation: Ansible playbooks continue working. pyinfra deploys are additive.
 uv_dependency = '''
 Risk: uv not installed on all targets.
 Mitigation: b00t gates on uv (depends_on: ["uv"]). uv is a single binary,
-            installs via curl (no Python required). Already used for b00t-py.
+            installs via curl (no Python required). Already used for b00t-pyverse.
 '''
 pyinfra_version_pin = '''
 Risk: pyinfra 3.x → 4.x breaking changes.

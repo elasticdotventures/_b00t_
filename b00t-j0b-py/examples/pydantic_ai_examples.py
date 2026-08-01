@@ -278,13 +278,13 @@ async def main():
     print("Pydantic-AI + b00t Datum Examples")
     print("=" * 60)
 
-    # Check b00t_py availability
+    # Check b00t_pyverse availability
     try:
-        import b00t_py
-        print(f"\n✅ b00t_py available (version: {b00t_py.version()})")
+        import b00t_pyverse
+        print(f"\n✅ b00t_pyverse available (version: {b00t_pyverse.version()})")
     except ImportError:
-        print("\n❌ b00t_py not available!")
-        print("   Install: cd ../b00t-py && maturin develop")
+        print("\n❌ b00t_pyverse not available!")
+        print("   Install: cd ../b00t-pyverse && maturin develop")
         return
 
     # List available

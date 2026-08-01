@@ -11,17 +11,17 @@ from typing import Dict, List, Optional, Any
 import os
 
 
-# Try to import b00t_py (Rust bindings via PyO3)
+# Try to import b00t_pyverse (Rust bindings via PyO3)
 try:
-    import b00t_py
-    HAS_B00T_PY = True
+    import b00t_pyverse as b00t_py
+    HAS_B00T_PYVERSE = True
 except ImportError:
-    HAS_B00T_PY = False
+    HAS_B00T_PYVERSE = False
     # Fallback warning
     import warnings
     warnings.warn(
-        "b00t_py Rust bindings not available. "
-        "Install with: pip install b00t-py OR cd ../b00t-py && maturin develop"
+        "b00t_pyverse Rust bindings not available. "
+        "Install with: pip install b00t-pyverse OR cd ../b00t-pyverse && maturin develop"
     )
 
 
@@ -41,13 +41,13 @@ class DatumProvider:
             datum_path: Path to b00t datum directory
 
         Raises:
-            ImportError: If b00t_py not available
+            ImportError: If b00t_pyverse not available
             ValueError: If model datum not found or invalid
         """
-        if not HAS_B00T_PY:
+        if not HAS_B00T_PYVERSE:
             raise ImportError(
-                "b00t_py required for datum providers. "
-                "Install: pip install b00t-py"
+                "b00t_pyverse required for datum providers. "
+                "Install: pip install b00t-pyverse"
             )
 
         self.model_name = model_name
@@ -71,8 +71,8 @@ class DatumProvider:
         Returns:
             (is_valid, missing_vars): Tuple of validation status and missing vars
         """
-        if not HAS_B00T_PY:
-            return False, ["b00t_py not available"]
+        if not HAS_B00T_PYVERSE:
+            return False, ["b00t_pyverse not available"]
 
         try:
             # Check provider env vars via Rust
@@ -119,7 +119,7 @@ class DatumProvider:
         Returns:
             List of provider names (e.g., ["openrouter", "anthropic", "ollama"])
         """
-        if not HAS_B00T_PY:
+        if not HAS_B00T_PYVERSE:
             return []
 
         try:
@@ -134,7 +134,7 @@ class DatumProvider:
         Returns:
             List of model names (e.g., ["qwen-2.5-72b", "claude-3-5-sonnet"])
         """
-        if not HAS_B00T_PY:
+        if not HAS_B00T_PYVERSE:
             return []
 
         try:
@@ -161,7 +161,7 @@ class DatumProvider:
         Returns:
             Model name or None if no match
         """
-        if not HAS_B00T_PY:
+        if not HAS_B00T_PYVERSE:
             return None
 
         models = DatumProvider.list_available_models()

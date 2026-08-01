@@ -1,6 +1,6 @@
-"""Tests for b00t-py native Rust bindings.
+"""Tests for b00t-pyverse native Rust bindings.
 
-Run: cd b00t-py && python -m pytest tests/ -v
+Run: cd b00t-pyverse && python -m pytest tests/ -v
 """
 
 import importlib
@@ -11,8 +11,8 @@ import pytest
 # The native extension's actual filename varies by build (Python-version-
 # tagged for a version-specific build, `_core.abi3.so` for an abi3 build) —
 # import by module name rather than hardcoding a filename, exactly like
-# b00t_py/__init__.py's own _get_core() does.
-native = importlib.import_module("b00t_py._core")
+# b00t_pyverse/__init__.py's own _get_core() does.
+native = importlib.import_module("b00t_pyverse._core")
 
 
 class TestGuardCheck:

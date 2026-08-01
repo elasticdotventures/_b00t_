@@ -135,13 +135,13 @@ defaults = { OPENROUTER_API_BASE = "https://openrouter.ai/api/v1" }
 
 **Python Usage:**
 ```python
-import b00t_py
+import b00t_pyverse
 
 # Load datum (uses Rust via PyO3)
-datum = b00t_py.load_ai_model_datum("qwen-2.5-72b", "~/.dotfiles/_b00t_")
+datum = b00t_pyverse.load_ai_model_datum("qwen-2.5-72b", "~/.dotfiles/_b00t_")
 
 # Validate environment
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 ```
 
 ### direnv-pattern
@@ -218,7 +218,7 @@ _b00t_/
 │   └── dry-philosophy/
 │       └── SKILL.md        # DRY principles skill
 ├── b00t-c0re-lib/          # Rust core libraries
-├── b00t-py/                # PyO3 bindings
+├── b00t-pyverse/                # PyO3 bindings
 ├── b00t-j0b-py/            # Python job system
 └── _b00t_/                 # Datum repository
     ├── *.ai.toml           # Provider datums
@@ -251,7 +251,7 @@ cp .env.example .env
 direnv allow
 
 # Validate (skill: datum-system)
-python3 -c "import b00t_py; print(b00t_py.check_provider_env('openrouter', '~/.dotfiles/_b00t_'))"
+python3 -c "import b00t_pyverse; print(b00t_pyverse.check_provider_env('openrouter', '~/.dotfiles/_b00t_'))"
 ```
 
 ### With DRY Philosophy
@@ -263,15 +263,15 @@ import httpx  # ✅ DRY
 
 # Instead of duplicating Rust logic
 # Use PyO3 bindings
-import b00t_py  # ✅ DRY
-datum = b00t_py.load_ai_model_datum("model", "path")
+import b00t_pyverse  # ✅ DRY
+datum = b00t_pyverse.load_ai_model_datum("model", "path")
 ```
 
 ## Requirements
 
 ### System Dependencies
 
-- **Rust**: 1.82+ (for building b00t-py)
+- **Rust**: 1.82+ (for building b00t-pyverse)
 - **Python**: 3.12+
 - **direnv**: Latest version
 - **Git**: For version control
@@ -382,12 +382,12 @@ This follows DRY - no need to reinvent YAML parsing."
 
 ### Datum Loading Fails
 
-**Symptom**: `b00t_py.load_ai_model_datum()` fails
+**Symptom**: `b00t_pyverse.load_ai_model_datum()` fails
 
 **Solution**:
 1. Check datum files exist in `~/.dotfiles/_b00t_/`
 2. Verify TOML syntax: `tomlq . ~/.dotfiles/_b00t_/provider.ai.toml`
-3. Ensure b00t-py is installed: `pip install -e b00t-py/`
+3. Ensure b00t-pyverse is installed: `pip install -e b00t-pyverse/`
 
 ### Environment Variables Not Loading
 

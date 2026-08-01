@@ -9,7 +9,7 @@ members = [
     "b00t-lib-chat",
     "b00t-grok",
     "k0mmand3r",
-    "b00t-py",
+    "b00t-pyverse",
     "b00t-ipc",
     "b00t-azure-cp",
     "blessed",
