@@ -101,6 +101,10 @@ pub struct BatchJobSpec {
 
 fn default_gpu_count() -> u32 { 1 }
 
+fn fmt_cost(cost: Option<f64>) -> String {
+    cost.map(|c| format!("${c:.2}")).unwrap_or_else(|| "-".to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobHandle {
     pub id: String,
@@ -1407,14 +1411,12 @@ async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
         RunpodSubCommands::Status { id } => {
             let pod = client.get_pod(&id, Default::default()).await?;
             let st = pod.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-            let cost = pod.cost_per_hr;
-            println!("pod={id}  status={st}  cost_per_hr=${cost:.2}");
+            println!("pod={id}  status={st}  cost_per_hr={}", fmt_cost(pod.cost_per_hr));
         }
         RunpodSubCommands::List => {
             for p in client.list_pods(Default::default()).await? {
                 let st = p.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-                let cost = p.cost_per_hr;
-                println!("{}  {st}  ${cost:.2}/hr", p.id);
+                println!("{}  {st}  {} /hr", p.id, fmt_cost(p.cost_per_hr));
             }
         }
         RunpodSubCommands::Stop { id, all } => {
