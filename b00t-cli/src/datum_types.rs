@@ -317,7 +317,7 @@ impl DatumType {
         Apt         => ["apt"]                       => ".apt",
         Nix         => ["nix"]                       => ".nix",
         Mcp         => ["mcp"]                       => ".mcp",
-        Cli         => ["cli"]                       => ".cli",
+        Cli         => ["cli", "verifier"]           => ".cli",
         Api         => ["api"]                       => ".api",
         Job         => ["job"]                       => ".job",
         // Ai is the umbrella; model/ai_model tokens map here (reverse dot: name.model.ai.tomllmd)

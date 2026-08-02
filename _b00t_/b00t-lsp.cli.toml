@@ -1,0 +1,33 @@
+[b00t]
+name = "b00t-lsp"
+type = "cli"
+hint = "Language server + --check CI mode for b00t datum dialects (.toml/.tomllm/.tomllmd)"
+auto_install = true
+
+install = '''
+# b00t-lsp is a workspace crate — install from the b00t repo (parent of _b00t_)
+cargo install --path "${B00T_DIR:-$HOME/.b00t}/b00t-lsp" --locked --force
+'''
+
+update = '''
+cargo install --path "${B00T_DIR:-$HOME/.b00t}/b00t-lsp" --locked --force
+'''
+
+version = "b00t-lsp --version"
+version_regex = 'b00t-lsp (\d+\.\d+\.\d+)'
+desires = "latest"
+
+[[b00t.usage]]
+description = "Check a single datum file for errors and warnings"
+command = "b00t-lsp --check _b00t_/z3-verify.cli.toml"
+
+[[b00t.usage]]
+description = "Check the whole _b00t_ tree"
+command = "b00t-lsp --check _b00t_"
+
+# b00t:map v1
+# summary: b00t-lsp — LSP server + --check CI mode for b00t datum dialect validation
+# tags: lsp, datum, validation, ci, check
+# tier: sm0l
+# cmds: b00t-lsp --check _b00t_, b00t-lsp --check _b00t_/z3-verify.cli.toml
+# complexity: 2
