@@ -1,8 +1,13 @@
-name: Build b00t Windows Tray
+name: Package ledgrrr Desktop for Windows
 
 on:
+  pull_request:
+    paths:
+      - 'vendor/ledgrrr/crates/ledgerr-tauri/**'
+      - 'vendor/ledgrrr/crates/ledgerr-host/src/tray/**'
+      - '.github/workflows/build-tauri-windows.yml'
   push:
-    branches: [main, feat/*]
+    branches: [main, feat/*, task/*]
     paths:
       - 'vendor/ledgrrr/crates/ledgerr-tauri/**'
       - 'vendor/ledgrrr/crates/ledgerr-host/src/tray/**'
@@ -10,7 +15,7 @@ on:
   workflow_dispatch:  # manual trigger
 
 jobs:
-  build-windows:
+  package-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,14 +33,20 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           rustup show
 
-      - name: Build ledgerr-tauri (release)
-        run: |
-          cd vendor/ledgrrr
-          cargo build --release -p ledgerr-tauri
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Upload artifact
+      - name: Build MSI and NSIS installers
+        run: |
+          cd vendor/ledgrrr/crates/ledgerr-tauri
+          cargo tauri build --bundles msi,nsis
+
+      - name: Upload Windows installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ledgerr-tauri-windows
-          path: vendor/ledgrrr/target/release/ledgerr-tauri.exe
-          retention-days: 7
+          name: ledgrrr-desktop-windows
+          path: |
+            vendor/ledgrrr/target/release/bundle/msi/*.msi
+            vendor/ledgrrr/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 90

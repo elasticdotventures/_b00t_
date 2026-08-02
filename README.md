@@ -33,6 +33,40 @@ git clone https://github.com/elasticdotventures/_b00t_.git && cd _b00t_ && cargo
 
 ---
 
+## 🪟 Windows desktop and browser extension
+
+**Public Windows distribution is being prepared.** There is currently no published
+`l3dg3rr` Winget package and no Microsoft Edge Add-ons listing for `b00t-browser-ext`.
+Do not use a guessed Winget package identifier or install an extension from an
+untrusted ZIP.
+
+Until release artifacts are published, build the desktop installer locally:
+
+```powershell
+git clone --recurse-submodules https://github.com/elasticdotventures/_b00t_.git
+cd _b00t_/vendor/ledgrrr/crates/ledgerr-tauri
+cargo install tauri-cli --version "^2" --locked
+cargo tauri build --bundles msi,nsis
+# Run the MSI in target/release/bundle/msi/ or the NSIS EXE in target/release/bundle/nsis/
+```
+
+To build the b00t browser extension for local Microsoft Edge testing:
+
+```powershell
+cd _b00t_/b00t-browser-ext
+npm ci
+npm run package
+Expand-Archive build/chrome-mv3-prod.zip build/edge-unpacked
+# In Edge: edge://extensions → enable Developer mode → Load unpacked → build/edge-unpacked
+```
+
+Release artifacts will be available from [GitHub Releases](https://github.com/elasticdotventures/_b00t_/releases).
+The desktop installer will then be submitted to Winget; the extension will be submitted
+to Microsoft Edge Add-ons. These are separate channels: Winget does not install browser
+extensions.
+
+---
+
 ## 🧠 The agent boot sequence
 
 A fresh agent runs four deterministic commands and is operational:
