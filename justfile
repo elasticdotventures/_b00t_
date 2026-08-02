@@ -539,6 +539,18 @@ ra_run:
 test:
     cargo test -- --nocapture
 
+# Verify the compact b00t-mcp surface and communication output contract.
+test-b00t-mcp:
+    cargo test -p b00t-mcp
+
+# Format the b00t-mcp crate through the registered action surface.
+format-b00t-mcp:
+    rustfmt --edition 2024 b00t-mcp/src/chat.rs b00t-mcp/src/mcp_server_rusty.rs b00t-mcp/src/mcp_tools.rs
+
+# Install the already-versioned b00t-mcp after its focused contract passes.
+install-b00t-mcp: test-b00t-mcp
+    cargo install --locked --path b00t-mcp --force
+
 # 🤓 deterministic hive accelerator/soul verification (P1–P3).
 #    Builds the test binary ONCE (--no-run), then runs hive tests directly —
 #    avoids re-linking the full workspace test binary on every invocation.
@@ -1065,7 +1077,3 @@ skill-wrkflw-list:
 #   - Namespaced: `just ledgrrr viz` not `just ledgrrr-viz`
 #   - Vendor owns its own lifecycle; root only adds `mod` line
 # See vendor/ledgrrr/ledgrrr.just header for full documentation.
-
-
-
-
