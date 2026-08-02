@@ -1,5 +1,7 @@
 set shell := ["bash", "-c"]
 
+mod demo
+
 REGISTRY := env_var_or_default("REGISTRY", "ghcr.io/promptexecution")
 IMAGE := env_var_or_default("IMAGE", "pingap-devproxy-b00t")
 TAG := env_var_or_default("TAG", "latest")
@@ -22,3 +24,14 @@ smoke:
     node bin/gen-pingap-config.mjs --help
     test -f templates/pingap.pod.yml.tmpl
 
+demo-up:
+    just demo::up
+
+demo-status:
+    just demo::status
+
+demo-down:
+    just demo::down
+
+demo-run:
+    just demo::up
