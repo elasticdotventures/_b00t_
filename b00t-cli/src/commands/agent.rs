@@ -569,7 +569,16 @@ async fn handle_discover(
     };
 
     let coordinator = AgentCoordinator::new(redis, metadata);
-    let mut agents = coordinator.discover_agents().await?;
+    // Kaizen: a Redis connection failure (broker down/unreachable) must fall
+    // back the same as an empty-but-successful response — otherwise `?` bails
+    // out before the local `_b00t_/*.agent.toml` fallback below ever runs.
+    let mut agents = match coordinator.discover_agents().await {
+        Ok(agents) => agents,
+        Err(e) => {
+            eprintln!("⚠️  Redis unavailable ({e}); using local _b00t_/*.agent.toml");
+            Vec::new()
+        }
+    };
     let from_redis = !agents.is_empty();
 
     // Kaizen: Redis registry empty/unavailable → fall back to locally-defined
@@ -988,9 +997,18 @@ async fn handle_capability(capabilities: &str, description: &str, urgency_str: &
     println!("Requesting agents with capabilities: {}", capabilities);
     println!("Task: {}", description);
 
-    let agents = coordinator
+    // Kaizen: a Redis connection failure must fall back the same as an
+    // empty-but-successful response — see handle_discover() above.
+    let agents = match coordinator
         .request_capability(required_caps.clone(), description, urgency)
-        .await?;
+        .await
+    {
+        Ok(agents) => agents,
+        Err(e) => {
+            eprintln!("⚠️  Redis unavailable ({e}); using local _b00t_/*.agent.toml");
+            Vec::new()
+        }
+    };
 
     if agents.is_empty() {
         // Kaizen: Redis unavailable → fall back to locally-defined agents.
