@@ -38,7 +38,7 @@ fn load_fixtures() -> GrokTestCases {
 
 /// Resolve path to the b00t-cli binary as built by Cargo for this test target.
 fn b00t_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_b00t-cli"))
+    assert_cmd::cargo::cargo_bin("b00t-cli")
 }
 /// Returns a Command pointing at the b00t-cli binary built by Cargo.
 /// Uses `assert_cmd::prelude::CommandCargoExt` so the binary is always available.
