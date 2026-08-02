@@ -24,7 +24,6 @@ members = [
     "b00t-zellij",
     "b00t-admin",
     "b00t-mermaid-wasm",
-    "crates/ufo-types",
     "b00t-ui-wasm",
 ]
 exclude = ["vendor/embed-anything-b00t",
@@ -43,6 +42,12 @@ repository = "https://github.com/elasticdotventures/_b00t_"
 
 [workspace.dependencies]
 diffy = "0.5"
+# ufo-types was extracted out of this monorepo (crates/ufo-types) into its
+# own lightweight standalone repo — see https://github.com/PromptExecution/ufo-types.
+# It has no _b00t_-specific deps; pulling it via a plain crate-scoped git dep
+# avoids consumers of ufo-types (e.g. external repos like app4dog) needing to
+# clone this entire 34-submodule monorepo just to get a ~3k-line types crate.
+ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v0.10.2" }
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
