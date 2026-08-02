@@ -139,6 +139,13 @@ contributes = ["soul-log", "moltis-integration"]
 production_cost_cake = 70
 retrieval_value_cake = 15
 
+[[b00t.map.entry]]
+name = "vendor/pingap-devproxy-b00t"
+kind = "vendor-fork"
+contributes = ["pingap-dev-proxy", "route-codegen", "podman-kube-play", "shadow-cutover-proxy", "json-health-status", "ghcr-gar-image-wrapper"]
+production_cost_cake = 90
+retrieval_value_cake = 35
+
 # ── Recipes ───────────────────────────────────────────────────────────────────
 
 [b00t.skill.recipes."b00tyverse-map::orient"]

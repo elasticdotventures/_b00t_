@@ -1,0 +1,24 @@
+set shell := ["bash", "-c"]
+
+REGISTRY := env_var_or_default("REGISTRY", "ghcr.io/promptexecution")
+IMAGE := env_var_or_default("IMAGE", "pingap-devproxy-b00t")
+TAG := env_var_or_default("TAG", "latest")
+PINGAP_IMAGE := env_var_or_default("PINGAP_IMAGE", "docker.io/vicanso/pingap:latest")
+
+default:
+    @just --list
+
+build:
+    podman build --build-arg PINGAP_IMAGE={{PINGAP_IMAGE}} -f Containerfile -t {{REGISTRY}}/{{IMAGE}}:{{TAG}} .
+
+push-ghcr: build
+    podman push {{REGISTRY}}/{{IMAGE}}:{{TAG}}
+
+push-gar GAR_IMAGE:
+    podman tag {{REGISTRY}}/{{IMAGE}}:{{TAG}} {{GAR_IMAGE}}:{{TAG}}
+    podman push {{GAR_IMAGE}}:{{TAG}}
+
+smoke:
+    node bin/gen-pingap-config.mjs --help
+    test -f templates/pingap.pod.yml.tmpl
+
