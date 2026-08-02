@@ -54,6 +54,7 @@ pub const VALID_TYPE_TOKENS: &[&str] = &[
     "schema",
     "training",
     "vendor",
+    "verifier",
     "ooda",
 ];
 
@@ -76,6 +77,8 @@ pub const KNOWN_CONTENT_TAGS: &[&str] = &[
     "ai_provider",
     "pyinfra",
     "wow",
+    "lfmf",
+    "capability",
 ];
 
 /// Filenames that live in datum directories but are not datums.

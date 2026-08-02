@@ -32,6 +32,8 @@ fn is_known_content_tag(s: &str) -> bool {
             | "ai_provider"
             | "pyinfra"
             | "wow"
+            | "lfmf"
+            | "capability"
     )
 }
 
