@@ -209,3 +209,10 @@ notes (e.g. workflow-tool experiments) live in that project's own datums —
 check the current repo's `_b00t_/` and `SOUL.tomllm` before adding ML/workflow
 code, not this file. `b00t lfmf mvp` holds the durable, repo-agnostic version
 of this lesson.
+
+## Just Recipe Boundary (recorded 2026-07-25)
+
+Before editing a justfile, agents MUST run `b00t learn just`.
+Just recipes MUST remain thin command surfaces. Move stateful shell logic, request
+generation, heredocs, and provider orchestration into descriptively named scripts;
+the recipe invokes the script and exposes its contract.

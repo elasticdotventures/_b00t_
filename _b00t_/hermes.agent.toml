@@ -1,0 +1,61 @@
+# b00t Agent Datum — hermes as first-class hive sub-agent
+# 🤓 hermes v0.11.0 (~/.local/bin/hermes): MCP client (`hermes mcp add`),
+#    MCP server (`hermes mcp serve`, stdio), ACP agent (`hermes acp`),
+#    and messaging gateway. This datum registers the AGENT identity;
+#    the MCP server surface lives in hermes.mcp.toml.
+
+[b00t]
+name = "hermes"
+type = "agent"
+hint = "hermes agent — MCP client/server + ACP + messaging gateway; one-shot via `hermes -z`"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "hermes-001"
+# 🤓 hermes routes models itself — set via 'hermes model' or -m/--provider
+skills = ["chat", "tools", "mcp", "gateway"]
+role = "specialist"
+
+[b00t.agent.ipc]
+# 🤓 hermes MCP server is stdio-transport only (no port flags) — see hermes.mcp.toml
+protocol = "mcp+stdio"
+
+[b00t.agent.executor]
+# 🤓 -z is hermes' one-shot prompt flag (non-interactive single exchange)
+cli_path = "hermes"
+cli_args = ["-z"]
+max_iterations = 10
+
+# ── NO [b00t.hive.service] section — deliberate ──────────────────────────────
+# 🤓 KNOWN CONSTRAINT: the b00t@ systemd template resolves profiles ONLY from
+#    *.hive.toml*/*.stack.toml* files. Inline [b00t.hive.service] blocks inside
+#    *.agent.toml datums are never found:
+#      Error: profile 'opencode-agent' not found (tried .hive.tomllmd,
+#      .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml)
+#    Service management for hermes waits on the upstream fix
+#    (elasticdotventures/_b00t_ issue: b00t@ template vs inline agent service specs).
+
+[b00t.env]
+AGENT_ID = "hermes"
+
+[b00t.kv]
+"decision.adopted" = "hermes-agent-datum"
+"decision.adopted.source" = "operator-2026-07-25"
+"decision.adopted.context" = "operator directed: each agent gets its own datum; datum kv meta-properties are the canonical per-datum decision register (CMDB); git history is the audit trail"
+
+[[b00t.usage]]
+description = "One-shot prompt via hermes CLI"
+command = "hermes -z 'your task here'"
+
+[[b00t.usage]]
+description = "Run hermes as an ACP agent"
+command = "hermes acp"
+
+# b00t:map v1
+# summary: hermes agent — MCP client/server + ACP + messaging gateway; stdio MCP surface; one-shot via -z
+# tags: hermes, agent, mcp, acp, gateway, stdio, specialist
+# tier: ch0nky
+# cmds: hermes -z, hermes acp, hermes mcp serve
+# complexity: 4
