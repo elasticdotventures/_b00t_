@@ -12,7 +12,7 @@ IMAGE := env_var_or_default("PINGAP_DEMO_IMAGE", "localhost/pingap-devproxy-b00t
 
 default: up
 
-up: write-files build generate start-backend deploy status
+up: write-files build generate start-backend deploy check
 
 write-files:
     #!/usr/bin/env bash
@@ -88,13 +88,36 @@ deploy:
         PINGAP_SHADOW_HTTP_PORT="$HTTP_PORT" \
         "$COMPONENT_DIR/bin/pingap-kube-play.sh" --shadow
 
-status:
+check:
     @env PINGAP_PROJECT_ROOT="$DEMO_ROOT" \
         PINGAP_POD_NAME="$POD_NAME" \
         PINGAP_IMAGE="$IMAGE" \
         PINGAP_SHADOW_HTTPS_PORT="$HTTPS_PORT" \
         PINGAP_SHADOW_HTTP_PORT="$HTTP_PORT" \
         "$COMPONENT_DIR/bin/pingap-kube-play.sh" --status --json
+
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if env PINGAP_PROJECT_ROOT="$DEMO_ROOT" \
+        PINGAP_POD_NAME="$POD_NAME" \
+        PINGAP_IMAGE="$IMAGE" \
+        PINGAP_SHADOW_HTTPS_PORT="$HTTPS_PORT" \
+        PINGAP_SHADOW_HTTP_PORT="$HTTP_PORT" \
+        "$COMPONENT_DIR/bin/pingap-kube-play.sh" --status --json; then
+        exit 0
+    fi
+
+    cat >&2 <<'EOF'
+
+    Demo status is unhealthy or not initialized.
+
+    Run:
+      just demo::up
+
+    For teardown:
+      just demo::down
+    EOF
 
 down:
     #!/usr/bin/env bash

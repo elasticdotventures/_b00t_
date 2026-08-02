@@ -30,6 +30,9 @@ demo-up:
 demo-status:
     just demo::status
 
+demo-check:
+    just demo::check
+
 demo-down:
     just demo::down
 
