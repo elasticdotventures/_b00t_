@@ -166,7 +166,7 @@ impl RedisComms {
                     live agent-coordination features (message/delegate/vote), \
                     start a local Redis, e.g.: \
                     `podman run -d --name redis -p 6379:6379 redis:7-alpine`. \
-                    `b00t agent discover`/`agent capability` work fine without \
+                    `b00t agent discover`/`agent capability`/`agent workers` work fine without \
                     Redis — they fall back to local _b00t_/*.agent.toml.",
                 );
             }
