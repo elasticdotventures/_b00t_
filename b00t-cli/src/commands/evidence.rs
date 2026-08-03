@@ -148,15 +148,23 @@ pub fn prove_skill(skill: &str) -> Result<Vec<EvidenceRecord>> {
 
 /// Record that `skill` satisfies `constraint` with AL-1.0 influence attribution.
 /// Generates influence receipt in store, attaches receipt key to evidence record.
+///
 /// `agent_id` (if given) is stamped onto the record for `b00t influence log --agent`
 /// and `b00t influence stats` top-agent aggregation (#691).
+///
+/// `credential_subject_check`: optional credential provider name (see
+/// `b00t_c0re_lib::store::put_influence`). Pass `None` for the prior,
+/// unchecked behavior; pass `Some(provider)` to require that provider's
+/// credential datum be scoped to `skill` and not expired.
 pub fn record_satisfies_with_influence(
     skill: &str,
     constraint: &str,
     scored_sources: &[(String, f64)],
     agent_id: Option<&str>,
+    credential_subject_check: Option<&str>,
 ) -> Result<()> {
-    let receipt = b00t_c0re_lib::store::put_influence(skill, scored_sources)?;
+    let receipt =
+        b00t_c0re_lib::store::put_influence(skill, scored_sources, credential_subject_check)?;
     let weights: Vec<InfluenceWeight> = receipt
         .sources
         .iter()
@@ -351,7 +359,7 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
         } => {
             if let Some(spec) = influence {
                 let scored_sources = parse_influence_arg(spec)?;
-                record_satisfies_with_influence(skill, constraint, &scored_sources, agent_id.as_deref())?;
+                record_satisfies_with_influence(skill, constraint, &scored_sources, agent_id.as_deref(), None)?;
             } else {
                 let mut rec = EvidenceRecord::satisfies(skill, constraint);
                 rec.agent_id = agent_id.clone();
@@ -540,6 +548,7 @@ mod tests {
                 "requires:role:backend",
                 &[("source-a".to_string(), 3.0), ("source-b".to_string(), 1.0)],
                 Some("agent-1"),
+                None,
             )
             .unwrap();
 

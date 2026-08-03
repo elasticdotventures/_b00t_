@@ -191,11 +191,29 @@ pub struct InfluenceSource {
 pub struct InfluenceReceipt {
     pub subject: String,
     pub sources: Vec<InfluenceSource>,
+    /// 🤓 Provider name checked via `datum_credential::validate_subject_not_expired`,
+    ///    when the caller opted into credential-scoped attribution. `None` when no
+    ///    check was requested (backward-compatible default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_subject_check: Option<String>,
 }
 
 /// 🤓 Minimal AL-1.0 attribution: normalises raw scores into ratios summing to 1.0.
 ///    Does not persist — callers (e.g. evidence records) attach the receipt directly.
-pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+///
+///    `credential_subject_check`: optional credential provider name. When set, the
+///    credential datum for that provider must have `subject == subject` and not be
+///    expired (see `datum_credential::validate_subject_not_expired`), or this errors.
+///    `None` skips the check entirely (default, backward-compatible).
+pub fn put_influence(
+    subject: &str,
+    scored_sources: &[(String, f64)],
+    credential_subject_check: Option<&str>,
+) -> Result<InfluenceReceipt> {
+    if let Some(provider) = credential_subject_check {
+        crate::datum_credential::validate_subject_not_expired(provider, subject)?;
+    }
+
     let total: f64 = scored_sources.iter().map(|(_, score)| score).sum();
     let sources = scored_sources
         .iter()
@@ -208,6 +226,7 @@ pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<
     Ok(InfluenceReceipt {
         subject: subject.to_string(),
         sources,
+        credential_subject_check: credential_subject_check.map(|s| s.to_string()),
     })
 }
 
@@ -468,6 +487,33 @@ mod tests {
 
         let query = query(&tags).expect("query");
         assert!(!query.is_empty());
+    }
+
+    #[test]
+    fn test_put_influence_credential_check_missing_provider_errors() {
+        // No credential datum exists for "nonexistent-provider" — the check
+        // must fail closed rather than silently skipping attribution.
+        let scored = vec![("source-a".to_string(), 1.0)];
+        let result = put_influence("subject-x", &scored, Some("nonexistent-provider"));
+        assert!(
+            result.is_err(),
+            "expected Err when credential_subject_check provider has no credential datum"
+        );
+    }
+
+    #[test]
+    fn test_put_influence_no_credential_check_is_unchanged() {
+        // Regression guard: passing None must preserve prior (pre-#715) behavior.
+        let scored = vec![
+            ("source-a".to_string(), 3.0),
+            ("source-b".to_string(), 1.0),
+        ];
+        let receipt = put_influence("subject-y", &scored, None).expect("put_influence");
+        assert_eq!(receipt.subject, "subject-y");
+        assert_eq!(receipt.sources.len(), 2);
+        assert!(receipt.credential_subject_check.is_none());
+        let source_a = receipt.sources.iter().find(|s| s.source_key == "source-a").unwrap();
+        assert!((source_a.ratio - 0.75).abs() < 1e-9);
     }
 }
 
