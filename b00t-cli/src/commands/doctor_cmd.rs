@@ -12,6 +12,7 @@
 
 use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
 use anyhow::{Context, Result};
+use b00t_c0re_lib::redis::{RedisComms, RedisConfig};
 use clap::Parser;
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -55,6 +56,29 @@ fn check_version(name: &str) -> Value {
     } else { "not found".into() }})
 }
 
+/// Probe the optional Redis-backed agent registry (issue #83). Reuses
+/// `RedisComms::is_available()` rather than shelling out to `redis-cli` so
+/// this exercises the same connection path `agent discover`/`agent
+/// capability` use. Always `pass: true` — Redis is an optional accelerant
+/// for live multi-host discovery, not a hard dependency; both commands fall
+/// back to local `_b00t_/*.agent.toml` when it's unreachable.
+fn check_redis_agent_registry() -> Value {
+    let start = Instant::now();
+    let reachable = RedisComms::new(RedisConfig::default(), "doctor-probe".into())
+        .map(|c| c.is_available())
+        .unwrap_or(false);
+    json!({
+        "id": "redis-agent-registry",
+        "pass": true,
+        "detail": if reachable {
+            "reachable — live multi-host agent discovery available"
+        } else {
+            "unreachable — optional, accelerates live multi-host agent discovery; falls back to local `_b00t_/*.agent.toml` when unavailable"
+        },
+        "latency_ms": start.elapsed().as_millis(),
+    })
+}
+
 fn all_deps() -> Vec<Value> {
     vec![
         check_version("b00t-cli"),
@@ -74,6 +98,7 @@ fn all_deps() -> Vec<Value> {
         // Special checks with auth/daemon info
         json!({"id": "gh-auth", "check": "gh auth status 2>&1 | grep -q 'Logged in' && echo yes || echo no"}),
         json!({"id": "docker-daemon", "check": "docker info --format '{{.ServerVersion}}' 2>/dev/null"}),
+        check_redis_agent_registry(),
         // Filesystem
         json!({"id": "b00t-repo", "check": "test -d $HOME/.b00t/.git && cd $HOME/.b00t && git log --oneline -1 2>/dev/null"}),
         json!({"id": "soul-db", "check": "test -f $HOME/._b00t_/soul.db && ls -la $HOME/._b00t_/soul.db || echo missing"}),

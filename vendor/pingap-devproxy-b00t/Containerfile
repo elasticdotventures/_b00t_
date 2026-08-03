@@ -1,0 +1,8 @@
+ARG PINGAP_IMAGE=docker.io/vicanso/pingap:latest
+FROM ${PINGAP_IMAGE}
+
+LABEL org.opencontainers.image.title="pingap-devproxy-b00t"
+LABEL org.opencontainers.image.description="Pinned Pingap/Pingora runtime for b00t generated dev-proxy configs"
+LABEL org.opencontainers.image.source="https://github.com/PromptExecution/b00t"
+LABEL org.opencontainers.image.vendor="PromptExecution"
+LABEL org.opencontainers.image.licenses="Apache-2.0"

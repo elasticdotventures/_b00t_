@@ -1,0 +1,64 @@
+# b00t vendor datum — canonical Pingap dev proxy wrapper
+
+[b00t]
+name = "VENDOR-PINGAP-DEVPROXY-B00T"
+type = "vendor"
+hint = "pingap-devproxy-b00t — shared Pingap/Pingora dev reverse-proxy scaffold with route codegen, podman kube play templates, shadow/cutover modes, and JSON status."
+keywords = ["vendor", "pingap", "pingora", "proxy", "podman", "kube-play", "ghcr", "gar", "devproxy"]
+clone_path = "vendor/pingap-devproxy-b00t"
+url = "https://github.com/PromptExecution/pingap-devproxy-b00t"
+oci_uri = "ghcr.io/promptexecution/pingap-devproxy-b00t:latest"
+desires = "latest"
+depends_on = ["podman.cli", "node.cli", "just.cli"]
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/pingap-devproxy-b00t"
+upstream = "https://github.com/PromptExecution/pingap-devproxy-b00t.git"
+branch = "main"
+build_command = "just -f vendor/pingap-devproxy-b00t/justfile smoke"
+install_command = "test -d vendor/pingap-devproxy-b00t"
+health_check = "test -f vendor/pingap-devproxy-b00t/justfile && just -f vendor/pingap-devproxy-b00t/justfile --list"
+required_tools = ["podman", "just", "node", "envsubst", "curl"]
+
+[b00t.maintenance]
+update_frequency = "weekly"
+review_required = true
+
+[b00t.services.action_runner]
+local = "wrkflw"
+remote = "github-actions"
+
+[resource]
+upstream_image = "docker.io/vicanso/pingap:latest"
+wrapper_image_ghcr = "ghcr.io/promptexecution/pingap-devproxy-b00t"
+wrapper_image_gar_pattern = "australia-southeast2-docker.pkg.dev/<project>/<repo>/pingap-devproxy-b00t"
+license = "Apache-2.0 wrapper metadata; Pingap upstream license applies to runtime image"
+
+[resource.contract]
+route_source = "consuming repo _b00t_/k8s/pingap/services.mjs"
+generated_config = "locations.toml, upstreams.toml, certificates.toml, plugins.toml, servers.toml"
+lifecycle = "bin/pingap-kube-play.sh [--shadow|--cutover|--down|--status [--json]|--cutover-dryrun]"
+template = "templates/pingap.pod.yml.tmpl"
+
+[[resource.usage]]
+description = "Generate Pingap TOML for a consuming project."
+command = "PINGAP_PROJECT_ROOT=$PWD ~/.b00t/vendor/pingap-devproxy-b00t/bin/gen-pingap-config.mjs"
+
+[[resource.usage]]
+description = "Deploy consuming project in shadow mode."
+command = "PINGAP_PROJECT_ROOT=$PWD PINGAP_POD_NAME=my-pingap ~/.b00t/vendor/pingap-devproxy-b00t/bin/pingap-kube-play.sh --shadow"
+
+[[resource.usage]]
+description = "Build the wrapper image for GHCR."
+command = "cd ~/.b00t/vendor/pingap-devproxy-b00t && just build"
+
+# b00t:map v1
+# summary: Vendor component for Pingap dev proxies — generated config, kube-play lifecycle, GHCR/GAR wrapper image
+# tags: vendor, pingap, pingora, proxy, podman, kube-play, ghcr, gar, devproxy
+# tier: ch0nky
+# cmds: just build, bin/gen-pingap-config.mjs, bin/pingap-kube-play.sh --status --json
+# complexity: 5

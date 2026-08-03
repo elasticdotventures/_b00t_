@@ -156,6 +156,19 @@ impl RedisComms {
             if let Some(hint) = sandbox_root_cause_hint("Redis TCP connectivity") {
                 message.push(' ');
                 message.push_str(&hint);
+            } else {
+                // Generic remediation for the common "Redis just isn't running
+                // locally" case (issue #83). Redis is optional for agent
+                // discovery — after that fix it's only needed for the live
+                // coordination paths (message/delegate/vote/etc).
+                message.push_str(
+                    " Redis does not appear to be reachable. If you need the \
+                    live agent-coordination features (message/delegate/vote), \
+                    start a local Redis, e.g.: \
+                    `podman run -d --name redis -p 6379:6379 redis:7-alpine`. \
+                    `b00t agent discover`/`agent capability`/`agent workers` work fine without \
+                    Redis — they fall back to local _b00t_/*.agent.toml.",
+                );
             }
             message
         })?;
