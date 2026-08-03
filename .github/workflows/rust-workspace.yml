@@ -44,6 +44,9 @@ jobs:
       - name: Install z3 (required by b00t-c0re-lib::z3_examples tests)
         run: sudo apt-get update && sudo apt-get install -y z3
 
+      - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
+        uses: extractions/setup-just@v2
+
       - name: Prepare ts-rs export target dir
         # b00t-c0re-lib/src/b00t_config.rs hardcodes #[ts(export_to = "/home/brianh/...")]
         # (absolute path to the maintainer's local sibling dashboard checkout). ts-rs
