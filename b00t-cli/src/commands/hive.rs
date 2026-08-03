@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use crate::hive::{
     GuardContext, GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards,
-    discover_profiles, hive_stacks_status, load_profile,
+    crossref_datum_status, discover_profiles, hive_stacks_status, load_profile,
 };
 
 /// Detect + record hardware drift between the live snapshot and soul `node.*` (P3).
@@ -73,13 +73,18 @@ fn record_hardware_drift(snapshot: &SystemSnapshot) -> Option<String> {
 pub enum HiveCommands {
     #[clap(
         about = "Show system resource state and active hive profile",
-        long_about = "Reads RAM, GPU, CPU, running services and active profile.\n\nExamples:\n  b00t hive status\n  b00t hive status --json\n  b00t hive status --guards"
+        long_about = "Reads RAM, GPU, CPU, running services and active profile.\n\nExamples:\n  b00t hive status\n  b00t hive status --json\n  b00t hive status --guards\n  b00t hive status --datum-crossref"
     )]
     Status {
         #[clap(long, help = "Output as JSON")]
         json: bool,
         #[clap(long, help = "Include active guards in output")]
         guards: bool,
+        #[clap(
+            long,
+            help = "Cross-reference each hive profile's depends_on datums against BootDatum.status"
+        )]
+        datum_crossref: bool,
     },
 
     #[clap(
@@ -201,15 +206,40 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
     let datum_dir = PathBuf::from(shellexpand::tilde(path).to_string());
 
     match cmd {
-        HiveCommands::Status { json, guards } => {
-            let (json, guards) = (*json, *guards);
+        HiveCommands::Status {
+            json,
+            guards,
+            datum_crossref,
+        } => {
+            let (json, guards, datum_crossref) = (*json, *guards, *datum_crossref);
             let snapshot = SystemSnapshot::capture()?;
             // 🤓 P3: detect hardware drift vs soul — emits hw_drift event +
             //    refreshes node.* regardless of output mode (deterministic).
             let drift = record_hardware_drift(&snapshot);
 
+            let crossref_results = if datum_crossref {
+                let b00t_path = datum_dir.to_string_lossy().to_string();
+                Some(
+                    discover_profiles(&datum_dir)
+                        .iter()
+                        .filter_map(|(_, path)| HiveProfile::from_file(path).ok())
+                        .map(|p| crossref_datum_status(&p, &b00t_path))
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                None
+            };
+
             if json {
-                println!("{}", serde_json::to_string_pretty(&snapshot)?);
+                if let Some(results) = &crossref_results {
+                    let mut snapshot_json = serde_json::to_value(&snapshot)?;
+                    if let serde_json::Value::Object(ref mut map) = snapshot_json {
+                        map.insert("datum_crossref".to_string(), serde_json::to_value(results)?);
+                    }
+                    println!("{}", serde_json::to_string_pretty(&snapshot_json)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&snapshot)?);
+                }
                 return Ok(());
             }
 
@@ -293,6 +323,37 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                         g.action,
                         g.pattern,
                         g.message.as_deref().unwrap_or("")
+                    );
+                }
+            }
+
+            if let Some(results) = &crossref_results {
+                println!();
+                println!("  Datum crossref:");
+                for r in results {
+                    let label = if r.healthy { "healthy" } else { "degraded" };
+                    println!("    [{}] {}", label, r.profile);
+                    for reason in &r.reasons {
+                        println!("      - {}", reason);
+                    }
+                }
+
+                let healthy_count = results.iter().filter(|r| r.healthy).count();
+                let degraded: Vec<String> = results
+                    .iter()
+                    .filter(|r| !r.healthy)
+                    .map(|r| format!("{}: {}", r.profile, r.reasons.join(", ")))
+                    .collect();
+
+                println!();
+                if degraded.is_empty() {
+                    println!("  {} profiles healthy, 0 degraded", healthy_count);
+                } else {
+                    println!(
+                        "  {} profiles healthy, {} degraded ({})",
+                        healthy_count,
+                        degraded.len(),
+                        degraded.join("; ")
                     );
                 }
             }
