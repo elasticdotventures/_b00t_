@@ -32,7 +32,9 @@ if [ -z "$(docker ps -q -s -f name=squid)" ] ; then
     sameersbn/squid:3.5.27-2
 fi
 
-./test/bats/bin/bats test/test.bats
+# 🦨 #935: was ./test/bats/bin/bats test/test.bats — that resolved against a
+# root-level test/ dir with no registered submodule; point at the real one.
+./_b00t_/test/bats/bin/bats _b00t_/test/test.bats
 
 @test "can run our script" {
     ./project.sh
