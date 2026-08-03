@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use ufo_types::{Stereotyped, UfoStereotype};
 
 use crate::{
     ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig, K0mmand3rDatumConfig,
@@ -311,6 +312,19 @@ impl BootDatum {
     }
 }
 
+impl Stereotyped for BootDatum {
+    /// Delegates to `DatumType`'s lattice (#925) — this impl declares no
+    /// mapping of its own. Missing/unrecognized type degrades to
+    /// `Kind("Unknown")` — never panics, per Postel's Law (CLAUDE.md:
+    /// "be liberal in what you accept"). BootDatum is an open struct; the
+    /// stereotype is derived from the *declared* type, never field presence.
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        self.datum_type
+            .map(|dt| dt.ufo_stereotype())
+            .unwrap_or_else(|| UfoStereotype::Kind("Unknown".into()))
+    }
+}
+
 /// Scans `dir` (non-recursive) for datum files and loads them into a
 /// `{name}.{type_prefix}` -> `BootDatum` map. The single shared
 /// implementation of the scan itself for `install`/`uninstall`/`stack`/
@@ -479,5 +493,36 @@ mod load_all_datums_tests {
         let path = temp_dir.path().to_str().unwrap();
         let datums = load_all_datums(path).unwrap();
         assert_eq!(datums.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod stereotype_tests {
+    use super::*;
+
+    #[test]
+    fn stereotype_degrades_to_unknown_for_untyped_datum() {
+        let d = BootDatum {
+            name: "synthetic".into(),
+            datum_type: None,
+            ..Default::default()
+        };
+        assert_eq!(d.ufo_stereotype(), UfoStereotype::Kind("Unknown".into()));
+    }
+
+    #[test]
+    fn stereotype_delegates_to_datum_type() {
+        let d = BootDatum {
+            name: "x".into(),
+            datum_type: Some(DatumType::Docker),
+            ..Default::default()
+        };
+        assert_eq!(
+            d.ufo_stereotype(),
+            UfoStereotype::SubKind {
+                name: "Docker".into(),
+                parent: "ContainerRuntime".into()
+            }
+        );
     }
 }
