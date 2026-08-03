@@ -2890,6 +2890,13 @@ async fn main() {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }
+            // `lfmf status <tool>` — cross-reference lesson-store health
+            // (fail/skip counts, error rate, latest failure) for one tool.
+            } else if tool == "status" {
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_status(&lesson) {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             } else if let Err(e) =
                 b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
             {

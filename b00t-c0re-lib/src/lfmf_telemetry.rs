@@ -185,6 +185,66 @@ pub fn read_stats(path: &Path, tool_filter: Option<&str>) -> LfmfStats {
     }
 }
 
+/// Per-tool lesson-store health snapshot -- the cross-reference signal a gate
+/// or `lfmf status <tool>` needs: how often this tool's lfmf invocations
+/// failed outright vs. came back empty, and how recently a failure landed.
+/// Unlike `LfmfStats` (repo-wide, optionally tool-filtered aggregate),
+/// `LfmfHealth` is always scoped to exactly one tool.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LfmfHealth {
+    pub tool: String,
+    pub fail_count: usize,
+    pub skip_count: usize,
+    pub total: usize,
+    pub error_rate: f64,
+    pub latest_failure: Option<DateTime<Utc>>,
+}
+
+/// Aggregate telemetry for a single `tool`. `fail_count` counts
+/// `LfmfOutcome::Error` (write/read attempts that errored outright);
+/// `skip_count` counts `LfmfOutcome::NoResults` (advice queries that came
+/// back empty -- the lesson store had nothing to cross-reference against).
+/// `Salvaged`/`Ok` events count toward `total` but neither bucket.
+/// Unparseable lines are skipped, matching `compute_stats`.
+pub fn compute_health(jsonl: &str, tool: &str) -> LfmfHealth {
+    let mut health = LfmfHealth {
+        tool: tool.to_string(),
+        fail_count: 0,
+        skip_count: 0,
+        total: 0,
+        error_rate: 0.0,
+        latest_failure: None,
+    };
+    for line in jsonl.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(event) = serde_json::from_str::<LfmfTelemetryEvent>(line) else {
+            continue;
+        };
+        if event.tool != tool {
+            continue;
+        }
+        health.total += 1;
+        match event.outcome {
+            LfmfOutcome::Error => {
+                health.fail_count += 1;
+                health.latest_failure = Some(match health.latest_failure {
+                    Some(prev) if prev >= event.ts => prev,
+                    _ => event.ts,
+                });
+            }
+            LfmfOutcome::NoResults => health.skip_count += 1,
+            LfmfOutcome::Ok | LfmfOutcome::Salvaged => {}
+        }
+    }
+    if health.total > 0 {
+        health.error_rate = health.fail_count as f64 / health.total as f64;
+    }
+    health
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +295,64 @@ mod tests {
         let stats = read_stats(Path::new("/nonexistent/lfmf-telemetry.jsonl"), None);
         assert_eq!(stats.total, 0);
         assert_eq!(stats.miss_rate(), 0.0);
+    }
+
+    #[test]
+    fn compute_health_counts_failures_for_tool() {
+        let jsonl = [
+            serde_json::to_string(&event(LfmfAction::Record, "just", LfmfOutcome::Error, Some("timeout"))).unwrap(),
+            serde_json::to_string(&event(LfmfAction::Record, "just", LfmfOutcome::Error, Some("timeout"))).unwrap(),
+            serde_json::to_string(&event(LfmfAction::Record, "just", LfmfOutcome::Ok, None)).unwrap(),
+        ]
+        .join("\n");
+
+        let health = compute_health(&jsonl, "just");
+        assert_eq!(health.tool, "just");
+        assert_eq!(health.total, 3);
+        assert_eq!(health.fail_count, 2);
+        assert_eq!(health.skip_count, 0);
+        assert!((health.error_rate - (2.0 / 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn compute_health_latest_failure_is_max_error_ts() {
+        let older = Utc::now() - chrono::Duration::minutes(10);
+        let newer = Utc::now() - chrono::Duration::minutes(1);
+        let earlier_error = LfmfTelemetryEvent {
+            ts: older,
+            action: LfmfAction::Record,
+            tool: "just".to_string(),
+            outcome: LfmfOutcome::Error,
+            detail: None,
+        };
+        let later_error = LfmfTelemetryEvent {
+            ts: newer,
+            action: LfmfAction::Record,
+            tool: "just".to_string(),
+            outcome: LfmfOutcome::Error,
+            detail: None,
+        };
+        // Deliberately appended out of chronological order to prove we take
+        // the max ts, not merely the last Error line seen.
+        let jsonl = [
+            serde_json::to_string(&later_error).unwrap(),
+            serde_json::to_string(&earlier_error).unwrap(),
+        ]
+        .join("\n");
+
+        let health = compute_health(&jsonl, "just");
+        assert_eq!(health.fail_count, 2);
+        assert_eq!(health.latest_failure, Some(newer));
+    }
+
+    #[test]
+    fn compute_health_zero_events_is_all_zero() {
+        let health = compute_health("", "ghost-tool");
+        assert_eq!(health.tool, "ghost-tool");
+        assert_eq!(health.fail_count, 0);
+        assert_eq!(health.skip_count, 0);
+        assert_eq!(health.total, 0);
+        assert_eq!(health.error_rate, 0.0);
+        assert_eq!(health.latest_failure, None);
     }
 }
