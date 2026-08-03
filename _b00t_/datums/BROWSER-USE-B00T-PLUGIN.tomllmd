@@ -113,6 +113,7 @@ stage_6_audit = "Persist action log + before/after snapshot hashes as ledgerr ev
 [install_deploy_plan]
 local_dev = "b00t-rpa plugin copies _b00t_/browser-plugin into a Chrome user-data-dir and launches Chrome with --load-extension."
 wsl_bridge = "Prefer netsh portproxy or embedded Rust TCP forwarder over the current Python relay; keep socat recipe for operator debugging."
+operator_display = "For the visible/headed Linux browser case (not the Windows-Chrome CDP relay above) — the operator no longer X11-forwards the window over SSH. See xpra-rpa.hive.toml + xpra.cli.toml: just rpa-xpra-start wraps the headed browser in an Xpra seamless session; operator attaches via zero-install HTML5 tab (just rpa-xpra-attach-html5) or native xpra client (just rpa-xpra-attach-native)."
 managed_extension = "Package b00t-browser-ext separately when enterprise policy or Chrome Web Store deployment is required."
 ci_smoke = "Headless Playwright test opens a fixture page, injects content.js, verifies data-b00t attributes, captures a snapshot, and validates JSON schema."
 mcp_surface = "Expose snapshot, act, verify, and extract as MCP tools after the snapshot contract is stable."

@@ -71,7 +71,7 @@ grok-e2e: grok-e2e-unit
 
 # l3dg3rr docgen proxy — query knowledge graph, emit .tomllm / rustdoc
 # 🌐 Docgen UI server: cd vendor/... && ./build/c/codebase-memory-mcp --ui=true --port=9749
-docgen: project="home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20"
+docgen project="home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20":
 	@echo "📚 Querying l3dg3rr knowledge graph (project={{project}}, format={{format}}, limit={{limit}})..."
 	@python3 ../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py \
 		--project={{project}} --format={{format}} --limit={{limit}}
@@ -144,26 +144,25 @@ lint-guards:
 # Compact guard violation counters from append-mode JSONL
 # Merges duplicate pattern counts; call periodically to bound file growth
 guard-compact:
-	@echo "📊 Compacting guard violation counters..."
-	@python3 -c "
-import json, os, collections
-path = os.path.expanduser('~/.b00t/guard-violations.jsonl')
-if not os.path.exists(path):
-    print('  No violations file found')
-    exit(0)
-counts = collections.Counter()
-with open(path) as f:
-    for line in f:
-        try:
-            entry = json.loads(line)
-            counts[entry['pattern']] += 1
-        except: pass
-with open(path, 'w') as f:
-    for pattern, count in sorted(counts.items()):
-        f.write(json.dumps({'pattern': pattern, 'count': count}) + '\n')
-print(f'  Compacted {sum(counts.values())} violations across {len(counts)} patterns')
-print(f'  File: {path}')
-"
+	#!/usr/bin/env python3
+	import json, os, collections
+	print("📊 Compacting guard violation counters...")
+	path = os.path.expanduser('~/.b00t/guard-violations.jsonl')
+	if not os.path.exists(path):
+	    print('  No violations file found')
+	    exit(0)
+	counts = collections.Counter()
+	with open(path) as f:
+	    for line in f:
+	        try:
+	            entry = json.loads(line)
+	            counts[entry['pattern']] += 1
+	        except: pass
+	with open(path, 'w') as f:
+	    for pattern, count in sorted(counts.items()):
+	        f.write(json.dumps({'pattern': pattern, 'count': count}) + '\n')
+	print(f'  Compacted {sum(counts.values())} violations across {len(counts)} patterns')
+	print(f'  File: {path}')
 
 # Pre-release gate: runs grok E2E + guard lint + full cargo test suite
 # Wire to cog pre-bump-hook or call manually before any version bump
@@ -185,6 +184,10 @@ pre-release-check:
 	cd .. && cargo test --package b00t-c0re-lib 2>&1
 	echo ""
 	echo "✅ All pre-release checks passed — safe to bump version"
+
+# rpa module — b00t-rpa recipes (Xpra operator display, browser backends).
+# See b00t-cli/rpa.just. Invoke as: just rpa::xpra-start, just rpa::xpra-attach-html5, etc.
+mod rpa
 
 # MCP shortcuts - delegate to b00t.just
 b00t-mcp-chat:
