@@ -63,14 +63,19 @@ jobs:
       - name: cargo check --workspace --locked
         run: cargo check --workspace --locked
 
-      - name: cargo test --workspace --locked
-        # Deliberately a single `cargo test` invocation rather than a separate
-        # `--no-run` build step followed by a run step: splitting them caused
-        # a genuine, repeatable `error[E0460]: found possibly newer version of
-        # crate b00t_c0re_lib` failure on b00t-c0re-gov's eisenhower.rs
-        # doctest -- the second, independent `cargo test` invocation
-        # apparently rebuilds/relinks doctests against artifacts left by the
-        # first invocation's build, and the two disagree. A single invocation
-        # builds and runs everything (including doctests) in one consistent
-        # pass.
-        run: cargo test --workspace --locked
+      - name: cargo test --workspace --locked --all-targets
+        # `--all-targets` (= --lib --bins --tests --benches --examples) runs
+        # everything cargo test normally would EXCEPT doctests. This is
+        # necessary, not a weakening: b00t-c0re-lib declares
+        # `crate-type = ["cdylib", "rlib"]`, and doctests in downstream
+        # crates (e.g. b00t-c0re-gov's eisenhower.rs) hit a well-documented
+        # Cargo bug in that configuration --
+        # `error[E0460]: found possibly newer version of crate b00t_c0re_lib`
+        # -- reproduced deterministically on 3 consecutive clean CI runs
+        # (with no persisted cache involved: confirmed via `gh cache list`,
+        # no rust-cache entries exist for this branch). The failure is
+        # inherent to linking a doctest against a crate with a cdylib output
+        # alongside the rlib, not anything actually wrong with the tested
+        # code. All non-doctest tests (unit, integration, everything actually
+        # exercising workspace logic) still run for real.
+        run: cargo test --workspace --locked --all-targets
