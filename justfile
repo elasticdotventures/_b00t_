@@ -543,6 +543,10 @@ test:
 test-b00t-mcp:
     cargo test -p b00t-mcp
 
+# Salvage-first lfmf writer round-trip — zero duplication, zero payload loss (issue #934).
+test-lfmf-roundtrip:
+    cargo test -p b00t-cli --test lfmf_salvage_test --test lfmf_writer_test
+
 # Format the b00t-mcp crate through the registered action surface.
 format-b00t-mcp:
     rustfmt --edition 2024 b00t-mcp/src/chat.rs b00t-mcp/src/mcp_server_rusty.rs b00t-mcp/src/mcp_tools.rs

@@ -212,12 +212,48 @@ impl LfmfSystem {
         tool_or_category.to_string()
     }
 
-    /// Record a lesson learned from failure
+    /// Record a lesson learned from failure.
+    ///
+    /// `lesson` is a raw "topic: body" string, independently re-split by
+    /// `parse_lesson` below. Callers that already hold a parsed topic/body
+    /// pair (e.g. the CLI's salvage-first parser) should call
+    /// `record_lesson_parts` instead to avoid a redundant, fragile second
+    /// parse of an already-formatted string (issue #934, defect 2).
     pub async fn record_lesson(&mut self, tool: &str, lesson: &str) -> Result<()> {
         // Resolve category (might be a datum name)
         let category = self.resolve_category(tool);
         let lesson_obj = self.parse_lesson(&category, lesson)?;
+        self.record_lesson_obj(lesson_obj).await
+    }
 
+    /// Record a lesson from an already-parsed topic/body pair — bypasses the
+    /// internal `split_once(':')` re-parse entirely. Use this whenever the
+    /// caller already knows topic and content separately (e.g. after
+    /// salvage-first parsing) instead of re-serializing into "topic: body"
+    /// and having it re-split here (issue #934, defect 2).
+    pub async fn record_lesson_parts(
+        &mut self,
+        tool: &str,
+        topic: &str,
+        content: &str,
+    ) -> Result<()> {
+        let category = self.resolve_category(tool);
+        let lesson_obj = Lesson {
+            tool: category.clone(),
+            topic: topic.to_string(),
+            content: content.to_string(),
+            timestamp: Utc::now(),
+            confidence: Some(1.0),
+            error_pattern: Some(topic.to_string()),
+            solution: Some(content.to_string()),
+            tags: vec![category, "lfmf".to_string()],
+        };
+        self.record_lesson_obj(lesson_obj).await
+    }
+
+    /// Shared post-parse recording logic: durable filesystem write first,
+    /// then best-effort vector-DB enrichment with circuit-breaker fallback.
+    async fn record_lesson_obj(&mut self, lesson_obj: Lesson) -> Result<()> {
         // 🤓 Durable-first: the filesystem write MUST precede vector enrichment.
         // A death between the two (SIGPIPE from a truncating pipe, ctrl-c, crash)
         // must never lose the payload — the cheap local store is the source of

@@ -35,6 +35,11 @@ pub struct ParsedLesson {
     pub salvage: Option<String>,
 }
 
+/// Auto-derived topics (no real ':' topic supplied) are a SHORT stub label —
+/// capped well below topic_max so a lesson that fits entirely under budget
+/// doesn't get its whole body echoed back as "topic" (issue #934).
+const DERIVED_TOPIC_STUB_TOKENS: usize = 8;
+
 /// Longest word-prefix of `text` that fits within `topic_max` tokens (≥1 word).
 fn auto_topic(text: &str, count_tokens: &dyn Fn(&str) -> usize, topic_max: usize) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
@@ -58,7 +63,7 @@ pub fn parse_lesson_salvage(
     let Some((topic_part, body_part)) = raw.split_once(':') else {
         // No colon — derive topic from the lesson itself, keep full payload as body.
         return ParsedLesson {
-            topic: auto_topic(raw, count_tokens, topic_max),
+            topic: auto_topic(raw, count_tokens, topic_max.min(DERIVED_TOPIC_STUB_TOKENS)),
             body: raw.to_string(),
             salvage: Some("no_colon".to_string()),
         };
@@ -69,7 +74,7 @@ pub fn parse_lesson_salvage(
     // First colon belongs to a URL scheme (https://…) — not a topic separator.
     if body_part.starts_with("//") {
         return ParsedLesson {
-            topic: auto_topic(raw, count_tokens, topic_max),
+            topic: auto_topic(raw, count_tokens, topic_max.min(DERIVED_TOPIC_STUB_TOKENS)),
             body: raw.to_string(),
             salvage: Some("url_colon".to_string()),
         };
@@ -77,7 +82,7 @@ pub fn parse_lesson_salvage(
 
     if topic_part.is_empty() {
         return ParsedLesson {
-            topic: auto_topic(body_part, count_tokens, topic_max),
+            topic: auto_topic(body_part, count_tokens, topic_max.min(DERIVED_TOPIC_STUB_TOKENS)),
             body: body_part.to_string(),
             salvage: Some("empty_part".to_string()),
         };
@@ -111,6 +116,21 @@ pub fn parse_lesson_salvage(
         topic: topic_part.to_string(),
         body: body_part.to_string(),
         salvage: None,
+    }
+}
+
+/// Render a parsed lesson's body for storage, appending the salvage marker
+/// (if any) so entries stay greppable for the distillery (task #98).
+///
+/// Pure and separately testable — this used to be inlined into `handle_lfmf`
+/// as part of building a WHOLE "topic: body" string that then got re-parsed
+/// by `LfmfSystem::record_lesson`'s own `split_once(':')` (issue #934,
+/// defect 2). Callers now pass topic/body straight through
+/// `record_lesson_parts` and use this only for the stored body text.
+pub fn format_stored_content(parsed: &ParsedLesson) -> String {
+    match &parsed.salvage {
+        Some(kind) => format!("{} <!-- salvaged:{} -->", parsed.body, kind),
+        None => parsed.body.clone(),
     }
 }
 
@@ -213,16 +233,16 @@ pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str) -> R
     // Scope handling: currently only memoized, extend LfmfSystem for future
     println!("Scope: {}", scope);
 
-    // Storage format is "topic: body" — topic must stay colon-free or the core
-    // parse_lesson re-split corrupts it (URL-derived topics contain ':').
+    // Topic must stay colon-free — it's stored as its own field now (no more
+    // "topic: body" re-serialize-then-re-split), but a stray ':' in a
+    // synthesized topic would still read oddly as a label.
     let safe_topic = parsed.topic.replace(':', "");
-    let stored = match &parsed.salvage {
-        // Salvage marker keeps entries greppable for the distillery (task #98).
-        Some(kind) => format!("{}: {} <!-- salvaged:{} -->", safe_topic, parsed.body, kind),
-        None => format!("{}: {}", safe_topic, parsed.body),
-    };
+    let stored_content = format_stored_content(&parsed);
 
-    if let Err(e) = lfmf_system.record_lesson(tool, &stored).await {
+    if let Err(e) = lfmf_system
+        .record_lesson_parts(tool, &safe_topic, &stored_content)
+        .await
+    {
         log_event(&LfmfTelemetryEvent::now(
             LfmfAction::Record,
             tool,

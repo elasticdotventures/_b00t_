@@ -1,0 +1,33 @@
+{
+  "comment": "Production-scale (real o200k_base tiktoken, topic_max=25, body_max=250) regression fixtures for issue #934 — locks in the anti-duplication fix (DERIVED_TOPIC_STUB_TOKENS) and the redundant-second-parse elimination. The '_regression' cases mirror the two _b00t_/learn/*.md entries that were corrupted by the pre-fix code (whole colon-free lesson echoed back as both topic and body); '_well_formed' cases use the proper 'topic: body' syntax used to re-emit those same lessons cleanly.",
+  "topic_max": 25,
+  "body_max": 250,
+  "cases": [
+    {
+      "name": "cargo_workspace_install_regression",
+      "raw": "Use `cargo install --locked` for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution",
+      "expect_salvage": "no_colon",
+      "assert_anti_duplication": true
+    },
+    {
+      "name": "guard_session_fixtures_regression",
+      "raw": "Session guards persisted in ~/.b00t/session-guards.json can block unrelated audited commands if not isolated or torn down and tests must clean up session guards on teardown",
+      "expect_salvage": "no_colon",
+      "assert_anti_duplication": true
+    },
+    {
+      "name": "cargo_workspace_install_well_formed",
+      "raw": "cargo install --locked: use it for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution",
+      "expect_salvage": null,
+      "expect_topic": "cargo install --locked",
+      "expect_body": "use it for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution"
+    },
+    {
+      "name": "guard_session_fixtures_well_formed",
+      "raw": "session guards must not leak across test runs: guards persisted in ~/.b00t/session-guards.json can block unrelated audited commands if not isolated or torn down; tests MUST clean up session guards on teardown",
+      "expect_salvage": null,
+      "expect_topic": "session guards must not leak across test runs",
+      "expect_body": "guards persisted in ~/.b00t/session-guards.json can block unrelated audited commands if not isolated or torn down; tests MUST clean up session guards on teardown"
+    }
+  ]
+}

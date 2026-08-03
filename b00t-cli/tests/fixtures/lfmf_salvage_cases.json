@@ -51,6 +51,27 @@
       "topic": "just a body here",
       "body": "just a body here",
       "salvage": "empty_part"
+    },
+    {
+      "name": "colon_in_body",
+      "raw": "atomic commits: use 'a: b' style commit messages consistently",
+      "topic": "atomic commits",
+      "body": "use 'a: b' style commit messages consistently",
+      "salvage": null
+    },
+    {
+      "name": "unicode_no_colon",
+      "raw": "Ω café naïve 日本語 emoji 🎉 works fine today",
+      "topic": "Ω café naïve 日本語 emoji",
+      "body": "Ω café naïve 日本語 emoji 🎉 works fine today",
+      "salvage": "no_colon"
+    },
+    {
+      "name": "embedded_newline_well_formed",
+      "raw": "topic label: line one\nline two continues here",
+      "topic": "topic label",
+      "body": "line one\nline two continues here",
+      "salvage": null
     }
   ]
 }
