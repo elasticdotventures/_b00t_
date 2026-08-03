@@ -8,7 +8,7 @@ FROM ghcr.io/elasticdotventures/just:latest AS just-binary
 # ================================
 # Stage 1: Rust Build Environment
 # ================================
-FROM rust:1.91-slim AS rust-builder
+FROM rust:1.96-slim AS rust-builder
 
 # Copy just from forked container
 COPY --from=just-binary /usr/local/bin/just /usr/local/bin/just
