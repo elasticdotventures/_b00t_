@@ -150,7 +150,7 @@ fn all_deps() -> Vec<Value> {
                 } else {
                     let bad = detail.trim().trim_start_matches("FAIL: ");
                     json!(format!(
-                        "gutted gitdir(s): {} — repair: rm -rf $HOME/.b00t/.git/modules/<path>; rm -f <path>/.git; git -C $HOME/.b00t submodule update --init <path> (#924), or run `b00t doctor fix-submodule <path>`",
+                        "gutted gitdir(s): {} — repair: git -C $HOME/.b00t submodule deinit -f <path>; rm -rf $HOME/.b00t/.git/modules/<path>; git -C $HOME/.b00t submodule update --init <path> (#924), or run `b00t doctor fix-submodule <path>`",
                         bad
                     ))
                 };
@@ -183,11 +183,13 @@ fn find_gutted_submodules(repo_root: &Path) -> Vec<String> {
 
 /// Repair a gutted submodule gitdir (#924). A gutted gitdir has no HEAD,
 /// objects, or refs — there is nothing recoverable to lose — so the repair
-/// is a straight re-clone: remove the corrupt gitdir, remove the stale `.git`
-/// pointer file in the submodule's working directory, then re-init from the
-/// remote registered in .gitmodules. Safe to auto-apply for exactly this
-/// reason (unlike #923's drift checks, which distinguish safe/unsafe because
-/// they may discard *uncommitted* local state — a gutted gitdir has none).
+/// is a straight re-clone: deinit the submodule (clears its checked-out
+/// working-tree content, which normally survives the gitdir being gutted),
+/// remove the corrupt gitdir, then re-init from the remote registered in
+/// .gitmodules. Safe to auto-apply for exactly this reason (unlike #923's
+/// drift checks, which distinguish safe/unsafe because they may discard
+/// *uncommitted* local state — a gutted gitdir has none, and `deinit -f`
+/// only ever removes files that came from the (unrecoverable) checkout).
 fn repair_gutted_submodule(repo_root: &Path, submodule_path: &str) -> Result<String> {
     let gitdir = repo_root.join(".git/modules").join(submodule_path);
     anyhow::ensure!(
@@ -196,9 +198,31 @@ fn repair_gutted_submodule(repo_root: &Path, submodule_path: &str) -> Result<Str
         submodule_path
     );
 
+    // `git submodule update --init` refuses to clone into a non-empty
+    // directory, and the submodule's working-tree content typically
+    // survives the gitdir being gutted (only .git/modules/<path> was
+    // destroyed). `deinit -f` clears that working-tree content and the
+    // stale `.git` pointer file together, and must run before the gitdir
+    // is removed — it still resolves config through the (gutted but
+    // present) gitdir.
+    let deinit = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args(["submodule", "deinit", "-f", submodule_path])
+        .output()
+        .context("running git submodule deinit")?;
+    anyhow::ensure!(
+        deinit.status.success(),
+        "git submodule deinit -f {} failed: {}",
+        submodule_path,
+        String::from_utf8_lossy(&deinit.stderr)
+    );
+
     std::fs::remove_dir_all(&gitdir)
         .with_context(|| format!("removing gutted gitdir {}", gitdir.display()))?;
 
+    // Belt-and-suspenders: deinit already removes the `.git` pointer file,
+    // but clean it up if anything unexpected left it behind.
     let dotgit = repo_root.join(submodule_path).join(".git");
     if dotgit.is_file() {
         std::fs::remove_file(&dotgit)
