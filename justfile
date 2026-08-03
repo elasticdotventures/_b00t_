@@ -1011,8 +1011,15 @@ android-sandbox:
 b00t-test-harness:
     @bash _b00t_/scripts/b00t-ping-pong.sh
 
+# Pre-cargo gate: detect submodule pin drift (recorded gitlink vs checked-out HEAD).
+# Distinguishes drifted+clean (safe, auto-fixable) from drifted+dirty (report only).
+# Usage: just doctor         (report only)
+#        just doctor --fix   (auto-sync drifted+clean submodules; never touches dirty ones)
+doctor *ARGS:
+    @bash _b00t_/scripts/check-submodule-drift.sh {{ARGS}}
+
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
-check-fast:
+check-fast: doctor
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
 
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
