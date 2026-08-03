@@ -21,7 +21,7 @@ pub struct GateSpec {
 }
 
 /// Result of evaluating a single gate precondition.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GateResult {
     pub passed: bool,
     pub reason: String,

@@ -1892,6 +1892,21 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
         description: "Run a registered just recipe through a typed recipe-and-args contract",
         subcommand: "just",
     },
+    ToolCatalogEntry {
+        name: "b00t_store_init",
+        description: "Initialise the knowledge store",
+        subcommand: "store init",
+    },
+    ToolCatalogEntry {
+        name: "b00t_store_status",
+        description: "Show store status (backend, objects, bytes)",
+        subcommand: "store status",
+    },
+    ToolCatalogEntry {
+        name: "b00t_store_validate",
+        description: "Cross-engine consistency check",
+        subcommand: "store validate",
+    },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
@@ -2645,6 +2660,26 @@ mod tests {
             shlex::split(argv).is_none(),
             "unterminated quote must fail tokenization, not panic"
         );
+    }
+
+    #[test]
+    fn test_store_subcommands_discoverable() {
+        // #708: store subcommands (init/status/validate) must be discoverable
+        // via b00t_discover("store") — the CLI commands already exist and are
+        // reachable through b00t_exec, but were missing from TOOL_CATALOG.
+        let matches = discover_tools("store");
+        assert!(
+            matches.len() >= 3,
+            "expected at least 3 store entries in discover_tools(\"store\"), got {}",
+            matches.len()
+        );
+        for expected in ["b00t_store_init", "b00t_store_status", "b00t_store_validate"] {
+            assert!(
+                matches.iter().any(|e| e.name == expected),
+                "discover_tools(\"store\") missing entry {}",
+                expected
+            );
+        }
     }
 
     #[test]
