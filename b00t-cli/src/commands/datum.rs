@@ -194,9 +194,6 @@ pub enum DatumCommands {
 
         #[clap(long, help = "Check all datums")]
         all: bool,
-
-        #[clap(long, help = "Override maintenance check_interval_days for this run")]
-        interval: Option<u64>,
     },
 
     #[clap(about = "Aggregate pass/warn/fail health report across all datums + store status (#694)")]
@@ -307,8 +304,8 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             crate::commands::from_artifact::handle_from_artifact(args)
         }
         DatumCommands::GenWrkflw { repo_path, write } => handle_gen_wrkflw(repo_path, *write),
-        DatumCommands::HealthCheck { name, all, interval } => {
-            handle_health_check(path, name.as_deref(), *all, *interval)
+        DatumCommands::HealthCheck { name, all } => {
+            handle_health_check(path, name.as_deref(), *all)
         }
         DatumCommands::HealthReport { format } => handle_health_report(path, format),
     }
@@ -1724,20 +1721,9 @@ fn print_datum_health(health: &DatumHealth) {
     );
 }
 
-fn handle_health_check(
-    path: &str,
-    name: Option<&str>,
-    all: bool,
-    interval: Option<u64>,
-) -> Result<()> {
+fn handle_health_check(path: &str, name: Option<&str>, all: bool) -> Result<()> {
     if !all && name.is_none() {
         anyhow::bail!("datum health-check requires --name <datum> or --all");
-    }
-
-    if let Some(interval_days) = interval {
-        eprintln!(
-            "ℹ️  overriding maintenance.check_interval_days -> {interval_days} for this run"
-        );
     }
 
     let datums = datum_utils::get_all_datums(path)?;
@@ -1842,7 +1828,22 @@ mod tests {
     }
 
     #[test]
-    fn health_check_one_failing_gate_yields_fail_or_warn_with_gate_reason() {
+    fn health_check_one_no_gate_no_maintenance_yields_pass() {
+        // Most real datums have neither a [gate] nor a [maintenance] section —
+        // this is the common-case default and should be a clean Pass, not an
+        // accidental Fail/Warn from an empty gate list or missing check_command.
+        let datum = make_health_datum("plain-cli");
+
+        let health = health_check_one(&datum, "/tmp");
+
+        assert_eq!(health.state, HealthState::Pass);
+        assert_eq!(health.reason, "no maintenance check configured");
+        assert!(health.gate_results.is_empty());
+        assert!(health.last_checked.is_none());
+    }
+
+    #[test]
+    fn health_check_one_failing_gate_yields_fail_with_gate_reason() {
         let mut datum = make_health_datum("gated-cli");
         datum.gate = Some(vec![crate::GateSpec {
             command: Some("definitely-not-a-real-command-xyz".to_string()),
@@ -1855,10 +1856,10 @@ mod tests {
 
         let health = health_check_one(&datum, "/tmp");
 
-        assert!(matches!(
-            health.state,
-            HealthState::Fail | HealthState::Warn
-        ));
+        // health_check_one always maps a failing gate to Fail (never Warn) —
+        // asserting the exact state (rather than Fail|Warn) so a future
+        // regression that muddles gate-fail vs. maintenance-warn is caught.
+        assert_eq!(health.state, HealthState::Fail);
         assert!(health.reason.contains("definitely-not-a-real-command-xyz"));
         assert!(!health.gate_results.is_empty());
         assert!(!health.gate_results[0].passed);
