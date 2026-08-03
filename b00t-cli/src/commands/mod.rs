@@ -128,6 +128,8 @@ pub use server::ServerCommands;
 pub use server::handle_server_command;
 pub mod calibrate;
 pub mod evidence;
+pub mod influence;
+pub use influence::InfluenceCommands;
 pub mod from_artifact;
 pub mod pipeline;
 pub mod provider;
