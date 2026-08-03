@@ -195,7 +195,7 @@ pub enum DatumCommands {
         #[clap(long, help = "Govern all datums, skipping status=disabled")]
         all: bool,
 
-        #[clap(long, default_value = "table")]
+        #[clap(long, help = "Output format: table|json", default_value = "table")]
         format: String,
     },
 }
