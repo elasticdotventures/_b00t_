@@ -79,8 +79,75 @@ fn check_redis_agent_registry() -> Value {
     })
 }
 
-fn all_deps() -> Vec<Value> {
-    vec![
+/// Submodule pin drift check (#923): shells out to the standalone bash
+/// script that is the single source of truth for this check (both
+/// `just doctor` and this call it). Kept as a script rather than a Rust
+/// implementation because a pre-cargo gate that itself requires compiling
+/// b00t-cli is a chicken-and-egg risk — see the justfile's `viz-entangle`
+/// comment ("cargo run fails on b00t repo due to git worktree structure").
+///
+/// Distinguishes drifted+clean (safe, auto-fixable via `fix: true`) from
+/// drifted+dirty (report only — the script itself never touches dirty
+/// submodules regardless of the `--fix` flag it's given).
+fn check_submodule_drift(b00t_path: &str, fix: bool) -> Value {
+    let script = PathBuf::from(b00t_path).join("scripts/check-submodule-drift.sh");
+    let mut cmd = Command::new("bash");
+    cmd.arg(&script).arg("--json");
+    if fix {
+        cmd.arg("--fix");
+    }
+
+    let start = Instant::now();
+    let output = cmd.output();
+    let ms = start.elapsed().as_millis();
+
+    match output {
+        Ok(o) => match serde_json::from_slice::<Value>(&o.stdout) {
+            Ok(submodules) => {
+                let unresolved = submodules
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter(|s| {
+                                matches!(
+                                    s["status"].as_str(),
+                                    Some("drifted_dirty") | Some("drifted_clean")
+                                )
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0);
+                let pass = o.status.success();
+                json!({
+                    "id": "submodule-drift",
+                    "pass": pass,
+                    "detail": if pass {
+                        "0 drifted submodules".to_string()
+                    } else {
+                        format!("{unresolved} unresolved submodule drift (see submodules[])")
+                    },
+                    "submodules": submodules,
+                    "latency_ms": ms,
+                })
+            }
+            Err(e) => json!({
+                "id": "submodule-drift",
+                "pass": false,
+                "detail": format!("failed to parse {} --json output: {e}", script.display()),
+                "latency_ms": ms,
+            }),
+        },
+        Err(e) => json!({
+            "id": "submodule-drift",
+            "pass": false,
+            "detail": format!("failed to run {}: {e}", script.display()),
+            "latency_ms": ms,
+        }),
+    }
+}
+
+fn all_deps(fix: bool) -> Vec<Value> {
+    let mut results: Vec<Value> = vec![
         check_version("b00t-cli"),
         check_version("b00t-mcp"),
         check_version("b00t-task"),
@@ -143,7 +210,18 @@ fn all_deps() -> Vec<Value> {
             v["latency_ms"] = json!(start.elapsed().as_millis());
         }
         v
-    }).collect()
+    }).collect();
+
+    // Submodule pin drift (#923): recorded gitlink vs checked-out HEAD.
+    // check_submodule_drift() joins "scripts/check-submodule-drift.sh" onto
+    // whatever it's given, so it needs the `_b00t_/` datum dir itself, not
+    // the repo root — mirrors the "b00t-repo" check above's $HOME/.b00t,
+    // just one level deeper. Distinct from the `b00t_path` fn parameter
+    // threaded through this module (defaults to ~/.dotfiles/_b00t_).
+    let repo_b00t_dir = home().join(".b00t").join("_b00t_");
+    results.push(check_submodule_drift(&repo_b00t_dir.to_string_lossy(), fix));
+
+    results
 }
 
 #[derive(Default)]
@@ -233,7 +311,8 @@ fn install_role_mcps(composite: &RoleComposite, target: &str) -> Vec<String> {
 }
 
 fn generate_env_doc(b00t_path: &str) -> Value {
-    let deps = all_deps();
+    // Docs generator — never auto-fix, only an explicit `doctor check --fix` may.
+    let deps = all_deps(false);
     json!({
         "hostname": sh("hostname 2>/dev/null").1.trim(),
         "os": sh("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'").1.trim(),
@@ -258,6 +337,11 @@ pub enum DoctorCommands {
         json: bool,
         #[clap(long, help = "Check a single dependency by id")]
         probe: Option<String>,
+        #[clap(
+            long,
+            help = "Attempt safe auto-fixes (currently: sync drifted+clean submodules to their recorded pin; never touches drifted+dirty ones)"
+        )]
+        fix: bool,
     },
     #[clap(about = "Verify role deps + wire MCP into IDEs")]
     Setup {
@@ -299,8 +383,8 @@ pub enum IdeAction {
 
 pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<()> {
     match args {
-        DoctorCommands::Check { json, probe } => {
-            let results: Vec<Value> = all_deps()
+        DoctorCommands::Check { json, probe, fix } => {
+            let results: Vec<Value> = all_deps(*fix)
                 .into_iter()
                 .filter(|d| {
                     probe.as_ref().map_or(true, |p| {
@@ -354,6 +438,24 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                         ms,
                         r["detail"].as_str().unwrap_or("")
                     );
+                    if r["id"] == "submodule-drift" {
+                        if let Some(subs) = r["submodules"].as_array() {
+                            for s in subs {
+                                let status = s["status"].as_str().unwrap_or("");
+                                if matches!(
+                                    status,
+                                    "broken" | "drifted_clean" | "drifted_dirty" | "drifted_fixed"
+                                ) {
+                                    println!(
+                                        "      {}  {}  {}",
+                                        status,
+                                        s["path"].as_str().unwrap_or("?"),
+                                        s["action"].as_str().unwrap_or("")
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 let ok = results
                     .iter()
@@ -495,7 +597,9 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             Ok(())
         }
         DoctorCommands::HealthJson => {
-            let results = all_deps();
+            // JSON health endpoint — never auto-fix, only an explicit
+            // `doctor check --fix` may.
+            let results = all_deps(false);
             let ok = results
                 .iter()
                 .filter(|r| r["pass"].as_bool().unwrap_or(false))
@@ -512,7 +616,8 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
     }
 }
 pub fn health_json() -> serde_json::Value {
-    let results = all_deps();
+    // Never auto-fix, only an explicit `doctor check --fix` may.
+    let results = all_deps(false);
     let ok = results
         .iter()
         .filter(|r| r["pass"].as_bool().unwrap_or(false))
