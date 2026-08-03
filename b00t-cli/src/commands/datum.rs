@@ -187,6 +187,21 @@ pub enum DatumCommands {
         write: bool,
     },
 
+    #[clap(about = "Health-check a datum's gates + maintenance check_command (#694)")]
+    HealthCheck {
+        #[clap(long, help = "Specific datum name to check")]
+        name: Option<String>,
+
+        #[clap(long, help = "Check all datums")]
+        all: bool,
+    },
+
+    #[clap(about = "Aggregate pass/warn/fail health report across all datums + store status (#694)")]
+    HealthReport {
+        #[clap(long, help = "Output format: table|json", default_value = "table")]
+        format: String,
+    },
+
     #[clap(about = "Govern a datum (or all datums): prove + gate + hook, report health (#696)")]
     Govern {
         #[clap(help = "Datum name (omit with --all)")]
@@ -301,6 +316,10 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             crate::commands::from_artifact::handle_from_artifact(args)
         }
         DatumCommands::GenWrkflw { repo_path, write } => handle_gen_wrkflw(repo_path, *write),
+        DatumCommands::HealthCheck { name, all } => {
+            handle_health_check(path, name.as_deref(), *all)
+        }
+        DatumCommands::HealthReport { format } => handle_health_report(path, format),
         DatumCommands::Govern { name, all, format } => {
             handle_govern(path, name.as_deref(), *all, format)
         }
@@ -1745,6 +1764,332 @@ mod call_tests {
             err.to_string()
                 .contains("Refusing to execute multi-line backend template")
         );
+    }
+}
+
+// ── Health check / health report (#694) ─────────────────────────────────────
+//
+// Health-checks a BootDatum by evaluating its `gate` preconditions (hard
+// fail — the datum is not usable) and, if configured, its
+// `maintenance.check_command` (soft warn — the datum works but its version
+// check is failing / stale). Reuses `InstallerEngine::run_check` for command
+// execution rather than reinventing shell-exec.
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+enum HealthState {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl std::fmt::Display for HealthState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            HealthState::Pass => "pass",
+            HealthState::Warn => "warn",
+            HealthState::Fail => "fail",
+        };
+        write!(f, "{s}")
+    }
+}
+
+/// Serializable mirror of `crate::gates::GateResult`, which does not derive
+/// `Serialize` itself. gates.rs is out of scope for #694, so we copy the two
+/// fields we need rather than modifying it.
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct GateResultSummary {
+    passed: bool,
+    reason: String,
+}
+
+impl From<&crate::gates::GateResult> for GateResultSummary {
+    fn from(g: &crate::gates::GateResult) -> Self {
+        Self {
+            passed: g.passed,
+            reason: g.reason.clone(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct DatumHealth {
+    datum: String,
+    state: HealthState,
+    reason: String,
+    last_checked: Option<String>,
+    gate_results: Vec<GateResultSummary>,
+}
+
+/// Health-check a single datum: gate preconditions first (hard Fail — reason
+/// comes from the failing gate's hint/message), then its
+/// `maintenance.check_command` if configured (Warn on nonzero exit / exec
+/// error), else Pass with no maintenance configured.
+fn health_check_one(datum: &crate::BootDatum, path: &str) -> DatumHealth {
+    let gate_results: Vec<GateResultSummary> = datum
+        .gate
+        .as_deref()
+        .map(|gates| crate::gates::evaluate_gates(gates, path))
+        .unwrap_or_default()
+        .iter()
+        .map(GateResultSummary::from)
+        .collect();
+
+    if let Some(failed) = gate_results.iter().find(|g| !g.passed) {
+        return DatumHealth {
+            datum: datum.name.clone(),
+            state: HealthState::Fail,
+            reason: failed.reason.clone(),
+            last_checked: None,
+            gate_results,
+        };
+    }
+
+    if let Some(maintenance) = &datum.maintenance {
+        if let Some(check_command) = &maintenance.check_command {
+            let check = crate::install::capability::CapabilityCheck {
+                name: datum.name.clone(),
+                check_command: check_command.clone(),
+                remediation: String::new(),
+                required: false,
+                vendor_datum: None,
+            };
+            let result = crate::install::capability::InstallerEngine::run_check(&check);
+            let now = Some(chrono::Utc::now().to_rfc3339());
+            return match result.status {
+                crate::install::capability::CheckStatus::Pass => DatumHealth {
+                    datum: datum.name.clone(),
+                    state: HealthState::Pass,
+                    reason: "maintenance check_command passed".to_string(),
+                    last_checked: now,
+                    gate_results,
+                },
+                _ => DatumHealth {
+                    datum: datum.name.clone(),
+                    state: HealthState::Warn,
+                    reason: result
+                        .error
+                        .unwrap_or_else(|| "maintenance check_command failed".to_string()),
+                    last_checked: now,
+                    gate_results,
+                },
+            };
+        }
+    }
+
+    DatumHealth {
+        datum: datum.name.clone(),
+        state: HealthState::Pass,
+        reason: "no maintenance check configured".to_string(),
+        last_checked: None,
+        gate_results,
+    }
+}
+
+fn print_datum_health(health: &DatumHealth) {
+    let icon = match health.state {
+        HealthState::Pass => "✅",
+        HealthState::Warn => "⚠️ ",
+        HealthState::Fail => "❌",
+    };
+    println!(
+        "{icon} {} [{}] — {}",
+        health.datum, health.state, health.reason
+    );
+}
+
+fn handle_health_check(path: &str, name: Option<&str>, all: bool) -> Result<()> {
+    if !all && name.is_none() {
+        anyhow::bail!("datum health-check requires --name <datum> or --all");
+    }
+
+    let datums = datum_utils::get_all_datums(path)?;
+
+    if all {
+        for datum in datums.values() {
+            let health = health_check_one(datum, path);
+            print_datum_health(&health);
+        }
+        return Ok(());
+    }
+
+    let target = name.expect("checked above: name or all must be set");
+    let datum = datums
+        .get(target)
+        .or_else(|| datums.values().find(|d| d.name == target))
+        .with_context(|| format!("datum '{target}' not found"))?;
+    let health = health_check_one(datum, path);
+    print_datum_health(&health);
+    Ok(())
+}
+
+fn handle_health_report(path: &str, format: &str) -> Result<()> {
+    let datums = datum_utils::get_all_datums(path)?;
+
+    let mut results: Vec<DatumHealth> = datums
+        .values()
+        .map(|datum| health_check_one(datum, path))
+        .collect();
+    results.sort_by(|a, b| a.datum.cmp(&b.datum));
+
+    let pass = results
+        .iter()
+        .filter(|r| r.state == HealthState::Pass)
+        .count();
+    let warn = results
+        .iter()
+        .filter(|r| r.state == HealthState::Warn)
+        .count();
+    let fail = results
+        .iter()
+        .filter(|r| r.state == HealthState::Fail)
+        .count();
+    let (store_objects, store_bytes) = b00t_c0re_lib::store::status();
+
+    match format {
+        "json" => {
+            let report = serde_json::json!({
+                "datums": results,
+                "summary": {
+                    "pass": pass,
+                    "warn": warn,
+                    "fail": fail,
+                    "total": results.len(),
+                },
+                "store": {
+                    "objects": store_objects,
+                    "bytes": store_bytes,
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        _ => {
+            for health in &results {
+                print_datum_health(health);
+            }
+            println!(
+                "\n── health-report summary ──\n  pass: {pass}  warn: {warn}  fail: {fail}  total: {}\n  store: {store_objects} objects, {store_bytes} bytes",
+                results.len()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_health_datum(name: &str) -> crate::BootDatum {
+        crate::BootDatum {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn health_check_one_passing_maintenance_command_yields_pass() {
+        let mut datum = make_health_datum("healthy-cli");
+        datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(7),
+            check_command: Some("true".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let health = health_check_one(&datum, "/tmp");
+
+        assert_eq!(health.state, HealthState::Pass);
+        assert_eq!(health.datum, "healthy-cli");
+    }
+
+    #[test]
+    fn health_check_one_no_gate_no_maintenance_yields_pass() {
+        // Most real datums have neither a [gate] nor a [maintenance] section —
+        // this is the common-case default and should be a clean Pass, not an
+        // accidental Fail/Warn from an empty gate list or missing check_command.
+        let datum = make_health_datum("plain-cli");
+
+        let health = health_check_one(&datum, "/tmp");
+
+        assert_eq!(health.state, HealthState::Pass);
+        assert_eq!(health.reason, "no maintenance check configured");
+        assert!(health.gate_results.is_empty());
+        assert!(health.last_checked.is_none());
+    }
+
+    #[test]
+    fn health_check_one_failing_gate_yields_fail_with_gate_reason() {
+        let mut datum = make_health_datum("gated-cli");
+        datum.gate = Some(vec![crate::GateSpec {
+            command: Some("definitely-not-a-real-command-xyz".to_string()),
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: None,
+            hint: Some("install definitely-not-a-real-command-xyz first".to_string()),
+        }]);
+
+        let health = health_check_one(&datum, "/tmp");
+
+        // health_check_one always maps a failing gate to Fail (never Warn) —
+        // asserting the exact state (rather than Fail|Warn) so a future
+        // regression that muddles gate-fail vs. maintenance-warn is caught.
+        assert_eq!(health.state, HealthState::Fail);
+        assert!(health.reason.contains("definitely-not-a-real-command-xyz"));
+        assert!(!health.gate_results.is_empty());
+        assert!(!health.gate_results[0].passed);
+    }
+
+    #[test]
+    fn health_report_aggregates_pass_warn_fail_counts() {
+        let mut pass_datum = make_health_datum("pass-datum");
+        pass_datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(1),
+            check_command: Some("true".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let mut warn_datum = make_health_datum("warn-datum");
+        warn_datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(1),
+            check_command: Some("false".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let mut fail_datum = make_health_datum("fail-datum");
+        fail_datum.gate = Some(vec![crate::GateSpec {
+            command: Some("definitely-not-a-real-command-xyz".to_string()),
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: None,
+            hint: None,
+        }]);
+
+        let results: Vec<DatumHealth> = vec![&pass_datum, &warn_datum, &fail_datum]
+            .into_iter()
+            .map(|d| health_check_one(d, "/tmp"))
+            .collect();
+
+        let pass = results
+            .iter()
+            .filter(|r| r.state == HealthState::Pass)
+            .count();
+        let warn = results
+            .iter()
+            .filter(|r| r.state == HealthState::Warn)
+            .count();
+        let fail = results
+            .iter()
+            .filter(|r| r.state == HealthState::Fail)
+            .count();
+
+        assert_eq!(pass, 1, "expected exactly one Pass datum");
+        assert_eq!(warn, 1, "expected exactly one Warn datum");
+        assert_eq!(fail, 1, "expected exactly one Fail datum");
     }
 }
 
