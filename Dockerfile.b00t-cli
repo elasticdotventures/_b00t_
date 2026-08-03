@@ -55,8 +55,11 @@ COPY b00t-zellij/ ./b00t-zellij/
 COPY blessed/ ./blessed/
 COPY k0mmand3r/ ./k0mmand3r/
 COPY pm2-tasker/ ./pm2-tasker/
+COPY vendor/embed-anything-b00t/rust/ ./vendor/embed-anything-b00t/rust/
+COPY vendor/embed-anything-b00t/processors/ ./vendor/embed-anything-b00t/processors/
 COPY vendor/irontology-mcp/ ./vendor/irontology-mcp/
 COPY vendor/ledgrrr/crates/b00t-reflect-types/ ./vendor/ledgrrr/crates/b00t-reflect-types/
+COPY vendor/runpod-sdk/ ./vendor/runpod-sdk/
 COPY vendor/tomllm/ ./vendor/tomllm/
 
 # Build only the shipping binaries. `just install` is interactive, bumps versions,
