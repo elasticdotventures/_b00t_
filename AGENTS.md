@@ -135,7 +135,7 @@ b00t types are Rust structs/enums in `b00t-cli/src/lib.rs`. Agents navigate via:
 - `b00t-cli ontology sparql --subject <X> --predicate type` — just type triples
 - `b00t-cli learn <topic>` — DWIW fanout: `DatumSearchSource(w=3)` + `GraphAdjacencySource(w=2)`
 - `b00t-cli blessing --manifest --role <R>` — walk `depends_on` graph for role
-- Key types: `BootDatum` (open struct) · `DatumType` (22-variant enum: Cli/Skill/Role/Mcp/Agent…)
+- Key types: `BootDatum` (open struct) · `DatumType` (open enum — see `b00t-cli/src/datum_types.rs` for the current variant list, do not hardcode a count here)
 - Chalk Interner pattern: `DatumStore` trait would abstract TOML/SQLite/Qdrant storage behind same API
 - `b00t learn chalk-interner` — load Chalk Interner → b00t DatumStore mapping
 - `b00t learn datum-macro` — load Rust macro → dynamic datum feasibility analysis
