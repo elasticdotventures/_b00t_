@@ -63,16 +63,6 @@ jobs:
       - name: cargo check --workspace --locked
         run: cargo check --workspace --locked
 
-      - name: Prebuild b00t-cli binary
-        # b00t-cli's own integration tests (tests/integration_test.rs,
-        # tests/worker_ab_experiment_test.rs) shell out to `cargo run --bin
-        # b00t-cli` up to 6 times, unsynchronized with each other. Building it
-        # once up front means those invocations just find it already
-        # up-to-date instead of racing each other to compile it under the
-        # runner's constrained CPU/RAM while dozens of other test binaries
-        # run in parallel.
-        run: cargo build --bin b00t-cli -p b00t-cli --locked
-
       - name: cargo test --workspace --locked (build, no-run)
         run: cargo test --workspace --locked --no-run
 
