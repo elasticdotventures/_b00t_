@@ -186,6 +186,18 @@ pub enum DatumCommands {
         )]
         write: bool,
     },
+
+    #[clap(about = "Govern a datum (or all datums): prove + gate + hook, report health (#696)")]
+    Govern {
+        #[clap(help = "Datum name (omit with --all)")]
+        name: Option<String>,
+
+        #[clap(long, help = "Govern all datums, skipping status=disabled")]
+        all: bool,
+
+        #[clap(long, default_value = "table")]
+        format: String,
+    },
 }
 
 pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
@@ -289,6 +301,9 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             crate::commands::from_artifact::handle_from_artifact(args)
         }
         DatumCommands::GenWrkflw { repo_path, write } => handle_gen_wrkflw(repo_path, *write),
+        DatumCommands::Govern { name, all, format } => {
+            handle_govern(path, name.as_deref(), *all, format)
+        }
     }
 }
 
@@ -1491,6 +1506,167 @@ fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
     Ok(())
 }
 
+// ─── govern (#696) ───────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct PhaseResult {
+    passed: bool,
+    detail: String,
+}
+
+#[derive(serde::Serialize)]
+struct GovernReport {
+    datum: String,
+    proved: PhaseResult,
+    gated: Vec<crate::gates::GateResult>,
+    hooked: PhaseResult,
+    status: Option<String>,
+    healthy: bool,
+}
+
+/// Run all three governance phases (prove, gate, hook) against a single datum
+/// and summarize the result. Never panics: proof/hook failures are captured
+/// as `passed: false` phase results rather than propagated as errors.
+fn govern_one(datum: &crate::BootDatum, path: &str) -> GovernReport {
+    let proved = match datum.prove_by_type() {
+        Ok(()) => PhaseResult {
+            passed: true,
+            detail: "proof passed".to_string(),
+        },
+        Err(e) => PhaseResult {
+            passed: false,
+            detail: e.to_string(),
+        },
+    };
+
+    let gated: Vec<crate::gates::GateResult> = datum
+        .gate
+        .as_ref()
+        .map(|gates| crate::gates::evaluate_gates(gates, path))
+        .unwrap_or_default();
+    let gates_passed = gated.iter().all(|g| g.passed);
+
+    let hooked = match datum.hook_detect.as_deref() {
+        Some(script) if !script.trim().is_empty() => match crate::hook_engine::run_hook(script) {
+            crate::hook_engine::HookResult::Ok => PhaseResult {
+                passed: true,
+                detail: "hook ok".to_string(),
+            },
+            crate::hook_engine::HookResult::Warn(msg) => PhaseResult {
+                passed: true,
+                detail: format!("warn: {msg}"),
+            },
+            crate::hook_engine::HookResult::Info(msg) => PhaseResult {
+                passed: true,
+                detail: msg,
+            },
+            crate::hook_engine::HookResult::Missing(msg) => PhaseResult {
+                passed: false,
+                detail: format!("missing: {msg}"),
+            },
+            crate::hook_engine::HookResult::Redirect(name) => PhaseResult {
+                passed: false,
+                detail: format!("redirect: {name}"),
+            },
+        },
+        _ => PhaseResult {
+            passed: true,
+            detail: "no hook_detect".to_string(),
+        },
+    };
+
+    let healthy = proved.passed && gates_passed && hooked.passed;
+
+    GovernReport {
+        datum: datum.name.clone(),
+        proved,
+        gated,
+        hooked,
+        status: datum.status.clone(),
+        healthy,
+    }
+}
+
+fn print_govern_report_table(report: &GovernReport) {
+    let overall = if report.healthy { "✅ healthy" } else { "❌ unhealthy" };
+    println!("# {} — {}", report.datum, overall);
+    println!(
+        "  proved: {} — {}",
+        if report.proved.passed { "ok" } else { "FAIL" },
+        report.proved.detail
+    );
+    if report.gated.is_empty() {
+        println!("  gated:  (no gates)");
+    } else {
+        for gate in &report.gated {
+            println!(
+                "  gated:  {} — {}",
+                if gate.passed { "ok" } else { "FAIL" },
+                gate.reason
+            );
+        }
+    }
+    println!(
+        "  hooked: {} — {}",
+        if report.hooked.passed { "ok" } else { "FAIL" },
+        report.hooked.detail
+    );
+    if let Some(status) = &report.status {
+        println!("  status: {status}");
+    }
+    println!();
+}
+
+/// Govern every datum under `path`, skipping entries with `status = "disabled"`.
+/// Results are sorted by datum key for deterministic output.
+fn govern_all(path: &str) -> Result<Vec<GovernReport>> {
+    let all_datums = datum_utils::get_all_datums(path)?;
+    let mut keys: Vec<&String> = all_datums.keys().collect();
+    keys.sort();
+    Ok(keys
+        .into_iter()
+        .filter_map(|key| {
+            let datum = all_datums.get(key)?;
+            if datum.status.as_deref() == Some("disabled") {
+                return None;
+            }
+            Some(govern_one(datum, path))
+        })
+        .collect())
+}
+
+/// `b00t datum govern <name>` / `b00t datum govern --all`.
+///
+/// Runs prove_by_type + evaluate_gates + hook_detect against a single named
+/// datum, or every datum under `path` (skipping `status = "disabled"` entries
+/// when `--all` is given) and reports per-datum health.
+fn handle_govern(path: &str, name: Option<&str>, all: bool, format: &str) -> Result<()> {
+    let reports: Vec<GovernReport> = if all {
+        govern_all(path)?
+    } else {
+        let datum_name = name.ok_or_else(|| {
+            anyhow::anyhow!("datum govern requires a name, or pass --all to govern every datum")
+        })?;
+        let datum = datum_utils::find_datum_by_pattern(path, datum_name)?
+            .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found", datum_name))?;
+        vec![govern_one(&datum, path)]
+    };
+
+    if format == "json" {
+        println!("{}", serde_json::to_string_pretty(&reports)?);
+    } else if reports.is_empty() {
+        println!("No datums to govern.");
+    } else {
+        for report in &reports {
+            print_govern_report_table(report);
+        }
+        let healthy_count = reports.iter().filter(|r| r.healthy).count();
+        println!("{} healthy / {} total", healthy_count, reports.len());
+    }
+
+    Ok(())
+}
+
 fn github_mcp_running() -> bool {
     std::process::Command::new("b00t")
         .args(["mcp", "list", "--search", "github"])
@@ -1568,6 +1744,101 @@ mod call_tests {
         assert!(
             err.to_string()
                 .contains("Refusing to execute multi-line backend template")
+        );
+    }
+}
+
+#[cfg(test)]
+mod govern_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Write a minimal `<name>.<type>.toml` datum fixture into `dir`.
+    /// `extra` is inserted verbatim into the `[b00t]` table (e.g. `version = "..."`,
+    /// `status = "disabled"`, or a trailing `[[b00t.gate]]` block).
+    fn write_fixture(dir: &TempDir, name: &str, datum_type: &str, extra: &str) {
+        let content = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"{datum_type}\"\nhint = \"test datum {name}\"\n{extra}\n"
+        );
+        let filename = format!("{name}.{datum_type}.toml");
+        std::fs::write(dir.path().join(filename), content).unwrap();
+    }
+
+    #[test]
+    fn govern_one_healthy_cli_datum_passes() {
+        let temp_dir = TempDir::new().unwrap();
+        // File gate resolves relative to the datum directory (path is a dir here).
+        std::fs::write(temp_dir.path().join("marker.txt"), "present").unwrap();
+        write_fixture(
+            &temp_dir,
+            "healthy-cli",
+            "cli",
+            "version = \"healthy-cli --version\"\n\n[[b00t.gate]]\nfile = \"marker.txt\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let datum = datum_utils::find_datum_by_pattern(path, "healthy-cli")
+            .unwrap()
+            .expect("fixture datum should be found");
+
+        let report = govern_one(&datum, path);
+
+        assert!(report.proved.passed, "proof should pass: {}", report.proved.detail);
+        assert_eq!(report.gated.len(), 1);
+        assert!(report.gated[0].passed, "gate should pass: {}", report.gated[0].reason);
+        assert!(report.hooked.passed, "no hook_detect should default to passed");
+        assert!(report.healthy, "datum with passing proof/gate/hook should be healthy");
+    }
+
+    #[test]
+    fn govern_one_missing_env_gate_marks_unhealthy() {
+        let temp_dir = TempDir::new().unwrap();
+        write_fixture(
+            &temp_dir,
+            "gated-cli",
+            "cli",
+            "version = \"gated-cli --version\"\n\n[[b00t.gate]]\nenv = \"B00T_GOVERN_TEST_MISSING_VAR_9d8f3a\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let datum = datum_utils::find_datum_by_pattern(path, "gated-cli")
+            .unwrap()
+            .expect("fixture datum should be found");
+
+        // Ensure the gate's env var really is unset in this process.
+        assert!(std::env::var("B00T_GOVERN_TEST_MISSING_VAR_9d8f3a").is_err());
+
+        let report = govern_one(&datum, path);
+
+        assert_eq!(report.gated.len(), 1);
+        assert!(
+            !report.gated[0].passed,
+            "gate on a missing env var should fail"
+        );
+        assert!(!report.healthy, "unhealthy gate should make the datum unhealthy");
+    }
+
+    #[test]
+    fn govern_all_skips_disabled_datums() {
+        let temp_dir = TempDir::new().unwrap();
+        write_fixture(&temp_dir, "active-cli", "cli", "version = \"active-cli --version\"\n");
+        write_fixture(
+            &temp_dir,
+            "disabled-cli",
+            "cli",
+            "version = \"disabled-cli --version\"\nstatus = \"disabled\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let reports = govern_all(path).unwrap();
+
+        assert!(
+            reports.iter().any(|r| r.datum == "active-cli"),
+            "active datum should be present in the report list"
+        );
+        assert!(
+            !reports.iter().any(|r| r.datum == "disabled-cli"),
+            "disabled datum should be skipped from --all governance"
         );
     }
 }
