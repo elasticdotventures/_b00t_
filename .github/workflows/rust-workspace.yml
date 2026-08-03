@@ -1,0 +1,51 @@
+name: Rust Workspace
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: rust-workspace-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-test:
+    name: cargo check + test --workspace --locked
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Init required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 \
+            vendor/ledgrrr \
+            vendor/runpod-sdk \
+            vendor/embed-anything-b00t
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo check --workspace --locked
+        run: cargo check --workspace --locked
+
+      - name: cargo test --workspace --locked (build, no-run)
+        run: cargo test --workspace --locked --no-run
+
+      - name: cargo test --workspace --locked (run)
+        run: cargo test --workspace --locked
