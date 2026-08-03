@@ -617,19 +617,28 @@ pub struct ProfileCrossrefResult {
 }
 
 /// Cross-reference a hive profile's `depends_on` datum keys against their
-/// `BootDatum.status` in the `_b00t_` datum store.
+/// `BootDatum.status`/`BootDatum.enabled` in the `_b00t_` datum store.
 ///
-/// A profile is degraded when any dependency's backing datum has
-/// `status == Some("disabled")`, or when no datum matches the dependency at
-/// all. A profile with an empty `depends_on` (or where every dependency
-/// resolves to an enabled datum) is healthy.
+/// A profile is degraded when any dependency's backing datum is disabled, or
+/// when no datum matches the dependency at all. A profile with an empty
+/// `depends_on` (or where every dependency resolves to an enabled datum) is
+/// healthy.
+///
+/// "Disabled" is `enabled == Some(false)` OR `status == Some("disabled")`.
+/// The former is the real-world signal: datums in this repo are disabled via
+/// `.gitattributes` (`b00t.enabled=false`), almost always paired with
+/// `status=sunset` rather than a literal `status=disabled` — see
+/// `_b00t_/.gitattributes`. Checking `status` alone would silently miss
+/// every disabled datum actually in use. `status == "disabled"` is kept too,
+/// for hand-authored datums that set it directly without a git-attribute
+/// override.
 pub fn crossref_datum_status(profile: &HiveProfile, b00t_path: &str) -> ProfileCrossrefResult {
     let mut reasons = Vec::new();
 
     for dep in &profile.depends_on {
         match crate::datum_utils::find_datum_by_pattern(b00t_path, dep) {
             Ok(Some(datum)) => {
-                if datum.status.as_deref() == Some("disabled") {
+                if datum.enabled == Some(false) || datum.status.as_deref() == Some("disabled") {
                     reasons.push(format!("dep {} disabled", dep));
                 }
             }
@@ -2566,6 +2575,47 @@ status = "disabled"
 name = "serena"
 type = "hive_profile"
 hint = "test profile with disabled dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(!result.healthy);
+        assert_eq!(
+            result.reasons,
+            vec!["dep agent-qwen.mcp disabled".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_degraded_when_dep_enabled_false() {
+        // Real-world disabled datums in this repo use `enabled = false`
+        // (typically paired with `status = "sunset"`, set via
+        // `.gitattributes` — see _b00t_/.gitattributes), NOT a literal
+        // `status = "disabled"`. Regression guard: crossref must catch this
+        // shape too, not just the synthetic status="disabled" case above.
+        let dir = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+status = "sunset"
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with sunset+enabled=false dep"
 depends_on = ["agent-qwen.mcp"]
 "#;
         let profile_path = dir.path().join("serena.hive.toml");

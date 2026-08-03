@@ -11,8 +11,9 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
-    GuardContext, GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards,
-    crossref_datum_status, discover_profiles, hive_stacks_status, load_profile,
+    GuardContext, GuardResult, HiveProfile, ProfileCrossrefResult, SystemSnapshot,
+    activate_profile, check_guards, crossref_datum_status, discover_profiles, hive_stacks_status,
+    load_profile,
 };
 
 /// Detect + record hardware drift between the live snapshot and soul `node.*` (P3).
@@ -222,8 +223,14 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                 Some(
                     discover_profiles(&datum_dir)
                         .iter()
-                        .filter_map(|(_, path)| HiveProfile::from_file(path).ok())
-                        .map(|p| crossref_datum_status(&p, &b00t_path))
+                        .map(|(name, path)| match HiveProfile::from_file(path) {
+                            Ok(p) => crossref_datum_status(&p, &b00t_path),
+                            Err(e) => ProfileCrossrefResult {
+                                profile: name.clone(),
+                                healthy: false,
+                                reasons: vec![format!("parse error: {}", e)],
+                            },
+                        })
                         .collect::<Vec<_>>(),
                 )
             } else {
