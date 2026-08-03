@@ -102,6 +102,7 @@ use b00t_cli::commands::{
     StoreCommands,
     ContractCommands,
     GrokCommands, HiveCommands,
+    InfluenceCommands,
     InitCommands,
     JobCommands,
     provider::ProviderCommands,
@@ -512,6 +513,11 @@ The system will:
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
+    },
+    #[clap(about = "AL-1.0 influence attribution audit trail — log/trail/stats (#691)")]
+    Influence {
+        #[clap(subcommand)]
+        influence_command: InfluenceCommands,
     },
     #[clap(
         about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided"
@@ -2517,6 +2523,13 @@ async fn main() {
         Some(Commands::Grok { grok_command }) => {
             use b00t_cli::commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Influence { influence_command }) => {
+            use b00t_cli::commands::influence::handle_influence_command;
+            if let Err(e) = handle_influence_command(influence_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
