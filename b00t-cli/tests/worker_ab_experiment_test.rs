@@ -10,6 +10,8 @@ use std::sync::Mutex;
 static INTEGRATION_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
+#[ignore] // relies on ~/.dotfiles/_b00t_/AGENT.md (b00t-cli's --path default), a personal
+          // dotfiles layout that doesn't exist on a fresh checkout / in CI
 fn test_b00t_whoami_worker_role_default() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let output = Command::new("cargo")
@@ -27,6 +29,8 @@ fn test_b00t_whoami_worker_role_default() {
 }
 
 #[test]
+#[ignore] // relies on ~/.dotfiles/_b00t_/AGENT.md (b00t-cli's --path default), a personal
+          // dotfiles layout that doesn't exist on a fresh checkout / in CI
 fn test_b00t_whoami_worker_explicit() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let output = Command::new("cargo")

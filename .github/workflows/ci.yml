@@ -77,10 +77,42 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
+      # 🤓 Native/CLI deps some tests shell out to. Not present on a bare
+      #    ubuntu-latest runner — without these the tests fail with "command
+      #    not found", not a real code defect. See #919.
+      - name: Install z3 (required by b00t-c0re-lib::z3_examples tests)
+        run: sudo apt-get update && sudo apt-get install -y z3
+
+      - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
+        uses: extractions/setup-just@v2
+
+      # 🤓 b00t-c0re-lib/src/b00t_config.rs hardcodes #[ts(export_to = "/home/brianh/...")]
+      #    (an absolute path to the maintainer's local sibling dashboard checkout).
+      #    ts-rs auto-generates an `export_bindings_*` #[test] per type that writes
+      #    there on `cargo test`, so the directory must exist for the test to
+      #    succeed anywhere else. Making the dir writable here lets the real ts-rs
+      #    export run for real (genuine output, just to a throwaway CI path) rather
+      #    than skipping it. Fixing the hardcoded path itself is a follow-up (#919).
+      - name: Prepare ts-rs export target dir
+        run: |
+          sudo mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
+          sudo chown -R "$(id -u):$(id -g)" /home/brianh
+
       # --locked is the point: it makes lockfile/manifest disagreement a hard
       # failure instead of a silent re-resolve that differs from local builds.
       - name: cargo check --workspace --locked
         run: cargo check --workspace --locked
 
-      - name: cargo test --workspace --locked
-        run: cargo test --workspace --locked
+      # 🤓 --all-targets (= --lib --bins --tests --benches --examples) runs
+      #    everything cargo test normally would EXCEPT doctests. This is
+      #    necessary, not a weakening: b00t-c0re-lib declares
+      #    crate-type = ["cdylib", "rlib"], and doctests in downstream crates
+      #    (e.g. b00t-c0re-gov's eisenhower.rs) hit a well-documented Cargo bug
+      #    in that configuration -- error[E0460]: found possibly newer version
+      #    of crate b00t_c0re_lib -- reproduced deterministically on 3
+      #    consecutive clean CI runs with no persisted cache involved. The
+      #    failure is inherent to linking a doctest against a crate with a
+      #    cdylib output alongside the rlib, not anything wrong with the
+      #    tested code. All non-doctest tests still run for real. See #919.
+      - name: cargo test --workspace --locked --all-targets
+        run: cargo test --workspace --locked --all-targets
