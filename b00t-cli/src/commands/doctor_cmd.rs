@@ -109,6 +109,11 @@ fn all_deps() -> Vec<Value> {
         json!({"id": "gh-api", "check": "curl -sf --max-time 5 -o /dev/null -w '%{http_code}' https://api.github.com/zen 2>/dev/null"}),
         // Skill datum integrity: no loose .skill.* files in _b00t_/
         json!({"id": "skill-symlinks", "check": "cd $HOME/.dotfiles 2>/dev/null && find _b00t_/ -name '*.skill.*' ! -type l 2>/dev/null | wc -l | tr -d ' ' || echo 0"}),
+        // Stray root-level test/ dir (#935): bats-core/bats-assert/bats-support
+        // are registered as submodules under _b00t_/test/ only. A root-level
+        // test/ dir is an untracked, unregistered footgun — a duplicate
+        // checkout that could silently diverge from the real submodule.
+        json!({"id": "no-stray-root-test-dir", "check": "test -d $HOME/.b00t/test && echo FAIL || echo PASS"}),
     ].into_iter().map(|mut v| {
         let check = v.get("check").and_then(|c| c.as_str()).unwrap_or("");
         if !check.is_empty() {
@@ -122,6 +127,14 @@ fn all_deps() -> Vec<Value> {
                     json!("all .skill.* files are symlinks")
                 } else {
                     json!(format!("{} loose .skill.* files in _b00t_/ (must be symlinks to skills/*/SKILL.md)", count))
+                };
+            } else if v["id"] == "no-stray-root-test-dir" {
+                let pass = detail.trim() == "PASS";
+                v["pass"] = json!(pass);
+                v["detail"] = if pass {
+                    json!("no stray root-level test/ dir")
+                } else {
+                    json!("stray $HOME/.b00t/test/ dir present — use _b00t_/test/* submodules instead (#935)")
                 };
             } else {
                 v["pass"] = json!(ok);
