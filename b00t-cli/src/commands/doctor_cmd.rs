@@ -15,7 +15,7 @@ use anyhow::{Context, Result};
 use b00t_c0re_lib::redis::{RedisComms, RedisConfig};
 use clap::Parser;
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
@@ -114,6 +114,12 @@ fn all_deps() -> Vec<Value> {
         // test/ dir is an untracked, unregistered footgun — a duplicate
         // checkout that could silently diverge from the real submodule.
         json!({"id": "no-stray-root-test-dir", "check": "test -d $HOME/.b00t/test && echo FAIL || echo PASS"}),
+        // Gutted submodule gitdir (#924): .git/modules/<path> exists (config present)
+        // but HEAD is missing — the low-level gitdir was partially destroyed,
+        // making bare `git status` fatal for the whole superproject.
+        json!({"id": "no-gutted-submodule-gitdir", "check":
+            "cd $HOME/.b00t 2>/dev/null && bad=$(git config -f .gitmodules --get-regexp '\\.path$' 2>/dev/null | awk '{print $2}' | while read -r p; do d=\".git/modules/$p\"; [ -f \"$d/config\" ] && [ ! -f \"$d/HEAD\" ] && echo \"$p\"; done); [ -z \"$bad\" ] && echo PASS || echo \"FAIL: $bad\""
+        }),
     ].into_iter().map(|mut v| {
         let check = v.get("check").and_then(|c| c.as_str()).unwrap_or("");
         if !check.is_empty() {
@@ -136,6 +142,18 @@ fn all_deps() -> Vec<Value> {
                 } else {
                     json!("stray $HOME/.b00t/test/ dir present — use _b00t_/test/* submodules instead (#935)")
                 };
+            } else if v["id"] == "no-gutted-submodule-gitdir" {
+                let pass = detail.trim() == "PASS";
+                v["pass"] = json!(pass);
+                v["detail"] = if pass {
+                    json!("no gutted submodule gitdirs")
+                } else {
+                    let bad = detail.trim().trim_start_matches("FAIL: ");
+                    json!(format!(
+                        "gutted gitdir(s): {} — repair: rm -rf $HOME/.b00t/.git/modules/<path>; rm -f <path>/.git; git -C $HOME/.b00t submodule update --init <path> (#924), or run `b00t doctor fix-submodule <path>`",
+                        bad
+                    ))
+                };
             } else {
                 v["pass"] = json!(ok);
                 v["detail"] = json!(detail);
@@ -144,6 +162,62 @@ fn all_deps() -> Vec<Value> {
         }
         v
     }).collect()
+}
+
+/// Enumerate submodules whose gitdir was "gutted": `.git/modules/<path>/config`
+/// exists but `HEAD` does not (objects/refs are typically gone too). See #924.
+fn find_gutted_submodules(repo_root: &Path) -> Vec<String> {
+    let Ok(content) = std::fs::read_to_string(repo_root.join(".gitmodules")) else {
+        return vec![];
+    };
+    content
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("path = ").map(str::trim))
+        .filter(|p| {
+            let gitdir = repo_root.join(".git/modules").join(p);
+            gitdir.join("config").is_file() && !gitdir.join("HEAD").is_file()
+        })
+        .map(String::from)
+        .collect()
+}
+
+/// Repair a gutted submodule gitdir (#924). A gutted gitdir has no HEAD,
+/// objects, or refs — there is nothing recoverable to lose — so the repair
+/// is a straight re-clone: remove the corrupt gitdir, remove the stale `.git`
+/// pointer file in the submodule's working directory, then re-init from the
+/// remote registered in .gitmodules. Safe to auto-apply for exactly this
+/// reason (unlike #923's drift checks, which distinguish safe/unsafe because
+/// they may discard *uncommitted* local state — a gutted gitdir has none).
+fn repair_gutted_submodule(repo_root: &Path, submodule_path: &str) -> Result<String> {
+    let gitdir = repo_root.join(".git/modules").join(submodule_path);
+    anyhow::ensure!(
+        gitdir.join("config").is_file() && !gitdir.join("HEAD").is_file(),
+        "{} does not match the gutted-gitdir shape (config present, HEAD missing) — refusing to touch it",
+        submodule_path
+    );
+
+    std::fs::remove_dir_all(&gitdir)
+        .with_context(|| format!("removing gutted gitdir {}", gitdir.display()))?;
+
+    let dotgit = repo_root.join(submodule_path).join(".git");
+    if dotgit.is_file() {
+        std::fs::remove_file(&dotgit)
+            .with_context(|| format!("removing stale .git pointer at {}", dotgit.display()))?;
+    }
+
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args(["submodule", "update", "--init", submodule_path])
+        .output()
+        .context("running git submodule update --init")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git submodule update --init {} failed: {}",
+        submodule_path,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(format!("repaired {}", submodule_path))
 }
 
 #[derive(Default)]
@@ -285,6 +359,13 @@ pub enum DoctorCommands {
     },
     #[clap(hide = true)]
     HealthJson,
+    #[clap(about = "Repair gutted submodule gitdir(s) (#924) — safe: gutted state has no recoverable data")]
+    FixSubmodule {
+        #[clap(help = "Submodule path from .gitmodules; omit to repair all detected")]
+        path: Option<String>,
+        #[clap(long, help = "List gutted submodules without repairing")]
+        dry_run: bool,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -509,6 +590,28 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             );
             Ok(())
         }
+        DoctorCommands::FixSubmodule { path, dry_run } => {
+            let root = home().join(".b00t");
+            let targets = match path {
+                Some(p) => vec![p.clone()],
+                None => find_gutted_submodules(&root),
+            };
+            if targets.is_empty() {
+                println!("no gutted submodules found");
+                return Ok(());
+            }
+            for t in &targets {
+                if *dry_run {
+                    println!("would repair: {t}");
+                } else {
+                    match repair_gutted_submodule(&root, t) {
+                        Ok(msg) => println!("✅ {msg}"),
+                        Err(e) => println!("❌ {t}: {e}"),
+                    }
+                }
+            }
+            Ok(())
+        }
     }
 }
 pub fn health_json() -> serde_json::Value {
@@ -717,4 +820,55 @@ fn check_fsl_dir(fix: bool) -> Value {
             "not found".to_string()
         }
     })
+}
+
+#[cfg(test)]
+mod gutted_submodule_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn make_gutted_fixture() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join(".gitmodules"),
+            "[submodule \"x\"]\n\tpath = sub/x\n\turl = https://example.com/x.git\n",
+        )
+        .unwrap();
+        let gitdir = dir.path().join(".git/modules/sub/x");
+        fs::create_dir_all(&gitdir).unwrap();
+        fs::write(gitdir.join("config"), "[core]\n\tbare = true\n").unwrap();
+        dir
+    }
+
+    #[test]
+    fn detects_gutted_gitdir() {
+        let dir = make_gutted_fixture();
+        assert_eq!(
+            find_gutted_submodules(dir.path()),
+            vec!["sub/x".to_string()]
+        );
+    }
+
+    #[test]
+    fn does_not_flag_healthy_gitdir() {
+        let dir = make_gutted_fixture();
+        fs::write(
+            dir.path().join(".git/modules/sub/x/HEAD"),
+            "ref: refs/heads/main\n",
+        )
+        .unwrap();
+        assert!(find_gutted_submodules(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn repair_refuses_non_gutted_path() {
+        let dir = make_gutted_fixture();
+        fs::write(
+            dir.path().join(".git/modules/sub/x/HEAD"),
+            "ref: refs/heads/main\n",
+        )
+        .unwrap();
+        assert!(repair_gutted_submodule(dir.path(), "sub/x").is_err());
+    }
 }
