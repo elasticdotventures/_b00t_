@@ -71,14 +71,6 @@ impl K8sDatum {
     }
 }
 
-impl TryFrom<(&str, &str)> for K8sDatum {
-    type Error = anyhow::Error;
-
-    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
-        Self::from_config(name, path)
-    }
-}
-
 impl DatumChecker for K8sDatum {
     fn is_installed(&self) -> bool {
         // K8s charts are "installed" if:
@@ -156,7 +148,7 @@ impl StatusProvider for K8sDatum {
 
 impl FilterLogic for K8sDatum {
     fn is_available(&self) -> bool {
-        !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
+        self.is_available_default()
     }
 
     fn prerequisites_satisfied(&self) -> bool {
@@ -174,17 +166,7 @@ impl FilterLogic for K8sDatum {
     }
 }
 
-impl ConstraintEvaluator for K8sDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
-
-impl DatumProvider for K8sDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
+crate::impl_boot_datum_accessors!(K8sDatum);
 
 /// Sync all datum files to k8s ConfigMaps in the given namespace.
 ///

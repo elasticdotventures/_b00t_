@@ -125,14 +125,6 @@ impl DockerDatum {
     }
 }
 
-impl TryFrom<(&str, &str)> for DockerDatum {
-    type Error = anyhow::Error;
-
-    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
-        Self::from_config(name, path)
-    }
-}
-
 impl DatumChecker for DockerDatum {
     fn is_installed(&self) -> bool {
         // Docker containers are "installed" if:
@@ -197,7 +189,7 @@ impl StatusProvider for DockerDatum {
 
 impl FilterLogic for DockerDatum {
     fn is_available(&self) -> bool {
-        !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
+        self.is_available_default()
     }
 
     fn prerequisites_satisfied(&self) -> bool {
@@ -215,14 +207,4 @@ impl FilterLogic for DockerDatum {
     }
 }
 
-impl ConstraintEvaluator for DockerDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
-
-impl DatumProvider for DockerDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
+crate::impl_boot_datum_accessors!(DockerDatum);
