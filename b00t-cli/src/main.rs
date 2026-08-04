@@ -82,6 +82,7 @@ use b00t_cli::datum_apt::AptDatum;
 use b00t_cli::datum_bash::BashDatum;
 use b00t_cli::datum_cli::CliDatum;
 use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_k8s::K8sDatum;
 use b00t_cli::datum_podman::PodmanDatum;
 use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
@@ -1123,12 +1124,18 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         BashDatum,
     >(path, ".bash.toml")?));
+    // ContainerRuntime SubKind siblings (see datum_types.rs's `datum_type_table!`
+    // ContainerRuntime declaration) — Docker, Podman, K8s. If a 4th
+    // ContainerRuntime variant is ever added there, wire its provider in here too.
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         DockerDatum,
     >(path, ".docker.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         PodmanDatum,
     >(path, ".podman.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        K8sDatum,
+    >(path, ".k8s.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         VscodeDatum,
     >(path, ".vscode.toml")?));
