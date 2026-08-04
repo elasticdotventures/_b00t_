@@ -5,6 +5,7 @@ pub mod gates;
 pub mod ring;
 pub mod redb_scope_store;
 pub mod scheduler;
+pub mod scope_chain_view;
 pub mod scope_store;
 pub mod scoring;
 pub mod store;

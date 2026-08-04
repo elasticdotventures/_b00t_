@@ -1469,6 +1469,7 @@ dependencies = [
  "async-trait",
  "b00t-c0re-lib",
  "chrono",
+ "jsonpath-rust",
  "redb 4.1.0",
  "serde",
  "serde_json",
@@ -7098,9 +7099,9 @@ dependencies = [
 
 [[package]]
 name = "jsonpath-rust"
-version = "1.0.4"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633a7320c4bb672863a3782e89b9094ad70285e097ff6832cddd0ec615beadfa"
+checksum = "2e07021eefc09f897611b067ba7897b5e9266edfc902768418968772e5bb06a7"
 dependencies = [
  "pest",
  "pest_derive",
