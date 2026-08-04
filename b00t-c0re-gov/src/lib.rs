@@ -3,6 +3,7 @@ pub mod epoch3;
 pub mod errors;
 pub mod gates;
 pub mod ring;
+pub mod redb_scope_store;
 pub mod scheduler;
 pub mod scope_store;
 pub mod scoring;
