@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use ufo_types::Stereotyped;
+
+use crate::DatumType;
 
 #[derive(Parser, Debug)]
 pub enum OntologyCommands {
@@ -277,6 +280,9 @@ pub fn sparql_query(
         match predicate {
             "type" | "b00t:type" => {
                 triples.push(emit("b00t:type", &datum.b00t.datum_type));
+                let dt = DatumType::from_type_token(&datum.b00t.datum_type)
+                    .unwrap_or(DatumType::Unknown);
+                triples.push(emit("ufo:stereotype", &dt.ufo_stereotype().to_string()));
             }
             "roles" | "b00t:roles" => {
                 for r in &datum.roles.required_for {
@@ -294,6 +300,9 @@ pub fn sparql_query(
             _ => {
                 // "all" or unknown — emit all predicates
                 triples.push(emit("b00t:type", &datum.b00t.datum_type));
+                let dt = DatumType::from_type_token(&datum.b00t.datum_type)
+                    .unwrap_or(DatumType::Unknown);
+                triples.push(emit("ufo:stereotype", &dt.ufo_stereotype().to_string()));
                 for r in &datum.roles.required_for {
                     triples.push(emit("b00t:requiredFor", r));
                 }
@@ -531,6 +540,15 @@ optional_for = []
         assert_eq!(triples[0][0], "rust");
         assert_eq!(triples[0][1], "b00t:type");
         assert_eq!(triples[0][2], "cli");
+
+        // ufo:stereotype triple (#926) — Cli is a SubKind of Executable.
+        // NOTE: the vendored ufo_types::UfoStereotype Display impl for SubKind
+        // has a real upstream bug (missing closing '>'), so the expected
+        // string is "SubKind:Cli<Executable" with no trailing '>'. This is
+        // NOT fixed here — see PR description.
+        assert_eq!(triples[1][0], "rust");
+        assert_eq!(triples[1][1], "ufo:stereotype");
+        assert_eq!(triples[1][2], "SubKind:Cli<Executable");
 
         let triples2 = sparql_query(Some("rust"), "roles", dir.path().to_str().unwrap()).unwrap();
         assert!(
