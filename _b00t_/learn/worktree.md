@@ -1,2 +1,38 @@
 ---
-Fresh git worktrees under ~/.b00t/.claude/worktrees/ do NOT have submodules initialized, but 3: Fresh git worktrees under ~/.b00t/.claude/worktrees/ do NOT have submodules initialized, but 3 crates require submodule path-dependencies to even resolve for cargo check/test: vendor/ledgrrr (b00t-reflect-types), vendor/runpod-sdk, and vendor/embed-anything-b00t. Any fresh worktree hits 'failed to load manifest ... No such file or directory' on first cargo invocation. Fix: run 'git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t' immediately after 'git worktree add', before any cargo command. Also after checking out embed-anything-b00t, verify it's at rev ee16a22 (v0.7.2, candle-core 0.11.0) not an older rev — the root ~/.b00t repo's own recorded submodule pointer has drifted to a stale rev (bed9e6ea, pre-dating the real upstream v0.7.2 rebase) more than once this session; if cargo reports two versions of candle_core in the dep tree, check this pointer first. <!-- salvaged:topic_overflow -->
+Fresh git worktrees do NOT have submodules initialized. 3 crates require submodule
+path-dependencies to resolve for cargo check/test: vendor/ledgrrr (b00t-reflect-types),
+vendor/runpod-sdk, and vendor/embed-anything-b00t. Any fresh worktree hits 'failed to
+load manifest ... No such file or directory' on first cargo invocation.
+
+Fix: immediately after `git worktree add <path> <branch>`, run:
+```
+git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+```
+before any cargo command. Do NOT `--recursive` — that pulls the full nested submodule
+history of every vendored fork (~16GB observed in one session), nearly all of it unused
+by this workspace.
+
+After checking out embed-anything-b00t, verify it's at rev ee16a22 (v0.7.2, candle-core
+0.11.0), not an older rev — the root repo's own recorded submodule pointer has drifted to
+a stale rev (bed9e6ea, pre-dating the real upstream v0.7.2 rebase) more than once. If
+cargo reports two versions of candle_core in the dep tree, check this pointer first.
+
+## Where to put the worktree (recorded 2026-08-04)
+
+- Real disk only — NEVER `/tmp`. tmpfs is RAM-backed and shared across every concurrent
+  session on the host; it has hit 0 bytes free mid-build from unrelated sessions' churn,
+  with no warning until a write fails.
+- `~/.dotfiles` itself is a **bare** repo (`core.bare=true`) with legacy stray working
+  files sitting in it — NOT a real working tree. Never edit files or run cargo there
+  directly; a concurrent session checking out a different branch there can silently mix
+  its state into your uncommitted edits. Always `git worktree add <path> <branch>` first.
+- Suggested location: `~/scratch/<slug>` or `~/.b00t/.claude/worktrees/<slug>` (create the
+  parent dir first — it's the documented convention but isn't always pre-created).
+- The repo's checked-in `.cargo/config.toml` points `target-dir` at one shared location
+  (`~/.cache/b00t-cargo-target`) so every worktree of this repo reuses already-compiled
+  dependency artifacts instead of each paying the ~7-13GB cold-build cost. Override with
+  `CARGO_TARGET_DIR` only if you specifically need an isolated target dir.
+- `git worktree remove <path>` (and `git worktree prune` if removed by hand) when the
+  task is done — don't leave throwaway worktrees accumulating on disk. The shared
+  target-dir survives worktree removal by design; no need to `cargo clean` it.
+<!-- salvaged:topic_overflow -->

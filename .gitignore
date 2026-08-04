@@ -149,6 +149,8 @@
 .cache/
 .cargo/*
 **/.cargo/*
+# Exception: repo-root shared target-dir config (no secrets, see _b00t_/learn/worktree.md)
+!/.cargo/config.toml
 .claude-plugin/recipes/mcp-servers/*.json
 .claude/
 .claude/*

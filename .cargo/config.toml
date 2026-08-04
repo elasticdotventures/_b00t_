@@ -1,0 +1,6 @@
+# 🤓 Shared across every git worktree of this repo (see _b00t_/learn/worktree.md):
+# a fresh `git worktree add` reuses already-compiled dependency artifacts here
+# instead of rebuilding several GB of the dep graph from scratch per worktree.
+# Override per-invocation with CARGO_TARGET_DIR if you need an isolated target dir.
+[build]
+target-dir = "/home/brianh/.cache/b00t-cargo-target"
