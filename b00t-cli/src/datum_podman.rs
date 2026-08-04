@@ -62,14 +62,6 @@ impl PodmanDatum {
     }
 }
 
-impl TryFrom<(&str, &str)> for PodmanDatum {
-    type Error = anyhow::Error;
-
-    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
-        Self::from_config(name, path)
-    }
-}
-
 impl DatumChecker for PodmanDatum {
     fn is_installed(&self) -> bool {
         check_command_available("podman") && (self.is_deployed() || self.is_manifest_available())
@@ -127,7 +119,7 @@ impl StatusProvider for PodmanDatum {
 
 impl FilterLogic for PodmanDatum {
     fn is_available(&self) -> bool {
-        !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
+        self.is_available_default()
     }
 
     fn prerequisites_satisfied(&self) -> bool {
@@ -143,17 +135,7 @@ impl FilterLogic for PodmanDatum {
     }
 }
 
-impl ConstraintEvaluator for PodmanDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
-
-impl DatumProvider for PodmanDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
+crate::impl_boot_datum_accessors!(PodmanDatum);
 
 #[cfg(test)]
 mod tests {
