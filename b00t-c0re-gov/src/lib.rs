@@ -4,6 +4,7 @@ pub mod errors;
 pub mod gates;
 pub mod ring;
 pub mod scheduler;
+pub mod scope_store;
 pub mod scoring;
 pub mod store;
 pub mod traits;
