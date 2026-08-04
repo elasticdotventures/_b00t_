@@ -979,6 +979,11 @@ ask query="":
 # ── ufo-types crate (#511) — Tax-Lawyer UFO stereotypes + Satisfies<T> ──────
 # (moved to mod ufo '_b00t_/justfile-ufo.just')
 
+# Regenerate the ufo-types adoption baseline report (issue #928) — measures
+# real adoption via grep, not hand-maintained numbers that silently drift.
+ufo-adoption-report:
+    @bash _b00t_/scripts/ufo-adoption-report.sh
+
 # ── Chore memoization — recipes for fine-tune corpus (fewer tokens) ─────────
 # (moved to mod chore '_b00t_/justfile-chore.just')
 
