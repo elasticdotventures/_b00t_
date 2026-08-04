@@ -116,7 +116,14 @@ impl ScopeChainView {
     /// actually part of this chain. There is deliberately no "write to
     /// whichever scope is closest" method — #893's no-silent-shadowing
     /// requirement.
+    ///
+    /// Also runs the credential guard (#899) unconditionally, before
+    /// touching any backend: a credential-shaped key is rejected at
+    /// every scope, not just repo-scope — see scope_credential_guard.rs
+    /// for why "everywhere" replaced the original "repo-scope only"
+    /// framing.
     pub fn set_raw(&mut self, target: &ScopeId, key: &str, val: Value) -> ScopeResult<()> {
+        crate::scope_credential_guard::guard_write(key)?;
         for store in &mut self.chain {
             if store.scope_id() == target {
                 return store.set_raw(key, val);
@@ -369,5 +376,36 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].resolved_at, None);
         assert_eq!(events[0].boundaries_crossed.len(), 2, "checked all 3 scopes -> 2 boundaries");
+    }
+
+    #[test]
+    fn set_raw_rejects_credential_shaped_key_at_every_scope() {
+        // #899: not just repo-scope -- global too.
+        for target in [
+            ScopeId::Repo("myrepo".into()),
+            ScopeId::Node("myhost".into()),
+            ScopeId::Global,
+        ] {
+            let mut chain = three_tier_chain();
+            let err = chain
+                .set_raw(&target, "openai.credential", Value::String("sk-...".into()))
+                .unwrap_err();
+            assert!(
+                matches!(err, ScopeError::WriteRejected(_)),
+                "expected WriteRejected for target {target:?}, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn set_raw_still_allows_ordinary_keys() {
+        let mut chain = three_tier_chain();
+        chain
+            .set_raw(&ScopeId::Global, "greeting", Value::String("hi".into()))
+            .unwrap();
+        assert_eq!(
+            chain.get_raw("greeting").unwrap(),
+            Some(Value::String("hi".into()))
+        );
     }
 }

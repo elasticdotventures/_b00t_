@@ -9,6 +9,7 @@ pub mod redis_scope_store;
 pub mod scheduler;
 pub mod scope_audit;
 pub mod scope_chain_view;
+pub mod scope_credential_guard;
 pub mod scope_store;
 pub mod scoring;
 pub mod store;
