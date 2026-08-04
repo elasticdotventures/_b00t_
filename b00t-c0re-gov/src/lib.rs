@@ -1,4 +1,5 @@
 pub mod continuation;
+pub mod discovery;
 pub mod epoch3;
 pub mod errors;
 pub mod gates;
