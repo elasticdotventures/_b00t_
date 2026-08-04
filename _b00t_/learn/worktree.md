@@ -28,10 +28,12 @@ cargo reports two versions of candle_core in the dep tree, check this pointer fi
   its state into your uncommitted edits. Always `git worktree add <path> <branch>` first.
 - Suggested location: `~/scratch/<slug>` or `~/.b00t/.claude/worktrees/<slug>` (create the
   parent dir first — it's the documented convention but isn't always pre-created).
-- The repo's checked-in `.cargo/config.toml` points `target-dir` at one shared location
-  (`~/.cache/b00t-cargo-target`) so every worktree of this repo reuses already-compiled
-  dependency artifacts instead of each paying the ~7-13GB cold-build cost. Override with
-  `CARGO_TARGET_DIR` only if you specifically need an isolated target dir.
+- `export CARGO_TARGET_DIR=$HOME/.cache/b00t-cargo-target` before building, so every
+  worktree of this repo reuses already-compiled dependency artifacts instead of each
+  paying the ~7-13GB cold-build cost. This MUST stay a per-shell env var, not a
+  checked-in `.cargo/config.toml` — CI runs this repo as a different user with no
+  `$HOME/.cache` to write to, and a committed absolute-path `target-dir` breaks its
+  build with `Permission denied` (hit in elasticdotventures/_b00t_#964).
 - `git worktree remove <path>` (and `git worktree prune` if removed by hand) when the
   task is done — don't leave throwaway worktrees accumulating on disk. The shared
   target-dir survives worktree removal by design; no need to `cargo clean` it.
