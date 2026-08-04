@@ -6,7 +6,9 @@
 //! scope (no "write to the closest scope" — #893: "no silent shadowing").
 
 use crate::errors::{ScopeError, ScopeResult};
+use crate::scope_audit::{AuditDirection, AuditEvent, AuditLogger, BoundaryCrossing};
 use crate::scope_store::{ScopeId, ScopeStore};
+use chrono::Utc;
 use jsonpath_rust::JsonPath;
 use serde_json::Value;
 
@@ -61,6 +63,53 @@ impl ScopeChainView {
             }
         }
         Ok(None)
+    }
+
+    /// Same resolution as `get_raw`, but records an `AuditEvent` (#900) to
+    /// `logger`: every scope checked-and-missed before the value resolved
+    /// (or every scope checked if it wasn't found anywhere), as an ordered
+    /// `boundaries_crossed[from,to,direction]` list -- not a boolean. A
+    /// hit on the first (most-specific) scope logs zero crossings, which
+    /// is itself meaningful data (see scope_audit's test for why).
+    pub fn get_raw_with_audit(
+        &self,
+        key: &str,
+        logger: &AuditLogger,
+    ) -> ScopeResult<Option<Value>> {
+        let mut crossings = Vec::new();
+        let mut resolved_at = None;
+        let mut result = None;
+
+        for pair in self.chain.windows(2) {
+            let (from, to) = (&pair[0], &pair[1]);
+            if let Some(v) = from.get_raw(key)? {
+                result = Some(v);
+                resolved_at = Some(from.scope_id().clone());
+                break;
+            }
+            crossings.push(BoundaryCrossing {
+                from: from.scope_id().clone(),
+                to: to.scope_id().clone(),
+                direction: AuditDirection::Read,
+            });
+        }
+        if result.is_none() {
+            if let Some(last) = self.chain.last() {
+                if let Some(v) = last.get_raw(key)? {
+                    result = Some(v);
+                    resolved_at = Some(last.scope_id().clone());
+                }
+            }
+        }
+
+        logger.append(&AuditEvent {
+            timestamp: Utc::now(),
+            key: key.to_string(),
+            boundaries_crossed: crossings,
+            resolved_at,
+        })?;
+
+        Ok(result)
     }
 
     /// Explicit-target-only write: `target` must name a scope that is
@@ -251,5 +300,74 @@ mod tests {
         let chain = three_tier_chain();
         let matches = chain.query("nope", "$.anything").unwrap();
         assert_eq!(matches, Vec::<Value>::new());
+    }
+
+    #[test]
+    fn audited_read_records_boundaries_crossed_on_the_way_to_the_hit() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        // Only Global has it -- repo and node scopes must both be
+        // checked-and-missed first.
+        chain
+            .set_raw(&ScopeId::Global, "k", Value::String("v".into()))
+            .unwrap();
+
+        let result = chain.get_raw_with_audit("k", &logger).unwrap();
+        assert_eq!(result, Some(Value::String("v".into())));
+
+        let events = logger.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].key, "k");
+        assert_eq!(events[0].resolved_at, Some(ScopeId::Global));
+        assert_eq!(
+            events[0].boundaries_crossed,
+            vec![
+                crate::scope_audit::BoundaryCrossing {
+                    from: ScopeId::Repo("myrepo".into()),
+                    to: ScopeId::Node("myhost".into()),
+                    direction: crate::scope_audit::AuditDirection::Read,
+                },
+                crate::scope_audit::BoundaryCrossing {
+                    from: ScopeId::Node("myhost".into()),
+                    to: ScopeId::Global,
+                    direction: crate::scope_audit::AuditDirection::Read,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn audited_read_hit_on_most_specific_scope_crosses_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        chain
+            .set_raw(&ScopeId::Repo("myrepo".into()), "k", Value::from(1))
+            .unwrap();
+
+        chain.get_raw_with_audit("k", &logger).unwrap();
+
+        let events = logger.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(events[0].boundaries_crossed.is_empty());
+        assert_eq!(events[0].resolved_at, Some(ScopeId::Repo("myrepo".into())));
+    }
+
+    #[test]
+    fn audited_read_miss_everywhere_still_logs_every_boundary_checked() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let chain = three_tier_chain();
+        let result = chain.get_raw_with_audit("nowhere", &logger).unwrap();
+        assert_eq!(result, None);
+
+        let events = logger.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].resolved_at, None);
+        assert_eq!(events[0].boundaries_crossed.len(), 2, "checked all 3 scopes -> 2 boundaries");
     }
 }

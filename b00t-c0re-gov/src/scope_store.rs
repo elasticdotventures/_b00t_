@@ -13,6 +13,7 @@
 //!    duplication this trait exists to consolidate away, not add to.
 
 use crate::errors::ScopeResult;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 
@@ -23,7 +24,7 @@ use std::fmt;
 /// `Repo` scope, never flattened into their parent (see #893's "Resolution"
 /// section — GET walks repo → submodule-parents → node → global, boundary
 /// crossings logged, not merged).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ScopeId {
     /// A single repo (or submodule) root, identified by an opaque key.
     Repo(String),
