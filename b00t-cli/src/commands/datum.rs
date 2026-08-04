@@ -4,6 +4,7 @@ use crate::datum_utils::{self, DatumFilter};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
+use ufo_types::{Disposition, IsoAuditable, Satisfies, SatisfiesResult, Stereotyped, UfoStereotype};
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -1040,21 +1041,78 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let content = std::fs::read_to_string(&file_path).context("cannot read file")?;
     let raw: toml::Value = toml::from_str(&content).context("invalid TOML")?;
 
-    let mut errors = Vec::new();
-    let mut warnings = Vec::new();
-
     // Check [b00t] section exists
     let b00t_table = match raw.get("b00t") {
-        Some(toml::Value::Table(t)) => t,
+        Some(toml::Value::Table(t)) => t.clone(),
         Some(_) => {
-            errors.push("[b00t] must be a TOML table".into());
-            return print_validation_result(&errors, &warnings);
+            let errors = vec!["[b00t] must be a TOML table".to_string()];
+            return print_validation_result(&errors, &[]);
         }
         None => {
-            errors.push("missing [b00t] section".into());
-            return print_validation_result(&errors, &warnings);
+            let errors = vec!["missing [b00t] section".to_string()];
+            return print_validation_result(&errors, &[]);
         }
     };
+
+    let outcome = compute_datum_validation(&b00t_table, filename, strict);
+    print_validation_result(&outcome.errors, &outcome.warnings)?;
+
+    // Route through the real Satisfies<C> / evidence-sink path (#927) —
+    // additive to the print-based UX above, which is unchanged.
+    let subject = DatumTomlSubject {
+        raw: &b00t_table,
+        filename,
+    };
+    let constraint = BootDatumSchemaConstraint { strict };
+    let result = subject.satisfies(&constraint);
+
+    let _ = crate::commands::evidence::record_is_a(target, &subject.ufo_stereotype().to_string());
+    for iso_id in constraint.iso_standard_ids() {
+        let _ = crate::commands::evidence::record_audited_by(target, &iso_id);
+    }
+
+    if matches!(result.disposition, Disposition::Unknown) {
+        println!("  UNKNOWN: cannot verify type/extension consistency (unrecognized extension)");
+        if strict {
+            anyhow::bail!(
+                "--strict: type/extension consistency is undecidable for '{}' (unrecognized extension)",
+                filename
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Pure outcome of validating a `[b00t]` TOML table against the `BootDatum`
+/// schema — same checks `handle_validate` has always run, extracted so both
+/// the print-based UX and the `Satisfies<BootDatumSchemaConstraint>` impl
+/// below can share one implementation.
+struct DatumValidationOutcome {
+    errors: Vec<String>,
+    warnings: Vec<String>,
+    /// True exactly when the strict extension↔type consistency check could
+    /// not be decided because the filename's extension is not a recognized
+    /// datum type (`DatumType::from_filename` returned `Unknown`). Prior to
+    /// #927 this case was silently skipped — neither an error nor a
+    /// warning — which is the bug this issue fixes: it's now surfaced as a
+    /// distinguishable `Disposition::Unknown`, not silently folded into
+    /// "valid".
+    extension_check_undecidable: bool,
+}
+
+/// Same required-field / unknown-key / extension-consistency / version_regex
+/// checks `handle_validate` has always run — extracted to a pure function so
+/// it can feed both the existing print-based UX and the new
+/// `Satisfies<BootDatumSchemaConstraint>` impl.
+fn compute_datum_validation(
+    b00t_table: &toml::value::Table,
+    filename: &str,
+    strict: bool,
+) -> DatumValidationOutcome {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    let mut extension_check_undecidable = false;
 
     // Required fields
     if b00t_table.get("name").is_none() {
@@ -1079,7 +1137,12 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
         if let Some(toml::Value::String(type_str)) = b00t_table.get("type") {
             let declared = DatumType::from_type_token(type_str);
             let from_ext = DatumType::from_filename(filename);
-            if declared != Some(from_ext) && from_ext != DatumType::Unknown {
+            if from_ext == DatumType::Unknown {
+                // #927 fix: previously silently skipped — no error, no
+                // warning. Unrecognized extension means we genuinely cannot
+                // decide whether type and extension are consistent.
+                extension_check_undecidable = true;
+            } else if declared != Some(from_ext) {
                 warnings.push(format!(
                     "type={} but filename suggests {:?} (extension .{})",
                     type_str,
@@ -1097,7 +1160,61 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
         }
     }
 
-    print_validation_result(&errors, &warnings)
+    DatumValidationOutcome {
+        errors,
+        warnings,
+        extension_check_undecidable,
+    }
+}
+
+/// `[b00t]` TOML table + originating filename — the subject evaluated
+/// against `BootDatumSchemaConstraint`.
+pub struct DatumTomlSubject<'a> {
+    pub raw: &'a toml::value::Table,
+    pub filename: &'a str,
+}
+
+/// Constraint: a `[b00t]` TOML table must conform to the `BootDatum` schema
+/// (required fields present, extension↔type consistent when `strict`,
+/// `version_regex` compiles).
+pub struct BootDatumSchemaConstraint {
+    pub strict: bool,
+}
+
+impl IsoAuditable for BootDatumSchemaConstraint {
+    fn iso_standard_ids(&self) -> Vec<String> {
+        vec!["b00t:BootDatumSchema".into()]
+    }
+}
+
+impl Stereotyped for DatumTomlSubject<'_> {
+    /// Resolves the declared `type` field through `DatumType`'s lattice
+    /// (#925/#926 single source of truth) — same pattern as
+    /// `ontology.rs`'s sparql "type" arm and `BootDatum`'s own
+    /// `Stereotyped` impl. Missing/unrecognized type degrades to
+    /// `Kind("Unknown")`, never panics.
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        let type_str = match self.raw.get("type") {
+            Some(toml::Value::String(s)) => s.as_str(),
+            _ => "",
+        };
+        DatumType::from_type_token(type_str)
+            .unwrap_or(DatumType::Unknown)
+            .ufo_stereotype()
+    }
+}
+
+impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
+    fn satisfies(&self, c: &BootDatumSchemaConstraint) -> SatisfiesResult {
+        let outcome = compute_datum_validation(self.raw, self.filename, c.strict);
+        if !outcome.errors.is_empty() {
+            return SatisfiesResult::violated(outcome.errors.join("; "), 1.0);
+        }
+        if outcome.extension_check_undecidable {
+            return SatisfiesResult::unknown(0.5);
+        }
+        SatisfiesResult::satisfied(1.0)
+    }
 }
 
 fn handle_validate_graph(datum_path: &str) -> Result<()> {
@@ -2185,5 +2302,204 @@ mod govern_tests {
             !reports.iter().any(|r| r.datum == "disabled-cli"),
             "disabled datum should be skipped from --all governance"
         );
+    }
+}
+
+#[cfg(test)]
+mod datum_toml_subject_satisfies_tests {
+    use super::*;
+
+    fn table_from_toml(toml_str: &str) -> toml::value::Table {
+        let value: toml::Value = toml::from_str(toml_str).unwrap();
+        match value {
+            toml::Value::Table(t) => t,
+            _ => panic!("expected a TOML table"),
+        }
+    }
+
+    #[test]
+    fn clean_datum_is_satisfied() {
+        let table = table_from_toml(
+            r#"
+name = "clean-cli"
+type = "cli"
+hint = "a clean datum"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "clean-cli.cli.toml",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: true });
+        assert!(result.is_satisfied(), "expected Satisfied, got {:?}", result.disposition);
+    }
+
+    #[test]
+    fn missing_required_field_is_violated() {
+        // No `hint` field — a required field per KNOWN_B00T_KEYS / handle_validate.
+        let table = table_from_toml(
+            r#"
+name = "incomplete-cli"
+type = "cli"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "incomplete-cli.cli.toml",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: false });
+        match result.disposition {
+            Disposition::Violated { reason } => {
+                assert!(reason.contains("hint"), "reason: {reason}");
+            }
+            other => panic!("expected Violated, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn recognized_type_unrecognized_extension_strict_is_unknown() {
+        // type="cli" is a recognized type, but the fixture filename's
+        // extension is not a recognized datum-type suffix — #927's fix:
+        // this must surface as Unknown, not be silently skipped as before.
+        let table = table_from_toml(
+            r#"
+name = "weird-ext-cli"
+type = "cli"
+hint = "a datum with an unrecognized filename extension"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "weird-ext-cli.some-made-up-extension-xyz",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: true });
+        assert!(
+            matches!(result.disposition, Disposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    #[test]
+    fn non_strict_mode_never_produces_unknown_for_extension_mismatch() {
+        // Same fixture as above, but strict=false: the extension check is
+        // skipped entirely (not even attempted), so it's Satisfied.
+        let table = table_from_toml(
+            r#"
+name = "weird-ext-cli"
+type = "cli"
+hint = "a datum with an unrecognized filename extension"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "weird-ext-cli.some-made-up-extension-xyz",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: false });
+        assert!(result.is_satisfied());
+    }
+
+    #[test]
+    fn ufo_stereotype_delegates_to_datum_type_lattice() {
+        let table = table_from_toml(
+            r#"
+name = "docker-thing"
+type = "docker"
+hint = "t"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "docker-thing.docker.toml",
+        };
+        assert_eq!(
+            subject.ufo_stereotype(),
+            DatumType::Docker.ufo_stereotype()
+        );
+    }
+
+    #[test]
+    fn ufo_stereotype_degrades_to_unknown_for_missing_type() {
+        let table = table_from_toml(
+            r#"
+name = "typeless"
+hint = "t"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "typeless.toml",
+        };
+        assert_eq!(
+            subject.ufo_stereotype(),
+            UfoStereotype::Kind("Unknown".into())
+        );
+    }
+}
+
+#[cfg(test)]
+mod validate_evidence_integration_tests {
+    use super::*;
+    use crate::commands::evidence::{read_evidence, with_test_evidence_log_path};
+    use tempfile::TempDir;
+
+    /// Proves the #927 wiring is real, not just computed and discarded:
+    /// evaluating a `DatumTomlSubject` against `BootDatumSchemaConstraint`
+    /// and recording NS-9/NS-10 evidence really appends rows to
+    /// `satisfies.jsonl` (via the same `record_is_a`/`record_audited_by`
+    /// sink `handle_validate` itself calls), with `object` strings prefixed
+    /// `"isA:"` and `"audited_by:"` respectively.
+    #[test]
+    fn satisfies_evaluation_records_isa_and_audited_by_evidence() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+
+        with_test_evidence_log_path(log_path, || {
+            let table = toml::from_str::<toml::Value>(
+                r#"
+name = "evidence-cli"
+type = "cli"
+hint = "exercises the evidence sink"
+"#,
+            )
+            .unwrap();
+            let table = match table {
+                toml::Value::Table(t) => t,
+                _ => unreachable!(),
+            };
+
+            let subject = DatumTomlSubject {
+                raw: &table,
+                filename: "evidence-cli.cli.toml",
+            };
+            let constraint = BootDatumSchemaConstraint { strict: true };
+            let target = "evidence-cli.cli";
+
+            let _result = subject.satisfies(&constraint);
+            crate::commands::evidence::record_is_a(target, &subject.ufo_stereotype().to_string())
+                .unwrap();
+            for iso_id in constraint.iso_standard_ids() {
+                crate::commands::evidence::record_audited_by(target, &iso_id).unwrap();
+            }
+
+            let records = read_evidence().unwrap();
+            assert!(
+                records
+                    .iter()
+                    .any(|r| r.subject == target
+                        && r.object.as_str().map_or(false, |o| o.starts_with("isA:"))),
+                "expected an isA: evidence record, got: {:?}",
+                records
+            );
+            assert!(
+                records.iter().any(|r| r.subject == target
+                    && r
+                        .object
+                        .as_str()
+                        .map_or(false, |o| o.starts_with("audited_by:"))),
+                "expected an audited_by: evidence record, got: {:?}",
+                records
+            );
+        });
     }
 }
