@@ -38,10 +38,6 @@
 	path = python.🐍/DALLE2-pytorch
 	url = https://github.com/lucidrains/DALLE2-pytorch.git
 
-[submodule "rmcp-rust-sdk"]
-	path = rmcp-rust-sdk
-	url = https://github.com/modelcontextprotocol/rust-sdk.git
-
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
 	url = https://github.com/microsoft/agent-framework
