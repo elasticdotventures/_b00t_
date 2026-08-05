@@ -70,7 +70,7 @@ done <<< "$CHANGED"
 
 if [ "$CONSERVATIVE" -eq 1 ]; then
   echo "[pre-push] dependency/toolchain/config change — running full b00t-cli gate"
-  git submodule update --init vendor/ledgrrr 2>/dev/null || true
+  git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t 2>/dev/null || true
   if ! cargo test -p b00t-cli --lib --quiet 2>&1; then
     echo "🚫 pre-push: tests failed — push blocked" >&2
     exit 1
@@ -82,7 +82,7 @@ fi
 # Precise selection via cargo metadata reverse-dependant closure.
 if ! command -v jq >/dev/null 2>&1; then
   echo "[pre-push] jq not found — falling back to full b00t-cli gate"
-  git submodule update --init vendor/ledgrrr 2>/dev/null || true
+  git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t 2>/dev/null || true
   if ! cargo test -p b00t-cli --lib --quiet 2>&1; then
     echo "🚫 pre-push: tests failed — push blocked" >&2
     exit 1
@@ -144,7 +144,7 @@ fi
 echo "[pre-push] selected packages (changed ∪ reverse dependants): ${SELECTED[*]}"
 # b00t-cli tests may need the ledgrrr submodule.
 for p in "${SELECTED[@]}"; do
-  [ "$p" = "b00t-cli" ] && { git submodule update --init vendor/ledgrrr 2>/dev/null || true; break; }
+  [ "$p" = "b00t-cli" ] && { git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t 2>/dev/null || true; break; }
 done
 
 # Single invocation: Cargo dedups compilation across selected packages.
