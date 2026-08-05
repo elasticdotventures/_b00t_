@@ -132,7 +132,15 @@ pub struct Worker;
 /// Executive decision authority.
 #[derive(Debug, Clone)]
 pub struct Executive;
-/// Crew dispatch and specialist routing.
+/// Crew dispatch and specialist routing — spins typed crews via k0mmand3r.
+///
+/// ⚠️ NOT the same role as `b00t_c0re_hierarchy::roles::Role::Operator`
+/// ("recruitment + training — scouts/finds agents, enlists, executes
+/// training plans"). Both use the bare string `"operator"` with no
+/// disambiguating prefix — a known, tracked, currently-unresolved naming
+/// collision. See `_b00t_/linkml/schema/hive_role_vocabulary.yaml`'s
+/// top-level description for the full context (Phase 2 of the
+/// ScopeStore+LinkML epic, #905/#909 "no parallel vocabularies").
 #[derive(Debug, Clone)]
 pub struct Operator;
 // 🦨 Orchestrator renamed to AppProvider
@@ -440,5 +448,68 @@ mod tests {
         assert_eq!(role.name(), "reviewer");
         assert_eq!(role, "reviewer");
         assert_eq!(format!("{}", role), "reviewer");
+    }
+
+    /// Phase 2 (ScopeStore+LinkML epic, #905/#909 "no parallel vocabularies")
+    /// coherence check: _b00t_/linkml/schema/hive_role_vocabulary.yaml is
+    /// declared the source of truth for HiveCrew's role vocabulary. This
+    /// reads the actual schema file (not a hand-copied duplicate of its
+    /// contents, which would just reintroduce the drift problem this
+    /// schema exists to prevent) and asserts its `enums.HiveRole`
+    /// permissible values are exactly `HiveCrew::known_roles()` -- so a
+    /// future edit to either side that silently drifts from the other
+    /// fails CI instead of accumulating as undetected fragmentation.
+    #[test]
+    fn hive_crew_roles_match_linkml_schema_source_of_truth() {
+        let schema_yaml = include_str!("../../_b00t_/linkml/schema/hive_role_vocabulary.yaml");
+        let schema: serde_yaml::Value =
+            serde_yaml::from_str(schema_yaml).expect("hive_role_vocabulary.yaml must parse as YAML");
+
+        let permissible_values = schema
+            .get("enums")
+            .and_then(|e| e.get("HiveRole"))
+            .and_then(|r| r.get("permissible_values"))
+            .and_then(|pv| pv.as_mapping())
+            .expect("schema must have enums.HiveRole.permissible_values as a mapping");
+
+        let mut schema_roles: Vec<String> = permissible_values
+            .keys()
+            .map(|k| k.as_str().expect("permissible_value keys must be strings").to_string())
+            .collect();
+        schema_roles.sort();
+
+        let mut rust_roles: Vec<String> = HiveCrew::known_roles().iter().map(|s| s.to_string()).collect();
+        rust_roles.sort();
+
+        assert_eq!(
+            schema_roles, rust_roles,
+            "HiveCrew::known_roles() has drifted from _b00t_/linkml/schema/hive_role_vocabulary.yaml \
+             (the declared source of truth) -- update whichever side is stale"
+        );
+    }
+
+    /// Each individual role's NAME constant must also appear in the schema
+    /// (not just the aggregate known_roles() list) -- catches the case
+    /// where known_roles() and a role's own NAME const independently drift
+    /// from each other, which the aggregate-only check above wouldn't.
+    #[test]
+    fn each_agentic_role_name_const_is_in_the_schema() {
+        let schema_yaml = include_str!("../../_b00t_/linkml/schema/hive_role_vocabulary.yaml");
+        let schema: serde_yaml::Value =
+            serde_yaml::from_str(schema_yaml).expect("hive_role_vocabulary.yaml must parse as YAML");
+        let permissible_values = schema
+            .get("enums")
+            .and_then(|e| e.get("HiveRole"))
+            .and_then(|r| r.get("permissible_values"))
+            .and_then(|pv| pv.as_mapping())
+            .expect("schema must have enums.HiveRole.permissible_values as a mapping");
+
+        for name in [Worker::NAME, Executive::NAME, Operator::NAME, AppProvider::NAME] {
+            assert!(
+                permissible_values.contains_key(name),
+                "{name:?} is a real AgenticRole::NAME but missing from \
+                 hive_role_vocabulary.yaml's permissible_values"
+            );
+        }
     }
 }
