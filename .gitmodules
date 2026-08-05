@@ -119,3 +119,6 @@
 [submodule "vendor/serena"]
 	path = vendor/serena
 	url = https://github.com/oraios/serena
+[submodule "vendor/linkml-b00t"]
+	path = vendor/linkml-b00t
+	url = https://github.com/linkml/linkml.git

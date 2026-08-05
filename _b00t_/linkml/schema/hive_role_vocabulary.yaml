@@ -1,0 +1,64 @@
+id: https://promptexecution.com/b00t/linkml/hive-role-vocabulary
+name: hive-role-vocabulary
+description: >-
+  Canonical HiveCrew role identifiers — source of truth for
+  b00t-cli/src/agentic_role.rs's Worker/Executive/Operator/AppProvider
+  ZST role system. Phase 2 ("harmonization") of the ScopeStore+LinkML
+  epic — _b00t_ issues #905/#909's "no parallel vocabularies" goal,
+  pursued incrementally rather than as a single big-bang merge of the
+  three existing role systems (agentic_role.rs, b00t-c0re-hierarchy::Role,
+  the TOML RoleDetails/blessing-datum system).
+
+  This schema covers ONLY agentic_role.rs's vocabulary for now — the
+  most rigorous of the three (a compile-time ZST/trait system, not a
+  plain data enum), and the one most amenable to a coherence check
+  against generated code without requiring a runtime data migration.
+
+  KNOWN UNRESOLVED COLLISION (documented, not silently merged): the
+  "operator" value below (agentic_role.rs: "crew dispatch and
+  specialist routing — spins typed crews via k0mmand3r") is a
+  DIFFERENT role from b00t-c0re-hierarchy::Role::Operator
+  ("recruitment + training — scouts/finds agents, enlists, executes
+  training plans", b00t-c0re-hierarchy/src/roles.rs). Both currently
+  use the bare string "operator" with no disambiguating prefix. This
+  schema does not rename either — that's a larger, riskier follow-up
+  (renaming touches call sites in both crates) — it exists so the
+  collision is a documented, checkable fact rather than tribal
+  knowledge that erodes over time.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  b00t: https://promptexecution.com/b00t/
+
+default_range: string
+default_prefix: b00t
+
+imports:
+  - linkml:types
+
+enums:
+  HiveRole:
+    description: >-
+      Canonical role identifiers within HiveCrew (b00t-cli's primary
+      agent-coordination crew, agentic_role.rs). This schema is the
+      source of truth going forward — agentic_role.rs's AgenticRole::NAME
+      constants must match these permissible value names exactly, checked
+      by a coherence test in b00t-cli (agentic_role.rs's own test module).
+    permissible_values:
+      worker:
+        description: >-
+          Default hive worker — general-purpose executor with
+          governance safety gates.
+      executive:
+        description: >-
+          Hive-level decision authority — release gate, tier routing,
+          resource management.
+      operator:
+        description: >-
+          Crew dispatch and specialist routing — spins typed crews via
+          k0mmand3r. NOT the same role as b00t-c0re-hierarchy::Role::Operator
+          — see this schema's top-level description for the tracked
+          naming collision.
+      provider:
+        description: >-
+          Provider — MCP surface, desktop control-plane, service hosting.

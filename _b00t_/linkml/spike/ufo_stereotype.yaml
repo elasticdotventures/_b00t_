@@ -1,0 +1,70 @@
+id: https://promptexecution.com/b00t/linkml/ufo-stereotype-spike
+name: ufo-stereotype-spike
+description: >-
+  Phase 0 spike schema for the ScopeStore+LinkML epic. Reproduces the
+  existing hand-written ufo-types::stereotype::UfoStereotype enum
+  (Kind/SubKind/Role/Relator/Mode) as a LinkML class hierarchy, to evaluate
+  the `linkml generate rust` codegen path's is_a-driven tagged-union
+  generation (UfoStereotypeOrSubtype) before committing architecture to it.
+  See _b00t_/datums epic issue #893 and .claude/plans/steady-tickling-cerf.md.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  b00t: https://promptexecution.com/b00t/
+
+default_range: string
+default_prefix: b00t
+
+imports:
+  - linkml:types
+
+classes:
+  UfoStereotype:
+    abstract: true
+    description: >-
+      UFO stereotype — classifies a domain entity according to Guizzardi's
+      Unified Foundational Ontology. Base class; every concrete stereotype
+      below is_a UfoStereotype, so the Rust generator should emit a tagged
+      UfoStereotypeOrSubtype enum mirroring the hand-written Rust enum.
+    attributes:
+      stereotype_kind:
+        description: >-
+          Type designator — disambiguates which concrete stereotype this is.
+          Without this, sibling subtypes with identical field sets (all of
+          Kind/Role/Relator/Mode are just {name}) serialize identically and
+          untagged deserialization silently picks the wrong variant.
+        designates_type: true
+        required: true
+      name:
+        description: The stereotype's label, e.g. "Company", "TaxCreditClaimant".
+        required: true
+
+  Kind:
+    is_a: UfoStereotype
+    description: >-
+      UFO-A Endurant: rigid, essential type. Examples: "Company", "Person",
+      "Datum", "ScopeStore".
+
+  SubKind:
+    is_a: UfoStereotype
+    description: >-
+      UFO-A Endurant: rigid subtype inheriting identity from its parent Kind.
+    attributes:
+      parent:
+        description: Name of the parent Kind this sub-kind specialises.
+        required: true
+
+  Role:
+    is_a: UfoStereotype
+    description: >-
+      UFO-A Endurant: anti-rigid, relationally dependent type.
+
+  Relator:
+    is_a: UfoStereotype
+    description: >-
+      UFO-B Moment: mediates between two or more entities.
+
+  Mode:
+    is_a: UfoStereotype
+    description: >-
+      UFO-B Moment: intrinsic property inhering in a single entity.
