@@ -183,7 +183,7 @@ spec:
   restartPolicy: OnFailure
   containers:
   - name: runner
-    image: ghcr.io/actions/actions-runner:latest
+    image: ghcr.io/promptexecution/actions-runner-podman:latest
     command:
     - /bin/bash
     - -c
@@ -205,6 +205,7 @@ spec:
       value: "{ephemeral}"
     - name: RUNNER_WORKDIR
       value: "/runner/_work"
+{container_host_env}
     volumeMounts:
     - name: work
       mountPath: /runner/_work
@@ -241,16 +242,42 @@ pub fn generate_kube_yaml(
 
     let ephemeral_flag = if ephemeral { "--ephemeral" } else { "" };
 
+    // podman sockets are mounted at a distinctly-named path (not docker.sock,
+    // which would be misleading) and paired with CONTAINER_HOST so podman's
+    // CLI inside the runner connects to it as a remote client rather than
+    // trying to spin up its own (nested, and empirically broken -- see
+    // app4dog#92) rootless user namespace. docker sockets keep the old
+    // hardcoded /var/run/docker.sock path/behavior; no CONTAINER_HOST needed
+    // since the docker CLI already defaults to looking there.
+    let is_podman_socket = socket_path.contains("podman");
+    let container_mount_path = if is_podman_socket {
+        "/run/podman.sock"
+    } else {
+        "/var/run/docker.sock"
+    };
+
     let (docker_sock_volume_mount, docker_sock_volume) = if socket_path.is_empty() {
         (String::new(), String::new())
     } else {
         (
-            format!("    - name: docker-sock\n      mountPath: /var/run/docker.sock\n"),
+            format!(
+                "    - name: docker-sock\n      mountPath: {}\n",
+                container_mount_path
+            ),
             format!(
                 "  - name: docker-sock\n    hostPath:\n      path: {}\n      type: Socket\n",
                 socket_path
             ),
         )
+    };
+
+    let container_host_env = if is_podman_socket {
+        format!(
+            "    - name: CONTAINER_HOST\n      value: \"unix://{}\"\n",
+            container_mount_path
+        )
+    } else {
+        String::new()
     };
 
     KUBE_YAML_TEMPLATE
@@ -262,6 +289,7 @@ pub fn generate_kube_yaml(
         .replace("{ephemeral}", if ephemeral { "true" } else { "false" })
         .replace("{ephemeral_flag}", ephemeral_flag)
         .replace("{workdir}", workdir)
+        .replace("{container_host_env}", &container_host_env)
         .replace("{docker_sock_volume_mount}", &docker_sock_volume_mount)
         .replace("{docker_sock_volume}", &docker_sock_volume)
 }
