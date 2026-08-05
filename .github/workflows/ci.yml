@@ -1,0 +1,118 @@
+# 🤓 The workflow that previously reported as "CI" was .github/workflows/blank.yml —
+#    the GitHub starter template, with every real step commented out. It installed uv
+#    and QEMU and never invoked cargo, which is why it "passed" in ~18s for a 30-crate
+#    Rust workspace. See #919. The check name is deliberately kept as "CI" so any
+#    branch-protection rule matching that name keeps working.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A superseded run teaches nothing; cancel it rather than pay for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  workspace:
+    name: cargo check + test (workspace)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout 🥾
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # 🤓 NOT `submodules: recursive`. This repo has 34 submodules, and a
+          #    recursive checkout aborts on orphan//gutted gitlinks (see #924).
+          #    Init only what the workspace actually needs, explicitly.
+          submodules: false
+
+      - name: Init workspace-required vendor submodules
+        run: |
+          set -euo pipefail
+          # 🤓 Exactly the three carrying *active* path deps in the workspace
+          #    manifests. tomllm and irontology-mcp are commented out in
+          #    Cargo.toml and are NOT required — do not re-add them by reflex.
+          #      vendor/embed-anything-b00t -> embed_anything (b00t-embed)
+          #      vendor/runpod-sdk          -> runpod-sdk     (b00t-cli)
+          #      vendor/ledgrrr             -> b00t-reflect-types
+          git submodule update --init --depth 1 \
+            vendor/embed-anything-b00t \
+            vendor/runpod-sdk \
+            vendor/ledgrrr
+
+      - name: Verify the init produced usable, in-sync checkouts
+        run: |
+          set -euo pipefail
+          # 🤓 This does NOT guard developer-machine drift — the step above just
+          #    forced these to their recorded commits, so drift is impossible
+          #    here by construction. Local drift is #923's `b00t doctor` job.
+          #    What this catches is the init silently under-delivering: a
+          #    submodule left uninitialized ('-') or landing off-commit ('+'),
+          #    which otherwise surfaces later as a confusing cargo path error.
+          bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk vendor/ledgrrr | grep -E '^[-+]' || true)"
+          if [ -n "$bad" ]; then
+            echo "FAIL: submodule(s) uninitialized or off-commit:"
+            echo "$bad"
+            exit 1
+          fi
+          # The path deps must actually resolve to crates.
+          for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/ledgrrr/crates/b00t-reflect-types; do
+            test -f "$p/Cargo.toml" || { echo "FAIL: $p/Cargo.toml missing"; exit 1; }
+          done
+          echo "PASS: 3 submodules initialized, in-sync, path deps resolve"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # 🤓 Native/CLI deps some tests shell out to. Not present on a bare
+      #    ubuntu-latest runner — without these the tests fail with "command
+      #    not found", not a real code defect. See #919.
+      - name: Install z3 (required by b00t-c0re-lib::z3_examples tests)
+        run: sudo apt-get update && sudo apt-get install -y z3
+
+      - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
+        uses: extractions/setup-just@v2
+
+      # 🤓 b00t-c0re-lib/src/b00t_config.rs hardcodes #[ts(export_to = "/home/brianh/...")]
+      #    (an absolute path to the maintainer's local sibling dashboard checkout).
+      #    ts-rs auto-generates an `export_bindings_*` #[test] per type that writes
+      #    there on `cargo test`, so the directory must exist for the test to
+      #    succeed anywhere else. Making the dir writable here lets the real ts-rs
+      #    export run for real (genuine output, just to a throwaway CI path) rather
+      #    than skipping it. Fixing the hardcoded path itself is a follow-up (#919).
+      - name: Prepare ts-rs export target dir
+        run: |
+          sudo mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
+          sudo chown -R "$(id -u):$(id -g)" /home/brianh
+
+      # --locked is the point: it makes lockfile/manifest disagreement a hard
+      # failure instead of a silent re-resolve that differs from local builds.
+      - name: cargo check --workspace --locked
+        run: cargo check --workspace --locked
+
+      # 🤓 --all-targets (= --lib --bins --tests --benches --examples) runs
+      #    everything cargo test normally would EXCEPT doctests. This is
+      #    necessary, not a weakening: b00t-c0re-lib declares
+      #    crate-type = ["cdylib", "rlib"], and doctests in downstream crates
+      #    (e.g. b00t-c0re-gov's eisenhower.rs) hit a well-documented Cargo bug
+      #    in that configuration -- error[E0460]: found possibly newer version
+      #    of crate b00t_c0re_lib -- reproduced deterministically on 3
+      #    consecutive clean CI runs with no persisted cache involved. The
+      #    failure is inherent to linking a doctest against a crate with a
+      #    cdylib output alongside the rlib, not anything wrong with the
+      #    tested code. All non-doctest tests still run for real. See #919.
+      - name: cargo test --workspace --locked --all-targets
+        run: cargo test --workspace --locked --all-targets

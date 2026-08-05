@@ -12,9 +12,10 @@
 
 use crate::datum_store::{DatumStore, HashMapStore, ReferenceError};
 use anyhow::{Context, Result};
+use b00t_c0re_lib::redis::{RedisComms, RedisConfig};
 use clap::Parser;
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
@@ -55,8 +56,98 @@ fn check_version(name: &str) -> Value {
     } else { "not found".into() }})
 }
 
-fn all_deps() -> Vec<Value> {
-    vec![
+/// Probe the optional Redis-backed agent registry (issue #83). Reuses
+/// `RedisComms::is_available()` rather than shelling out to `redis-cli` so
+/// this exercises the same connection path `agent discover`/`agent
+/// capability` use. Always `pass: true` — Redis is an optional accelerant
+/// for live multi-host discovery, not a hard dependency; both commands fall
+/// back to local `_b00t_/*.agent.toml` when it's unreachable.
+fn check_redis_agent_registry() -> Value {
+    let start = Instant::now();
+    let reachable = RedisComms::new(RedisConfig::default(), "doctor-probe".into())
+        .map(|c| c.is_available())
+        .unwrap_or(false);
+    json!({
+        "id": "redis-agent-registry",
+        "pass": true,
+        "detail": if reachable {
+            "reachable — live multi-host agent discovery available"
+        } else {
+            "unreachable — optional, accelerates live multi-host agent discovery; falls back to local `_b00t_/*.agent.toml` when unavailable"
+        },
+        "latency_ms": start.elapsed().as_millis(),
+    })
+}
+
+/// Submodule pin drift check (#923): shells out to the standalone bash
+/// script that is the single source of truth for this check (both
+/// `just doctor` and this call it). Kept as a script rather than a Rust
+/// implementation because a pre-cargo gate that itself requires compiling
+/// b00t-cli is a chicken-and-egg risk — see the justfile's `viz-entangle`
+/// comment ("cargo run fails on b00t repo due to git worktree structure").
+///
+/// Distinguishes drifted+clean (safe, auto-fixable via `fix: true`) from
+/// drifted+dirty (report only — the script itself never touches dirty
+/// submodules regardless of the `--fix` flag it's given).
+fn check_submodule_drift(b00t_path: &str, fix: bool) -> Value {
+    let script = PathBuf::from(b00t_path).join("scripts/check-submodule-drift.sh");
+    let mut cmd = Command::new("bash");
+    cmd.arg(&script).arg("--json");
+    if fix {
+        cmd.arg("--fix");
+    }
+
+    let start = Instant::now();
+    let output = cmd.output();
+    let ms = start.elapsed().as_millis();
+
+    match output {
+        Ok(o) => match serde_json::from_slice::<Value>(&o.stdout) {
+            Ok(submodules) => {
+                let unresolved = submodules
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter(|s| {
+                                matches!(
+                                    s["status"].as_str(),
+                                    Some("drifted_dirty") | Some("drifted_clean")
+                                )
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0);
+                let pass = o.status.success();
+                json!({
+                    "id": "submodule-drift",
+                    "pass": pass,
+                    "detail": if pass {
+                        "0 drifted submodules".to_string()
+                    } else {
+                        format!("{unresolved} unresolved submodule drift (see submodules[])")
+                    },
+                    "submodules": submodules,
+                    "latency_ms": ms,
+                })
+            }
+            Err(e) => json!({
+                "id": "submodule-drift",
+                "pass": false,
+                "detail": format!("failed to parse {} --json output: {e}", script.display()),
+                "latency_ms": ms,
+            }),
+        },
+        Err(e) => json!({
+            "id": "submodule-drift",
+            "pass": false,
+            "detail": format!("failed to run {}: {e}", script.display()),
+            "latency_ms": ms,
+        }),
+    }
+}
+
+fn all_deps(fix: bool) -> Vec<Value> {
+    let mut results: Vec<Value> = vec![
         check_version("b00t-cli"),
         check_version("b00t-mcp"),
         check_version("b00t-task"),
@@ -74,6 +165,7 @@ fn all_deps() -> Vec<Value> {
         // Special checks with auth/daemon info
         json!({"id": "gh-auth", "check": "gh auth status 2>&1 | grep -q 'Logged in' && echo yes || echo no"}),
         json!({"id": "docker-daemon", "check": "docker info --format '{{.ServerVersion}}' 2>/dev/null"}),
+        check_redis_agent_registry(),
         // Filesystem
         json!({"id": "b00t-repo", "check": "test -d $HOME/.b00t/.git && cd $HOME/.b00t && git log --oneline -1 2>/dev/null"}),
         json!({"id": "soul-db", "check": "test -f $HOME/._b00t_/soul.db && ls -la $HOME/._b00t_/soul.db || echo missing"}),
@@ -84,6 +176,17 @@ fn all_deps() -> Vec<Value> {
         json!({"id": "gh-api", "check": "curl -sf --max-time 5 -o /dev/null -w '%{http_code}' https://api.github.com/zen 2>/dev/null"}),
         // Skill datum integrity: no loose .skill.* files in _b00t_/
         json!({"id": "skill-symlinks", "check": "cd $HOME/.dotfiles 2>/dev/null && find _b00t_/ -name '*.skill.*' ! -type l 2>/dev/null | wc -l | tr -d ' ' || echo 0"}),
+        // Stray root-level test/ dir (#935): bats-core/bats-assert/bats-support
+        // are registered as submodules under _b00t_/test/ only. A root-level
+        // test/ dir is an untracked, unregistered footgun — a duplicate
+        // checkout that could silently diverge from the real submodule.
+        json!({"id": "no-stray-root-test-dir", "check": "test -d $HOME/.b00t/test && echo FAIL || echo PASS"}),
+        // Gutted submodule gitdir (#924): .git/modules/<path> exists (config present)
+        // but HEAD is missing — the low-level gitdir was partially destroyed,
+        // making bare `git status` fatal for the whole superproject.
+        json!({"id": "no-gutted-submodule-gitdir", "check":
+            "cd $HOME/.b00t 2>/dev/null && bad=$(git config -f .gitmodules --get-regexp '\\.path$' 2>/dev/null | awk '{print $2}' | while read -r p; do d=\".git/modules/$p\"; [ -f \"$d/config\" ] && [ ! -f \"$d/HEAD\" ] && echo \"$p\"; done); [ -z \"$bad\" ] && echo PASS || echo \"FAIL: $bad\""
+        }),
     ].into_iter().map(|mut v| {
         let check = v.get("check").and_then(|c| c.as_str()).unwrap_or("");
         if !check.is_empty() {
@@ -98,6 +201,26 @@ fn all_deps() -> Vec<Value> {
                 } else {
                     json!(format!("{} loose .skill.* files in _b00t_/ (must be symlinks to skills/*/SKILL.md)", count))
                 };
+            } else if v["id"] == "no-stray-root-test-dir" {
+                let pass = detail.trim() == "PASS";
+                v["pass"] = json!(pass);
+                v["detail"] = if pass {
+                    json!("no stray root-level test/ dir")
+                } else {
+                    json!("stray $HOME/.b00t/test/ dir present — use _b00t_/test/* submodules instead (#935)")
+                };
+            } else if v["id"] == "no-gutted-submodule-gitdir" {
+                let pass = detail.trim() == "PASS";
+                v["pass"] = json!(pass);
+                v["detail"] = if pass {
+                    json!("no gutted submodule gitdirs")
+                } else {
+                    let bad = detail.trim().trim_start_matches("FAIL: ");
+                    json!(format!(
+                        "gutted gitdir(s): {} — repair: git -C $HOME/.b00t submodule deinit -f <path>; rm -rf $HOME/.b00t/.git/modules/<path>; git -C $HOME/.b00t submodule update --init <path> (#924), or run `b00t doctor fix-submodule <path>`",
+                        bad
+                    ))
+                };
             } else {
                 v["pass"] = json!(ok);
                 v["detail"] = json!(detail);
@@ -105,7 +228,98 @@ fn all_deps() -> Vec<Value> {
             v["latency_ms"] = json!(start.elapsed().as_millis());
         }
         v
-    }).collect()
+    }).collect();
+
+    // Submodule pin drift (#923): recorded gitlink vs checked-out HEAD.
+    // check_submodule_drift() joins "scripts/check-submodule-drift.sh" onto
+    // whatever it's given, so it needs the `_b00t_/` datum dir itself, not
+    // the repo root — mirrors the "b00t-repo" check above's $HOME/.b00t,
+    // just one level deeper. Distinct from the `b00t_path` fn parameter
+    // threaded through this module (defaults to ~/.dotfiles/_b00t_).
+    let repo_b00t_dir = home().join(".b00t").join("_b00t_");
+    results.push(check_submodule_drift(&repo_b00t_dir.to_string_lossy(), fix));
+
+    results
+}
+
+/// Enumerate submodules whose gitdir was "gutted": `.git/modules/<path>/config`
+/// exists but `HEAD` does not (objects/refs are typically gone too). See #924.
+fn find_gutted_submodules(repo_root: &Path) -> Vec<String> {
+    let Ok(content) = std::fs::read_to_string(repo_root.join(".gitmodules")) else {
+        return vec![];
+    };
+    content
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("path = ").map(str::trim))
+        .filter(|p| {
+            let gitdir = repo_root.join(".git/modules").join(p);
+            gitdir.join("config").is_file() && !gitdir.join("HEAD").is_file()
+        })
+        .map(String::from)
+        .collect()
+}
+
+/// Repair a gutted submodule gitdir (#924). A gutted gitdir has no HEAD,
+/// objects, or refs — there is nothing recoverable to lose — so the repair
+/// is a straight re-clone: deinit the submodule (clears its checked-out
+/// working-tree content, which normally survives the gitdir being gutted),
+/// remove the corrupt gitdir, then re-init from the remote registered in
+/// .gitmodules. Safe to auto-apply for exactly this reason (unlike #923's
+/// drift checks, which distinguish safe/unsafe because they may discard
+/// *uncommitted* local state — a gutted gitdir has none, and `deinit -f`
+/// only ever removes files that came from the (unrecoverable) checkout).
+fn repair_gutted_submodule(repo_root: &Path, submodule_path: &str) -> Result<String> {
+    let gitdir = repo_root.join(".git/modules").join(submodule_path);
+    anyhow::ensure!(
+        gitdir.join("config").is_file() && !gitdir.join("HEAD").is_file(),
+        "{} does not match the gutted-gitdir shape (config present, HEAD missing) — refusing to touch it",
+        submodule_path
+    );
+
+    // `git submodule update --init` refuses to clone into a non-empty
+    // directory, and the submodule's working-tree content typically
+    // survives the gitdir being gutted (only .git/modules/<path> was
+    // destroyed). `deinit -f` clears that working-tree content and the
+    // stale `.git` pointer file together, and must run before the gitdir
+    // is removed — it still resolves config through the (gutted but
+    // present) gitdir.
+    let deinit = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args(["submodule", "deinit", "-f", submodule_path])
+        .output()
+        .context("running git submodule deinit")?;
+    anyhow::ensure!(
+        deinit.status.success(),
+        "git submodule deinit -f {} failed: {}",
+        submodule_path,
+        String::from_utf8_lossy(&deinit.stderr)
+    );
+
+    std::fs::remove_dir_all(&gitdir)
+        .with_context(|| format!("removing gutted gitdir {}", gitdir.display()))?;
+
+    // Belt-and-suspenders: deinit already removes the `.git` pointer file,
+    // but clean it up if anything unexpected left it behind.
+    let dotgit = repo_root.join(submodule_path).join(".git");
+    if dotgit.is_file() {
+        std::fs::remove_file(&dotgit)
+            .with_context(|| format!("removing stale .git pointer at {}", dotgit.display()))?;
+    }
+
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args(["submodule", "update", "--init", submodule_path])
+        .output()
+        .context("running git submodule update --init")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git submodule update --init {} failed: {}",
+        submodule_path,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(format!("repaired {}", submodule_path))
 }
 
 #[derive(Default)]
@@ -195,7 +409,8 @@ fn install_role_mcps(composite: &RoleComposite, target: &str) -> Vec<String> {
 }
 
 fn generate_env_doc(b00t_path: &str) -> Value {
-    let deps = all_deps();
+    // Docs generator — never auto-fix, only an explicit `doctor check --fix` may.
+    let deps = all_deps(false);
     json!({
         "hostname": sh("hostname 2>/dev/null").1.trim(),
         "os": sh("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'").1.trim(),
@@ -220,6 +435,11 @@ pub enum DoctorCommands {
         json: bool,
         #[clap(long, help = "Check a single dependency by id")]
         probe: Option<String>,
+        #[clap(
+            long,
+            help = "Attempt safe auto-fixes (currently: sync drifted+clean submodules to their recorded pin; never touches drifted+dirty ones)"
+        )]
+        fix: bool,
     },
     #[clap(about = "Verify role deps + wire MCP into IDEs")]
     Setup {
@@ -247,6 +467,13 @@ pub enum DoctorCommands {
     },
     #[clap(hide = true)]
     HealthJson,
+    #[clap(about = "Repair gutted submodule gitdir(s) (#924) — safe: gutted state has no recoverable data")]
+    FixSubmodule {
+        #[clap(help = "Submodule path from .gitmodules; omit to repair all detected")]
+        path: Option<String>,
+        #[clap(long, help = "List gutted submodules without repairing")]
+        dry_run: bool,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -261,8 +488,8 @@ pub enum IdeAction {
 
 pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<()> {
     match args {
-        DoctorCommands::Check { json, probe } => {
-            let results: Vec<Value> = all_deps()
+        DoctorCommands::Check { json, probe, fix } => {
+            let results: Vec<Value> = all_deps(*fix)
                 .into_iter()
                 .filter(|d| {
                     probe.as_ref().map_or(true, |p| {
@@ -316,6 +543,24 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                         ms,
                         r["detail"].as_str().unwrap_or("")
                     );
+                    if r["id"] == "submodule-drift" {
+                        if let Some(subs) = r["submodules"].as_array() {
+                            for s in subs {
+                                let status = s["status"].as_str().unwrap_or("");
+                                if matches!(
+                                    status,
+                                    "broken" | "drifted_clean" | "drifted_dirty" | "drifted_fixed"
+                                ) {
+                                    println!(
+                                        "      {}  {}  {}",
+                                        status,
+                                        s["path"].as_str().unwrap_or("?"),
+                                        s["action"].as_str().unwrap_or("")
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 let ok = results
                     .iter()
@@ -457,7 +702,9 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             Ok(())
         }
         DoctorCommands::HealthJson => {
-            let results = all_deps();
+            // JSON health endpoint — never auto-fix, only an explicit
+            // `doctor check --fix` may.
+            let results = all_deps(false);
             let ok = results
                 .iter()
                 .filter(|r| r["pass"].as_bool().unwrap_or(false))
@@ -471,10 +718,33 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
             );
             Ok(())
         }
+        DoctorCommands::FixSubmodule { path, dry_run } => {
+            let root = home().join(".b00t");
+            let targets = match path {
+                Some(p) => vec![p.clone()],
+                None => find_gutted_submodules(&root),
+            };
+            if targets.is_empty() {
+                println!("no gutted submodules found");
+                return Ok(());
+            }
+            for t in &targets {
+                if *dry_run {
+                    println!("would repair: {t}");
+                } else {
+                    match repair_gutted_submodule(&root, t) {
+                        Ok(msg) => println!("✅ {msg}"),
+                        Err(e) => println!("❌ {t}: {e}"),
+                    }
+                }
+            }
+            Ok(())
+        }
     }
 }
 pub fn health_json() -> serde_json::Value {
-    let results = all_deps();
+    // Never auto-fix, only an explicit `doctor check --fix` may.
+    let results = all_deps(false);
     let ok = results
         .iter()
         .filter(|r| r["pass"].as_bool().unwrap_or(false))
@@ -679,4 +949,55 @@ fn check_fsl_dir(fix: bool) -> Value {
             "not found".to_string()
         }
     })
+}
+
+#[cfg(test)]
+mod gutted_submodule_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn make_gutted_fixture() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join(".gitmodules"),
+            "[submodule \"x\"]\n\tpath = sub/x\n\turl = https://example.com/x.git\n",
+        )
+        .unwrap();
+        let gitdir = dir.path().join(".git/modules/sub/x");
+        fs::create_dir_all(&gitdir).unwrap();
+        fs::write(gitdir.join("config"), "[core]\n\tbare = true\n").unwrap();
+        dir
+    }
+
+    #[test]
+    fn detects_gutted_gitdir() {
+        let dir = make_gutted_fixture();
+        assert_eq!(
+            find_gutted_submodules(dir.path()),
+            vec!["sub/x".to_string()]
+        );
+    }
+
+    #[test]
+    fn does_not_flag_healthy_gitdir() {
+        let dir = make_gutted_fixture();
+        fs::write(
+            dir.path().join(".git/modules/sub/x/HEAD"),
+            "ref: refs/heads/main\n",
+        )
+        .unwrap();
+        assert!(find_gutted_submodules(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn repair_refuses_non_gutted_path() {
+        let dir = make_gutted_fixture();
+        fs::write(
+            dir.path().join(".git/modules/sub/x/HEAD"),
+            "ref: refs/heads/main\n",
+        )
+        .unwrap();
+        assert!(repair_gutted_submodule(dir.path(), "sub/x").is_err());
+    }
 }

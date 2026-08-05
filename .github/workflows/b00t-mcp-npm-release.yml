@@ -48,6 +48,9 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
+      - name: 🔧 Initialize required submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:

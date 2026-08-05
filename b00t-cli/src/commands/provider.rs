@@ -16,6 +16,11 @@ use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::process::Command;
 
+use runpod_sdk::model::{
+    CloudType, Endpoint, EndpointCreateInput, GetEndpointQuery, GetPodQuery, GpuTypeId,
+    ListEndpointsQuery, ListPodsQuery, Pod, PodCreateInput, PodStatus,
+};
+
 /// Minimum free VRAM (MB) required before a local batch job is allowed to start.
 /// Matches the gate style already used by `[b00t.hive.resources.gate]` profiles.
 const LOCAL_GPU_FREE_MB_GATE: u32 = 4000;
@@ -101,6 +106,10 @@ pub struct BatchJobSpec {
 
 fn default_gpu_count() -> u32 { 1 }
 
+fn fmt_cost(cost: Option<f64>) -> String {
+    cost.map(|c| format!("${c:.2}")).unwrap_or_else(|| "-".to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobHandle {
     pub id: String,
@@ -140,11 +149,66 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
 
 // ── RunPod provider ──────────────────────────────────────────────────────────
 
-pub struct RunpodProvider {
-    client: runpod_sdk::RunpodClient,
+/// Thin transport abstraction over the runpod SDK client so pod/endpoint
+/// lifecycle can be unit-tested with a mock. Mirrors exactly the methods
+/// `ComputeProvider for RunpodProvider` calls; implemented for the real
+/// `runpod_sdk::RunpodClient` via its `PodsService`/`EndpointsService` traits.
+#[async_trait]
+pub trait RunpodApi: Send + Sync {
+    async fn create_endpoint(&self, input: EndpointCreateInput) -> Result<Endpoint>;
+    async fn get_endpoint(&self, id: &str, query: GetEndpointQuery) -> Result<Endpoint>;
+    async fn delete_endpoint(&self, id: &str) -> Result<()>;
+    async fn list_endpoints(&self, query: ListEndpointsQuery) -> Result<Vec<Endpoint>>;
+    async fn create_pod(&self, input: PodCreateInput) -> Result<Pod>;
+    async fn get_pod(&self, id: &str, query: GetPodQuery) -> Result<Pod>;
+    async fn delete_pod(&self, id: &str) -> Result<()>;
+    async fn list_pods(&self, query: ListPodsQuery) -> Result<Vec<Pod>>;
 }
 
-impl RunpodProvider {
+#[async_trait]
+impl RunpodApi for runpod_sdk::RunpodClient {
+    // UFCS with an explicit service trait keeps these unambiguous even though
+    // the same method names exist on both `RunpodApi` and the SDK traits.
+    async fn create_endpoint(&self, input: EndpointCreateInput) -> Result<Endpoint> {
+        Ok(<Self as runpod_sdk::service::EndpointsService>::create_endpoint(self, input).await?)
+    }
+
+    async fn get_endpoint(&self, id: &str, query: GetEndpointQuery) -> Result<Endpoint> {
+        Ok(<Self as runpod_sdk::service::EndpointsService>::get_endpoint(self, id, query).await?)
+    }
+
+    async fn delete_endpoint(&self, id: &str) -> Result<()> {
+        <Self as runpod_sdk::service::EndpointsService>::delete_endpoint(self, id).await?;
+        Ok(())
+    }
+
+    async fn list_endpoints(&self, query: ListEndpointsQuery) -> Result<Vec<Endpoint>> {
+        Ok(<Self as runpod_sdk::service::EndpointsService>::list_endpoints(self, query).await?)
+    }
+
+    async fn create_pod(&self, input: PodCreateInput) -> Result<Pod> {
+        Ok(<Self as runpod_sdk::service::PodsService>::create_pod(self, input).await?)
+    }
+
+    async fn get_pod(&self, id: &str, query: GetPodQuery) -> Result<Pod> {
+        Ok(<Self as runpod_sdk::service::PodsService>::get_pod(self, id, query).await?)
+    }
+
+    async fn delete_pod(&self, id: &str) -> Result<()> {
+        <Self as runpod_sdk::service::PodsService>::delete_pod(self, id).await?;
+        Ok(())
+    }
+
+    async fn list_pods(&self, query: ListPodsQuery) -> Result<Vec<Pod>> {
+        Ok(<Self as runpod_sdk::service::PodsService>::list_pods(self, query).await?)
+    }
+}
+
+pub struct RunpodProvider<C: RunpodApi = runpod_sdk::RunpodClient> {
+    client: C,
+}
+
+impl RunpodProvider<runpod_sdk::RunpodClient> {
     pub fn new() -> Result<Self> {
         let config = runpod_sdk::RunpodConfig::from_env()
             .context("RUNPOD_API_KEY not set — see PROVIDER-RUNPOD.provider.tomllmd")?;
@@ -155,31 +219,22 @@ impl RunpodProvider {
     }
 }
 
+#[cfg(test)]
+impl<C: RunpodApi> RunpodProvider<C> {
+    /// Test-only constructor: inject a mock transport.
+    fn with_client(client: C) -> Self {
+        Self { client }
+    }
+}
+
 #[async_trait]
-impl ComputeProvider for RunpodProvider {
+impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
     fn name(&self) -> &str {
         "runpod"
     }
 
     async fn deploy_inference_endpoint(&self, cfg: &EndpointConfig) -> Result<EndpointHandle> {
-        use runpod_sdk::model::EndpointCreateInput;
-        use runpod_sdk::service::EndpointsService;
-        // 🤓 EndpointCreateInput requires template_id; env is baked into the template
-        let template_id = cfg
-            .env
-            .get("RUNPOD_TEMPLATE_ID")
-            .cloned()
-            .unwrap_or_default();
-        let input = EndpointCreateInput {
-            template_id,
-            name: Some(cfg.name.clone()),
-            workers_min: Some(cfg.workers_min),
-            workers_max: Some(cfg.workers_max),
-            idle_timeout: Some(cfg.idle_timeout_s as i32),
-            execution_timeout_ms: Some(cfg.execution_timeout_ms as i32),
-            network_volume_id: cfg.network_volume_id.clone(),
-            ..Default::default()
-        };
+        let input = endpoint_create_request(cfg);
         let endpoint = self
             .client
             .create_endpoint(input)
@@ -194,8 +249,6 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn endpoint_status(&self, id: &str) -> Result<EndpointHandle> {
-        use runpod_sdk::service::EndpointsService;
-        use runpod_sdk::model::GetEndpointQuery;
         let endpoint = self
             .client
             .get_endpoint(id, GetEndpointQuery::default())
@@ -210,7 +263,6 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn teardown_endpoint(&self, id: &str) -> Result<()> {
-        use runpod_sdk::service::EndpointsService;
         self.client
             .delete_endpoint(id)
             .await
@@ -218,8 +270,6 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
-        use runpod_sdk::service::EndpointsService;
-        use runpod_sdk::model::ListEndpointsQuery;
         let endpoints = self
             .client
             .list_endpoints(ListEndpointsQuery::default())
@@ -237,75 +287,28 @@ impl ComputeProvider for RunpodProvider {
     }
 
     async fn submit_training_job(&self, spec: &TrainingJobSpec) -> Result<JobHandle> {
-        use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput};
-        use runpod_sdk::service::PodsService;
-        let gpu_str = hf_flavor_to_runpod_gpu(&spec.flavor);
-        let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
-            .with_context(|| format!("unknown GPU type '{gpu_str}'"))?;
-        let env: std::collections::HashMap<String, String> = [
-            ("TRAINING_CONFIG".to_string(), spec.config_path.clone()),
-            ("UNSLOTH_CACHE_DIR".to_string(), "/opt/unsloth_compiled_cache".to_string()),
-        ].into();
-        let req = PodCreateInput {
-            name: Some("b00t-training".into()),
-            image_name: Some(spec.image.clone()),
-            gpu_type_ids: Some(vec![gpu_id]),
-            cloud_type: Some(CloudType::Secure),
-            gpu_count: Some(1),
-            volume_in_gb: Some(50),
-            container_disk_in_gb: Some(20),
-            env: Some(env),
-            ..Default::default()
-        };
+        let req = training_pod_request(spec)?;
         let pod = self.client.create_pod(req).await.context("RunPod create_pod failed")?;
         Ok(JobHandle { id: pod.id, provider: "runpod".into() })
     }
 
     async fn submit_batch_job(&self, spec: &BatchJobSpec) -> Result<JobHandle> {
-        use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput};
-        use runpod_sdk::service::PodsService;
-        let gpu_str = hf_flavor_to_runpod_gpu(&spec.flavor);
-        let gpu_id: GpuTypeId = serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
-            .with_context(|| format!("unknown GPU type '{gpu_str}'"))?;
-        let req = PodCreateInput {
-            name: Some("b00t-batch".into()),
-            image_name: Some(spec.image.clone()),
-            gpu_type_ids: Some(vec![gpu_id]),
-            cloud_type: Some(CloudType::Secure),
-            gpu_count: Some(1),
-            volume_in_gb: Some(50),
-            container_disk_in_gb: Some(20),
-            docker_start_cmd: {
-                let cp = spec.config_path.trim();
-                if cp.is_empty() || cp == "/dev/null" {
-                    None  // Image has its own entrypoint — don't override
-                } else {
-                    Some(vec!["bash".into(), "-c".into(), spec.config_path.clone()])
-                }
-            },
-            env: Some(spec.env.clone()),
-            ..Default::default()
-        };
+        let req = batch_pod_request(spec)?;
         let pod = self.client.create_pod(req).await.context("RunPod create_pod failed")?;
         Ok(JobHandle { id: pod.id, provider: "runpod".into() })
     }
 
     async fn job_status(&self, handle: &JobHandle) -> Result<String> {
-        use runpod_sdk::service::PodsService;
-        use runpod_sdk::model::GetPodQuery;
         let pod = self.client.get_pod(&handle.id, GetPodQuery::default())
             .await.context("RunPod get_pod failed")?;
         Ok(format!("pod={} status={:?}", handle.id, pod.desired_status))
     }
 
     async fn cancel_job(&self, handle: &JobHandle) -> Result<()> {
-        use runpod_sdk::service::PodsService;
         self.client.delete_pod(&handle.id).await.context("RunPod delete_pod failed")
     }
 
     async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
-        use runpod_sdk::service::PodsService;
-        use runpod_sdk::model::ListPodsQuery;
         let pods = self.client.list_pods(ListPodsQuery::default())
             .await.context("RunPod list_pods failed")?;
         Ok(pods.into_iter().map(|p| JobHandle { id: p.id, provider: "runpod".into() }).collect())
@@ -319,6 +322,94 @@ fn hf_flavor_to_runpod_gpu(flavor: &str) -> &str {
         "a10g-large" | "a10g-small" => "NVIDIA A40",
         _ => "NVIDIA A40",
     }
+}
+
+/// Parses a RunPod GPU type string into the SDK enum, with an error that names
+/// the offending string. Pure — split out for unit-testing the error path.
+fn parse_gpu_type_id(gpu_str: &str) -> Result<GpuTypeId> {
+    serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
+        .with_context(|| format!("unknown GPU type '{gpu_str}'"))
+}
+
+/// Env vars injected into training pods: the config path the runner reads and
+/// the unsloth compiled-cache mount.
+fn training_pod_env(config_path: &str) -> std::collections::HashMap<String, String> {
+    [
+        ("TRAINING_CONFIG".to_string(), config_path.to_string()),
+        ("UNSLOTH_CACHE_DIR".to_string(), "/opt/unsloth_compiled_cache".to_string()),
+    ]
+    .into()
+}
+
+/// Pure decision helper for batch pods: empty or `/dev/null` config paths mean
+/// the image carries its own entrypoint and must not be overridden.
+fn docker_start_cmd_for(config_path: &str) -> Option<Vec<String>> {
+    let cp = config_path.trim();
+    if cp.is_empty() || cp == "/dev/null" {
+        None
+    } else {
+        Some(vec!["bash".into(), "-c".into(), config_path.to_string()])
+    }
+}
+
+/// Builds the PodCreateInput for a fine-tuning pod. Split out so request
+/// construction is unit-testable without a live RunPod connection.
+fn training_pod_request(spec: &TrainingJobSpec) -> Result<PodCreateInput> {
+    let gpu_id = parse_gpu_type_id(hf_flavor_to_runpod_gpu(&spec.flavor))?;
+    Ok(PodCreateInput {
+        name: Some("b00t-training".into()),
+        image_name: Some(spec.image.clone()),
+        gpu_type_ids: Some(vec![gpu_id]),
+        cloud_type: Some(CloudType::Secure),
+        gpu_count: Some(1),
+        volume_in_gb: Some(50),
+        container_disk_in_gb: Some(20),
+        env: Some(training_pod_env(&spec.config_path)),
+        ..Default::default()
+    })
+}
+
+/// Builds the PodCreateInput for a generic containerized batch job.
+fn batch_pod_request(spec: &BatchJobSpec) -> Result<PodCreateInput> {
+    let gpu_id = parse_gpu_type_id(hf_flavor_to_runpod_gpu(&spec.flavor))?;
+    Ok(PodCreateInput {
+        name: Some("b00t-batch".into()),
+        image_name: Some(spec.image.clone()),
+        gpu_type_ids: Some(vec![gpu_id]),
+        cloud_type: Some(CloudType::Secure),
+        gpu_count: Some(1),
+        volume_in_gb: Some(50),
+        container_disk_in_gb: Some(20),
+        docker_start_cmd: docker_start_cmd_for(&spec.config_path),
+        env: Some(spec.env.clone()),
+        ..Default::default()
+    })
+}
+
+/// Builds the EndpointCreateInput for a serverless inference endpoint.
+/// 🤓 EndpointCreateInput requires template_id; env is baked into the template
+fn endpoint_create_request(cfg: &EndpointConfig) -> EndpointCreateInput {
+    let template_id = cfg
+        .env
+        .get("RUNPOD_TEMPLATE_ID")
+        .cloned()
+        .unwrap_or_default();
+    EndpointCreateInput {
+        template_id,
+        name: Some(cfg.name.clone()),
+        workers_min: Some(cfg.workers_min),
+        workers_max: Some(cfg.workers_max),
+        idle_timeout: Some(cfg.idle_timeout_s as i32),
+        execution_timeout_ms: Some(cfg.execution_timeout_ms as i32),
+        network_volume_id: cfg.network_volume_id.clone(),
+        ..Default::default()
+    }
+}
+
+/// Formats the one-line pod status used by `b00t provider runpod status`.
+fn fmt_pod_status_line(id: &str, status: Option<PodStatus>, cost_per_hr: Option<f64>) -> String {
+    let st = status.map(|s| format!("{s:?}")).unwrap_or_default();
+    format!("pod={id}  status={st}  cost_per_hr={}", fmt_cost(cost_per_hr))
 }
 
 // ── HF provider (CLI wrapper) ─────────────────────────────────────────────────
@@ -1378,8 +1469,6 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
 }
 
 async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
-    use runpod_sdk::model::{CloudType, GpuTypeId, PodCreateInput, PodStatus};
-    use runpod_sdk::service::PodsService;
     use runpod_sdk::RunpodConfig;
     let config = RunpodConfig::from_env().context("RUNPOD_API_KEY not set")?;
     let client = runpod_sdk::RunpodClient::new(config).context("RunpodClient::new failed")?;
@@ -1406,15 +1495,12 @@ async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
         }
         RunpodSubCommands::Status { id } => {
             let pod = client.get_pod(&id, Default::default()).await?;
-            let st = pod.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-            let cost = pod.cost_per_hr;
-            println!("pod={id}  status={st}  cost_per_hr=${cost:.2}");
+            println!("{}", fmt_pod_status_line(&id, pod.desired_status, pod.cost_per_hr));
         }
         RunpodSubCommands::List => {
             for p in client.list_pods(Default::default()).await? {
                 let st = p.desired_status.map(|s| format!("{s:?}")).unwrap_or_default();
-                let cost = p.cost_per_hr;
-                println!("{}  {st}  ${cost:.2}/hr", p.id);
+                println!("{}  {st}  {} /hr", p.id, fmt_cost(p.cost_per_hr));
             }
         }
         RunpodSubCommands::Stop { id, all } => {
@@ -1791,5 +1877,552 @@ mod batch_job_tests {
         let copied = dest_dir.path().join("photo.png");
         assert!(copied.exists());
         assert_eq!(std::fs::read(&copied).unwrap(), b"fake-image-bytes");
+    }
+}
+
+#[cfg(test)]
+mod runpod_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // ── Mock transport ────────────────────────────────────────────────────────
+
+    /// In-memory `RunpodApi`: canned responses, a call log, captured request
+    /// inputs, and a `fail` switch. When `fail` is set every call returns Err,
+    /// exercising the provider's error-context propagation with no network.
+    struct MockRunpod {
+        calls: Mutex<Vec<String>>,
+        last_pod_input: Mutex<Option<PodCreateInput>>,
+        last_endpoint_input: Mutex<Option<EndpointCreateInput>>,
+        pod: Pod,
+        pods: Vec<Pod>,
+        endpoint: Endpoint,
+        endpoints: Vec<Endpoint>,
+        fail: bool,
+    }
+
+    impl Default for MockRunpod {
+        fn default() -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                last_pod_input: Mutex::new(None),
+                last_endpoint_input: Mutex::new(None),
+                pod: test_pod("mock-pod", None),
+                pods: Vec::new(),
+                endpoint: test_endpoint("mock-endpoint", "mock-endpoint"),
+                endpoints: Vec::new(),
+                fail: false,
+            }
+        }
+    }
+
+    impl MockRunpod {
+        fn call_log(&self) -> Vec<String> {
+            self.calls.lock().unwrap().clone()
+        }
+
+        fn last_pod_input(&self) -> PodCreateInput {
+            self.last_pod_input
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("expected a create_pod call")
+        }
+
+        fn last_endpoint_input(&self) -> EndpointCreateInput {
+            self.last_endpoint_input
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("expected a create_endpoint call")
+        }
+    }
+
+    #[async_trait]
+    impl RunpodApi for MockRunpod {
+        async fn create_pod(&self, input: PodCreateInput) -> Result<Pod> {
+            self.calls.lock().unwrap().push("create_pod".into());
+            *self.last_pod_input.lock().unwrap() = Some(input);
+            if self.fail {
+                bail!("mock create_pod failure");
+            }
+            Ok(self.pod.clone())
+        }
+
+        async fn get_pod(&self, id: &str, _query: GetPodQuery) -> Result<Pod> {
+            self.calls.lock().unwrap().push(format!("get_pod:{id}"));
+            if self.fail {
+                bail!("mock get_pod failure");
+            }
+            Ok(self.pod.clone())
+        }
+
+        async fn delete_pod(&self, id: &str) -> Result<()> {
+            self.calls.lock().unwrap().push(format!("delete_pod:{id}"));
+            if self.fail {
+                bail!("mock delete_pod failure");
+            }
+            Ok(())
+        }
+
+        async fn list_pods(&self, _query: ListPodsQuery) -> Result<Vec<Pod>> {
+            self.calls.lock().unwrap().push("list_pods".into());
+            if self.fail {
+                bail!("mock list_pods failure");
+            }
+            Ok(self.pods.clone())
+        }
+
+        async fn create_endpoint(&self, input: EndpointCreateInput) -> Result<Endpoint> {
+            self.calls.lock().unwrap().push("create_endpoint".into());
+            *self.last_endpoint_input.lock().unwrap() = Some(input);
+            if self.fail {
+                bail!("mock create_endpoint failure");
+            }
+            Ok(self.endpoint.clone())
+        }
+
+        async fn get_endpoint(&self, id: &str, _query: GetEndpointQuery) -> Result<Endpoint> {
+            self.calls.lock().unwrap().push(format!("get_endpoint:{id}"));
+            if self.fail {
+                bail!("mock get_endpoint failure");
+            }
+            Ok(self.endpoint.clone())
+        }
+
+        async fn delete_endpoint(&self, id: &str) -> Result<()> {
+            self.calls.lock().unwrap().push(format!("delete_endpoint:{id}"));
+            if self.fail {
+                bail!("mock delete_endpoint failure");
+            }
+            Ok(())
+        }
+
+        async fn list_endpoints(&self, _query: ListEndpointsQuery) -> Result<Vec<Endpoint>> {
+            self.calls.lock().unwrap().push("list_endpoints".into());
+            if self.fail {
+                bail!("mock list_endpoints failure");
+            }
+            Ok(self.endpoints.clone())
+        }
+    }
+
+    // ── Test fixtures ─────────────────────────────────────────────────────────
+
+    /// Builds a minimal `Pod` via JSON: every field except `id` is `Option`,
+    /// so omitted keys deserialize to `None`. `PodStatus` serializes as
+    /// UPPERCASE ("RUNNING"/"EXITED"/"TERMINATED").
+    fn test_pod(id: &str, status: Option<PodStatus>) -> Pod {
+        let mut v = serde_json::json!({
+            "id": id,
+            "name": format!("name-{id}"),
+            "costPerHr": 0.39,
+        });
+        if let Some(s) = status {
+            v["desiredStatus"] = serde_json::to_value(s).expect("PodStatus serializes");
+        }
+        serde_json::from_value(v).expect("test pod json should deserialize")
+    }
+
+    /// Builds a minimal `Endpoint` via JSON — supplies every non-Option field
+    /// required by the SDK struct.
+    fn test_endpoint(id: &str, name: &str) -> Endpoint {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": name,
+            "userId": "user-1",
+            "templateId": "tpl-1",
+            "version": 1,
+            "computeType": "GPU",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "dataCenterIds": [],
+            "executionTimeoutMs": 30000,
+            "idleTimeout": 5,
+            "scalerType": "QUEUE_DELAY",
+            "scalerValue": 4,
+            "workersMax": 3,
+            "workersMin": 0,
+        }))
+        .expect("test endpoint json should deserialize")
+    }
+
+    fn training_spec() -> TrainingJobSpec {
+        TrainingJobSpec {
+            config_path: "fine-tune/config.yaml".into(),
+            image: "ghcr.io/elasticdotventures/b00t-training-image:latest".into(),
+            flavor: "a100-large".into(),
+            timeout_hours: 10.0,
+        }
+    }
+
+    fn batch_spec(config_path: &str) -> BatchJobSpec {
+        BatchJobSpec {
+            image: "app4dog/sam3-runner:cloud".into(),
+            config_path: config_path.into(),
+            env: [("SAM_RUNNER_MODE".to_string(), "real".to_string())].into(),
+            flavor: "a10g-small".into(),
+            timeout_hours: 1.0,
+            gpu_count: 1,
+            volumes: vec![],
+            inputs: vec![],
+        }
+    }
+
+    fn failing_provider() -> RunpodProvider<MockRunpod> {
+        let mut mock = MockRunpod::default();
+        mock.fail = true;
+        RunpodProvider::with_client(mock)
+    }
+
+    // ── Pure helper tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn hf_flavor_to_runpod_gpu_maps_known_flavors_and_defaults() {
+        assert_eq!(hf_flavor_to_runpod_gpu("a100-large"), "NVIDIA A100 80GB PCIe");
+        assert_eq!(hf_flavor_to_runpod_gpu("a100"), "NVIDIA A100 80GB PCIe");
+        assert_eq!(hf_flavor_to_runpod_gpu("h100"), "NVIDIA H100 PCIe");
+        assert_eq!(hf_flavor_to_runpod_gpu("a10g-large"), "NVIDIA A40");
+        assert_eq!(hf_flavor_to_runpod_gpu("a10g-small"), "NVIDIA A40");
+        // Unknown flavors fall back to the default GPU
+        assert_eq!(hf_flavor_to_runpod_gpu("rtx-4090"), "NVIDIA A40");
+    }
+
+    #[test]
+    fn default_gpu_count_is_one() {
+        assert_eq!(default_gpu_count(), 1);
+    }
+
+    #[test]
+    fn fmt_cost_formats_dollars_or_dash() {
+        assert_eq!(fmt_cost(Some(1.234)), "$1.23");
+        assert_eq!(fmt_cost(Some(0.0)), "$0.00");
+        assert_eq!(fmt_cost(None), "-");
+    }
+
+    #[test]
+    fn fmt_pod_status_line_includes_status_and_cost() {
+        let line = fmt_pod_status_line("pod-1", Some(PodStatus::Running), Some(0.39));
+        assert!(line.contains("pod=pod-1"));
+        assert!(line.contains("status=Running"));
+        assert!(line.contains("cost_per_hr=$0.39"));
+        let blank = fmt_pod_status_line("pod-2", None, None);
+        assert!(blank.contains("status="));
+        assert!(blank.contains("cost_per_hr=-"));
+    }
+
+    #[test]
+    fn parse_gpu_type_id_rejects_unknown_string_with_context() {
+        let err = parse_gpu_type_id("BOGUS GPU").unwrap_err();
+        assert!(err.to_string().contains("unknown GPU type 'BOGUS GPU'"));
+    }
+
+    #[test]
+    fn parse_gpu_type_id_accepts_known_gpu() {
+        assert_eq!(parse_gpu_type_id("NVIDIA A40").unwrap(), GpuTypeId::NvidiaA40);
+    }
+
+    #[test]
+    fn training_pod_env_injects_config_and_cache_dir() {
+        let env = training_pod_env("/cfg.yaml");
+        assert_eq!(env.get("TRAINING_CONFIG").map(String::as_str), Some("/cfg.yaml"));
+        assert_eq!(
+            env.get("UNSLOTH_CACHE_DIR").map(String::as_str),
+            Some("/opt/unsloth_compiled_cache")
+        );
+    }
+
+    #[test]
+    fn docker_start_cmd_for_omits_override_for_dev_null_or_empty() {
+        assert_eq!(docker_start_cmd_for("/dev/null"), None);
+        assert_eq!(docker_start_cmd_for(""), None);
+        assert_eq!(docker_start_cmd_for("   /dev/null   "), None);
+    }
+
+    #[test]
+    fn docker_start_cmd_for_overrides_with_bash_for_real_path() {
+        assert_eq!(
+            docker_start_cmd_for("/workspace/request.json"),
+            Some(vec!["bash".to_string(), "-c".to_string(), "/workspace/request.json".to_string()])
+        );
+    }
+
+    #[test]
+    fn training_pod_request_builds_expected_input() {
+        let req = training_pod_request(&training_spec()).expect("known flavor should parse");
+        assert_eq!(req.name.as_deref(), Some("b00t-training"));
+        assert_eq!(
+            req.image_name.as_deref(),
+            Some("ghcr.io/elasticdotventures/b00t-training-image:latest")
+        );
+        assert_eq!(req.gpu_type_ids, Some(vec![GpuTypeId::NvidiaA100_80GbPcie]));
+        assert_eq!(req.cloud_type, Some(CloudType::Secure));
+        assert_eq!(req.gpu_count, Some(1));
+        assert_eq!(req.volume_in_gb, Some(50));
+        assert_eq!(req.container_disk_in_gb, Some(20));
+        assert_eq!(req.docker_start_cmd, None);
+        let env = req.env.as_ref().expect("training env should be set");
+        assert_eq!(env.get("TRAINING_CONFIG").map(String::as_str), Some("fine-tune/config.yaml"));
+    }
+
+    #[test]
+    fn batch_pod_request_overrides_start_cmd_for_real_config_path() {
+        let req = batch_pod_request(&batch_spec("/workspace/request.json")).expect("known flavor");
+        assert_eq!(req.name.as_deref(), Some("b00t-batch"));
+        assert_eq!(
+            req.docker_start_cmd,
+            Some(vec!["bash".to_string(), "-c".to_string(), "/workspace/request.json".to_string()])
+        );
+        let env = req.env.as_ref().expect("batch env should be preserved");
+        assert_eq!(env.get("SAM_RUNNER_MODE").map(String::as_str), Some("real"));
+    }
+
+    #[test]
+    fn batch_pod_request_leaves_start_cmd_unset_for_dev_null() {
+        let req = batch_pod_request(&batch_spec("/dev/null")).expect("known flavor");
+        assert_eq!(req.docker_start_cmd, None);
+    }
+
+    #[test]
+    fn endpoint_create_request_uses_template_id_from_env() {
+        let mut cfg = EndpointConfig {
+            name: "b00t-ch0nky".into(),
+            workers_min: 0,
+            workers_max: 3,
+            idle_timeout_s: 5,
+            execution_timeout_ms: 30_000,
+            image: "vllm/vllm-openai:latest".into(),
+            network_volume_id: Some("vol-9".into()),
+            ..Default::default()
+        };
+        cfg.env.insert("RUNPOD_TEMPLATE_ID".into(), "tpl-7".into());
+        let req = endpoint_create_request(&cfg);
+        assert_eq!(req.template_id, "tpl-7");
+        assert_eq!(req.name.as_deref(), Some("b00t-ch0nky"));
+        assert_eq!(req.workers_min, Some(0));
+        assert_eq!(req.workers_max, Some(3));
+        assert_eq!(req.idle_timeout, Some(5));
+        assert_eq!(req.execution_timeout_ms, Some(30_000));
+        assert_eq!(req.network_volume_id.as_deref(), Some("vol-9"));
+    }
+
+    #[test]
+    fn endpoint_create_request_defaults_template_id_when_missing() {
+        let req = endpoint_create_request(&EndpointConfig::default());
+        assert_eq!(req.template_id, "");
+    }
+
+    // ── Error-path context propagation ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn submit_training_job_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider.submit_training_job(&training_spec()).await.unwrap_err();
+        assert!(err.to_string().contains("RunPod create_pod failed"), "{err}");
+        let chain = format!("{err:?}");
+        assert!(chain.contains("mock create_pod failure"), "{chain}");
+    }
+
+    #[tokio::test]
+    async fn submit_batch_job_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider
+            .submit_batch_job(&batch_spec("/workspace/request.json"))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("RunPod create_pod failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn job_status_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let handle = JobHandle { id: "pod-1".into(), provider: "runpod".into() };
+        let err = provider.job_status(&handle).await.unwrap_err();
+        assert!(err.to_string().contains("RunPod get_pod failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn cancel_job_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let handle = JobHandle { id: "pod-1".into(), provider: "runpod".into() };
+        let err = provider.cancel_job(&handle).await.unwrap_err();
+        assert!(err.to_string().contains("RunPod delete_pod failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn list_jobs_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider.list_jobs().await.unwrap_err();
+        assert!(err.to_string().contains("RunPod list_pods failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn deploy_inference_endpoint_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider
+            .deploy_inference_endpoint(&EndpointConfig::default())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("RunPod create_endpoint failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn endpoint_status_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider.endpoint_status("ep-1").await.unwrap_err();
+        assert!(err.to_string().contains("RunPod get_endpoint failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn teardown_endpoint_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider.teardown_endpoint("ep-1").await.unwrap_err();
+        assert!(err.to_string().contains("RunPod delete_endpoint failed"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn list_endpoints_propagates_mock_error_with_context() {
+        let provider = failing_provider();
+        let err = provider.list_endpoints().await.unwrap_err();
+        assert!(err.to_string().contains("RunPod list_endpoints failed"), "{err}");
+    }
+
+    // ── Mock-driven lifecycle ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn submit_training_job_returns_handle_from_mock_pod() {
+        let mut mock = MockRunpod::default();
+        mock.pod = test_pod("pod-42", Some(PodStatus::Running));
+        let provider = RunpodProvider::with_client(mock);
+        let handle = provider.submit_training_job(&training_spec()).await.unwrap();
+        assert_eq!(handle.id, "pod-42");
+        assert_eq!(handle.provider, "runpod");
+        assert_eq!(provider.client.call_log(), ["create_pod"]);
+    }
+
+    #[tokio::test]
+    async fn submit_batch_job_passes_env_and_start_cmd_to_transport() {
+        let mock = MockRunpod::default();
+        let provider = RunpodProvider::with_client(mock);
+        let handle = provider
+            .submit_batch_job(&batch_spec("/workspace/request.json"))
+            .await
+            .unwrap();
+        assert_eq!(handle.id, "mock-pod");
+        let input = provider.client.last_pod_input();
+        assert_eq!(
+            input.docker_start_cmd.as_deref(),
+            Some(&["bash".to_string(), "-c".to_string(), "/workspace/request.json".to_string()][..])
+        );
+        let env = input.env.as_ref().expect("env forwarded to transport");
+        assert_eq!(env.get("SAM_RUNNER_MODE").map(String::as_str), Some("real"));
+    }
+
+    #[tokio::test]
+    async fn job_status_formats_desired_status() {
+        let mut mock = MockRunpod::default();
+        mock.pod = test_pod("pod-7", Some(PodStatus::Running));
+        let provider = RunpodProvider::with_client(mock);
+        let handle = JobHandle { id: "pod-7".into(), provider: "runpod".into() };
+        let status = provider.job_status(&handle).await.unwrap();
+        // `{:?}` on Option<PodStatus> yields "Some(Running)" — matches the
+        // pre-existing provider formatting exactly.
+        assert_eq!(status, "pod=pod-7 status=Some(Running)");
+        assert_eq!(provider.client.call_log(), ["get_pod:pod-7"]);
+    }
+
+    #[tokio::test]
+    async fn job_status_handles_missing_desired_status() {
+        let mock = MockRunpod::default(); // default pod has no desired_status
+        let provider = RunpodProvider::with_client(mock);
+        let handle = JobHandle { id: "pod-x".into(), provider: "runpod".into() };
+        let status = provider.job_status(&handle).await.unwrap();
+        assert_eq!(status, "pod=pod-x status=None");
+    }
+
+    #[tokio::test]
+    async fn cancel_job_deletes_pod_by_id() {
+        let mock = MockRunpod::default();
+        let provider = RunpodProvider::with_client(mock);
+        let handle = JobHandle { id: "pod-9".into(), provider: "runpod".into() };
+        provider.cancel_job(&handle).await.unwrap();
+        assert_eq!(provider.client.call_log(), ["delete_pod:pod-9"]);
+    }
+
+    #[tokio::test]
+    async fn list_jobs_maps_mock_pods_to_handles() {
+        let mut mock = MockRunpod::default();
+        mock.pods = vec![test_pod("pod-a", None), test_pod("pod-b", None)];
+        let provider = RunpodProvider::with_client(mock);
+        let jobs = provider.list_jobs().await.unwrap();
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].id, "pod-a");
+        assert_eq!(jobs[1].id, "pod-b");
+        assert!(jobs.iter().all(|j| j.provider == "runpod"));
+        assert_eq!(provider.client.call_log(), ["list_pods"]);
+    }
+
+    #[tokio::test]
+    async fn deploy_inference_endpoint_returns_handle() {
+        let mut mock = MockRunpod::default();
+        mock.endpoint = test_endpoint("ep-1", "b00t-ch0nky");
+        let provider = RunpodProvider::with_client(mock);
+        let mut cfg = EndpointConfig::default();
+        cfg.name = "b00t-ch0nky".into();
+        let handle = provider.deploy_inference_endpoint(&cfg).await.unwrap();
+        assert_eq!(handle.id, "ep-1");
+        assert_eq!(handle.provider, "runpod");
+        assert_eq!(handle.name.as_deref(), Some("b00t-ch0nky"));
+        assert_eq!(provider.client.call_log(), ["create_endpoint"]);
+        assert_eq!(
+            provider.client.last_endpoint_input().name.as_deref(),
+            Some("b00t-ch0nky")
+        );
+    }
+
+    #[tokio::test]
+    async fn endpoint_status_returns_handle_from_mock_endpoint() {
+        let mut mock = MockRunpod::default();
+        mock.endpoint = test_endpoint("ep-2", "b00t-ch0nky");
+        let provider = RunpodProvider::with_client(mock);
+        let handle = provider.endpoint_status("ep-2").await.unwrap();
+        assert_eq!(handle.id, "ep-2");
+        assert_eq!(handle.provider, "runpod");
+        assert_eq!(provider.client.call_log(), ["get_endpoint:ep-2"]);
+    }
+
+    #[tokio::test]
+    async fn teardown_endpoint_deletes_by_id() {
+        let mock = MockRunpod::default();
+        let provider = RunpodProvider::with_client(mock);
+        provider.teardown_endpoint("ep-3").await.unwrap();
+        assert_eq!(provider.client.call_log(), ["delete_endpoint:ep-3"]);
+    }
+
+    #[tokio::test]
+    async fn list_endpoints_maps_to_handles() {
+        let mut mock = MockRunpod::default();
+        mock.endpoints = vec![test_endpoint("ep-1", "a"), test_endpoint("ep-2", "b")];
+        let provider = RunpodProvider::with_client(mock);
+        let endpoints = provider.list_endpoints().await.unwrap();
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(endpoints[0].id, "ep-1");
+        assert_eq!(endpoints[1].id, "ep-2");
+        assert_eq!(provider.client.call_log(), ["list_endpoints"]);
+    }
+
+    #[tokio::test]
+    async fn lifecycle_records_calls_in_order() {
+        let mock = MockRunpod::default();
+        let provider = RunpodProvider::with_client(mock);
+        let handle = provider
+            .submit_batch_job(&batch_spec("/workspace/request.json"))
+            .await
+            .unwrap();
+        provider.job_status(&handle).await.unwrap();
+        provider.cancel_job(&handle).await.unwrap();
+        assert_eq!(
+            provider.client.call_log(),
+            ["create_pod", "get_pod:mock-pod", "delete_pod:mock-pod"]
+        );
     }
 }

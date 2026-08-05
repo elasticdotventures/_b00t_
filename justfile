@@ -539,6 +539,18 @@ ra_run:
 test:
     cargo test -- --nocapture
 
+# Verify the compact b00t-mcp surface and communication output contract.
+test-b00t-mcp:
+    cargo test -p b00t-mcp
+
+# Format the b00t-mcp crate through the registered action surface.
+format-b00t-mcp:
+    rustfmt --edition 2024 b00t-mcp/src/chat.rs b00t-mcp/src/mcp_server_rusty.rs b00t-mcp/src/mcp_tools.rs
+
+# Install the already-versioned b00t-mcp after its focused contract passes.
+install-b00t-mcp: test-b00t-mcp
+    cargo install --locked --path b00t-mcp --force
+
 # 🤓 deterministic hive accelerator/soul verification (P1–P3).
 #    Builds the test binary ONCE (--no-run), then runs hive tests directly —
 #    avoids re-linking the full workspace test binary on every invocation.
@@ -967,6 +979,11 @@ ask query="":
 # ── ufo-types crate (#511) — Tax-Lawyer UFO stereotypes + Satisfies<T> ──────
 # (moved to mod ufo '_b00t_/justfile-ufo.just')
 
+# Regenerate the ufo-types adoption baseline report (issue #928) — measures
+# real adoption via grep, not hand-maintained numbers that silently drift.
+ufo-adoption-report:
+    @bash _b00t_/scripts/ufo-adoption-report.sh
+
 # ── Chore memoization — recipes for fine-tune corpus (fewer tokens) ─────────
 # (moved to mod chore '_b00t_/justfile-chore.just')
 
@@ -999,8 +1016,15 @@ android-sandbox:
 b00t-test-harness:
     @bash _b00t_/scripts/b00t-ping-pong.sh
 
+# Pre-cargo gate: detect submodule pin drift (recorded gitlink vs checked-out HEAD).
+# Distinguishes drifted+clean (safe, auto-fixable) from drifted+dirty (report only).
+# Usage: just doctor         (report only)
+#        just doctor --fix   (auto-sync drifted+clean submodules; never touches dirty ones)
+doctor *ARGS:
+    @bash _b00t_/scripts/check-submodule-drift.sh {{ARGS}}
+
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
-check-fast:
+check-fast: doctor
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
 
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
@@ -1065,7 +1089,3 @@ skill-wrkflw-list:
 #   - Namespaced: `just ledgrrr viz` not `just ledgrrr-viz`
 #   - Vendor owns its own lifecycle; root only adds `mod` line
 # See vendor/ledgrrr/ledgrrr.just header for full documentation.
-
-
-
-

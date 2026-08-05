@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use ufo_types::{IsoAuditable, Satisfies, SatisfiesResult, Stereotyped, UfoStereotype};
+
+use crate::DatumType;
 
 #[derive(Parser, Debug)]
 pub enum OntologyCommands {
@@ -69,6 +72,36 @@ impl OntologyCommands {
                     }
                     _ => println!("{}", serde_json::to_string_pretty(&triples)?),
                 }
+
+                // NS-9/NS-10 evidence wiring (#927): `sparql_query` itself
+                // stays pure/side-effect-free for testability — evidence
+                // recording happens here, at the command layer, once per
+                // matched datum, only for the "validate"/"all" predicates
+                // (the ones that actually evaluate `DatumValidateConstraint`).
+                if predicate == "validate" || predicate == "b00t:validate" || predicate == "all" {
+                    let datums = scan_datums(&datum_dir).unwrap_or_default();
+                    for datum in &datums {
+                        if let Some(subj) = subject.as_deref() {
+                            if !datum.b00t.name.contains(subj) {
+                                continue;
+                            }
+                        }
+                        if datum.validate.command.is_empty() {
+                            continue;
+                        }
+                        let constraint = DatumValidateConstraint;
+                        let _ = datum.satisfies(&constraint);
+                        let _ = crate::commands::evidence::record_is_a(
+                            &datum.b00t.name,
+                            &datum.ufo_stereotype().to_string(),
+                        );
+                        for iso_id in constraint.iso_standard_ids() {
+                            let _ =
+                                crate::commands::evidence::record_audited_by(&datum.b00t.name, &iso_id);
+                        }
+                    }
+                }
+
                 Ok(())
             }
             OntologyCommands::FindAgent {
@@ -186,37 +219,92 @@ pub fn scan_datums(datum_dir: &str) -> Result<Vec<DatumMeta>> {
     Ok(datums)
 }
 
-pub fn is_validated(datum: &DatumMeta) -> bool {
-    if datum.validate.command.is_empty() {
-        return false;
+/// Constraint: a datum's `[validate]` command exits successfully (and, if
+/// `regex` is set, its combined stdout+stderr matches). Deliberately unit
+/// (no fields) — the datum itself carries the command/regex to evaluate.
+pub struct DatumValidateConstraint;
+
+impl IsoAuditable for DatumValidateConstraint {
+    fn iso_standard_ids(&self) -> Vec<String> {
+        vec!["b00t:DatumValidateCommand".into()]
     }
-    // Expand ~ to the actual home directory so validate commands like
-    // `git -C ~/.b00t cat-file -e <hash>` work without shell expansion.
-    let home = dirs::home_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let expanded = datum.validate.command.replace('~', &home);
-    let parts: Vec<&str> = expanded.split_whitespace().collect();
-    if parts.is_empty() {
-        return false;
+}
+
+impl Stereotyped for DatumMeta {
+    /// Delegates to `DatumType`'s lattice (#925/#926 single source of
+    /// truth) — same pattern as `sparql_query`'s "type" arm and
+    /// `BootDatum`'s own `Stereotyped` impl. Missing/unrecognized type
+    /// degrades to `Kind("Unknown")`, never panics.
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        DatumType::from_type_token(&self.b00t.datum_type)
+            .unwrap_or(DatumType::Unknown)
+            .ufo_stereotype()
     }
-    match Command::new(parts[0]).args(&parts[1..]).output() {
-        Ok(output) => {
-            let combined = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            if datum.validate.regex.is_empty() {
-                output.status.success()
-            } else {
-                regex::Regex::new(&datum.validate.regex)
-                    .map(|re| re.is_match(&combined))
-                    .unwrap_or(false)
-            }
+}
+
+impl Satisfies<DatumValidateConstraint> for DatumMeta {
+    /// Same command-splitting/expansion and output-combination logic
+    /// `is_validated()` has always run, but distinguishing three cases the
+    /// old bool return silently collapsed into `false`:
+    ///  1. no `[validate]` command at all → `Unknown` (nothing to check)
+    ///  2. command genuinely ran and failed / output didn't match →
+    ///     `Violated`
+    ///  3. command couldn't even be spawned (ENOENT etc.), or the regex
+    ///     itself doesn't compile → `Unknown` (we couldn't determine
+    ///     pass/fail, we did not determine it to be false)
+    fn satisfies(&self, _c: &DatumValidateConstraint) -> SatisfiesResult {
+        if self.validate.command.is_empty() {
+            return SatisfiesResult::unknown(0.0);
         }
-        Err(_) => false,
+        // Expand ~ to the actual home directory so validate commands like
+        // `git -C ~/.b00t cat-file -e <hash>` work without shell expansion.
+        let home = dirs::home_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let expanded = self.validate.command.replace('~', &home);
+        let parts: Vec<&str> = expanded.split_whitespace().collect();
+        if parts.is_empty() {
+            return SatisfiesResult::unknown(0.0);
+        }
+        match Command::new(parts[0]).args(&parts[1..]).output() {
+            Ok(output) => {
+                let combined = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                if self.validate.regex.is_empty() {
+                    if output.status.success() {
+                        SatisfiesResult::satisfied(1.0)
+                    } else {
+                        SatisfiesResult::violated(
+                            format!("command exited {:?}", output.status.code()),
+                            1.0,
+                        )
+                    }
+                } else {
+                    match regex::Regex::new(&self.validate.regex) {
+                        Ok(re) if re.is_match(&combined) => SatisfiesResult::satisfied(1.0),
+                        Ok(_) => SatisfiesResult::violated(
+                            format!("output did not match /{}/", self.validate.regex),
+                            1.0,
+                        ),
+                        Err(_) => SatisfiesResult::unknown(0.0),
+                    }
+                }
+            }
+            Err(_) => SatisfiesResult::unknown(0.0),
+        }
     }
+}
+
+/// Legacy bool entry point — delegates to `Satisfies<DatumValidateConstraint>`.
+/// `is_satisfied()` is `false` for BOTH `Violated` and `Unknown`, so this
+/// preserves the exact same bool result `is_validated()` has always
+/// returned for every input (see `is_validated_returns_false_for_all_three_unknown_cases`
+/// regression-lock test).
+pub fn is_validated(datum: &DatumMeta) -> bool {
+    datum.satisfies(&DatumValidateConstraint).is_satisfied()
 }
 
 pub fn detect_blessings() -> Vec<String> {
@@ -277,6 +365,9 @@ pub fn sparql_query(
         match predicate {
             "type" | "b00t:type" => {
                 triples.push(emit("b00t:type", &datum.b00t.datum_type));
+                let dt = DatumType::from_type_token(&datum.b00t.datum_type)
+                    .unwrap_or(DatumType::Unknown);
+                triples.push(emit("ufo:stereotype", &dt.ufo_stereotype().to_string()));
             }
             "roles" | "b00t:roles" => {
                 for r in &datum.roles.required_for {
@@ -289,11 +380,17 @@ pub fn sparql_query(
             "validate" | "b00t:validate" => {
                 if !datum.validate.command.is_empty() {
                     triples.push(emit("b00t:validateCmd", &datum.validate.command));
+                    let result = datum.satisfies(&DatumValidateConstraint);
+                    triples.push(emit("b00t:validateDisposition", &result.disposition.to_string()));
+                    triples.push(emit("b00t:validateConfidence", &result.confidence.to_string()));
                 }
             }
             _ => {
                 // "all" or unknown — emit all predicates
                 triples.push(emit("b00t:type", &datum.b00t.datum_type));
+                let dt = DatumType::from_type_token(&datum.b00t.datum_type)
+                    .unwrap_or(DatumType::Unknown);
+                triples.push(emit("ufo:stereotype", &dt.ufo_stereotype().to_string()));
                 for r in &datum.roles.required_for {
                     triples.push(emit("b00t:requiredFor", r));
                 }
@@ -418,6 +515,7 @@ fn print_agent_results(task: &str, results: &[AgentMatch]) {
 mod tests {
     use super::*;
     use std::io::Write;
+    use ufo_types::Disposition;
 
     fn make_datum(
         name: &str,
@@ -531,6 +629,15 @@ optional_for = []
         assert_eq!(triples[0][0], "rust");
         assert_eq!(triples[0][1], "b00t:type");
         assert_eq!(triples[0][2], "cli");
+
+        // ufo:stereotype triple (#926) — Cli is a SubKind of Executable.
+        // NOTE: the vendored ufo_types::UfoStereotype Display impl for SubKind
+        // has a real upstream bug (missing closing '>'), so the expected
+        // string is "SubKind:Cli<Executable" with no trailing '>'. This is
+        // NOT fixed here — see PR description.
+        assert_eq!(triples[1][0], "rust");
+        assert_eq!(triples[1][1], "ufo:stereotype");
+        assert_eq!(triples[1][2], "SubKind:Cli<Executable");
 
         let triples2 = sparql_query(Some("rust"), "roles", dir.path().to_str().unwrap()).unwrap();
         assert!(
@@ -661,5 +768,121 @@ optional_for = []
 
         let results = find_agents_for_task("a b c d", 5, dir.path().to_str().unwrap()).unwrap();
         assert!(results.is_empty());
+    }
+
+    // ── is_validated / Satisfies<DatumValidateConstraint> (#927) ──
+
+    fn make_datum_with_regex(name: &str, validate_cmd: &str, regex: &str) -> DatumMeta {
+        DatumMeta {
+            b00t: B00tSection {
+                name: name.to_string(),
+                datum_type: "cli".to_string(),
+            },
+            validate: ValidateSection {
+                command: validate_cmd.to_string(),
+                regex: regex.to_string(),
+            },
+            roles: RolesSection::default(),
+        }
+    }
+
+    /// Regression lock: `is_validated()`'s legacy bool must remain
+    /// byte-identical (`false`) for all three cases that used to silently
+    /// collapse "couldn't determine" into "false" — proving the #927
+    /// refactor changed the underlying disposition tracking without
+    /// changing this function's observable output.
+    #[test]
+    fn is_validated_returns_false_for_all_three_unknown_cases() {
+        // Case 1: empty validate command.
+        let no_cmd = make_datum("no-validate-cmd", &[], &[], "");
+        assert!(!is_validated(&no_cmd));
+
+        // Case 2: invalid regex.
+        let bad_regex = make_datum_with_regex("bad-regex", "echo hi", "(unclosed[");
+        assert!(!is_validated(&bad_regex));
+
+        // Case 3: command exec failure (ENOENT).
+        let bad_cmd = make_datum(
+            "nonexistent-binary",
+            &[],
+            &[],
+            "definitely-not-a-real-command-927-xyz",
+        );
+        assert!(!is_validated(&bad_cmd));
+    }
+
+    #[test]
+    fn satisfies_empty_validate_command_is_unknown() {
+        let datum = make_datum("no-validate-cmd", &[], &[], "");
+        let result = datum.satisfies(&DatumValidateConstraint);
+        assert!(
+            matches!(result.disposition, Disposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    #[test]
+    fn satisfies_invalid_regex_is_unknown() {
+        let datum = make_datum_with_regex("bad-regex", "echo hi", "(unclosed[");
+        let result = datum.satisfies(&DatumValidateConstraint);
+        assert!(
+            matches!(result.disposition, Disposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    #[test]
+    fn satisfies_command_exec_failure_is_unknown() {
+        let datum = make_datum(
+            "nonexistent-binary",
+            &[],
+            &[],
+            "definitely-not-a-real-command-927-xyz",
+        );
+        let result = datum.satisfies(&DatumValidateConstraint);
+        assert!(
+            matches!(result.disposition, Disposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    /// Proves the 3-way split is real: a command that genuinely runs and
+    /// exits non-zero is a real `Violated`, distinct from all three
+    /// `Unknown` cases above.
+    #[test]
+    fn satisfies_command_exits_nonzero_is_violated() {
+        let datum = make_datum("failing-cmd", &[], &[], "false");
+        let result = datum.satisfies(&DatumValidateConstraint);
+        match result.disposition {
+            Disposition::Violated { reason } => {
+                assert!(reason.contains("exited"), "reason: {reason}");
+            }
+            other => panic!("expected Violated, got {:?}", other),
+        }
+    }
+
+    /// Proves genuine regex-mismatch (command runs fine, output doesn't
+    /// match) is `Violated`, distinct from the invalid-regex `Unknown` case.
+    #[test]
+    fn satisfies_regex_mismatch_is_violated() {
+        let datum =
+            make_datum_with_regex("echo-cli", "echo hello-world", "definitely-wont-match-xyz");
+        let result = datum.satisfies(&DatumValidateConstraint);
+        match result.disposition {
+            Disposition::Violated { reason } => {
+                assert!(reason.contains("did not match"), "reason: {reason}");
+            }
+            other => panic!("expected Violated, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn satisfies_passing_command_is_satisfied() {
+        let datum = make_datum("passing-cmd", &[], &[], "true");
+        let result = datum.satisfies(&DatumValidateConstraint);
+        assert!(result.is_satisfied());
     }
 }

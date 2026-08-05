@@ -1,0 +1,2 @@
+---
+Python 3.14 is the minimum runtime for all b00t systems. Python 3.11 is deprecated. All: Python 3.14 is the minimum runtime for all b00t systems. Python 3.11 is deprecated. All Containerfiles MUST use python:3.14-slim as base. ALL pip install commands MUST use uv pip install --system instead. The guard redirects bare pip to uv pip. b00t up must eventually check python3 --version >= 3.14. The notebook container now runs Python 3.14.6 with uv 0.9.13. <!-- salvaged:topic_overflow -->
