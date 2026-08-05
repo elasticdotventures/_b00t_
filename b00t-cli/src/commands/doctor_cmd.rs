@@ -146,6 +146,182 @@ fn check_submodule_drift(b00t_path: &str, fix: bool) -> Value {
     }
 }
 
+/// A vendor crate whose built release binary something in b00t's own config
+/// actually spawns/expects (#814) — sourced from the `[b00t.vendor]` table's
+/// `health_check` field in `_b00t_/datums/VENDOR-*.tomllmd` registry
+/// entries. Scope is deliberately narrow: only registry entries whose
+/// `health_check` asserts `test -x <path>` are considered (Rust/Go binaries
+/// built via `cargo`/`make` into a concrete path) — python/bun-installed
+/// vendors (VENDOR-AGENT-FRAMEWORK, VENDOR-HERMES-AGENT-B00T,
+/// VENDOR-OPENCODE-B00T, VENDOR-PI-MONO, VENDOR-PINGAP-DEVPROXY-B00T) and the
+/// ~20 other vendored submodules with no VENDOR-*.tomllmd entry at all are
+/// out of scope, per #814's "don't flag every vendored crate" requirement.
+struct VendorBinaryExpectation {
+    /// Datum key, e.g. "VENDOR-IRONTOLOGY-MCP".
+    name: String,
+    /// Binary path relative to the b00t repo root, e.g.
+    /// "vendor/irontology-mcp/target/release/mcp-server".
+    binary_path: String,
+    /// Exact build command from the registry entry, verbatim for the operator.
+    build_command: String,
+}
+
+/// Line-oriented scrape of the `[b00t.vendor]` table's `key = "value"`
+/// entries. `_b00t_/datums/*.tomllmd` files mix TOML front matter with a
+/// markdown prose body and are NOT valid whole-file TOML — verified:
+/// `toml::from_str` fails on every `VENDOR-*.tomllmd` in this repo, on its
+/// prose lines. The crate's own generic datum loader
+/// (`get_all_datums`/`scan_datums_recursive` in datum_utils.rs, which does
+/// parse the whole file) therefore silently skips these files; they never
+/// appear in `HashMapStore`. Scanning just the one table this check needs
+/// sidesteps that pre-existing parser gap rather than widening #814's scope
+/// to fix it.
+fn parse_vendor_table(content: &str) -> std::collections::HashMap<String, String> {
+    let mut fields = std::collections::HashMap::new();
+    let mut in_vendor = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(header) = trimmed.strip_prefix('[') {
+            in_vendor = header.trim_end_matches(']') == "b00t.vendor";
+            continue;
+        }
+        if !in_vendor {
+            continue;
+        }
+        if let Some((k, v)) = trimmed.split_once('=') {
+            fields.insert(
+                k.trim().to_string(),
+                v.trim().trim_matches('"').to_string(),
+            );
+        }
+    }
+    fields
+}
+
+/// Enumerate vendor binary expectations from `<repo_root>/_b00t_/datums/VENDOR-*.tomllmd`.
+fn find_vendor_binary_expectations(repo_root: &Path) -> Vec<VendorBinaryExpectation> {
+    let datums_dir = repo_root.join("_b00t_/datums");
+    let Ok(entries) = std::fs::read_dir(&datums_dir) else {
+        return vec![];
+    };
+    let mut out: Vec<VendorBinaryExpectation> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let path = e.path();
+            let fname = path.file_name()?.to_str()?;
+            if !(fname.starts_with("VENDOR-") && fname.ends_with(".tomllmd")) {
+                return None;
+            }
+            let content = std::fs::read_to_string(&path).ok()?;
+            let fields = parse_vendor_table(&content);
+            let health_check = fields.get("health_check")?;
+            let idx = health_check.find("test -x ")?;
+            let binary_path = health_check[idx + "test -x ".len()..]
+                .split_whitespace()
+                .next()?
+                .to_string();
+            if binary_path.is_empty() {
+                return None;
+            }
+            Some(VendorBinaryExpectation {
+                name: fname.trim_end_matches(".tomllmd").to_string(),
+                binary_path,
+                build_command: fields.get("build_command").cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+    // De-dupe by binary path: VENDOR-LEDGRRR / VENDOR-L3DG3RR both point at
+    // vendor/ledgrrr's ledgerr-mcp (two checkouts of the same upstream repo)
+    // — report the shared binary once.
+    out.sort_by(|a, b| a.binary_path.cmp(&b.binary_path).then(a.name.cmp(&b.name)));
+    out.dedup_by(|a, b| a.binary_path == b.binary_path);
+    out
+}
+
+/// Missing vendor binary detection (#814): `b00t lfmf` and friends spawn
+/// vendor MCP/CLI binaries (e.g. irontology-mcp) that are never auto-built —
+/// the submodule can be checked out with no `target/release/<bin>` present,
+/// producing an opaque "No such file or directory (os error 2)" at call
+/// time. This surfaces that as a doctor check instead: PASS/FAIL per
+/// registered vendor binary, with the exact build command to run.
+///
+/// Deliberately never auto-builds, even under `--fix`: these are `cargo
+/// build --release` (or `make`/`bun`) invocations against multi-crate
+/// workspaces (irontology-mcp alone has 20+ crates) with unbounded wall
+/// time — unlike #923's submodule-drift `--fix` (a bounded `git` pin sync)
+/// or #924's gutted-gitdir repair (a bounded re-clone), "safe and fast"
+/// can't be guaranteed for an arbitrary vendor release build. `--fix`
+/// therefore only annotates the report; the operator always runs the build
+/// command manually.
+fn check_vendor_binaries(repo_root: &Path, fix: bool) -> Value {
+    let start = Instant::now();
+    let expectations = find_vendor_binary_expectations(repo_root);
+    let results: Vec<Value> = expectations
+        .iter()
+        .map(|v| {
+            let full_path = repo_root.join(&v.binary_path);
+            // A present-but-non-executable file (e.g. a stray regular file)
+            // would still fail the same "os error 2"-shaped spawn the way
+            // `irontology-mcp` was actually reported (os error 13,
+            // Permission denied, if present-but-not-+x) — check the
+            // executable bit, not just existence.
+            #[cfg(unix)]
+            let built = {
+                use std::os::unix::fs::PermissionsExt;
+                full_path
+                    .metadata()
+                    .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                    .unwrap_or(false)
+            };
+            #[cfg(not(unix))]
+            let built = full_path.is_file();
+            json!({
+                "name": v.name,
+                "binary_path": v.binary_path,
+                "status": if built { "built" } else { "missing" },
+                "build_command": v.build_command,
+            })
+        })
+        .collect();
+    let missing: Vec<&Value> = results
+        .iter()
+        .filter(|r| r["status"] == "missing")
+        .collect();
+    let pass = missing.is_empty();
+    let mut detail = if pass {
+        format!("{}/{} vendor binaries built", results.len(), results.len())
+    } else {
+        let commands: Vec<String> = missing
+            .iter()
+            .map(|r| {
+                format!(
+                    "{}: {}",
+                    r["binary_path"].as_str().unwrap_or("?"),
+                    r["build_command"].as_str().unwrap_or("?")
+                )
+            })
+            .collect();
+        format!(
+            "{} missing vendor binar{} — {}",
+            missing.len(),
+            if missing.len() == 1 { "y" } else { "ies" },
+            commands.join(" | ")
+        )
+    };
+    if fix && !pass {
+        detail.push_str(
+            " (--fix not applied: vendor release builds are slow/unbounded — run the build command(s) above manually)",
+        );
+    }
+    json!({
+        "id": "vendor-binaries",
+        "pass": pass,
+        "detail": detail,
+        "vendor_binaries": results,
+        "latency_ms": start.elapsed().as_millis(),
+    })
+}
+
 fn all_deps(fix: bool) -> Vec<Value> {
     let mut results: Vec<Value> = vec![
         check_version("b00t-cli"),
@@ -236,8 +412,14 @@ fn all_deps(fix: bool) -> Vec<Value> {
     // the repo root — mirrors the "b00t-repo" check above's $HOME/.b00t,
     // just one level deeper. Distinct from the `b00t_path` fn parameter
     // threaded through this module (defaults to ~/.dotfiles/_b00t_).
-    let repo_b00t_dir = home().join(".b00t").join("_b00t_");
+    let repo_root = home().join(".b00t");
+    let repo_b00t_dir = repo_root.join("_b00t_");
     results.push(check_submodule_drift(&repo_b00t_dir.to_string_lossy(), fix));
+
+    // Missing vendor binary detection (#814): see check_vendor_binaries() doc
+    // comment. Shares the $HOME/.b00t repo-root convention with the
+    // submodule-drift check above rather than the `b00t_path` fn parameter.
+    results.push(check_vendor_binaries(&repo_root, fix));
 
     results
 }
@@ -556,6 +738,19 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                                         status,
                                         s["path"].as_str().unwrap_or("?"),
                                         s["action"].as_str().unwrap_or("")
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if r["id"] == "vendor-binaries" {
+                        if let Some(vb) = r["vendor_binaries"].as_array() {
+                            for b in vb {
+                                if b["status"] == "missing" {
+                                    println!(
+                                        "      MISSING  {}  build: {}",
+                                        b["binary_path"].as_str().unwrap_or("?"),
+                                        b["build_command"].as_str().unwrap_or("?")
                                     );
                                 }
                             }
@@ -999,5 +1194,144 @@ mod gutted_submodule_tests {
         )
         .unwrap();
         assert!(repair_gutted_submodule(dir.path(), "sub/x").is_err());
+    }
+}
+
+#[cfg(test)]
+mod vendor_binary_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Mirrors the real `_b00t_/datums/VENDOR-*.tomllmd` shape: a
+    /// `[b00t.vendor]` table followed by a markdown prose body that is NOT
+    /// valid TOML on its own — regression coverage for the reason
+    /// `parse_vendor_table` scans just the one table instead of doing a
+    /// whole-file `toml::from_str`.
+    fn write_vendor_datum(repo_root: &std::path::Path, key: &str, binary_rel: &str, build_cmd: &str) {
+        let content = format!(
+            "# b00t Vendor Datum — {key} (fixture)\n\n\
+             [b00t]\n\
+             name = \"VENDOR-{key}\"\n\
+             type = \"vendor\"\n\
+             hint = \"test fixture\"\n\n\
+             [b00t.vendor]\n\
+             path = \"vendor/{key}\"\n\
+             upstream = \"https://example.com/{key}.git\"\n\
+             branch = \"main\"\n\
+             build_command = \"{build_cmd}\"\n\
+             install_command = \"cp {binary_rel} ~/.local/bin/\"\n\
+             health_check = \"{key} --version || test -x {binary_rel}\"\n\
+             required_tools = [\"cargo\"]\n\n\
+             ## What is it?\n\n\
+             A prose body line that is not valid TOML on its own — mirrors\n\
+             the real VENDOR-*.tomllmd files.\n"
+        );
+        let datums_dir = repo_root.join("_b00t_/datums");
+        fs::create_dir_all(&datums_dir).unwrap();
+        fs::write(datums_dir.join(format!("VENDOR-{key}.tomllmd")), content).unwrap();
+    }
+
+    #[test]
+    fn detects_missing_vendor_binary() {
+        let dir = TempDir::new().unwrap();
+        write_vendor_datum(
+            dir.path(),
+            "FOO",
+            "vendor/foo/target/release/foo",
+            "cargo build --release --manifest-path vendor/foo/Cargo.toml",
+        );
+
+        let result = check_vendor_binaries(dir.path(), false);
+
+        assert_eq!(result["pass"], json!(false));
+        let vb = result["vendor_binaries"].as_array().unwrap();
+        assert_eq!(vb.len(), 1);
+        assert_eq!(vb[0]["status"], json!("missing"));
+        assert_eq!(vb[0]["binary_path"], json!("vendor/foo/target/release/foo"));
+        assert_eq!(
+            vb[0]["build_command"],
+            json!("cargo build --release --manifest-path vendor/foo/Cargo.toml")
+        );
+    }
+
+    #[test]
+    fn passes_when_binary_built_and_executable() {
+        let dir = TempDir::new().unwrap();
+        write_vendor_datum(dir.path(), "FOO", "vendor/foo/target/release/foo", "cargo build --release");
+        let bin_path = dir.path().join("vendor/foo/target/release/foo");
+        fs::create_dir_all(bin_path.parent().unwrap()).unwrap();
+        fs::write(&bin_path, "#!/bin/sh\necho hi\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&bin_path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let result = check_vendor_binaries(dir.path(), false);
+
+        assert_eq!(result["pass"], json!(true));
+    }
+
+    #[test]
+    fn present_but_non_executable_file_still_fails() {
+        let dir = TempDir::new().unwrap();
+        write_vendor_datum(dir.path(), "FOO", "vendor/foo/target/release/foo", "cargo build --release");
+        let bin_path = dir.path().join("vendor/foo/target/release/foo");
+        fs::create_dir_all(bin_path.parent().unwrap()).unwrap();
+        fs::write(&bin_path, "not a binary").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&bin_path, fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let result = check_vendor_binaries(dir.path(), false);
+
+        assert_eq!(result["pass"], json!(false));
+    }
+
+    #[test]
+    fn skips_registry_entries_without_test_dash_x_health_check() {
+        // e.g. real VENDOR-AGENT-FRAMEWORK.tomllmd's python health_check —
+        // no `test -x <path>` means there is no binary to check for, and it
+        // must not be flagged "missing" (#814 scoping requirement: only
+        // vendor crates that actually produce a binary b00t expects).
+        let dir = TempDir::new().unwrap();
+        let datums_dir = dir.path().join("_b00t_/datums");
+        fs::create_dir_all(&datums_dir).unwrap();
+        fs::write(
+            datums_dir.join("VENDOR-PY.tomllmd"),
+            "[b00t]\nname = \"VENDOR-PY\"\ntype = \"vendor\"\nhint = \"test\"\n\n\
+             [b00t.vendor]\npath = \"vendor/py\"\nbuild_command = \"uv pip install -e vendor/py\"\n\
+             health_check = \"python -c 'import py' 2>/dev/null || echo 'not installed'\"\n",
+        )
+        .unwrap();
+
+        let result = check_vendor_binaries(dir.path(), false);
+
+        assert_eq!(result["pass"], json!(true));
+        assert_eq!(result["vendor_binaries"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn dedupes_two_registry_entries_pointing_at_the_same_binary() {
+        // Mirrors real VENDOR-LEDGRRR.tomllmd / VENDOR-L3DG3RR.tomllmd, both
+        // of which point at vendor/ledgrrr/target/release/ledgerr-mcp.
+        let dir = TempDir::new().unwrap();
+        write_vendor_datum(dir.path(), "A", "vendor/shared/target/release/shared", "cargo build --release");
+        write_vendor_datum(dir.path(), "B", "vendor/shared/target/release/shared", "cargo build --release");
+
+        let result = check_vendor_binaries(dir.path(), false);
+
+        assert_eq!(result["vendor_binaries"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn no_vendor_datums_directory_yields_empty_pass() {
+        let dir = TempDir::new().unwrap();
+        let result = check_vendor_binaries(dir.path(), false);
+        assert_eq!(result["pass"], json!(true));
+        assert_eq!(result["vendor_binaries"].as_array().unwrap().len(), 0);
     }
 }
