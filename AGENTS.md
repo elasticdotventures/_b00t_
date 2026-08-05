@@ -147,6 +147,10 @@ Sharp corner or bug found? REPORT IT — silence hides systemic issues.
 - `b00t task add "bug: <description>"` — creates tracked issue for operator review
 - Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
 - Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
+- 🚩 known-broken (2026-08-04): `b00t lfmf`'s vector-DB backend silently fails to persist
+  ("✅ Lesson recorded" prints even when the write errors) — verify with `b00t lfmf advice
+  <tool>` after recording, don't trust the success message alone. Direct file edits are
+  the reliable fallback until fixed.
 
 ## Hive A2A Collaboration
 
@@ -216,3 +220,11 @@ Before editing a justfile, agents MUST run `b00t learn just`.
 Just recipes MUST remain thin command surfaces. Move stateful shell logic, request
 generation, heredocs, and provider orchestration into descriptively named scripts;
 the recipe invokes the script and exposes its contract.
+
+## Worktree Discipline (recorded 2026-08-04)
+
+TLDR: `~/.dotfiles` is bare — never edit or build in it directly. `b00t learn worktree`
+→ `git worktree add <path> <branch>` on real disk (never `/tmp`) → build. Detail, sharp
+edges (submodule init, shared target-dir, tmpfs contention), and fixes all live in the
+datum — MUST `b00t learn worktree` before the first `git`/`cargo` command against any
+bare/worktree-layout repo rather than rediscovering them the hard way.
