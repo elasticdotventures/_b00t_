@@ -35,10 +35,14 @@ b00t task next            # gate 2: valid task, deps satisfied
 test "$(rustc --edition)" = "2024"                       # gate 3: Rust 2024
 cat ~/.hermes/config.yaml | jq '.mcp_servers | keys'    # gate 4: MCP healthy
 b00t grok ask "checkpoint-gate status" -t operator      # gate 5: ontology
+git rev-parse --is-bare-repository | grep -qx false     # gate 6: worktree, not bare repo
+df --output=fstype,avail "$PWD" | tail -1 | awk '{exit !($1!="tmpfs" && $2>5000000)}'  # gate 7: real disk, ≥5GB free
 ```
 ANY gate fail → DENY. Checkpoint artifact present → `b00t checkpoint restore` or `abort`.
 Extensible via `_b00t_/datums/CHECKPOINT-GATE-CONTRB.tomllm` (priority-ordered, halt on first DENY).
 ⚠️ Rust 2024: `std::env::set_var`/`remove_var` are now `unsafe` — wrap in `unsafe {}` in tests.
+⚠️ Gates 6-7 fail on `/tmp` or a bare repo's own dir — `b00t learn worktree`, then retry
+from a disk-backed `git worktree add`. See AGENTS.md "Worktree Discipline".
 
 ## Session Bootstrap — `#️⃣ topic: hermes-cmdb-bootstrap`
 On every SSH/WSL session entry:
