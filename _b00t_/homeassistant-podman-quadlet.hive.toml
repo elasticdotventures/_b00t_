@@ -1,0 +1,66 @@
+name = "homeassistant-podman-quadlet"
+type = "hive"
+hint = "Home Assistant on ROCK 5C runs via user Podman Quadlet .kube, with podman-compose.yml only as a transition path."
+
+[resources]
+host = "rock-5c"
+architecture = "aarch64"
+runtime = "podman"
+orchestrator = "quadlet-kube"
+systemd_scope = "user"
+rootless = true
+kernel_lane = "current-rockchip64"
+kernel_target = "6.18.35-current-rockchip64"
+requires = ["fuse", "catatonit", "rootless-podman"]
+boot_initrd = "uInitrd-6.18.35-current-rockchip64"
+boot_links = [
+  "/boot/Image -> vmlinuz-6.18.35-current-rockchip64",
+  "/boot/dtb -> dtb-6.18.35-current-rockchip64",
+  "/boot/initrd.img -> initrd.img-6.18.35-current-rockchip64",
+  "/boot/uInitrd -> uInitrd-6.18.35-current-rockchip64",
+]
+
+[[services]]
+name = "homeassistant"
+image = "ghcr.io/home-assistant/home-assistant:stable"
+network = "host"
+config = "/home/brianh/homeassistant/config:/config"
+
+[[services]]
+name = "esphome"
+image = "ghcr.io/esphome/esphome:stable"
+network = "host"
+config = "/home/brianh/homeassistant/esphome:/config"
+
+[[services]]
+name = "mosquitto"
+image = "eclipse-mosquitto:latest"
+network = "host"
+config = "/home/brianh/homeassistant/mosquitto/config:/mosquitto/config"
+
+[[planned_services]]
+name = "frigate"
+status = "disabled"
+task = 8
+image = "ghcr.io/elasticdotventures/frigate:latest-rk"
+network = "host"
+notes = "Restore after RK3588 /dev/dri, /dev/media*, and NPU device mappings are verified under Podman kube."
+
+[[guards]]
+name = "no-docker-runtime"
+pattern = "docker "
+action = "reject"
+message = "Use podman or Quadlet; Docker Engine is not part of this host runtime."
+
+[[guards]]
+name = "quadlet-kube-preferred"
+pattern = "podman compose"
+action = "warn"
+message = "podman-compose.yml is transitional; prefer systemctl --user start homeassistant.service from Quadlet."
+
+# b00t:map v1
+# summary: Home Assistant runtime profile for Podman Quadlet kube on ROCK 5C
+# tags: homeassistant, podman, quadlet, kube, rock5c
+# tier: ch0nky
+# cmds: just quadlet-install, systemctl --user start homeassistant.service
+# complexity: 5

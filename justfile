@@ -18,6 +18,9 @@ mod? irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
 mod? irontology 'vendor/irontology-mcp/irontology.just'
 # 🥾 Zellij interactive modal system (floating pane dialogs)
 mod zellij '_b00t_/zellij.just'
+# 🖥️  General-purpose always-on Xpra display service (task #12) — NOT owned
+#    by b00t-rpa; see _b00t_/xpra-display.hive.toml
+mod xpra-display '_b00t_/xpra-display.just'
 # 🛡️ Zellij mandatory interaction gate (governance: Allow/Deny/Hook)
 mod zellij-gate '_b00t_/zellij-gate.just'
 # 🌐 b00t-admin web server — dashboard, container, quadlet
@@ -104,6 +107,43 @@ gremlin-graalvm-run:
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
+
+# Sync canonical _b00t_/ datum tree -> the live deployed _B00T_Path
+# (default ~/.dotfiles/_b00t_, resolved via _B00T_Path env if set).
+# Additive-only (no --delete): only adds/updates files from canonical,
+# never removes dotfiles-local files that don't exist here.
+# Default is a dry-run (rsync -n); pass `true` (positional — just recipe
+# args are positional, `apply=true` on the CLI is NOT recognized and will
+# silently stay in dry-run) to actually write.
+#
+# 🤓 bug/#13: ~/.dotfiles/_b00t_ (the live b00t-cli default _B00T_Path) drifts
+#    from this repo's canonical _b00t_/ tree with no sync mechanism — e.g.
+#    missing sonar.cli.toml causes 'b00t cli install sonar' to fail
+#    'sonar UNDEFINED' even though the datum exists here. This recipe is
+#    the documented refresh step; run it whenever a datum you just added
+#    here doesn't seem to exist for the live b00t-cli.
+#    ~/.dotfiles is a separate git repo (its own history) — this only
+#    overwrites its _b00t_/ subtree, never deletes, and the operator should
+#    `git stash` any uncommitted ~/.dotfiles changes first since rsync will
+#    silently clobber/resurrect files that differ from canonical.
+#
+# @example: just sync-g0spell-dotfiles          # dry-run, shows the drift
+# @example: just sync-g0spell-dotfiles true     # apply (positional, not apply=true)
+sync-g0spell-dotfiles apply="false" target=env_var_or_default("_B00T_Path", "~/.dotfiles/_b00t_"):
+    #!/bin/bash
+    set -euo pipefail
+    SRC="{{repo-root}}/_b00t_/"
+    DST="{{target}}"
+    DST="${DST/#\~/$HOME}"
+    echo "🔄 g0spell sync: $SRC -> $DST"
+    if [[ "{{apply}}" != "true" ]]; then
+        echo "(dry-run — pass 'true' as the first arg to write, e.g. 'just sync-g0spell-dotfiles true'; this never deletes dotfiles-local files)"
+        rsync -avn --exclude='.git' "$SRC" "$DST"
+    else
+        mkdir -p "$DST"
+        rsync -av --exclude='.git' "$SRC" "$DST"
+        echo "✅ synced. cd $DST/.. && git status to review + commit the drift."
+    fi
 
 ansible-k0s PLAYBOOK="ansible/playbooks/k0s_kata.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
     #!/bin/bash
@@ -1401,8 +1441,15 @@ opencode-mesh workspace=".":
 b00t-test-harness:
     @bash _b00t_/scripts/b00t-ping-pong.sh
 
+# Pre-cargo gate: detect submodule pin drift (recorded gitlink vs checked-out HEAD).
+# Distinguishes drifted+clean (safe, auto-fixable) from drifted+dirty (report only).
+# Usage: just doctor         (report only)
+#        just doctor --fix   (auto-sync drifted+clean submodules; never touches dirty ones)
+doctor *ARGS:
+    @bash _b00t_/scripts/check-submodule-drift.sh {{ARGS}}
+
 # Fast compile-check (no tests) — use BEFORE cargo test to catch wiring errors cheaply
-check-fast:
+check-fast: doctor
     cargo check --package b00t-cli --message-format=short 2>&1 | grep -E "^error" | head -20 || echo "✅ check clean"
 
 # ── ch0nky slot swap (pi ↔ opencode) ─────────────────────────────────────────
@@ -2183,3 +2230,106 @@ b00t-metrics:
       --argjson datums "$datums" \
       --argjson train_rows "$train_rows" \
       '{datums: $datums, train_rows: $train_rows, dangling_refs: null, probe_score: null}'
+
+# ── ROCK 5C Rocket NPU / Frigate — see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd ────
+# 🤓 Upstream Linux "Rocket" DRM accel driver + Mesa Teflon, NOT the vendor
+#    RKNN/RKLLM stack — works on the current-rockchip64 mainline kernel this
+#    host already boots, no vendor-kernel switch required. gate_0/1_5 here
+#    are read-only or scratch-only (never touch /boot); gate_1/gate_2 change
+#    live boot config or start a service — confirm with the operator before
+#    running those on a host also serving Home Assistant.
+
+# gate_0: compile the NPU overlay + apply it to a SCRATCH copy of the real DTB
+# (never touches /boot) and verify all 3 NPU cores + 3 IOMMUs report "okay".
+rocket-overlay-build src="/home/brianh/homeassistant/boot/rock-5c-rocket-npu-overlay.dts" base_dtb="/boot/dtb-6.18.35-current-rockchip64/rockchip/rk3588s-rock-5c.dtb":
+    #!/bin/bash
+    set -euo pipefail
+    command -v dtc >/dev/null || { echo "❌ dtc (device-tree-compiler) not installed"; exit 1; }
+    command -v fdtoverlay >/dev/null || { echo "❌ fdtoverlay not installed"; exit 1; }
+    WORK="$(mktemp -d)"
+    trap 'rm -rf "$WORK"' EXIT
+    echo "🔧 compiling overlay: {{src}}"
+    dtc -@ -I dts -O dtb -o "$WORK/overlay.dtbo" "{{src}}"
+    echo "🔧 applying to a scratch copy of {{base_dtb}} (NOT /boot)"
+    cp "{{base_dtb}}" "$WORK/base.dtb"
+    fdtoverlay -i "$WORK/base.dtb" -o "$WORK/merged.dtb" "$WORK/overlay.dtbo"
+    dtc -I dtb -O dts "$WORK/merged.dtb" 2>/dev/null > "$WORK/merged.dts"
+    echo "🔍 checking all 3 NPU cores + 3 IOMMUs report status = \"okay\":"
+    FAIL=0
+    for p in npu@fdab0000 iommu@fdab9000 npu@fdac0000 iommu@fdaca000 npu@fdad0000 iommu@fdada000; do
+        status="$(awk -v node="$p \\{" '$0 ~ node {f=1} f && /status =/ {print; exit} f && /};/{exit}' "$WORK/merged.dts")"
+        if echo "$status" | grep -q '"okay"'; then
+            echo "  ✅ $p: $status"
+        else
+            echo "  ❌ $p: ${status:-status line not found}"
+            FAIL=1
+        fi
+    done
+    if [ "$FAIL" -eq 0 ]; then
+        echo "✅ gate_0 PASS — overlay compiles + applies cleanly, all 6 nodes okay (scratch-only, /boot untouched)"
+    else
+        echo "❌ gate_0 FAIL — see above"
+        exit 1
+    fi
+
+# gate_1_5: read-only preflight — do the devices Frigate expects already exist?
+# Safe to run any time; reports reality, never changes anything.
+frigate-rocket-preflight:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Frigate/Rocket device preflight (read-only):"
+    FAIL=0
+    for d in /dev/accel/accel0 /dev/dri /dev/media0 /dev/video1; do
+        if [ -e "$d" ]; then
+            echo "  ✅ $d exists"
+        else
+            echo "  ❌ $d missing"
+            FAIL=1
+        fi
+    done
+    if [ "$FAIL" -eq 0 ]; then
+        echo "✅ preflight PASS"
+    else
+        echo "⚠️  preflight incomplete — expected before gate_1 (overlay install + reboot); see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd"
+    fi
+
+# gate_1: install the compiled overlay into /boot's active overlay dir + reboot.
+# ⚠️ MODIFIES LIVE BOOT CONFIG AND REBOOTS THIS HOST — this machine also runs
+#    Home Assistant/esphome/mosquitto. Confirm with the operator before running.
+#    Not auto-run by any other recipe.
+rocket-overlay-install src="/home/brianh/homeassistant/boot/rock-5c-rocket-npu-overlay.dts":
+    #!/bin/bash
+    set -euo pipefail
+    echo "⚠️  This installs a devicetree overlay into /boot and is meant to be"
+    echo "   followed by a reboot of this host (also runs Home Assistant)."
+    echo "   Not auto-executed — see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd gate_1."
+    echo "   Manual steps once confirmed:"
+    echo "     sudo dtc -@ -I dts -O dtb -o /boot/dtb/rockchip/overlay/rock-5c-rocket-npu.dtbo {{src}}"
+    echo "     echo 'user_overlays=rock-5c-rocket-npu' | sudo tee -a /boot/armbianEnv.txt"
+    echo "     sudo reboot"
+
+# gate_1 verification: run AFTER the operator reboots post rocket-overlay-install.
+# Read-only — reports whether Rocket actually bound to hardware.
+rocket-postboot-check:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Rocket NPU postboot check (read-only):"
+    if [ -e /dev/accel/accel0 ]; then
+        echo "  ✅ /dev/accel/accel0 exists"
+    else
+        echo "  ❌ /dev/accel/accel0 missing — overlay not active or rocket module not bound"
+    fi
+    echo "  dmesg | grep -i rocket:"
+    dmesg 2>/dev/null | grep -i rocket || echo "    (no rocket entries in dmesg — may need: sudo dmesg | grep -i rocket)"
+
+# gate_2: start Frigate via Quadlet and confirm the Teflon detector is active.
+# ⚠️ Starts a systemd service. Only meaningful after gate_1 passes.
+frigate-start:
+    systemctl --user start frigate.service
+
+frigate-status:
+    #!/bin/bash
+    set -euo pipefail
+    systemctl --user status frigate.service --no-pager || true
+    echo "🔍 detector log (looking for teflon_tfl, watching for 'No NPU was detected'):"
+    journalctl --user -u frigate.service --no-pager -n 100 | grep -iE "teflon_tfl|No NPU was detected" || echo "  (no matching lines yet)"
