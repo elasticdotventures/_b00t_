@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use ufo_types::{Disposition, IsoAuditable, Satisfies, SatisfiesResult};
 
 /// A single gate precondition — late-binding condition evaluated at install time.
 /// All fields are optional; any present field must pass for the gate to open.
@@ -21,7 +22,7 @@ pub struct GateSpec {
 }
 
 /// Result of evaluating a single gate precondition.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GateResult {
     pub passed: bool,
     pub reason: String,
@@ -47,8 +48,7 @@ pub fn check_command_available(command: &str) -> bool {
 fn expand_tilde_path(spec: &str) -> std::path::PathBuf {
     if spec.starts_with('~') {
         let home = std::env::var("HOME").unwrap_or_default();
-        std::path::Path::new(&home)
-            .join(spec.strip_prefix("~/").unwrap_or(spec))
+        std::path::Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
     } else {
         std::path::Path::new(spec).to_path_buf()
     }
@@ -65,10 +65,7 @@ pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
             }
         }
         "env" => {
-            if std::env::var(spec)
-                .ok()
-                .map_or(false, |v| !v.is_empty())
-            {
+            if std::env::var(spec).ok().map_or(false, |v| !v.is_empty()) {
                 return "pass";
             }
             // check .env in workspace root
@@ -111,24 +108,41 @@ pub fn eval_gate_status(kind: &str, spec: &str) -> &'static str {
     }
 }
 
-/// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
-/// If any gate fails, the datum should be skipped.
-pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
-    let mut results = Vec::new();
-    for gate in gates {
-        let mut passed = true;
-        let mut reasons = Vec::new();
+/// Per-field outcome of a single gate's checks, in field-declaration order
+/// (command, file, env, rhai, knowledge_backend). Only non-passing fields
+/// produce an outcome. `Violated` is a genuine failed check; `UnknownReason`
+/// is reserved for checks that could not be evaluated at all (currently:
+/// a rhai expression that failed to *compile/evaluate*, as opposed to one
+/// that evaluated cleanly to `false`) — carries its own reason text so the
+/// legacy bool-returning `evaluate_gates()` can reproduce today's exact
+/// message, even though `ufo_types::Disposition::Unknown` itself carries no
+/// payload.
+enum FieldOutcome {
+    Violated(String),
+    UnknownReason(String),
+}
+
+impl GateSpec {
+    /// Runs the same command/file/env/rhai/knowledge_backend checks
+    /// `evaluate_gates()` has always run, in the same order, producing the
+    /// same reason text for each failing field — but tagging each failure
+    /// as a genuine `Violated` or an `UnknownReason` (rhai eval error)
+    /// instead of collapsing both into "not passed".
+    fn eval_fields(&self, path: &str) -> Vec<FieldOutcome> {
+        let mut outcomes = Vec::new();
 
         // Command gate: check if command exists on PATH
-        if let Some(ref cmd) = gate.command {
+        if let Some(ref cmd) = self.command {
             if !check_command_available(cmd) {
-                passed = false;
-                reasons.push(format!("command '{}' not found on PATH", cmd));
+                outcomes.push(FieldOutcome::Violated(format!(
+                    "command '{}' not found on PATH",
+                    cmd
+                )));
             }
         }
 
         // File gate: check if file exists (supports ~ expansion and relative paths)
-        if let Some(ref file) = gate.file {
+        if let Some(ref file) = self.file {
             let expanded = shellexpand::tilde(file).to_string();
             let exists = if std::path::Path::new(&expanded).is_absolute() {
                 std::path::Path::new(&expanded).exists()
@@ -145,17 +159,18 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
                             .unwrap_or_else(|| std::path::PathBuf::from("."))
                     }
                 };
-                base.join(&expanded).exists()
-                    || std::path::Path::new(&expanded).exists()
+                base.join(&expanded).exists() || std::path::Path::new(&expanded).exists()
             };
             if !exists {
-                passed = false;
-                reasons.push(format!("file '{}' does not exist", file));
+                outcomes.push(FieldOutcome::Violated(format!(
+                    "file '{}' does not exist",
+                    file
+                )));
             }
         }
 
         // Env gate: check if env var or .env entry is set
-        if let Some(ref env_var) = gate.env {
+        if let Some(ref env_var) = self.env {
             let direct = std::env::var(env_var);
             let env_ok = direct.is_ok() && !direct.unwrap_or_default().is_empty();
             if !env_ok {
@@ -180,54 +195,125 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
                     false
                 };
                 if !env_file_ok {
-                    passed = false;
-                    reasons.push(format!("env var '{}' not set", env_var));
+                    outcomes.push(FieldOutcome::Violated(format!(
+                        "env var '{}' not set",
+                        env_var
+                    )));
                 }
             }
         }
 
-        // Rhai gate: evaluate rhai expression
-        if let Some(ref rhai_expr) = gate.rhai {
-            let (rhai_ok, rhai_err) = evaluate_rhai_gate(rhai_expr);
-            if !rhai_ok {
-                passed = false;
-                let reason = if let Some(err) = rhai_err {
-                    format!("rhai gate '{rhai_expr}' failed: {err}")
-                } else {
-                    format!("rhai gate '{rhai_expr}' returned false")
-                };
-                reasons.push(reason);
+        // Rhai gate: evaluate rhai expression via the Disposition-native
+        // classifier (#927 fix — an eval ERROR is `Unknown`, not a
+        // violation; only `Ok(false)` is a genuine violation).
+        if let Some(ref rhai_expr) = self.rhai {
+            match rhai_gate_disposition(rhai_expr) {
+                Disposition::Satisfied => {}
+                Disposition::Violated { reason } => outcomes.push(FieldOutcome::Violated(reason)),
+                Disposition::Unknown => {
+                    // `Disposition::Unknown` carries no payload, so recover
+                    // the original rhai error text (for the legacy
+                    // bool-returning `evaluate_gates()`'s reason string) by
+                    // re-running the eval. Only reached on eval error, which
+                    // is rare, so the extra eval is not a hot-path cost.
+                    let (_, err) = evaluate_rhai_gate(rhai_expr);
+                    let text = err
+                        .map(|e| format!("rhai gate '{rhai_expr}' failed: {e}"))
+                        .unwrap_or_else(|| format!("rhai gate '{rhai_expr}' failed"));
+                    outcomes.push(FieldOutcome::UnknownReason(text));
+                }
             }
         }
 
-        if let Some(ref backend) = gate.knowledge_backend {
+        if let Some(ref backend) = self.knowledge_backend {
             if b00t_c0re_lib::compiled_knowledge_backend() != backend {
-                passed = false;
-                reasons.push(format!(
+                outcomes.push(FieldOutcome::Violated(format!(
                     "knowledge backend '{}' does not match compiled backend '{}'",
                     backend,
                     b00t_c0re_lib::compiled_knowledge_backend()
-                ));
+                )));
             }
         }
 
-        let reason = if reasons.is_empty() {
-            gate.hint
-                .clone()
-                .unwrap_or_else(|| "gate passed".to_string())
-        } else {
-            gate.hint
-                .clone()
-                .map(|h| format!("{}: {}", h, reasons.join("; ")))
-                .unwrap_or_else(|| reasons.join("; "))
-        };
-
-        results.push(GateResult { passed, reason });
+        outcomes
     }
-    results
+
+    /// Disposition-returning evaluation of this gate's preconditions.
+    /// A genuine violation always wins over an undetermined (`Unknown`)
+    /// field; only when every field either passed or was undetermined (and
+    /// none were genuinely violated) does an undetermined field yield
+    /// `Unknown` overall.
+    pub fn eval_disposition(&self, path: &str) -> Disposition {
+        let outcomes = self.eval_fields(path);
+
+        let violated: Vec<String> = outcomes
+            .iter()
+            .filter_map(|o| match o {
+                FieldOutcome::Violated(reason) => Some(reason.clone()),
+                FieldOutcome::UnknownReason(_) => None,
+            })
+            .collect();
+        if !violated.is_empty() {
+            let reason = self
+                .hint
+                .clone()
+                .map(|h| format!("{}: {}", h, violated.join("; ")))
+                .unwrap_or_else(|| violated.join("; "));
+            return Disposition::Violated { reason };
+        }
+
+        if outcomes
+            .iter()
+            .any(|o| matches!(o, FieldOutcome::UnknownReason(_)))
+        {
+            return Disposition::Unknown;
+        }
+
+        Disposition::Satisfied
+    }
 }
 
-/// Evaluate a simple rhai boolean expression.
+/// Evaluate all gates for a datum. Returns a Vec of GateResults, one per gate.
+/// If any gate fails, the datum should be skipped.
+///
+/// Thin fold over `GateSpec::eval_fields()` — preserves the exact
+/// `passed`/`reason` behavior this function has always had (including for
+/// the rhai-eval-error case, which today is folded into `passed: false`
+/// with the same reason text; #927 exposes that same case as
+/// `Disposition::Unknown` via `eval_disposition()` without changing this
+/// function's observable output).
+pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
+    gates
+        .iter()
+        .map(|gate| {
+            let outcomes = gate.eval_fields(path);
+            let reasons: Vec<String> = outcomes
+                .iter()
+                .map(|o| match o {
+                    FieldOutcome::Violated(reason) => reason.clone(),
+                    FieldOutcome::UnknownReason(reason) => reason.clone(),
+                })
+                .collect();
+            let passed = reasons.is_empty();
+            let reason = if reasons.is_empty() {
+                gate.hint
+                    .clone()
+                    .unwrap_or_else(|| "gate passed".to_string())
+            } else {
+                gate.hint
+                    .clone()
+                    .map(|h| format!("{}: {}", h, reasons.join("; ")))
+                    .unwrap_or_else(|| reasons.join("; "))
+            };
+            GateResult { passed, reason }
+        })
+        .collect()
+}
+
+/// Evaluate a simple rhai boolean expression, returning (passed, error_text).
+/// `error_text` is `Some` only when the expression failed to evaluate at all
+/// (syntax error, unknown symbol, …) — used by `eval_fields()` to reproduce
+/// today's exact legacy reason text.
 fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
     use rhai::Engine;
     let engine = Engine::new();
@@ -235,6 +321,72 @@ fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
         Ok(true) => (true, None),
         Ok(false) => (false, None),
         Err(e) => (false, Some(e.to_string())),
+    }
+}
+
+/// Disposition-returning evaluation of a rhai boolean expression. An eval
+/// ERROR (bad syntax, unknown symbol, …) means the expression could not be
+/// determined true or false — that is `Unknown`, not a violation. Fixes the
+/// #927 bug where `evaluate_rhai_gate`'s bool-collapsing treated a rhai eval
+/// error as an outright `false` (i.e. a violation).
+fn rhai_gate_disposition(expr: &str) -> Disposition {
+    use rhai::Engine;
+    let engine = Engine::new();
+    match engine.eval::<bool>(expr) {
+        Ok(true) => Disposition::Satisfied,
+        Ok(false) => Disposition::Violated {
+            reason: format!("rhai gate '{expr}' returned false"),
+        },
+        Err(_) => Disposition::Unknown,
+    }
+}
+
+/// Constraint: `path`'s datum must satisfy every gate in `gates`.
+/// Bundles the gate list with the evaluation path since `Satisfies<C>`
+/// takes the constraint by reference alone — `GateSpec::eval_disposition`
+/// needs both.
+pub struct GatePreconditions<'a> {
+    pub gates: &'a [GateSpec],
+    pub path: &'a str,
+}
+
+impl IsoAuditable for GatePreconditions<'_> {
+    fn iso_standard_ids(&self) -> Vec<String> {
+        vec!["b00t:GatePrecondition".into()]
+    }
+}
+
+impl Satisfies<GatePreconditions<'_>> for crate::BootDatum {
+    fn satisfies(&self, c: &GatePreconditions<'_>) -> SatisfiesResult {
+        if c.gates.is_empty() {
+            return SatisfiesResult::satisfied(1.0);
+        }
+
+        let dispositions: Vec<Disposition> = c
+            .gates
+            .iter()
+            .map(|g| g.eval_disposition(c.path))
+            .collect();
+
+        let violated: Vec<String> = dispositions
+            .iter()
+            .filter_map(|d| match d {
+                Disposition::Violated { reason } => Some(reason.clone()),
+                _ => None,
+            })
+            .collect();
+        if !violated.is_empty() {
+            return SatisfiesResult::violated(violated.join("; "), 1.0);
+        }
+
+        if dispositions
+            .iter()
+            .any(|d| matches!(d, Disposition::Unknown))
+        {
+            return SatisfiesResult::unknown(0.5);
+        }
+
+        SatisfiesResult::satisfied(1.0)
     }
 }
 
@@ -355,4 +507,182 @@ pub fn list_gates(path: &str, search: Option<&str>) -> Result<Vec<GateReport>> {
     }
 
     Ok(gates)
+}
+
+#[cfg(test)]
+mod satisfies_tests {
+    use super::*;
+    use ufo_types::satisfies::Disposition as UfoDisposition;
+
+    #[test]
+    fn eval_disposition_bad_rhai_syntax_is_unknown_not_violated() {
+        // Regression lock for the #927 bug: a rhai eval ERROR (bad syntax)
+        // must be Unknown, never Violated — we could not determine
+        // pass/fail, we did not determine it to be false.
+        let gate = GateSpec {
+            rhai: Some("this is not valid rhai (((".to_string()),
+            ..Default::default()
+        };
+        let disposition = gate.eval_disposition("/tmp");
+        assert!(
+            matches!(disposition, UfoDisposition::Unknown),
+            "expected Unknown for a rhai syntax error, got {:?}",
+            disposition
+        );
+    }
+
+    #[test]
+    fn eval_disposition_rhai_false_is_violated() {
+        // A rhai expression that evaluates cleanly to `false` IS a genuine
+        // violation — distinct from the syntax-error/Unknown case above,
+        // proving the 3-way split (Satisfied/Violated/Unknown) is real.
+        let gate = GateSpec {
+            rhai: Some("false".to_string()),
+            ..Default::default()
+        };
+        let disposition = gate.eval_disposition("/tmp");
+        match disposition {
+            UfoDisposition::Violated { reason } => {
+                assert!(reason.contains("returned false"), "reason: {reason}");
+            }
+            other => panic!("expected Violated, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn eval_disposition_rhai_true_is_satisfied() {
+        let gate = GateSpec {
+            rhai: Some("true".to_string()),
+            ..Default::default()
+        };
+        assert!(matches!(
+            gate.eval_disposition("/tmp"),
+            UfoDisposition::Satisfied
+        ));
+    }
+
+    #[test]
+    fn evaluate_gates_regression_lock_bad_rhai_syntax_matches_legacy_output() {
+        // Regression-lock: legacy bool-returning evaluate_gates() must
+        // produce byte-identical passed/reason output for a rhai syntax
+        // error after the #927 refactor — this test would have caught a
+        // behavior change in that path.
+        let gates = vec![GateSpec {
+            rhai: Some("this is not valid rhai (((".to_string()),
+            ..Default::default()
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].passed, "rhai syntax error should fail the gate");
+        assert!(
+            results[0].reason.contains("rhai gate")
+                && results[0].reason.contains("failed:"),
+            "reason should preserve the legacy 'rhai gate ... failed: <err>' text, got: {}",
+            results[0].reason
+        );
+    }
+
+    #[test]
+    fn evaluate_gates_regression_lock_rhai_false_matches_legacy_output() {
+        let gates = vec![GateSpec {
+            rhai: Some("false".to_string()),
+            ..Default::default()
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].passed);
+        assert!(results[0].reason.contains("returned false"));
+    }
+
+    #[test]
+    fn evaluate_gates_regression_lock_rhai_true_passes() {
+        let gates = vec![GateSpec {
+            rhai: Some("true".to_string()),
+            ..Default::default()
+        }];
+        let results = evaluate_gates(&gates, "/tmp");
+        assert_eq!(results.len(), 1);
+        assert!(results[0].passed);
+    }
+
+    #[test]
+    fn gate_preconditions_empty_gates_is_satisfied() {
+        let datum = crate::BootDatum {
+            name: "empty-gates".into(),
+            ..Default::default()
+        };
+        let gates: Vec<GateSpec> = vec![];
+        let constraint = GatePreconditions {
+            gates: &gates,
+            path: "/tmp",
+        };
+        let result = datum.satisfies(&constraint);
+        assert!(result.is_satisfied());
+    }
+
+    #[test]
+    fn gate_preconditions_violated_gate_wins() {
+        let datum = crate::BootDatum {
+            name: "violated-gate".into(),
+            ..Default::default()
+        };
+        let gates = vec![GateSpec {
+            command: Some("definitely-not-a-real-command-927".to_string()),
+            ..Default::default()
+        }];
+        let constraint = GatePreconditions {
+            gates: &gates,
+            path: "/tmp",
+        };
+        let result = datum.satisfies(&constraint);
+        assert!(result.is_violated());
+    }
+
+    #[test]
+    fn gate_preconditions_unknown_gate_yields_unknown_disposition() {
+        let datum = crate::BootDatum {
+            name: "unknown-gate".into(),
+            ..Default::default()
+        };
+        let gates = vec![GateSpec {
+            rhai: Some("this is not valid rhai (((".to_string()),
+            ..Default::default()
+        }];
+        let constraint = GatePreconditions {
+            gates: &gates,
+            path: "/tmp",
+        };
+        let result = datum.satisfies(&constraint);
+        assert!(
+            matches!(result.disposition, UfoDisposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    #[test]
+    fn gate_preconditions_violated_wins_over_unknown() {
+        // One violated gate + one undecidable (rhai syntax error) gate:
+        // Violated must win per the documented precedence.
+        let datum = crate::BootDatum {
+            name: "mixed-gates".into(),
+            ..Default::default()
+        };
+        let gates = vec![
+            GateSpec {
+                command: Some("definitely-not-a-real-command-927".to_string()),
+                ..Default::default()
+            },
+            GateSpec {
+                rhai: Some("this is not valid rhai (((".to_string()),
+                ..Default::default()
+            },
+        ];
+        let constraint = GatePreconditions {
+            gates: &gates,
+            path: "/tmp",
+        };
+        let result = datum.satisfies(&constraint);
+        assert!(result.is_violated());
+    }
 }

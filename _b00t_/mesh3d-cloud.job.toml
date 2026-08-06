@@ -1,0 +1,72 @@
+# _b00t_/mesh3d-cloud.job.toml
+#
+# One-command entry point for the Pixal3D image->GLB cloud batch job:
+# resource-gate check, dstack submission, bucket-aware polling, and
+# PASS/FAIL enforcement all happen inside JobExecutor::run_job — no
+# hand-written bash re-derived per invocation.
+#
+# Local files listed in [b00t.job.steps.batch.inputs] are copied alongside
+# the scratch config before submission — dstack syncs the config directory
+# to the remote, so these files are available inside the container at
+# /workflow/<filename>. See BatchJobSpec.inputs for details.
+
+[b00t]
+name = "mesh3d-cloud"
+parent = "wrkflw.cli"
+type = "job"
+hint = "Pixal3D image->GLB cloud batch job via dstack, resource-gated, PASS/FAIL-enforced"
+version = "0.1.0"
+depends_on = []
+
+[b00t.job]
+description = "Submit the mesh3d Pixal3D container to dstack, watch to completion, enforce PASS/FAIL"
+tags = ["mesh3d", "pixal3d", "dstack", "app4dog"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "off"
+continue_on_failure = false
+
+[[b00t.job.steps]]
+name = "resource-gate"
+description = "Dry-run the existing mesh3d-batch hive resource gate before spending cloud time/money"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t hive plan mesh3d-batch"
+
+[b00t.job.steps.condition]
+when = "always"
+
+[[b00t.job.steps]]
+name = "mesh3d-generate"
+description = "Submit Pixal3D GLB generation to dstack and enforce PASS/FAIL"
+depends_on = ["resource-gate"]
+backend = "dstack"
+output_contract = "PASS|FAIL:<5lines>"
+
+# `task` is required by the JobStep schema even when `backend` is set — the
+# executor ignores it on the provider-dispatch path (see
+# execute_provider_step in job_executor.rs) and drives [b00t.job.steps.batch]
+# instead. Kept as a human-readable description of what actually happens.
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'dispatched via dstack backend — see [b00t.job.steps.batch] for the actual spec'"
+
+[b00t.job.steps.batch]
+image = "docker.io/elasticdotventures/mesh-runner:v6"
+config_path = "/workspace/request.json"
+flavor = "RTX_4090"
+timeout_hours = 2.0
+inputs = ["request.json"]
+
+[b00t.job.steps.batch.env]
+MESH_RESOLUTION = "1024"
+MESH_LOW_VRAM = "true"
+
+[b00t.job.steps.condition]
+when = "on_success"
+
+[b00t.job.env]
+MESH_RESOLUTION = "1024"
+MESH_LOW_VRAM = "true"

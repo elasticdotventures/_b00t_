@@ -55,7 +55,12 @@ pub struct ModelDatumEntry {
 impl ModelDatumEntry {
     pub fn from_config(name: &str, base_path: &str) -> Result<Self> {
         let base = get_expanded_path(base_path)?;
-        for suffix in [".model.toml", ".ai_model.toml", ".model.ai.toml", ".model.ai.tomllmd"] {
+        for suffix in [
+            ".model.toml",
+            ".ai_model.toml",
+            ".model.ai.toml",
+            ".model.ai.tomllmd",
+        ] {
             let resolved = base.join(format!("{}{}", name, suffix));
             if resolved.exists() {
                 return Self::from_file(&resolved);
@@ -82,11 +87,19 @@ impl ModelDatumEntry {
 
         // Warn on unrecognized provider/architecture (serde untagged silently accepts typos)
         if !config.model.provider.is_known() {
-            eprintln!("  WARN: {} — unrecognized provider '{:?}'", path.display(), config.model.provider);
+            eprintln!(
+                "  WARN: {} — unrecognized provider '{:?}'",
+                path.display(),
+                config.model.provider
+            );
         }
         if let Some(ref arch) = config.model.architecture {
             if !arch.is_known() {
-                eprintln!("  WARN: {} — unrecognized architecture '{:?}'", path.display(), arch);
+                eprintln!(
+                    "  WARN: {} — unrecognized architecture '{:?}'",
+                    path.display(),
+                    arch
+                );
             }
         }
 

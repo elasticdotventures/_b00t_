@@ -8,9 +8,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-use b00t_lsp::analysis::{
-    self, Diag, Severity, WorkspaceIndex,
-};
+use b00t_lsp::analysis::{self, Diag, Severity, WorkspaceIndex};
 
 struct State {
     index: Option<WorkspaceIndex>,
@@ -227,21 +225,26 @@ impl LanguageServer for Backend {
     }
 }
 
-/// `--check [dir]`: run diagnostics over a datum tree; exit 1 on any Error.
+/// `--check <path>`: run diagnostics over a datum tree or a single file; exit 1 on any Error.
 /// This is the CI surface used by `just validate-datums` when taplo is absent.
 fn run_check(dir: &Path) -> i32 {
-    let index = WorkspaceIndex::scan(dir);
+    // Single-file arg: validate just that file (scan() only walks directories).
+    let single = dir.is_file();
+    let index = if single { None } else { Some(WorkspaceIndex::scan(dir)) };
     let mut errors = 0usize;
     let mut warnings = 0usize;
     let mut files = 0usize;
 
-    let paths: Vec<PathBuf> = index.files.iter().map(|f| f.path.clone()).collect();
+    let paths: Vec<PathBuf> = match &index {
+        Some(idx) => idx.files.iter().map(|f| f.path.clone()).collect(),
+        None => vec![dir.to_path_buf()],
+    };
     for path in paths {
         let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };
         files += 1;
-        for d in analysis::diagnostics(&path, &content, Some(&index)) {
+        for d in analysis::diagnostics(&path, &content, index.as_ref()) {
             let sev = match d.severity {
                 Severity::Error => {
                     errors += 1;
@@ -291,4 +294,27 @@ async fn main() {
         }),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    }
+
+    #[test]
+    fn run_check_single_file_reports_parse_error() {
+        // Regression for #121: `--check <file>` must validate the file itself —
+        // old behavior scanned it as a directory and reported "0 files", exit 0.
+        assert_eq!(run_check(&fixture("broken.syntax.toml")), 1);
+    }
+
+    #[test]
+    fn run_check_single_clean_file_exits_zero() {
+        assert_eq!(run_check(&fixture("dep-a.cli.toml")), 0);
+    }
 }

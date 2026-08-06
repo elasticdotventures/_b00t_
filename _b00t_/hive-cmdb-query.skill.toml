@@ -1,0 +1,14 @@
+[b00t]
+name = "hive-cmdb-query"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Query the hive's live resource/profile state (RAM/GPU/CPU, active profile) rather than assuming it from stale docs"
+keywords = ["hive", "cmdb", "query", "resource-state"]
+
+[b00t.learn]
+content = """
+Backed directly by `b00t-cli hive status`/`list` — the Hive CMDB
+command family. An operator queries this before activating a profile or
+making a resource-sensitive scheduling decision, rather than trusting
+memory of a previous state.
+"""

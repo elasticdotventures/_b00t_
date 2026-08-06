@@ -1,0 +1,13 @@
+[b00t]
+name = "debug"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Diagnose a failure's root cause from evidence (logs, test output, repro) before proposing a fix — never guess-and-check"
+keywords = ["debug", "diagnosis", "root-cause"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: reproduce a failure, gather evidence, and
+identify root cause before changing code — matches the hive's
+systematic-debugging discipline (fix root causes, not symptoms).
+"""

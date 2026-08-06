@@ -9,7 +9,7 @@
 //! b00t gh-runner doctor    [--repo X/Y]
 //! ```
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use serde_json::json;
 use std::path::PathBuf;
@@ -41,7 +41,12 @@ fn retry_sh(cmd: &str, max_retries: u32, label: &str) -> Result<String> {
     for attempt in 0..max_retries {
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(2u64.pow(attempt - 1)));
-            eprintln!("  Retrying {} (attempt {}/{})...", label, attempt + 1, max_retries);
+            eprintln!(
+                "  Retrying {} (attempt {}/{})...",
+                label,
+                attempt + 1,
+                max_retries
+            );
         }
         let (ok, out) = sh(cmd);
         if ok {
@@ -49,7 +54,12 @@ fn retry_sh(cmd: &str, max_retries: u32, label: &str) -> Result<String> {
         }
         last_err = out;
     }
-    bail!("{} failed after {} attempts: {}", label, max_retries, last_err)
+    bail!(
+        "{} failed after {} attempts: {}",
+        label,
+        max_retries,
+        last_err
+    )
 }
 
 fn detect_socket(socket_opt: &str) -> String {
@@ -104,9 +114,17 @@ pub enum GhRunnerCommands {
         group: Option<String>,
         #[clap(long, help = "Use ephemeral runner (one job then exit)")]
         ephemeral: bool,
-        #[clap(long, help = "Container socket for CI builds: docker, podman, or none", default_value = "auto")]
+        #[clap(
+            long,
+            help = "Container socket for CI builds: docker, podman, or none",
+            default_value = "auto"
+        )]
         socket: String,
-        #[clap(long, help = "Max seconds to wait for pod to start", default_value = "120")]
+        #[clap(
+            long,
+            help = "Max seconds to wait for pod to start",
+            default_value = "120"
+        )]
         timeout: u64,
     },
     #[clap(
@@ -144,7 +162,10 @@ pub enum GhRunnerCommands {
         long_about = "Run a diagnostic checklist: gh auth, podman daemon, network connectivity, pod state, disk space.\n\nExample:\n  b00t gh-runner doctor\n  b00t gh-runner doctor --repo app4dog/middleware"
     )]
     Doctor {
-        #[clap(long, help = "Target repo (owner/repo) — optional, checks all if omitted")]
+        #[clap(
+            long,
+            help = "Target repo (owner/repo) — optional, checks all if omitted"
+        )]
         repo: Option<String>,
     },
 }
@@ -162,7 +183,7 @@ spec:
   restartPolicy: OnFailure
   containers:
   - name: runner
-    image: ghcr.io/actions/actions-runner:latest
+    image: ghcr.io/promptexecution/actions-runner-podman:latest
     command:
     - /bin/bash
     - -c
@@ -184,6 +205,7 @@ spec:
       value: "{ephemeral}"
     - name: RUNNER_WORKDIR
       value: "/runner/_work"
+{container_host_env}
     volumeMounts:
     - name: work
       mountPath: /runner/_work
@@ -220,13 +242,42 @@ pub fn generate_kube_yaml(
 
     let ephemeral_flag = if ephemeral { "--ephemeral" } else { "" };
 
+    // podman sockets are mounted at a distinctly-named path (not docker.sock,
+    // which would be misleading) and paired with CONTAINER_HOST so podman's
+    // CLI inside the runner connects to it as a remote client rather than
+    // trying to spin up its own (nested, and empirically broken -- see
+    // app4dog#92) rootless user namespace. docker sockets keep the old
+    // hardcoded /var/run/docker.sock path/behavior; no CONTAINER_HOST needed
+    // since the docker CLI already defaults to looking there.
+    let is_podman_socket = socket_path.contains("podman");
+    let container_mount_path = if is_podman_socket {
+        "/run/podman.sock"
+    } else {
+        "/var/run/docker.sock"
+    };
+
     let (docker_sock_volume_mount, docker_sock_volume) = if socket_path.is_empty() {
         (String::new(), String::new())
     } else {
         (
-            format!("    - name: docker-sock\n      mountPath: /var/run/docker.sock\n"),
-            format!("  - name: docker-sock\n    hostPath:\n      path: {}\n      type: Socket\n", socket_path),
+            format!(
+                "    - name: docker-sock\n      mountPath: {}\n",
+                container_mount_path
+            ),
+            format!(
+                "  - name: docker-sock\n    hostPath:\n      path: {}\n      type: Socket\n",
+                socket_path
+            ),
         )
+    };
+
+    let container_host_env = if is_podman_socket {
+        format!(
+            "    - name: CONTAINER_HOST\n      value: \"unix://{}\"\n",
+            container_mount_path
+        )
+    } else {
+        String::new()
     };
 
     KUBE_YAML_TEMPLATE
@@ -238,6 +289,7 @@ pub fn generate_kube_yaml(
         .replace("{ephemeral}", if ephemeral { "true" } else { "false" })
         .replace("{ephemeral_flag}", ephemeral_flag)
         .replace("{workdir}", workdir)
+        .replace("{container_host_env}", &container_host_env)
         .replace("{docker_sock_volume_mount}", &docker_sock_volume_mount)
         .replace("{docker_sock_volume}", &docker_sock_volume)
 }
@@ -266,7 +318,10 @@ fn cmd_install(
     if !podman_ok {
         bail!("podman not available: {}", podman_out);
     }
-    println!("[1/7] Prerequisites OK — gh auth + podman {}", podman_out.trim());
+    println!(
+        "[1/7] Prerequisites OK — gh auth + podman {}",
+        podman_out.trim()
+    );
 
     // 2. Validate repo access
     let _ = retry_sh(
@@ -286,7 +341,9 @@ fn cmd_install(
         if !sudo_ok {
             bail!(
                 "Cannot create workdir: {}. Try:\n  sudo mkdir -p {}/_work && sudo chown -R $USER:$USER {}",
-                e, workdir_str, workdir_str
+                e,
+                workdir_str,
+                workdir_str
             );
         }
     }
@@ -307,20 +364,15 @@ fn cmd_install(
     println!("[4/7] Registration token fetched (expires in 1h)");
 
     // 5. Generate and write kube YAML
-    let yaml_content = generate_kube_yaml(repo, labels, &workdir_str, &token, ephemeral, &socket_path);
+    let yaml_content =
+        generate_kube_yaml(repo, labels, &workdir_str, &token, ephemeral, &socket_path);
     let yaml_path = workdir.join("gh-runner.yaml");
     std::fs::write(&yaml_path, &yaml_content)
         .with_context(|| format!("Failed to write YAML: {}", yaml_path.display()))?;
-    println!(
-        "[5/7] Pod spec generated: {}",
-        yaml_path.display()
-    );
+    println!("[5/7] Pod spec generated: {}", yaml_path.display());
 
     // 6. Deploy pod
-    let (deploy_ok, deploy_out) = sh(&format!(
-        "podman kube play {} 2>&1",
-        yaml_path.display()
-    ));
+    let (deploy_ok, deploy_out) = sh(&format!("podman kube play {} 2>&1", yaml_path.display()));
 
     if !deploy_ok {
         bail!("Failed to deploy pod: {}", deploy_out);
@@ -350,7 +402,8 @@ fn cmd_install(
     // Verify registration
     let (verify_ok, verify_out) = sh(&format!(
         "gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | {{name, status, labels}}' 2>&1",
-        repo, runner_name(repo)
+        repo,
+        runner_name(repo)
     ));
     if verify_ok && !verify_out.is_empty() {
         println!("  Runner registered:\n{}", verify_out);
@@ -482,9 +535,9 @@ fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
     let workdir_path = if !workdir.is_empty() {
         // Source is {workdir}/_work, so parent is workdir
         let p = PathBuf::from(&workdir);
-        p.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
-            PathBuf::from(format!("/var/lib/gh-runner/{}", slug))
-        })
+        p.parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(format!("/var/lib/gh-runner/{}", slug)))
     } else {
         PathBuf::from(format!("/var/lib/gh-runner/{}", slug))
     };
@@ -500,35 +553,32 @@ fn cmd_deregister(repo: &str, remove_workdir: bool) -> Result<()> {
         "removal token fetch",
     ) {
         Ok(token) if !token.is_empty() => {
-        let remove_sh = format!(
-            "gh api -X DELETE repos/{}/actions/runners/$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id') 2>&1",
-            repo, repo, name
-        );
-        let (rm_ok, rm_out) = sh(&remove_sh);
-        if rm_ok {
-            println!("[1/3] Runner deregistered from GitHub");
-        } else {
-            println!("[1/3] GitHub deregister: {}", rm_out);
+            let remove_sh = format!(
+                "gh api -X DELETE repos/{}/actions/runners/$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id') 2>&1",
+                repo, repo, name
+            );
+            let (rm_ok, rm_out) = sh(&remove_sh);
+            if rm_ok {
+                println!("[1/3] Runner deregistered from GitHub");
+            } else {
+                println!("[1/3] GitHub deregister: {}", rm_out);
+            }
         }
-    }
-    _ => {
-        // Fallback: try direct runner ID lookup
-        let lookup_sh = format!(
-            "RUNNER_ID=$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id' 2>/dev/null); \
+        _ => {
+            // Fallback: try direct runner ID lookup
+            let lookup_sh = format!(
+                "RUNNER_ID=$(gh api repos/{}/actions/runners --jq '.runners[] | select(.name==\"{}\") | .id' 2>/dev/null); \
              if [ -n \"$RUNNER_ID\" ]; then gh api -X DELETE repos/{}/actions/runners/$RUNNER_ID && echo ok; else echo 'runner not found on GitHub'; fi",
-            repo, name, repo
-        );
-        let (_, rm_out) = sh(&lookup_sh);
-        println!("[1/3] GitHub: {}", rm_out.trim());
-    }
+                repo, name, repo
+            );
+            let (_, rm_out) = sh(&lookup_sh);
+            println!("[1/3] GitHub: {}", rm_out.trim());
+        }
     }
 
     // 2. Tear down pod
     if yaml_path.exists() {
-        let (down_ok, down_out) = sh(&format!(
-            "podman kube down {} 2>&1",
-            yaml_path.display()
-        ));
+        let (down_ok, down_out) = sh(&format!("podman kube down {} 2>&1", yaml_path.display()));
         if down_ok {
             println!("[2/3] Pod torn down: gh-runner-{}", slug);
         } else {
@@ -577,7 +627,8 @@ fn cmd_doctor(repo: Option<&str>) -> Result<()> {
     );
 
     // 3. Network
-    let (net_ok, _) = sh("curl -sf --max-time 5 -o /dev/null -w '%{http_code}' https://api.github.com/zen 2>&1");
+    let (net_ok, _) =
+        sh("curl -sf --max-time 5 -o /dev/null -w '%{http_code}' https://api.github.com/zen 2>&1");
     println!(
         "  {}  github.com reachable",
         if net_ok { "ok" } else { "FAIL" }
@@ -600,8 +651,9 @@ fn cmd_doctor(repo: Option<&str>) -> Result<()> {
     );
 
     // 5. Actions runner image
-    let (img_ok, img_out) =
-        sh("podman image exists ghcr.io/actions/actions-runner:latest 2>&1 || echo 'not pulled yet (will pull on install)' 2>&1");
+    let (img_ok, img_out) = sh(
+        "podman image exists ghcr.io/actions/actions-runner:latest 2>&1 || echo 'not pulled yet (will pull on install)' 2>&1",
+    );
     println!(
         "  {}  actions-runner image: {}",
         if img_ok { "ok" } else { "info" },
@@ -636,7 +688,11 @@ fn cmd_doctor(repo: Option<&str>) -> Result<()> {
         ));
         println!(
             "  {}  registered on GitHub: {}",
-            if reg_ok && reg_out.trim() == "1" { "ok" } else { "info" },
+            if reg_ok && reg_out.trim() == "1" {
+                "ok"
+            } else {
+                "info"
+            },
             reg_out.trim()
         );
 

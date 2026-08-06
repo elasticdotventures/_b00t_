@@ -1,0 +1,15 @@
+[b00t]
+name = "mcp-assimilation"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Install, register, and validate a new MCP server into the hive so agents can discover and call it — not just install the binary"
+keywords = ["mcp", "assimilation", "install", "registration"]
+
+[b00t.learn]
+content = """
+"Assimilation" is this store's term for fully onboarding an MCP
+server: install it, register it as a `.mcp.toml` datum with a working
+`[[b00t.mcp.stdio]]` block, and confirm `tools/list` succeeds — see the
+"b00t assimilation complete" markers already present in datums like
+zellij-mcp-server.mcp.toml. Backed by `b00t-cli mcp`.
+"""

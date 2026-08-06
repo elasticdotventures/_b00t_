@@ -1,0 +1,16 @@
+# 🦨 unfinished — budget/context commands exist but the specific track-and-compress behavior described is inferred, not confirmed implemented
+[b00t]
+name = "context budget tracking"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Track how much context/token budget remains for the current task and compress or delegate before it runs out"
+keywords = ["context", "budget", "tracking", "tokens"]
+
+[b00t.learn]
+content = """
+Context budget tracking watches remaining context/token headroom for
+the current task and triggers compression (summarize, delegate to a
+sub-agent, drop stale history) before the budget is exhausted rather than
+after. Backed by `b00t-cli budget` and `b00t-cli context` (agent context
+snapshots).
+"""

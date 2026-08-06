@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::index::DatumIndexEntry;
 
@@ -147,7 +147,10 @@ mod tests {
         };
         assert!(q.matches(&e));
 
-        let q2 = EdlQuery { complexity_max: Some(5), ..q.clone() };
+        let q2 = EdlQuery {
+            complexity_max: Some(5),
+            ..q.clone()
+        };
         assert!(!q2.matches(&e)); // complexity 6 > max 5
     }
 

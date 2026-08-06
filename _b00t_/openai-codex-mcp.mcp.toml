@@ -3,7 +3,6 @@ name = "openai-codex-mcp"
 type = "mcp"
 hint = "OpenAI Codex MCP server for agentic AI coding sessions"
 
-entangled_cli = ["openai-codex-mcp.cli"]
 lfmf_category = "codex"
 
 [b00t.learn]

@@ -18,7 +18,10 @@ pub enum InitCommands {
         name: Option<String>,
         #[clap(long, help = "Primary technology stack (rust|python|nodejs|auto)")]
         stack: Option<String>,
-        #[clap(long, help = "Force agent onboarding (detect tools, start Redis, show capabilities)")]
+        #[clap(
+            long,
+            help = "Force agent onboarding (detect tools, start Redis, show capabilities)"
+        )]
         setup: bool,
         #[clap(long, help = "Skip agent onboarding")]
         no_setup: bool,
@@ -108,12 +111,20 @@ primary_stack = "{primary_stack}"
     write_env_files(&cwd, &env)?;
     print_validation_report(&env);
 
-    println!("\n✅ Project '{}' initialized ({})", project_name, primary_stack);
+    println!(
+        "\n✅ Project '{}' initialized ({})",
+        project_name, primary_stack
+    );
 
     // ── Auto-check tool versions (#585) ─────────────────────────────────
     println!("\n🔍 Checking installed tools...");
     let b00t_bin = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("b00t-cli"));
-    match std::process::Command::new(&b00t_bin).args(["cli", "up"]).arg("--path").arg(path).status() {
+    match std::process::Command::new(&b00t_bin)
+        .args(["cli", "up"])
+        .arg("--path")
+        .arg(path)
+        .status()
+    {
         Ok(s) if s.success() => {}
         Ok(_) => eprintln!("  ⚠️  Some tools need updating — run 'b00t cli up'"),
         Err(e) => eprintln!("  ⚠️  Tool check skipped: {e}"),
@@ -172,22 +183,36 @@ fn collect_environment(_cwd: &Path, project_name: &str, primary_stack: &str) -> 
     // Critical tools for the detected stack
     match primary_stack {
         "rust" => {
-            if env.rust_version.is_none() { env.missing_critical.push("rustc".into()); }
-            if !which::which("cargo").is_ok() { env.missing_critical.push("cargo".into()); }
+            if env.rust_version.is_none() {
+                env.missing_critical.push("rustc".into());
+            }
+            if !which::which("cargo").is_ok() {
+                env.missing_critical.push("cargo".into());
+            }
         }
         "nodejs" => {
-            if env.node_version.is_none() { env.missing_critical.push("node".into()); }
-            if !which::which("npm").is_ok() { env.missing_critical.push("npm".into()); }
+            if env.node_version.is_none() {
+                env.missing_critical.push("node".into());
+            }
+            if !which::which("npm").is_ok() {
+                env.missing_critical.push("npm".into());
+            }
         }
         "python" => {
-            if env.python_version.is_none() { env.missing_critical.push("python3".into()); }
+            if env.python_version.is_none() {
+                env.missing_critical.push("python3".into());
+            }
         }
         "go" => {
-            if env.go_version.is_none() { env.missing_critical.push("go".into()); }
+            if env.go_version.is_none() {
+                env.missing_critical.push("go".into());
+            }
         }
         _ => {}
     }
-    if !which::which("git").is_ok() { env.missing_critical.push("git".into()); }
+    if !which::which("git").is_ok() {
+        env.missing_critical.push("git".into());
+    }
 
     if env.container_runtime == "none" {
         env.missing_critical.push("podman/docker".into());
@@ -206,8 +231,12 @@ fn detect_version(bin: &str, args: &[&str], regex: &str) -> Option<String> {
 }
 
 fn detect_container_runtime() -> String {
-    if which::which("podman").is_ok() { return "podman".into(); }
-    if which::which("docker").is_ok() { return "docker".into(); }
+    if which::which("podman").is_ok() {
+        return "podman".into();
+    }
+    if which::which("docker").is_ok() {
+        return "docker".into();
+    }
     "none".into()
 }
 
@@ -240,16 +269,24 @@ export _B00T_Path="$PWD/_b00t_"
             stack = env.primary_stack,
             runtime = env.container_runtime,
             container_block = container_block,
-            rust_line = env.rust_version.as_ref()
+            rust_line = env
+                .rust_version
+                .as_ref()
                 .map(|v| format!("export RUST_VERSION=\"{}\"\n", v))
                 .unwrap_or_default(),
-            node_line = env.node_version.as_ref()
+            node_line = env
+                .node_version
+                .as_ref()
                 .map(|v| format!("export NODE_VERSION=\"{}\"\n", v))
                 .unwrap_or_default(),
-            python_line = env.python_version.as_ref()
+            python_line = env
+                .python_version
+                .as_ref()
                 .map(|v| format!("export PYTHON_VERSION=\"{}\"\n", v))
                 .unwrap_or_default(),
-            go_line = env.go_version.as_ref()
+            go_line = env
+                .go_version
+                .as_ref()
                 .map(|v| format!("export GO_VERSION=\"{}\"\n", v))
                 .unwrap_or_default(),
         );
@@ -291,11 +328,31 @@ fn print_validation_report(env: &ProjectEnv) {
     let mut warn = 0;
 
     let checks: Vec<(&str, Option<&str>, bool)> = vec![
-        ("rustc", env.rust_version.as_deref(), env.primary_stack == "rust"),
-        ("node", env.node_version.as_deref(), env.primary_stack == "nodejs"),
-        ("python3", env.python_version.as_deref(), env.primary_stack == "python"),
+        (
+            "rustc",
+            env.rust_version.as_deref(),
+            env.primary_stack == "rust",
+        ),
+        (
+            "node",
+            env.node_version.as_deref(),
+            env.primary_stack == "nodejs",
+        ),
+        (
+            "python3",
+            env.python_version.as_deref(),
+            env.primary_stack == "python",
+        ),
         ("go", env.go_version.as_deref(), env.primary_stack == "go"),
-        ("git", Some(if which::which("git").is_ok() { "✓" } else { "" }), true),
+        (
+            "git",
+            Some(if which::which("git").is_ok() {
+                "✓"
+            } else {
+                ""
+            }),
+            true,
+        ),
         (&env.container_runtime, Some("✓"), true),
     ];
 
@@ -303,19 +360,33 @@ fn print_validation_report(env: &ProjectEnv) {
         match version {
             Some(v) if !v.is_empty() => {
                 let tag = if important { "required" } else { "available" };
-                println!("  ✅ {:<20} {:>12}  ({})", tool, if v == "✓" { v.into() } else { format!("v{}", v) }, tag);
+                println!(
+                    "  ✅ {:<20} {:>12}  ({})",
+                    tool,
+                    if v == "✓" {
+                        v.into()
+                    } else {
+                        format!("v{}", v)
+                    },
+                    tag
+                );
                 ok += 1;
             }
             _ => {
                 let tag = if important { "❌ missing" } else { "optional" };
                 println!("  ❌ {:<20} {:>12}  ({})", tool, "—", tag);
-                if important { warn += 1; }
+                if important {
+                    warn += 1;
+                }
             }
         }
     }
 
     if warn > 0 {
-        println!("\n  ⚠️  {} critical tool(s) missing. Install them and re-run 'b00t init project --setup'.", warn);
+        println!(
+            "\n  ⚠️  {} critical tool(s) missing. Install them and re-run 'b00t init project --setup'.",
+            warn
+        );
     }
     if ok > 0 && warn == 0 {
         println!("\n  ✅ All critical tools available.");
@@ -325,12 +396,18 @@ fn print_validation_report(env: &ProjectEnv) {
 // ── Project stack detection ───────────────────────────────────────────────
 
 fn detect_project_stack(cwd: &Path) -> String {
-    if cwd.join("Cargo.toml").exists() { return "rust".into(); }
-    if cwd.join("package.json").exists() { return "nodejs".into(); }
+    if cwd.join("Cargo.toml").exists() {
+        return "rust".into();
+    }
+    if cwd.join("package.json").exists() {
+        return "nodejs".into();
+    }
     if cwd.join("pyproject.toml").exists() || cwd.join("requirements.txt").exists() {
         return "python".into();
     }
-    if cwd.join("go.mod").exists() { return "go".into(); }
+    if cwd.join("go.mod").exists() {
+        return "go".into();
+    }
     "unknown".into()
 }
 
@@ -387,7 +464,9 @@ fn detect_project_context(memory: &mut SessionMemory) -> Result<()> {
     for (file, stack, emoji) in checks {
         if Path::new(file).exists() {
             project_types.push(*stack);
-            if primary_stack == "unknown" { primary_stack = stack; }
+            if primary_stack == "unknown" {
+                primary_stack = stack;
+            }
             println!("  {} {} ({})", emoji, stack, file);
         }
     }
@@ -428,7 +507,10 @@ fn discover_available_tools(path: &str, memory: &mut SessionMemory) -> Result<()
         }
     }
 
-    println!("  🔧 {} CLI tools ({} installed)", available_count, installed_count);
+    println!(
+        "  🔧 {} CLI tools ({} installed)",
+        available_count, installed_count
+    );
     println!("  🔌 {} MCP servers", mcp_servers.len());
     println!("  🐳 {} Docker containers", docker_containers.len());
 
@@ -502,7 +584,9 @@ fn verify_and_start_redis(memory: &mut SessionMemory) -> Result<()> {
     let started = try_start_redis_server()?;
     if started {
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        let ping = std::process::Command::new("redis-cli").args(&["ping"]).output();
+        let ping = std::process::Command::new("redis-cli")
+            .args(&["ping"])
+            .output();
         match ping {
             Ok(o) if o.status.success() => {
                 if String::from_utf8_lossy(&o.stdout).trim() == "PONG" {
@@ -552,8 +636,15 @@ pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
 
     println!("  🩺 Agent Context Diagnostics");
     println!("  🤖 Agent: {}", context.agent_name);
-    println!("  📅 Session: {}s ({})", context.session_duration, format_duration(context.session_duration));
-    println!("  🌿 Branch: {} ({} builds)", context.current_branch, context.build_count);
+    println!(
+        "  📅 Session: {}s ({})",
+        context.session_duration,
+        format_duration(context.session_duration)
+    );
+    println!(
+        "  🌿 Branch: {} ({} builds)",
+        context.current_branch, context.build_count
+    );
     println!(
         "  📊 Activity: {} shells, {} compiles, {} tests",
         context.shell_count, context.compile_count, context.test_count
@@ -562,8 +653,17 @@ pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
     let mut passing = 0;
     let total = 4;
 
-    for (label, bin) in &[("git", "git"), ("cargo", "cargo"), ("node", "node"), ("docker", "docker")] {
-        if std::process::Command::new(bin).arg("--version").output().is_ok() {
+    for (label, bin) in &[
+        ("git", "git"),
+        ("cargo", "cargo"),
+        ("node", "node"),
+        ("docker", "docker"),
+    ] {
+        if std::process::Command::new(bin)
+            .arg("--version")
+            .output()
+            .is_ok()
+        {
             println!("  ✅ {}: available", label);
             passing += 1;
         } else {
@@ -578,9 +678,13 @@ pub fn run_system_diagnostics(memory: &mut SessionMemory) -> Result<()> {
 }
 
 fn format_duration(seconds: i64) -> String {
-    if seconds < 60 { format!("{}s", seconds) }
-    else if seconds < 3600 { format!("{}m{}s", seconds / 60, seconds % 60) }
-    else { format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60) }
+    if seconds < 60 {
+        format!("{}s", seconds)
+    } else if seconds < 3600 {
+        format!("{}m{}s", seconds / 60, seconds % 60)
+    } else {
+        format!("{}h{}m", seconds / 3600, (seconds % 3600) / 60)
+    }
 }
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
@@ -588,7 +692,13 @@ fn format_duration(seconds: i64) -> String {
 impl InitCommands {
     pub fn execute(&self, path: &str) -> Result<()> {
         match self {
-            InitCommands::Project { name, stack, setup, no_setup, dry_run } => {
+            InitCommands::Project {
+                name,
+                stack,
+                setup,
+                no_setup,
+                dry_run,
+            } => {
                 if *dry_run {
                     let mut memory = SessionMemory::load()?;
                     detect_project_context(&mut memory)?;
@@ -615,17 +725,29 @@ mod tests {
 
     struct RestoreCwd(std::path::PathBuf);
     impl Drop for RestoreCwd {
-        fn drop(&mut self) { let _ = std::env::set_current_dir(&self.0); }
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.0);
+        }
     }
 
     #[test]
     fn project_init_creates_directory_and_files() {
-        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CWD_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-        handle_project_init(Some("test-proj".into()), Some("rust".into()), false, true, "test").unwrap();
+        handle_project_init(
+            Some("test-proj".into()),
+            Some("rust".into()),
+            false,
+            true,
+            "test",
+        )
+        .unwrap();
 
         let b00t = dir.path().join("_b00t_");
         assert!(b00t.exists());
@@ -662,12 +784,22 @@ mod tests {
 
     #[test]
     fn env_file_contains_project_vars() {
-        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CWD_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-        handle_project_init(Some("demo".into()), Some("nodejs".into()), false, true, "test").unwrap();
+        handle_project_init(
+            Some("demo".into()),
+            Some("nodejs".into()),
+            false,
+            true,
+            "test",
+        )
+        .unwrap();
 
         let envrc = std::fs::read_to_string(dir.path().join(".envrc")).unwrap();
         assert!(envrc.contains("_B00T_Project=\"demo\""));
@@ -677,12 +809,20 @@ mod tests {
 
     #[test]
     fn rejects_non_git_directory() {
-        let _guard = CWD_LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap();
+        let _guard = CWD_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
         let result = handle_project_init(None, None, false, true, "test");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not a git repository"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not a git repository")
+        );
     }
 }

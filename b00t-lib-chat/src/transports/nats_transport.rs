@@ -17,7 +17,7 @@ use async_nats::{Client, Subscriber};
 use async_trait::async_trait;
 use futures::StreamExt;
 use std::sync::{Arc, RwLock as StdRwLock};
-use tokio::sync::{mpsc, Mutex as AsyncMutex, RwLock};
+use tokio::sync::{Mutex as AsyncMutex, RwLock, mpsc};
 use tracing::{debug, info};
 
 /// NATS transport for distributed agent messaging.
@@ -187,7 +187,10 @@ impl BroadcastTransport for NatsTransport {
 
         self.forward(subscriber);
 
-        self.subscriptions.write().unwrap().push(channel.to_string());
+        self.subscriptions
+            .write()
+            .unwrap()
+            .push(channel.to_string());
 
         ChatMetrics::global().record_transport_operation("nats", "subscribe");
         info!("Subscribed to NATS subject: {}", subject);

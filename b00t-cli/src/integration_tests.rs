@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::{get_mcp_config, mcp_add_json, UnifiedConfig};
-    use b00t_cli::datum_mcp::McpDatum;
+    use crate::{UnifiedConfig, get_mcp_config, mcp_add_json};
     use b00t_cli::McpListFilter;
+    use b00t_cli::datum_mcp::McpDatum;
     use serde_json::Value;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
@@ -325,7 +325,7 @@ baz = "learn/baz.md"
         let gemini = get_mcp_config("gemini-mcp-tool", b00t_path_str).expect("load gemini datum");
         assert_eq!(
             gemini.entangled_cli,
-            Some(vec!["geminicli".to_string()]),
+            Some(vec!["geminicli.cli".to_string()]),
             "gemini datum should keep top-level entangled CLI metadata"
         );
 

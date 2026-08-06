@@ -48,10 +48,16 @@ pub trait EmbedBackend: Send + Sync {
 
     /// Compose OCI-style layers: activate top-k by query relevance.
     /// Default no-op for backends without layer support.
-    async fn compose_layers(&self, _query: &str, _max_layers: usize) -> Result<Vec<crate::layer::LayerDescriptor>> {
+    async fn compose_layers(
+        &self,
+        _query: &str,
+        _max_layers: usize,
+    ) -> Result<Vec<crate::layer::LayerDescriptor>> {
         Ok(Vec::new())
     }
 
     /// Clear all composed layers, restore base weights.
-    fn clear_layers(&self) -> Result<()> { Ok(()) }
+    fn clear_layers(&self) -> Result<()> {
+        Ok(())
+    }
 }

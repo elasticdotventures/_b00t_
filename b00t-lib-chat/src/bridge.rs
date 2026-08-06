@@ -36,16 +36,10 @@ struct McpJsonRpcNotification {
 
 impl McpBridge {
     pub fn new(spec: McpServerSpec) -> Self {
-        Self {
-            spec,
-            child: None,
-        }
+        Self { spec, child: None }
     }
 
-    pub async fn start(
-        &mut self,
-        transport: &ChatTransport,
-    ) -> ChatResult<()> {
+    pub async fn start(&mut self, transport: &ChatTransport) -> ChatResult<()> {
         let mut cmd = Command::new(&self.spec.command);
         cmd.args(&self.spec.args);
         cmd.stdin(Stdio::piped());
@@ -64,15 +58,24 @@ impl McpBridge {
 
         cmd.kill_on_drop(false);
 
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| ChatError::Other(format!("MCP bridge spawn failed ({}): {}", self.spec.command, e)))?;
+        let mut child = cmd.spawn().map_err(|e| {
+            ChatError::Other(format!(
+                "MCP bridge spawn failed ({}): {}",
+                self.spec.command, e
+            ))
+        })?;
 
-        let stdin = child.stdin.take()
+        let stdin = child
+            .stdin
+            .take()
             .ok_or_else(|| ChatError::Other("MCP bridge: no stdin".into()))?;
-        let stdout = child.stdout.take()
+        let stdout = child
+            .stdout
+            .take()
             .ok_or_else(|| ChatError::Other("MCP bridge: no stdout".into()))?;
-        let stderr = child.stderr.take()
+        let stderr = child
+            .stderr
+            .take()
             .ok_or_else(|| ChatError::Other("MCP bridge: no stderr".into()))?;
 
         self.child = Some(child);
@@ -90,19 +93,34 @@ impl McpBridge {
         });
 
         let handshake_str = serde_json::to_string(&handshake).unwrap();
-        stdin_writer.write_all(handshake_str.as_bytes()).await.map_err(|e| ChatError::Other(format!("MCP bridge: handshake write failed: {}", e)))?;
-        stdin_writer.write_all(b"\n").await.map_err(|e| ChatError::Other(format!("MCP bridge: handshake newline failed: {}", e)))?;
-        stdin_writer.flush().await.map_err(|e| ChatError::Other(format!("MCP bridge: handshake flush failed: {}", e)))?;
+        stdin_writer
+            .write_all(handshake_str.as_bytes())
+            .await
+            .map_err(|e| ChatError::Other(format!("MCP bridge: handshake write failed: {}", e)))?;
+        stdin_writer.write_all(b"\n").await.map_err(|e| {
+            ChatError::Other(format!("MCP bridge: handshake newline failed: {}", e))
+        })?;
+        stdin_writer
+            .flush()
+            .await
+            .map_err(|e| ChatError::Other(format!("MCP bridge: handshake flush failed: {}", e)))?;
 
         let mut stdout_reader = BufReader::new(stdout);
         let mut response_line = String::new();
-        stdout_reader.read_line(&mut response_line).await.map_err(|e| ChatError::Other(format!("MCP bridge: handshake read failed: {}", e)))?;
+        stdout_reader
+            .read_line(&mut response_line)
+            .await
+            .map_err(|e| ChatError::Other(format!("MCP bridge: handshake read failed: {}", e)))?;
 
         let init_response: serde_json::Value = serde_json::from_str(&response_line)
             .map_err(|e| ChatError::Other(format!("MCP bridge: bad handshake: {}", e)))?;
 
         if init_response.get("error").is_some() {
-            return Err(ChatError::Other(format!("MCP bridge: init failed for {}: {}", self.spec.id, response_line.trim())));
+            return Err(ChatError::Other(format!(
+                "MCP bridge: init failed for {}: {}",
+                self.spec.id,
+                response_line.trim()
+            )));
         }
 
         let initialized = serde_json::json!({
@@ -111,9 +129,18 @@ impl McpBridge {
             "params": {}
         });
         let init_str = serde_json::to_string(&initialized).unwrap();
-        stdin_writer.write_all(init_str.as_bytes()).await.map_err(|e| ChatError::Other(format!("MCP bridge: initialized notify failed: {}", e)))?;
-        stdin_writer.write_all(b"\n").await.map_err(|e| ChatError::Other(format!("MCP bridge: initialized newline failed: {}", e)))?;
-        stdin_writer.flush().await.map_err(|e| ChatError::Other(format!("MCP bridge: initialized flush failed: {}", e)))?;
+        stdin_writer
+            .write_all(init_str.as_bytes())
+            .await
+            .map_err(|e| {
+                ChatError::Other(format!("MCP bridge: initialized notify failed: {}", e))
+            })?;
+        stdin_writer.write_all(b"\n").await.map_err(|e| {
+            ChatError::Other(format!("MCP bridge: initialized newline failed: {}", e))
+        })?;
+        stdin_writer.flush().await.map_err(|e| {
+            ChatError::Other(format!("MCP bridge: initialized flush failed: {}", e))
+        })?;
 
         info!("MCP bridge {} connected successfully", self.spec.id);
 
@@ -175,7 +202,8 @@ impl McpBridge {
                                 let payload = notif.params.unwrap_or(serde_json::Value::Null);
                                 let notification =
                                     NotificationMessage::new(&source, &event_type, payload);
-                                if let Err(e) = transport.publish_notification(&notification).await {
+                                if let Err(e) = transport.publish_notification(&notification).await
+                                {
                                     error!("MCP bridge {} publish failed: {}", id, e);
                                 } else {
                                     debug!(
@@ -184,10 +212,7 @@ impl McpBridge {
                                     );
                                 }
                             } else if method.contains("error") {
-                                warn!(
-                                    "MCP bridge {} received error: {}",
-                                    id, trimmed
-                                );
+                                warn!("MCP bridge {} received error: {}", id, trimmed);
                             }
                         }
                         Err(e) => {
@@ -243,11 +268,17 @@ mod bridge_tests {
     #[test]
     fn test_notification_event_type_convention() {
         let method = "notifications/resources/updated";
-        let event_type = method.strip_prefix("notifications/").unwrap().replace('/', ".");
+        let event_type = method
+            .strip_prefix("notifications/")
+            .unwrap()
+            .replace('/', ".");
         assert_eq!(event_type, "resources.updated");
 
         let method2 = "notifications/tools/list_changed";
-        let event_type2 = method2.strip_prefix("notifications/").unwrap().replace('/', ".");
+        let event_type2 = method2
+            .strip_prefix("notifications/")
+            .unwrap()
+            .replace('/', ".");
         assert_eq!(event_type2, "tools.list_changed");
     }
 }

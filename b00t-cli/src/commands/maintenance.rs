@@ -147,9 +147,7 @@ async fn cmd_start(interval_mins: i64) -> Result<()> {
     );
 
     // 5. Wait for SIGTERM / Ctrl-C
-    tokio::signal::ctrl_c()
-        .await
-        .context("wait for ctrl-c")?;
+    tokio::signal::ctrl_c().await.context("wait for ctrl-c")?;
 
     gov.emit_stop_event();
     let _ = std::fs::remove_file(&pid_file);
@@ -159,7 +157,8 @@ async fn cmd_start(interval_mins: i64) -> Result<()> {
 }
 
 fn cmd_stop() -> Result<()> {
-    let pid = read_pid().ok_or_else(|| anyhow::anyhow!("No maintenance.pid found — daemon not running"))?;
+    let pid = read_pid()
+        .ok_or_else(|| anyhow::anyhow!("No maintenance.pid found — daemon not running"))?;
 
     // Send SIGTERM using the `kill` command (avoids nix dependency)
     let status = std::process::Command::new("kill")

@@ -7,7 +7,7 @@
 //!
 //! Known agent process names: claude, opencode, aider, ralph, cursor, copilot
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 
 const AGENT_NAMES: &[&str] = &["claude", "opencode", "aider", "ralph", "cursor"];

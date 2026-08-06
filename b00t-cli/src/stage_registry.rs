@@ -37,18 +37,12 @@ impl StageRegistry {
         if let Ok(entries) = glob::glob(pattern.to_str().unwrap_or("")) {
             for entry in entries.flatten() {
                 match std::fs::read_to_string(&entry) {
-                    Ok(content) => {
-                        match toml::from_str::<CapsuleProfile>(&content) {
-                            Ok(profile) => stages.push(profile),
-                            Err(e) => {
-                                eprintln!(
-                                    "  ⚠️  stage_registry: skipping {} — {}",
-                                    entry.display(),
-                                    e
-                                );
-                            }
+                    Ok(content) => match toml::from_str::<CapsuleProfile>(&content) {
+                        Ok(profile) => stages.push(profile),
+                        Err(e) => {
+                            eprintln!("  ⚠️  stage_registry: skipping {} — {}", entry.display(), e);
                         }
-                    }
+                    },
                     Err(e) => {
                         eprintln!(
                             "  ⚠️  stage_registry: cannot read {} — {}",
@@ -133,7 +127,10 @@ mod tests {
         }
     }
 
-    fn profile_with_ports(name: &str, ports: Vec<(PortDirection, PortMediaType)>) -> CapsuleProfile {
+    fn profile_with_ports(
+        name: &str,
+        ports: Vec<(PortDirection, PortMediaType)>,
+    ) -> CapsuleProfile {
         CapsuleProfile {
             name: name.to_string(),
             ports: ports
@@ -319,10 +316,7 @@ mod tests {
     #[test]
     fn get_exact_name_match() {
         let reg = StageRegistry {
-            stages: vec![
-                sample_profile("encode"),
-                sample_profile("transcode"),
-            ],
+            stages: vec![sample_profile("encode"), sample_profile("transcode")],
         };
         assert!(reg.get("encode").is_some());
         assert_eq!(reg.get("encode").unwrap().name, "encode");

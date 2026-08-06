@@ -25,7 +25,16 @@ pub enum Role {
     /// Legacy human/user marker kept for backward wire/storage compatibility.
     /// Prefer `Agent::is_player` / `Team::player_ids` for new writes.
     Player,
-    /// Operator — system operator with administrative privileges
+    /// Operator — system operator with administrative privileges.
+    ///
+    /// ⚠️ NOT the same role as `b00t_cli::agentic_role::Operator`
+    /// ("crew dispatch and specialist routing — spins typed crews via
+    /// k0mmand3r"). Both use the bare string `"operator"` with no
+    /// disambiguating prefix — a known, tracked, currently-unresolved
+    /// naming collision. See
+    /// `_b00t_/linkml/schema/hive_role_vocabulary.yaml`'s top-level
+    /// description for the full context (Phase 2 of the ScopeStore+LinkML
+    /// epic, #905/#909 "no parallel vocabularies").
     Operator,
     /// Specialist — domain-specific work (coding, research, analysis)
     Specialist,
@@ -41,7 +50,7 @@ pub struct Agent {
     pub cake_balance: f64,
     pub is_alive: bool,
     pub manager_id: Option<String>, // Captain or Operator who recruited them
-    pub is_player: bool,           // true if this Agent represents a human user
+    pub is_player: bool,            // true if this Agent represents a human user
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,12 +149,7 @@ pub struct MissionTopic {
 
 impl MissionTopic {
     /// Create a new MissionTopic with status `Open`.
-    pub fn new(
-        id: &str,
-        bounty: f64,
-        description: &str,
-        required_skills: Vec<String>,
-    ) -> Self {
+    pub fn new(id: &str, bounty: f64, description: &str, required_skills: Vec<String>) -> Self {
         Self {
             id: id.to_string(),
             bounty,

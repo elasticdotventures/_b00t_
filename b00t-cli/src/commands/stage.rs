@@ -44,10 +44,7 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
                 return Ok(());
             }
 
-            println!(
-                "{}",
-                ansi::bold(&format!("Stages ({}):", stages.len()))
-            );
+            println!("{}", ansi::bold(&format!("Stages ({}):", stages.len())));
             println!();
             // Table: Name │ Ports │ GPU │ RAM
             println!(
@@ -56,7 +53,9 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
             );
             println!(
                 "{}",
-                ansi::dim("  ─────────────────────── ────────────── ────── ─────── ──────────────────")
+                ansi::dim(
+                    "  ─────────────────────── ────────────── ────── ─────── ──────────────────"
+                )
             );
             for s in &stages {
                 let ports_desc = if s.ports.is_empty() {
@@ -83,11 +82,7 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
                 let image_str = s.image.as_deref().unwrap_or("—");
                 println!(
                     "  {:25} {:16} {} {:>5}  {}",
-                    s.name,
-                    ports_desc,
-                    gpu_flag,
-                    ram_str,
-                    image_str,
+                    s.name, ports_desc, gpu_flag, ram_str, image_str,
                 );
             }
         }
@@ -112,7 +107,11 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
             println!();
             for s in &results {
                 let port_count = s.ports.len();
-                let gpu = if s.resources.requires_gpu { "GPU" } else { "CPU" };
+                let gpu = if s.resources.requires_gpu {
+                    "GPU"
+                } else {
+                    "CPU"
+                };
                 println!(
                     "  {}  ({} port{}, {}, {:.1}GB RAM){}",
                     ansi::cyan(&s.name),
@@ -130,17 +129,11 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
         StageCommands::Info { name } => {
             match registry.get(name) {
                 None => {
-                    println!(
-                        "{}",
-                        ansi::red(&format!("Stage '{}' not found.", name))
-                    );
+                    println!("{}", ansi::red(&format!("Stage '{}' not found.", name)));
                     // Suggest similar names via case-insensitive search
                     let similar = registry.search(name);
                     if !similar.is_empty() {
-                        println!(
-                            "{}",
-                            ansi::dim("Did you mean:")
-                        );
+                        println!("{}", ansi::dim("Did you mean:"));
                         for s in &similar {
                             println!("  {}", ansi::cyan(&s.name));
                         }
@@ -150,7 +143,10 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
                     println!("{}", ansi::bold(&format!("Stage: {}", profile.name)));
                     println!("{}", ansi::dim(&"─".repeat(48)));
                     println!("  Name:           {}", ansi::cyan(&profile.name));
-                    println!("  Image:          {}", profile.image.as_deref().unwrap_or("—"));
+                    println!(
+                        "  Image:          {}",
+                        profile.image.as_deref().unwrap_or("—")
+                    );
                     println!(
                         "  Timeout:        {}",
                         profile
@@ -160,14 +156,8 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
                     );
                     println!();
                     println!("  Resources:");
-                    println!(
-                        "    RAM:          {:.1} GB",
-                        profile.resources.min_ram_gb
-                    );
-                    println!(
-                        "    VRAM:         {:.1} GB",
-                        profile.resources.min_vram_gb
-                    );
+                    println!("    RAM:          {:.1} GB", profile.resources.min_ram_gb);
+                    println!("    VRAM:         {:.1} GB", profile.resources.min_vram_gb);
                     println!(
                         "    GPU required: {}",
                         if profile.resources.requires_gpu {
@@ -186,19 +176,13 @@ pub fn handle_stage_command(cmd: &StageCommands, b00t_path: &str) -> Result<()> 
                     if profile.ports.is_empty() {
                         println!("  Ports: none");
                     } else {
-                        println!(
-                            "  Ports ({}):",
-                            profile.ports.len()
-                        );
+                        println!("  Ports ({}):", profile.ports.len());
                         for (i, port) in profile.ports.iter().enumerate() {
                             let dir_icon = match port.direction {
                                 PortDirection::Input => "← IN ",
                                 PortDirection::Output => "→ OUT",
                             };
-                            let desc = port
-                                .description
-                                .as_deref()
-                                .unwrap_or("");
+                            let desc = port.description.as_deref().unwrap_or("");
                             println!(
                                 "    {}. {}  {:?}  {}",
                                 i + 1,

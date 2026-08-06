@@ -52,9 +52,7 @@ xpra-attach-html5 host=`hostname -I | awk '{print $1}'` user=`whoami`:
 #    bindings and crashes ("cannot load X11 bindings on non-X11 platform")
 #    instead of falling back gracefully. WSLg bundles XWayland alongside
 #    Weston for exactly this case — forcing GTK onto it sidesteps the crash.
-#    Confirmed to fix the crash 2026-08-04; the overall flow is still
-#    unconfirmed past "window renders" — see xpra.cli.toml's RESUME HERE
-#    note. This work is paused/tabled for now.
+#    Confirmed 2026-08-04.
 xpra-attach-native host=`hostname -I | awk '{print $1}'` user=`whoami`:
 	GDK_BACKEND=x11 xpra attach "ssh://{{user}}@{{host}}/100" --tray=no
 

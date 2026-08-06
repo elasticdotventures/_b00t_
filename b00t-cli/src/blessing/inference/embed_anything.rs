@@ -7,8 +7,8 @@
 use super::{Embedding, LLMInference, ModelInfo};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use b00t_embed::layer::stack::LayerStack;
 use b00t_embed::EmbedBackend;
+use b00t_embed::layer::stack::LayerStack;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -108,9 +108,7 @@ impl LLMInference for EmbedAnythingBackend {
     /// This is the OCI container "merge" operation for embedding heads.
     async fn compose_layers(&mut self, blessing_ids: &[&str]) -> Result<()> {
         let mut guard = self.layer_stack.write().await;
-        let stack = guard
-            .as_mut()
-            .context("layer stack not initialized")?;
+        let stack = guard.as_mut().context("layer stack not initialized")?;
 
         if blessing_ids.is_empty() {
             // No layers to compose — deactivate all

@@ -1,0 +1,18 @@
+# 🦨 unfinished — the b00t-cli model link to tier-routing logic is inferred, not confirmed; harness-level cognitive routing isn't fully solved yet per the operator
+[b00t]
+name = "cognitive-tier-routing"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Route a task to sm0l/ch0nky/frontier by complexity, not by habit — cheap models for tests/lint/classify, frontier only for architecture/security/novel design"
+keywords = ["cognitive-tier", "routing", "sm0l", "ch0nky", "frontier", "model-selection"]
+
+[b00t.learn]
+content = """
+Cognitive-tier routing is the hive's model-selection contract (see hive
+CLAUDE.md "Cognitive Tiers" table): sm0l (qwen2.5-3B, haiku) for tests/lint/
+classify/grep with a PASS/FAIL output contract; ch0nky (qwen3-coder-next)
+for implement/refactor/debug with a diff+test-result contract; frontier
+(claude-opus/sonnet) for architecture/security/novel design with a
+structured-decision contract. Never pass full sub-agent output to a higher
+tier — always compress. Backed operationally by `b00t-cli model`.
+"""

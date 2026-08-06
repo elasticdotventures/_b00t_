@@ -1,0 +1,16 @@
+[b00t]
+name = "stateless-scoring"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Score an experiment/run without carrying hidden state between trials — every score must be reproducible from its own inputs alone"
+keywords = ["stateless", "scoring", "experiment", "ab-testing", "evaluation"]
+
+[b00t.learn]
+content = """
+Stateless scoring means a scoring function takes only the run's own
+recorded inputs/outputs and produces a score with no dependency on prior
+runs, ordering, or mutable shared state — required for A/B experiment
+results to be comparable and replayable. Backed by `b00t-cli experiment`
+("Dispatch A/B experiments with parallel sub-agents and stateless
+scoring").
+"""

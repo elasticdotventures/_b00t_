@@ -225,7 +225,11 @@ fn detect_workspace_version() -> Option<String> {
     let cargo_toml = root.join("b00t-cli").join("Cargo.toml");
     let content = std::fs::read_to_string(cargo_toml).ok()?;
     let table: toml::Value = content.parse().ok()?;
-    table.get("package")?.get("version")?.as_str().map(|v| v.trim().to_string())
+    table
+        .get("package")?
+        .get("version")?
+        .as_str()
+        .map(|v| v.trim().to_string())
 }
 
 fn fetch_latest_release() -> Result<GitHubRelease> {

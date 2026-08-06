@@ -71,14 +71,6 @@ impl K8sDatum {
     }
 }
 
-impl TryFrom<(&str, &str)> for K8sDatum {
-    type Error = anyhow::Error;
-
-    fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
-        Self::from_config(name, path)
-    }
-}
-
 impl DatumChecker for K8sDatum {
     fn is_installed(&self) -> bool {
         // K8s charts are "installed" if:
@@ -156,7 +148,7 @@ impl StatusProvider for K8sDatum {
 
 impl FilterLogic for K8sDatum {
     fn is_available(&self) -> bool {
-        !DatumChecker::is_installed(self) && self.prerequisites_satisfied()
+        self.is_available_default()
     }
 
     fn prerequisites_satisfied(&self) -> bool {
@@ -174,17 +166,7 @@ impl FilterLogic for K8sDatum {
     }
 }
 
-impl ConstraintEvaluator for K8sDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
-
-impl DatumProvider for K8sDatum {
-    fn datum(&self) -> &BootDatum {
-        &self.datum
-    }
-}
+crate::impl_boot_datum_accessors!(K8sDatum);
 
 /// Sync all datum files to k8s ConfigMaps in the given namespace.
 ///
@@ -200,7 +182,9 @@ pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<
     }
 
     // Ensure namespace exists (ignore error if already present)
-    let _ = cmd!("kubectl", "create", "namespace", namespace).unchecked().run();
+    let _ = cmd!("kubectl", "create", "namespace", namespace)
+        .unchecked()
+        .run();
 
     let datum_dir = Path::new(b00t_path).join("datums");
     if !datum_dir.exists() {
@@ -228,10 +212,16 @@ pub fn sync_datums_to_configmap(b00t_path: &str, namespace: &str) -> Result<Vec<
 
         // kubectl create configmap --dry-run=client -o yaml | kubectl apply -f -
         let result = cmd!(
-            "kubectl", "create", "configmap", &cm_name,
-            "--namespace", namespace,
+            "kubectl",
+            "create",
+            "configmap",
+            &cm_name,
+            "--namespace",
+            namespace,
             &format!("--from-file=content={}", path.display()),
-            "--dry-run=client", "-o", "yaml"
+            "--dry-run=client",
+            "-o",
+            "yaml"
         )
         .pipe(cmd!("kubectl", "apply", "-f", "-"))
         .run();

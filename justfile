@@ -47,6 +47,19 @@ mod qwen-code '_b00t_/qwen-code.justfile'
 mod ai-finetune '_b00t_/ai-finetune.just'
 mod ngc '_b00t_/ngc.just'
 mod ux 'ux.just'
+mod hf-cloud '_b00t_/justfile-hf-cloud.just'
+mod gemma '_b00t_/justfile-gemma.just'
+mod worker '_b00t_/justfile-worker.just'
+mod review '_b00t_/justfile-review.just'
+mod ufo '_b00t_/justfile-ufo.just'
+mod chore '_b00t_/justfile-chore.just'
+mod opencode-plugins '_b00t_/justfile-opencode-plugins.just'
+mod mcp-mesh '_b00t_/justfile-mcp-mesh.just'
+mod h3rmes '_b00t_/justfile-h3rmes.just'
+mod b00t-embed '_b00t_/justfile-b00t-embed.just'
+mod autolearn '_b00t_/justfile-autolearn.just'
+mod ralph '_b00t_/justfile-ralph.just'
+mod dstack-sdd '_b00t_/justfile-dstack-sdd.just'
 
 # ── Module guide — `just modules` or `just --list <module>` ──────────────────
 # Lists all submodule justfiles registered in this repo.
@@ -566,6 +579,18 @@ ra_run:
 test:
     cargo test -- --nocapture
 
+# Verify the compact b00t-mcp surface and communication output contract.
+test-b00t-mcp:
+    cargo test -p b00t-mcp
+
+# Format the b00t-mcp crate through the registered action surface.
+format-b00t-mcp:
+    rustfmt --edition 2024 b00t-mcp/src/chat.rs b00t-mcp/src/mcp_server_rusty.rs b00t-mcp/src/mcp_tools.rs
+
+# Install the already-versioned b00t-mcp after its focused contract passes.
+install-b00t-mcp: test-b00t-mcp
+    cargo install --locked --path b00t-mcp --force
+
 # 🤓 deterministic hive accelerator/soul verification (P1–P3).
 #    Builds the test binary ONCE (--no-run), then runs hive tests directly —
 #    avoids re-linking the full workspace test binary on every invocation.
@@ -759,167 +784,7 @@ inspect-mcp:
 	npx @modelcontextprotocol/inspector ./target/release/b00t-mcp
 
 # ── HF Cloud — dataset sync + job lifecycle ────────────────────────────────────
-
-# Upload train.jsonl + ai-finetune.just + active config to HF dataset repo (source of truth for cloud jobs)
-hf-dataset-push config="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    hf upload elasticdotventures/b00t-training fine-tune/train.jsonl train.jsonl --repo-type dataset
-    hf upload elasticdotventures/b00t-training fine-tune/train_unsloth.py train_unsloth.py --repo-type dataset
-    hf upload elasticdotventures/b00t-training _b00t_/ai-finetune.just ai-finetune.just --repo-type dataset
-    if [[ -n "{{config}}" ]]; then
-        hf upload elasticdotventures/b00t-training "fine-tune/{{config}}" "{{config}}" --repo-type dataset
-        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just + {{config}}"
-    else
-        echo "✅ pushed train.jsonl + train_unsloth.py + ai-finetune.just (no config — pass config=<file> to include)"
-    fi
-
-# Submit a training job to HF Jobs; pass config=<filename> and flavor=a10g-large|a100-large
-# 🤓 job loads ai-finetune.just + config from hf://datasets/elasticdotventures/b00t-training
-hf-job-submit config flavor="a10g-large":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [[ -z "{{config}}" ]] && { echo "⚠️  pass config=<filename>  e.g. just hf-job-submit config=config-phi4-mini.yaml" >&2; exit 1; }
-    hf jobs run \
-      --image ghcr.io/elasticdotventures/b00t-training-image:latest \
-      --flavor "{{flavor}}" \
-      --timeout 10h \
-      --env HF_HOME=/tmp/hf-cache \
-      --env UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache \
-      --env UNSLOTH_VLLM_STANDBY=0 \
-      --secret HF_TOKEN \
-      --volume "hf://datasets/elasticdotventures/b00t-training:/data:ro" \
-      -- /bin/sh -c "command -v just 2>/dev/null || { curl -sSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz && tar -xzf /tmp/just.tar.gz -C /tmp just; }; \$(command -v just 2>/dev/null || echo /tmp/just) -f /data/ai-finetune.just train /data/{{config}}"
-
-# Poll status of a HF job
-hf-job-status job_id:
-    hf jobs status {{job_id}}
-
-# Stream logs from a running or completed HF job
-hf-job-logs job_id:
-    hf jobs logs {{job_id}}
-
-# Cancel a running HF job
-hf-job-cancel job_id:
-    hf jobs cancel {{job_id}}
-
-# Pull completed adapter from HF Hub to local sm3lly
-hf-adapter-pull repo dest="fine-tune/output-cloud/lora-adapter":
-    hf download "{{repo}}" --repo-type model --local-dir "{{dest}}"
-
-# Hugging Face model caching helper
-hf-download model dest="" revision="":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	MODEL="{{model}}"
-	if [[ -z "$MODEL" ]]; then
-		echo "⚠️ set model=<repo>" >&2
-		exit 1
-	fi
-	# 🤓 prefer hf (huggingface_hub>=0.26 alias); auto-install if missing
-	if ! command -v hf >/dev/null 2>&1; then
-		echo "hf not found — auto-installing huggingface_hub[cli] via uv ..." >&2
-		uv tool install --upgrade "huggingface_hub[cli]"
-	fi
-	DEST="{{dest}}"
-	if [[ -z "$DEST" ]]; then
-		SANITIZED="${MODEL//\//__}"
-		DEST="$HOME/.b00t/models/$SANITIZED"
-	fi
-	mkdir -p "$DEST"
-	ARGS=(download "$MODEL" --local-dir "$DEST" --local-dir-use-symlinks False)
-	if [[ -n "{{revision}}" ]]; then
-		ARGS+=(--revision "{{revision}}")
-	fi
-	hf "${ARGS[@]}"
-	echo "✅ cached $MODEL -> $DEST"
-
-# Invoke b00t-cli to install/cache a datum-backed model
-b00t-install-model model="llava" force="false" no_activate="false":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	MODEL="{{model}}"
-	ARGS=(model download "$MODEL")
-	if [[ "{{force}}" == "true" ]]; then
-		ARGS+=(--force)
-	fi
-	if [[ "{{no_activate}}" == "true" ]]; then
-		ARGS+=(--no-activate)
-	fi
-	b00t-cli "${ARGS[@]}"
-
-# Launch vLLM container against cached weights
-vllm-up model="" dtype="" port="8000" image="vllm/vllm-openai:latest":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	if [[ -n "{{model}}" ]]; then
-		eval "$(b00t-cli model env "{{model}}")"
-	else
-		eval "$(b00t-cli model env)"
-	fi
-	: "${VLLM_MODEL_DIR:?Missing VLLM_MODEL_DIR from model env}"
-	: "${VLLM_MODEL_PATH:?Missing VLLM_MODEL_PATH from model env}"
-	DTYPE="${dtype:-${VLLM_DTYPE:-float16}}"
-	PORT="{{port}}"
-	IMAGE="{{image}}"
-	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
-	docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-	EXTRA_ARGS=()
-	if [[ -n "${VLLM_MAX_MODEL_LEN:-}" ]]; then
-		EXTRA_ARGS+=(--max-model-len "${VLLM_MAX_MODEL_LEN}")
-	fi
-	if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
-		# shellcheck disable=SC2206
-		EXTRA_ARGS+=(${VLLM_EXTRA_ARGS})
-	fi
-	podman run --rm -d \
-		--name "$CONTAINER" \
-		--device nvidia.com/gpu=all \
-		-p "${PORT}:8000" \
-		-v "${VLLM_MODEL_DIR}:${VLLM_MODEL_PATH}:ro" \
-		${HF_TOKEN:+-e HF_TOKEN="$HF_TOKEN"} \
-		"$IMAGE" \
-		--model "${VLLM_MODEL_PATH}" \
-		--dtype "${DTYPE}" \
-		--tensor-parallel-size "${VLLM_TP_SIZE:-1}" \
-		"${EXTRA_ARGS[@]}"
-	echo "✅ vLLM listening on http://localhost:${PORT}"
-
-# Tail vLLM logs (defaults to follow mode)
-vllm-logs follow="true":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	CONTAINER="${VLLM_CONTAINER_NAME:-vllm-server}"
-	if [[ "{{follow}}" == "true" ]]; then
-		docker logs -f "$CONTAINER"
-	else
-		docker logs "$CONTAINER"
-	fi
-
-# Launch mistral.rs OpenAI-compatible server against a cached local model.
-mistralrs-up model_id="mistralai/Mistral-7B-Instruct-v0.3" model_name="mistral-local" port="1234":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	MODEL_ID="{{model_id}}"
-	MODEL_NAME="{{model_name}}"
-	PORT="{{port}}"
-	echo "🚀 starting mistralrs-server on :${PORT} with ${MODEL_ID}"
-	mistralrs-server \
-		--port "${PORT}" \
-		--served-model-name "${MODEL_NAME}" \
-		--hf-model-id "${MODEL_ID}"
-
-# Smoke test local mistral.rs chat endpoint.
-mistralrs-chat prompt="hello from b00t" port="1234" model_name="mistral-local":
-	#!/usr/bin/env bash
-	set -euo pipefail
-	PROMPT="{{prompt}}"
-	PORT="{{port}}"
-	MODEL_NAME="{{model_name}}"
-	curl -fsS \
-		-H 'Content-Type: application/json' \
-		-d "$(jq -nc --arg m "$MODEL_NAME" --arg p "$PROMPT" '{model:$m,messages:[{role:"user",content:$p}],max_tokens:120,temperature:0.2}')" \
-		"http://127.0.0.1:${PORT}/v1/chat/completions" | jq -r '.choices[0].message.content // empty'
+# (moved to mod hf-cloud '_b00t_/justfile-hf-cloud.just')
 
 # Captain's Command Arsenal - Memoized Agent Operations
 
@@ -957,9 +822,9 @@ validate-mcp:
 # Requires OBSIDIAN_MCP_KEY env var (set in .env or b00t install).
 # Connects via mcp-remote → https://${OBSIDIAN_HOST}:3443/mcp with Bearer auth.
 obsidian-proxy:
-    npx -y mcp-remote \
-      https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
-      --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
+	npx -y mcp-remote \
+	  https://$(OBSIDIAN_HOST:=windows-host.lan):$(OBSIDIAN_PORT:=3443)/mcp \
+	  --header "Authorization: Bearer $(OBSIDIAN_MCP_KEY)"
 
 # Lint: NTFS invalid character scan — fail if paths contain reserved chars
 # Policy: pwsh.🪟/NTFS_RESERVED_CHARS.md
@@ -1101,84 +966,10 @@ acp-sm3lly-status:
     b00t whoami --role=executive | sed -n '/Capability check:/,$p'
 
 # ── Gemma 4 + pi-coding-agent local inference ────────────────────────────────
-
-# Download Gemma 4 26B-A4B MXFP4_MOE GGUF (unsloth/gemma-4-26B-A4B-it-GGUF)
-qwen36-download:
-    b00t hive activate download-mode
-    hf download unsloth/Qwen3.6-27B-GGUF --include "Qwen3.6-27B-Q4_K_M.gguf"
-    @echo "✅ download done — run: just qwen36-serve  (or just qwen36-serve-llamacpp)"
-
-# Activate Qwen3.6-27B via vLLM (generates + enables systemd unit)
-qwen36-serve:
-    b00t hive activate inference-qwen36-27b
-
-# Activate Qwen3.6-27B via llamacpp podman (GGUF-native fallback when vLLM fails)
-qwen36-serve-llamacpp:
-    b00t hive activate inference-qwen36-27b-llamacpp
-
-# Stop Qwen3.6-27B inference (whichever backend is running)
-qwen36-stop:
-    systemctl --user stop b00t-hive-inference-qwen36-27b.service || true
-    systemctl --user stop b00t-hive-inference-qwen36-27b-llamacpp.service || true
-    systemctl --user stop b00t-hive-inference-qwen36-35b-a3b-llamacpp.service || true
-
-# Serve 35B-A3B MoE (lighter VRAM than 27B dense; preferred when MXFP4 supported)
-qwen36-serve-35b:
-    b00t hive activate inference-qwen36-35b-a3b-llamacpp
-
-# Eval active ch0nky model (must be serving on :8001)
-qwen36-status:
-    curl -s http://localhost:8001/v1/models | python3 -m json.tool
-
-# Run opencode one-shot against local qwen36-local/ch0nky
-qwen36-test-opencode prompt="say hello in 3 words":
-    opencode run --model qwen36-local/ch0nky "{{prompt}}"
+# (moved to mod gemma '_b00t_/justfile-gemma.just')
 
 # ── Worker agent — A/B experiment dispatch + phygital ontology ──────────────
-
-# Run an A/B experiment: two sub-agents, parallel dispatch, stateless scoring
-test-schema-drift:
-    cargo test -p b00t-cli --lib -- datum_schema::tests::test_focus_schema_file_matches_generated
-
-# Show worker phygital-twin status
-worker-status:
-    #!/bin/bash
-    echo "🥾 Worker phygital-twin status"
-    echo "node_id: worker-$$"
-    echo "state: $(b00t-cli experiment status 2>/dev/null || echo 'idle')"
-    echo "last_heartbeat: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "gate_result: $(test -f .b00t/worker-audit.jsonl && echo 'pass' || echo 'pass')"
-
-# Render worker ontology graph with l3dg3rr visual
-worker-viz format="mermaid":
-    #!/bin/bash
-    BCLI="./target/release/b00t-cli"
-    [[ -x "$BCLI" ]] || { echo "❌ no prebuilt b00t-cli"; exit 1; }
-    "$BCLI" --path _b00t_ viz entangle --datum worker --format {{format}}
-
-# Show recent experiment scores
-worker-experiment-scores:
-    @fdfind --base-directory .b00t -g "experiment-*.json" 2>/dev/null \
-      | xargs -I{} sh -c 'echo "--- .b00t/{} ---"; cat ".b00t/{}"' || echo "no experiment data yet"
-
-# Show worker audit log (governance gates)
-worker-audit-log:
-    @cat .b00t/worker-audit.jsonl 2>/dev/null || echo "no audit log entries yet"
-
-# Validate all worker role files
-worker-validate:
-    #!/bin/bash
-    set -euo pipefail
-    errors=0
-    for f in _b00t_/worker.role.toml _b00t_/experiment-controller.agent.toml _b00t_/scoring.agent.toml _b00t_/worker-ontology.mermaid AGENTS/--role=worker.md; do
-      if [[ -f "$f" ]]; then
-        echo "✅ $f"
-      else
-        echo "❌ $f (MISSING)"
-        errors=$((errors+1))
-      fi
-    done
-    exit $errors
+# (moved to mod worker '_b00t_/justfile-worker.just')
 
 # ── b00t skill-improvement loop — opencode ch0nky continuous self-improvement ──
 # 🤓 Tests datums, fixes gaps, commits improvements; runs unattended overnight
@@ -1226,103 +1017,18 @@ ask query="":
       | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
 
 # ── ufo-types crate (#511) — Tax-Lawyer UFO stereotypes + Satisfies<T> ──────
-# 🤓 Part of Tax-Lawyer EPIC (#510). ufo-types is the ontological foundation:
-#    UFO stereotypes (Kind/SubKind/Role/Relator/Mode) + Satisfies<T> constraint trait
-#    + ISO wrappers (Lei, Iso4217, Ifrs9Classification) + DARED governance types.
-# Usage: just ufo check | test | doc | watch
+# (moved to mod ufo '_b00t_/justfile-ufo.just')
 
-# Fast compile-check for ufo-types crate
-ufo-check:
-    cargo check -p ufo-types
-
-# Run ufo-types tests (78 tests, <2s)
-ufo-test:
-    cargo test -p ufo-types
-
-# Open ufo-types docs in browser
-ufo-doc:
-    cargo doc -p ufo-types --open
-
-# Continuous watch: re-check ufo-types on file changes
-ufo-watch:
-    cargo watch -x 'check -p ufo-types'
-
-# Full Tax-Lawyer test suite (ufo-types + ledgrrr)
-tax-lawyer-test: ufo-test
-    just ledgrrr test
+# Regenerate the ufo-types adoption baseline report (issue #928) — measures
+# real adoption via grep, not hand-maintained numbers that silently drift.
+ufo-adoption-report:
+    @bash _b00t_/scripts/ufo-adoption-report.sh
 
 # ── Chore memoization — recipes for fine-tune corpus (fewer tokens) ─────────
-# 🤓 Each recipe below replaces a multi-line bash invocation. After fine-tuning,
-#    the model recalls `just submodule-status` (5 tokens) instead of the
-#    full git submodule pipeline (30+ tokens). This is deliberate token
-#    compression for LLM context windows.
-
-# Show submodule drift: which submodules are ahead/behind/dirty
-submodule-status:
-    @git submodule status 2>/dev/null
-
-# Commit all submodule pointer updates with a standard message
-submodule-sync msg="chore: bump submodules":
-    @echo "📦 Syncing submodule pointers..."
-    git add $$(git submodule status 2>/dev/null | awk '{print $$2}') 2>/dev/null || true
-    git add pnpm-lock.yaml Cargo.lock 2>/dev/null || true
-    git commit -m "{{msg}}" || echo "Nothing to commit"
-
-# Delete all merged local branches except main
-tidy-branches:
-    @echo "🗑️  Deleting merged branches..."
-    @git branch --merged main 2>/dev/null | grep -v '^\*\|main' | xargs -r git branch -d
-    @echo "✅ Done. Remaining:"
-    @git branch --list
-
-# Drop all stashes older than 7 days
-tidy-stashes:
-    @echo "🗑️  Dropping old stashes..."
-    @git stash list 2>/dev/null | while IFS=: read -r ref desc; do \
-        echo "  Dropping $$ref"; \
-        git stash drop "$$ref" 2>/dev/null || true; \
-    done
-    @echo "✅ Stashes cleared"
-
-# Remove all *~ backup files (Emacs/vim tilde files)
-tidy-tilde:
-    @echo "🗑️  Removing backup files..."
-    @fdfind --max-depth 5 -g '*~' --exclude .git --exclude node_modules --exclude target --exclude vendor -x rm {} \; 2>/dev/null && echo "✅ Tilde files removed"
-
-# Full workspace tidy: branches + stashes + tilde files
-tidy: tidy-branches tidy-stashes tidy-tilde
-    @echo ""
-    @echo "✅ Workspace tidy complete"
-    @just submodule-status
+# (moved to mod chore '_b00t_/justfile-chore.just')
 
 # ── Pre-flight checks — system-normal gate for reviewers ──────────────────
-
-# Run the reviewer system-normal precriteria gate (RHAI)
-check-system-normal:
-    @b00t script run _b00t_/scripts/reviewer-system-normal.rhai 2>/dev/null || echo "⚠️  RHAI not available — run 'just submodule-status' and check: git stash list, git branch --show-current, git status"
-
-# ── Review & capability analysis ──────────────────────────────────────────
-
-# Show b00t capability overview
-review-capabilities:
-    b00t capabilities
-
-# Operator survey: load role + check system state
-operator-survey:
-    @echo "🔍 Operator survey"
-    @echo "━━━━━━━━━━━━━━━━━"
-    b00t learn operator 2>/dev/null | head -5
-    @echo ""
-    @just review-branch
-
-# Show recent branch changes with stats
-review-branch:
-    @echo "📋 Branch: $$(git branch --show-current)"
-    @echo ""
-    @git log --oneline --stat -10
-    @echo ""
-    @echo "📦 Uncommitted:"
-    @git status --short
+# (moved to mod review '_b00t_/justfile-review.just')
 
 # ── Codebase memory indexing ──────────────────────────────────────────────
 
@@ -1340,100 +1046,9 @@ index-codebase:
 android-sandbox:
     b00t script run _b00t_/scripts/android-emu-setup.rhai
 
-# ── OpenCode plugin management ──────────────────────────────────────────────
 
-# Install opencode-goal-plugin (canonical willytop8 fork)
-opencode-goal-install:
-    @echo "📦 Installing opencode-goal-plugin..."
-    npm install -g opencode-goal-plugin 2>/dev/null || \
-        npm install --save-dev opencode-goal-plugin
-    @echo "✅ Add to opencode.json: {\"plugin\": [\"opencode-goal-plugin\"]}"
 
-# Install all b00t opencode plugins
-opencode-plugins-install: opencode-goal-install
-    @echo "✅ All opencode plugins installed"
 
-# Run OpenCode via podman with full b00t environment mounted
-# 🤓 Mounts: workspace, config, MCP binaries, git/ssh, API keys.
-#    b00t-mcp + codebase-memory-mcp binaries from host PATH.
-opencode-run workspace=".":
-    @echo "🚀 Launching OpenCode (podman)..."
-    @mkdir -p {{workspace}}/.opencode/skills
-    podman run -it --rm \
-        --security-opt label=disable \
-        -v {{workspace}}:/workspace \
-        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
-        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
-        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
-        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
-        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
-        -v ${HOME}/.ssh:/root/.ssh:ro \
-        -e OPENAI_API_KEY \
-        -e ANTHROPIC_API_KEY \
-        -w /workspace \
-        ghcr.io/anomalyco/opencode
-
-# Run OpenCode for app4dog with full game development environment
-opencode-app4dog:
-    @echo "🐶 Launching OpenCode for app4dog..."
-    @mkdir -p ~/promptexecution/app4dog/.opencode/skills
-    podman run -it --rm \
-        --security-opt label=disable \
-        --network host \
-        -v ~/promptexecution/app4dog:/workspace \
-        -v ~/promptexecution/app4dog/.opencode/skills:/root/.opencode/skills:ro \
-        -v ~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json:ro \
-        -v ~/.local/bin/b00t-mcp:/home/brianh/.local/bin/b00t-mcp:ro \
-        -v ~/.local/bin/codebase-memory-mcp:/home/brianh/.local/bin/codebase-memory-mcp:ro \
-        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
-        -v ${HOME}/.ssh:/root/.ssh:ro \
-        -e OPENAI_API_KEY \
-        -e ANTHROPIC_API_KEY \
-        -w /workspace \
-        ghcr.io/anomalyco/opencode
-
-# ── MCP Service Mesh (podman pod) ──────────────────────────────────────────
-
-# Start b00t MCP servers as sidecar containers in a pod
-# 🤓 b00t-mcp (HTTP :3000) + codebase-memory-mcp (socat :9101).
-#    OpenCode connects via localhost URLs — no binary mounts needed.
-opencode-mesh-start:
-    @echo "🔧 Starting b00t MCP mesh..."
-    @podman pod exists b00t-mesh 2>/dev/null && echo "  Pod already running" || \
-        (podman pod create --name b00t-mesh -p 3000:3000 -p 9101:9101 2>&1)
-    @podman ps --filter name=b00t-mcp-http | grep -q b00t-mcp-http || \
-        (podman run -d --pod b00t-mesh --name b00t-mcp-http \
-            -v $$(realpath $$(which b00t-mcp)):/usr/local/bin/b00t-mcp:ro \
-            -v $$(pwd):/workspace:ro -w /workspace \
-            docker.io/ubuntu:24.04 /usr/local/bin/b00t-mcp --http --host 0.0.0.0 --port 3000 2>&1)
-    @podman ps --filter name=cb-mcp-socat | grep -q cb-mcp-socat || \
-        (podman run -d --pod b00t-mesh --name cb-mcp-socat \
-            -v $$(realpath $$(which codebase-memory-mcp)):/usr/local/bin/codebase-memory-mcp:ro \
-            docker.io/ubuntu:24.04 \
-            bash -c "apt-get update -qq && apt-get install -y -qq socat && socat TCP-LISTEN:9101,fork,reuseaddr EXEC:/usr/local/bin/codebase-memory-mcp" 2>&1)
-    @echo "✅ MCP mesh running: b00t-mcp :3000, cb-mcp :9101"
-
-# Stop the MCP service mesh
-opencode-mesh-stop:
-    @echo "🛑 Stopping b00t MCP mesh..."
-    @podman pod rm -f b00t-mesh 2>/dev/null || true
-    @echo "✅ MCP mesh stopped"
-
-# Run OpenCode connected to MCP service mesh (no binary mounts)
-opencode-mesh workspace=".":
-    @echo "🌐 Launching OpenCode (mesh mode)..."
-    @mkdir -p {{workspace}}/.opencode/skills
-    podman run -it --rm \
-        --security-opt label=disable \
-        --network host \
-        -v {{workspace}}:/workspace \
-        -v {{workspace}}/.opencode/skills:/root/.opencode/skills:ro \
-        -v ${HOME}/.gitconfig:/root/.gitconfig:ro \
-        -v ${HOME}/.ssh:/root/.ssh:ro \
-        -e OPENAI_API_KEY \
-        -e ANTHROPIC_API_KEY \
-        -w /workspace \
-        ghcr.io/anomalyco/opencode
 
 # ── b00t test harness (ping/pong integration tests) ─────────────────────────
 
@@ -1468,222 +1083,7 @@ moltis-soul-test:
     b00t soul set moltis_test_key "hello_from_b00t"
     b00t soul get moltis_test_key
 
-# ── h3rmes — b00t-integrated Hermes Agent variant ───────────────────────────
 
-# Install/verify h3rmes (PromptExecution Hermes fork with b00t integration).
-# Checks the vendor/hermes-agent-b00t submodule, registers MCP servers,
-# and installs the guard interposition plugin. Asks before destructive ops.
-
-# Self-referential MCP: run h3rmes as MCP server that exposes itself as a
-# discoverable tool surface. Other h3rmes instances can connect via:
-#   hermes --mcp-server h3rmes-mcp
-h3rmes-mcp-serve port="8002":
-    #!/bin/bash
-    set -euo pipefail
-    port={{port}}
-    HERMES_BIN="$(command -v hermes || echo '')"
-    if [ -z "$HERMES_BIN" ]; then
-        echo "✗ hermes not in PATH — run 'just h3rmes install' first"
-        exit 1
-    fi
-    echo "🥾 h3rmes MCP serve on :{{port}}"
-    echo "  Connect from another agent:"
-    echo "    h3rmes --mcp-server http://localhost:{{port}}/mcp"
-    echo
-    exec "$HERMES_BIN" mcp serve --port {{port}}
-
-# Register h3rmes as a self-discoverable MCP server in the b00t MCP registry.
-# This lets h3rmes discover itself via `b00t mcp list` and lets other
-# h3rmes instances connect to this one via `h3rmes --mcp-server h3rmes-mcp`.
-h3rmes-mcp-register port="8002":
-    #!/bin/bash
-    set -euo pipefail
-    port={{port}}
-    HERMES_BIN="$(command -v hermes || echo '')"
-    if [ -z "$HERMES_BIN" ]; then
-        echo "✗ hermes not in PATH — run 'just h3rmes install' first"
-        exit 1
-    fi
-    echo "🥾 Registering h3rmes MCP server..."
-    # Register in Hermes config as an MCP server pointing to itself
-    HERMES_CONFIG="$HOME/.hermes/config.yaml"
-    export HERMES_CONFIG HERMES_BIN
-    python3 -c 'import os,yaml; path=os.environ["HERMES_CONFIG"]; cfg=yaml.safe_load(open(path)) or {}; cfg.setdefault("mcp_servers", {})["h3rmes-mcp"]={"command": os.environ["HERMES_BIN"], "args": ["mcp", "serve", "--port", "{{port}}"]}; yaml.dump(cfg, open(path, "w"), default_flow_style=False); print("h3rmes-mcp registered in Hermes config")' 2>/dev/null || echo 'yaml write failed'
-    echo "  Run: just h3rmes-mcp-serve port={{port}}"
-    CONNECT_STR="--mcp-server h3rmes-mcp"
-    echo "  Connect: h3rmes $CONNECT_STR"
-
-h3rmes action="status":
-    #!/bin/bash
-    set -euo pipefail
-
-    # Resolve paths
-    B00T_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")"
-    H3RMES_DIR="$B00T_ROOT/vendor/hermes-agent-b00t"
-    B00T_CLI="$(command -v b00t-cli || command -v b00t || echo '')"
-
-    case "{{action}}" in
-        status)
-            echo "🥾 h3rmes status"
-            echo "  source:   $H3RMES_DIR"
-
-            if [ -d "$H3RMES_DIR" ]; then
-                echo "  submodule: ✓"
-                (cd "$H3RMES_DIR" && echo "    branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'detached')")
-                (cd "$H3RMES_DIR" && echo "    commit: $(git log --oneline -1 2>/dev/null || echo 'N/A')")
-
-                # Check for b00t-specific patches
-                PATCH_COUNT=$(cd "$H3RMES_DIR" && (git merge-base --is-ancestor origin/main HEAD 2>/dev/null && git log --oneline origin/main..HEAD 2>/dev/null || echo "") | wc -l || echo 0)
-                PATCH_COUNT=${PATCH_COUNT//[[:space:]]/}
-                if [ -n "${PATCH_COUNT:-0}" ] && [ "${PATCH_COUNT:-0}" -gt 0 ] 2>/dev/null; then
-                    echo "    b00t patches: $PATCH_COUNT ✓"
-                else
-                    echo "    b00t patches: 0 ⚠️  (not on b00t branch)"
-                fi
-            else
-                echo "  submodule: ✗ missing"
-            fi
-
-            # Check installed binary
-            if command -v hermes &>/dev/null; then
-                HERMES_PATH="$(command -v hermes)"
-                echo "  binary:   ${HERMES_PATH}"
-                hermes --version 2>/dev/null || echo "    (version check failed)"
-            else
-                echo "  binary:   ✗ not in PATH"
-            fi
-
-            # Check MCP servers registered
-            HERMES_CONFIG="$HOME/.hermes/config.yaml"
-            if [ -f "$HERMES_CONFIG" ]; then
-                echo "  config:   $HERMES_CONFIG"
-                for server in b00t-mcp codebase-memory irontology-mcp; do
-                    if grep -q "$server" "$HERMES_CONFIG" 2>/dev/null; then
-                        echo "    mcp/$server: ✓"
-                    else
-                        echo "    mcp/$server: ⚠️ not registered"
-                    fi
-                done
-            else
-                echo "  config:   ✗ missing"
-            fi
-
-            # Check guard plugin
-            H3RMES_PLUGIN="$H3RMES_DIR/plugins/b00t"
-            if [ -f "$H3RMES_PLUGIN/__init__.py" ] && [ -f "$H3RMES_PLUGIN/plugin.yaml" ]; then
-                echo "  guard plugin: ✓"
-            else
-                echo "  guard plugin: ⚠️ not installed in submodule"
-            fi
-            ;;
-        install|update)
-            # ── Permission gate ──────────────────────────────────────────
-            echo "🥾 h3rmes {{action}}"
-            echo
-            echo "  This will:"
-            echo "    [1] Ensure vendor/hermes-agent-b00t submodule is checked out"
-            echo "    [2] Register MCP servers in ~/.hermes/config.yaml"
-            echo "    [3] Enable the b00t guard interposition plugin"
-            echo "    [4] Install/verify b00t-mcp and codebase-memory MCP servers"
-            echo
-            read -r -p "  Continue? [y/N] " REPLY
-            if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-                echo "  Aborted."
-                exit 1
-            fi
-            echo
-
-            # Ensure submodule is checked out on the right branch
-            if [ ! -d "$H3RMES_DIR" ]; then
-                echo "📦 Initializing hermes-agent-b00t submodule..."
-                cd "$B00T_ROOT"
-                git submodule update --init vendor/hermes-agent-b00t
-            fi
-
-            cd "$H3RMES_DIR"
-            # Ensure we're on the b00t feature branch with patches
-            git checkout b00t 2>/dev/null || true
-            # Check if the b00t-specific branch exists
-            if git show-ref --verify --quiet refs/heads/feat/pre-tool-rewrite-hook; then
-                git checkout feat/pre-tool-rewrite-hook
-                echo "    branch: feat/pre-tool-rewrite-hook (with b00t patches)"
-            else
-                echo "    branch: b00t (upstream base)"
-            fi
-            cd "$B00T_ROOT"
-
-            # Register MCP servers via b00t-cli
-            if [ -n "$B00T_CLI" ]; then
-                echo "🔌 Registering MCP servers..."
-                "$B00T_CLI" install hermes 2>/dev/null || echo "    (b00t-cli install hermes skipped)"
-                "$B00T_CLI" mcp install b00t-mcp hermes 2>/dev/null || echo "    (b00t-mcp already registered)"
-
-                # Install codebase-memory-mcp if built
-                if [ -f "$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp" ]; then
-                    echo "🔌 Registering codebase-memory..."
-                    "$B00T_CLI" mcp install codebase-memory hermes 2>/dev/null || true
-                fi
-
-                # Build and register irontology-mcp
-                echo "🔌 Building irontology-mcp..."
-                cargo build --release --manifest-path "$B00T_ROOT/vendor/irontology-mcp/Cargo.toml" -p mcp-server 2>&1 | tail -3
-                IRONTOLOGY_BIN="$B00T_ROOT/vendor/irontology-mcp/target/release/irontology-mcp"
-                if [ -f "$IRONTOLOGY_BIN" ]; then
-                    echo "🔌 Registering irontology-mcp..."
-                    mkdir -p "$B00T_ROOT/target/release"
-                    ln -sf "$IRONTOLOGY_BIN" "$B00T_ROOT/target/release/irontology-mcp" 2>/dev/null || true
-                    "$B00T_CLI" mcp install irontology-mcp hermes 2>/dev/null || echo "    (irontology-mcp already registered)"
-                fi
-            else
-                echo "⚠️ b00t-cli not found; MCP registration skipped"
-                echo "  Run: cd $B00T_ROOT && just install"
-            fi
-
-            echo
-            echo "✅ h3rmes {{action}} complete"
-            echo "  Restart Hermes or run /reset for changes to take effect."
-            ;;
-        doctor|check)
-            just h3rmes status
-            echo "---"
-            echo "🔍 Running health checks..."
-            # Verify b00t-cli works
-            if [ -n "$B00T_CLI" ]; then
-                "$B00T_CLI" --version 2>/dev/null && echo "  b00t-cli: ✓" || echo "  b00t-cli: ✗"
-            else
-                echo "  b00t-cli: ✗ not found"
-            fi
-            # Verify submodule MCP config
-            HERMES_CONFIG="$HOME/.hermes/config.yaml"
-            if [ -f "$HERMES_CONFIG" ]; then
-                if grep -q "b00t-mcp" "$HERMES_CONFIG" 2>/dev/null; then
-                    echo "  hermes-mcp-config: ✓"
-                else
-                    echo "  hermes-mcp-config: ⚠️ b00t-mcp not in config"
-                fi
-            fi
-            # Verify guard interposition plugin
-            if [ -d "$H3RMES_DIR/plugins/b00t" ]; then
-                echo "  guard-plugin: ✓"
-            else
-                echo "  guard-plugin: ⚠️ not deployed"
-            fi
-            echo
-            echo "✅ h3rmes check complete"
-            ;;
-        *)
-            echo "Usage: just h3rmes [status|install|update|doctor|check]"
-            echo "  status   — show current h3rmes integration state"
-            echo "  install  — install/configure h3rmes (with permission gate)"
-            echo "  update   — same as install (idempotent)"
-            echo "  doctor   — run health checks"
-            echo "  check    — alias for doctor"
-            ;;
-    esac
-
-# Alias: just hermes -> just h3rmes
-hermes action="status":
-    just h3rmes {{action}}
 
 # ── wrkflw skill — b00t learn wrkflw verification ─────────────────────────
 # Verify the wrkflw skill loads correctly via b00t learn
@@ -1705,40 +1105,7 @@ skill-wrkflw-list:
         exit 1
     fi
 
-# ─── b00t-embed OCI Layer Pipeline ──────────────────────────────────────────
 
-# Wave 1: Extract embedding head tensors from Qwen3-Embedding-0.6B
-# Produces standalone safetensors layer files in /tmp/qwen3-layers/
-qwen3-extract-heads:
-    cargo run --example extract_qwen3_heads -p b00t-embed -- /tmp/qwen3-layers
-
-# Wave 2: Test Qwen3Composable with real model + compose pipeline
-# Downloads model, builds with VarMap, registers extracted layers, composes
-qwen3-test-compose:
-    cargo test -p b00t-embed --test demo_layer_lifecycle -- --nocapture
-
-# Wave 3: Full pipeline — embed text → route → compose layers → output
-# Uses the R2 route_text() method on LayerRouter with a mock embedder.
-# For the real pipeline, run: just qwen3-test-compose
-# Usage: just qwen3-embed query="write python code"
-qwen3-embed query="":
-    @if [ -z "{{query}}" ]; then echo "Usage: just qwen3-embed query=\"your text\""; exit 1; fi
-    @echo "embed pipeline: {{query}}" >&2
-    @echo "Running OCI layer compose pipeline..." >&2
-    @echo "  stage 1: tokenize + embed query" >&2
-    @echo "  stage 2: LayerRouter.route_text() → cosine similarity" >&2
-    @echo "  stage 3: LayerStack.compose() → VarMap swap" >&2
-    @echo "  stage 4: forward pass with activated layers" >&2
-    # Run the full integration test as verification
-    cargo test -p b00t-embed --test demo_layer_lifecycle -- --nocapture 2>&1 | grep -E "P1|P2|P3|P4|P5|Wave 2|ALL PIPELINE|test result"
-
-# Run all epoch integration tests (P1-P5)
-qwen3-test-epochs:
-    cargo test -p b00t-embed 2>&1 | tail -12
-
-# Run tensor alignment test (R1a) — verifies varmap.load() against real HF weights
-qwen3-test-alignment:
-    cargo test --test test_qwen3_composable test_tensor_name_alignment -p b00t-embed -- --nocapture 2>&1 | grep -E "✓|✗|test result|FAILED"
 
 # ─── Ledgrrr Subsystem ──────────────────────────────────────────────────────
 # ledgrrr recipes live in vendor/ledgrrr/ledgrrr.just (just module).
@@ -1763,253 +1130,6 @@ qwen3-test-alignment:
 #   - Vendor owns its own lifecycle; root only adds `mod` line
 # See vendor/ledgrrr/ledgrrr.just header for full documentation.
 # ─────────────────────────────────────────────────────────────────────────────
-
-# mcp-surface: show the 5 surface tools exposed to sub-agents
-mcp-surface:
-    @echo "Surface tools (5):" && grep "register::<" b00t-mcp/src/mcp_tools.rs | grep -v "^//"
-
-# mcp-catalog: list all 50+ tools in the autodiscovery catalog
-mcp-catalog:
-    cargo run --bin b00t-cli -p b00t-cli -- exec "ontology query" 2>/dev/null || b00t-cli ontology query
-
-# autolearn: OODA cycle — goal-driven skill selection over compiled soul pages.
-# Soul = b00t learn output (datum content). Research is SEPARATE (research-soul recipe).
-# O: observe goal  O: orient via FOL+recall+fs → weighted rerank  D: smol rerank hook
-# A: iterate candidates; soul-quality gate → queue research-soul if thin  P: persist
-autolearn:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # ── OBSERVE ──────────────────────────────────────────────────────────────
-    GOAL=$(b00t-cli task next --json 2>/dev/null | jq -r '.title // empty' || true)
-    if [ -z "$GOAL" ]; then echo "[observe] no goal in queue"; exit 0; fi
-    echo "[observe] goal: $GOAL"
-    GOAL_WORDS=$(echo "$GOAL" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '\n' | awk 'length>2' | sort -u)
-
-    # ── ORIENT ───────────────────────────────────────────────────────────────
-    # Source 1: past recall from knowledge graph (frequency-ranked)
-    PAST_SKILLS=$(b00t-cli data fabric query \
-      --predicate "b00t:informedBy" --namespace autolearn --format json 2>/dev/null \
-      | jq -r '.[].object' | sort | uniq -c | sort -rn | head -5 | awk '{print $2}')
-    [ -n "$PAST_SKILLS" ] && echo "[orient:recall] $(echo "$PAST_SKILLS" | tr '\n' ' ')"
-
-    # Source 2: FOL-adjacent — Horn reachability + depends_on over knowledge graph
-    FOL_ADJACENT=$(b00t-cli data fabric adjacent \
-      --goal "$GOAL" --namespace autolearn --top 5 2>/dev/null \
-      | awk 'NF>=2 {print $2}' || true)
-    [ -n "$FOL_ADJACENT" ] && echo "[orient:fol] $(echo "$FOL_ADJACENT" | tr '\n' ' ')"
-
-    # Source 3: filesystem datum scan (keyword match against _b00t_ topic files)
-    B00T_ROOT=$(git -C "$HOME/.b00t" rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
-    DATUM_DIR="$B00T_ROOT/_b00t_"
-    FS_CANDIDATES=""
-    while IFS= read -r WORD; do
-      [ -z "$WORD" ] && continue
-      if ls "$DATUM_DIR/"*"$WORD"*.toml 2>/dev/null | grep -q .; then
-        FS_CANDIDATES=$(printf '%s\n%s' "$FS_CANDIDATES" "$WORD")
-      fi
-    done <<< "$GOAL_WORDS"
-    [ -n "$FS_CANDIDATES" ] && echo "[orient:fs] $(echo "$FS_CANDIDATES" | tr '\n' ' ')"
-
-    # Weighted aggregate rerank: recall=3 (proven), fol=2 (inferred), fs=1 (candidate)
-    RANKED=$( \
-      { \
-        echo "$PAST_SKILLS"  | grep -v '^$' | while IFS= read -r s; do echo "3 $s"; done; \
-        echo "$FOL_ADJACENT" | grep -v '^$' | while IFS= read -r s; do echo "2 $s"; done; \
-        echo "$FS_CANDIDATES"| grep -v '^$' | while IFS= read -r s; do echo "1 $s"; done; \
-      } | awk 'NF==2 { score[$2] += $1 } END { for (k in score) print score[k], k }' \
-        | sort -rn | awk '{print $2}' | head -10 \
-    )
-    if [ -z "$RANKED" ]; then echo "[orient] no candidates — skip"; exit 0; fi
-    echo "[orient] weighted ranked: $(echo "$RANKED" | tr '\n' ' ')"
-
-    # ── DECIDE: optional smol model rerank (degrades if ollama unavailable) ──
-    SMOL_MODEL=$(ollama list 2>/dev/null | grep -oiE 'qwen[0-9.:-]+|phi[0-9.-]+' | head -1 || true)
-    if [ -n "$SMOL_MODEL" ]; then
-      SMOL_LIST=$(echo "$RANKED" | head -5 | tr '\n' '|' | sed 's/|$//')
-      SMOL_PROMPT="Goal: $GOAL. Candidates: $SMOL_LIST. Which ONE candidate name best matches the goal? Output the candidate name only, nothing else."
-      SMOL_PICK=$(ollama run "$SMOL_MODEL" "$SMOL_PROMPT" 2>/dev/null \
-        | head -1 | tr -d '"' | xargs 2>/dev/null || true)
-      if echo "$RANKED" | grep -qx "$SMOL_PICK" 2>/dev/null; then
-        echo "[decide:smol] $SMOL_MODEL promoted: $SMOL_PICK"
-        RANKED=$(printf '%s\n%s' "$SMOL_PICK" "$(echo "$RANKED" | grep -vx "$SMOL_PICK")")
-      fi
-    fi
-
-    # ── ACT: iterate candidates through soul-quality gate + 2-stage review ──
-    CHOSEN=""
-    LEARN_OUT=""
-    while IFS= read -r BEST; do
-      [ -z "$BEST" ] && continue
-      echo "[decide] trying: $BEST"
-
-      # Soul load: b00t learn IS the soul page (Karpathy: datum content = compiled wiki page)
-      # 🤓 NOT a RAG check — the soul is the datum, loaded directly into context
-      SOUL=$(b00t-cli learn "$BEST" 2>&1) && SOUL_OK=true || SOUL_OK=false
-      if [ "$SOUL_OK" = false ]; then
-        # Failure discriminator: permanent = no datum; transient = runtime error
-        if echo "$SOUL" | grep -qiE "not found|no such|unknown topic|not registered"; then
-          echo "[soul:missing] '$BEST' has no datum — queuing research-soul + skip"
-          b00t-cli task add "research-soul: $BEST" 2>/dev/null || true
-          b00t-cli lfmf "autolearn" "soul missing for '$BEST' — research-soul queued" 2>/dev/null || true
-        else
-          echo "[soul:transient] '$BEST' error — skip"
-        fi
-        continue
-      fi
-
-      # Soul quality gate: thin soul = knowledge not yet compiled → queue research-soul
-      SOUL_LEN=$(echo "$SOUL" | wc -c)
-      if [ "$SOUL_LEN" -lt 200 ]; then
-        echo "[soul:thin] '$BEST' only ${SOUL_LEN}c — queuing research-soul + skip"
-        b00t-cli task add "research-soul: $BEST" 2>/dev/null || true
-        continue
-      fi
-
-      # Review stage 1: keyword overlap between soul content and goal words
-      OVERLAP=$(echo "$SOUL" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '\n' \
-        | grep -cFf <(echo "$GOAL_WORDS") || echo 0)
-      echo "[review:1:local] overlap=$OVERLAP for '$BEST'"
-
-      # Review stage 2: independent grok reviewer (vector similarity — different algorithm)
-      GROK_HITS=$(b00t-cli grok ask "$GOAL $BEST" --limit 3 2>/dev/null \
-        | grep -c "$BEST" || echo 0)
-      echo "[review:2:grok] vector_endorsement=$GROK_HITS for '$BEST'"
-
-      if [ "$OVERLAP" -gt 0 ] || [ "$GROK_HITS" -gt 0 ]; then
-        CHOSEN="$BEST"
-        LEARN_OUT="$SOUL"
-        break
-      fi
-
-      echo "[review] REJECT '$BEST' (overlap=0, grok=0) — next"
-      b00t-cli lfmf "autolearn" \
-        "soul '$BEST' rejected by both reviewers for: $GOAL" 2>/dev/null || true
-    done <<< "$RANKED"
-
-    # All candidates exhausted: queue segmented research for top candidates
-    # 🤓 research is NOT done inline; each topic gets its own deliberate research-soul cycle
-    if [ -z "$CHOSEN" ]; then
-      echo "[autolearn] no candidate passed review — queuing research-soul for knowledge gaps"
-      echo "$RANKED" | head -3 | while IFS= read -r TOPIC; do
-        [ -z "$TOPIC" ] && continue
-        b00t-cli task add "research-soul: $TOPIC" 2>/dev/null || true
-        echo "[queue] research-soul: $TOPIC"
-      done
-      exit 1
-    fi
-
-    echo "[act] accepted: $CHOSEN (${SOUL_LEN}c soul)"
-
-    # ── PERSIST: store goal→skill in knowledge graph for future FOL recall ───
-    GOAL_HASH=$(echo "$GOAL" | sha256sum | head -c12)
-    b00t-cli data fabric upsert \
-      --subject "ooda:goal:$GOAL_HASH" --predicate "b00t:informedBy" \
-      --object "$CHOSEN" --namespace autolearn 2>/dev/null || true
-    b00t-cli data fabric upsert \
-      --subject "ooda:goal:$GOAL_HASH" --predicate "b00t:goalText" \
-      --object "$GOAL" --namespace autolearn 2>/dev/null || true
-    echo "[persist] ooda:goal:$GOAL_HASH → b00t:informedBy → $CHOSEN"
-
-# research-soul: Karpathy-pattern deliberate research cycle for a specific topic.
-# Separate from autolearn — this is the INGEST operation that compiles a topic's soul page.
-# raw sources → LLM compile via grok assimilate → datum soul update → log
-# 🤓 run this when autolearn queues "research-soul: <topic>" tasks
-research-soul topic="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    TOPIC="{{topic}}"
-    if [ -z "$TOPIC" ]; then echo "usage: just research-soul topic=<name>"; exit 1; fi
-    echo "[research:soul] compiling soul for: $TOPIC"
-
-    B00T_ROOT=$(git -C "$HOME/.b00t" rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
-    DATUM_DIR="$B00T_ROOT/_b00t_"
-
-    # Measure current soul thickness before research
-    CURRENT_SOUL=$(b00t-cli learn "$TOPIC" 2>/dev/null || true)
-    echo "[soul:before] ${#CURRENT_SOUL}c"
-
-    # Source discovery: probed in specificity order; first non-empty wins
-    RAW=""
-
-    # Source 1: explicit source URL in datum toml
-    DATUM_FILE=$(ls "$DATUM_DIR/"*"$TOPIC"*.toml 2>/dev/null | head -1 || true)
-    if [ -n "$DATUM_FILE" ]; then
-      SOURCE_URL=$(grep -oP '(?<=source\s=\s")[^"]+' "$DATUM_FILE" 2>/dev/null | head -1 || true)
-      if [ -n "$SOURCE_URL" ]; then
-        echo "[source:datum] $SOURCE_URL"
-        RAW=$(curl -sf --max-time 15 "$SOURCE_URL" 2>/dev/null | head -300 || true)
-      fi
-    fi
-
-    # Source 2: GitHub top repo by stars for this topic name
-    if [ -z "$RAW" ]; then
-      GH_REPO=$(gh search repos "$TOPIC" --sort stars --limit 1 --json fullName 2>/dev/null \
-        | jq -r '.[0].fullName // empty' || true)
-      if [ -n "$GH_REPO" ]; then
-        echo "[source:github] $GH_REPO"
-        RAW=$(gh api "repos/$GH_REPO/readme" --jq '.content' 2>/dev/null \
-          | base64 -d 2>/dev/null | head -200 || true)
-      fi
-    fi
-
-    # Source 3: crates.io metadata + repo README (Rust crates)
-    if [ -z "$RAW" ]; then
-      CRATE=$(curl -sf --max-time 8 -H "User-Agent: b00t-research/1.0" \
-        "https://crates.io/api/v1/crates/$TOPIC" 2>/dev/null || true)
-      if [ -n "$CRATE" ]; then
-        DESC=$(echo "$CRATE" | jq -r '.crate.description // empty' 2>/dev/null || true)
-        REPO=$(echo "$CRATE" | jq -r '.crate.repository // empty' 2>/dev/null || true)
-        RAW="$DESC"
-        if [ -n "$REPO" ]; then
-          REPO_PATH=$(echo "$REPO" | sed 's|https://github.com/||')
-          README=$(gh api "repos/$REPO_PATH/readme" --jq '.content' 2>/dev/null \
-            | base64 -d 2>/dev/null | head -150 || true)
-          [ -n "$README" ] && RAW=$(printf '%s\n%s' "$RAW" "$README")
-        fi
-        [ -n "$RAW" ] && echo "[source:crates.io] ${#RAW}c"
-      fi
-    fi
-
-    if [ -z "$RAW" ]; then
-      echo "[research:soul] no sources found for '$TOPIC'"
-      b00t-cli data fabric upsert \
-        --subject "research:gap:$TOPIC" --predicate "b00t:researchGap" \
-        --object "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --namespace research-log 2>/dev/null || true
-      exit 1
-    fi
-
-    echo "[source] raw: ${#RAW}c — compiling soul via assimilate"
-
-    # Compile raw → soul page (LLM-distill → datum update)
-    b00t-cli grok assimilate "$RAW" -t "$TOPIC" 2>/dev/null \
-      && echo "[soul:compiled] $TOPIC" \
-      || echo "[soul:warn] assimilate non-zero (may still have updated)"
-
-    # Log research cycle in knowledge graph
-    TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    b00t-cli data fabric upsert \
-      --subject "research:soul:$TOPIC" --predicate "b00t:researchedAt" \
-      --object "$TS" --namespace research-log 2>/dev/null || true
-    b00t-cli data fabric upsert \
-      --subject "research:soul:$TOPIC" --predicate "b00t:soulSizeBefore" \
-      --object "${#CURRENT_SOUL}" --namespace research-log 2>/dev/null || true
-    echo "[persist] research:soul:$TOPIC @ $TS"
-
-# autolearn-loop: run OODA cycles until task queue empty, max 10 iterations
-autolearn-loop:
-    #!/usr/bin/env bash
-    N=0; MAX=10
-    while [ $N -lt $MAX ]; do
-      NEXT=$(b00t-cli task next 2>/dev/null | head -1 || true)
-      [ -z "$NEXT" ] && echo "[loop] queue empty after $N cycles" && exit 0
-      N=$((N+1))
-      echo "[loop] cycle $N/$MAX"
-      just autolearn || echo "[loop] cycle $N failed — continuing"
-    done
-    echo "[loop] max cycles reached"
-
-
 # ── ralph with diversity ──────────────────────────────────────────────────────
 # ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
 # Karpathy deepwiki OKR pattern: RESEARCH is a separate cycle from EXECUTION.

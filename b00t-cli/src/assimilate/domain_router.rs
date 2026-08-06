@@ -32,9 +32,8 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
         //          https://arxiv.org/pdf/2401.12345
         //          https://arxiv.org/pdf/2401.12345.pdf
         McpDomainHandler {
-            url_pattern: Regex::new(
-                r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$"
-            ).expect("valid arxiv URL regex"),
+            url_pattern: Regex::new(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$")
+                .expect("valid arxiv URL regex"),
             mcp_server: "arxiv-mcp-server".into(),
             fetch_tool: "download_paper".into(),
             fetch_arg: "paper_id".into(),
@@ -47,9 +46,8 @@ pub fn institutional_mcp_handlers() -> Vec<McpDomainHandler> {
         //          https://huggingface.co/papers/<id>
         // Uses paper_search for papers, hub_repo_details for models/datasets/spaces
         McpDomainHandler {
-            url_pattern: Regex::new(
-                r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)"
-            ).expect("valid huggingface URL regex"),
+            url_pattern: Regex::new(r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)")
+                .expect("valid huggingface URL regex"),
             mcp_server: "huggingface".into(),
             fetch_tool: "paper_search".into(),
             fetch_arg: "query".into(),
@@ -75,7 +73,8 @@ mod tests {
 
     #[test]
     fn test_arxiv_url_parsing() {
-        let re = Regex::new(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$").unwrap();
+        let re =
+            Regex::new(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?$").unwrap();
 
         let cases = vec![
             ("https://arxiv.org/abs/2401.12345", Some("2401.12345")),
@@ -105,15 +104,29 @@ mod tests {
 
     #[test]
     fn test_huggingface_url_parsing() {
-        let re =
-            Regex::new(r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)").unwrap();
+        let re = Regex::new(r"huggingface\.co/(?:(?:datasets|spaces)/)?([^/]+/[^/?#]+)").unwrap();
 
         let cases = vec![
-            ("https://huggingface.co/meta-llama/Llama-3.1-8B", Some("meta-llama/Llama-3.1-8B")),
-            ("https://huggingface.co/datasets/squad/squad", Some("squad/squad")),
-            ("https://huggingface.co/spaces/facebook/metaseq", Some("facebook/metaseq")),
-            ("https://huggingface.co/papers/2604.17472", Some("papers/2604.17472")),
-            ("https://huggingface.co/google/gemma-2-2b-it?tab=readme", Some("google/gemma-2-2b-it")),
+            (
+                "https://huggingface.co/meta-llama/Llama-3.1-8B",
+                Some("meta-llama/Llama-3.1-8B"),
+            ),
+            (
+                "https://huggingface.co/datasets/squad/squad",
+                Some("squad/squad"),
+            ),
+            (
+                "https://huggingface.co/spaces/facebook/metaseq",
+                Some("facebook/metaseq"),
+            ),
+            (
+                "https://huggingface.co/papers/2604.17472",
+                Some("papers/2604.17472"),
+            ),
+            (
+                "https://huggingface.co/google/gemma-2-2b-it?tab=readme",
+                Some("google/gemma-2-2b-it"),
+            ),
             ("https://example.com/paper", None),
         ];
 

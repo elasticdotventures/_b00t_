@@ -12,10 +12,11 @@
 #
 # b00t CLI: b00t provider job submit|status|cancel|list --provider hf
 
-[b00t.schema]
-version   = "1"
-type      = "api"
-type_tags = ["provider", "training", "huggingface", "finetune", "gpu", "cloud"]
+[b00t]
+name        = "PROVIDER-HF"
+type        = "api"
+hint        = "HuggingFace Jobs provider — managed GPU training; flavors a10g/a100/h100; billed per second"
+type_tags   = ["provider", "training", "huggingface", "finetune", "gpu", "cloud"]
 
 [resource]
 name        = "HuggingFace Jobs"

@@ -63,13 +63,15 @@ pub fn Simulation() -> Element {
         }
     } else {
         let s = state.read();
-        let name    = s.get("name").and_then(Value::as_str).unwrap_or("—");
-        let tick    = s.get("tick").and_then(Value::as_u64).unwrap_or(0);
-        let history_len = s.get("history")
+        let name = s.get("name").and_then(Value::as_str).unwrap_or("—");
+        let tick = s.get("tick").and_then(Value::as_u64).unwrap_or(0);
+        let history_len = s
+            .get("history")
             .and_then(Value::as_array)
             .map(|a| a.len())
             .unwrap_or(0);
-        let subscribers = s.get("subscribers")
+        let subscribers = s
+            .get("subscribers")
             .and_then(Value::as_array)
             .map(|a| a.len())
             .unwrap_or(0);

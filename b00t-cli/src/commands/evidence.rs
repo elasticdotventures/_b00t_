@@ -73,6 +73,18 @@ fn evidence_log_path() -> Result<PathBuf> {
         return Ok(path);
     }
 
+    // B00T_EVIDENCE_LOG_PATH env override — for hermetic integration tests in
+    // b00t-cli/tests/, which can't reach the #[cfg(test)]-gated thread_local
+    // override above since they compile against the crate as a normal
+    // dependency (see #691).
+    if let Ok(p) = std::env::var("B00T_EVIDENCE_LOG_PATH") {
+        let path = PathBuf::from(p);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).context("create evidence dir")?;
+        }
+        return Ok(path);
+    }
+
     let dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("no home dir"))?
         .join(".b00t")
@@ -136,22 +148,47 @@ pub fn prove_skill(skill: &str) -> Result<Vec<EvidenceRecord>> {
 
 /// Record that `skill` satisfies `constraint` with AL-1.0 influence attribution.
 /// Generates influence receipt in store, attaches receipt key to evidence record.
+/// `agent_id` (if given) is stamped onto the record for `b00t influence log --agent`
+/// and `b00t influence stats` top-agent aggregation (#691).
 pub fn record_satisfies_with_influence(
     skill: &str,
     constraint: &str,
     scored_sources: &[(String, f64)],
+    agent_id: Option<&str>,
 ) -> Result<()> {
     let receipt = b00t_c0re_lib::store::put_influence(skill, scored_sources)?;
-    let weights: Vec<InfluenceWeight> = receipt.sources.iter().map(|s| InfluenceWeight {
-        source_key: s.source_key.clone(),
-        ratio: s.ratio,
-        score: s.score,
-    }).collect();
+    let weights: Vec<InfluenceWeight> = receipt
+        .sources
+        .iter()
+        .map(|s| InfluenceWeight {
+            source_key: s.source_key.clone(),
+            ratio: s.ratio,
+            score: s.score,
+        })
+        .collect();
 
     let mut rec = EvidenceRecord::satisfies(skill, constraint);
+    rec.agent_id = agent_id.map(|s| s.to_string());
     rec.influence = Some(weights);
     append_evidence(&rec)?;
     Ok(())
+}
+
+/// Parse a `--influence` CLI arg of the form "source_key=score[,source_key2=score2,...]"
+/// into scored_sources pairs for `record_satisfies_with_influence`.
+fn parse_influence_arg(spec: &str) -> Result<Vec<(String, f64)>> {
+    spec.split(',')
+        .map(|pair| {
+            let (key, score) = pair.split_once('=').ok_or_else(|| {
+                anyhow::anyhow!("invalid --influence entry '{pair}', expected source=score")
+            })?;
+            let score: f64 = score
+                .trim()
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid score '{score}' in --influence entry '{pair}'"))?;
+            Ok((key.trim().to_string(), score))
+        })
+        .collect()
 }
 
 /// Record that `skill` satisfies `constraint` (idempotent: skips if same
@@ -159,9 +196,7 @@ pub fn record_satisfies_with_influence(
 pub fn record_satisfies(skill: &str, constraint: &str) -> Result<()> {
     let existing = read_evidence().unwrap_or_default();
     let already = existing.iter().any(|r| {
-        r.subject == skill
-            && r.predicate == "satisfies"
-            && r.object.as_str() == Some(constraint)
+        r.subject == skill && r.predicate == "satisfies" && r.object.as_str() == Some(constraint)
     });
     if !already {
         append_evidence(&EvidenceRecord::satisfies(skill, constraint))?;
@@ -257,6 +292,11 @@ pub enum EvidenceCommand {
         constraint: String,
         #[clap(long)]
         agent_id: Option<String>,
+        /// AL-1.0 influence attribution: "source_key=score[,source_key2=score2,...]".
+        /// When present, routes through record_satisfies_with_influence() instead of
+        /// the plain satisfies() path, computing normalized influence weights (#691).
+        #[clap(long, value_name = "source=score,...")]
+        influence: Option<String>,
     },
     #[clap(about = "Prove which constraints a skill satisfies")]
     Prove {
@@ -272,7 +312,11 @@ pub enum EvidenceCommand {
     },
     #[clap(about = "Prune old evidence and edge records by TTL (NS-5)")]
     Prune {
-        #[clap(long, default_value = "168", help = "Max age in hours (default: 7 days)")]
+        #[clap(
+            long,
+            default_value = "168",
+            help = "Max age in hours (default: 7 days)"
+        )]
         max_age_hours: u64,
         #[clap(long, help = "Prune edges.jsonl too (default: false)")]
         edges: bool,
@@ -299,10 +343,20 @@ pub enum EvidenceCommand {
 
 pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
     match &args.cmd {
-        EvidenceCommand::Record { skill, constraint, agent_id } => {
-            let mut rec = EvidenceRecord::satisfies(skill, constraint);
-            rec.agent_id = agent_id.clone();
-            append_evidence(&rec)?;
+        EvidenceCommand::Record {
+            skill,
+            constraint,
+            agent_id,
+            influence,
+        } => {
+            if let Some(spec) = influence {
+                let scored_sources = parse_influence_arg(spec)?;
+                record_satisfies_with_influence(skill, constraint, &scored_sources, agent_id.as_deref())?;
+            } else {
+                let mut rec = EvidenceRecord::satisfies(skill, constraint);
+                rec.agent_id = agent_id.clone();
+                append_evidence(&rec)?;
+            }
             println!("recorded: {skill} satisfies {constraint}");
         }
         EvidenceCommand::Prove { skill, format } => {
@@ -317,20 +371,39 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
                     println!("[evidence]");
                     println!("total = {}", all.len());
                     for r in &all {
-                        println!("# {} {} {:?} ({})", r.subject, r.predicate, r.object, r.timestamp);
+                        println!(
+                            "# {} {} {:?} ({})",
+                            r.subject, r.predicate, r.object, r.timestamp
+                        );
                     }
                 }
             }
         }
-        EvidenceCommand::Prune { max_age_hours, edges: prune_edges_too } => {
+        EvidenceCommand::Prune {
+            max_age_hours,
+            edges: prune_edges_too,
+        } => {
             let pruned_facts = prune_evidence(*max_age_hours)?;
-            let pruned_edges = if *prune_edges_too { prune_edges(*max_age_hours)? } else { 0 };
-            println!("pruned: {pruned_facts} fact(s), {pruned_edges} edge(s) older than {max_age_hours}h");
+            let pruned_edges = if *prune_edges_too {
+                prune_edges(*max_age_hours)?
+            } else {
+                0
+            };
+            println!(
+                "pruned: {pruned_facts} fact(s), {pruned_edges} edge(s) older than {max_age_hours}h"
+            );
         }
-        EvidenceCommand::Edge { from, predicate, to, meta } => {
+        EvidenceCommand::Edge {
+            from,
+            predicate,
+            to,
+            meta,
+        } => {
             let metadata = meta
                 .as_deref()
-                .map(|s| serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.to_string())))
+                .map(|s| {
+                    serde_json::from_str(s).unwrap_or(serde_json::Value::String(s.to_string()))
+                })
                 .unwrap_or(serde_json::Value::Null);
             record_edge(from, predicate, to, metadata)?;
             println!("recorded edge: {from} --[{predicate}]--> {to}");
@@ -352,7 +425,10 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
                         } else {
                             format!(" meta={}", e.metadata)
                         };
-                        println!("# {} --[{}]--> {}{} ({})", e.from, e.predicate, e.to, meta_str, e.timestamp);
+                        println!(
+                            "# {} --[{}]--> {}{} ({})",
+                            e.from, e.predicate, e.to, meta_str, e.timestamp
+                        );
                     }
                 }
             }
@@ -435,7 +511,10 @@ mod tests {
             EvidenceRecord::satisfies("other.skill", "constraint-b"),
             EvidenceRecord::satisfies("target.skill", "constraint-c"),
         ];
-        let chain: Vec<&EvidenceRecord> = records.iter().filter(|r| r.subject == "target.skill").collect();
+        let chain: Vec<&EvidenceRecord> = records
+            .iter()
+            .filter(|r| r.subject == "target.skill")
+            .collect();
         assert_eq!(chain.len(), 2);
         assert!(chain.iter().all(|r| r.subject == "target.skill"));
     }
@@ -450,6 +529,52 @@ mod tests {
             // (idempotency guard will return Ok(()) if evidence already present)
         });
     }
+
+    #[test]
+    fn record_satisfies_with_influence_persists_weights() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+        with_test_evidence_log_path(log_path, || {
+            record_satisfies_with_influence(
+                "rust.skill",
+                "requires:role:backend",
+                &[("source-a".to_string(), 3.0), ("source-b".to_string(), 1.0)],
+                Some("agent-1"),
+            )
+            .unwrap();
+
+            let all = read_evidence().unwrap();
+            assert_eq!(all.len(), 1);
+            let record = &all[0];
+            assert_eq!(record.subject, "rust.skill");
+            assert_eq!(record.predicate, "satisfies");
+            assert_eq!(record.agent_id.as_deref(), Some("agent-1"));
+
+            let weights = record.influence.as_ref().expect("influence weights present");
+            assert_eq!(weights.len(), 2);
+            let total_ratio: f64 = weights.iter().map(|w| w.ratio).sum();
+            assert!((total_ratio - 1.0).abs() < 1e-9, "ratios should normalize to 1.0, got {total_ratio}");
+
+            let a = weights.iter().find(|w| w.source_key == "source-a").unwrap();
+            assert!((a.ratio - 0.75).abs() < 1e-9);
+            assert_eq!(a.score, 3.0);
+        });
+    }
+
+    #[test]
+    fn parse_influence_arg_parses_multiple_pairs() {
+        let parsed = parse_influence_arg("src-a=2.5,src-b=1.5").unwrap();
+        assert_eq!(parsed, vec![
+            ("src-a".to_string(), 2.5),
+            ("src-b".to_string(), 1.5),
+        ]);
+    }
+
+    #[test]
+    fn parse_influence_arg_rejects_malformed_entry() {
+        assert!(parse_influence_arg("no-equals-sign").is_err());
+        assert!(parse_influence_arg("key=not-a-number").is_err());
+    }
 }
 
 // ── NS-4 … NS-11: Domain-specific edge/fact helpers ──────────────────────────
@@ -458,7 +583,12 @@ mod tests {
 // All are idempotent (same from+predicate+to → skip).
 
 /// NS-4: Record delegates_to(agent → agent) edge for A2A routing audit.
-pub fn record_delegates_to(from_agent: &str, to_agent: &str, skill: &str, task_id: &str) -> Result<()> {
+pub fn record_delegates_to(
+    from_agent: &str,
+    to_agent: &str,
+    skill: &str,
+    task_id: &str,
+) -> Result<()> {
     record_edge(
         from_agent,
         "delegates_to",
@@ -487,10 +617,7 @@ pub fn record_trained_on(model_id: &str, corpus_sha: &str, layer: u8) -> Result<
 
 /// NS-8: Record generated(datum_key → topic) fact from gap_detect/kreuzberg/artifact.
 pub fn record_generated(datum_key: &str, topic: &str, via: &str) -> Result<()> {
-    record_satisfies(
-        datum_key,
-        &format!("generated:topic:{topic}:via:{via}"),
-    )
+    record_satisfies(datum_key, &format!("generated:topic:{topic}:via:{via}"))
 }
 
 /// NS-9: Record isA(datum_key → UFO_stereotype) fact from DatumType classification.
@@ -500,14 +627,15 @@ pub fn record_is_a(datum_key: &str, ufo_stereotype: &str) -> Result<()> {
 
 /// NS-10: Record audited_by(satisfies_record → iso_standard_id) for compliance.
 pub fn record_audited_by(record_id: &str, iso_standard_id: &str) -> Result<()> {
-    record_satisfies(
-        record_id,
-        &format!("audited_by:{iso_standard_id}"),
-    )
+    record_satisfies(record_id, &format!("audited_by:{iso_standard_id}"))
 }
 
 /// NS-11: Record participates_in(agent → process_step) edge for pipeline audit.
-pub fn record_participates_in(agent_id: &str, process_step: &str, metadata: serde_json::Value) -> Result<()> {
+pub fn record_participates_in(
+    agent_id: &str,
+    process_step: &str,
+    metadata: serde_json::Value,
+) -> Result<()> {
     record_edge(agent_id, "participates_in", process_step, metadata)
 }
 
@@ -601,11 +729,16 @@ pub fn read_edges() -> Result<Vec<EdgeRecord>> {
 }
 
 /// Record a directed edge (idempotent: skips same from+predicate+to already in log).
-pub fn record_edge(from: &str, predicate: &str, to: &str, metadata: serde_json::Value) -> Result<()> {
+pub fn record_edge(
+    from: &str,
+    predicate: &str,
+    to: &str,
+    metadata: serde_json::Value,
+) -> Result<()> {
     let existing = read_edges().unwrap_or_default();
-    let already = existing.iter().any(|r| {
-        r.from == from && r.predicate == predicate && r.to == to
-    });
+    let already = existing
+        .iter()
+        .any(|r| r.from == from && r.predicate == predicate && r.to == to);
     if !already {
         let rec = EdgeRecord::new(from, predicate, to).with_metadata(metadata);
         append_edge(&rec)?;
@@ -655,7 +788,10 @@ mod edge_tests {
     fn edge_record_null_metadata_is_omitted_in_json() {
         let e = EdgeRecord::new("a", "p", "b");
         let json = serde_json::to_string(&e).unwrap();
-        assert!(!json.contains("metadata"), "null metadata should be omitted");
+        assert!(
+            !json.contains("metadata"),
+            "null metadata should be omitted"
+        );
     }
 
     #[test]
@@ -665,7 +801,10 @@ mod edge_tests {
             EdgeRecord::new("c", "discovers", "d"),
             EdgeRecord::new("e", "delegates_to", "f"),
         ];
-        let delegates: Vec<&EdgeRecord> = edges.iter().filter(|r| r.predicate == "delegates_to").collect();
+        let delegates: Vec<&EdgeRecord> = edges
+            .iter()
+            .filter(|r| r.predicate == "delegates_to")
+            .collect();
         assert_eq!(delegates.len(), 2);
         assert!(delegates.iter().all(|r| r.predicate == "delegates_to"));
     }

@@ -5,8 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use b00t_lsp::analysis::{
-    datum_rank, datum_stem, dep_ref_at, diagnostics, extract_dep_refs, hover, is_datum_file,
-    Severity, WorkspaceIndex,
+    Severity, WorkspaceIndex, datum_rank, datum_stem, dep_ref_at, diagnostics, extract_dep_refs,
+    hover, is_datum_file,
 };
 
 fn fixtures_dir() -> PathBuf {
@@ -31,8 +31,14 @@ fn rank_precedence_tomllmd_over_tomllm_over_toml() {
 
 #[test]
 fn stem_strips_outer_extension_only() {
-    assert_eq!(datum_stem(Path::new("foo.cli.tomllm")).as_deref(), Some("foo.cli"));
-    assert_eq!(datum_stem(Path::new("foo.cli.toml")).as_deref(), Some("foo.cli"));
+    assert_eq!(
+        datum_stem(Path::new("foo.cli.tomllm")).as_deref(),
+        Some("foo.cli")
+    );
+    assert_eq!(
+        datum_stem(Path::new("foo.cli.toml")).as_deref(),
+        Some("foo.cli")
+    );
     assert_eq!(datum_stem(Path::new("bar.tomllmd")).as_deref(), Some("bar"));
 }
 
@@ -69,10 +75,20 @@ fn diagnostics_match_expected_dataset() {
     for case in expected.cases {
         let (path, content) = read(&case.file);
         let diags = diagnostics(&path, &content, Some(&index));
-        let errors = diags.iter().filter(|d| d.severity == Severity::Error).count();
-        let warnings = diags.iter().filter(|d| d.severity == Severity::Warning).count();
+        let errors = diags
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .count();
+        let warnings = diags
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .count();
         assert_eq!(errors, case.errors, "{}: errors {:?}", case.file, diags);
-        assert_eq!(warnings, case.warnings, "{}: warnings {:?}", case.file, diags);
+        assert_eq!(
+            warnings, case.warnings,
+            "{}: warnings {:?}",
+            case.file, diags
+        );
         if let Some(needle) = case.message_contains {
             assert!(
                 diags.iter().any(|d| d.message.contains(&needle)),
@@ -151,7 +167,10 @@ fn dep_ref_at_cursor_hits_and_misses() {
     let first = &refs[0];
     let hit = dep_ref_at(&content, first.line, first.col_start + 1).expect("cursor on name");
     assert_eq!(hit.name, "dep-a");
-    assert!(dep_ref_at(&content, 0, 0).is_none(), "comment line is not a dep ref");
+    assert!(
+        dep_ref_at(&content, 0, 0).is_none(),
+        "comment line is not a dep ref"
+    );
 }
 
 #[test]

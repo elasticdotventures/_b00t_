@@ -1,12 +1,8 @@
 use crate::datum_config::B00tConfig;
 use crate::hook_engine::{HookResult, run_hook};
-use crate::{BootDatum, UnifiedConfig};
+use crate::load_all_datums;
 use anyhow::{Context, Result, anyhow};
 use duct::cmd;
-use shellexpand;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use toml;
 
 /// Execute uninstall for a named datum.
 /// - Loads datum from `path`
@@ -112,44 +108,6 @@ fn remove_from_manifest(_datum_dir: &str, key: &str) -> Result<()> {
 }
 /// Load all datums from the configured path (reuses load pattern from commands/install.rs).
 /// ⚠️ DRY note: if load_all_datums is ever extracted to a shared module, update this import.
-fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
-    let mut datums = HashMap::new();
-    let b00t_dir = PathBuf::from(shellexpand::tilde(path).to_string());
-    if !b00t_dir.exists() {
-        return Ok(datums);
-    }
-    for entry in std::fs::read_dir(&b00t_dir)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-        if entry_path.is_file() {
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| {
-                                    serde_json::to_string(t)
-                                        .unwrap_or_else(|_| String::from("\"unknown\""))
-                                        .trim_matches('"')
-                                        .to_string()
-                                })
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(datums)
-}
 
 #[cfg(test)]
 mod tests {

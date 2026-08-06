@@ -14,24 +14,81 @@ use b00t_datum_core::{TomllmDoc, TomllmdExt};
 ///    "model" alias handled in deserialize_datum_type — keep in sync manually;
 ///    b00t-lsp MUST NOT depend on b00t-cli (dependency inversion: cli is an app).
 pub const VALID_TYPE_TOKENS: &[&str] = &[
-    "database", "db", "hive", "hive_profile", "agent", "config", "docker", "skill",
-    "stack", "repo", "role", "bash", "vscode", "k8s", "apt", "nix", "mcp", "cli",
-    "api", "job", "ai", "model", "ai_model", "justfile", "hardware", "overlay",
-    "runtime", "wrap", "launcher", "polyseme", "poly", "credential", "credentials",
-    "gate", "hook", "mcp_server", "plan", "schema", "training", "vendor", "ooda",
+    "database",
+    "db",
+    "hive",
+    "hive_profile",
+    "agent",
+    "config",
+    "docker",
+    "skill",
+    "stack",
+    "repo",
+    "role",
+    "bash",
+    "vscode",
+    "k8s",
+    "apt",
+    "nix",
+    "mcp",
+    "cli",
+    "api",
+    "job",
+    "ai",
+    "model",
+    "ai_model",
+    "justfile",
+    "hardware",
+    "overlay",
+    "runtime",
+    "wrap",
+    "launcher",
+    "polyseme",
+    "poly",
+    "credential",
+    "credentials",
+    "gate",
+    "hook",
+    "mcp_server",
+    "plan",
+    "schema",
+    "training",
+    "vendor",
+    "verifier",
+    "ooda",
 ];
 
 /// Content tags accepted as `type` values without warning.
 /// 🤓 mirrors is_known_content_tag in b00t-cli/src/lib.rs:33.
 pub const KNOWN_CONTENT_TAGS: &[&str] = &[
-    "okr", "prd", "pattern", "datum", "reference", "learn", "hardware", "tomllmd",
-    "specification", "topic", "soul", "install", "github_org", "ai_provider",
-    "pyinfra", "wow",
+    "okr",
+    "prd",
+    "pattern",
+    "datum",
+    "reference",
+    "learn",
+    "hardware",
+    "tomllmd",
+    "specification",
+    "topic",
+    "soul",
+    "install",
+    "github_org",
+    "ai_provider",
+    "pyinfra",
+    "wow",
+    "lfmf",
+    "capability",
 ];
 
 /// Filenames that live in datum directories but are not datums.
 /// 🤓 mirrors the skip list in b00t-cli/src/datum_utils.rs scan_datums_recursive.
-const NON_DATUM_FILES: &[&str] = &["bootstrap.toml", "git-cliff.toml", "_b00t_.toml", "Cargo.toml"];
+const NON_DATUM_FILES: &[&str] = &[
+    "bootstrap.toml",
+    "git-cliff.toml",
+    "_b00t_.toml",
+    "Cargo.toml",
+];
 
 pub fn is_valid_type_token(s: &str) -> bool {
     VALID_TYPE_TOKENS.contains(&s) || KNOWN_CONTENT_TAGS.contains(&s)
@@ -336,11 +393,7 @@ fn load_incubating(root: &Path) -> HashSet<String> {
 
 fn parse_b00t_name(content: &str) -> Option<String> {
     let value: toml::Value = toml::from_str(content).ok()?;
-    value
-        .get("b00t")?
-        .get("name")?
-        .as_str()
-        .map(String::from)
+    value.get("b00t")?.get("name")?.as_str().map(String::from)
 }
 
 fn collect_datum_paths(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
@@ -348,7 +401,9 @@ fn collect_datum_paths(dir: &Path, out: &mut Vec<PathBuf>, depth: usize) {
     if depth > 6 {
         return;
     }
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in rd.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -491,13 +546,18 @@ fn check_type_token(content: &str, incubating: Option<&HashSet<String>>) -> Vec<
     let b00t = value.get("b00t");
     let type_val = b00t
         .and_then(|b| b.get("type"))
-        .or_else(|| b00t.and_then(|b| b.get("schema")).and_then(|s| s.get("type")))
+        .or_else(|| {
+            b00t.and_then(|b| b.get("schema"))
+                .and_then(|s| s.get("type"))
+        })
         .and_then(|t| t.as_str());
     let Some(type_str) = type_val else {
         return Vec::new();
     };
     if is_valid_type_token(type_str)
-        || incubating.map(|set| set.contains(type_str)).unwrap_or(false)
+        || incubating
+            .map(|set| set.contains(type_str))
+            .unwrap_or(false)
     {
         return Vec::new();
     }
@@ -535,13 +595,9 @@ pub fn hover(path: &Path, content: &str) -> Option<String> {
     let b00t = value.get("b00t");
     let get = |key: &str| b00t.and_then(|b| b.get(key)).and_then(|v| v.as_str());
     let name = get("name").map(String::from).or_else(|| datum_stem(path));
-    let datum_type = get("type").map(String::from).or_else(|| {
-        b00t?
-            .get("schema")?
-            .get("type")?
-            .as_str()
-            .map(String::from)
-    });
+    let datum_type = get("type")
+        .map(String::from)
+        .or_else(|| b00t?.get("schema")?.get("type")?.as_str().map(String::from));
     let hint = get("hint");
 
     let mut out = String::new();

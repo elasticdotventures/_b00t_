@@ -145,7 +145,7 @@ pub struct JobStep {
     /// executed locally (e.g. `Bash`/`Python` shell out via `duct::cmd`).
     /// `Some(name)` dispatches via `ComputeProvider::submit_batch_job` from
     /// `commands::provider::get_provider(name)` — accepted values are whatever
-    /// `get_provider` accepts ("local" | "runpod" | "hf"). Requires `batch` to
+    /// `get_provider` accepts ("local" | "runpod" | "hf" | "dstack"). Requires `batch` to
     /// also be set; the step's `task` is ignored in that case.
     #[serde(default)]
     pub backend: Option<String>,

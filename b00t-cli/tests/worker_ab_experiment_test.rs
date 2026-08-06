@@ -10,6 +10,8 @@ use std::sync::Mutex;
 static INTEGRATION_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
+#[ignore] // relies on ~/.dotfiles/_b00t_/AGENT.md (b00t-cli's --path default), a personal
+          // dotfiles layout that doesn't exist on a fresh checkout / in CI
 fn test_b00t_whoami_worker_role_default() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let output = Command::new("cargo")
@@ -27,6 +29,8 @@ fn test_b00t_whoami_worker_role_default() {
 }
 
 #[test]
+#[ignore] // relies on ~/.dotfiles/_b00t_/AGENT.md (b00t-cli's --path default), a personal
+          // dotfiles layout that doesn't exist on a fresh checkout / in CI
 fn test_b00t_whoami_worker_explicit() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let output = Command::new("cargo")
@@ -107,11 +111,23 @@ fn test_experiment_governance_gates_dispatch() {
     // If the experiment subcommand is not yet wired into main.rs, the test
     // expects a "not found" error instead of crashing.
     if output.status.success() {
-        assert!(stdout.contains("A/B RESULT"), "experiment output should contain A/B RESULT:\n{}", stdout);
-        assert!(stdout.contains("REASONING") || stdout.contains("RECOMMEND"), "experiment should produce a recommendation:\n{}", stdout);
+        assert!(
+            stdout.contains("A/B RESULT"),
+            "experiment output should contain A/B RESULT:\n{}",
+            stdout
+        );
+        assert!(
+            stdout.contains("REASONING") || stdout.contains("RECOMMEND"),
+            "experiment should produce a recommendation:\n{}",
+            stdout
+        );
     } else {
         // Subcommand may not be wired into main.rs yet — that's ok for this test tier
-        eprintln!("note: experiment subcommand not yet wired (exit={:?}): {}", output.status.code(), stderr);
+        eprintln!(
+            "note: experiment subcommand not yet wired (exit={:?}): {}",
+            output.status.code(),
+            stderr
+        );
     }
 }
 

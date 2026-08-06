@@ -1,0 +1,1162 @@
+{
+  "project": "b00t",
+  "runs": [
+    {
+      "id": "e15d14dd-0058-4610-a55f-de6e73b4a880",
+      "project_name": "b00t",
+      "user": "admin",
+      "fleet": {
+        "id": "1c7ee262-4c23-439a-8bc4-a1e6b4a2ac46",
+        "name": "b00t-fixture-fleet"
+      },
+      "submitted_at": "2026-07-23T03:02:17.488622+00:00",
+      "last_processed_at": "2026-07-23T03:04:10.193993+00:00",
+      "status": "done",
+      "status_message": "done",
+      "termination_reason": "all_jobs_done",
+      "run_spec": {
+        "run_name": "b00t-fixture-capture",
+        "repo_id": "none",
+        "repo_data": {
+          "repo_type": "virtual"
+        },
+        "repo_code_hash": null,
+        "repo_dir": null,
+        "file_archives": [],
+        "working_dir": null,
+        "configuration_path": "fixture-task.dstack.yml",
+        "configuration": {
+          "nodes": 1,
+          "ports": [],
+          "commands": [
+            "echo \"PASS\""
+          ],
+          "type": "task",
+          "name": "b00t-fixture-capture",
+          "image": null,
+          "user": null,
+          "privileged": false,
+          "entrypoint": null,
+          "working_dir": null,
+          "home_dir": "/root",
+          "registry_auth": null,
+          "python": null,
+          "nvcc": null,
+          "single_branch": null,
+          "env": {},
+          "shell": null,
+          "resources": {
+            "cpu": {
+              "min": 2,
+              "max": null
+            },
+            "memory": {
+              "min": 8.0,
+              "max": null
+            },
+            "shm_size": null,
+            "gpu": {
+              "vendor": "nvidia",
+              "name": null,
+              "count": {
+                "min": 1,
+                "max": 1
+              },
+              "memory": null,
+              "total_memory": null,
+              "compute_capability": null
+            },
+            "disk": {
+              "size": {
+                "min": 100.0,
+                "max": null
+              }
+            }
+          },
+          "priority": 0,
+          "volumes": [],
+          "docker": null,
+          "repos": [],
+          "files": [],
+          "dstack": false,
+          "setup": [],
+          "backends": null,
+          "regions": [
+            "EU-RO-1"
+          ],
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null
+        },
+        "profile": {
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null,
+          "name": "default",
+          "default": false
+        },
+        "ssh_key_pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQChvtEueM0xw5A9BcQ0KBdTSEcU6gcE/aM6cjYfFzMPbSibB3+yx8PXHCpcp4jMC7dqgDhxsuQX5NjjatdcfZb8Oup7reNzLC/cQvQAvV/rjxJR9UnEiAYbgegLbBFAGkC2hIkFy0YDbw2h/zWEo+qcnD2iwyiILJ8ylNQliw//oCzIX39DtZsP0zLWFgM/wNPEUw+gGf9O+7Nkx8aboYqVeR3jspWPV5ip9GtZadDuLRxLcA+qAS+E0Z31yzvw61xMfQD7KLq5HZVKJoOAgZ7s/BdpeNuQQqXVLGcTwTAvkk3sA9Wu4rEfGLyC9GXP6/NWIaZpN64leVTbgXf1dOGB admin\n"
+      },
+      "jobs": [
+        {
+          "job_spec": {
+            "replica_num": 0,
+            "job_num": 0,
+            "job_name": "b00t-fixture-capture-0-0",
+            "jobs_per_replica": 1,
+            "replica_group": "0",
+            "app_specs": [],
+            "user": null,
+            "commands": [
+              "/bin/bash",
+              "-i",
+              "-c",
+              "eval $(echo 'export DSTACK_VENV_DIR=/dstack/venv' | sudo tee -a /dstack/profile) && sudo rm -rf $DSTACK_VENV_DIR && sudo mkdir $DSTACK_VENV_DIR && sudo chown $(id -u):$(id -g) $DSTACK_VENV_DIR && uv venv -q --prompt dstack -p 3.13 --seed $DSTACK_VENV_DIR && eval $(echo '. $DSTACK_VENV_DIR/bin/activate' | sudo tee -a /dstack/profile) && echo \"PASS\""
+            ],
+            "env": {},
+            "home_dir": "/root",
+            "image_name": "dstackai/base:0.15-base-ubuntu24.04",
+            "privileged": false,
+            "single_branch": true,
+            "max_duration": null,
+            "stop_duration": 300,
+            "utilization_policy": null,
+            "registry_auth": null,
+            "requirements": {
+              "resources": {
+                "cpu": {
+                  "min": 2,
+                  "max": null
+                },
+                "memory": {
+                  "min": 8.0,
+                  "max": null
+                },
+                "shm_size": null,
+                "gpu": {
+                  "vendor": "nvidia",
+                  "name": null,
+                  "count": {
+                    "min": 1,
+                    "max": 1
+                  },
+                  "memory": null,
+                  "total_memory": null,
+                  "compute_capability": null
+                },
+                "disk": {
+                  "size": {
+                    "min": 100.0,
+                    "max": null
+                  }
+                }
+              },
+              "max_price": null,
+              "spot": false,
+              "reservation": null,
+              "multinode": false,
+              "backend_options": null
+            },
+            "retry": null,
+            "volumes": [],
+            "ssh_key": null,
+            "working_dir": null,
+            "repo_data": {
+              "repo_type": "virtual"
+            },
+            "repo_code_hash": null,
+            "repo_dir": "/workflow",
+            "repo_exists_action": null,
+            "file_archives": [],
+            "service_port": null,
+            "probes": []
+          },
+          "job_submissions": [
+            {
+              "id": "8561cf2d-3c92-4acb-a529-1145ca8610bd",
+              "submission_num": 0,
+              "deployment_num": 0,
+              "submitted_at": "2026-07-23T03:02:17.490656+00:00",
+              "last_processed_at": "2026-07-23T03:03:55.516549+00:00",
+              "finished_at": "2026-07-23T03:03:55.516549+00:00",
+              "inactivity_secs": null,
+              "status": "done",
+              "status_message": "exited (0)",
+              "termination_reason": "done_by_runner",
+              "termination_reason_message": null,
+              "exit_status": 0,
+              "job_provisioning_data": {
+                "backend": "runpod",
+                "base_backend": null,
+                "instance_type": {
+                  "name": "NVIDIA RTX 2000 Ada Generation",
+                  "resources": {
+                    "cpus": 6,
+                    "memory_mib": 31744,
+                    "gpus": [
+                      {
+                        "name": "RTX2000Ada",
+                        "memory_mib": 16384,
+                        "vendor": "nvidia"
+                      }
+                    ],
+                    "spot": false,
+                    "disk": {
+                      "size_mib": 102400
+                    },
+                    "cpu_arch": "x86",
+                    "description": "cpu=6 mem=31GB disk=100GB gpu=RTX2000Ada:16GB:1"
+                  }
+                },
+                "instance_id": "xvgdie50px9fp1",
+                "hostname": "213.173.107.79",
+                "internal_ip": null,
+                "public_ip_enabled": true,
+                "instance_network": null,
+                "region": "EU-RO-1",
+                "availability_zone": null,
+                "reservation": null,
+                "price": 0.24,
+                "username": "root",
+                "ssh_port": 18997,
+                "dockerized": false,
+                "ssh_proxy": null,
+                "backend_data": null
+              },
+              "job_runtime_data": {
+                "network_mode": "host",
+                "gpu": null,
+                "cpu": null,
+                "memory": null,
+                "ports": null,
+                "volume_names": [],
+                "offer": {
+                  "backend": "runpod",
+                  "instance": {
+                    "name": "NVIDIA RTX 2000 Ada Generation",
+                    "resources": {
+                      "cpus": 6,
+                      "memory_mib": 31744,
+                      "gpus": [
+                        {
+                          "name": "RTX2000Ada",
+                          "memory_mib": 16384,
+                          "vendor": "nvidia"
+                        }
+                      ],
+                      "spot": false,
+                      "disk": {
+                        "size_mib": 102400
+                      },
+                      "cpu_arch": "x86",
+                      "description": ""
+                    }
+                  },
+                  "region": "EU-RO-1",
+                  "price": 0.24,
+                  "backend_data": {},
+                  "availability": "available",
+                  "availability_zones": null,
+                  "instance_runtime": "shim",
+                  "blocks": 1,
+                  "total_blocks": 1
+                },
+                "working_dir": "/dstack/run",
+                "username": "root"
+              },
+              "error": null,
+              "probes": [],
+              "image_pull_progress": null
+            }
+          ],
+          "job_connection_info": null
+        }
+      ],
+      "latest_job_submission": {
+        "id": "8561cf2d-3c92-4acb-a529-1145ca8610bd",
+        "submission_num": 0,
+        "deployment_num": 0,
+        "submitted_at": "2026-07-23T03:02:17.490656+00:00",
+        "last_processed_at": "2026-07-23T03:03:55.516549+00:00",
+        "finished_at": "2026-07-23T03:03:55.516549+00:00",
+        "inactivity_secs": null,
+        "status": "done",
+        "status_message": "exited (0)",
+        "termination_reason": "done_by_runner",
+        "termination_reason_message": null,
+        "exit_status": 0,
+        "job_provisioning_data": {
+          "backend": "runpod",
+          "base_backend": null,
+          "instance_type": {
+            "name": "NVIDIA RTX 2000 Ada Generation",
+            "resources": {
+              "cpus": 6,
+              "memory_mib": 31744,
+              "gpus": [
+                {
+                  "name": "RTX2000Ada",
+                  "memory_mib": 16384,
+                  "vendor": "nvidia"
+                }
+              ],
+              "spot": false,
+              "disk": {
+                "size_mib": 102400
+              },
+              "cpu_arch": "x86",
+              "description": "cpu=6 mem=31GB disk=100GB gpu=RTX2000Ada:16GB:1"
+            }
+          },
+          "instance_id": "xvgdie50px9fp1",
+          "hostname": "213.173.107.79",
+          "internal_ip": null,
+          "public_ip_enabled": true,
+          "instance_network": null,
+          "region": "EU-RO-1",
+          "availability_zone": null,
+          "reservation": null,
+          "price": 0.24,
+          "username": "root",
+          "ssh_port": 18997,
+          "dockerized": false,
+          "ssh_proxy": null,
+          "backend_data": null
+        },
+        "job_runtime_data": {
+          "network_mode": "host",
+          "gpu": null,
+          "cpu": null,
+          "memory": null,
+          "ports": null,
+          "volume_names": [],
+          "offer": {
+            "backend": "runpod",
+            "instance": {
+              "name": "NVIDIA RTX 2000 Ada Generation",
+              "resources": {
+                "cpus": 6,
+                "memory_mib": 31744,
+                "gpus": [
+                  {
+                    "name": "RTX2000Ada",
+                    "memory_mib": 16384,
+                    "vendor": "nvidia"
+                  }
+                ],
+                "spot": false,
+                "disk": {
+                  "size_mib": 102400
+                },
+                "cpu_arch": "x86",
+                "description": ""
+              }
+            },
+            "region": "EU-RO-1",
+            "price": 0.24,
+            "backend_data": {},
+            "availability": "available",
+            "availability_zones": null,
+            "instance_runtime": "shim",
+            "blocks": 1,
+            "total_blocks": 1
+          },
+          "working_dir": "/dstack/run",
+          "username": "root"
+        },
+        "error": null,
+        "probes": [],
+        "image_pull_progress": null
+      },
+      "cost": 0.0065,
+      "service": null,
+      "deployment_num": 0,
+      "error": null,
+      "deleted": false,
+      "next_triggered_at": null
+    },
+    {
+      "id": "107b926c-720b-4760-93d8-c0cf371e14c5",
+      "project_name": "b00t",
+      "user": "admin",
+      "fleet": null,
+      "submitted_at": "2026-07-23T03:01:42.091609+00:00",
+      "last_processed_at": "2026-07-23T03:01:59.771042+00:00",
+      "status": "failed",
+      "status_message": "failed",
+      "termination_reason": "job_failed",
+      "run_spec": {
+        "run_name": "b00t-fixture-capture",
+        "repo_id": "none",
+        "repo_data": {
+          "repo_type": "virtual"
+        },
+        "repo_code_hash": null,
+        "repo_dir": null,
+        "file_archives": [],
+        "working_dir": null,
+        "configuration_path": "fixture-task.dstack.yml",
+        "configuration": {
+          "nodes": 1,
+          "ports": [],
+          "commands": [
+            "echo \"PASS\""
+          ],
+          "type": "task",
+          "name": "b00t-fixture-capture",
+          "image": null,
+          "user": null,
+          "privileged": false,
+          "entrypoint": null,
+          "working_dir": null,
+          "home_dir": "/root",
+          "registry_auth": null,
+          "python": null,
+          "nvcc": null,
+          "single_branch": null,
+          "env": {},
+          "shell": null,
+          "resources": {
+            "cpu": {
+              "min": 2,
+              "max": null
+            },
+            "memory": {
+              "min": 8.0,
+              "max": null
+            },
+            "shm_size": null,
+            "gpu": {
+              "vendor": "nvidia",
+              "name": null,
+              "count": {
+                "min": 1,
+                "max": 1
+              },
+              "memory": null,
+              "total_memory": null,
+              "compute_capability": null
+            },
+            "disk": {
+              "size": {
+                "min": 100.0,
+                "max": null
+              }
+            }
+          },
+          "priority": 0,
+          "volumes": [],
+          "docker": null,
+          "repos": [],
+          "files": [],
+          "dstack": false,
+          "setup": [],
+          "backends": null,
+          "regions": [
+            "EU-RO-1"
+          ],
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null
+        },
+        "profile": {
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null,
+          "name": "default",
+          "default": false
+        },
+        "ssh_key_pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQChvtEueM0xw5A9BcQ0KBdTSEcU6gcE/aM6cjYfFzMPbSibB3+yx8PXHCpcp4jMC7dqgDhxsuQX5NjjatdcfZb8Oup7reNzLC/cQvQAvV/rjxJR9UnEiAYbgegLbBFAGkC2hIkFy0YDbw2h/zWEo+qcnD2iwyiILJ8ylNQliw//oCzIX39DtZsP0zLWFgM/wNPEUw+gGf9O+7Nkx8aboYqVeR3jspWPV5ip9GtZadDuLRxLcA+qAS+E0Z31yzvw61xMfQD7KLq5HZVKJoOAgZ7s/BdpeNuQQqXVLGcTwTAvkk3sA9Wu4rEfGLyC9GXP6/NWIaZpN64leVTbgXf1dOGB admin\n"
+      },
+      "jobs": [
+        {
+          "job_spec": {
+            "replica_num": 0,
+            "job_num": 0,
+            "job_name": "b00t-fixture-capture-0-0",
+            "jobs_per_replica": 1,
+            "replica_group": "0",
+            "app_specs": [],
+            "user": null,
+            "commands": [
+              "/bin/bash",
+              "-i",
+              "-c",
+              "eval $(echo 'export DSTACK_VENV_DIR=/dstack/venv' | sudo tee -a /dstack/profile) && sudo rm -rf $DSTACK_VENV_DIR && sudo mkdir $DSTACK_VENV_DIR && sudo chown $(id -u):$(id -g) $DSTACK_VENV_DIR && uv venv -q --prompt dstack -p 3.13 --seed $DSTACK_VENV_DIR && eval $(echo '. $DSTACK_VENV_DIR/bin/activate' | sudo tee -a /dstack/profile) && echo \"PASS\""
+            ],
+            "env": {},
+            "home_dir": "/root",
+            "image_name": "dstackai/base:0.15-base-ubuntu24.04",
+            "privileged": false,
+            "single_branch": true,
+            "max_duration": null,
+            "stop_duration": 300,
+            "utilization_policy": null,
+            "registry_auth": null,
+            "requirements": {
+              "resources": {
+                "cpu": {
+                  "min": 2,
+                  "max": null
+                },
+                "memory": {
+                  "min": 8.0,
+                  "max": null
+                },
+                "shm_size": null,
+                "gpu": {
+                  "vendor": "nvidia",
+                  "name": null,
+                  "count": {
+                    "min": 1,
+                    "max": 1
+                  },
+                  "memory": null,
+                  "total_memory": null,
+                  "compute_capability": null
+                },
+                "disk": {
+                  "size": {
+                    "min": 100.0,
+                    "max": null
+                  }
+                }
+              },
+              "max_price": null,
+              "spot": false,
+              "reservation": null,
+              "multinode": false,
+              "backend_options": null
+            },
+            "retry": null,
+            "volumes": [],
+            "ssh_key": null,
+            "working_dir": null,
+            "repo_data": {
+              "repo_type": "virtual"
+            },
+            "repo_code_hash": null,
+            "repo_dir": "/workflow",
+            "repo_exists_action": null,
+            "file_archives": [],
+            "service_port": null,
+            "probes": []
+          },
+          "job_submissions": [
+            {
+              "id": "60a4f84b-8782-40f0-8666-1d5c9b0161a1",
+              "submission_num": 0,
+              "deployment_num": 0,
+              "submitted_at": "2026-07-23T03:01:42.094562+00:00",
+              "last_processed_at": "2026-07-23T03:01:48.155524+00:00",
+              "finished_at": "2026-07-23T03:01:48.155524+00:00",
+              "inactivity_secs": null,
+              "status": "failed",
+              "status_message": "no fleets",
+              "termination_reason": "failed_to_start_due_to_no_capacity",
+              "termination_reason_message": "No matching fleet found. Possible reasons: https://dstack.ai/docs/guides/troubleshooting/#no-fleets",
+              "exit_status": null,
+              "job_provisioning_data": null,
+              "job_runtime_data": null,
+              "error": null,
+              "probes": [],
+              "image_pull_progress": null
+            }
+          ],
+          "job_connection_info": null
+        }
+      ],
+      "latest_job_submission": {
+        "id": "60a4f84b-8782-40f0-8666-1d5c9b0161a1",
+        "submission_num": 0,
+        "deployment_num": 0,
+        "submitted_at": "2026-07-23T03:01:42.094562+00:00",
+        "last_processed_at": "2026-07-23T03:01:48.155524+00:00",
+        "finished_at": "2026-07-23T03:01:48.155524+00:00",
+        "inactivity_secs": null,
+        "status": "failed",
+        "status_message": "no fleets",
+        "termination_reason": "failed_to_start_due_to_no_capacity",
+        "termination_reason_message": "No matching fleet found. Possible reasons: https://dstack.ai/docs/guides/troubleshooting/#no-fleets",
+        "exit_status": null,
+        "job_provisioning_data": null,
+        "job_runtime_data": null,
+        "error": null,
+        "probes": [],
+        "image_pull_progress": null
+      },
+      "cost": 0.0,
+      "service": null,
+      "deployment_num": 0,
+      "error": null,
+      "deleted": true,
+      "next_triggered_at": null
+    },
+    {
+      "id": "a401cda2-3bcb-4ef8-bdae-7544e7b2bac6",
+      "project_name": "b00t",
+      "user": "admin",
+      "fleet": null,
+      "submitted_at": "2026-07-23T00:51:00.989329+00:00",
+      "last_processed_at": "2026-07-23T00:51:18.616570+00:00",
+      "status": "failed",
+      "status_message": "failed",
+      "termination_reason": "job_failed",
+      "run_spec": {
+        "run_name": "b00t-fixture-capture",
+        "repo_id": "none",
+        "repo_data": {
+          "repo_type": "virtual"
+        },
+        "repo_code_hash": null,
+        "repo_dir": null,
+        "file_archives": [],
+        "working_dir": null,
+        "configuration_path": "fixture-task.dstack.yml",
+        "configuration": {
+          "nodes": 1,
+          "ports": [],
+          "commands": [
+            "echo \"PASS\""
+          ],
+          "type": "task",
+          "name": "b00t-fixture-capture",
+          "image": null,
+          "user": null,
+          "privileged": false,
+          "entrypoint": null,
+          "working_dir": null,
+          "home_dir": "/root",
+          "registry_auth": null,
+          "python": "3.11",
+          "nvcc": null,
+          "single_branch": null,
+          "env": {},
+          "shell": null,
+          "resources": {
+            "cpu": {
+              "min": 2,
+              "max": null
+            },
+            "memory": {
+              "min": 8.0,
+              "max": null
+            },
+            "shm_size": null,
+            "gpu": {
+              "vendor": null,
+              "name": [
+                "False"
+              ],
+              "count": {
+                "min": 1,
+                "max": null
+              },
+              "memory": null,
+              "total_memory": null,
+              "compute_capability": null
+            },
+            "disk": {
+              "size": {
+                "min": 100.0,
+                "max": null
+              }
+            }
+          },
+          "priority": 0,
+          "volumes": [],
+          "docker": null,
+          "repos": [],
+          "files": [],
+          "dstack": false,
+          "setup": [],
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null
+        },
+        "profile": {
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null,
+          "name": "default",
+          "default": false
+        },
+        "ssh_key_pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQChvtEueM0xw5A9BcQ0KBdTSEcU6gcE/aM6cjYfFzMPbSibB3+yx8PXHCpcp4jMC7dqgDhxsuQX5NjjatdcfZb8Oup7reNzLC/cQvQAvV/rjxJR9UnEiAYbgegLbBFAGkC2hIkFy0YDbw2h/zWEo+qcnD2iwyiILJ8ylNQliw//oCzIX39DtZsP0zLWFgM/wNPEUw+gGf9O+7Nkx8aboYqVeR3jspWPV5ip9GtZadDuLRxLcA+qAS+E0Z31yzvw61xMfQD7KLq5HZVKJoOAgZ7s/BdpeNuQQqXVLGcTwTAvkk3sA9Wu4rEfGLyC9GXP6/NWIaZpN64leVTbgXf1dOGB admin\n"
+      },
+      "jobs": [
+        {
+          "job_spec": {
+            "replica_num": 0,
+            "job_num": 0,
+            "job_name": "b00t-fixture-capture-0-0",
+            "jobs_per_replica": 1,
+            "replica_group": "0",
+            "app_specs": [],
+            "user": null,
+            "commands": [
+              "/bin/bash",
+              "-i",
+              "-c",
+              "eval $(echo 'export DSTACK_VENV_DIR=/dstack/venv' | sudo tee -a /dstack/profile) && sudo rm -rf $DSTACK_VENV_DIR && sudo mkdir $DSTACK_VENV_DIR && sudo chown $(id -u):$(id -g) $DSTACK_VENV_DIR && uv venv -q --prompt dstack -p 3.11 --seed $DSTACK_VENV_DIR && eval $(echo '. $DSTACK_VENV_DIR/bin/activate' | sudo tee -a /dstack/profile) && echo \"PASS\""
+            ],
+            "env": {},
+            "home_dir": "/root",
+            "image_name": "dstackai/base:0.15-base-ubuntu24.04",
+            "privileged": false,
+            "single_branch": true,
+            "max_duration": null,
+            "stop_duration": 300,
+            "utilization_policy": null,
+            "registry_auth": null,
+            "requirements": {
+              "resources": {
+                "cpu": {
+                  "min": 2,
+                  "max": null
+                },
+                "memory": {
+                  "min": 8.0,
+                  "max": null
+                },
+                "shm_size": null,
+                "gpu": {
+                  "vendor": null,
+                  "name": [
+                    "False"
+                  ],
+                  "count": {
+                    "min": 1,
+                    "max": null
+                  },
+                  "memory": null,
+                  "total_memory": null,
+                  "compute_capability": null
+                },
+                "disk": {
+                  "size": {
+                    "min": 100.0,
+                    "max": null
+                  }
+                }
+              },
+              "max_price": null,
+              "spot": false,
+              "reservation": null,
+              "multinode": false,
+              "backend_options": null
+            },
+            "retry": null,
+            "volumes": [],
+            "ssh_key": null,
+            "working_dir": null,
+            "repo_data": {
+              "repo_type": "virtual"
+            },
+            "repo_code_hash": null,
+            "repo_dir": "/workflow",
+            "repo_exists_action": null,
+            "file_archives": [],
+            "service_port": null,
+            "probes": []
+          },
+          "job_submissions": [
+            {
+              "id": "5c4bec46-3658-4878-a22a-9049c4b34b52",
+              "submission_num": 0,
+              "deployment_num": 0,
+              "submitted_at": "2026-07-23T00:51:00.991501+00:00",
+              "last_processed_at": "2026-07-23T00:51:06.715163+00:00",
+              "finished_at": "2026-07-23T00:51:06.715163+00:00",
+              "inactivity_secs": null,
+              "status": "failed",
+              "status_message": "no offers",
+              "termination_reason": "failed_to_start_due_to_no_capacity",
+              "termination_reason_message": null,
+              "exit_status": null,
+              "job_provisioning_data": null,
+              "job_runtime_data": null,
+              "error": null,
+              "probes": [],
+              "image_pull_progress": null
+            }
+          ],
+          "job_connection_info": null
+        }
+      ],
+      "latest_job_submission": {
+        "id": "5c4bec46-3658-4878-a22a-9049c4b34b52",
+        "submission_num": 0,
+        "deployment_num": 0,
+        "submitted_at": "2026-07-23T00:51:00.991501+00:00",
+        "last_processed_at": "2026-07-23T00:51:06.715163+00:00",
+        "finished_at": "2026-07-23T00:51:06.715163+00:00",
+        "inactivity_secs": null,
+        "status": "failed",
+        "status_message": "no offers",
+        "termination_reason": "failed_to_start_due_to_no_capacity",
+        "termination_reason_message": null,
+        "exit_status": null,
+        "job_provisioning_data": null,
+        "job_runtime_data": null,
+        "error": null,
+        "probes": [],
+        "image_pull_progress": null
+      },
+      "cost": 0.0,
+      "service": null,
+      "deployment_num": 0,
+      "error": null,
+      "deleted": true,
+      "next_triggered_at": null
+    },
+    {
+      "id": "512a8263-4a3f-48c9-a3b0-197559f7dad0",
+      "project_name": "b00t",
+      "user": "admin",
+      "fleet": null,
+      "submitted_at": "2026-07-23T00:49:26.256239+00:00",
+      "last_processed_at": "2026-07-23T00:49:43.153222+00:00",
+      "status": "failed",
+      "status_message": "failed",
+      "termination_reason": "job_failed",
+      "run_spec": {
+        "run_name": "b00t-fixture-capture",
+        "repo_id": "none",
+        "repo_data": {
+          "repo_type": "virtual"
+        },
+        "repo_code_hash": null,
+        "repo_dir": null,
+        "file_archives": [],
+        "working_dir": null,
+        "configuration_path": "fixture-task.dstack.yml",
+        "configuration": {
+          "nodes": 1,
+          "ports": [],
+          "commands": [
+            "echo \"PASS\""
+          ],
+          "type": "task",
+          "name": "b00t-fixture-capture",
+          "image": null,
+          "user": null,
+          "privileged": false,
+          "entrypoint": null,
+          "working_dir": null,
+          "home_dir": "/root",
+          "registry_auth": null,
+          "python": "3.11",
+          "nvcc": null,
+          "single_branch": null,
+          "env": {},
+          "shell": null,
+          "resources": {
+            "cpu": {
+              "min": 2,
+              "max": null
+            },
+            "memory": {
+              "min": 8.0,
+              "max": null
+            },
+            "shm_size": null,
+            "gpu": {
+              "vendor": null,
+              "name": [
+                "False"
+              ],
+              "count": {
+                "min": 1,
+                "max": null
+              },
+              "memory": null,
+              "total_memory": null,
+              "compute_capability": null
+            },
+            "disk": {
+              "size": {
+                "min": 100.0,
+                "max": null
+              }
+            }
+          },
+          "priority": 0,
+          "volumes": [],
+          "docker": null,
+          "repos": [],
+          "files": [],
+          "dstack": false,
+          "setup": [],
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null
+        },
+        "profile": {
+          "backends": null,
+          "regions": null,
+          "availability_zones": null,
+          "instance_types": null,
+          "reservation": null,
+          "spot_policy": null,
+          "retry": null,
+          "max_duration": null,
+          "stop_duration": null,
+          "max_price": null,
+          "creation_policy": null,
+          "idle_duration": null,
+          "utilization_policy": null,
+          "startup_order": null,
+          "stop_criteria": null,
+          "schedule": null,
+          "fleets": null,
+          "instances": null,
+          "tags": null,
+          "backend_options": null,
+          "name": "default",
+          "default": false
+        },
+        "ssh_key_pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQChvtEueM0xw5A9BcQ0KBdTSEcU6gcE/aM6cjYfFzMPbSibB3+yx8PXHCpcp4jMC7dqgDhxsuQX5NjjatdcfZb8Oup7reNzLC/cQvQAvV/rjxJR9UnEiAYbgegLbBFAGkC2hIkFy0YDbw2h/zWEo+qcnD2iwyiILJ8ylNQliw//oCzIX39DtZsP0zLWFgM/wNPEUw+gGf9O+7Nkx8aboYqVeR3jspWPV5ip9GtZadDuLRxLcA+qAS+E0Z31yzvw61xMfQD7KLq5HZVKJoOAgZ7s/BdpeNuQQqXVLGcTwTAvkk3sA9Wu4rEfGLyC9GXP6/NWIaZpN64leVTbgXf1dOGB admin\n"
+      },
+      "jobs": [
+        {
+          "job_spec": {
+            "replica_num": 0,
+            "job_num": 0,
+            "job_name": "b00t-fixture-capture-0-0",
+            "jobs_per_replica": 1,
+            "replica_group": "0",
+            "app_specs": [],
+            "user": null,
+            "commands": [
+              "/bin/bash",
+              "-i",
+              "-c",
+              "eval $(echo 'export DSTACK_VENV_DIR=/dstack/venv' | sudo tee -a /dstack/profile) && sudo rm -rf $DSTACK_VENV_DIR && sudo mkdir $DSTACK_VENV_DIR && sudo chown $(id -u):$(id -g) $DSTACK_VENV_DIR && uv venv -q --prompt dstack -p 3.11 --seed $DSTACK_VENV_DIR && eval $(echo '. $DSTACK_VENV_DIR/bin/activate' | sudo tee -a /dstack/profile) && echo \"PASS\""
+            ],
+            "env": {},
+            "home_dir": "/root",
+            "image_name": "dstackai/base:0.15-base-ubuntu24.04",
+            "privileged": false,
+            "single_branch": true,
+            "max_duration": null,
+            "stop_duration": 300,
+            "utilization_policy": null,
+            "registry_auth": null,
+            "requirements": {
+              "resources": {
+                "cpu": {
+                  "min": 2,
+                  "max": null
+                },
+                "memory": {
+                  "min": 8.0,
+                  "max": null
+                },
+                "shm_size": null,
+                "gpu": {
+                  "vendor": null,
+                  "name": [
+                    "False"
+                  ],
+                  "count": {
+                    "min": 1,
+                    "max": null
+                  },
+                  "memory": null,
+                  "total_memory": null,
+                  "compute_capability": null
+                },
+                "disk": {
+                  "size": {
+                    "min": 100.0,
+                    "max": null
+                  }
+                }
+              },
+              "max_price": null,
+              "spot": false,
+              "reservation": null,
+              "multinode": false,
+              "backend_options": null
+            },
+            "retry": null,
+            "volumes": [],
+            "ssh_key": null,
+            "working_dir": null,
+            "repo_data": {
+              "repo_type": "virtual"
+            },
+            "repo_code_hash": null,
+            "repo_dir": "/workflow",
+            "repo_exists_action": null,
+            "file_archives": [],
+            "service_port": null,
+            "probes": []
+          },
+          "job_submissions": [
+            {
+              "id": "deb14988-6343-4725-a1e2-b6ff1b33c57e",
+              "submission_num": 0,
+              "deployment_num": 0,
+              "submitted_at": "2026-07-23T00:49:26.258637+00:00",
+              "last_processed_at": "2026-07-23T00:49:31.395928+00:00",
+              "finished_at": "2026-07-23T00:49:31.395928+00:00",
+              "inactivity_secs": null,
+              "status": "failed",
+              "status_message": "no fleets",
+              "termination_reason": "failed_to_start_due_to_no_capacity",
+              "termination_reason_message": "No matching fleet found. Possible reasons: https://dstack.ai/docs/guides/troubleshooting/#no-fleets",
+              "exit_status": null,
+              "job_provisioning_data": null,
+              "job_runtime_data": null,
+              "error": null,
+              "probes": [],
+              "image_pull_progress": null
+            }
+          ],
+          "job_connection_info": null
+        }
+      ],
+      "latest_job_submission": {
+        "id": "deb14988-6343-4725-a1e2-b6ff1b33c57e",
+        "submission_num": 0,
+        "deployment_num": 0,
+        "submitted_at": "2026-07-23T00:49:26.258637+00:00",
+        "last_processed_at": "2026-07-23T00:49:31.395928+00:00",
+        "finished_at": "2026-07-23T00:49:31.395928+00:00",
+        "inactivity_secs": null,
+        "status": "failed",
+        "status_message": "no fleets",
+        "termination_reason": "failed_to_start_due_to_no_capacity",
+        "termination_reason_message": "No matching fleet found. Possible reasons: https://dstack.ai/docs/guides/troubleshooting/#no-fleets",
+        "exit_status": null,
+        "job_provisioning_data": null,
+        "job_runtime_data": null,
+        "error": null,
+        "probes": [],
+        "image_pull_progress": null
+      },
+      "cost": 0.0,
+      "service": null,
+      "deployment_num": 0,
+      "error": null,
+      "deleted": true,
+      "next_triggered_at": null
+    }
+  ]
+}

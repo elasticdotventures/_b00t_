@@ -29,13 +29,13 @@ COPY b00t-mcp/Cargo.toml b00t-mcp/
 COPY b00t-lib-chat/Cargo.toml b00t-lib-chat/
 COPY b00t-grok/Cargo.toml b00t-grok/
 COPY k0mmand3r/Cargo.toml k0mmand3r/
-COPY b00t-py/Cargo.toml b00t-py/
+COPY b00t-pyverse/Cargo.toml b00t-pyverse/
 COPY b00t-ipc/Cargo.toml b00t-ipc/
 COPY tomllm/Cargo.toml tomllm/
 
 # Create stub lib/bin files so cargo can resolve the dep graph.
 RUN for dir in b00t-azure-cp b00t-c0re-lib b00t-cli b00t-mcp b00t-lib-chat \
-               b00t-grok k0mmand3r b00t-py b00t-ipc tomllm; do \
+               b00t-grok k0mmand3r b00t-pyverse b00t-ipc tomllm; do \
       mkdir -p "$dir/src" && \
       echo 'fn main() {}' > "$dir/src/main.rs" && \
       echo '' > "$dir/src/lib.rs"; \
@@ -56,7 +56,7 @@ COPY b00t-mcp/src b00t-mcp/src/
 COPY b00t-lib-chat/src b00t-lib-chat/src/
 COPY b00t-grok/src b00t-grok/src/
 COPY k0mmand3r/src k0mmand3r/src/
-COPY b00t-py/src b00t-py/src/
+COPY b00t-pyverse/src b00t-pyverse/src/
 COPY b00t-ipc/src b00t-ipc/src/
 COPY tomllm/src tomllm/src/
 

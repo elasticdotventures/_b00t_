@@ -66,11 +66,9 @@ fn load_from_path(path: &Path) -> ModelRegistry {
 pub fn save_registry(registry: &ModelRegistry) -> Result<()> {
     let path = overlay_registry_path();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create dir {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("create dir {}", parent.display()))?;
     }
-    let toml_str = toml::to_string_pretty(registry)
-        .context("serialize model registry to TOML")?;
+    let toml_str = toml::to_string_pretty(registry).context("serialize model registry to TOML")?;
     let content = format!(
         "{toml_str}\n\
          # ── b00t:map v1 ──────────────────────────────────────────────\n\
@@ -79,8 +77,7 @@ pub fn save_registry(registry: &ModelRegistry) -> Result<()> {
          # type: overlay\n\
          # b00t.overlay: true\n"
     );
-    fs::write(&path, content)
-        .with_context(|| format!("write registry to {}", path.display()))?;
+    fs::write(&path, content).with_context(|| format!("write registry to {}", path.display()))?;
     Ok(())
 }
 
@@ -320,6 +317,5 @@ mod tests {
     }
 
     #[test]
-    fn registry_roundtrip() {
-    }
+    fn registry_roundtrip() {}
 }

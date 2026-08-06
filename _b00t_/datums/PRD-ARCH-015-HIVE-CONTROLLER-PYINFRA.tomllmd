@@ -20,7 +20,7 @@ closes_task = null
 # This PRD defines:
 # (a) b00t-hive-controller: persistent Rust daemon (podman quadlet) managing
 #     worker registry, task queue, health monitoring, and self-upgrade
-# (b) b00t-py wheel: PyO3/maturin wheel published to PyPI, importable by pyinfra
+# (b) b00t-pyverse wheel: PyO3/maturin wheel published to PyPI, importable by pyinfra
 # (c) pyinfra ouroboros: b00t operations call b00t-cli on remote hosts via SSH,
 #     creating a Python→Rust→Python→SSH→Rust call chain
 # (d) Quadlet auto-generation: `b00t hive quadlet` emits systemd units
@@ -89,12 +89,12 @@ Restart=always
 WantedBy=default.target
 '''
 
-# ─── Phase 3: b00t-py wheel (PyO3/maturin) ──────────────────────────────────
+# ─── Phase 3: b00t-pyverse wheel (PyO3/maturin) ──────────────────────────────────
 [phase3.py_wheel]
 description = "Python wheel exposing b00t-core functionality via PyO3"
 build_tool = "maturin"
 publish_target = "PyPI (pip install b00t)"
-source = "b00t-py/ (existing crate, needs pyinfra operation layer)"
+source = "b00t-pyverse/ (existing crate, needs pyinfra operation layer)"
 python_api = [
   "b00t.hive.status()         → returns hive node status dict",
   "b00t.hive.workers()        → returns registered workers list",
@@ -211,7 +211,7 @@ Mitigation: Quadlet auto-restarts via systemd. State in Redis (separate containe
 '''
 pyo3_complexity = '''
 Risk: PyO3 cross-compilation for wheels (linux x86_64, aarch64, macOS).
-Mitigation: maturin CI action builds wheels via cibuildwheel. Existing b00t-py crate proves FFI works.
+Mitigation: maturin CI action builds wheels via cibuildwheel. Existing b00t-pyverse crate proves FFI works.
 '''
 pyinfra_adoption = '''
 Risk: pyinfra less ecosystem than ansible.

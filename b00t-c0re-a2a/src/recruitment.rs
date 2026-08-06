@@ -18,12 +18,7 @@ use crate::agent_card::AgentCard;
 pub fn score_agent_for_skills(agent: &AgentCard, required_skills: &[String]) -> f64 {
     let match_count = required_skills
         .iter()
-        .filter(|s| {
-            agent
-                .skills
-                .iter()
-                .any(|sk| sk.id == **s || sk.name == **s)
-        })
+        .filter(|s| agent.skills.iter().any(|sk| sk.id == **s || sk.name == **s))
         .count() as f64;
     let max_possible = required_skills.len() as f64;
     let skill_score = if max_possible > 0.0 {

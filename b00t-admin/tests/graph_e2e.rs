@@ -12,7 +12,8 @@ mod e2e {
             .timeout(Duration::from_secs(60))
             .call()
             .unwrap_or_else(|e| panic!("{label}: GET failed: {e}"));
-        let data: serde_json::Value = resp.into_json()
+        let data: serde_json::Value = resp
+            .into_json()
             .unwrap_or_else(|e| panic!("{label}: JSON malformed: {e}"));
         if let Some(err) = data.get("error").and_then(|v| v.as_str()) {
             if !err.is_empty() {
@@ -29,11 +30,17 @@ mod e2e {
     }
 
     #[test]
+    #[ignore] // requires a live b00t-admin server at localhost:31337, not available in CI
     fn all_default_graphs_render() {
         check("/api/admin/processes", "pipeline", "mermaid", 200);
         check("/api/admin/viz/task", "task", "mermaid", 50);
         check("/api/admin/viz/entangle", "entangle", "mermaid", 200);
-        check("/api/admin/viz/isometric/demo", "isometric_demo", "svg", 500);
+        check(
+            "/api/admin/viz/isometric/demo",
+            "isometric_demo",
+            "svg",
+            500,
+        );
         check("/api/admin/viz/isometric", "isometric", "svg", 50);
     }
 }

@@ -4,6 +4,7 @@ type = "role"
 hint = "Hive orchestrator role: coordinate sub-agents, load role-scoped tools, and monitor intra-agent chat."
 
 skills = [
+    # <|🦨: prose-logical — free-text capability names, not datum keys; consider moving to compliance; #163, _b00t_#850 |>
     "role-scoped capability loading",
     "sub-agent delegation and supervision",
     "intra-agent chat monitoring",

@@ -1,0 +1,16 @@
+# 🦨 unfinished — inferred from a single example datum (langchain-agent-pm2.cli); not confirmed as a hive-wide pattern
+[b00t]
+name = "langchain-tool-routing"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Route a tool call through LangChain's agent/tool abstraction when a datum is fronted by a LangChain-based agent process"
+keywords = ["langchain", "tool-routing", "agent"]
+
+[b00t.learn]
+content = """
+Tool routing for the LangChain-backed agent processes already present
+in this store (e.g. langchain-agent-pm2.cli.toml) — dispatching a tool
+call to the correct LangChain tool binding rather than calling the
+underlying API directly, so LangChain's own tracing/memory stays
+consistent.
+"""

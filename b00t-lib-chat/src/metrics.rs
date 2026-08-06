@@ -8,9 +8,8 @@
 //! - Transport-specific metrics
 
 use opentelemetry::{
-    global,
+    KeyValue, global,
     metrics::{Counter, Histogram, Meter, UpDownCounter},
-    KeyValue,
 };
 use std::sync::OnceLock;
 use std::time::Instant;

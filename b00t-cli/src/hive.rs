@@ -8,8 +8,8 @@
 //! State file: /tmp/b00t/hive-state.json (volatile; reset on reboot)
 
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -334,6 +334,10 @@ pub struct HiveProfile {
 
     // inline service spec (generates b00t-hive-<name>.service on activate)
     pub service_spec: Option<HiveServiceSpec>,
+
+    // datum keys this profile depends on (b00t hive status --datum-crossref)
+    #[serde(default)]
+    pub depends_on: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -373,6 +377,8 @@ struct HiveToml {
 struct HiveTomlB00t {
     name: String,
     hint: String,
+    #[serde(default)]
+    depends_on: Vec<String>,
     hive: Option<HiveTomlHive>,
 }
 
@@ -538,6 +544,7 @@ impl HiveProfile {
             mcp_activate,
             mcp_deactivate,
             service_spec,
+            depends_on: raw.b00t.depends_on,
         })
     }
 }
@@ -594,6 +601,61 @@ pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     let mut result: Vec<(String, PathBuf)> = profiles.into_iter().collect();
     result.sort_by(|a, b| a.0.cmp(&b.0));
     result
+}
+
+// ─── Datum crossref (b00t hive status --datum-crossref) ───────────────────────
+
+/// Result of cross-referencing a single hive profile's `depends_on` datums
+/// against their `BootDatum.status`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileCrossrefResult {
+    pub profile: String,
+    pub healthy: bool,
+    /// Reasons the profile is degraded, e.g. "dep agent-qwen disabled" or
+    /// "dep agent-qwen missing". Empty when healthy.
+    pub reasons: Vec<String>,
+}
+
+/// Cross-reference a hive profile's `depends_on` datum keys against their
+/// `BootDatum.status`/`BootDatum.enabled` in the `_b00t_` datum store.
+///
+/// A profile is degraded when any dependency's backing datum is disabled, or
+/// when no datum matches the dependency at all. A profile with an empty
+/// `depends_on` (or where every dependency resolves to an enabled datum) is
+/// healthy.
+///
+/// "Disabled" is `enabled == Some(false)` OR `status == Some("disabled")`.
+/// The former is the real-world signal: datums in this repo are disabled via
+/// `.gitattributes` (`b00t.enabled=false`), almost always paired with
+/// `status=sunset` rather than a literal `status=disabled` — see
+/// `_b00t_/.gitattributes`. Checking `status` alone would silently miss
+/// every disabled datum actually in use. `status == "disabled"` is kept too,
+/// for hand-authored datums that set it directly without a git-attribute
+/// override.
+pub fn crossref_datum_status(profile: &HiveProfile, b00t_path: &str) -> ProfileCrossrefResult {
+    let mut reasons = Vec::new();
+
+    for dep in &profile.depends_on {
+        match crate::datum_utils::find_datum_by_pattern(b00t_path, dep) {
+            Ok(Some(datum)) => {
+                if datum.enabled == Some(false) || datum.status.as_deref() == Some("disabled") {
+                    reasons.push(format!("dep {} disabled", dep));
+                }
+            }
+            Ok(None) => {
+                reasons.push(format!("dep {} missing", dep));
+            }
+            Err(_) => {
+                reasons.push(format!("dep {} missing", dep));
+            }
+        }
+    }
+
+    ProfileCrossrefResult {
+        profile: profile.name.clone(),
+        healthy: reasons.is_empty(),
+        reasons,
+    }
 }
 
 /// Load a named profile from datum dir — prefers
@@ -773,7 +835,9 @@ pub fn load_session_guards() -> Vec<HiveGuard> {
         message: Option<String>,
         threshold: Option<u32>,
     }
-    fn default_sg_action() -> String { "warn".to_string() }
+    fn default_sg_action() -> String {
+        "warn".to_string()
+    }
 
     let path = session_guards_path();
     let content = match std::fs::read_to_string(&path) {
@@ -901,7 +965,9 @@ impl GuardViolationCounter {
         }
         // Also write to unified events.jsonl with consistent schema
         let home = std::env::var("HOME").unwrap_or_default();
-        let events_path = std::path::Path::new(&home).join(".b00t").join("events.jsonl");
+        let events_path = std::path::Path::new(&home)
+            .join(".b00t")
+            .join("events.jsonl");
         if let Some(parent) = events_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -1032,7 +1098,9 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     // Register regex_match(cmd, pattern) for guard pattern matching.
     // Allows guards like: pattern = { rhai = "regex_match(cmd, 'git checkout -b (feat|fix)/')" }
     engine.register_fn("regex_match", |s: &str, pattern: &str| -> bool {
-        Regex::new(pattern).map(|re| re.is_match(s)).unwrap_or(false)
+        Regex::new(pattern)
+            .map(|re| re.is_match(s))
+            .unwrap_or(false)
     });
     let mut scope = Scope::new();
     scope.push("cmd", command.to_string());
@@ -1049,8 +1117,14 @@ pub fn eval_rhai_expr(expr: &str, command: &str, context: &GuardContext) -> Rhai
     let mut script = String::new();
     let mut macro_vec: Vec<(&String, &String)> = context.rhai_macros.iter().collect();
     macro_vec.sort_by(|(_, a_expr), (_, b_expr)| {
-        let a_dep = context.rhai_macros.keys().any(|k| a_expr.contains(k.as_str()));
-        let b_dep = context.rhai_macros.keys().any(|k| b_expr.contains(k.as_str()));
+        let a_dep = context
+            .rhai_macros
+            .keys()
+            .any(|k| a_expr.contains(k.as_str()));
+        let b_dep = context
+            .rhai_macros
+            .keys()
+            .any(|k| b_expr.contains(k.as_str()));
         a_dep.cmp(&b_dep)
     });
     for (name, macro_expr) in &macro_vec {
@@ -1499,11 +1573,7 @@ fn dpkg_version(pkg: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v)
-    }
+    if v.is_empty() { None } else { Some(v) }
 }
 
 fn find_active_downloads() -> Vec<String> {
@@ -1583,13 +1653,19 @@ mod tests {
 
     #[test]
     fn accelerator_summary_with_vram() {
-        assert_eq!(gpu("RTX 3090", 24576, 8000).summary(), "RTX 3090 — 8000MB free / 24576MB total");
+        assert_eq!(
+            gpu("RTX 3090", 24576, 8000).summary(),
+            "RTX 3090 — 8000MB free / 24576MB total"
+        );
     }
 
     #[test]
     fn accelerator_summary_without_vram() {
         // NPU / iGPU: no VRAM → name only
-        assert_eq!(npu("Rockchip RKNPU2 NPU (2.3.0)").summary(), "Rockchip RKNPU2 NPU (2.3.0)");
+        assert_eq!(
+            npu("Rockchip RKNPU2 NPU (2.3.0)").summary(),
+            "Rockchip RKNPU2 NPU (2.3.0)"
+        );
     }
 
     #[test]
@@ -1597,9 +1673,12 @@ mod tests {
         // RK3588 node: an NPU + an integrated Mali (no VRAM). Legacy fields stay None
         // because no GPU has its own VRAM — gate logic must not falsely report free VRAM.
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let accels = vec![npu("RKNPU2"), mali];
         let (name, total, free) = derive_legacy_gpu_fields(&accels);
@@ -1631,13 +1710,19 @@ mod tests {
     #[test]
     fn snapshot_summary_line_counts_accelerators() {
         let snap = SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
             accelerators: vec![gpu("Mali", 0, 0), npu("RKNPU2")],
             cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
             timestamp: "t".into(),
         };
         assert!(snap.summary_line().contains("1gpu/1npu"));
@@ -1647,18 +1732,29 @@ mod tests {
     fn fingerprint_is_stable_and_sorted() {
         // a Mali iGPU (as probe_mali() would emit) + an RKNN NPU
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         // same hardware → same fingerprint, regardless of accel vector order
         let mk = |accels: Vec<Accelerator>| SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 1.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
-            accelerators: accels, cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+            ram_total_gb: 16.0,
+            ram_available_gb: 1.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
+            accelerators: accels,
+            cpu_cores: 8,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
+            timestamp: "t".into(),
         };
         let a = mk(vec![npu("RKNPU2"), mali.clone()]);
         let b = mk(vec![mali, npu("RKNPU2")]);
@@ -1674,12 +1770,20 @@ mod tests {
         // free RAM differs wildly between two captures of the same hardware →
         // fingerprint must be identical (it tracks total, not free).
         let base = || SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
-            accelerators: vec![npu("RKNPU2")], cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None, timestamp: "t".into(),
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
+            accelerators: vec![npu("RKNPU2")],
+            cpu_cores: 8,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
+            timestamp: "t".into(),
         };
         let mut loaded = base();
         loaded.ram_available_gb = 2.0; // nearly full RAM
@@ -1689,13 +1793,19 @@ mod tests {
     #[test]
     fn snapshot_summary_line_no_accelerators() {
         let snap = SystemSnapshot {
-            ram_total_gb: 16.0, ram_available_gb: 14.0,
-            swap_total_gb: 0.0, swap_free_gb: 0.0,
-            gpu_name: None, gpu_total_mb: None, gpu_free_mb: None,
+            ram_total_gb: 16.0,
+            ram_available_gb: 14.0,
+            swap_total_gb: 0.0,
+            swap_free_gb: 0.0,
+            gpu_name: None,
+            gpu_total_mb: None,
+            gpu_free_mb: None,
             accelerators: vec![],
             cpu_cores: 8,
-            active_downloads: vec![], active_services: vec![],
-            active_profile: None, hive_ledger_path: None,
+            active_downloads: vec![],
+            active_services: vec![],
+            active_profile: None,
+            hive_ledger_path: None,
             timestamp: "t".into(),
         };
         assert!(!snap.summary_line().contains("accel"));
@@ -1728,9 +1838,12 @@ mod tests {
     fn satisfies_substring_tokens() {
         // vendor/name/kind substring matching
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali (integrated)".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali (integrated)".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let rknn = npu("Rockchip RKNPU2 NPU (2.3.0)");
         assert!(mali.satisfies("mali"));
@@ -1762,9 +1875,12 @@ mod tests {
     fn satisfies_all_requirements_node_compat() {
         // RK3588 node: Mali + RKNN NPU
         let mali = Accelerator {
-            class: "gpu".into(), kind: "mali-devnode".into(),
-            name: "ARM Mali".into(), vendor: Some("ARM".into()),
-            vram_total_mb: None, vram_free_mb: None,
+            class: "gpu".into(),
+            kind: "mali-devnode".into(),
+            name: "ARM Mali".into(),
+            vendor: Some("ARM".into()),
+            vram_total_mb: None,
+            vram_free_mb: None,
         };
         let accels = vec![mali, npu("RKNPU2")];
         // a stack needing an NPU → compatible
@@ -1773,7 +1889,10 @@ mod tests {
         // a stack needing a discrete NVIDIA GPU → NOT compatible (only Mali here)
         assert!(!satisfies_all_requirements(&accels, &["nvidia".into()]));
         // needs both gpu + npu → compatible (Mali covers gpu)
-        assert!(satisfies_all_requirements(&accels, &["gpu".into(), "npu".into()]));
+        assert!(satisfies_all_requirements(
+            &accels,
+            &["gpu".into(), "npu".into()]
+        ));
         // empty requirements → compatible
         assert!(satisfies_all_requirements(&accels, &[]));
     }
@@ -1804,7 +1923,10 @@ mod tests {
             repeat_threshold: None,
         }];
         let ctx = GuardContext::default();
-        matches!(check_guards("rm -rf /", &guards, &ctx), GuardResult::Block { .. });
+        matches!(
+            check_guards("rm -rf /", &guards, &ctx),
+            GuardResult::Block { .. }
+        );
     }
 
     #[test]
@@ -1817,7 +1939,10 @@ mod tests {
             repeat_threshold: None,
         }];
         let ctx = GuardContext::default();
-        matches!(check_guards("cargo build", &guards, &ctx), GuardResult::Allow);
+        matches!(
+            check_guards("cargo build", &guards, &ctx),
+            GuardResult::Allow
+        );
     }
 
     #[test]
@@ -1935,7 +2060,9 @@ mod tests {
                 .and_then(|h| h.get("guards"))
                 .and_then(|g| g.as_array());
 
-            let Some(guard_values) = guards_arr else { continue };
+            let Some(guard_values) = guards_arr else {
+                continue;
+            };
             total_guards += guard_values.len() as u32;
 
             // Extract rhai_macros from datum header, if any
@@ -1974,9 +2101,7 @@ mod tests {
             for (idx, gv) in guard_values.iter().enumerate() {
                 // Determine pattern type
                 let pattern = match gv.get("pattern") {
-                    Some(toml::Value::String(s)) => {
-                        GuardPattern::JsonRegexPattern(s.clone())
-                    }
+                    Some(toml::Value::String(s)) => GuardPattern::JsonRegexPattern(s.clone()),
                     Some(toml::Value::Table(t)) if t.contains_key("rhai") => {
                         let expr = t.get("rhai").unwrap().as_str().unwrap().to_string();
                         rhai_guards += 1;
@@ -1993,7 +2118,8 @@ mod tests {
                 // Validate K0mmand3rStage stage names against known ParseStage values.
                 // Catches typos in TOML stage definitions at test time.
                 if let GuardPattern::K0mmand3rStage(ref stage_guard) = pattern {
-                    if k0mmand3r::parser_stages::ParseStage::from_name(&stage_guard.stage).is_none() {
+                    if k0mmand3r::parser_stages::ParseStage::from_name(&stage_guard.stage).is_none()
+                    {
                         failures.push(format!(
                             "{file_name}[{idx}]: unknown stage '{}' — must be one of: pre_parse, pre_verb, post_verb, pre_params, post_params, pre_content, post_content, post_parse",
                             stage_guard.stage
@@ -2006,16 +2132,24 @@ mod tests {
                     Some("block") => HiveGuardAction::Block,
                     _ => HiveGuardAction::Warn,
                 };
-                let msg = gv.get("message").and_then(|m| m.as_str()).map(|s| s.to_string());
-                let redirect = gv.get("redirect").and_then(|r| r.as_str()).map(|s| s.to_string());
+                let msg = gv
+                    .get("message")
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string());
+                let redirect = gv
+                    .get("redirect")
+                    .and_then(|r| r.as_str())
+                    .map(|s| s.to_string());
 
                 let guard = HiveGuard {
                     pattern: pattern.clone(),
                     action,
                     message: msg,
                     redirect,
-                    repeat_threshold: gv.get("repeat_threshold")
-                        .and_then(|r| r.as_integer()).map(|i| i as u32),
+                    repeat_threshold: gv
+                        .get("repeat_threshold")
+                        .and_then(|r| r.as_integer())
+                        .map(|i| i as u32),
                 };
 
                 // Generate a matching input — extract keywords from the Rhai expression
@@ -2045,7 +2179,9 @@ mod tests {
                                     inter_quote_buf.clear();
                                 }
                                 c if in_quote => current.push(c),
-                                c => { inter_quote_buf.push(c); }
+                                c => {
+                                    inter_quote_buf.push(c);
+                                }
                             }
                         }
                         // Also check for references to macro names: pip_guard, docker_guard, etc.
@@ -2054,11 +2190,15 @@ mod tests {
                         let mut keyword_cmd: Option<String> = None;
                         for keyword in &keywords {
                             let cmd = match keyword.as_str() {
-                                "pip" | "pip3" | "npm" | "conda" => format!("{keyword} install somepackage"),
+                                "pip" | "pip3" | "npm" | "conda" => {
+                                    format!("{keyword} install somepackage")
+                                }
                                 "docker" => "docker run nginx".to_string(),
                                 "git" => "git push --force origin main".to_string(),
                                 "brew" => "brew install ffmpeg".to_string(),
-                                "huggingface-cli" => "huggingface-cli download some-model".to_string(),
+                                "huggingface-cli" => {
+                                    "huggingface-cli download some-model".to_string()
+                                }
                                 "rm" => "rm -rf /tmp/cache".to_string(),
                                 "ulimit" => "ulimit -n 65536".to_string(),
                                 _ => continue,
@@ -2075,16 +2215,40 @@ mod tests {
                             let macro_resolved = if !rhai_macros.is_empty() {
                                 let trimmed = expr.rhai.trim();
                                 if let Some(macro_expr) = rhai_macros.get(trimmed) {
-                                    // Extract quoted strings from the macro definition
+                                    // Extract quoted strings from the macro definition —
+                                    // same negation-skip logic as the outer keyword-extraction
+                                    // loop above: a quoted string appearing inside
+                                    // !cmd.contains("...") must NOT be included in the
+                                    // synthesized match command, or the synthesized command
+                                    // will always fail its own negation clause. This loop was
+                                    // missing that check (only the outer, non-macro-reference
+                                    // path had it), so any bare macro-name-reference guard
+                                    // whose expression combines a positive cmd.contains(...)
+                                    // with a negated !cmd.contains(...) — e.g.
+                                    // podman_build_uncapped/podman_run_uncapped — always
+                                    // synthesized a command containing the negated keyword too,
+                                    // making the guard always evaluate to "Allow" in this test.
                                     let mut macro_keywords: Vec<String> = Vec::new();
                                     let mut in_q = false;
                                     let mut cur = String::new();
+                                    let mut macro_inter_quote_buf = String::new();
                                     for ch in macro_expr.chars() {
                                         match ch {
-                                            '"' if !in_q => { in_q = true; cur.clear(); }
-                                            '"' if in_q => { in_q = false; macro_keywords.push(cur.clone()); }
+                                            '"' if !in_q => {
+                                                in_q = true;
+                                                cur.clear();
+                                            }
+                                            '"' if in_q => {
+                                                in_q = false;
+                                                let is_negated = macro_inter_quote_buf
+                                                    .contains("!cmd.contains(");
+                                                if !is_negated {
+                                                    macro_keywords.push(cur.clone());
+                                                }
+                                                macro_inter_quote_buf.clear();
+                                            }
                                             c if in_q => cur.push(c),
-                                            _ => {}
+                                            c => macro_inter_quote_buf.push(c),
                                         }
                                     }
                                     if !macro_keywords.is_empty() {
@@ -2138,9 +2302,9 @@ mod tests {
                         match_cmd.clone(),
                         "git checkout master".to_string(),
                         "git push --force origin main".to_string(),
-                        "git commit -m 'simple message'".to_string(),   // no : for guard 19
+                        "git commit -m 'simple message'".to_string(), // no : for guard 19
                         "git checkout -b feat/new-thing".to_string(),
-                        "git checkout -b main".to_string(),   // no / — matches guard 18
+                        "git checkout -b main".to_string(), // no / — matches guard 18
                         "git merge feature-branch".to_string(),
                     ]
                 } else {
@@ -2156,7 +2320,8 @@ mod tests {
                 // K0mmand3rStage guards can't be tested via check_guards (they return false
                 // since they're parser-stage hooks). Skip the match assertion for them.
                 if !matches!(pattern, GuardPattern::K0mmand3rStage(_)) {
-                    let matched = matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
+                    let matched =
+                        matches!(result, GuardResult::Warn { .. } | GuardResult::Block { .. });
                     if !matched {
                         failures.push(format!(
                             "{}[{}]: expected match for pattern={:?}, got Allow",
@@ -2188,14 +2353,21 @@ mod tests {
         }
 
         // Report results
-        assert!(total_guards > 0, "no guards found — are hive-guards.hive.toml files shipped?");
+        assert!(
+            total_guards > 0,
+            "no guards found — are hive-guards.hive.toml files shipped?"
+        );
         eprintln!(
             "✅ guard coverage: {total_guards} guards scanned, {rhai_guards} rhai expressions, {mat} failures",
             total_guards = total_guards,
             rhai_guards = rhai_guards,
             mat = failures.len(),
         );
-        assert!(failures.is_empty(), "guard failures:\n  {}", failures.join("\n  "));
+        assert!(
+            failures.is_empty(),
+            "guard failures:\n  {}",
+            failures.join("\n  ")
+        );
     }
 
     #[test]
@@ -2235,9 +2407,15 @@ message = "ledgerr-mcp requires supervised execution"
         assert_eq!(profile.resources_ram_gb, Some(10.0));
         assert_eq!(profile.resources_gpu_mb, Some(8000));
         assert_eq!(profile.guards.len(), 2);
-        assert_eq!(profile.guards[0].pattern, GuardPattern::JsonRegexPattern("pip install".to_string()));
         assert_eq!(
-            profile.rhai_macros.get("ledgerr_mcp_guard").map(String::as_str),
+            profile.guards[0].pattern,
+            GuardPattern::JsonRegexPattern("pip install".to_string())
+        );
+        assert_eq!(
+            profile
+                .rhai_macros
+                .get("ledgerr_mcp_guard")
+                .map(String::as_str),
             Some("cmd.contains(\"ledgerr-mcp\")")
         );
         let ctx = GuardContext {
@@ -2289,6 +2467,7 @@ message = "ledgerr-mcp requires supervised execution"
             mcp_activate: vec![],
             mcp_deactivate: vec![],
             service_spec: None,
+            depends_on: vec![],
         };
         let issues = snapshot.satisfies_gate(&profile);
         assert!(!issues.is_empty(), "should fail gate with only 2GB free");
@@ -2351,6 +2530,150 @@ working_directory = "/tmp/test"
         assert_eq!(spec.exec_start, "/usr/bin/sleep 3600");
         assert_eq!(spec.limit_nofile, Some(1024));
         assert_eq!(spec.working_directory.as_deref(), Some("/tmp/test"));
+    }
+
+    // ── datum crossref tests (b00t hive status --datum-crossref, #713) ─────────
+
+    #[test]
+    fn test_hive_profile_depends_on_parses_from_toml() {
+        let toml_str = r#"
+[b00t]
+name = "test-crossref-parse"
+type = "hive_profile"
+hint = "test depends_on parsing"
+depends_on = ["agent-qwen", "serena.mcp"]
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test-crossref-parse.hive.toml");
+        std::fs::write(&path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&path).unwrap();
+        assert_eq!(
+            profile.depends_on,
+            vec!["agent-qwen".to_string(), "serena.mcp".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_degraded_when_dep_disabled() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // backing datum: disabled
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+status = "disabled"
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with disabled dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(!result.healthy);
+        assert_eq!(
+            result.reasons,
+            vec!["dep agent-qwen.mcp disabled".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_degraded_when_dep_enabled_false() {
+        // Real-world disabled datums in this repo use `enabled = false`
+        // (typically paired with `status = "sunset"`, set via
+        // `.gitattributes` — see _b00t_/.gitattributes), NOT a literal
+        // `status = "disabled"`. Regression guard: crossref must catch this
+        // shape too, not just the synthetic status="disabled" case above.
+        let dir = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+status = "sunset"
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with sunset+enabled=false dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(!result.healthy);
+        assert_eq!(
+            result.reasons,
+            vec!["dep agent-qwen.mcp disabled".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_healthy_when_deps_enabled_or_empty() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // backing datum: enabled (no status field means not disabled)
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with healthy dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(result.healthy);
+        assert!(result.reasons.is_empty());
+
+        // empty depends_on is also healthy
+        let toml_str_empty = r#"
+[b00t]
+name = "no-deps"
+type = "hive_profile"
+hint = "profile with no dependencies"
+"#;
+        let empty_path = dir.path().join("no-deps.hive.toml");
+        std::fs::write(&empty_path, toml_str_empty).unwrap();
+        let empty_profile = HiveProfile::from_file(&empty_path).unwrap();
+        let empty_result = crossref_datum_status(&empty_profile, dir.path().to_str().unwrap());
+        assert!(empty_result.healthy);
+        assert!(empty_result.reasons.is_empty());
     }
 
     // ── load_profile precedence tests ─────────────────────────────────────────

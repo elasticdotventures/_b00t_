@@ -1,0 +1,40 @@
+# b00t MCP Datum — hermes agent conversations exposed as MCP tools
+# 🤓 hermes v0.11.0 (~/.local/bin/hermes) is simultaneously an MCP client
+#    (`hermes mcp add`), an ACP agent (`hermes acp`), a messaging gateway,
+#    AND an MCP SERVER (`hermes mcp serve`, stdio transport — no port flags).
+#    This datum registers the SERVER surface: agent-in-agent, mountable from
+#    any MCP-capable harness.
+
+[b00t]
+name = "hermes"
+type = "mcp"
+hint = "Hermes agent conversations exposed as MCP tools — stdio; agent-in-agent surface"
+
+[b00t.mcp]
+command = "hermes"
+args = ["mcp", "serve"]
+
+[b00t.mcp.env]
+# 🤓 unattended `hermes mcp serve` dies on interactive shell-hook prompts
+#    unless hooks are pre-accepted — equivalent to passing --accept-hooks
+HERMES_ACCEPT_HOOKS = "1"
+
+[b00t.kv]
+"decision.adopted" = "hermes-mcp-surface"
+"decision.adopted.source" = "operator-2026-07-25"
+"decision.adopted.context" = "operator directed: each agent gets its own datum; datum kv meta-properties are the canonical per-datum decision register (CMDB); git history is the audit trail"
+
+[[b00t.usage]]
+description = "Test the hermes MCP server surface interactively (verbose)"
+command = "hermes mcp serve -v"
+
+[[b00t.usage]]
+description = "Mount hermes as an MCP server from another harness (stdio)"
+command = "claude mcp add hermes -- env HERMES_ACCEPT_HOOKS=1 hermes mcp serve"
+
+# b00t:map v1
+# summary: hermes MCP server surface — agent conversations as MCP tools over stdio; agent-in-agent
+# tags: hermes, mcp, server, stdio, agent-in-agent, gateway
+# tier: ch0nky
+# cmds: hermes mcp serve
+# complexity: 3

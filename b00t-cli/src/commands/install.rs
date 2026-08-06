@@ -1,14 +1,12 @@
+use crate::load_all_datums;
 use crate::dependency_resolver::DependencyResolver;
-use crate::{BootDatum, UnifiedConfig, evaluate_gates};
+use crate::{BootDatum, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use clap::Parser;
 use duct::cmd;
 use serde_json;
 use shellexpand;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use toml;
 
 #[derive(Parser)]
 pub enum InstallCommands {
@@ -110,7 +108,10 @@ pub(crate) fn checkpoint_installed(workspace_root: &str) -> Result<()> {
     tags.insert("version".to_string(), version.clone());
 
     match b00t_c0re_lib::store::put(&tmp, "b00t:InstalledBinary", "b00t-cli", &tags) {
-        Ok(_) => eprintln!("  📦 store checkpointed: b00t-cli v{} ({})", version, commit),
+        Ok(_) => eprintln!(
+            "  📦 store checkpointed: b00t-cli v{} ({})",
+            version, commit
+        ),
         Err(e) => eprintln!("  ⚠️  store checkpoint failed (non-fatal): {}", e),
     }
     let _ = std::fs::remove_file(&tmp);
@@ -184,12 +185,20 @@ pub fn install_datum(path: &str, name: &str, dry_run: bool) -> Result<()> {
         // Evaluate hook_detect if set (e.g. hook_detect = "gates")
         if let Some(hook) = &datum.hook_detect {
             // Set env vars so gates.rhai can find the datum file
-            let datum_file = format!("{}/{}.toml", shellexpand::tilde(path), key.replace('.', "."));
-            unsafe { std::env::set_var("_B00T_DATUM_FILE", &datum_file); }
-            unsafe { std::env::set_var("_B00T_DATUM_NAME", &datum.name); }
+            let datum_file = format!(
+                "{}/{}.toml",
+                shellexpand::tilde(path),
+                key.replace('.', ".")
+            );
+            unsafe {
+                std::env::set_var("_B00T_DATUM_FILE", &datum_file);
+            }
+            unsafe {
+                std::env::set_var("_B00T_DATUM_NAME", &datum.name);
+            }
             let result = crate::hook_engine::run_hook(hook);
             match &result {
-                crate::hook_engine::HookResult::Ok => {},
+                crate::hook_engine::HookResult::Ok => {}
                 crate::hook_engine::HookResult::Warn(msg) => {
                     eprintln!("⚠️  {} hook_detect: {}", key, msg);
                 }
@@ -387,45 +396,6 @@ pub fn update_hermes_mcp_config(config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Load all datums from the configured path (excluding stack files).
-fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
-    let mut datums = HashMap::new();
-    let b00t_dir = PathBuf::from(shellexpand::tilde(path).to_string());
-
-    if !b00t_dir.exists() {
-        return Ok(datums);
-    }
-
-    for entry in std::fs::read_dir(&b00t_dir)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.is_file() {
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(datums)
-}
 
 #[cfg(test)]
 mod tests {
@@ -516,6 +486,11 @@ hint = "Test datum {}"
         assert!(datums.contains_key("docker.cli"));
         assert_eq!(datums.get("docker.cli").unwrap().name, "docker");
     }
+
+    // `.toml`/`.tomllm`/`.tomllmd` extension coverage and the
+    // type_prefix()-vs-Debug/serde key-derivation regression are now
+    // covered by boot_datum.rs's `load_all_datums_tests` module, since
+    // that's where the shared implementation lives.
 
     #[test]
     fn test_load_all_datums_multiple_datums() {
@@ -1020,8 +995,16 @@ hint = "Test stack"
         ];
         let results = evaluate_gates(&gates, "/tmp");
         assert!(results.len() == 2);
-        assert!(results[0].passed, "file gate should pass: {}", results[0].reason);
-        assert!(results[1].passed, "env gate should pass: {}", results[1].reason);
+        assert!(
+            results[0].passed,
+            "file gate should pass: {}",
+            results[0].reason
+        );
+        assert!(
+            results[1].passed,
+            "env gate should pass: {}",
+            results[1].reason
+        );
     }
 
     #[test]

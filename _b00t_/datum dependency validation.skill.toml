@@ -1,0 +1,16 @@
+[b00t]
+name = "datum dependency validation"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Run the datum graph validator after touching depends_on/skills/entangled_* references — a dangling reference blocks the commit-hook gate"
+keywords = ["datum", "validation", "graph", "dependency", "dangling-reference"]
+
+[b00t.learn]
+content = """
+Backed directly by `b00t-cli datum validate --graph`, which checks the
+whole `_b00t_/` store's cross-references (depends_on, skills,
+entangled_cli, entangled_mcp, entangled_agents, stack members) resolve to
+real datums. An orchestrator should run this before handing a datum
+change back for commit — it is the graph-integrity counterpart to
+`cargo test` for Rust code.
+"""

@@ -1,0 +1,110 @@
+# dstack — Multi-Cloud GPU Orchestration
+#
+# dstack provisions GPU workloads across RunPod, AWS, GCP, Azure, Lambda,
+# Kubernetes, and bare metal through one CLI/API. b00t uses it as the
+# provider-agnostic backend so RunPod (or any single cloud) is optional
+# infrastructure, not a hard dependency for running AI jobs.
+#
+# Auth: configured via `dstack server` backend config (see
+#   https://dstack.ai/docs/reference/server/config.yml); no single
+#   DSTACK_API_KEY env var — each backend cloud has its own credentials.
+# Install: uv tool install 'dstack[all]'
+#
+# No official Rust SDK exists for dstackai/dstack (CLI + Python SDK + REST
+# API only) — b00t's DstackProvider shells out to the CLI, same pattern as
+# HfProvider's `hf jobs` wrapper.
+#
+# Run states (verified against dstackai/dstack source): pending, submitted,
+# provisioning, running, terminating, terminated, failed, done.
+# finished_statuses = [terminated, failed, done]. No separate "pulling"
+# state — cold-start time is absorbed into `provisioning`.
+#
+# 🤓 TRIZ note 2026-07-22: one-shot batch dispatch (fresh pod per job) burns
+#    real budget on cold-boot with "repetitive types of jobs" (operator's
+#    own framing, after ~25% of a RunPod budget with zero completions).
+#    Persistent volumes (`type: volume`, verified against dstack docs to
+#    survive across separate `dstack apply` runs) resolve the reproducibility-
+#    vs-speed contradiction: stage image/deps/datasets once, dispatch many
+#    jobs against the same warm environment. Use `ensure-volume` below for
+#    that path; plain `job submit-batch` stays right for genuine one-offs.
+#
+# b00t CLI: b00t provider job submit-batch|status|cancel|list --provider dstack
+#           b00t-cli provider dstack ensure-volume|stop-dev-environment
+
+[b00t]
+name          = "PROVIDER-DSTACK"
+type          = "api"
+hint          = "dstack multi-cloud GPU orchestration provider — CLI shell-out backend for ComputeProvider, with persistent-volume support for repeated iteration"
+type_tags     = ["provider", "training", "batch", "gpu", "cloud", "multi-cloud", "orchestration"]
+install       = { uv_tool = "dstack[all]", binary = "dstack" }
+version       = "dstack --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+[resource]
+name        = "dstack"
+console_url = "https://dstack.ai"
+cli_install = "uv tool install 'dstack[all]'"
+
+[resource.run_states]
+pending      = { bucket = "pending" }
+submitted    = { bucket = "pending" }
+provisioning = { bucket = "pending" }
+running      = { bucket = "running" }
+terminating  = { bucket = "terminal" }
+terminated   = { bucket = "terminal", failure = true }
+failed       = { bucket = "terminal", failure = true }
+done         = { bucket = "terminal", failure = false }
+
+[resource.secrets.runpod_api_key]
+# 🤓 dstack's RunPod backend (verified against installed 0.20.28 source:
+#    core/backends/runpod/models.py's RunpodAPIKeyCreds + server/services/
+#    config.py's plain yaml.safe_load) accepts ONLY a literal creds.api_key
+#    string in ~/.dstack/server/config.yml — no ${VAR} interpolation, no
+#    env-var-chain creds type for this backend. Never hand-author or commit
+#    that file with a literal key. Generate it at runtime with
+#    `just dstack-server-config` (justfile-dstack-sdd.just), which sources
+#    RUNPOD_API_KEY from .env fresh each run. See _b00t_/learn/managing-secrets.md.
+required = true
+source_provider = "dotenv"
+source_path     = ".env"
+source_key      = "RUNPOD_API_KEY"
+delivery_type   = "file"
+delivery_path   = "~/.dstack/server/config.yml"
+delivery_via    = "just dstack-server-config"
+
+[resource.cost_control]
+# 🤓 volumes bill for storage only while idle (cheap); dev-environments bill
+#    for compute while idle unless inactivity_duration is set — always set it.
+volume_idle_cost = "storage-rate only, no compute charge"
+dev_environment_default = "set inactivity_duration on every dev-environment config — no default auto-shutdown otherwise"
+
+[[resource.usages]]
+description = "Submit a one-off batch job via b00t CLI (provider-agnostic) — fresh pod, no volume"
+command     = "b00t-cli provider job submit-batch --provider dstack --image <image> --config <path> --flavor <flavor>"
+
+[[resource.usages]]
+description = "Check job status"
+command     = "b00t-cli provider job status --provider dstack <run-name>"
+
+[[resource.usages]]
+description = "Cancel a job"
+command     = "b00t-cli provider job cancel --provider dstack <run-name>"
+
+[[resource.usages]]
+description = "Provision (idempotent) a persistent volume for repeated-iteration jobs"
+command     = "b00t-cli provider dstack ensure-volume <name> --size-gb <n> --region <region>"
+
+[[resource.usages]]
+description = "Stop a dev-environment / warm run explicitly (cost control — see [resource.cost_control])"
+command     = "b00t-cli provider dstack stop-dev-environment <name>"
+
+[[resource.usages]]
+description = "Run the full warm-dispatch pattern (resource gate -> ensure volume -> dstack job)"
+command     = "b00t-cli job run mesh3d-cloud-warm"
+
+# b00t:map v1
+# summary: dstack multi-cloud GPU orchestration provider — CLI shell-out backend for ComputeProvider, with persistent-volume support for repeated iteration
+# tags: provider, dstack, orchestration, multi-cloud, gpu, batch, training, volume, cost-control
+# tier: frontier
+# cmds: b00t-cli provider job submit-batch --provider dstack, b00t-cli provider dstack ensure-volume
+# complexity: 4

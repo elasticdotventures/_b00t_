@@ -4,7 +4,7 @@ trigger_words = ["implement", "refactor", "debug", "build", "delegate", "sm0l", 
 type = "role"
 hint = "Hive specialist role: sm0l-tier subagent with delegate skill, CMDB hygiene, 🍰 cake accrual"
 
-depends_on = ["playbook.skill", "delegate.skill", "opencode.agent", "b00t.cli", "git.cli", "just.cli", "bash.cli", "cargo.cli"]
+depends_on = ["playbook.skill", "delegate.skill", "opencode.agent", "b00t.cli", "git.cli", "just.cli", "bash.cli", "rustc.cli"]
 
 skills = [
     "delegate",

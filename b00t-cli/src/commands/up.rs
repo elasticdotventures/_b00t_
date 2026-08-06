@@ -48,7 +48,10 @@ pub struct UpArgs {
     pub dry_run: bool,
 
     /// Self-upgrade: update b00t binary + run maintenance checks for core datums
-    #[clap(long, help = "Upgrade b00t & core tools using datum-driven version checks")]
+    #[clap(
+        long,
+        help = "Upgrade b00t & core tools using datum-driven version checks"
+    )]
     pub self_: bool,
 
     /// Validate system readiness — checks tools, git, _b00t_/, env
@@ -629,33 +632,50 @@ fn self_upgrade() -> Result<()> {
         println!("  🔑 GitHub token found — checking latest release...");
         let release = std::process::Command::new("gh")
             .args([
-                "release", "view",
-                "--repo", "elasticdotventures/_b00t_",
-                "--json", "tagName",
-                "--jq", ".tagName",
+                "release",
+                "view",
+                "--repo",
+                "elasticdotventures/_b00t_",
+                "--json",
+                "tagName",
+                "--jq",
+                ".tagName",
             ])
             .env("GITHUB_TOKEN", &gh_token)
             .output();
         match release {
             Ok(out) if out.status.success() => {
-                let latest = String::from_utf8_lossy(&out.stdout).trim().trim_start_matches('v').to_string();
+                let latest = String::from_utf8_lossy(&out.stdout)
+                    .trim()
+                    .trim_start_matches('v')
+                    .to_string();
                 if latest == source_ver {
                     println!("  ✅ source {} matches latest release", source_ver);
                 } else {
-                    println!("  ⚠️  latest release is v{} (source is v{})", latest, source_ver);
+                    println!(
+                        "  ⚠️  latest release is v{} (source is v{})",
+                        latest, source_ver
+                    );
                 }
             }
             _ => println!("  ⚠️  could not query GitHub release (offline?)"),
         }
     } else {
-        println!("  ℹ️  no GITHUB_TOKEN — set credential with: b00t server key set --provider github");
+        println!(
+            "  ℹ️  no GITHUB_TOKEN — set credential with: b00t server key set --provider github"
+        );
     }
 
     // 1. Update b00t via cargo (from local source)
     println!("🔨 Building b00t-cli from source...");
     let workspace_root = crate::utils::get_workspace_root();
     let status = std::process::Command::new("cargo")
-        .args(["install", "--path", &format!("{}/b00t-cli", workspace_root), "--force"])
+        .args([
+            "install",
+            "--path",
+            &format!("{}/b00t-cli", workspace_root),
+            "--force",
+        ])
         .current_dir(&workspace_root)
         .status()
         .context("Failed to execute cargo install for b00t-cli")?;

@@ -1,0 +1,15 @@
+# 🦨 unfinished — same as context budget tracking — inferred behavior, not confirmed implemented
+[b00t]
+name = "context budget preservation"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Avoid burning shared context budget on work a sub-agent could do in its own isolated context"
+keywords = ["context", "budget", "preservation", "delegation"]
+
+[b00t.learn]
+content = """
+Complementary to [[context budget tracking]]: an orchestrator
+preserves its own context budget by pushing exploratory/verbose work into
+sub-agents with isolated context rather than pulling raw output back into
+its own window. Backed by `b00t-cli context` and `b00t-cli budget`.
+"""

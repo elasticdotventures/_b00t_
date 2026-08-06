@@ -4,9 +4,9 @@
 
 use crate::blessing::BlessingGraph;
 // 🤓 BlessingNode is available inside mod tests via `use super::*;` (Rust 2024 glob-vis semantics)
-use std::collections::{BTreeMap, HashSet};
 #[cfg(test)]
 use crate::blessing::BlessingNode;
+use std::collections::{BTreeMap, HashSet};
 
 /// Validation result with detailed diagnostics
 #[derive(Debug, Clone, PartialEq)]

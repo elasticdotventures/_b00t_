@@ -1,0 +1,15 @@
+[b00t]
+name = "hive-cmdb"
+type = "skill"
+type_tags = ["transferable"]
+hint = "The Hive CMDB itself — system resource state, active profile, and command guards, queried via b00t-cli hive"
+keywords = ["hive", "cmdb", "resource-state", "guards"]
+
+[b00t.learn]
+content = """
+The Hive CMDB (`b00t-cli hive`) tracks system resource state
+(RAM/GPU/CPU), the currently active hive profile, and command guards.
+`hive status`/`list`/`plan`/`activate`/`run` are the operational surface;
+`_b00t_/*.hive.toml` profiles declare resources/exclusion groups/services/
+guards.
+"""

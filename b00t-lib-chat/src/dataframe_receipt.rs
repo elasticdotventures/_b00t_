@@ -219,13 +219,41 @@ impl DataframeReceipt for FocusRecord {
     fn fields(&self) -> Vec<Field> {
         use Datatype::*;
         vec![
-            Field { name: "experiment_id".into(), datatype: Utf8, nullable: false },
-            Field { name: "variant".into(), datatype: Utf8, nullable: false },
-            Field { name: "personality".into(), datatype: Utf8, nullable: true },
-            Field { name: "score".into(), datatype: Float64, nullable: false },
-            Field { name: "agent_id".into(), datatype: Utf8, nullable: false },
-            Field { name: "reasoning_review".into(), datatype: Utf8, nullable: true },
-            Field { name: "occurred_at_ms".into(), datatype: TimestampMs, nullable: false },
+            Field {
+                name: "experiment_id".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "variant".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "personality".into(),
+                datatype: Utf8,
+                nullable: true,
+            },
+            Field {
+                name: "score".into(),
+                datatype: Float64,
+                nullable: false,
+            },
+            Field {
+                name: "agent_id".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "reasoning_review".into(),
+                datatype: Utf8,
+                nullable: true,
+            },
+            Field {
+                name: "occurred_at_ms".into(),
+                datatype: TimestampMs,
+                nullable: false,
+            },
         ]
     }
 
@@ -248,14 +276,46 @@ impl DataframeReceipt for crate::ledgrrr::UsageReceipt {
     fn fields(&self) -> Vec<Field> {
         use Datatype::*;
         vec![
-            Field { name: "receipt_id".into(), datatype: Utf8, nullable: false },
-            Field { name: "agent_id".into(), datatype: Utf8, nullable: false },
-            Field { name: "project".into(), datatype: Utf8, nullable: false },
-            Field { name: "capability".into(), datatype: Utf8, nullable: false },
-            Field { name: "units".into(), datatype: Int64, nullable: false },
-            Field { name: "occurred_at".into(), datatype: TimestampMs, nullable: false },
-            Field { name: "finops_code".into(), datatype: Utf8, nullable: true },
-            Field { name: "constraint_satisfied".into(), datatype: Bool, nullable: false },
+            Field {
+                name: "receipt_id".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "agent_id".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "project".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "capability".into(),
+                datatype: Utf8,
+                nullable: false,
+            },
+            Field {
+                name: "units".into(),
+                datatype: Int64,
+                nullable: false,
+            },
+            Field {
+                name: "occurred_at".into(),
+                datatype: TimestampMs,
+                nullable: false,
+            },
+            Field {
+                name: "finops_code".into(),
+                datatype: Utf8,
+                nullable: true,
+            },
+            Field {
+                name: "constraint_satisfied".into(),
+                datatype: Bool,
+                nullable: false,
+            },
         ]
     }
 

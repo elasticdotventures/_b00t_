@@ -1,16 +1,16 @@
 use crate::datum_cli::CliDatum;
 use crate::dependency_resolver::DependencyResolver;
 use crate::hook_engine::{HookResult, run_hook};
+use crate::load_all_datums;
 use crate::load_datum_providers;
 use crate::traits::*;
-use crate::{BootDatum, UnifiedConfig};
+use crate::BootDatum;
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use shellexpand;
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -135,7 +135,10 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
         println!("📌 Project override: {}={}", command, pinned);
         // Resolve the datum but enforce pinned version in desires
         // (install command from datum, version from override)
-        eprintln!("  🥾 Using pinned version '{}' from .git/🥾.tomllmd", pinned);
+        eprintln!(
+            "  🥾 Using pinned version '{}' from .git/🥾.tomllmd",
+            pinned
+        );
     }
 
     run_hook_detect(&cli_datum.datum);
@@ -222,47 +225,6 @@ fn cli_install(command: &str, path: &str) -> Result<()> {
 }
 
 /// Load all datums from _b00t_ directory for dependency resolution
-fn load_all_datums(path: &str) -> Result<HashMap<String, BootDatum>> {
-    let mut datums = HashMap::new();
-    let b00t_dir = PathBuf::from(shellexpand::tilde(path).to_string());
-
-    if !b00t_dir.exists() {
-        return Ok(datums);
-    }
-
-    for entry in std::fs::read_dir(&b00t_dir)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.is_file() {
-            if let Some(file_name) = entry_path.file_name().and_then(|s| s.to_str()) {
-                // Skip stack files
-                if file_name.ends_with(".stack.toml") {
-                    continue;
-                }
-
-                // Load other datum types
-                if file_name.ends_with(".toml") {
-                    if let Ok(content) = std::fs::read_to_string(&entry_path) {
-                        if let Ok(config) = toml::from_str::<UnifiedConfig>(&content) {
-                            let datum = config.b00t;
-                            let datum_type = datum
-                                .datum_type
-                                .as_ref()
-                                .map(|t| format!("{:?}", t).to_lowercase())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let key = format!("{}.{}", datum.name, datum_type);
-                            datums.insert(key, datum);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(datums)
-}
-
 fn cli_update(command: &str, path: &str) -> Result<()> {
     let cli_datum = CliDatum::from_config(command, path)?;
 
@@ -305,12 +267,23 @@ fn cli_check(command: &str, path: &str) -> Result<()> {
     // Check project overrides
     let overrides = crate::load_project_overrides();
     let override_ver = overrides.get(command);
-    let pinned = override_ver.map(|v| format!(" (project pinned: {})", v)).unwrap_or_default();
+    let pinned = override_ver
+        .map(|v| format!(" (project pinned: {})", v))
+        .unwrap_or_default();
 
     let status_text = match version_status {
-        VersionStatus::Match => format!("🥾👍🏻 {} {} {} (desired: {})", command, current, pinned, desired),
-        VersionStatus::Newer => format!("🥾🐣 {} {} {} (newer than desired: {})", command, current, pinned, desired),
-        VersionStatus::Older => format!("🥾😭 {} {} {} (older than desired: {})", command, current, pinned, desired),
+        VersionStatus::Match => format!(
+            "🥾👍🏻 {} {} {} (desired: {})",
+            command, current, pinned, desired
+        ),
+        VersionStatus::Newer => format!(
+            "🥾🐣 {} {} {} (newer than desired: {})",
+            command, current, pinned, desired
+        ),
+        VersionStatus::Older => format!(
+            "🥾😭 {} {} {} (older than desired: {})",
+            command, current, pinned, desired
+        ),
         VersionStatus::Missing => format!("🥾😱 {} (not installed){}", command, pinned),
         VersionStatus::Unknown => format!(
             "🥾⏹️ {} {} {} (version comparison unavailable)",
@@ -345,7 +318,14 @@ fn cli_up(path: &str, yes: bool, maintenance: bool) -> Result<()> {
 
     let overrides = crate::load_project_overrides();
     if !overrides.is_empty() {
-        println!("📌 Project overrides: {}", overrides.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", "));
+        println!(
+            "📌 Project overrides: {}",
+            overrides
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     let mut updated_count = 0;
@@ -716,9 +696,18 @@ mod tests {
         let _check = CliCommands::Check {
             command: "test".to_string(),
         };
-        let _up = CliCommands::Up { yes: false, maintenance: false };
-        let _up_yes = CliCommands::Up { yes: true, maintenance: false };
-        let _up_maint = CliCommands::Up { yes: false, maintenance: true };
+        let _up = CliCommands::Up {
+            yes: false,
+            maintenance: false,
+        };
+        let _up_yes = CliCommands::Up {
+            yes: true,
+            maintenance: false,
+        };
+        let _up_maint = CliCommands::Up {
+            yes: false,
+            maintenance: true,
+        };
         let _run = CliCommands::Run {
             script_name: "test".to_string(),
             args: vec![],

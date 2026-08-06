@@ -364,7 +364,8 @@ impl GrokClient {
             if overlap > 0.80 {
                 tracing::debug!(
                     "Ponytail rung 1: near-duplicate found for '{}' (overlap={:.0}%), skipping digest",
-                    topic, overlap * 100.0
+                    topic,
+                    overlap * 100.0
                 );
                 return Ok(None);
             }

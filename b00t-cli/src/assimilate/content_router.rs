@@ -17,13 +17,13 @@ pub enum ContentType {
     Text,
     Json,
     /// Image formats (PNG, JPEG, GIF, WebP, SVG)
-    Image(String),      // MIME subtype e.g. "png"
+    Image(String), // MIME subtype e.g. "png"
     /// Audio formats (MP3, WAV, OGG, FLAC)
-    Audio(String),      // MIME subtype e.g. "mpeg"
+    Audio(String), // MIME subtype e.g. "mpeg"
     /// Video formats (MP4, WebM, AVI)
-    Video(String),      // MIME subtype e.g. "mp4"
+    Video(String), // MIME subtype e.g. "mp4"
     /// Generic binary (unknown or unclassified)
-    Binary(String),     // file extension e.g. "bin"
+    Binary(String), // file extension e.g. "bin"
     Unknown,
 }
 
@@ -118,7 +118,12 @@ impl ContentRouter {
             .get("Mcp-Session-Id")
             .and_then(|v| v.to_str().ok())
             .map(String::from)
-            .ok_or_else(|| anyhow!("{} MCP: no session ID in init response", handler.domain_label))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "{} MCP: no session ID in init response",
+                    handler.domain_label
+                )
+            })?;
 
         // Send initialized notification
         // 🤓 Some MCP servers require this before tools/call
@@ -169,7 +174,11 @@ impl ContentRouter {
         Ok(ParsedContent {
             text,
             content_type: ContentType::Markdown,
-            source_url: Some(format!("{}://{}", handler.domain_label.to_lowercase(), resource_id)),
+            source_url: Some(format!(
+                "{}://{}",
+                handler.domain_label.to_lowercase(),
+                resource_id
+            )),
         })
     }
 
@@ -309,7 +318,9 @@ impl ContentRouter {
         } else if lower.ends_with(".webm") {
             Some(ContentType::Video("webm".into()))
         } else if lower.ends_with(".bin") || lower.ends_with(".dat") {
-            Some(ContentType::Binary(lower.rsplit('.').next().unwrap_or("bin").into()))
+            Some(ContentType::Binary(
+                lower.rsplit('.').next().unwrap_or("bin").into(),
+            ))
         } else {
             None
         }
@@ -374,10 +385,7 @@ mod tests {
             ContentRouter::detect_from_extension("notes.txt"),
             Some(ContentType::Text)
         );
-        assert_eq!(
-            ContentRouter::detect_from_extension("unknown.xyz"),
-            None
-        );
+        assert_eq!(ContentRouter::detect_from_extension("unknown.xyz"), None);
     }
 
     #[test]

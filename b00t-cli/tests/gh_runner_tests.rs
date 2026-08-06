@@ -89,28 +89,56 @@ fn test_generate_kube_yaml_contains_repo_url() {
 #[test]
 fn test_generate_kube_yaml_contains_labels() {
     // ✅ Positive: labels are injected correctly
-    let yaml = generate_kube_yaml("a/b", "linux,x64,self-hosted", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "linux,x64,self-hosted",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("linux,x64,self-hosted"));
 }
 
 #[test]
 fn test_generate_kube_yaml_ephemeral_true() {
     // ✅ Positive: ephemeral=true → value is "true"
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", true, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        true,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("value: \"true\""));
 }
 
 #[test]
 fn test_generate_kube_yaml_ephemeral_false() {
     // ✅ Positive: ephemeral=false → value is "false"
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("value: \"false\""));
 }
 
 #[test]
 fn test_generate_kube_yaml_docker_socket_present() {
     // ✅ Positive: socket path → volume mount and volume definition present
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("docker-sock"));
     assert!(yaml.contains("/var/run/docker.sock"));
 }
@@ -125,14 +153,28 @@ fn test_generate_kube_yaml_socket_none() {
 #[test]
 fn test_generate_kube_yaml_is_valid_yaml() {
     // ✅ Positive: output must parse as valid YAML
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     let _doc: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("YAML should be valid");
 }
 
 #[test]
 fn test_generate_kube_yaml_has_security_context() {
     // ✅ Positive: non-root + no privilege escalation
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("runAsNonRoot: true"));
     assert!(yaml.contains("allowPrivilegeEscalation: false"));
 }
@@ -140,7 +182,14 @@ fn test_generate_kube_yaml_has_security_context() {
 #[test]
 fn test_generate_kube_yaml_has_resource_limits() {
     // ✅ Positive: resource requests and limits present
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("memory: \"4Gi\""));
     assert!(yaml.contains("cpu: \"4\""));
 }
@@ -148,7 +197,14 @@ fn test_generate_kube_yaml_has_resource_limits() {
 #[test]
 fn test_generate_kube_yaml_has_resource_requests() {
     // ✅ Positive: resource requests (2Gi/2CPU) also present
-    let yaml = generate_kube_yaml("a/b", "l", "/tmp/w", "fake-token", false, "/var/run/docker.sock");
+    let yaml = generate_kube_yaml(
+        "a/b",
+        "l",
+        "/tmp/w",
+        "fake-token",
+        false,
+        "/var/run/docker.sock",
+    );
     assert!(yaml.contains("memory: \"2Gi\""));
     assert!(yaml.contains("cpu: \"2\""));
 }

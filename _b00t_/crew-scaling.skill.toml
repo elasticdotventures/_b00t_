@@ -1,0 +1,14 @@
+# 🦨 unfinished — b00t-cli crew exists; size-scaling logic is not confirmed implemented
+[b00t]
+name = "crew-scaling"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Grow or shrink a crew's agent count to match the work's parallelism, bounded by one-pizza-team-enforcement"
+keywords = ["crew", "scaling", "team-size"]
+
+[b00t.learn]
+content = """
+Crew scaling adjusts how many agents an Operator-Player-Captain crew
+runs concurrently based on available parallel work, bounded above by
+[[one-pizza-team-enforcement]]. Backed by `b00t-cli crew`.
+"""

@@ -1,0 +1,84 @@
+# _b00t_/mesh3d-cloud-warm.job.toml
+#
+# Additive to mesh3d-cloud.job.toml (Task 9) — not a replacement. Task 9's job
+# stays the reference for one-off submission; this one is for the
+# repeated-iteration case where re-pulling the image/deps on every run is the
+# budget-burning path. Demonstrates the persistent-volume pattern end to end:
+# a one-time `provision-cache` step (`ensure_volume`, idempotent) feeds a
+# repeatable `mesh3d-generate-warm` step that attaches the same volume.
+#
+# Local files listed in [b00t.job.steps.batch.inputs] are copied alongside
+# the scratch config before submission — dstack syncs the config directory
+# to the remote, so these files are available inside the container at
+# /workflow/<filename>. See BatchJobSpec.inputs for details.
+
+[b00t]
+name = "mesh3d-cloud-warm"
+parent = "wrkflw.cli"
+type = "job"
+hint = "Pixal3D cloud batch job against a pre-staged persistent dstack volume — avoids re-pulling image/deps per run for repeated iteration"
+version = "0.1.0"
+depends_on = []
+
+[b00t.job]
+description = "Provision (idempotent) a persistent volume once, then dispatch mesh3d jobs that reuse it"
+tags = ["mesh3d", "pixal3d", "dstack", "app4dog", "volume", "cycle-time"]
+
+[b00t.job.config]
+mode = "sequential"
+checkpoint_mode = "off"
+continue_on_failure = false
+
+[[b00t.job.steps]]
+name = "resource-gate"
+description = "Dry-run the existing mesh3d-batch hive resource gate before spending cloud time/money"
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t hive plan mesh3d-batch"
+
+[[b00t.job.steps]]
+name = "provision-cache"
+description = "Ensure the persistent volume exists (idempotent, safe to run every invocation)"
+depends_on = ["resource-gate"]
+
+[b00t.job.steps.task]
+type = "bash"
+command = "b00t-cli provider dstack ensure-volume b00t-mesh-cache --size-gb 100 --region eu-central-1"
+
+[[b00t.job.steps]]
+name = "mesh3d-generate-warm"
+description = "Submit Pixal3D GLB generation against the pre-staged volume"
+depends_on = ["provision-cache"]
+backend = "dstack"
+output_contract = "PASS|FAIL:<5lines>"
+
+# `task` is required by the JobStep schema even when `backend` is set — the
+# executor ignores it on the provider-dispatch path (see
+# execute_provider_step in job_executor.rs) and drives [b00t.job.steps.batch]
+# instead. Kept as a human-readable description of what actually happens.
+[b00t.job.steps.task]
+type = "bash"
+command = "echo 'dispatched via dstack backend — see [b00t.job.steps.batch] for the actual spec'"
+
+[b00t.job.steps.batch]
+image = "docker.io/elasticdotventures/mesh-runner:v6"
+config_path = "/workspace/request.json"
+flavor = "RTX_4090"
+timeout_hours = 2.0
+inputs = ["request.json"]
+
+[b00t.job.steps.batch.env]
+MESH_RESOLUTION = "1024"
+MESH_LOW_VRAM = "true"
+
+[[b00t.job.steps.batch.volumes]]
+name = "b00t-mesh-cache"
+path = "/cache"
+
+[b00t.job.steps.condition]
+when = "on_success"
+
+[b00t.job.env]
+MESH_RESOLUTION = "1024"
+MESH_LOW_VRAM = "true"

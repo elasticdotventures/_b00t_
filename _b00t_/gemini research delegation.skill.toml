@@ -1,0 +1,13 @@
+[b00t]
+name = "gemini research delegation"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Delegate open-ended research/investigation to Gemini via its MCP tooling instead of doing broad web research inline"
+keywords = ["gemini", "research", "delegation", "mcp"]
+
+[b00t.learn]
+content = """
+Delegating broad research tasks to Gemini through the hive's existing
+gemini-mcp-tool.mcp and geminicli.cli datums, keeping the executive's own
+context budget for synthesis rather than raw search.
+"""

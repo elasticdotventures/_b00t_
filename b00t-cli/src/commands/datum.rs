@@ -4,6 +4,7 @@ use crate::datum_utils::{self, DatumFilter};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
+use ufo_types::{Disposition, IsoAuditable, Satisfies, SatisfiesResult, Stereotyped, UfoStereotype};
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -180,8 +181,38 @@ pub enum DatumCommands {
         )]
         repo_path: String,
 
-        #[clap(long, help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing")]
+        #[clap(
+            long,
+            help = "Write wrkflw-ci-build.yml to .github/workflows/ instead of printing"
+        )]
         write: bool,
+    },
+
+    #[clap(about = "Health-check a datum's gates + maintenance check_command (#694)")]
+    HealthCheck {
+        #[clap(long, help = "Specific datum name to check")]
+        name: Option<String>,
+
+        #[clap(long, help = "Check all datums")]
+        all: bool,
+    },
+
+    #[clap(about = "Aggregate pass/warn/fail health report across all datums + store status (#694)")]
+    HealthReport {
+        #[clap(long, help = "Output format: table|json", default_value = "table")]
+        format: String,
+    },
+
+    #[clap(about = "Govern a datum (or all datums): prove + gate + hook, report health (#696)")]
+    Govern {
+        #[clap(help = "Datum name (omit with --all)")]
+        name: Option<String>,
+
+        #[clap(long, help = "Govern all datums, skipping status=disabled")]
+        all: bool,
+
+        #[clap(long, help = "Output format: table|json", default_value = "table")]
+        format: String,
     },
 }
 
@@ -281,14 +312,17 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
             token,
             exec,
         } => handle_call(path, datum, interface, token, *exec),
-        DatumCommands::Calibrate(args) => {
-            crate::commands::calibrate::handle_calibrate(path, args)
-        }
+        DatumCommands::Calibrate(args) => crate::commands::calibrate::handle_calibrate(path, args),
         DatumCommands::FromArtifact(args) => {
             crate::commands::from_artifact::handle_from_artifact(args)
         }
-        DatumCommands::GenWrkflw { repo_path, write } => {
-            handle_gen_wrkflw(repo_path, *write)
+        DatumCommands::GenWrkflw { repo_path, write } => handle_gen_wrkflw(repo_path, *write),
+        DatumCommands::HealthCheck { name, all } => {
+            handle_health_check(path, name.as_deref(), *all)
+        }
+        DatumCommands::HealthReport { format } => handle_health_report(path, format),
+        DatumCommands::Govern { name, all, format } => {
+            handle_govern(path, name.as_deref(), *all, format)
         }
     }
 }
@@ -1007,21 +1041,78 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let content = std::fs::read_to_string(&file_path).context("cannot read file")?;
     let raw: toml::Value = toml::from_str(&content).context("invalid TOML")?;
 
-    let mut errors = Vec::new();
-    let mut warnings = Vec::new();
-
     // Check [b00t] section exists
     let b00t_table = match raw.get("b00t") {
-        Some(toml::Value::Table(t)) => t,
+        Some(toml::Value::Table(t)) => t.clone(),
         Some(_) => {
-            errors.push("[b00t] must be a TOML table".into());
-            return print_validation_result(&errors, &warnings);
+            let errors = vec!["[b00t] must be a TOML table".to_string()];
+            return print_validation_result(&errors, &[]);
         }
         None => {
-            errors.push("missing [b00t] section".into());
-            return print_validation_result(&errors, &warnings);
+            let errors = vec!["missing [b00t] section".to_string()];
+            return print_validation_result(&errors, &[]);
         }
     };
+
+    let outcome = compute_datum_validation(&b00t_table, filename, strict);
+    print_validation_result(&outcome.errors, &outcome.warnings)?;
+
+    // Route through the real Satisfies<C> / evidence-sink path (#927) —
+    // additive to the print-based UX above, which is unchanged.
+    let subject = DatumTomlSubject {
+        raw: &b00t_table,
+        filename,
+    };
+    let constraint = BootDatumSchemaConstraint { strict };
+    let result = subject.satisfies(&constraint);
+
+    let _ = crate::commands::evidence::record_is_a(target, &subject.ufo_stereotype().to_string());
+    for iso_id in constraint.iso_standard_ids() {
+        let _ = crate::commands::evidence::record_audited_by(target, &iso_id);
+    }
+
+    if matches!(result.disposition, Disposition::Unknown) {
+        println!("  UNKNOWN: cannot verify type/extension consistency (unrecognized extension)");
+        if strict {
+            anyhow::bail!(
+                "--strict: type/extension consistency is undecidable for '{}' (unrecognized extension)",
+                filename
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Pure outcome of validating a `[b00t]` TOML table against the `BootDatum`
+/// schema — same checks `handle_validate` has always run, extracted so both
+/// the print-based UX and the `Satisfies<BootDatumSchemaConstraint>` impl
+/// below can share one implementation.
+struct DatumValidationOutcome {
+    errors: Vec<String>,
+    warnings: Vec<String>,
+    /// True exactly when the strict extension↔type consistency check could
+    /// not be decided because the filename's extension is not a recognized
+    /// datum type (`DatumType::from_filename` returned `Unknown`). Prior to
+    /// #927 this case was silently skipped — neither an error nor a
+    /// warning — which is the bug this issue fixes: it's now surfaced as a
+    /// distinguishable `Disposition::Unknown`, not silently folded into
+    /// "valid".
+    extension_check_undecidable: bool,
+}
+
+/// Same required-field / unknown-key / extension-consistency / version_regex
+/// checks `handle_validate` has always run — extracted to a pure function so
+/// it can feed both the existing print-based UX and the new
+/// `Satisfies<BootDatumSchemaConstraint>` impl.
+fn compute_datum_validation(
+    b00t_table: &toml::value::Table,
+    filename: &str,
+    strict: bool,
+) -> DatumValidationOutcome {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    let mut extension_check_undecidable = false;
 
     // Required fields
     if b00t_table.get("name").is_none() {
@@ -1046,7 +1137,12 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
         if let Some(toml::Value::String(type_str)) = b00t_table.get("type") {
             let declared = DatumType::from_type_token(type_str);
             let from_ext = DatumType::from_filename(filename);
-            if declared != Some(from_ext) && from_ext != DatumType::Unknown {
+            if from_ext == DatumType::Unknown {
+                // #927 fix: previously silently skipped — no error, no
+                // warning. Unrecognized extension means we genuinely cannot
+                // decide whether type and extension are consistent.
+                extension_check_undecidable = true;
+            } else if declared != Some(from_ext) {
                 warnings.push(format!(
                     "type={} but filename suggests {:?} (extension .{})",
                     type_str,
@@ -1064,7 +1160,61 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
         }
     }
 
-    print_validation_result(&errors, &warnings)
+    DatumValidationOutcome {
+        errors,
+        warnings,
+        extension_check_undecidable,
+    }
+}
+
+/// `[b00t]` TOML table + originating filename — the subject evaluated
+/// against `BootDatumSchemaConstraint`.
+pub struct DatumTomlSubject<'a> {
+    pub raw: &'a toml::value::Table,
+    pub filename: &'a str,
+}
+
+/// Constraint: a `[b00t]` TOML table must conform to the `BootDatum` schema
+/// (required fields present, extension↔type consistent when `strict`,
+/// `version_regex` compiles).
+pub struct BootDatumSchemaConstraint {
+    pub strict: bool,
+}
+
+impl IsoAuditable for BootDatumSchemaConstraint {
+    fn iso_standard_ids(&self) -> Vec<String> {
+        vec!["b00t:BootDatumSchema".into()]
+    }
+}
+
+impl Stereotyped for DatumTomlSubject<'_> {
+    /// Resolves the declared `type` field through `DatumType`'s lattice
+    /// (#925/#926 single source of truth) — same pattern as
+    /// `ontology.rs`'s sparql "type" arm and `BootDatum`'s own
+    /// `Stereotyped` impl. Missing/unrecognized type degrades to
+    /// `Kind("Unknown")`, never panics.
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        let type_str = match self.raw.get("type") {
+            Some(toml::Value::String(s)) => s.as_str(),
+            _ => "",
+        };
+        DatumType::from_type_token(type_str)
+            .unwrap_or(DatumType::Unknown)
+            .ufo_stereotype()
+    }
+}
+
+impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
+    fn satisfies(&self, c: &BootDatumSchemaConstraint) -> SatisfiesResult {
+        let outcome = compute_datum_validation(self.raw, self.filename, c.strict);
+        if !outcome.errors.is_empty() {
+            return SatisfiesResult::violated(outcome.errors.join("; "), 1.0);
+        }
+        if outcome.extension_check_undecidable {
+            return SatisfiesResult::unknown(0.5);
+        }
+        SatisfiesResult::satisfied(1.0)
+    }
 }
 
 fn handle_validate_graph(datum_path: &str) -> Result<()> {
@@ -1411,7 +1561,8 @@ fn handle_call(
 fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
     use std::path::Path;
 
-    let root = Path::new(repo_path).canonicalize()
+    let root = Path::new(repo_path)
+        .canonicalize()
         .with_context(|| format!("cannot resolve path: {repo_path}"))?;
 
     let workflows_dir = root.join(".github/workflows");
@@ -1424,14 +1575,17 @@ fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
     // Check for existing wrkflw workflow
     let out_path = workflows_dir.join("wrkflw-ci-build.yml");
     if out_path.exists() && !write {
-        println!("# wrkflw-ci-build.yml already exists at {}", out_path.display());
+        println!(
+            "# wrkflw-ci-build.yml already exists at {}",
+            out_path.display()
+        );
         println!("# Use --write to overwrite.");
         return Ok(());
     }
 
     // Detect build shape
-    let is_rust   = root.join("Cargo.toml").exists();
-    let is_node   = root.join("package.json").exists();
+    let is_rust = root.join("Cargo.toml").exists();
+    let is_node = root.join("package.json").exists();
     let is_python = root.join("pyproject.toml").exists() || root.join("setup.py").exists();
     let repo_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("repo");
 
@@ -1476,11 +1630,174 @@ fn handle_gen_wrkflw(repo_path: &str, write: bool) -> Result<()> {
         std::fs::write(&out_path, &content)
             .with_context(|| format!("write {}", out_path.display()))?;
         println!("✓ wrote {}", out_path.display());
-        println!("  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml");
+        println!(
+            "  Add to justfile: just ci-local = wrkflw run .github/workflows/wrkflw-ci-build.yml"
+        );
         println!("  Declare in datum: [b00t.services.action_runner] local = \"wrkflw\"");
     } else {
         println!("# Preview — run with --write to create .github/workflows/wrkflw-ci-build.yml");
         println!("{content}");
+    }
+
+    Ok(())
+}
+
+// ─── govern (#696) ───────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct PhaseResult {
+    passed: bool,
+    detail: String,
+}
+
+#[derive(serde::Serialize)]
+struct GovernReport {
+    datum: String,
+    proved: PhaseResult,
+    gated: Vec<crate::gates::GateResult>,
+    hooked: PhaseResult,
+    status: Option<String>,
+    healthy: bool,
+}
+
+/// Run all three governance phases (prove, gate, hook) against a single datum
+/// and summarize the result. Never panics: proof/hook failures are captured
+/// as `passed: false` phase results rather than propagated as errors.
+fn govern_one(datum: &crate::BootDatum, path: &str) -> GovernReport {
+    let proved = match datum.prove_by_type() {
+        Ok(()) => PhaseResult {
+            passed: true,
+            detail: "proof passed".to_string(),
+        },
+        Err(e) => PhaseResult {
+            passed: false,
+            detail: e.to_string(),
+        },
+    };
+
+    let gated: Vec<crate::gates::GateResult> = datum
+        .gate
+        .as_ref()
+        .map(|gates| crate::gates::evaluate_gates(gates, path))
+        .unwrap_or_default();
+    let gates_passed = gated.iter().all(|g| g.passed);
+
+    let hooked = match datum.hook_detect.as_deref() {
+        Some(script) if !script.trim().is_empty() => match crate::hook_engine::run_hook(script) {
+            crate::hook_engine::HookResult::Ok => PhaseResult {
+                passed: true,
+                detail: "hook ok".to_string(),
+            },
+            crate::hook_engine::HookResult::Warn(msg) => PhaseResult {
+                passed: true,
+                detail: format!("warn: {msg}"),
+            },
+            crate::hook_engine::HookResult::Info(msg) => PhaseResult {
+                passed: true,
+                detail: msg,
+            },
+            crate::hook_engine::HookResult::Missing(msg) => PhaseResult {
+                passed: false,
+                detail: format!("missing: {msg}"),
+            },
+            crate::hook_engine::HookResult::Redirect(name) => PhaseResult {
+                passed: false,
+                detail: format!("redirect: {name}"),
+            },
+        },
+        _ => PhaseResult {
+            passed: true,
+            detail: "no hook_detect".to_string(),
+        },
+    };
+
+    let healthy = proved.passed && gates_passed && hooked.passed;
+
+    GovernReport {
+        datum: datum.name.clone(),
+        proved,
+        gated,
+        hooked,
+        status: datum.status.clone(),
+        healthy,
+    }
+}
+
+fn print_govern_report_table(report: &GovernReport) {
+    let overall = if report.healthy { "✅ healthy" } else { "❌ unhealthy" };
+    println!("# {} — {}", report.datum, overall);
+    println!(
+        "  proved: {} — {}",
+        if report.proved.passed { "ok" } else { "FAIL" },
+        report.proved.detail
+    );
+    if report.gated.is_empty() {
+        println!("  gated:  (no gates)");
+    } else {
+        for gate in &report.gated {
+            println!(
+                "  gated:  {} — {}",
+                if gate.passed { "ok" } else { "FAIL" },
+                gate.reason
+            );
+        }
+    }
+    println!(
+        "  hooked: {} — {}",
+        if report.hooked.passed { "ok" } else { "FAIL" },
+        report.hooked.detail
+    );
+    if let Some(status) = &report.status {
+        println!("  status: {status}");
+    }
+    println!();
+}
+
+/// Govern every datum under `path`, skipping entries with `status = "disabled"`.
+/// Results are sorted by datum key for deterministic output.
+fn govern_all(path: &str) -> Result<Vec<GovernReport>> {
+    let all_datums = datum_utils::get_all_datums(path)?;
+    let mut keys: Vec<&String> = all_datums.keys().collect();
+    keys.sort();
+    Ok(keys
+        .into_iter()
+        .filter_map(|key| {
+            let datum = all_datums.get(key)?;
+            if datum.status.as_deref() == Some("disabled") {
+                return None;
+            }
+            Some(govern_one(datum, path))
+        })
+        .collect())
+}
+
+/// `b00t datum govern <name>` / `b00t datum govern --all`.
+///
+/// Runs prove_by_type + evaluate_gates + hook_detect against a single named
+/// datum, or every datum under `path` (skipping `status = "disabled"` entries
+/// when `--all` is given) and reports per-datum health.
+fn handle_govern(path: &str, name: Option<&str>, all: bool, format: &str) -> Result<()> {
+    let reports: Vec<GovernReport> = if all {
+        govern_all(path)?
+    } else {
+        let datum_name = name.ok_or_else(|| {
+            anyhow::anyhow!("datum govern requires a name, or pass --all to govern every datum")
+        })?;
+        let datum = datum_utils::find_datum_by_pattern(path, datum_name)?
+            .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found", datum_name))?;
+        vec![govern_one(&datum, path)]
+    };
+
+    if format == "json" {
+        println!("{}", serde_json::to_string_pretty(&reports)?);
+    } else if reports.is_empty() {
+        println!("No datums to govern.");
+    } else {
+        for report in &reports {
+            print_govern_report_table(report);
+        }
+        let healthy_count = reports.iter().filter(|r| r.healthy).count();
+        println!("{} healthy / {} total", healthy_count, reports.len());
     }
 
     Ok(())
@@ -1564,5 +1881,625 @@ mod call_tests {
             err.to_string()
                 .contains("Refusing to execute multi-line backend template")
         );
+    }
+}
+
+// ── Health check / health report (#694) ─────────────────────────────────────
+//
+// Health-checks a BootDatum by evaluating its `gate` preconditions (hard
+// fail — the datum is not usable) and, if configured, its
+// `maintenance.check_command` (soft warn — the datum works but its version
+// check is failing / stale). Reuses `InstallerEngine::run_check` for command
+// execution rather than reinventing shell-exec.
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+enum HealthState {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl std::fmt::Display for HealthState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            HealthState::Pass => "pass",
+            HealthState::Warn => "warn",
+            HealthState::Fail => "fail",
+        };
+        write!(f, "{s}")
+    }
+}
+
+/// Serializable mirror of `crate::gates::GateResult`, which does not derive
+/// `Serialize` itself. gates.rs is out of scope for #694, so we copy the two
+/// fields we need rather than modifying it.
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct GateResultSummary {
+    passed: bool,
+    reason: String,
+}
+
+impl From<&crate::gates::GateResult> for GateResultSummary {
+    fn from(g: &crate::gates::GateResult) -> Self {
+        Self {
+            passed: g.passed,
+            reason: g.reason.clone(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct DatumHealth {
+    datum: String,
+    state: HealthState,
+    reason: String,
+    last_checked: Option<String>,
+    gate_results: Vec<GateResultSummary>,
+}
+
+/// Health-check a single datum: gate preconditions first (hard Fail — reason
+/// comes from the failing gate's hint/message), then its
+/// `maintenance.check_command` if configured (Warn on nonzero exit / exec
+/// error), else Pass with no maintenance configured.
+fn health_check_one(datum: &crate::BootDatum, path: &str) -> DatumHealth {
+    let gate_results: Vec<GateResultSummary> = datum
+        .gate
+        .as_deref()
+        .map(|gates| crate::gates::evaluate_gates(gates, path))
+        .unwrap_or_default()
+        .iter()
+        .map(GateResultSummary::from)
+        .collect();
+
+    if let Some(failed) = gate_results.iter().find(|g| !g.passed) {
+        return DatumHealth {
+            datum: datum.name.clone(),
+            state: HealthState::Fail,
+            reason: failed.reason.clone(),
+            last_checked: None,
+            gate_results,
+        };
+    }
+
+    if let Some(maintenance) = &datum.maintenance {
+        if let Some(check_command) = &maintenance.check_command {
+            let check = crate::install::capability::CapabilityCheck {
+                name: datum.name.clone(),
+                check_command: check_command.clone(),
+                remediation: String::new(),
+                required: false,
+                vendor_datum: None,
+            };
+            let result = crate::install::capability::InstallerEngine::run_check(&check);
+            let now = Some(chrono::Utc::now().to_rfc3339());
+            return match result.status {
+                crate::install::capability::CheckStatus::Pass => DatumHealth {
+                    datum: datum.name.clone(),
+                    state: HealthState::Pass,
+                    reason: "maintenance check_command passed".to_string(),
+                    last_checked: now,
+                    gate_results,
+                },
+                _ => DatumHealth {
+                    datum: datum.name.clone(),
+                    state: HealthState::Warn,
+                    reason: result
+                        .error
+                        .unwrap_or_else(|| "maintenance check_command failed".to_string()),
+                    last_checked: now,
+                    gate_results,
+                },
+            };
+        }
+    }
+
+    DatumHealth {
+        datum: datum.name.clone(),
+        state: HealthState::Pass,
+        reason: "no maintenance check configured".to_string(),
+        last_checked: None,
+        gate_results,
+    }
+}
+
+fn print_datum_health(health: &DatumHealth) {
+    let icon = match health.state {
+        HealthState::Pass => "✅",
+        HealthState::Warn => "⚠️ ",
+        HealthState::Fail => "❌",
+    };
+    println!(
+        "{icon} {} [{}] — {}",
+        health.datum, health.state, health.reason
+    );
+}
+
+fn handle_health_check(path: &str, name: Option<&str>, all: bool) -> Result<()> {
+    if !all && name.is_none() {
+        anyhow::bail!("datum health-check requires --name <datum> or --all");
+    }
+
+    let datums = datum_utils::get_all_datums(path)?;
+
+    if all {
+        for datum in datums.values() {
+            let health = health_check_one(datum, path);
+            print_datum_health(&health);
+        }
+        return Ok(());
+    }
+
+    let target = name.expect("checked above: name or all must be set");
+    let datum = datums
+        .get(target)
+        .or_else(|| datums.values().find(|d| d.name == target))
+        .with_context(|| format!("datum '{target}' not found"))?;
+    let health = health_check_one(datum, path);
+    print_datum_health(&health);
+    Ok(())
+}
+
+fn handle_health_report(path: &str, format: &str) -> Result<()> {
+    let datums = datum_utils::get_all_datums(path)?;
+
+    let mut results: Vec<DatumHealth> = datums
+        .values()
+        .map(|datum| health_check_one(datum, path))
+        .collect();
+    results.sort_by(|a, b| a.datum.cmp(&b.datum));
+
+    let pass = results
+        .iter()
+        .filter(|r| r.state == HealthState::Pass)
+        .count();
+    let warn = results
+        .iter()
+        .filter(|r| r.state == HealthState::Warn)
+        .count();
+    let fail = results
+        .iter()
+        .filter(|r| r.state == HealthState::Fail)
+        .count();
+    let (store_objects, store_bytes) = b00t_c0re_lib::store::status();
+
+    match format {
+        "json" => {
+            let report = serde_json::json!({
+                "datums": results,
+                "summary": {
+                    "pass": pass,
+                    "warn": warn,
+                    "fail": fail,
+                    "total": results.len(),
+                },
+                "store": {
+                    "objects": store_objects,
+                    "bytes": store_bytes,
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        _ => {
+            for health in &results {
+                print_datum_health(health);
+            }
+            println!(
+                "\n── health-report summary ──\n  pass: {pass}  warn: {warn}  fail: {fail}  total: {}\n  store: {store_objects} objects, {store_bytes} bytes",
+                results.len()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_health_datum(name: &str) -> crate::BootDatum {
+        crate::BootDatum {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn health_check_one_passing_maintenance_command_yields_pass() {
+        let mut datum = make_health_datum("healthy-cli");
+        datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(7),
+            check_command: Some("true".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let health = health_check_one(&datum, "/tmp");
+
+        assert_eq!(health.state, HealthState::Pass);
+        assert_eq!(health.datum, "healthy-cli");
+    }
+
+    #[test]
+    fn health_check_one_no_gate_no_maintenance_yields_pass() {
+        // Most real datums have neither a [gate] nor a [maintenance] section —
+        // this is the common-case default and should be a clean Pass, not an
+        // accidental Fail/Warn from an empty gate list or missing check_command.
+        let datum = make_health_datum("plain-cli");
+
+        let health = health_check_one(&datum, "/tmp");
+
+        assert_eq!(health.state, HealthState::Pass);
+        assert_eq!(health.reason, "no maintenance check configured");
+        assert!(health.gate_results.is_empty());
+        assert!(health.last_checked.is_none());
+    }
+
+    #[test]
+    fn health_check_one_failing_gate_yields_fail_with_gate_reason() {
+        let mut datum = make_health_datum("gated-cli");
+        datum.gate = Some(vec![crate::GateSpec {
+            command: Some("definitely-not-a-real-command-xyz".to_string()),
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: None,
+            hint: Some("install definitely-not-a-real-command-xyz first".to_string()),
+        }]);
+
+        let health = health_check_one(&datum, "/tmp");
+
+        // health_check_one always maps a failing gate to Fail (never Warn) —
+        // asserting the exact state (rather than Fail|Warn) so a future
+        // regression that muddles gate-fail vs. maintenance-warn is caught.
+        assert_eq!(health.state, HealthState::Fail);
+        assert!(health.reason.contains("definitely-not-a-real-command-xyz"));
+        assert!(!health.gate_results.is_empty());
+        assert!(!health.gate_results[0].passed);
+    }
+
+    #[test]
+    fn health_report_aggregates_pass_warn_fail_counts() {
+        let mut pass_datum = make_health_datum("pass-datum");
+        pass_datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(1),
+            check_command: Some("true".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let mut warn_datum = make_health_datum("warn-datum");
+        warn_datum.maintenance = Some(crate::MaintenanceConfig {
+            check_interval_days: Some(1),
+            check_command: Some("false".to_string()),
+            version_source: None,
+            check_regex: None,
+        });
+
+        let mut fail_datum = make_health_datum("fail-datum");
+        fail_datum.gate = Some(vec![crate::GateSpec {
+            command: Some("definitely-not-a-real-command-xyz".to_string()),
+            file: None,
+            env: None,
+            rhai: None,
+            knowledge_backend: None,
+            hint: None,
+        }]);
+
+        let results: Vec<DatumHealth> = vec![&pass_datum, &warn_datum, &fail_datum]
+            .into_iter()
+            .map(|d| health_check_one(d, "/tmp"))
+            .collect();
+
+        let pass = results
+            .iter()
+            .filter(|r| r.state == HealthState::Pass)
+            .count();
+        let warn = results
+            .iter()
+            .filter(|r| r.state == HealthState::Warn)
+            .count();
+        let fail = results
+            .iter()
+            .filter(|r| r.state == HealthState::Fail)
+            .count();
+
+        assert_eq!(pass, 1, "expected exactly one Pass datum");
+        assert_eq!(warn, 1, "expected exactly one Warn datum");
+        assert_eq!(fail, 1, "expected exactly one Fail datum");
+    }
+}
+
+#[cfg(test)]
+mod govern_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Write a minimal `<name>.<type>.toml` datum fixture into `dir`.
+    /// `extra` is inserted verbatim into the `[b00t]` table (e.g. `version = "..."`,
+    /// `status = "disabled"`, or a trailing `[[b00t.gate]]` block).
+    fn write_fixture(dir: &TempDir, name: &str, datum_type: &str, extra: &str) {
+        let content = format!(
+            "[b00t]\nname = \"{name}\"\ntype = \"{datum_type}\"\nhint = \"test datum {name}\"\n{extra}\n"
+        );
+        let filename = format!("{name}.{datum_type}.toml");
+        std::fs::write(dir.path().join(filename), content).unwrap();
+    }
+
+    #[test]
+    fn govern_one_healthy_cli_datum_passes() {
+        let temp_dir = TempDir::new().unwrap();
+        // File gate resolves relative to the datum directory (path is a dir here).
+        std::fs::write(temp_dir.path().join("marker.txt"), "present").unwrap();
+        write_fixture(
+            &temp_dir,
+            "healthy-cli",
+            "cli",
+            "version = \"healthy-cli --version\"\n\n[[b00t.gate]]\nfile = \"marker.txt\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let datum = datum_utils::find_datum_by_pattern(path, "healthy-cli")
+            .unwrap()
+            .expect("fixture datum should be found");
+
+        let report = govern_one(&datum, path);
+
+        assert!(report.proved.passed, "proof should pass: {}", report.proved.detail);
+        assert_eq!(report.gated.len(), 1);
+        assert!(report.gated[0].passed, "gate should pass: {}", report.gated[0].reason);
+        assert!(report.hooked.passed, "no hook_detect should default to passed");
+        assert!(report.healthy, "datum with passing proof/gate/hook should be healthy");
+    }
+
+    #[test]
+    fn govern_one_missing_env_gate_marks_unhealthy() {
+        let temp_dir = TempDir::new().unwrap();
+        write_fixture(
+            &temp_dir,
+            "gated-cli",
+            "cli",
+            "version = \"gated-cli --version\"\n\n[[b00t.gate]]\nenv = \"B00T_GOVERN_TEST_MISSING_VAR_9d8f3a\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let datum = datum_utils::find_datum_by_pattern(path, "gated-cli")
+            .unwrap()
+            .expect("fixture datum should be found");
+
+        // Ensure the gate's env var really is unset in this process.
+        assert!(std::env::var("B00T_GOVERN_TEST_MISSING_VAR_9d8f3a").is_err());
+
+        let report = govern_one(&datum, path);
+
+        assert_eq!(report.gated.len(), 1);
+        assert!(
+            !report.gated[0].passed,
+            "gate on a missing env var should fail"
+        );
+        assert!(!report.healthy, "unhealthy gate should make the datum unhealthy");
+    }
+
+    #[test]
+    fn govern_all_skips_disabled_datums() {
+        let temp_dir = TempDir::new().unwrap();
+        write_fixture(&temp_dir, "active-cli", "cli", "version = \"active-cli --version\"\n");
+        write_fixture(
+            &temp_dir,
+            "disabled-cli",
+            "cli",
+            "version = \"disabled-cli --version\"\nstatus = \"disabled\"\n",
+        );
+
+        let path = temp_dir.path().to_str().unwrap();
+        let reports = govern_all(path).unwrap();
+
+        assert!(
+            reports.iter().any(|r| r.datum == "active-cli"),
+            "active datum should be present in the report list"
+        );
+        assert!(
+            !reports.iter().any(|r| r.datum == "disabled-cli"),
+            "disabled datum should be skipped from --all governance"
+        );
+    }
+}
+
+#[cfg(test)]
+mod datum_toml_subject_satisfies_tests {
+    use super::*;
+
+    fn table_from_toml(toml_str: &str) -> toml::value::Table {
+        let value: toml::Value = toml::from_str(toml_str).unwrap();
+        match value {
+            toml::Value::Table(t) => t,
+            _ => panic!("expected a TOML table"),
+        }
+    }
+
+    #[test]
+    fn clean_datum_is_satisfied() {
+        let table = table_from_toml(
+            r#"
+name = "clean-cli"
+type = "cli"
+hint = "a clean datum"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "clean-cli.cli.toml",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: true });
+        assert!(result.is_satisfied(), "expected Satisfied, got {:?}", result.disposition);
+    }
+
+    #[test]
+    fn missing_required_field_is_violated() {
+        // No `hint` field — a required field per KNOWN_B00T_KEYS / handle_validate.
+        let table = table_from_toml(
+            r#"
+name = "incomplete-cli"
+type = "cli"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "incomplete-cli.cli.toml",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: false });
+        match result.disposition {
+            Disposition::Violated { reason } => {
+                assert!(reason.contains("hint"), "reason: {reason}");
+            }
+            other => panic!("expected Violated, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn recognized_type_unrecognized_extension_strict_is_unknown() {
+        // type="cli" is a recognized type, but the fixture filename's
+        // extension is not a recognized datum-type suffix — #927's fix:
+        // this must surface as Unknown, not be silently skipped as before.
+        let table = table_from_toml(
+            r#"
+name = "weird-ext-cli"
+type = "cli"
+hint = "a datum with an unrecognized filename extension"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "weird-ext-cli.some-made-up-extension-xyz",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: true });
+        assert!(
+            matches!(result.disposition, Disposition::Unknown),
+            "expected Unknown, got {:?}",
+            result.disposition
+        );
+    }
+
+    #[test]
+    fn non_strict_mode_never_produces_unknown_for_extension_mismatch() {
+        // Same fixture as above, but strict=false: the extension check is
+        // skipped entirely (not even attempted), so it's Satisfied.
+        let table = table_from_toml(
+            r#"
+name = "weird-ext-cli"
+type = "cli"
+hint = "a datum with an unrecognized filename extension"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "weird-ext-cli.some-made-up-extension-xyz",
+        };
+        let result = subject.satisfies(&BootDatumSchemaConstraint { strict: false });
+        assert!(result.is_satisfied());
+    }
+
+    #[test]
+    fn ufo_stereotype_delegates_to_datum_type_lattice() {
+        let table = table_from_toml(
+            r#"
+name = "docker-thing"
+type = "docker"
+hint = "t"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "docker-thing.docker.toml",
+        };
+        assert_eq!(
+            subject.ufo_stereotype(),
+            DatumType::Docker.ufo_stereotype()
+        );
+    }
+
+    #[test]
+    fn ufo_stereotype_degrades_to_unknown_for_missing_type() {
+        let table = table_from_toml(
+            r#"
+name = "typeless"
+hint = "t"
+"#,
+        );
+        let subject = DatumTomlSubject {
+            raw: &table,
+            filename: "typeless.toml",
+        };
+        assert_eq!(
+            subject.ufo_stereotype(),
+            UfoStereotype::Kind("Unknown".into())
+        );
+    }
+}
+
+#[cfg(test)]
+mod validate_evidence_integration_tests {
+    use super::*;
+    use crate::commands::evidence::{read_evidence, with_test_evidence_log_path};
+    use tempfile::TempDir;
+
+    /// Proves the #927 wiring is real, not just computed and discarded:
+    /// evaluating a `DatumTomlSubject` against `BootDatumSchemaConstraint`
+    /// and recording NS-9/NS-10 evidence really appends rows to
+    /// `satisfies.jsonl` (via the same `record_is_a`/`record_audited_by`
+    /// sink `handle_validate` itself calls), with `object` strings prefixed
+    /// `"isA:"` and `"audited_by:"` respectively.
+    #[test]
+    fn satisfies_evaluation_records_isa_and_audited_by_evidence() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+
+        with_test_evidence_log_path(log_path, || {
+            let table = toml::from_str::<toml::Value>(
+                r#"
+name = "evidence-cli"
+type = "cli"
+hint = "exercises the evidence sink"
+"#,
+            )
+            .unwrap();
+            let table = match table {
+                toml::Value::Table(t) => t,
+                _ => unreachable!(),
+            };
+
+            let subject = DatumTomlSubject {
+                raw: &table,
+                filename: "evidence-cli.cli.toml",
+            };
+            let constraint = BootDatumSchemaConstraint { strict: true };
+            let target = "evidence-cli.cli";
+
+            let _result = subject.satisfies(&constraint);
+            crate::commands::evidence::record_is_a(target, &subject.ufo_stereotype().to_string())
+                .unwrap();
+            for iso_id in constraint.iso_standard_ids() {
+                crate::commands::evidence::record_audited_by(target, &iso_id).unwrap();
+            }
+
+            let records = read_evidence().unwrap();
+            assert!(
+                records
+                    .iter()
+                    .any(|r| r.subject == target
+                        && r.object.as_str().map_or(false, |o| o.starts_with("isA:"))),
+                "expected an isA: evidence record, got: {:?}",
+                records
+            );
+            assert!(
+                records.iter().any(|r| r.subject == target
+                    && r
+                        .object
+                        .as_str()
+                        .map_or(false, |o| o.starts_with("audited_by:"))),
+                "expected an audited_by: evidence record, got: {:?}",
+                records
+            );
+        });
     }
 }

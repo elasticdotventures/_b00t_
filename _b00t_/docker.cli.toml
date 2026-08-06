@@ -1,0 +1,34 @@
+# docker.cli.toml — minimal reference datum for the Docker Engine CLI.
+# @tribal: created to close a dangling `depends_on = ["docker.cli"]`
+#   reference (k3d.cli) found during a datum-graph audit. This store
+#   otherwise only models individual containers (postgres-enhanced.docker,
+#   redis.docker, ...); this datum is the engine/CLI those depend on being
+#   present, not another container. No install script is fabricated —
+#   Docker vs Podman vs Docker Desktop is a host choice.
+
+[b00t]
+name = "docker"
+type = "cli"
+hint = "Docker Engine CLI — required by tools (k3d, container-backed datums) that shell out to `docker`."
+version = "docker --version"
+version_regex = 'Docker version (\d+\.\d+\.\d+)'
+docs = "https://docs.docker.com/engine/install/"
+
+[validate]
+command = "docker --version"
+regex = "^Docker version"
+
+[[usage]]
+description = "Check Docker version"
+command = "docker --version"
+
+[[usage]]
+description = "Check the Docker daemon is reachable"
+command = "docker info"
+
+# b00t:map v1
+# summary: docker — minimal detect-only datum, no fabricated install script
+# tags: docker, container, engine, cli
+# tier: sm0l
+# cmds: docker --version
+# complexity: 1

@@ -71,30 +71,18 @@ impl GossipTable {
                 seq,
             },
         );
-        if hops == 0 {
-            None
-        } else {
-            Some(hops - 1)
-        }
+        if hops == 0 { None } else { Some(hops - 1) }
     }
 
     /// Record a local (self-originated or non-propagating) presence update.
     pub fn insert_local(&mut self, presence: AgentPresence, seq: u64) {
-        self.members.insert(
-            presence.agent_id.clone(),
-            GossipMember {
-                presence,
-                seq,
-            },
-        );
+        self.members
+            .insert(presence.agent_id.clone(), GossipMember { presence, seq });
     }
 
     /// Next sequence number for `agent_id` (previous + 1, or 1 if unseen).
     pub fn next_seq(&self, agent_id: &str) -> u64 {
-        self.members
-            .get(agent_id)
-            .map(|m| m.seq + 1)
-            .unwrap_or(1)
+        self.members.get(agent_id).map(|m| m.seq + 1).unwrap_or(1)
     }
 
     /// All live endpoints (excluding self, excluding stale by TTL).

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use crate::Embedding;
 use crate::layer::bouncer::LayerGateKeeper;
 use crate::layer::trait_def::{EmbedLayer, TensorSource};
 use crate::layer::{LayerDescriptor, LayerError, LayerId, LayerStatus};
-use crate::Embedding;
 
 impl LayerGateKeeper {
     /// Synchronous validate_pre_load — delegates to blocking gate check.
@@ -236,9 +236,9 @@ impl LayerStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layer::TensorSpec;
     use crate::layer::source::SafetensorsSource;
     use crate::layer::trait_def::{EmbedLayer, TensorSource};
-    use crate::layer::TensorSpec;
 
     #[derive(Clone)]
     struct TestLayer {
@@ -319,15 +319,9 @@ mod tests {
             store.register(Box::new(make_test_layer(&format!("layer-{i}"), 384)));
         }
 
-        store
-            .activate(&LayerId::new("layer-0"), None)
-            .unwrap();
-        store
-            .activate(&LayerId::new("layer-1"), None)
-            .unwrap();
-        store
-            .activate(&LayerId::new("layer-2"), None)
-            .unwrap();
+        store.activate(&LayerId::new("layer-0"), None).unwrap();
+        store.activate(&LayerId::new("layer-1"), None).unwrap();
+        store.activate(&LayerId::new("layer-2"), None).unwrap();
 
         assert_eq!(store.active_layers().len(), 2);
         assert!(!store.is_active(&LayerId::new("layer-0")));
@@ -360,7 +354,10 @@ mod tests {
         store.activate(&LayerId::new("test"), None).unwrap();
         let result = store.activate(&LayerId::new("test"), None);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), LayerError::AlreadyActive { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            LayerError::AlreadyActive { .. }
+        ));
     }
 
     #[test]

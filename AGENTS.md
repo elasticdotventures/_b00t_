@@ -135,7 +135,7 @@ b00t types are Rust structs/enums in `b00t-cli/src/lib.rs`. Agents navigate via:
 - `b00t-cli ontology sparql --subject <X> --predicate type` — just type triples
 - `b00t-cli learn <topic>` — DWIW fanout: `DatumSearchSource(w=3)` + `GraphAdjacencySource(w=2)`
 - `b00t-cli blessing --manifest --role <R>` — walk `depends_on` graph for role
-- Key types: `BootDatum` (open struct) · `DatumType` (22-variant enum: Cli/Skill/Role/Mcp/Agent…)
+- Key types: `BootDatum` (open struct) · `DatumType` (open enum — see `b00t-cli/src/datum_types.rs` for the current variant list, do not hardcode a count here)
 - Chalk Interner pattern: `DatumStore` trait would abstract TOML/SQLite/Qdrant storage behind same API
 - `b00t learn chalk-interner` — load Chalk Interner → b00t DatumStore mapping
 - `b00t learn datum-macro` — load Rust macro → dynamic datum feasibility analysis
@@ -147,6 +147,10 @@ Sharp corner or bug found? REPORT IT — silence hides systemic issues.
 - `b00t task add "bug: <description>"` — creates tracked issue for operator review
 - Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
 - Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
+- 🚩 known-broken (2026-08-04): `b00t lfmf`'s vector-DB backend silently fails to persist
+  ("✅ Lesson recorded" prints even when the write errors) — verify with `b00t lfmf advice
+  <tool>` after recording, don't trust the success message alone. Direct file edits are
+  the reliable fallback until fixed.
 
 ## Hive A2A Collaboration
 
@@ -179,32 +183,48 @@ complexity: 8
 
 ---
 
-## Tax-Lawyer Architecture (recorded 2026-06-20)
+## ledgrrr (corrected 2026-07-23)
 
-The Tax-Lawyer Platform combines two architectural currents:
-- **MCP-down**: ledgerr_tax actions are thin wrappers (<=10 lines) over Satisfies<Constraint> checks
-- **UFO-up**: ufo-types crate grounds all domain concepts in UFO stereotypes with ISO standard types
-The Satisfies<T> trait is the bridge — produces arc-kit-au evidence nodes for audit trail.
-See _b00t_/datums/PRD-TAX-LAWYER-UFO-SDD.tomllmd and issues #510-#517.
+`ledgrrr` (github.com/PromptExecution/ledgrrr, vendored at
+`~/.dotfiles/vendor/ledgrrr`) is a real, separate project — a local-first
+bookkeeping/cost-tracking control plane (typed ontology graph + Rhai rules +
+MCP tools + Mermaid/isometric visualization) — co-developed alongside b00t as
+an independently reusable component, and used heavily at PromptExecution.
 
-## DoggoLingo Playable-First Pattern (recorded 2026-06-30)
+A prior entry here ("Tax-Lawyer Platform", `Satisfies<Constraint>`/UFO-stereotype
+bridge, PRD-TAX-LAWYER-UFO-SDD.tomllmd, issues #510-#517) was a hallucinated
+architecture summary — none of those names, traits, or issues exist in the
+real repo. Do not cite it. For actual ledgrrr architecture, read its own
+`README.md`/`AGENTS.md` in the vendored checkout, not this file.
 
-DoggoLingo is the active App4.Dog acceleration vector.
-Agents MUST prioritize a working local game loop over backend, cloud, or ML architecture.
+## Playable-First Pattern (genericized 2026-07-23, `b00t lfmf mvp`)
 
-P0 is `tap-the-sheep`:
-- one skill: touch target acquisition
-- no backend dependency
-- no treat-dispenser dependency
-- no cloud dependency
-- static or hardcoded sheep asset is acceptable
-- reward is happy audio plus visual motion
+For any playable/interactive product, agents MUST prioritize one working
+end-to-end interaction loop over backend, cloud, or ML architecture:
+- one skill (e.g. touch target acquisition)
+- no backend, treat-dispenser, or cloud dependency
+- a static or hardcoded asset is acceptable for P0
+- reward is immediate audio/visual feedback
 - telemetry is local and JSON-shaped
 
-Before adding ML workflow code, agents MUST check:
-- `._b00t_/doggolingo.stack.tomllm`
-- `docs/DOGGOLINGO_CLEANUP_PLAN.md`
-- `SOUL.tomllm` `[doggolingo]`
+Infra-before-loop stalls momentum and hides scope creep behind unplayable
+plumbing. Project-specific stack files, cleanup plans, and legacy-exploration
+notes (e.g. workflow-tool experiments) live in that project's own datums —
+check the current repo's `_b00t_/` and `SOUL.tomllm` before adding ML/workflow
+code, not this file. `b00t lfmf mvp` holds the durable, repo-agnostic version
+of this lesson.
 
-ComfyUI work is legacy exploration. Extract stage ideas into typed b00t business logic;
-do not make ComfyUI, workflow JSON, or a persistent ComfyUI server part of the game runtime.
+## Just Recipe Boundary (recorded 2026-07-25)
+
+Before editing a justfile, agents MUST run `b00t learn just`.
+Just recipes MUST remain thin command surfaces. Move stateful shell logic, request
+generation, heredocs, and provider orchestration into descriptively named scripts;
+the recipe invokes the script and exposes its contract.
+
+## Worktree Discipline (recorded 2026-08-04)
+
+TLDR: `~/.dotfiles` is bare — never edit or build in it directly. `b00t learn worktree`
+→ `git worktree add <path> <branch>` on real disk (never `/tmp`) → build. Detail, sharp
+edges (submodule init, shared target-dir, tmpfs contention), and fixes all live in the
+datum — MUST `b00t learn worktree` before the first `git`/`cargo` command against any
+bare/worktree-layout repo rather than rediscovering them the hard way.

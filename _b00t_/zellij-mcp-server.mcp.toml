@@ -56,7 +56,7 @@ echo "✅ Zellij MCP Server uninstalled"
 version = "echo '1.0.0'"
 version_regex = "(\\d+\\.\\d+\\.\\d+)"
 
-depends_on = ["node", "zellij.cli"]
+depends_on = ["node.cli", "zellij.cli"]
 
 [[b00t.mcp.stdio]]
 command = "npx"

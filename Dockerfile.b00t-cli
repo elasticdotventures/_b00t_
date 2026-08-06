@@ -8,18 +8,27 @@ FROM ghcr.io/elasticdotventures/just:latest AS just-binary
 # ================================
 # Stage 1: Rust Build Environment
 # ================================
-FROM rust:1.91-slim AS rust-builder
+FROM rust:1.96-slim AS rust-builder
 
 # Copy just from forked container
 COPY --from=just-binary /usr/local/bin/just /usr/local/bin/just
 
 # Install build dependencies
+# `perl` (not just the slim image's preinstalled perl-base) is required
+# because openssl-sys vendors and builds OpenSSL from source here, and its
+# Configure script needs FindBin.pm, which perl-base doesn't ship.
+# `build-essential` (make, gcc, g++, libc headers) is required because
+# rust:slim ships no native toolchain at all, and b00t-cli depends on
+# b00t-embed -> embed_anything, whose transitive deps (e.g. esaxx-rs) build
+# native C/C++ code.
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     ca-certificates \
     python3 \
     python3-dev \
+    perl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory for the Rust project
@@ -28,24 +37,38 @@ WORKDIR /build
 # Copy workspace root and required workspace members/vendor crates
 COPY Cargo.toml Cargo.lock ./
 COPY _b00t_/ ./_b00t_/
+COPY b00t-admin/ ./b00t-admin/
 COPY b00t-ast/ ./b00t-ast/
 COPY b00t-azure-cp/ ./b00t-azure-cp/
 COPY b00t-bouncer/ ./b00t-bouncer/
+COPY b00t-cad/ ./b00t-cad/
 COPY b00t-cli/ ./b00t-cli/
+COPY b00t-crate/ ./b00t-crate/
 COPY b00t-c0re-a2a/ ./b00t-c0re-a2a/
 COPY b00t-c0re-gov/ ./b00t-c0re-gov/
 COPY b00t-c0re-hierarchy/ ./b00t-c0re-hierarchy/
 COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-datum-core/ ./b00t-datum-core/
+COPY b00t-embed/ ./b00t-embed/
 COPY b00t-grok/ ./b00t-grok/
 COPY b00t-ipc/ ./b00t-ipc/
 COPY b00t-l3dg3rr-viz/ ./b00t-l3dg3rr-viz/
 COPY b00t-lib-chat/ ./b00t-lib-chat/
+COPY b00t-lsp/ ./b00t-lsp/
 COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-mcp-npm/ ./b00t-mcp-npm/
-COPY b00t-py/ ./b00t-py/
+COPY b00t-mermaid-wasm/ ./b00t-mermaid-wasm/
+COPY b00t-pyverse/ ./b00t-pyverse/
+COPY b00t-ui-wasm/ ./b00t-ui-wasm/
+COPY b00t-zellij/ ./b00t-zellij/
+COPY blessed/ ./blessed/
 COPY k0mmand3r/ ./k0mmand3r/
 COPY pm2-tasker/ ./pm2-tasker/
+COPY vendor/embed-anything-b00t/rust/ ./vendor/embed-anything-b00t/rust/
+COPY vendor/embed-anything-b00t/processors/ ./vendor/embed-anything-b00t/processors/
 COPY vendor/irontology-mcp/ ./vendor/irontology-mcp/
+COPY vendor/ledgrrr/crates/b00t-reflect-types/ ./vendor/ledgrrr/crates/b00t-reflect-types/
+COPY vendor/runpod-sdk/ ./vendor/runpod-sdk/
 COPY vendor/tomllm/ ./vendor/tomllm/
 
 # Build only the shipping binaries. `just install` is interactive, bumps versions,

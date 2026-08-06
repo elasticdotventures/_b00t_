@@ -1,0 +1,13 @@
+[b00t]
+name = "edit"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Modify an existing file with a precise, minimal diff after reading it — never rewrite a whole file to change one thing"
+keywords = ["edit", "file", "diff", "modify"]
+
+[b00t.learn]
+content = """
+Core coding-agent action: apply a targeted, minimal change to an
+existing file (read first). Prefer `Edit` over `Write` whenever the file
+already exists, to keep diffs reviewable.
+"""

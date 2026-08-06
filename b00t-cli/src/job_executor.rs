@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::task::JoinSet;
 
-use crate::commands::provider::{get_provider, BatchJobSpec, ComputeProvider, JobHandle};
+use crate::commands::provider::{ComputeProvider, JobHandle, get_provider};
 use crate::datum_job::{JobDatum, JobStep, JobTask};
 
 /// Bash command task for apalis execution
@@ -400,26 +400,57 @@ async fn execute_python_step(
         .with_context(|| format!("pip install {} failed", requirement))?;
     }
 
-    run_shell(
-        project_root,
-        cwd,
-        "python3",
-        &[script.to_string()],
-        env,
-    )
-    .await?;
+    run_shell(project_root, cwd, "python3", &[script.to_string()], env).await?;
 
     checkpoint_if_needed(project_root, job_name, step)
 }
 
-/// Poll interval / attempt budget for provider job-status polling. Kept
-/// small so tests (which use a fake `ComputeProvider` reporting a terminal
-/// status immediately) run fast offline. Real cloud jobs (RunPod/HF) take
-/// much longer than this budget to finish — this MVP bridge does not yet
-/// distinguish "still running, check back later" from "gave up"; it simply
-/// errors out after the budget is exhausted.
-const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(200);
-const PROVIDER_MAX_POLLS: u32 = 50;
+/// Poll interval for provider job-status polling. Production polls a real
+/// cloud API, so this is deliberately slow (2s) to avoid hammering it;
+/// tests use a fake `ComputeProvider` and want fast offline runs, so the
+/// test-mode interval is much shorter. See `PENDING_MAX_POLLS`/
+/// `RUNNING_MAX_POLLS` below for the attempt budgets.
+#[cfg(not(test))]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_secs(2);
+#[cfg(test)]
+const PROVIDER_POLL_INTERVAL: Duration = Duration::from_millis(20);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JobStatusBucket {
+    /// Provider is still allocating/pulling — dstack's pending/submitted/
+    /// provisioning, or any provider's equivalent. Not stuck by itself;
+    /// generous timeout applies here (see poll_until_terminal).
+    Pending,
+    /// Job is actively executing.
+    Running,
+    /// Success or failure, no further state changes expected.
+    Terminal,
+}
+
+/// Buckets a raw provider status string. dstack states (pending, submitted,
+/// provisioning, running, terminating, terminated, failed, done) are checked
+/// first since they're unambiguous; falls back to the existing substring
+/// markers for RunPod/HF/local providers.
+fn classify_status(status: &str) -> JobStatusBucket {
+    let s = status.to_lowercase();
+    if s.contains("status=pending") || s.contains("status=submitted") || s.contains("status=provisioning") {
+        return JobStatusBucket::Pending;
+    }
+    if s.contains("status=running") {
+        return JobStatusBucket::Running;
+    }
+    // "done" is dstack-specific and not one of is_terminal_status's markers;
+    // "failed"/"terminated" ARE already markers there, so they're left to
+    // the fallback below rather than re-checked here (composes with
+    // is_terminal_status instead of duplicating its logic).
+    if s.contains("status=done") {
+        return JobStatusBucket::Terminal;
+    }
+    if is_terminal_status(&s) {
+        return JobStatusBucket::Terminal;
+    }
+    JobStatusBucket::Pending
+}
 
 /// True if `status` looks like a finished (success or failure) job.
 ///
@@ -462,29 +493,88 @@ fn is_failure_status(status: &str) -> bool {
         .any(|marker| s.contains(marker))
 }
 
+/// Poll budgets are asymmetric: `Pending` (still pulling/provisioning) gets
+/// a much longer budget than `Running`, because cold starts are legitimately
+/// slow and provider-dependent, while a job that's already `Running` should
+/// be making progress — see the spec's state-aware timeout rationale.
+/// At production's 2s interval: 150 polls = 5 minutes pending, 50 polls =
+/// 100 seconds running. At test's 20ms interval, both budgets resolve in
+/// well under a second of real wall-clock time.
+const PENDING_MAX_POLLS: u32 = 150;
+const RUNNING_MAX_POLLS: u32 = 50;
+
 async fn poll_until_terminal(provider: &dyn ComputeProvider, handle: &JobHandle) -> Result<String> {
-    for _ in 0..PROVIDER_MAX_POLLS {
+    let mut pending_polls = 0u32;
+    let mut running_polls = 0u32;
+    loop {
         let status = provider.job_status(handle).await?;
-        if is_terminal_status(&status) {
-            return Ok(status);
+        match classify_status(&status) {
+            JobStatusBucket::Terminal => return Ok(status),
+            JobStatusBucket::Pending => {
+                pending_polls += 1;
+                if pending_polls > PENDING_MAX_POLLS {
+                    anyhow::bail!(
+                        "job {} (provider={}) still pending after {} polls",
+                        handle.id, handle.provider, PENDING_MAX_POLLS
+                    );
+                }
+            }
+            JobStatusBucket::Running => {
+                running_polls += 1;
+                if running_polls > RUNNING_MAX_POLLS {
+                    anyhow::bail!(
+                        "job {} (provider={}) still running after {} polls with no terminal status",
+                        handle.id, handle.provider, RUNNING_MAX_POLLS
+                    );
+                }
+            }
         }
         tokio::time::sleep(PROVIDER_POLL_INTERVAL).await;
     }
+}
+
+/// Enforces `JobStep.output_contract` (format documented in datum_job.rs as
+/// `"PASS|FAIL:<5lines>"`). A step with no contract always passes — this
+/// only tightens behavior for steps that opt in. `job_output` is the job's
+/// captured stdout (or `result.json` contents, read by the caller); the last
+/// non-empty line must start with `PASS` or `FAIL:`.
+fn evaluate_output_contract(contract: Option<&str>, job_output: &str) -> Result<()> {
+    let Some(_contract) = contract else {
+        return Ok(());
+    };
+    let last_line = job_output
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("");
+    if last_line.trim() == "PASS" {
+        return Ok(());
+    }
+    if let Some(detail) = last_line.trim().strip_prefix("FAIL:") {
+        anyhow::bail!("job output_contract reported FAIL:{}", detail);
+    }
     anyhow::bail!(
-        "job {} (provider={}) did not reach a terminal status after {} polls",
-        handle.id,
-        handle.provider,
-        PROVIDER_MAX_POLLS
+        "job declared an output_contract but its last output line was not PASS/FAIL: got '{}'",
+        last_line
     );
 }
 
-/// Submit `spec` via `provider` and poll until terminal. Split out from
-/// `execute_provider_step` (which resolves the provider by name through
-/// `get_provider`) so tests can inject a fake `ComputeProvider` directly —
-/// `commands/provider.rs` has no pre-existing test-double pattern for the
-/// trait (checked its own test module: none use one), so this is a minimal
-/// one scoped to this bridge.
-async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec) -> Result<()> {
+/// Submit `step.batch` via `provider` and poll until terminal. Split out
+/// from `execute_provider_step` (which resolves the provider by name
+/// through `get_provider`) so tests can inject a fake `ComputeProvider`
+/// directly — `commands/provider.rs` has no pre-existing test-double
+/// pattern for the trait (checked its own test module: none use one), so
+/// this is a minimal one scoped to this bridge. Takes the whole `step`
+/// (not just its `batch` spec) so it can also read `step.output_contract`
+/// after the terminal status is reached.
+async fn dispatch_batch_job(provider: &dyn ComputeProvider, step: &JobStep) -> Result<()> {
+    let spec = step.batch.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "step '{}' has a backend but no [b00t.job.steps.batch] spec",
+            step.name
+        )
+    })?;
+
     let handle = provider
         .submit_batch_job(spec)
         .await
@@ -501,6 +591,22 @@ async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec)
         );
     }
 
+    if let Some(contract) = &step.output_contract {
+        let provider_name = provider.name();
+        if provider_name != "local" {
+            tracing::warn!(
+                "output_contract on provider '{provider_name}' reads job_status() not \
+                 logs — skipping evaluation (see issue #869)"
+            );
+        } else {
+            let job_output = provider
+                .job_status(&handle)
+                .await
+                .context("re-reading job status for output_contract evaluation")?;
+            evaluate_output_contract(Some(contract), &job_output)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -508,18 +614,10 @@ async fn dispatch_batch_job(provider: &dyn ComputeProvider, spec: &BatchJobSpec)
 /// local shell-out. Requires `step.batch` to be set (the `BatchJobSpec` to
 /// submit) — `step.task` is ignored in this path.
 async fn execute_provider_step(backend: &str, step: &JobStep) -> Result<()> {
-    let spec = step.batch.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "step '{}' declares backend '{}' but has no [b00t.job.steps.batch] spec",
-            step.name,
-            backend
-        )
-    })?;
-
     let provider =
         get_provider(backend).with_context(|| format!("resolving backend '{}'", backend))?;
 
-    dispatch_batch_job(provider.as_ref(), spec).await
+    dispatch_batch_job(provider.as_ref(), step).await
 }
 
 /// Run a single step: dispatch via `ComputeProvider` if `step.backend` is
@@ -857,11 +955,7 @@ description = "sleep step 2"
 type = "bash"
 command = "sleep 0.2"
 "#;
-        fs::write(
-            b00t_dir.join("test-sequential-timing.job.toml"),
-            job_toml,
-        )
-        .unwrap();
+        fs::write(b00t_dir.join("test-sequential-timing.job.toml"), job_toml).unwrap();
 
         let executor = JobExecutor::new(project_root).await.unwrap();
 
@@ -890,8 +984,8 @@ command = "sleep 0.2"
 #[cfg(test)]
 mod provider_bridge_tests {
     use super::*;
+    use crate::commands::provider::{BatchJobSpec, EndpointConfig, EndpointHandle, TrainingJobSpec};
     use async_trait::async_trait;
-    use crate::commands::provider::{EndpointConfig, EndpointHandle, TrainingJobSpec};
     use std::collections::VecDeque;
     use std::sync::Mutex;
 
@@ -899,12 +993,21 @@ mod provider_bridge_tests {
     /// lets tests assert both immediate-terminal and poll-until-terminal
     /// behavior without a real provider or real wall-clock job duration.
     struct FakeProvider {
+        provider_name: &'static str,
         statuses: Mutex<VecDeque<String>>,
     }
 
     impl FakeProvider {
         fn with_statuses(statuses: &[&str]) -> Self {
             Self {
+                provider_name: "fake",
+                statuses: Mutex::new(statuses.iter().map(|s| s.to_string()).collect()),
+            }
+        }
+
+        fn with_statuses_and_name(statuses: &[&str], name: &'static str) -> Self {
+            Self {
+                provider_name: name,
                 statuses: Mutex::new(statuses.iter().map(|s| s.to_string()).collect()),
             }
         }
@@ -913,7 +1016,7 @@ mod provider_bridge_tests {
     #[async_trait]
     impl ComputeProvider for FakeProvider {
         fn name(&self) -> &str {
-            "fake"
+            self.provider_name
         }
 
         async fn deploy_inference_endpoint(&self, _cfg: &EndpointConfig) -> Result<EndpointHandle> {
@@ -964,13 +1067,63 @@ mod provider_bridge_tests {
             env: std::collections::HashMap::new(),
             flavor: "local-gpu".to_string(),
             timeout_hours: 1.0,
+            gpu_count: 1,
+            volumes: vec![],
+            inputs: vec![],
         }
+    }
+
+    /// Builds a `JobStep` wrapping `sample_spec()`, with `output_contract`
+    /// overridable per test.
+    fn sample_step(output_contract: Option<&str>) -> JobStep {
+        JobStep {
+            name: "sample-step".to_string(),
+            description: "sample step for dispatch_batch_job tests".to_string(),
+            checkpoint: None,
+            depends_on: vec![],
+            task: JobTask::Bash {
+                command: "echo hi".to_string(),
+                cwd: None,
+                timeout_ms: None,
+                env: std::collections::HashMap::new(),
+            },
+            condition: None,
+            artifacts: None,
+            cognitive_tier: None,
+            output_contract: output_contract.map(|s| s.to_string()),
+            backend: Some("fake".to_string()),
+            batch: Some(sample_spec()),
+        }
+    }
+
+    #[test]
+    fn evaluate_output_contract_rejects_missing_pass_fail_marker() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "some log line\nno marker here");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn evaluate_output_contract_accepts_pass_marker() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "running tests...\nPASS");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn evaluate_output_contract_surfaces_fail_detail() {
+        let result = evaluate_output_contract(Some("PASS|FAIL:<5lines>"), "running tests...\nFAIL: assertion mismatch at line 42");
+        let err = result.expect_err("FAIL: line should error");
+        assert!(err.to_string().contains("assertion mismatch at line 42"));
+    }
+
+    #[test]
+    fn evaluate_output_contract_none_always_passes() {
+        assert!(evaluate_output_contract(None, "anything at all").is_ok());
     }
 
     #[tokio::test]
     async fn dispatch_batch_job_succeeds_on_immediate_terminal_status() {
         let provider = FakeProvider::with_statuses(&["exited"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
     }
 
@@ -979,15 +1132,46 @@ mod provider_bridge_tests {
         // Non-terminal statuses first — proves this actually loops rather
         // than trusting the first `job_status` response.
         let provider = FakeProvider::with_statuses(&["running", "running", "exited"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
     }
 
     #[tokio::test]
     async fn dispatch_batch_job_fails_on_failure_status() {
         let provider = FakeProvider::with_statuses(&["failed"]);
-        let result = dispatch_batch_job(&provider, &sample_spec()).await;
+        let result = dispatch_batch_job(&provider, &sample_step(None)).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_enforces_output_contract_pass() {
+        // Terminal status first, then a second `job_status` call (the
+        // output_contract re-read) returns the job's captured output.
+        // Uses name "local" so output_contract evaluation is exercised.
+        let provider =
+            FakeProvider::with_statuses_and_name(&["exited", "running tests...\nPASS"], "local");
+        let step = sample_step(Some("PASS|FAIL:<5lines>"));
+        let result = dispatch_batch_job(&provider, &step).await;
+        assert!(result.is_ok(), "expected success, got: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn dispatch_batch_job_enforces_output_contract_fail() {
+        let provider = FakeProvider::with_statuses_and_name(
+            &[
+                "exited",
+                "running tests...\nFAIL: assertion mismatch at line 42",
+            ],
+            "local",
+        );
+        let step = sample_step(Some("PASS|FAIL:<5lines>"));
+        let result = dispatch_batch_job(&provider, &step).await;
+        let err = result.expect_err("output_contract FAIL should error even though status was a success terminal status");
+        assert!(
+            err.to_string().contains("assertion mismatch at line 42"),
+            "unexpected error: {}",
+            err
+        );
     }
 
     #[tokio::test]
@@ -1033,8 +1217,54 @@ mod provider_bridge_tests {
     fn failure_status_detection() {
         assert!(is_failure_status("failed"));
         assert!(is_failure_status("dead"));
-        assert!(!is_failure_status("exited"), "bare 'exited' has no exit code available, treat as success");
+        assert!(
+            !is_failure_status("exited"),
+            "bare 'exited' has no exit code available, treat as success"
+        );
         assert!(!is_failure_status("completed"));
+    }
+
+    #[test]
+    fn classify_status_buckets_dstack_states_correctly() {
+        assert_eq!(classify_status("run=x status=pending"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=submitted"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=provisioning"), JobStatusBucket::Pending);
+        assert_eq!(classify_status("run=x status=running"), JobStatusBucket::Running);
+        assert_eq!(classify_status("run=x status=done"), JobStatusBucket::Terminal);
+        assert_eq!(classify_status("run=x status=failed"), JobStatusBucket::Terminal);
+        assert_eq!(classify_status("run=x status=terminated"), JobStatusBucket::Terminal);
+        // existing RunPod/HF/local markers still classify as Terminal
+        assert_eq!(classify_status("pod=x status=Exited"), JobStatusBucket::Terminal);
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_allows_long_pending_but_short_running_budget() {
+        // 100 pending polls: old flat PROVIDER_MAX_POLLS=50 would have
+        // errored out well before this (50 < 100 pending polls alone,
+        // before even reaching running/done). New PENDING_MAX_POLLS=150
+        // tolerates it. Followed by running -> done should still succeed.
+        let mut statuses: Vec<&str> = vec!["run=x status=pending"; 100];
+        statuses.push("run=x status=running");
+        statuses.push("run=x status=done");
+        let provider = FakeProvider::with_statuses(&statuses);
+        let handle = JobHandle { id: "x".into(), provider: "dstack".into() };
+        let result = poll_until_terminal(&provider, &handle).await;
+        assert!(result.is_ok(), "expected success, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_errors_after_running_budget_exceeded() {
+        // A job stuck in "running" past RUNNING_MAX_POLLS=50 with no
+        // terminal status ever appearing must error, not loop forever.
+        let statuses: Vec<&str> = vec!["run=x status=running"; 60];
+        let provider = FakeProvider::with_statuses(&statuses);
+        let handle = JobHandle { id: "x".into(), provider: "dstack".into() };
+        let result = poll_until_terminal(&provider, &handle).await;
+        let err = result.expect_err("expected running-budget error");
+        assert!(
+            err.to_string().contains("still running"),
+            "expected a running-budget error message, got: {err}"
+        );
     }
 }
 

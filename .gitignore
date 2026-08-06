@@ -334,5 +334,19 @@ vendor/pi-mono/
 .b00t/ledgrrr-mock.jsonl
 .b00t/toolscore/
 .b00t/verification-artifacts.jsonl
+.b00t/jobs/
+**/.b00t/jobs/
+
+# DstackProvider scratch configs — written into the invocation CWD (dstack's
+# own `apply` requires the config file to be inside CWD's subtree), best-
+# effort cleaned up after each `dstack apply`; ignored as a safety net.
+.*.dstack.yml
 /target
 vscode.🆚/vscode-docs/
+.worktrees
+
+# Stray root-level test/ dir (#935): bats-core + bats-assert/bats-support
+# clones sometimes get checked out here by accident. The registered
+# submodules live under _b00t_/test/ — this anchored pattern only matches
+# the repo-root-level dir, not _b00t_/test/ or other nested test/ dirs.
+/test/

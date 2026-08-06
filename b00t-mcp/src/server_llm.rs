@@ -446,6 +446,25 @@ async fn list_models(
     }
 }
 
+/// POST one chat-completion body upstream, honoring the caller's upstream
+/// key. Shared by the plain forward path and the verify tool loop's re-entry
+/// sends (`verify_tool_loop::run_tool_loop`'s `send` parameter).
+async fn send_upstream_chat(upstream_url: &str, upstream_key: &str, body: Value) -> anyhow::Result<Value> {
+    let url = format!("{upstream_url}/chat/completions");
+    let client = reqwest::Client::new();
+    let mut req = client.post(&url).header("Content-Type", "application/json").json(&body);
+    if !upstream_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {upstream_key}"));
+    }
+    let resp = req.send().await?;
+    let status = resp.status();
+    let parsed: Value = resp.json().await?;
+    if !status.is_success() {
+        anyhow::bail!("upstream {status}: {parsed}");
+    }
+    Ok(parsed)
+}
+
 async fn proxy_chat(
     State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
@@ -456,9 +475,78 @@ async fn proxy_chat(
     if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
     }
-    let model = serde_json::from_slice::<Value>(&body)
-        .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
-        .unwrap_or_else(|| "unknown".to_string());
+
+    // Non-JSON or unparseable bodies can't carry tool injection / the verify
+    // loop — forward verbatim exactly as before (#596/#597 wiring is
+    // best-effort, never a hard requirement for basic proxying to work).
+    let Ok(mut request) = serde_json::from_slice::<Value>(&body) else {
+        return forward_chat_verbatim(&state, &consumer, &headers, body).await;
+    };
+    let model = request["model"].as_str().unwrap_or("unknown").to_string();
+    let is_streaming = request["stream"].as_bool().unwrap_or(false);
+
+    // Opt-in tool injection (default off — see verify_tool_loop doc comment).
+    if std::env::var("B00T_VERIFY_TOOL_INJECT").as_deref() == Ok("1") {
+        crate::verify_tool_loop::inject_verify_tool(&mut request);
+    }
+
+    let start = std::time::Instant::now();
+    let first = match send_upstream_chat(&state.upstream_url, &state.upstream_key, request.clone()).await {
+        Ok(v) => v,
+        Err(e) => {
+            let latency = start.elapsed().as_millis() as u64;
+            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            return (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response();
+        }
+    };
+
+    // Streaming bypasses the loop entirely (SSE bytes aren't JSON messages to
+    // splice into) — the doc comment on verify_tool_loop covers this as
+    // known follow-up work, not a bug.
+    let mut final_response = if is_streaming {
+        first
+    } else {
+        crate::verify_tool_loop::run_tool_loop(
+            &request,
+            first,
+            |next_body| send_upstream_chat(&state.upstream_url, &state.upstream_key, next_body),
+            crate::verify_tool_loop::execute_verify_call,
+        )
+        .await
+    };
+
+    // Grammar-shape audit (#596 bridge): if content contains
+    // `[tool_call: verify assertion="X"] -> [result: R] ->`, re-run the
+    // assertion through real Z3 and correct any hallucinated result token.
+    // No-op (regex doesn't match) for the overwhelming majority of requests
+    // that never produced grammar-shaped output.
+    let content = final_response["choices"][0]["message"]["content"]
+        .as_str()
+        .map(str::to_string);
+    if let Some(content) = content {
+        if let Some((audited, _summary)) =
+            crate::verify_tool_loop::audit_grammar_content(&content, crate::verify_tool_loop::z3_result_of)
+        {
+            final_response["choices"][0]["message"]["content"] = Value::String(audited);
+        }
+    }
+
+    let latency = start.elapsed().as_millis() as u64;
+    state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+    Json(final_response).into_response()
+}
+
+/// Pre-#596/#597 behavior: forward the raw request body upstream unmodified
+/// and return the upstream response verbatim (status + bytes). Used when the
+/// body isn't valid JSON, so there's no `Value` to inject tools into or loop
+/// over.
+async fn forward_chat_verbatim(
+    state: &LlmState,
+    consumer: &str,
+    headers: &HeaderMap,
+    body: Bytes,
+) -> axum::response::Response {
+    let model = "unknown".to_string();
     let url = format!("{}/chat/completions", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
@@ -474,12 +562,12 @@ async fn proxy_chat(
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
             let body = resp.bytes().await.unwrap_or_default();
-            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            state.emit_spotlight(consumer, "chat_completions", &model, latency).await;
             (status, body).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
-            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            state.emit_spotlight(consumer, "chat_completions", &model, latency).await;
             (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response()
         }
     }
@@ -557,5 +645,115 @@ mod tests {
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
+    }
+
+    // ── proxy_chat #596/#597 wiring — end-to-end against a fake upstream ─────
+
+    /// Minimal fake upstream: first call returns a `verify` tool_calls
+    /// response, second call (the loop's re-entry) returns a plain stop
+    /// response. Proves `proxy_chat` actually drives `run_tool_loop` over a
+    /// real HTTP round trip, not just that the loop functions are unit-correct
+    /// in isolation.
+    async fn spawn_fake_upstream(responses: Vec<Value>) -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let responses = Arc::new(responses);
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let app = Router::new().route(
+            "/chat/completions",
+            axum::routing::post({
+                let responses = responses.clone();
+                let call_count = call_count.clone();
+                move |_body: Bytes| {
+                    let responses = responses.clone();
+                    let call_count = call_count.clone();
+                    async move {
+                        let i = call_count.fetch_add(1, Ordering::SeqCst);
+                        Json(responses[i.min(responses.len() - 1)].clone())
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    fn tool_call_upstream_response(assertion: &str) -> Value {
+        json!({"choices": [{"finish_reason": "tool_calls", "message": {
+            "role": "assistant",
+            "tool_calls": [{"id": "call_1", "type": "function", "function": {
+                "name": "verify",
+                "arguments": format!("{{\"assertion\": \"{assertion}\"}}"),
+            }}]
+        }}]})
+    }
+
+    fn stop_upstream_response(content: &str) -> Value {
+        json!({"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]})
+    }
+
+    #[tokio::test]
+    async fn proxy_chat_drives_verify_tool_loop_end_to_end() {
+        let upstream_url = spawn_fake_upstream(vec![
+            tool_call_upstream_response("(assert true)(check-sat)"),
+            stop_upstream_response("verified via loop"),
+        ])
+        .await;
+        let state = Arc::new(LlmState::from_config(&upstream_url, ""));
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "is this satisfiable?"}]
+        });
+        let body = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        let resp = proxy_chat(State((state, true)), HeaderMap::new(), body)
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            parsed["choices"][0]["message"]["content"],
+            json!("verified via loop"),
+            "proxy_chat must return the loop's final response, not the first tool_calls hop: {parsed}"
+        );
+    }
+
+    #[tokio::test]
+    async fn proxy_chat_audits_hallucinated_grammar_shaped_result() {
+        // execute_verify_call shells out to `b00t-cli admin verify`, which
+        // shells out to `z3` — skip gracefully when it's not in PATH rather
+        // than asserting against an "error"/"unknown" result (matches the
+        // z3-subprocess skip convention in b00t-datum-core's own tests).
+        if std::process::Command::new("z3").arg("--version").output().is_err() {
+            eprintln!("skipping proxy_chat_audits_hallucinated_grammar_shaped_result: z3 not in PATH");
+            return;
+        }
+        // Model emits grammar-shaped content claiming "sat" for an assertion
+        // that is actually unsat — proxy_chat must correct it before
+        // returning to the client (#596 grammar-shape audit bridge).
+        let claim = "[tool_call: verify assertion=\"(declare-const x Int)(assert (and (> x 0) (< x 0)))(check-sat)\"] → [result: sat] → contradiction holds.";
+        let upstream_url = spawn_fake_upstream(vec![stop_upstream_response(claim)]).await;
+        let state = Arc::new(LlmState::from_config(&upstream_url, ""));
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "can x be both positive and negative?"}]
+        });
+        let body = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        let resp = proxy_chat(State((state, true)), HeaderMap::new(), body)
+            .await
+            .into_response();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        let content = parsed["choices"][0]["message"]["content"].as_str().unwrap();
+        assert!(
+            content.contains("[result: unsat]"),
+            "hallucinated 'sat' must be corrected to real z3 result: {content}"
+        );
+        assert!(content.contains("contradiction holds."), "surrounding text preserved: {content}");
     }
 }

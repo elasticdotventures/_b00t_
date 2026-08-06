@@ -3,7 +3,6 @@ name = "plantuml"
 type = "mcp"
 hint = "PlantUML MCP server for diagram generation (SVG, PNG) via b00t jobs and TOGAF workflows"
 
-entangled_cli = ["plantuml.cli"]
 lfmf_category = "plantuml-mcp"
 
 [b00t.learn]

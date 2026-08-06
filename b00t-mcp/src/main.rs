@@ -35,7 +35,11 @@ impl TransportMode {
         }
         let is_stdio = stdio || mode_str.map_or(false, |m| m == "stdio");
         let _is_http = http || mode_str.map_or(false, |m| m == "http");
-        if is_stdio { TransportMode::Stdio } else { TransportMode::Http }
+        if is_stdio {
+            TransportMode::Stdio
+        } else {
+            TransportMode::Http
+        }
     }
 }
 
@@ -126,8 +130,7 @@ async fn main() -> Result<()> {
     // 🤓 Structured logging via tracing — enable with RUST_LOG=info or RUST_LOG=debug
     {
         use tracing_subscriber::EnvFilter;
-        let filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("warn"));
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
         let _ = tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_target(false)
@@ -138,11 +141,17 @@ async fn main() -> Result<()> {
     // Skill executor stub — init skipped (module not yet ported)
     tracing::debug!("SkillExecutor: skipped (not ported)");
 
-
     // 🤓 Registry bridge spawn — sync official MCP registry and launch bridges
     //    for registered stdio-based servers. Bridges convert MCP notifications to NATS.
-    if let Err(e) = spawn_registry_bridges_on_startup().await {
-        eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+    //    Skipped in stdio mode: it syncs over the network and shells out to `npx`
+    //    for every stdio-transport registry entry (some gated behind paid/x402
+    //    credentials), which previously blocked the Claude Code handshake past
+    //    its 30s connect timeout. Stdio mode is a single-client tool proxy, not
+    //    a hive notification relay — this only belongs to the HTTP/daemon modes.
+    if !is_stdio_mode || is_llm_mode {
+        if let Err(e) = spawn_registry_bridges_on_startup().await {
+            eprintln!("⚠️  Registry bridge spawn failed: {} (continuing)", e);
+        }
     }
 
     if is_stdio_mode && !is_llm_mode {
@@ -212,8 +221,12 @@ async fn main() -> Result<()> {
         // Log auth provider
         match auth_provider {
             server_llm::AuthProvider::Dev => eprintln!("🔓 auth: dev mode (no auth required)"),
-            server_llm::AuthProvider::Basic => eprintln!("🔑 auth: basic (API keys from server-keys.json)"),
-            server_llm::AuthProvider::Hydra => eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)"),
+            server_llm::AuthProvider::Basic => {
+                eprintln!("🔑 auth: basic (API keys from server-keys.json)")
+            }
+            server_llm::AuthProvider::Hydra => {
+                eprintln!("🔐 auth: hydra (OAuth 2.1 via Hydra introspection)")
+            }
         }
 
         // Create GitHub auth state
@@ -233,7 +246,9 @@ async fn main() -> Result<()> {
 
         if is_llm_mode {
             let llm_state = Arc::new(server_llm::LlmState::new());
-            eprintln!("🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)");
+            eprintln!(
+                "🤖 LLM proxy mode activated — upstream auto-discovered (env or local probe)"
+            );
             app = app.merge(server_llm::llm_router(llm_state.clone(), false));
         }
 
@@ -310,13 +325,16 @@ async fn main() -> Result<()> {
 /// Sync the official MCP registry and spawn bridges for stdio-based servers.
 /// Bridges connect to MCP servers, read notifications, and publish to NATS.
 async fn spawn_registry_bridges_on_startup() -> anyhow::Result<()> {
-    use b00t_chat::{ChatClient, McpBridge, McpServerSpec};
     use b00t_c0re_lib::mcp_registry::ServerTransport;
+    use b00t_chat::{ChatClient, McpBridge, McpServerSpec};
 
     let mut registry = b00t_mcp::mcp_registry_tools::REGISTRY.lock().await;
     let sync_count = registry.sync_official_registry().await?;
     if sync_count > 0 {
-        eprintln!("📡 Synced {} servers from official MCP registry", sync_count);
+        eprintln!(
+            "📡 Synced {} servers from official MCP registry",
+            sync_count
+        );
     }
 
     let client = ChatClient::nats(None, None, None)

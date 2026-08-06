@@ -1,0 +1,22 @@
+[b00t]
+name = "graft"
+type = "mcp"
+hint = "nanonets/graft — tree-sitter code-graph MCP (graft_ask/skeleton/callers/grep/map/check); Go/Python/TypeScript only, no Rust support"
+
+[[b00t.gate]]
+command = "bunx"
+
+[[b00t.mcp.stdio]]
+command = "bunx"
+requires = []
+args = ["-y", "@nanonets/graft", "mcp"]
+priority = 0
+transport = "stdio"
+
+[validate]
+command = "bunx -y @nanonets/graft --version"
+regex = "\\d+\\.\\d+\\.\\d+"
+
+[roles]
+required_for = []
+optional_for = ["developer", "orchestrator", "worker"]

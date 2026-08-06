@@ -41,6 +41,42 @@ pub enum ContextStoreError {
     Serde(#[from] serde_json::Error),
 }
 
+/// ScopeStore errors — see scope_store.rs / _b00t_ issue #894.
+///
+/// Split into Transient (backend hiccup, safe to retry) vs. Structural
+/// (the request itself is invalid, retrying won't help) via
+/// [`ScopeError::is_transient`], so callers can implement retry/backoff
+/// without matching on every variant.
+#[derive(Error, Debug)]
+pub enum ScopeError {
+    #[error("scope backend unavailable: {0}")]
+    BackendUnavailable(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("key not found in scope: {0}")]
+    NotFound(String),
+
+    #[error("write rejected: {0}")]
+    WriteRejected(String),
+
+    #[error("invalid scope id: {0}")]
+    InvalidScopeId(String),
+
+    #[error("serialization error: {0}")]
+    Serde(#[from] serde_json::Error),
+}
+
+impl ScopeError {
+    /// True when the failure is a backend hiccup a caller may reasonably
+    /// retry (unavailable backend, transient IO); false when the request
+    /// itself is invalid and retrying it unchanged won't help.
+    pub fn is_transient(&self) -> bool {
+        matches!(self, ScopeError::BackendUnavailable(_) | ScopeError::Io(_))
+    }
+}
+
 /// Scheduler errors
 #[derive(Error, Debug)]
 pub enum SchedulerError {
@@ -62,3 +98,6 @@ pub type StoreResult<T> = Result<T, ContextStoreError>;
 
 /// Convenience alias for scheduler results.
 pub type SchedResult<T> = Result<T, SchedulerError>;
+
+/// Convenience alias for scope store results.
+pub type ScopeResult<T> = Result<T, ScopeError>;

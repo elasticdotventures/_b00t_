@@ -1,0 +1,37 @@
+# Template rendered by pingap-devProxy-b00t/bin/pingap-kube-play.sh.
+# Do not deploy directly; it contains ${...} placeholders.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${PINGAP_POD_NAME}
+spec:
+  restartPolicy: Always
+  containers:
+    - name: pingap
+      image: ${PINGAP_IMAGE}
+      args:
+        - -c
+        - /etc/pingap
+        - --autoreload
+      ports:
+        - containerPort: ${PINGAP_HTTPS_PORT}
+          hostPort: ${PINGAP_HTTPS_PORT}
+        - containerPort: ${PINGAP_HTTP_PORT}
+          hostPort: ${PINGAP_HTTP_PORT}
+      volumeMounts:
+        - name: config
+          mountPath: /etc/pingap
+          readOnly: true
+        - name: certs
+          mountPath: /certs
+          readOnly: true
+  volumes:
+    - name: config
+      hostPath:
+        path: ${GENERATED_CONFIG_DIR}
+        type: Directory
+    - name: certs
+      hostPath:
+        path: ${CERTS_DIR}
+        type: Directory
+

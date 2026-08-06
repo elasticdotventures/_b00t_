@@ -27,7 +27,7 @@
 //! and event-driven patterns (e.g., "re-check when k0mmand3r reaches pre_tokenize").
 
 use crate::hive::{
-    check_guards as hive_check_guards, GuardContext, GuardPattern, GuardResult, HiveGuard,
+    GuardContext, GuardPattern, GuardResult, HiveGuard, check_guards as hive_check_guards,
 };
 use b00t_c0re_gov::types::{GateResult, HookToken, HookType};
 use chrono::Utc;

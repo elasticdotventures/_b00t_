@@ -38,7 +38,8 @@ pub fn download_guard_with_disk(
     hf_cache_dir: &Path,
     disk_free_fn: impl Fn(&Path) -> Result<f64>,
 ) -> Result<GuardResult> {
-    let needed = datum.model_size_gb
+    let needed = datum
+        .model_size_gb
         .or(datum.model_size_4bit_gb)
         .unwrap_or(0.0);
     let name = datum.name.clone();
@@ -62,17 +63,30 @@ pub fn download_guard_with_disk(
     let message = if pass {
         format!(
             "PASS: {:.1}GB needed, {:.1}GB available ({} cached)",
-            remaining, available,
-            if already > 0.0 { format!("{:.1}GB", already) } else { "none".into() }
+            remaining,
+            available,
+            if already > 0.0 {
+                format!("{:.1}GB", already)
+            } else {
+                "none".into()
+            }
         )
     } else {
         format!(
             "FAIL: need {:.1}GB, have {:.1}GB (short by {:.1}GB)",
-            remaining, available, remaining - available
+            remaining,
+            available,
+            remaining - available
         )
     };
 
-    Ok(GuardResult { datum: name, pass, needed_gb: remaining, available_gb: available, message })
+    Ok(GuardResult {
+        datum: name,
+        pass,
+        needed_gb: remaining,
+        available_gb: available,
+        message,
+    })
 }
 
 /// Check how much of a model is already cached on disk.
@@ -82,7 +96,9 @@ fn cached_size(hf_cache_dir: &Path, model_id: &str) -> f64 {
     if hf_cache_dir.as_os_str().is_empty() || model_id.is_empty() {
         return 0.0;
     }
-    let model_dir = hf_cache_dir.join("models--").join(model_id.replace('/', "--"));
+    let model_dir = hf_cache_dir
+        .join("models--")
+        .join(model_id.replace('/', "--"));
     if !model_dir.exists() {
         return 0.0;
     }
@@ -192,7 +208,11 @@ pub fn cache_evict_candidates_with_base(lru_days: u32, base_dir: &Path) -> Resul
                 let ts_utc = ts.with_timezone(&chrono::Utc);
                 last_used
                     .entry(event.datum.clone())
-                    .and_modify(|e| { if ts_utc > *e { *e = ts_utc; } })
+                    .and_modify(|e| {
+                        if ts_utc > *e {
+                            *e = ts_utc;
+                        }
+                    })
                     .or_insert(ts_utc);
             }
         }
@@ -209,7 +229,10 @@ pub fn cache_evict_candidates_with_base(lru_days: u32, base_dir: &Path) -> Resul
 }
 
 fn home_dir() -> PathBuf {
-    std::env::var("HOME").ok().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/tmp"))
+    std::env::var("HOME")
+        .ok()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
 }
 
 #[cfg(test)]
@@ -226,7 +249,10 @@ mod tests {
 
     #[test]
     fn guard_passes_when_no_size_declared() {
-        let datum = BootDatum { name: "test".into(), ..Default::default() };
+        let datum = BootDatum {
+            name: "test".into(),
+            ..Default::default()
+        };
         let result = download_guard(&datum, Path::new("/tmp")).unwrap();
         assert!(result.pass);
         assert!(result.message.contains("skipping guard"));
@@ -290,7 +316,8 @@ mod tests {
         let log_dir = tmp.join(".b00t");
         std::fs::create_dir_all(&log_dir).unwrap();
         let log_path = log_dir.join("model-usage.jsonl");
-        let old = r#"{"ts":"2020-01-01T00:00:00Z","datum":"old-model","event":"load","host":"test"}"#;
+        let old =
+            r#"{"ts":"2020-01-01T00:00:00Z","datum":"old-model","event":"load","host":"test"}"#;
         std::fs::write(&log_path, format!("{old}\n")).unwrap();
 
         let candidates = cache_evict_candidates_with_base(30, &tmp).unwrap();

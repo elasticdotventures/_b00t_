@@ -49,7 +49,11 @@ async fn resolve_ws_url(probe_host: &str, probe_port: u16) -> Result<String> {
                 if let Some(ws) = json["webSocketDebuggerUrl"].as_str() {
                     eprintln!("  ✅ CDP endpoint: {}", target);
                     // Rebase Chrome's WS URL path onto our probe host:port
-                    let path_idx = ws.match_indices('/').nth(2).map(|(i, _)| i + 1).unwrap_or(0);
+                    let path_idx = ws
+                        .match_indices('/')
+                        .nth(2)
+                        .map(|(i, _)| i + 1)
+                        .unwrap_or(0);
                     let path = &ws[path_idx..];
                     let rewritten = format!("ws://{}:{}/{}", probe_host, probe_port, path);
                     return Ok(rewritten);
@@ -69,9 +73,8 @@ impl RpaSession {
 
         eprintln!("🔌 Connecting to Chrome at {} ...", ws_url);
 
-        let (browser, mut handler): (Browser, Handler) = Browser::connect(&ws_url)
-            .await
-            .context(format!(
+        let (browser, mut handler): (Browser, Handler) =
+            Browser::connect(&ws_url).await.context(format!(
                 "Failed to connect to Chrome at {}. \
                  Make sure Chrome is running with --remote-debugging-port={} on Windows host.",
                 ws_url, port
@@ -83,7 +86,10 @@ impl RpaSession {
             }
         });
 
-        Ok(RpaSession { browser, _handler: handle })
+        Ok(RpaSession {
+            browser,
+            _handler: handle,
+        })
     }
 
     /// List all open page targets with their titles and URLs.
@@ -104,7 +110,7 @@ impl RpaSession {
     ///   data-b00t="type|label"  (e.g., "button|Sign In", "input|Search")
     /// This is capped at 500 elements and viewport-only to avoid memory issues.
     pub async fn open_page(&self, url: &str, enrich: bool) -> Result<Page> {
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
         let page = timeout(Duration::from_secs(15), self.browser.new_page(url))
             .await
             .map_err(|_| anyhow::anyhow!("Timeout opening page: {}", url))??;

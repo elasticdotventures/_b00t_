@@ -64,17 +64,22 @@ impl AiCommands {
                     ChonkyTierSource::EnvOverride => "env-override",
                 };
                 if *json {
-                    println!("{}", serde_json::json!({
-                        "model": sel.model,
-                        "base_url": sel.base_url,
-                        "tier_source": source,
-                        "gpu_free_mb": sel.gpu_free_mb,
-                    }));
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "model": sel.model,
+                            "base_url": sel.base_url,
+                            "tier_source": source,
+                            "gpu_free_mb": sel.gpu_free_mb,
+                        })
+                    );
                 } else if *export {
                     println!("{}", gate.export_env(&sel));
                 } else {
-                    println!("model={} base={} source={} gpu_free_mb={:?}",
-                        sel.model, sel.base_url, source, sel.gpu_free_mb);
+                    println!(
+                        "model={} base={} source={} gpu_free_mb={:?}",
+                        sel.model, sel.base_url, source, sel.gpu_free_mb
+                    );
                 }
                 Ok(())
             }

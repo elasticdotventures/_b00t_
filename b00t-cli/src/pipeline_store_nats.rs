@@ -195,10 +195,7 @@ impl StoreNatsAdapter {
 
     /// Create an adapter with a mock NATS client (test-only).
     #[cfg(test)]
-    pub fn with_mock(
-        store: Arc<dyn StoreBackend>,
-        mock: impl NatsClientOp + 'static,
-    ) -> Self {
+    pub fn with_mock(store: Arc<dyn StoreBackend>, mock: impl NatsClientOp + 'static) -> Self {
         Self {
             store,
             nc: Arc::new(mock),
@@ -218,8 +215,7 @@ impl StoreNatsAdapter {
 
         while let Some((subject, payload, reply_to)) = subscription.next().await {
             // Use the NATS reply subject, or fall back to a generated inbox.
-            let reply =
-                reply_to.unwrap_or_else(|| format!("_inbox.{}", uuid::Uuid::new_v4()));
+            let reply = reply_to.unwrap_or_else(|| format!("_inbox.{}", uuid::Uuid::new_v4()));
 
             let response = match self.handle_request(&subject, &payload).await {
                 Ok(data) => data,
@@ -276,15 +272,12 @@ fn handle_store_request(
             Ok(b"ok".to_vec())
         }
         "del" => {
-            store
-                .delete(key_or_prefix)
-                .context("Store delete failed")?;
+            store.delete(key_or_prefix).context("Store delete failed")?;
             Ok(b"ok".to_vec())
         }
         "list" => {
             let keys = store.list(key_or_prefix).context("Store list failed")?;
-            let json =
-                serde_json::to_string(&keys).context("Failed to serialize key list")?;
+            let json = serde_json::to_string(&keys).context("Failed to serialize key list")?;
             Ok(json.into_bytes())
         }
         _ => anyhow::bail!("Unknown store verb: {verb}"),
@@ -464,7 +457,10 @@ mod tests {
             .unwrap();
         assert_eq!(resp, b"ok");
 
-        let resp = adapter.handle_request("store.get.mykey", b"").await.unwrap();
+        let resp = adapter
+            .handle_request("store.get.mykey", b"")
+            .await
+            .unwrap();
         assert_eq!(resp, b"hello world");
     }
 
@@ -523,14 +519,8 @@ mod tests {
         let store = make_store();
         let adapter = StoreNatsAdapter::with_mock(store, MockNatsClient::new());
 
-        adapter
-            .handle_request("store.set.x", b"1")
-            .await
-            .unwrap();
-        adapter
-            .handle_request("store.set.y", b"2")
-            .await
-            .unwrap();
+        adapter.handle_request("store.set.x", b"1").await.unwrap();
+        adapter.handle_request("store.set.y", b"2").await.unwrap();
 
         let resp = adapter.handle_request("store.list.", b"").await.unwrap();
         let keys: Vec<String> = serde_json::from_slice(&resp).unwrap();
@@ -569,7 +559,10 @@ mod tests {
         let adapter = StoreNatsAdapter::with_mock(store, MockNatsClient::new());
 
         // set with empty key
-        let resp = adapter.handle_request("store.set.", b"empty-key-data").await.unwrap();
+        let resp = adapter
+            .handle_request("store.set.", b"empty-key-data")
+            .await
+            .unwrap();
         assert_eq!(resp, b"ok");
 
         // get with empty key

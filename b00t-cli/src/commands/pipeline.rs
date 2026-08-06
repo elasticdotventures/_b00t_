@@ -3,12 +3,12 @@
 //    JustfileDatum, PipelineDatum previously had none). Shape mirrors
 //    StoreCommands (commands/store.rs) — the closest proven multi-verb
 //    datum-type subcommand pattern in this codebase.
-use crate::commands::pipeline_cost::{handle_pipeline_cost, PipelineCostArgs};
+use crate::commands::pipeline_cost::{PipelineCostArgs, handle_pipeline_cost};
 use crate::commands::pipeline_validate::{print_validate_report, validate_pipeline};
 use crate::datum_pipeline::PipelineDatum;
 use crate::datum_utils::get_all_datums_with_paths;
 use crate::pipeline_dataframe::handle_pipeline_data;
-use crate::pipeline_logs::{handle_pipeline_logs, PipelineLogsArgs, PIPELINE_LOG_STORE};
+use crate::pipeline_logs::{PIPELINE_LOG_STORE, PipelineLogsArgs, handle_pipeline_logs};
 use crate::pipeline_scheduler::handle_schedule_command;
 use crate::traits::CliExecutor;
 use crate::{BootDatum, DatumType};
@@ -87,7 +87,9 @@ pub fn handle_pipeline_command(cmd: &PipelineCommands, b00t_path: &str) -> Resul
             } else {
                 println!("Pipeline datums:");
                 for (key, datum, file_path) in &pipelines {
-                    let base_dir = Path::new(file_path).parent().unwrap_or_else(|| Path::new("."));
+                    let base_dir = Path::new(file_path)
+                        .parent()
+                        .unwrap_or_else(|| Path::new("."));
                     let stage_count = PipelineDatum::from_datum(datum.clone(), base_dir)
                         .map(|p| p.stages().len())
                         .unwrap_or(0);

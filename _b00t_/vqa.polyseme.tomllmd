@@ -1,6 +1,6 @@
 [b00t]
 name = "vqa"
-type = "unknown"
+type = "polyseme"
 hint = "Polyseme datum — 'vqa' resolves to multiple artifacts"
 requires_sudo = false
 

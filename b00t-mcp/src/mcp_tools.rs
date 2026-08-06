@@ -3,7 +3,7 @@ use crate::impl_mcp_tool;
 use crate::tools::pipeline::BPipelineCommand;
 use anyhow::Result;
 use clap::Parser;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 // use b00t_c0re_lib::GrokClient;
 
@@ -704,7 +704,9 @@ impl crate::clap_reflection::McpExecutor for DelegateDatumCommand {
                 .unwrap_or_default()
                 .as_secs();
             eprintln!("[b00t_delegate] LEDGERR_MCP_CMD unset — using local gate fallback");
-            eprintln!("[b00t_delegate] datum={datum_id} agent={agent_id} task={task_id} cost={estimated_cost_cake:.4} 🍰 → local-authorized");
+            eprintln!(
+                "[b00t_delegate] datum={datum_id} agent={agent_id} task={task_id} cost={estimated_cost_cake:.4} 🍰 → local-authorized"
+            );
             return Ok(serde_json::to_string_pretty(&json!({
                 "authorized": true,
                 "datum_id": datum_id,
@@ -1885,6 +1887,26 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
         description: "Manage pipeline lifecycle — list, run, validate, inspect, cost",
         subcommand: "pipeline",
     },
+    ToolCatalogEntry {
+        name: "b00t_just",
+        description: "Run a registered just recipe through a typed recipe-and-args contract",
+        subcommand: "just",
+    },
+    ToolCatalogEntry {
+        name: "b00t_store_init",
+        description: "Initialise the knowledge store",
+        subcommand: "store init",
+    },
+    ToolCatalogEntry {
+        name: "b00t_store_status",
+        description: "Show store status (backend, objects, bytes)",
+        subcommand: "store status",
+    },
+    ToolCatalogEntry {
+        name: "b00t_store_validate",
+        description: "Cross-engine consistency check",
+        subcommand: "store validate",
+    },
 ];
 
 /// Search TOOL_CATALOG by keyword (case-insensitive substring match on name + description)
@@ -1931,7 +1953,14 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
             .get("argv")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("b00t_exec requires argv: string"))?;
-        let parts: Vec<&str> = argv.split_whitespace().collect();
+        let parts: Vec<String> = shlex::split(argv).ok_or_else(|| {
+            anyhow::anyhow!(
+                "b00t_exec: invalid argv quoting (unterminated quote or trailing backslash) in: {argv}"
+            )
+        })?;
+        if parts.is_empty() {
+            anyhow::bail!("b00t_exec: argv must not be empty");
+        }
         let output = std::process::Command::new("b00t-cli")
             .args(&parts)
             .output()
@@ -1944,7 +1973,65 @@ impl crate::clap_reflection::McpExecutor for BExecCommand {
     }
 }
 
-// BVerifyCommand: verify z3 assertion via b00t-cli admin
+// ── Surface Tool: b00t_just ──────────────────────────────────────────────────
+/// Execute a registered just recipe without routing through generic argv or a shell.
+#[derive(Parser, Clone)]
+pub struct BJustCommand {
+    #[arg(help = "Registered just recipe name, e.g. 'game-play::test'")]
+    pub just: String,
+    #[arg(long, help = "Optional recipe arguments, passed without shell parsing")]
+    pub args: Vec<String>,
+}
+impl crate::clap_reflection::McpReflection for BJustCommand {
+    fn mcp_tool_name() -> String {
+        "b00t_just".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec![]
+    }
+}
+impl crate::clap_reflection::McpExecutor for BJustCommand {
+    fn execute_mcp_call(
+        params: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> anyhow::Result<String> {
+        let recipe = params
+            .get("just")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow::anyhow!("b00t_just requires just: string"))?;
+        let args: Vec<&str> = params
+            .get("args")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .map(|value| {
+                value
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("b00t_just args must be strings"))
+            })
+            .collect::<anyhow::Result<_>>()?;
+        let output = std::process::Command::new("just")
+            .arg(recipe)
+            .args(args)
+            .output()
+            .map_err(|error| anyhow::anyhow!("just exec failed: {}", error))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if output.status.success() {
+            Ok(format!("{stdout}{stderr}"))
+        } else {
+            anyhow::bail!("{stdout}{stderr}")
+        }
+    }
+}
+
+// BVerifyCommand: verify a Z3/SMT2 assertion by shelling directly to `z3 -in`.
+// 🤓 Was `b00t-cli admin verify --assertion ...` — that subcommand never
+//    existed (no "admin" command in b00t-cli's Commands enum at all), so this
+//    always failed and every caller (grammar-shape audit, verify tool loop)
+//    silently got back {"result":"error"} regardless of the assertion.
+//    Matches the working `z3 -in` piped-stdin pattern already used by
+//    b00t-c0re-lib::z3_examples and b00t-datum-core::edl.
 #[derive(Parser, Clone)]
 pub struct BVerifyCommand {
     #[arg(help = "Z3 or formal assertion string")]
@@ -1962,19 +2049,42 @@ impl crate::clap_reflection::McpExecutor for BVerifyCommand {
     fn execute_mcp_call(
         params: &std::collections::HashMap<String, serde_json::Value>,
     ) -> anyhow::Result<String> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
         let assertion = params
             .get("assertion")
             .and_then(|v| v.as_str())
             .unwrap_or("true");
-        let output = std::process::Command::new("b00t-cli")
-            .args(["admin", "verify", "--assertion", assertion])
-            .output()
-            .map_err(|e| anyhow::anyhow!("verify failed: {}", e))?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let mut child = Command::new("z3")
+            .arg("-in")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("z3 not found in PATH: {e}"))?;
+        child
+            .stdin
+            .as_mut()
+            .expect("stdin was piped")
+            .write_all(assertion.as_bytes())?;
+        let output = child.wait_with_output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let result = if stdout == "unsat" {
+            "unsat"
+        } else if stdout == "sat" {
+            "sat"
         } else {
-            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
-        }
+            "unknown"
+        };
+        Ok(serde_json::json!({
+            "result": result,
+            "verified": result != "unknown",
+            "raw_stdout": stdout,
+            "raw_stderr": stderr,
+        })
+        .to_string())
     }
 }
 
@@ -2052,6 +2162,7 @@ pub fn create_mcp_registry_with_notify(
         .register::<WhoamiCommand>()
         .register::<StatusCommand>()
         .register::<BExecCommand>()
+        .register::<BJustCommand>()
         .register::<BDiscoverCommand>()
         .register::<BPipelineCommand>()
         .add_post_hook("b00t_mcp_stack_load", std::sync::Arc::clone(&notify_fn))
@@ -2396,6 +2507,10 @@ mod tests {
             "exec must be in surface"
         );
         assert!(
+            surface_names.contains(&"b00t_just"),
+            "typed just execution must be in surface"
+        );
+        assert!(
             surface_names.contains(&"b00t_discover"),
             "discover must be in surface"
         );
@@ -2414,6 +2529,15 @@ mod tests {
         let full_names: Vec<&str> = full_tools.iter().map(|t| t.name.as_ref()).collect();
         assert!(full_names.contains(&"b00t_mcp_list"));
         assert!(full_names.contains(&"b00t_cli_detect"));
+    }
+
+    #[test]
+    fn test_just_tool_schema_uses_just_parameter() {
+        let tool = BJustCommand::to_mcp_tool();
+        let properties = tool.input_schema["properties"].as_object().unwrap();
+
+        assert!(properties.contains_key("just"));
+        assert!(!properties.contains_key("argv"));
     }
 
     #[test]
@@ -2549,6 +2673,42 @@ mod tests {
     fn test_pipeline_tool_in_catalog() {
         let has_entry = TOOL_CATALOG.iter().any(|e| e.name == "b00t_pipeline");
         assert!(has_entry, "b00t_pipeline must be in TOOL_CATALOG");
+    }
+
+    #[test]
+    fn test_bexec_shlex_tokenizes_quoted_multiword_arg() {
+        let argv = r#"task add "some multi word description""#;
+        let parts = shlex::split(argv).expect("valid shell quoting must tokenize");
+        assert_eq!(parts, vec!["task", "add", "some multi word description"]);
+    }
+
+    #[test]
+    fn test_bexec_shlex_rejects_unterminated_quote() {
+        let argv = r#"task add "unterminated"#;
+        assert!(
+            shlex::split(argv).is_none(),
+            "unterminated quote must fail tokenization, not panic"
+        );
+    }
+
+    #[test]
+    fn test_store_subcommands_discoverable() {
+        // #708: store subcommands (init/status/validate) must be discoverable
+        // via b00t_discover("store") — the CLI commands already exist and are
+        // reachable through b00t_exec, but were missing from TOOL_CATALOG.
+        let matches = discover_tools("store");
+        assert!(
+            matches.len() >= 3,
+            "expected at least 3 store entries in discover_tools(\"store\"), got {}",
+            matches.len()
+        );
+        for expected in ["b00t_store_init", "b00t_store_status", "b00t_store_validate"] {
+            assert!(
+                matches.iter().any(|e| e.name == expected),
+                "discover_tools(\"store\") missing entry {}",
+                expected
+            );
+        }
     }
 
     #[test]

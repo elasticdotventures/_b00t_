@@ -2,7 +2,7 @@
 //!
 //! Polite crawling: rate-limited, dedup'd, bounded by max_pages.
 
-use crate::assimilate::concept_extractor::{ConceptExtractor, ConceptExtraction, ExtractedLink};
+use crate::assimilate::concept_extractor::{ConceptExtraction, ConceptExtractor, ExtractedLink};
 use crate::assimilate::content_router::{ContentRouter, ParsedContent};
 use anyhow::Result;
 use std::collections::HashSet;
@@ -69,7 +69,10 @@ pub async fn crawl(
             tokio::time::sleep(Duration::from_millis(config.delay_ms)).await;
         }
 
-        eprintln!("  [{depth}/{max_depth}] {url}", max_depth = config.max_depth);
+        eprintln!(
+            "  [{depth}/{max_depth}] {url}",
+            max_depth = config.max_depth
+        );
 
         match router.route(&url).await {
             Ok(parsed) => {
@@ -127,7 +130,7 @@ pub fn normalize_url(url: &str, base: &str) -> Option<String> {
 pub fn is_same_origin(url: &str, seed_host: Option<&str>) -> bool {
     match (Url::parse(url).ok(), seed_host) {
         (Some(parsed), Some(host)) => parsed.host_str() == Some(host),
-        (Some(_), None) => true,  // No seed host — allow all
+        (Some(_), None) => true, // No seed host — allow all
         (None, _) => false,
     }
 }
@@ -138,7 +141,8 @@ mod tests {
 
     #[test]
     fn test_normalize_absolute_url() {
-        let result = normalize_url("https://example.com/page#section", "https://other.com").unwrap();
+        let result =
+            normalize_url("https://example.com/page#section", "https://other.com").unwrap();
         assert_eq!(result, "https://example.com/page");
     }
 

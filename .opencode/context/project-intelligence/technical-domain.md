@@ -46,7 +46,7 @@ _b00t_/
 ├── b00t-ipc/              # Inter-process communication
 ├── b00t-azure-cp/         # Azure control plane
 ├── b00t-l3dg3rr-viz/      # Visualization
-├── b00t-py/               # Python bindings
+├── b00t-pyverse/               # Python bindings
 ├── k0mmand3r/             # Agent coordination protocol
 ├── b00t-ast/              # AST utilities
 └── _b00t_/                # Datum TOML files, scripts, hive profiles

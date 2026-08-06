@@ -12,10 +12,12 @@ type = "role"
 hint = "Hive captain — manages system state, cognitive tier routing, and agent delegation"
 
 skills = [
+    # <|🦨: aspirational — hive-cmdb/cognitive-tier-routing/resource-scheduling/agent-delegation skill datums never authored; _b00t_#850, #163 |>
     "hive-cmdb",
     "cognitive-tier-routing",
     "resource-scheduling",
     "agent-delegation",
+    # <|🦨: repoint-candidate — tomllm-format.skill exists; #163 |>
     "tomllm",
     "systemd.cli",
     "vllm.cli",

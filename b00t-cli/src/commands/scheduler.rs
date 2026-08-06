@@ -14,7 +14,7 @@
 use crate::scheduler::{try_claim, ClaimResult};
 use anyhow::{Context, Result};
 use clap::Subcommand;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;

@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+
+// Placeholder shim. On a successful install, scripts/install.js's cargo
+// install writes the real compiled b00t-cli binary to this exact path,
+// overwriting this file. This shim only runs if that overwrite didn't
+// happen (e.g. install failed but npm didn't abort) — it exists to fail
+// with a clear, actionable message rather than silently invoking nothing.
+
+const fs = require('fs');
+const path = require('path');
+
+console.error('❌ b00t-cli binary not found (install.js did not complete successfully)');
+console.error('🔧 Try reinstalling: npm install -g b00t-cli');
+console.error(
+  '🔧 Or install manually: cargo install --git https://github.com/elasticdotventures/dotfiles --bin b00t-cli'
+);
+
+// Defensive: if some other install path did place a real binary alongside
+// this shim under a different name, at least point at it rather than dying
+// silently.
+const altPath = path.join(__dirname, 'b00t-cli-real');
+if (fs.existsSync(altPath)) {
+  const { spawn } = require('child_process');
+  const child = spawn(altPath, process.argv.slice(2), { stdio: 'inherit' });
+  child.on('exit', (code) => process.exit(code || 0));
+} else {
+  process.exit(1);
+}

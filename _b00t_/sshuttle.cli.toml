@@ -1,0 +1,127 @@
+[b00t]
+name = "sshuttle"
+trigger_words = ["sshuttle", "vpn over ssh", "transparent proxy", "route over ssh", "subnet tunnel", "tproxy", "nft", "iptables"]
+type = "cli"
+desires = "1.3.2"
+install = { package = "sshuttle" }
+version = "sshuttle --version"
+version_regex = "sshuttle ([0-9]+\\.[0-9]+\\.[0-9]+)"
+hint = "sshuttle is a transparent proxy/VPN-like route tool over SSH. Use it when a WSL node needs remote subnet reachability through a jumpbox; keep ssh -L/-D for narrower browser demos."
+keywords = ["sshuttle", "ssh", "vpn", "transparent-proxy", "wsl", "jumpbox", "kubernetes", "pod", "nftables", "iptables", "tproxy", "dns", "udp"]
+unlocks = ["sshuttle *"]
+depends_on = ["ssh.cli", "python.cli"]
+repo = "https://github.com/sshuttle/sshuttle"
+docs = "https://sshuttle.readthedocs.io/en/stable/"
+
+[b00t.version_info]
+verified_against = "1.3.2"
+verified_on = "2026-08-02"
+docs_requirements = "https://sshuttle.readthedocs.io/en/stable/requirements.html"
+docs_installation = "https://sshuttle.readthedocs.io/en/stable/installation.html"
+docs_usage = "https://sshuttle.readthedocs.io/en/latest/usage.html"
+
+# sshuttle changes client firewall/routing state. Installing it is cheap; using
+# it should be a conscious operator choice because it needs local sudo/root.
+[b00t.situational_awareness]
+default_posture = "Do not install for ordinary single-port demos. Install when WSL needs VPN-like access to multiple remote subnets/services through an SSH jumpbox."
+client_requires = "sudo/root on the client, Python 3.9+ for stable 1.3.2 docs, and Linux firewall support for the selected method."
+server_requires = "SSH access and Python 3.9+; sshuttle uploads/runs its Python server code, so sshuttle itself does not need to be installed remotely."
+prefer_over_ssh_l = "Many destination IPs/ports must be reachable and maintaining one ssh -L per service is noisy or brittle."
+prefer_ssh_l_or_socks = "One or a few known browser ports are enough, or the operator should avoid touching local firewall/routing tables."
+prefer_pingap = "Hostname/TLS/reverse-proxy edge routing is needed; sshuttle is transport reachability, not an ingress/webserver tier."
+avoid_when = "The client cannot grant sudo/root, network policy forbids transparent proxying, or a narrow localhost tunnel is sufficient."
+
+[b00t.install_paths]
+ubuntu_debian = "sudo apt update && sudo apt install -y sshuttle"
+fedora = "sudo dnf install -y sshuttle"
+arch = "sudo pacman -S sshuttle"
+opensuse = "sudo zypper in sshuttle"
+macos_homebrew = "brew install sshuttle"
+python_app_fallback = "pipx install sshuttle"
+why_pipx = "Use pipx for a user-scoped Python application install when the OS package is missing or stale; avoid bare system pip installs."
+
+[b00t.methods]
+auto = "Default. sshuttle chooses a firewall method from tools present in PATH."
+nat = "Linux iptables/ip6tables NAT path. TCP and DNS; no UDP."
+nft = "Linux nftables path. TCP and DNS; no UDP."
+tproxy = "Linux transparent proxy path. TCP, DNS, and UDP; needs extra root-owned ip rule/ip route setup."
+pf = "macOS, FreeBSD, OpenBSD, pfSense path via pfctl. TCP and DNS."
+
+[b00t.abstracts.wsl_to_pod_jumpbox]
+description = "VPN-like WSL access through a jumpbox reachable by SSH, including a Kubernetes pod jumpbox exposed locally by port-forward."
+port_forward_jumpbox = "kubectl -n {namespace} port-forward pod/{pod_name} 2222:22"
+route_private_subnets = "sshuttle --dns -r {pod_user}@127.0.0.1:2222 {subnets}"
+exclude_jumpbox = "sshuttle --dns -r {jump_host} -x {jumpbox_ip} {subnets}"
+tokens = ["namespace", "pod_name", "pod_user", "jump_host", "jumpbox_ip", "subnets"]
+when = "Use after ssh -L/-D becomes unwieldy because the local WSL node needs to call several pod/cloud private services by IP or DNS."
+
+[b00t.abstracts.linux_method_selection]
+description = "Select the least powerful Linux firewall method that satisfies the traffic class."
+tcp_dns_default = "sshuttle --method=auto --dns -r {jump_host} {subnets}"
+force_nft = "sshuttle --method=nft --dns -r {jump_host} {subnets}"
+force_nat = "sshuttle --method=nat --dns -r {jump_host} {subnets}"
+udp_tproxy = "sudo SSH_AUTH_SOCK=$SSH_AUTH_SOCK sshuttle --method=tproxy --dns -r {jump_host} {subnets}"
+tokens = ["jump_host", "subnets"]
+note = "Use tproxy only when UDP is actually required; it needs additional root-owned routing marks."
+
+[b00t.abstracts.tproxy_prereq]
+description = "One-time Linux TPROXY route/rule setup for sshuttle UDP support."
+ipv4_route = "sudo ip route add local default dev lo table 100"
+ipv4_rule = "sudo ip rule add fwmark 0x01 lookup 100"
+ipv6_route = "sudo ip -6 route add local default dev lo table 100"
+ipv6_rule = "sudo ip -6 rule add fwmark 0x01 lookup 100"
+when = "Only for --method=tproxy, and only when UDP or transparent UDP DNS handling is required."
+
+[validate]
+command = "sshuttle --version"
+regex = "sshuttle ([0-9]+\\.[0-9]+\\.[0-9]+)"
+
+[roles]
+required_for = []
+optional_for = ["developer", "operator"]
+
+[[b00t.usage]]
+description = "Install on Ubuntu/Debian when broad subnet access over SSH is needed."
+command = "sudo apt update && sudo apt install -y sshuttle"
+
+[[b00t.usage]]
+description = "Fallback isolated Python application install when distro packages are unavailable."
+command = "pipx install sshuttle"
+
+[[b00t.usage]]
+description = "Route RFC1918 private IPv4 networks and DNS through a jumpbox."
+command = "sshuttle --dns -r user@jumpbox 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+
+[[b00t.usage]]
+description = "Route all IPv4 traffic through a jumpbox."
+command = "sshuttle --dns -r user@jumpbox 0/0"
+
+[[b00t.usage]]
+description = "Reach a Kubernetes pod jumpbox without exposing sshd publicly."
+command = "kubectl -n jumpbox port-forward pod/jumpbox 2222:22"
+
+[[b00t.usage]]
+description = "Then route selected private subnets through the locally forwarded pod jumpbox."
+command = "sshuttle --dns -r jump@127.0.0.1:2222 10.42.0.0/16 10.43.0.0/16"
+
+[[b00t.references]]
+name = "sshuttle requirements"
+url = "https://sshuttle.readthedocs.io/en/stable/requirements.html"
+description = "Client/server requirements and method capability matrix."
+
+[[b00t.references]]
+name = "sshuttle installation"
+url = "https://sshuttle.readthedocs.io/en/stable/installation.html"
+description = "Official installation options by operating system."
+
+[[b00t.references]]
+name = "sshuttle usage"
+url = "https://sshuttle.readthedocs.io/en/latest/usage.html"
+description = "Routing examples, --dns, exclusions, and operational notes."
+
+# b00t:map v1
+# summary: sshuttle CLI datum — transparent proxy/VPN-like subnet routing over SSH for WSL, jumpbox, and pod/cloud private-network access
+# tags: sshuttle, ssh, vpn, transparent-proxy, wsl, jumpbox, kubernetes, tproxy, nft, iptables
+# tier: sm0l
+# cmds: sshuttle --dns -r, sshuttle --method=nft, sshuttle --method=tproxy, pipx install sshuttle
+# complexity: 3

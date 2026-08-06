@@ -2,9 +2,9 @@
 //!
 //! Features collapsible accordion sections and active-route highlighting.
 
-use std::collections::HashSet;
 use dioxus::prelude::*;
 use dioxus_router::prelude::{use_navigator, use_route};
+use std::collections::HashSet;
 
 use crate::Route;
 
@@ -28,17 +28,29 @@ const SECTIONS: &[NavSectionData] = &[
     NavSectionData {
         title: "Data",
         items: &[
-            NavItemData { label: "Pipeline", route: Route::Pipeline {} },
-            NavItemData { label: "Types", route: Route::Types {} },
+            NavItemData {
+                label: "Pipeline",
+                route: Route::Pipeline {},
+            },
+            NavItemData {
+                label: "Types",
+                route: Route::Types {},
+            },
         ],
     },
     NavSectionData {
         title: "Simulation",
-        items: &[NavItemData { label: "Simulation", route: Route::Simulation {} }],
+        items: &[NavItemData {
+            label: "Simulation",
+            route: Route::Simulation {},
+        }],
     },
     NavSectionData {
         title: "Visualizations",
-        items: &[NavItemData { label: "Visualizations", route: Route::Visualizations {} }],
+        items: &[NavItemData {
+            label: "Visualizations",
+            route: Route::Visualizations {},
+        }],
     },
 ];
 

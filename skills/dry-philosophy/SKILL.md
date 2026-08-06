@@ -86,8 +86,8 @@ def parse_datum_file(path: str) -> dict:
 ✅ **DRY approach**:
 ```python
 # Use Rust via PyO3
-import b00t_py
-datum = b00t_py.load_ai_model_datum("model-name", "~/.dotfiles/_b00t_")
+import b00t_pyverse
+datum = b00t_pyverse.load_ai_model_datum("model-name", "~/.dotfiles/_b00t_")
 ```
 
 **Why?** Rust implementation already exists, is faster, type-safe, and tested.
@@ -196,9 +196,9 @@ class DatumParser:
 ✅ **DRY** (Use Rust):
 ```python
 # Use PyO3 bindings
-import b00t_py
+import b00t_pyverse
 
-datum = b00t_py.load_ai_model_datum("model-name", "~/.dotfiles/_b00t_")
+datum = b00t_pyverse.load_ai_model_datum("model-name", "~/.dotfiles/_b00t_")
 ```
 
 **Why better?**
@@ -221,9 +221,9 @@ def validate_provider_env(provider: str) -> bool:
 
 ✅ **DRY**:
 ```python
-import b00t_py
+import b00t_pyverse
 
-validation = b00t_py.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
+validation = b00t_pyverse.check_provider_env("openrouter", "~/.dotfiles/_b00t_")
 if not validation["available"]:
     print(f"Missing: {validation['missing_env_vars']}")
 ```
@@ -306,7 +306,7 @@ Use Rust for:
 ### How to Expose Rust to Python
 
 ```rust
-// b00t-py/src/lib.rs
+// b00t-pyverse/src/lib.rs
 use pyo3::prelude::*;
 
 #[pyfunction]
@@ -316,7 +316,7 @@ fn my_function(py: Python<'_>, arg: &str) -> PyResult<String> {
 }
 
 #[pymodule]
-fn b00t_py(_py: Python, m: &PyModule) -> PyResult<()> {
+fn b00t_pyverse(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(my_function, m)?)?;
     Ok(())
 }
@@ -324,9 +324,9 @@ fn b00t_py(_py: Python, m: &PyModule) -> PyResult<()> {
 
 ```python
 # Python usage
-import b00t_py
+import b00t_pyverse
 
-result = b00t_py.my_function("test")
+result = b00t_pyverse.my_function("test")
 ```
 
 ## Code Review Checklist
@@ -375,8 +375,8 @@ class DatumValidator:
 ✅ **Good**:
 ```python
 # Use Rust via PyO3
-import b00t_py
-validation = b00t_py.check_provider_env(provider, path)
+import b00t_pyverse
+validation = b00t_pyverse.check_provider_env(provider, path)
 ```
 
 ### 3. Private Forks
@@ -429,7 +429,7 @@ def process_data(data: dict[str, Any]) -> ProcessedData:
 ## References
 
 - `CLAUDE.md` - YEI MUST ALWAYS/NEVER section
-- `b00t-py/src/lib.rs` - PyO3 bindings example
+- `b00t-pyverse/src/lib.rs` - PyO3 bindings example
 - `b00t-j0b-py/pyproject.toml` - Dependency management
 
 ## Summary

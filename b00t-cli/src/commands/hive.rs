@@ -11,8 +11,9 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
-    GuardContext, GuardResult, HiveProfile, SystemSnapshot, activate_profile, check_guards,
-    discover_profiles, hive_stacks_status, load_profile,
+    GuardContext, GuardResult, HiveProfile, ProfileCrossrefResult, SystemSnapshot,
+    activate_profile, check_guards, crossref_datum_status, discover_profiles, hive_stacks_status,
+    load_profile,
 };
 
 /// Detect + record hardware drift between the live snapshot and soul `node.*` (P3).
@@ -36,10 +37,20 @@ fn record_hardware_drift(snapshot: &SystemSnapshot) -> Option<String> {
     // Refresh accelerator identity keys from the live probe (deterministic).
     // Only these two are derivable from the snapshot; static identity keys
     // (node.board/soc/arch/os/...) are left as seeded — see P4 datums.
-    if let Some(n) = snapshot.accelerators.iter().find(|a| a.is_npu()).map(|a| &a.name) {
+    if let Some(n) = snapshot
+        .accelerators
+        .iter()
+        .find(|a| a.is_npu())
+        .map(|a| &a.name)
+    {
         let _ = mem.write("node.npu", n);
     }
-    if let Some(g) = snapshot.accelerators.iter().find(|a| a.is_gpu()).map(|a| &a.name) {
+    if let Some(g) = snapshot
+        .accelerators
+        .iter()
+        .find(|a| a.is_gpu())
+        .map(|a| &a.name)
+    {
         let _ = mem.write("node.gpu", g);
     }
     let _ = mem.write("node.fingerprint", &live);
@@ -63,13 +74,18 @@ fn record_hardware_drift(snapshot: &SystemSnapshot) -> Option<String> {
 pub enum HiveCommands {
     #[clap(
         about = "Show system resource state and active hive profile",
-        long_about = "Reads RAM, GPU, CPU, running services and active profile.\n\nExamples:\n  b00t hive status\n  b00t hive status --json\n  b00t hive status --guards"
+        long_about = "Reads RAM, GPU, CPU, running services and active profile.\n\nExamples:\n  b00t hive status\n  b00t hive status --json\n  b00t hive status --guards\n  b00t hive status --datum-crossref"
     )]
     Status {
         #[clap(long, help = "Output as JSON")]
         json: bool,
         #[clap(long, help = "Include active guards in output")]
         guards: bool,
+        #[clap(
+            long,
+            help = "Cross-reference each hive profile's depends_on datums against BootDatum.status"
+        )]
+        datum_crossref: bool,
     },
 
     #[clap(
@@ -131,14 +147,16 @@ pub enum HiveCommands {
     Cyber(HiveCyberCommands),
 }
 
-
 #[derive(Parser)]
 pub enum PeerCommands {
     #[clap(about = "List all known hive peers with trust zone and health status")]
     List {
         #[clap(long, help = "Output as JSON")]
         json: bool,
-        #[clap(long, help = "Health-check all peers in parallel (5s timeout per peer)")]
+        #[clap(
+            long,
+            help = "Health-check all peers in parallel (5s timeout per peer)"
+        )]
         health: bool,
     },
     #[clap(about = "Register a peer in the hive ledger")]
@@ -189,15 +207,46 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
     let datum_dir = PathBuf::from(shellexpand::tilde(path).to_string());
 
     match cmd {
-        HiveCommands::Status { json, guards } => {
-            let (json, guards) = (*json, *guards);
+        HiveCommands::Status {
+            json,
+            guards,
+            datum_crossref,
+        } => {
+            let (json, guards, datum_crossref) = (*json, *guards, *datum_crossref);
             let snapshot = SystemSnapshot::capture()?;
             // 🤓 P3: detect hardware drift vs soul — emits hw_drift event +
             //    refreshes node.* regardless of output mode (deterministic).
             let drift = record_hardware_drift(&snapshot);
 
+            let crossref_results = if datum_crossref {
+                let b00t_path = datum_dir.to_string_lossy().to_string();
+                Some(
+                    discover_profiles(&datum_dir)
+                        .iter()
+                        .map(|(name, path)| match HiveProfile::from_file(path) {
+                            Ok(p) => crossref_datum_status(&p, &b00t_path),
+                            Err(e) => ProfileCrossrefResult {
+                                profile: name.clone(),
+                                healthy: false,
+                                reasons: vec![format!("parse error: {}", e)],
+                            },
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                None
+            };
+
             if json {
-                println!("{}", serde_json::to_string_pretty(&snapshot)?);
+                if let Some(results) = &crossref_results {
+                    let mut snapshot_json = serde_json::to_value(&snapshot)?;
+                    if let serde_json::Value::Object(ref mut map) = snapshot_json {
+                        map.insert("datum_crossref".to_string(), serde_json::to_value(results)?);
+                    }
+                    println!("{}", serde_json::to_string_pretty(&snapshot_json)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&snapshot)?);
+                }
                 return Ok(());
             }
 
@@ -224,7 +273,10 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             println!();
 
             if let Some(d) = drift {
-                println!("  ⚠️  HW drift: {}  (soul node.* + events.jsonl updated)", d);
+                println!(
+                    "  ⚠️  HW drift: {}  (soul node.* + events.jsonl updated)",
+                    d
+                );
                 println!();
             }
 
@@ -278,6 +330,37 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
                         g.action,
                         g.pattern,
                         g.message.as_deref().unwrap_or("")
+                    );
+                }
+            }
+
+            if let Some(results) = &crossref_results {
+                println!();
+                println!("  Datum crossref:");
+                for r in results {
+                    let label = if r.healthy { "healthy" } else { "degraded" };
+                    println!("    [{}] {}", label, r.profile);
+                    for reason in &r.reasons {
+                        println!("      - {}", reason);
+                    }
+                }
+
+                let healthy_count = results.iter().filter(|r| r.healthy).count();
+                let degraded: Vec<String> = results
+                    .iter()
+                    .filter(|r| !r.healthy)
+                    .map(|r| format!("{}: {}", r.profile, r.reasons.join(", ")))
+                    .collect();
+
+                println!();
+                if degraded.is_empty() {
+                    println!("  {} profiles healthy, 0 degraded", healthy_count);
+                } else {
+                    println!(
+                        "  {} profiles healthy, {} degraded ({})",
+                        healthy_count,
+                        degraded.len(),
+                        degraded.join("; ")
                     );
                 }
             }
@@ -487,7 +570,7 @@ fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
 fn handle_peer_command(cmd: &PeerCommands) -> Result<()> {
     match cmd {
         PeerCommands::List { json, health: _ } => {
-let snapshot = SystemSnapshot::capture()?;
+            let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.as_deref().unwrap_or("/dev/null");
             // Read peer ledger
             let peers = if std::path::Path::new(ledger_path).exists() {
@@ -507,17 +590,22 @@ let snapshot = SystemSnapshot::capture()?;
             }
             Ok(())
         }
-        PeerCommands::Add { id, address, auth_type } => {
+        PeerCommands::Add {
+            id,
+            address,
+            auth_type,
+        } => {
             let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.clone().unwrap_or_default();
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             peers.push(crate::hive::PeerEntry {
                 id: id.clone(),
                 address: address.clone(),
@@ -532,14 +620,15 @@ let snapshot = SystemSnapshot::capture()?;
         PeerCommands::Remove { id } => {
             let snapshot = SystemSnapshot::capture()?;
             let ledger_path = snapshot.hive_ledger_path.clone().unwrap_or_default();
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             let before = peers.len();
             peers.retain(|p| &p.id != id);
             if peers.len() < before {
@@ -562,7 +651,10 @@ let snapshot = SystemSnapshot::capture()?;
                 Vec::new()
             };
             if let Some(p) = peers.iter().find(|pe| &pe.id == id) {
-                println!("Peer: {}  {}  zone={}  auth={}  last_seen={}", p.id, p.address, p.zone, p.auth_type, p.last_seen);
+                println!(
+                    "Peer: {}  {}  zone={}  auth={}  last_seen={}",
+                    p.id, p.address, p.zone, p.auth_type, p.last_seen
+                );
             } else {
                 println!("Peer not found: {}", id);
             }
@@ -583,14 +675,15 @@ let snapshot = SystemSnapshot::capture()?;
                 .and_then(|n| n.parse::<i64>().ok())
                 .unwrap_or(30);
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
-            let mut peers: Vec<crate::hive::PeerEntry> = if std::path::Path::new(&ledger_path).exists() {
-                std::fs::read_to_string(&ledger_path)
-                    .ok()
-                    .and_then(|d| serde_json::from_str(&d).ok())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+            let mut peers: Vec<crate::hive::PeerEntry> =
+                if std::path::Path::new(&ledger_path).exists() {
+                    std::fs::read_to_string(&ledger_path)
+                        .ok()
+                        .and_then(|d| serde_json::from_str(&d).ok())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
             let before = peers.len();
             peers.retain(|p| {
                 chrono::DateTime::parse_from_rfc3339(&p.last_seen)
@@ -599,14 +692,21 @@ let snapshot = SystemSnapshot::capture()?;
             });
             if peers.len() < before {
                 std::fs::write(&ledger_path, serde_json::to_string_pretty(&peers)?)?;
-                println!("Pruned {} peers (older than {})", before - peers.len(), older_than);
+                println!(
+                    "Pruned {} peers (older than {})",
+                    before - peers.len(),
+                    older_than
+                );
             } else {
                 println!("No peers pruned.");
             }
             Ok(())
         }
         PeerCommands::Discover { subnet } => {
-            println!("🔍 Discover: scanning {}...", subnet.as_deref().unwrap_or("192.168.1.0/24"));
+            println!(
+                "🔍 Discover: scanning {}...",
+                subnet.as_deref().unwrap_or("192.168.1.0/24")
+            );
             // TODO: actual mDNS/network scan
             println!("Discover complete.");
             Ok(())

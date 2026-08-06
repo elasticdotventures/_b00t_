@@ -1,0 +1,52 @@
+{
+  "name": "b00t-cli",
+  "version": "0.10.2",
+  "description": "b00t-cli — universal package manager / hive agent CLI (installs via cargo; no prebuilt binaries yet)",
+  "main": "index.js",
+  "bin": {
+    "b00t-cli": "bin/b00t-cli",
+    "b00t": "bin/b00t-cli"
+  },
+  "scripts": {
+    "preinstall": "node scripts/install.js",
+    "postinstall": "node scripts/postinstall.js",
+    "test": "node scripts/test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elasticdotventures/dotfiles.git",
+    "directory": "b00t-cli"
+  },
+  "keywords": [
+    "b00t",
+    "cli",
+    "package-manager",
+    "rust",
+    "agent",
+    "promptexecution"
+  ],
+  "author": "Brian Horakh <brian@promptexecution.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ],
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

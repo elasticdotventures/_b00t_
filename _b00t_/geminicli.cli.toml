@@ -9,6 +9,7 @@ version = "gemini --version"
 version_regex = '(\d+\.\d+\.\d+)'
 aliases = ["gemini"]
 env = { GEMINI_API_KEY = "required" }
+# <|🦨: aspirational — node.cli datum never authored (3 datums depend on node.js); _b00t_#850, #163 |>
 depends_on = ["node.cli"]
 entangled_mcp = ["gemini-mcp-tool.mcp"]
 

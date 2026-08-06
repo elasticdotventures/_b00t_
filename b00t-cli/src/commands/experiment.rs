@@ -111,7 +111,14 @@ pub struct PhygitalStatus {
     pub focus_balance: f64,
 }
 
-fn make_scores(roi: f64, cost: f64, time: f64, accuracy: f64, utility: f64, risk: f64) -> HashMap<String, f64> {
+fn make_scores(
+    roi: f64,
+    cost: f64,
+    time: f64,
+    accuracy: f64,
+    utility: f64,
+    risk: f64,
+) -> HashMap<String, f64> {
     let mut m = HashMap::new();
     m.insert("roi".into(), roi);
     m.insert("cost".into(), cost);
@@ -293,27 +300,45 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, endpoint: &str) {
             },
             "id": 1
         });
-        let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
-        eprintln!("[ledgrrr-mcp] payload written to {} — curl attempt follows", tmp.display());
+        let _ = f.write_all(
+            serde_json::to_string_pretty(&payload)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        eprintln!(
+            "[ledgrrr-mcp] payload written to {} — curl attempt follows",
+            tmp.display()
+        );
     }
 
     // ── Try sending via curl ────────────────────────────────────────────────
     let output = Command::new("curl")
-        .args(["-s", "--max-time", "5",
-               "-H", "content-type: application/json",
-               "-d", &format!("@{}", tmp.display()),
-               &format!("{}/v1/chat/completions", endpoint)])
+        .args([
+            "-s",
+            "--max-time",
+            "5",
+            "-H",
+            "content-type: application/json",
+            "-d",
+            &format!("@{}", tmp.display()),
+            &format!("{}/v1/chat/completions", endpoint),
+        ])
         .output();
     let _ = std::fs::remove_file(&tmp);
 
     match output {
         Ok(o) if o.status.success() => {
-            eprintln!("[ledgrrr-mcp] FOCUS records persisted via curl for experiment {}", cmp.experiment_id);
+            eprintln!(
+                "[ledgrrr-mcp] FOCUS records persisted via curl for experiment {}",
+                cmp.experiment_id
+            );
             return;
         }
         Ok(o) => {
-            eprintln!("[ledgrrr-mcp] curl call returned {} — writing temp file",
-                o.status.code().unwrap_or(-1));
+            eprintln!(
+                "[ledgrrr-mcp] curl call returned {} — writing temp file",
+                o.status.code().unwrap_or(-1)
+            );
         }
         Err(e) => {
             eprintln!("[ledgrrr-mcp] curl error: {e}");
@@ -322,8 +347,15 @@ pub fn emit_focus_to_ledgrrr_mcp(cmp: &ExperimentComparison, endpoint: &str) {
 
     // ── Fallback: write payload to temp file ─────────────────────────────────
     if let Ok(mut f) = std::fs::File::create(&tmp) {
-        let _ = f.write_all(serde_json::to_string_pretty(&payload).unwrap_or_default().as_bytes());
-        eprintln!("[ledgrrr-mcp] payload written to {} — pipe to ledgrrr-mcp when daemon is running", tmp.display());
+        let _ = f.write_all(
+            serde_json::to_string_pretty(&payload)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        eprintln!(
+            "[ledgrrr-mcp] payload written to {} — pipe to ledgrrr-mcp when daemon is running",
+            tmp.display()
+        );
     }
 }
 
@@ -333,10 +365,9 @@ fn find_ledgrrr_mcp_command() -> Option<(String, Vec<String>)> {
     // Config file search paths
     let candidate_paths = [
         // Expand ~ via std::env::var("HOME")
-        std::env::var("HOME").ok().map(|h| {
-            std::path::Path::new(&h)
-                .join(".dotfiles/_b00t_/ledgrrr-mcp.mcp.toml")
-        }),
+        std::env::var("HOME")
+            .ok()
+            .map(|h| std::path::Path::new(&h).join(".dotfiles/_b00t_/ledgrrr-mcp.mcp.toml")),
         // Relative to CARGO_MANIFEST_DIR (available at compile time)
         Some(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_b00t_/ledgrrr-mcp.mcp.toml")),
         // Relative to current directory
@@ -382,12 +413,7 @@ struct McpConfigStdio {
 /// Parse the MCP config content to extract the first stdio method's command + args.
 fn parse_mcp_command(content: &str) -> Option<(String, Vec<String>)> {
     let cfg: McpConfigFile = toml::from_str(content).ok()?;
-    let method = cfg
-        .b00t
-        .mcp?
-        .stdio?
-        .into_iter()
-        .next()?;
+    let method = cfg.b00t.mcp?.stdio?.into_iter().next()?;
     Some((method.command, method.args))
 }
 
@@ -845,7 +871,10 @@ pub fn format_comparison(cmp: &ExperimentComparison) -> String {
         cmp.treatment.focus_earned, cmp.treatment.focus_consumed,
     ));
     out.push_str(&format!("  CONTROL REASONING: {}\n", cmp.control.reasoning));
-    out.push_str(&format!("  TREATMENT REASONING: {}", cmp.treatment.reasoning));
+    out.push_str(&format!(
+        "  TREATMENT REASONING: {}",
+        cmp.treatment.reasoning
+    ));
     out
 }
 
@@ -914,16 +943,10 @@ pub fn handle_experiment_compare(
 
         let dims = exps.entry(exp_id).or_default();
 
-        if let Some(v) = frame
-            .cell(0, "BilledCost")
-            .and_then(|c| cell_to_f64(c))
-        {
+        if let Some(v) = frame.cell(0, "BilledCost").and_then(|c| cell_to_f64(c)) {
             dims.billed_cost.push(v);
         }
-        if let Some(v) = frame
-            .cell(0, "EffectiveCost")
-            .and_then(|c| cell_to_f64(c))
-        {
+        if let Some(v) = frame.cell(0, "EffectiveCost").and_then(|c| cell_to_f64(c)) {
             dims.effective_cost.push(v);
         }
         if let Some(v) = frame
@@ -962,7 +985,11 @@ pub fn handle_experiment_compare(
         let delta = b_val - a_val;
         println!(
             "{:<24} {:>width$.2} {:>width$.2} {:>+width$.2}",
-            label, a_val, b_val, delta, width = max_w
+            label,
+            a_val,
+            b_val,
+            delta,
+            width = max_w
         );
     };
 
@@ -1040,7 +1067,11 @@ pub fn governance_gate(prompt: &str) -> Result<String, String> {
     }
     // Separate check for "token" with word boundaries (match "auth-token" but not "tokenizer")
     let lower = prompt.to_lowercase();
-    if lower.contains(" token ") || lower.ends_with(" token") || lower.starts_with("token ") || lower == "token" {
+    if lower.contains(" token ")
+        || lower.ends_with(" token")
+        || lower.starts_with("token ")
+        || lower == "token"
+    {
         return Err("GATE BLOCKED: check-credential-exposure | blocked pattern: token".into());
     }
     Ok("pass".to_string())
@@ -1145,12 +1176,15 @@ pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> b00t_c0re_a2a::ta
     }
 
     // Return as A2A Artifact
-    Artifact::json("cake-payout", serde_json::json!({
-        "experiment_id": cmp.experiment_id,
-        "payout": payout,
-        "agent": "experiment-runner",
-        "timestamp": chrono::Utc::now().to_rfc3339(),
-    }))
+    Artifact::json(
+        "cake-payout",
+        serde_json::json!({
+            "experiment_id": cmp.experiment_id,
+            "payout": payout,
+            "agent": "experiment-runner",
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }),
+    )
 }
 
 // ── Personality profiles ─────────────────────────────────────────────────────
@@ -1181,8 +1215,14 @@ mod tests {
     use super::*;
 
     const TEST_PROMPTS: [(&str, &str); 2] = [
-        ("Write fibonacci in Python with basic style", "Write fibonacci in Python with memoization + type hints"),
-        ("implement sort in Rust", "implement parallel sort in Rust with rayon"),
+        (
+            "Write fibonacci in Python with basic style",
+            "Write fibonacci in Python with memoization + type hints",
+        ),
+        (
+            "implement sort in Rust",
+            "implement parallel sort in Rust with rayon",
+        ),
     ];
 
     fn make_config(id: &str, prompts: (&str, &str)) -> ExperimentConfig {
@@ -1227,7 +1267,13 @@ mod tests {
         let cmp = dispatch_experiment(&config).unwrap();
 
         let cf = create_focus_record("test-003", "control", "sm0l-1", "eval", &cmp.control.scores);
-        let tf = create_focus_record("test-003", "treatment", "sm0l-2", "eval", &cmp.treatment.scores);
+        let tf = create_focus_record(
+            "test-003",
+            "treatment",
+            "sm0l-2",
+            "eval",
+            &cmp.treatment.scores,
+        );
 
         assert!(cf.record_id.contains("test-003"));
         assert!(cf.record_id.contains("control"));
@@ -1249,9 +1295,11 @@ mod tests {
         let config = make_config("test-004", TEST_PROMPTS[1]);
         let cmp = dispatch_experiment(&config).unwrap();
         assert!(
-            (cmp.focus_delta - (cmp.treatment.focus_earned - cmp.treatment.focus_consumed
-                - (cmp.control.focus_earned - cmp.control.focus_consumed)))
-            .abs()
+            (cmp.focus_delta
+                - (cmp.treatment.focus_earned
+                    - cmp.treatment.focus_consumed
+                    - (cmp.control.focus_earned - cmp.control.focus_consumed)))
+                .abs()
                 < 0.001
         );
     }

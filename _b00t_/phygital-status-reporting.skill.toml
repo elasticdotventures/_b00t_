@@ -1,0 +1,15 @@
+# 🦨 unfinished — 'phygital' terminology also appears in reviewer.role.toml's hint, but no confirmed phygital-status implementation exists yet
+[b00t]
+name = "phygital-status-reporting"
+type = "skill"
+type_tags = ["transferable"]
+hint = "Report status across both physical/hardware state (hive CMDB: RAM/GPU/CPU) and digital/agent state in one unified dashboard"
+keywords = ["phygital", "status", "reporting", "dashboard", "cmdb"]
+
+[b00t.learn]
+content = """
+"Phygital" = physical + digital: worker status reports should cover
+both hardware/resource state (`b00t-cli hive status`, RAM/GPU/CPU) and
+agent/task state (`b00t-cli status`, the tools/services dashboard) in one
+place, not two disconnected reports.
+"""

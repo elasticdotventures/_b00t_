@@ -1,0 +1,33 @@
+# ledgrrr.model-runtime.toml — local CPU inference profile for playbook
+# generation/mutation (PRD-10 §3.1, §6.3, §9).
+# @tribal: `type = "ai"` (parallels ollama.ai.toml). Missing — Phase 1 has
+#   no bundled model weights or runtime; ledgrrr_status always reports
+#   `model_runtime.configured = false` until LEDGRRR_MODEL_RUNTIME_PROFILE
+#   is set to something real. Do NOT wire a fake/hardcoded "configured=true"
+#   just to make this datum look done — PRD-10 §7 requires model use to be
+#   honestly visible in status output.
+
+[b00t]
+name = "ledgrrr"
+type = "ai"
+hint = "Local CPU fine-tuned model runtime for generative playbook modelling and the local-cpu simulation profile. Missing — no bundled weights/runtime yet; deterministic (non-LLM) simulation is the only working profile in Phase 1 (PRD-10 §6.3)."
+depends_on = ["ledgrrr.mcp"]
+trigger_words = ["ledgrrr", "playbook", "local-cpu", "simulation"]
+
+[b00t.env]
+LEDGRRR_MODEL_RUNTIME_PROFILE = ""
+
+[[b00t.usage]]
+description = "Check whether a model runtime profile is configured"
+command = "b00t exec ledgrrr_status"
+
+[[b00t.references]]
+name = "PRD-10 §6.3 Simulation"
+url = "vendor/ledgrrr/PRD-10.md"
+
+# b00t:map v1
+# summary: ledgrrr local model runtime — missing, deterministic simulation is the only Phase 1 profile
+# tags: ai, model-runtime, local-cpu, simulation, prd-10
+# tier: frontier
+# cmds: b00t exec ledgrrr_status
+# complexity: 7

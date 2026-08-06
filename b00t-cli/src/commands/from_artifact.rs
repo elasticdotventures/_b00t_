@@ -133,10 +133,7 @@ fn template_datum(topic: &str, extracted_text: &str, source_path: &str) -> Strin
 
     // Embed first 500 chars of extracted text as a TOML comment block
     let excerpt: String = extracted_text.chars().take(500).collect();
-    let excerpt_lines: Vec<String> = excerpt
-        .lines()
-        .map(|l| format!("# {l}"))
-        .collect();
+    let excerpt_lines: Vec<String> = excerpt.lines().map(|l| format!("# {l}")).collect();
     let excerpt_block = excerpt_lines.join("\n");
 
     format!(
@@ -265,7 +262,10 @@ pub fn handle_from_artifact(args: &FromArtifactArgs) -> Result<()> {
     eprintln!("[from-artifact] extracting: {}", path.display());
     let extracted = extract_text_from_artifact(path)?;
     let word_count = extracted.split_whitespace().count();
-    eprintln!("[from-artifact] extracted {word_count} words from {}", path.display());
+    eprintln!(
+        "[from-artifact] extracted {word_count} words from {}",
+        path.display()
+    );
 
     // NS-8: record generated(datum_key → topic) fact
     let _ = crate::commands::evidence::record_generated(
@@ -354,10 +354,17 @@ mod tests {
 
     #[test]
     fn template_datum_contains_required_fields() {
-        let content = template_datum("rust-async.skill", "async await tokio futures", "/tmp/spec.pdf");
+        let content = template_datum(
+            "rust-async.skill",
+            "async await tokio futures",
+            "/tmp/spec.pdf",
+        );
         assert!(content.contains("[b00t]"), "TOML section");
         assert!(content.contains("rust-async.skill"), "topic name");
-        assert!(content.contains("auto_generated = true"), "auto_generated flag");
+        assert!(
+            content.contains("auto_generated = true"),
+            "auto_generated flag"
+        );
         assert!(content.contains("# b00t:map v1"), "tail-map present");
         assert!(content.contains("# tier:"), "tier field");
         assert!(content.contains("# complexity:"), "complexity field");

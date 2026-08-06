@@ -119,12 +119,19 @@ fn load_capability_registry() -> Result<CapabilityRegistry, Box<dyn std::error::
     let toml: RegistryToml = toml::from_str(&content)?;
     let mut map = std::collections::HashMap::new();
     for entry in toml.registry.capabilities {
-        map.insert(entry.id.clone(), CapabilityInfo {
-            name: if entry.name.is_empty() { entry.id.clone() } else { entry.name },
-            capability_type: entry.entry_type,
-            depends_on: entry.depends_on,
-            tags: entry.skills,
-        });
+        map.insert(
+            entry.id.clone(),
+            CapabilityInfo {
+                name: if entry.name.is_empty() {
+                    entry.id.clone()
+                } else {
+                    entry.name
+                },
+                capability_type: entry.entry_type,
+                depends_on: entry.depends_on,
+                tags: entry.skills,
+            },
+        );
     }
     Ok(CapabilityRegistry { map })
 }
@@ -189,14 +196,26 @@ pub fn run_hook(script: &str) -> HookResult {
         let candidates = [
             crate::utils::get_workspace_root() + "/_b00t_/scripts/gates.rhai",
             dirs::home_dir()
-                .map(|h| h.join(".dotfiles").join("_b00t_").join("scripts").join("gates.rhai"))
+                .map(|h| {
+                    h.join(".dotfiles")
+                        .join("_b00t_")
+                        .join("scripts")
+                        .join("gates.rhai")
+                })
                 .unwrap_or_default()
-                .to_string_lossy().to_string(),
+                .to_string_lossy()
+                .to_string(),
         ];
-        let content = candidates.iter().find_map(|p| std::fs::read_to_string(p).ok());
+        let content = candidates
+            .iter()
+            .find_map(|p| std::fs::read_to_string(p).ok());
         match content {
             Some(src) => src,
-            None => return HookResult::Warn("gates.rhai not found (searched workspace and ~/.dotfiles)".into()),
+            None => {
+                return HookResult::Warn(
+                    "gates.rhai not found (searched workspace and ~/.dotfiles)".into(),
+                );
+            }
         }
     } else {
         script.to_string()
@@ -278,49 +297,63 @@ fn build_engine() -> Engine {
     );
 
     // Gate evaluation functions — reused from rhai_engine.rs
-    engine.register_fn("gate_check", |kind: &str, spec: &str| -> Result<bool, Box<EvalAltResult>> {
-        let result = match kind {
-            "command" => std::process::Command::new("which").arg(spec).output().map(|o| o.status.success()).unwrap_or(false),
-            "knowledge_backend" => b00t_c0re_lib::compiled_knowledge_backend() == spec,
-            "file" => {
-                let expanded = if spec.starts_with('~') {
-                    let home = std::env::var("HOME").unwrap_or_default();
-                    std::path::Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
-                } else {
-                    std::path::Path::new(spec).to_path_buf()
-                };
-                expanded.exists()
-            }
-            "env" => {
-                let direct = std::env::var(spec);
-                if direct.is_ok() && !direct.unwrap_or_default().is_empty() {
-                    true
-                } else {
-                    let ws = std::env::var("WORKSPACE_ROOT").or_else(|_| std::env::var("HOME")).unwrap_or_default();
-                    let env_path = std::path::Path::new(&ws).join(".env");
-                    if env_path.exists() {
-                        if let Ok(content) = std::fs::read_to_string(&env_path) {
-                            let prefix = format!("{}=", spec);
-                            for line in content.lines() {
-                                if line.trim().starts_with(&prefix) {
-                                    let val = line.trim()[prefix.len()..].trim();
-                                    return Ok(!val.is_empty() && !val.starts_with('#'));
+    engine.register_fn(
+        "gate_check",
+        |kind: &str, spec: &str| -> Result<bool, Box<EvalAltResult>> {
+            let result = match kind {
+                "command" => std::process::Command::new("which")
+                    .arg(spec)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false),
+                "knowledge_backend" => b00t_c0re_lib::compiled_knowledge_backend() == spec,
+                "file" => {
+                    let expanded = if spec.starts_with('~') {
+                        let home = std::env::var("HOME").unwrap_or_default();
+                        std::path::Path::new(&home).join(spec.strip_prefix("~/").unwrap_or(spec))
+                    } else {
+                        std::path::Path::new(spec).to_path_buf()
+                    };
+                    expanded.exists()
+                }
+                "env" => {
+                    let direct = std::env::var(spec);
+                    if direct.is_ok() && !direct.unwrap_or_default().is_empty() {
+                        true
+                    } else {
+                        let ws = std::env::var("WORKSPACE_ROOT")
+                            .or_else(|_| std::env::var("HOME"))
+                            .unwrap_or_default();
+                        let env_path = std::path::Path::new(&ws).join(".env");
+                        if env_path.exists() {
+                            if let Ok(content) = std::fs::read_to_string(&env_path) {
+                                let prefix = format!("{}=", spec);
+                                for line in content.lines() {
+                                    if line.trim().starts_with(&prefix) {
+                                        let val = line.trim()[prefix.len()..].trim();
+                                        return Ok(!val.is_empty() && !val.starts_with('#'));
+                                    }
                                 }
                             }
                         }
+                        false
                     }
-                    false
                 }
-            }
-            _ => return Err(format!("unknown gate kind: {}", kind).into()),
-        };
-        Ok(result)
-    });
+                _ => return Err(format!("unknown gate kind: {}", kind).into()),
+            };
+            Ok(result)
+        },
+    );
 
-    engine.register_fn("get_env", |var: &str| -> String { std::env::var(var).unwrap_or_default() });
-    engine.register_fn("read_file", |path: &str| -> Result<String, Box<EvalAltResult>> {
-        std::fs::read_to_string(path).map_err(|e| format!("read_file error: {}", e).into())
+    engine.register_fn("get_env", |var: &str| -> String {
+        std::env::var(var).unwrap_or_default()
     });
+    engine.register_fn(
+        "read_file",
+        |path: &str| -> Result<String, Box<EvalAltResult>> {
+            std::fs::read_to_string(path).map_err(|e| format!("read_file error: {}", e).into())
+        },
+    );
     engine.register_fn("log_info", |msg: &str| println!("ℹ️  {}", msg));
     // session_track: rhai-callable telemetry sink → unified ~/.b00t/events.jsonl
     // Uses shared b00t_c0re_lib::write_event so all three telemetry sources
