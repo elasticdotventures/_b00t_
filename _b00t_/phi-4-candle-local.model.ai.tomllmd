@@ -1,0 +1,89 @@
+# b00t AI Model Datum — Microsoft Phi-4 14B, quantized GGUF, native candle runtime (CPU)
+# 🤓 Unlike qwen3-coder-local / gemma-4-26b-a4b-local, this is NOT vllm-podman: it's a
+#    native Rust binary (b00t-candle-serve, crates.io candle-transformers 0.11.0) that
+#    loads the GGUF directly — no container, no GPU required. The RTX 3090 is contended/
+#    time-shared by ch0nky; this is the CPU-capable fallback tier.
+# HF weights card: https://huggingface.co/microsoft/phi-4-gguf
+# HF tokenizer card: https://huggingface.co/microsoft/phi-4
+# Rust inference docs: https://github.com/microsoft/PhiCookBook ("Inference Phi with Rust")
+# Candle upstream support: candle-transformers::models::quantized_phi3 (Phi-4 reuses the
+#    phi3 GGUF architecture tag — see candle-examples/examples/quantized-phi/main.rs)
+# Usage: just phi-candle::download && just phi-candle::run "your prompt"
+
+[b00t]
+name = "phi-4-candle-local"
+type = "ai"
+hint = "Phi-4 14B Q4_K GGUF, native candle-transformers runtime, CPU-only (no vLLM/podman/GPU)"
+aliases = ["phi4", "phi-4", "phi-candle", "phi4-cpu"]
+
+[b00t.env]
+PHI_CANDLE_MODEL_DIR = "~/.cache/huggingface/hub/models--microsoft--phi-4-gguf"
+PHI_CANDLE_BIN = "b00t-candle-serve"
+
+[model]
+provider = "candle_native"
+size = "medium"
+capabilities = ["chat", "reasoning", "code"]
+input_modalities  = ["text"]
+input_formats     = ["text/plain", "text/markdown"]
+output_modalities = ["text"]
+# 🤓 not OpenAI-compatible yet — stdout/stdin CLI generation only (see service_contract
+#    below and _b00t_/phi-candle.just). No HTTP endpoint / litellm_model wired up.
+context_window = 16384
+enabled = true
+access_groups = ["default", "local", "cpu-fallback"]
+
+[ai_model.parameters]
+max_tokens = 1024
+temperature = 0.2
+repeat_penalty = 1.1
+
+[ai_model.metadata]
+hf_repo = "microsoft/phi-4-gguf"
+tokenizer_repo = "microsoft/phi-4"
+allow_patterns = "phi-4-Q4_K.gguf"
+gguf_file = "phi-4-Q4_K.gguf"
+# 🤓 Q4_K quant, ~8.43 GB (9,053,114,560 bytes) — fits comfortably on this box's 31GB RAM
+#    with room for KV cache; CPU-only, 4 cores. Q5_K variants exist (~10.6GB) for higher
+#    fidelity if RAM/time budget allows; Q4_K chosen as the CPU-practical default.
+runtime = "candle-native"
+container_runtime = "none"
+gpu = "none (CPU-only by design — RTX 3090 reserved for ch0nky/vLLM)"
+crate = "b00t-candle-serve"
+crate_path = "b00t-candle-serve/"
+candle_transformers_module = "quantized_phi3::ModelWeights"
+
+# ── Service contracts — verifiable capability handlers ────────────────────────
+[[service_contract]]
+capability  = "candle-runner-builds"
+handler     = "cargo build --release -p b00t-candle-serve"
+evidence    = "PASS: target/release/b00t-candle-serve exists, exit 0"
+tier        = "sm0l"
+verifiable  = true
+
+[[service_contract]]
+capability  = "local-cpu-inference"
+handler     = "just phi-candle::run \"Q: What is the capital of France?\\nA:\""
+evidence    = "PASS: stdout contains generated completion tokens after the prompt, nonzero tok/s reported on stderr"
+tier        = "sm0l"
+verifiable  = true
+# 🤓 verified 2026-08-04: real end-to-end run on this box (4-core CPU, no GPU) —
+#    `./target/release/b00t-candle-serve --prompt "Q: What is the capital of France?\nA:"`
+#    completed the prompt with "A: Paris" (correct, coherent) at 0.53 tok/s;
+#    model load ~2m23s (cold HF cache read of the 9.05GB GGUF) + 75.73s for 40 tokens.
+#    CPU throughput is slow as expected for 14B Q4_K on 4 cores — usable for short
+#    completions, not interactive chat latency.
+
+[[service_contract]]
+capability  = "b00t-datum-authoring"
+handler     = "b00t-cli --path _b00t_ viz entangle --datum phi-4-candle-local --format json"
+evidence    = "PASS: valid JSON graph with phi-4-candle-local node + edges"
+tier        = "sm0l"
+verifiable  = true
+
+# b00t:map v1
+# summary: Phi-4 14B Q4_K GGUF served via native candle-transformers binary (b00t-candle-serve); CPU-only fallback, no GPU/container required
+# tags: ai, phi, phi4, microsoft, candle, gguf, cpu-inference, local-inference, sm0l
+# tier: sm0l
+# cmds: just phi-candle::download, just phi-candle::run
+# complexity: 4

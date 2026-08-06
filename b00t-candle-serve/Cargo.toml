@@ -1,0 +1,23 @@
+[package]
+name = "b00t-candle-serve"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Minimal candle-transformers CLI runner for quantized GGUF models (Phi-4 first) — CPU-friendly local inference, no vLLM/podman"
+
+[[bin]]
+name = "b00t-candle-serve"
+path = "src/main.rs"
+
+[dependencies]
+# 🤓 pinned to match b00t-embed's candle-core/candle-nn = "0.11.0" so the workspace
+#    only ever resolves one candle version graph.
+candle-core = "0.11.0"
+candle-nn = "0.11.0"
+candle-transformers = "0.11.0"
+hf-hub = { version = "1.0", default-features = false, features = ["blocking"] }
+tokenizers = { version = "0.22", default-features = false, features = ["onig"] }
+anyhow = { workspace = true }
+clap = { workspace = true }
