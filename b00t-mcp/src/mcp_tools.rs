@@ -2025,7 +2025,13 @@ impl crate::clap_reflection::McpExecutor for BJustCommand {
     }
 }
 
-// BVerifyCommand: verify z3 assertion via b00t-cli admin
+// BVerifyCommand: verify a Z3/SMT2 assertion by shelling directly to `z3 -in`.
+// 🤓 Was `b00t-cli admin verify --assertion ...` — that subcommand never
+//    existed (no "admin" command in b00t-cli's Commands enum at all), so this
+//    always failed and every caller (grammar-shape audit, verify tool loop)
+//    silently got back {"result":"error"} regardless of the assertion.
+//    Matches the working `z3 -in` piped-stdin pattern already used by
+//    b00t-c0re-lib::z3_examples and b00t-datum-core::edl.
 #[derive(Parser, Clone)]
 pub struct BVerifyCommand {
     #[arg(help = "Z3 or formal assertion string")]
@@ -2043,19 +2049,42 @@ impl crate::clap_reflection::McpExecutor for BVerifyCommand {
     fn execute_mcp_call(
         params: &std::collections::HashMap<String, serde_json::Value>,
     ) -> anyhow::Result<String> {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
         let assertion = params
             .get("assertion")
             .and_then(|v| v.as_str())
             .unwrap_or("true");
-        let output = std::process::Command::new("b00t-cli")
-            .args(["admin", "verify", "--assertion", assertion])
-            .output()
-            .map_err(|e| anyhow::anyhow!("verify failed: {}", e))?;
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        let mut child = Command::new("z3")
+            .arg("-in")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("z3 not found in PATH: {e}"))?;
+        child
+            .stdin
+            .as_mut()
+            .expect("stdin was piped")
+            .write_all(assertion.as_bytes())?;
+        let output = child.wait_with_output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let result = if stdout == "unsat" {
+            "unsat"
+        } else if stdout == "sat" {
+            "sat"
         } else {
-            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
-        }
+            "unknown"
+        };
+        Ok(serde_json::json!({
+            "result": result,
+            "verified": result != "unknown",
+            "raw_stdout": stdout,
+            "raw_stderr": stderr,
+        })
+        .to_string())
     }
 }
 

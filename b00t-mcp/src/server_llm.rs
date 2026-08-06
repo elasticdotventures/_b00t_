@@ -735,7 +735,7 @@ mod tests {
         // Model emits grammar-shaped content claiming "sat" for an assertion
         // that is actually unsat — proxy_chat must correct it before
         // returning to the client (#596 grammar-shape audit bridge).
-        let claim = "[tool_call: verify assertion=\"(assert (and (> x 0) (< x 0)))(check-sat)\"] → [result: sat] → contradiction holds.";
+        let claim = "[tool_call: verify assertion=\"(declare-const x Int)(assert (and (> x 0) (< x 0)))(check-sat)\"] → [result: sat] → contradiction holds.";
         let upstream_url = spawn_fake_upstream(vec![stop_upstream_response(claim)]).await;
         let state = Arc::new(LlmState::from_config(&upstream_url, ""));
         let request_body = json!({
