@@ -5,9 +5,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use ufo_types::{Stereotyped, UfoStereotype};
 
 use crate::{
-    ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig, K0mmand3rDatumConfig,
-    KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods, OrchestrationConfig, PipelineConfig,
-    PolysemeConfig, RuntimeConfig, UsageExample,
+    AiProvisionConfig, ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig,
+    K0mmand3rDatumConfig, KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods,
+    OrchestrationConfig, PipelineConfig, PolysemeConfig, RuntimeConfig, UsageExample,
 };
 
 // warn-once registry — one warning per unknown datum type string per process
@@ -182,6 +182,11 @@ pub struct BootDatum {
     // MCP-specific multi-method support
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<McpMethods>,
+
+    // Generic AI-backend credential provisioning (b00t-server key minting +
+    // env injection at MCP-install time) — see AiProvisionConfig doc comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_provision: Option<AiProvisionConfig>,
 
     // Gate preconditions
     #[serde(default, skip_serializing_if = "Option::is_none")]

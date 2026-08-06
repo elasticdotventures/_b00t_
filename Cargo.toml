@@ -26,6 +26,7 @@ members = [
     "b00t-admin",
     "b00t-mermaid-wasm",
     "b00t-ui-wasm",
+    "b00t-embed-serve",
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",

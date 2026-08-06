@@ -1739,6 +1739,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-embed-serve"
+version = "0.10.3"
+dependencies = [
+ "anyhow",
+ "axum 0.8.9",
+ "b00t-embed",
+ "clap",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "b00t-grok"
 version = "0.10.3"
 dependencies = [
