@@ -27,10 +27,12 @@ command = "CARGO_CODEGEN_BACKEND=cranelift cargo build -p b00t-admin"
 
 [[b00t.usage]]
 description = "Set cranelift as default for all builds (add to ~/.cargo/config.toml)"
-command = "cat >> ~/.cargo/config.toml << 'EOF'
+command = '''
+cat >> ~/.cargo/config.toml << 'EOF'
 [target.'cfg(all())']
-rustflags = [\"-Zcodegen-backend=cranelift\"]
-EOF"
+rustflags = ["-Zcodegen-backend=cranelift"]
+EOF
+'''
 
 [roles]
 required_for = ["developer"]

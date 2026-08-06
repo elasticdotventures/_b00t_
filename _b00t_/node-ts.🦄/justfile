@@ -1,5 +1,6 @@
 env:
-	source ~/_b00t_/npm.🐳/env.sh
+	#!/usr/bin/bash
+	source ~/_b00t_/node-ts.🦄/npm.🐳/env.sh
 
 install:
 	#!/usr/bin/env bash

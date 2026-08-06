@@ -51,9 +51,9 @@ fn derive_gates(content) {
     let in_knowledge_block = false;
     let in_stdio_env = false;
     let in_explicit_gate = false;
-    let mut ckind = "";
-    let mut cspec = "";
-    let mut chint = "";
+    let ckind = "";
+    let cspec = "";
+    let chint = "";
 
     for line in lines {
         let t = strip(line);

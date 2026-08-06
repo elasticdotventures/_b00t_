@@ -23,8 +23,11 @@ use uuid::Uuid;
 /// Outcome of a `try_claim` call.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClaimResult {
-    /// A schedule was successfully claimed.
-    Claimed(ScheduleDef),
+    /// A schedule was successfully claimed. `run_id` identifies the `runs`
+    /// row `try_claim` already inserted (status `claimed`) — callers use it
+    /// to transition the run to `running` and later to a terminal status via
+    /// `SchedulerDb::set_run_running` / `SchedulerDb::update_run`.
+    Claimed { schedule: ScheduleDef, run_id: String },
     /// No schedule is currently due (or all schedules exhausted).
     NotDue,
     /// The agent's capabilities do not match any eligible schedule.
@@ -73,7 +76,7 @@ pub fn try_claim(
     let claim_result = try_claim_inner(&conn, agent_id, capabilities);
 
     match &claim_result {
-        Ok(ClaimResult::Claimed(_))
+        Ok(ClaimResult::Claimed { .. })
         | Ok(ClaimResult::NotDue)
         | Ok(ClaimResult::CapabilityMismatch)
         | Ok(ClaimResult::AlreadyClaimed) => {
@@ -187,7 +190,10 @@ fn try_claim_inner(
         let mut claimed = candidate.clone();
         claimed.run_count += 1;
 
-        return Ok(ClaimResult::Claimed(claimed));
+        return Ok(ClaimResult::Claimed {
+            schedule: claimed,
+            run_id,
+        });
     }
 
     // Determine why we didn't claim.
@@ -279,6 +285,47 @@ mod tests {
 
         let result = try_claim_inner(&conn, "agent_2", &[]).unwrap();
         assert_eq!(result, ClaimResult::NotDue);
+    }
+
+    #[test]
+    fn never_run_interval_schedule_is_claimed_and_returns_run_id() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let created_at = (Utc::now() - Duration::minutes(10))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+        conn.execute(
+            "INSERT INTO schedules (id, name, schedule_kind, interval_mins, max_runs, run_count, prompt, created_at)
+             VALUES ('sched_2', 'never run', 'interval', 60, -1, 0, 'do work', ?1)",
+            params![created_at],
+        )
+        .unwrap();
+
+        let result = try_claim_inner(&conn, "agent_1", &[]).unwrap();
+        match result {
+            ClaimResult::Claimed { schedule, run_id } => {
+                assert_eq!(schedule.id, "sched_2");
+                assert_eq!(schedule.run_count, 1);
+                assert!(run_id.starts_with("run_"), "run_id was {run_id:?}");
+
+                // The runs row try_claim inserted must be readable back by that id.
+                let status: String = conn
+                    .query_row(
+                        "SELECT status FROM runs WHERE id = ?1",
+                        params![run_id],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(status, "claimed");
+            }
+            other => panic!("expected Claimed, got {other:?}"),
+        }
+
+        // A second claim attempt immediately after must not double-claim —
+        // the schedule is no longer due (interval hasn't elapsed since the
+        // run we just recorded).
+        let second = try_claim_inner(&conn, "agent_2", &[]).unwrap();
+        assert_eq!(second, ClaimResult::NotDue);
     }
 }
 

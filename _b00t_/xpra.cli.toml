@@ -19,11 +19,37 @@
 #   if a full desktop session is ever needed (out of scope here — see
 #   xpra-rpa.hive.toml).
 #
-# @tribal: CONFIRMED WORKING END-TO-END 2026-08-04 — client: WSL2/WSLg (Ubuntu
-#   24.04 noble, x86_64) attaching to server: rock-5c (armbian/noble, aarch64),
-#   both on xpra.org repo build 6.5.2-r0. Getting here took 6 real, distinct
-#   bugs/gaps — every one is memoized below because each is non-obvious and
-#   WILL recur for the next agent/operator who sets this up on a new node.
+# @tribal: STATUS 2026-08-06 — HTML5 PATH CONFIRMED WORKING end-to-end.
+#   Server: rock-5c (armbian/noble, aarch64), xpra.org repo build 6.5.2-r0.
+#   Verified server-side via Playwright driving a real (non-headless-shell)
+#   Chromium against `http://127.0.0.1:10000` directly (no SSH tunnel needed
+#   for this verification since it ran on rock-5c itself): `xpra start :100
+#   --start-child=xterm ...` renders the seamless window in the HTML5 canvas,
+#   real OS-level keystrokes (Playwright `press_key`, not synthetic
+#   `dispatchEvent` — that path is untrustworthy, see below) land in the
+#   forwarded xterm, Enter executes the command, and the shell's stdout
+#   renders back through the canvas. Full round-trip confirmed: browser
+#   keystroke → HTML5 client → xpra server → X11 app → shell → X11 update →
+#   xpra encode → HTML5 canvas → visible.
+#   The DPI-mismatch dialog ("DPI set to 27 x 52, wanted 96 x 96") IS real
+#   and reproducible on connect — confirmed cosmetic/non-blocking, dismissed
+#   via clicking its `.dismiss` div (not part of the forwarded X11 window,
+#   it's the xpra HTML5 client's own overlay UI).
+#   NOT yet re-verified on this pass: `attach_native` (GTK3 client path) and
+#   a real WSL2/WSLg client machine specifically — those need the operator's
+#   own client machine, not just server-side testing. Getting this far
+#   originally took 6 real, distinct bugs/gaps — every one is memoized below
+#   because each is non-obvious and WILL recur for the next agent/operator
+#   who sets this up on a new node.
+#
+# @tribal: if re-verifying keyboard input programmatically (e.g. via
+#   Playwright), use real OS-level key events (Playwright's `press_key` /
+#   CDP `Input.dispatchKeyEvent`), NOT `document.dispatchEvent(new
+#   KeyboardEvent(...))` — synthetic DOM events are untrusted
+#   (`event.isTrusted === false`) and some xpra HTML5 client keyboard paths
+#   may silently ignore them depending on version/build. (In this session
+#   the synthetic-event characters DID land, so it's not a hard requirement
+#   on 6.5.2-r0, but don't rely on it — use real key events.)
 #
 # @tribal: DON'T use plain `apt-get install xpra` (Ubuntu universe, 3.1.5) on
 #   either side — it's a stale build with real bugs, not just an old version
