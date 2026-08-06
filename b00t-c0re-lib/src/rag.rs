@@ -152,9 +152,25 @@ impl RagLightManager {
                     && let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
                     // 🤓 Strip ALL extensions: "gemma-4-26b-a4b-local.model.toml" → "gemma-4-26b-a4b-local"
                     //    Also handle "pi.agent.toml" → "pi", "b00t-mcp.mcp.toml" → "b00t-mcp"
-                    let topic = fname.split('.').next().unwrap_or(fname);
+                    let filename_stem = fname.split('.').next().unwrap_or(fname);
+
+                    // 🤓 #843: `grok assimilate -t <topic>` writes
+                    //    `<topic>-<uuid8>.datum.toml` — the filename-stem
+                    //    heuristic above mis-extracts "<topic>-<uuid8>" as
+                    //    the topic (breaking the chicken-and-egg discovery
+                    //    for a topic created in the SAME invocation). Datum
+                    //    files carry the authoritative topic in
+                    //    `[datum].topic` (or legacy `[b00t].name`) — read it
+                    //    directly instead of guessing from the filename.
+                    let topic = if is_toml && fname.ends_with(".datum.toml") {
+                        Self::topic_from_datum_file(&path)
+                            .unwrap_or_else(|| filename_stem.to_string())
+                    } else {
+                        filename_stem.to_string()
+                    };
+
                     if !topic.is_empty() {
-                        topics.push(topic.to_string());
+                        topics.push(topic);
                     }
                 }
             }
@@ -179,6 +195,26 @@ impl RagLightManager {
 
         info!("Discovered {} b00t topics for RAG", topics.len());
         Ok(topics)
+    }
+
+    /// Extract the canonical topic from a `*.datum.toml` file — reads
+    /// `[datum].topic` (current schema, written by `grok assimilate`) or
+    /// falls back to legacy `[b00t].name`. Returns `None` on any parse
+    /// failure so the caller can fall back to the filename-stem heuristic.
+    fn topic_from_datum_file(path: &std::path::Path) -> Option<String> {
+        let content = std::fs::read_to_string(path).ok()?;
+        let value: toml::Value = toml::from_str(&content).ok()?;
+        value
+            .get("datum")
+            .and_then(|d| d.get("topic"))
+            .and_then(|t| t.as_str())
+            .or_else(|| {
+                value
+                    .get("b00t")
+                    .and_then(|b| b.get("name"))
+                    .and_then(|n| n.as_str())
+            })
+            .map(str::to_string)
     }
 
     /// Add document source for async indexing
@@ -493,6 +529,71 @@ impl Default for RagLightConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // 🤓 discover_b00t_topics reads B00T_DIR env var; guard mutation so
+    //    parallel `cargo test` runs in this binary don't race on it.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Issue #843 — chicken-and-egg: `grok assimilate -t <topic>` writes
+    /// `_b00t_/<topic>-<uuid8>.datum.toml`. The old filename-stem heuristic
+    /// (split on first '.') mis-extracted "<topic>-<uuid8>" as the topic
+    /// name, so a topic created by assimilate was never discoverable by
+    /// RAGLight's `add_document` in the SAME invocation — "Topic 'vqa' not
+    /// found in available b00t datums" even though the datum was just
+    /// written to disk. Fix: parse the datum TOML's `[datum].topic` field
+    /// (or legacy `[b00t].name`) instead of guessing from the filename.
+    #[test]
+    fn test_discover_topics_reads_new_assimilate_datum_immediately() {
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let b00t_dir = tmp.path().join("_b00t_");
+        std::fs::create_dir_all(&b00t_dir).unwrap();
+
+        // Mirrors handle_assimilate()'s exact datum filename convention.
+        let datum_path = b00t_dir.join("vqa843-deadbeef.datum.toml");
+        std::fs::write(
+            &datum_path,
+            r#"[datum]
+topic      = "vqa843"
+class      = "Concept"
+tags       = []
+source_url = ""
+encoding   = "gzip"
+git_hash   = "0000000000000000000000000000000000000000"
+datum_id   = "deadbeef-0000-0000-0000-000000000000"
+created    = "2026-08-06T00:00:00Z"
+"#,
+        )
+        .unwrap();
+
+        let prev = std::env::var("B00T_DIR").ok();
+        // SAFETY: single-threaded within ENV_LOCK guard.
+        unsafe {
+            std::env::set_var("B00T_DIR", tmp.path());
+        }
+
+        let config = RagLightConfig::default();
+        let topics = RagLightManager::discover_b00t_topics(&config).unwrap();
+
+        // SAFETY: single-threaded within ENV_LOCK guard.
+        unsafe {
+            match &prev {
+                Some(v) => std::env::set_var("B00T_DIR", v),
+                None => std::env::remove_var("B00T_DIR"),
+            }
+        }
+
+        assert!(
+            topics.contains(&"vqa843".to_string()),
+            "expected freshly-assimilated topic 'vqa843' to be discoverable immediately; got {topics:?}"
+        );
+        assert!(
+            !topics.contains(&"vqa843-deadbeef".to_string()),
+            "topic list should not contain the filename-mangled 'vqa843-deadbeef'; got {topics:?}"
+        );
+    }
 
     #[test]
     fn test_loader_type_detection() {
