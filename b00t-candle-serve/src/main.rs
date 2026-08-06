@@ -56,6 +56,45 @@ struct Args {
 
     #[arg(long, default_value_t = 299792458)]
     seed: u64,
+
+    /// Print which device this binary would use (cuda/cpu) and exit immediately —
+    /// no download, no model load. Used by `b00t whoami`'s dashboard to report
+    /// candle CUDA capability without paying the multi-GB download/load cost.
+    #[arg(long)]
+    print_build_info: bool,
+}
+
+/// Picks the compute device: CUDA if this binary was built with the `cuda` feature
+/// AND a CUDA device is actually available at runtime (falls back to CPU on any
+/// failure — a stale driver, a busy/reserved GPU, etc — rather than hard-erroring).
+/// Without the `cuda` feature, this is CPU always; the code path doesn't exist in
+/// that build, so there's nothing to fall back from.
+fn select_device() -> Device {
+    #[cfg(feature = "cuda")]
+    {
+        match Device::new_cuda(0) {
+            Ok(d) => {
+                eprintln!("[b00t-candle-serve] device: cuda:0");
+                return d;
+            }
+            Err(e) => {
+                eprintln!("[b00t-candle-serve] cuda requested but unavailable ({e}), falling back to cpu");
+            }
+        }
+    }
+    eprintln!("[b00t-candle-serve] device: cpu");
+    Device::Cpu
+}
+
+/// Build identifier for `--print-build-info`: "cuda" if compiled with the cuda
+/// feature (regardless of whether a GPU is present right now — this reflects what
+/// the BINARY can do, runtime availability is select_device()'s job), else "cpu".
+fn build_info() -> &'static str {
+    if cfg!(feature = "cuda") {
+        "cuda"
+    } else {
+        "cpu"
+    }
 }
 
 fn split_repo_id(id: &str) -> (&str, &str) {
@@ -67,7 +106,11 @@ fn split_repo_id(id: &str) -> (&str, &str) {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let device = Device::Cpu;
+    if args.print_build_info {
+        println!("{}", build_info());
+        return Ok(());
+    }
+    let device = select_device();
 
     // hf-hub 1.0's blocking API: HFClientSync -> .model(owner, name) -> .download_file()
     // builder (matches the pattern already used in b00t-embed/src/qwen3.rs).

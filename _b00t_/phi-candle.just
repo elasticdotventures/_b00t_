@@ -5,12 +5,35 @@
 # Pattern mirrored from vendor/rust-doc.just (build/start/status/stop/update for a
 # "build once, run as background local process" style crate).
 
-# Build the release binary
+# Build the release binary. Auto-detects the CUDA toolkit (nvcc + libcudart) and
+# builds with --features cuda when present; plain CPU build otherwise. Either way
+# the resulting binary defaults to CPU at runtime unless the GPU is actually free
+# (see b00t-candle-serve's select_device()) — this only decides whether the CUDA
+# code path exists in the binary at all. Check what actually got built with:
+#   just phi-candle build-info
 build:
     #!/bin/bash
     set -euo pipefail
     B00T_ROOT="$(git rev-parse --show-toplevel)"
-    cargo build --release -p b00t-candle-serve --manifest-path "${B00T_ROOT}/Cargo.toml"
+    if command -v nvcc >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q libcudart; then
+        echo "🎮 CUDA toolkit detected (nvcc + libcudart) — building with --features cuda"
+        cargo build --release -p b00t-candle-serve --features cuda --manifest-path "${B00T_ROOT}/Cargo.toml"
+    else
+        echo "🖥️  No CUDA toolkit detected — building CPU-only"
+        cargo build --release -p b00t-candle-serve --manifest-path "${B00T_ROOT}/Cargo.toml"
+    fi
+
+# Report whether the currently-installed binary was built with CUDA support
+build-info:
+    #!/bin/bash
+    set -euo pipefail
+    B00T_ROOT="$(git rev-parse --show-toplevel)"
+    BIN="${B00T_ROOT}/target/release/b00t-candle-serve"
+    if [ ! -f "$BIN" ]; then
+        echo "❌ not built yet — run: just phi-candle build"
+        exit 1
+    fi
+    "$BIN" --print-build-info
 
 # Pre-fetch the GGUF weights + tokenizer into the HF cache (no inference run yet)
 download:

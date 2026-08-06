@@ -1,8 +1,13 @@
-# b00t AI Model Datum — Microsoft Phi-4 14B, quantized GGUF, native candle runtime (CPU)
+# b00t AI Model Datum — Microsoft Phi-4 14B, quantized GGUF, native candle runtime
 # 🤓 Unlike qwen3-coder-local / gemma-4-26b-a4b-local, this is NOT vllm-podman: it's a
 #    native Rust binary (b00t-candle-serve, crates.io candle-transformers 0.11.0) that
-#    loads the GGUF directly — no container, no GPU required. The RTX 3090 is contended/
-#    time-shared by ch0nky; this is the CPU-capable fallback tier.
+#    loads the GGUF directly — no container. CPU is the guaranteed-always-works path
+#    (no GPU required — the RTX 3090 is contended/time-shared by ch0nky); as of
+#    2026-08-04 it ALSO supports CUDA, opt-in and auto-detected at build time
+#    (`just phi-candle build` enables --features cuda iff nvcc+libcudart are present),
+#    with runtime CPU fallback if the GPU turns out busy/unavailable (select_device()
+#    in b00t-candle-serve/src/main.rs). Check what's actually installed with
+#    `just phi-candle build-info` or `b00t whoami` (Inference layer, "Candle CUDA").
 # HF weights card: https://huggingface.co/microsoft/phi-4-gguf
 # HF tokenizer card: https://huggingface.co/microsoft/phi-4
 # Rust inference docs: https://github.com/microsoft/PhiCookBook ("Inference Phi with Rust")
@@ -13,8 +18,8 @@
 [b00t]
 name = "phi-4-candle-local"
 type = "ai"
-hint = "Phi-4 14B Q4_K GGUF, native candle-transformers runtime, CPU-only (no vLLM/podman/GPU)"
-aliases = ["phi4", "phi-4", "phi-candle", "phi4-cpu"]
+hint = "Phi-4 14B Q4_K GGUF, native candle-transformers runtime (no vLLM/podman); CPU always works, CUDA opt-in when built+free"
+aliases = ["phi4", "phi-4", "phi-candle", "phi4-cpu", "phi4-cuda"]
 
 [b00t.env]
 PHI_CANDLE_MODEL_DIR = "~/.cache/huggingface/hub/models--microsoft--phi-4-gguf"
@@ -31,7 +36,7 @@ output_modalities = ["text"]
 #    below and _b00t_/phi-candle.just). No HTTP endpoint / litellm_model wired up.
 context_window = 16384
 enabled = true
-access_groups = ["default", "local", "cpu-fallback"]
+access_groups = ["default", "local", "cpu-fallback", "cuda-optional"]
 
 [ai_model.parameters]
 max_tokens = 1024
@@ -44,11 +49,14 @@ tokenizer_repo = "microsoft/phi-4"
 allow_patterns = "phi-4-Q4_K.gguf"
 gguf_file = "phi-4-Q4_K.gguf"
 # 🤓 Q4_K quant, ~8.43 GB (9,053,114,560 bytes) — fits comfortably on this box's 31GB RAM
-#    with room for KV cache; CPU-only, 4 cores. Q5_K variants exist (~10.6GB) for higher
-#    fidelity if RAM/time budget allows; Q4_K chosen as the CPU-practical default.
+#    (CPU path) or VRAM (CUDA path). Q5_K variants exist (~10.6GB) for higher fidelity
+#    if RAM/VRAM/time budget allows; Q4_K chosen as the CPU-practical default.
 runtime = "candle-native"
 container_runtime = "none"
-gpu = "none (CPU-only by design — RTX 3090 reserved for ch0nky/vLLM)"
+# 🤓 "optional" not "none": CUDA feature auto-enabled at build time when nvcc+libcudart
+#    are detected (just phi-candle build), device picked at runtime with CPU fallback
+#    (select_device() in b00t-candle-serve/src/main.rs) — never assumes the 3090 is free.
+gpu = "optional (CUDA opt-in, auto-detected+compiled, runtime-selected with CPU fallback)"
 crate = "b00t-candle-serve"
 crate_path = "b00t-candle-serve/"
 candle_transformers_module = "quantized_phi3::ModelWeights"
@@ -75,6 +83,22 @@ verifiable  = true
 #    completions, not interactive chat latency.
 
 [[service_contract]]
+capability  = "local-cuda-inference"
+handler     = "cargo build --release -p b00t-candle-serve --features cuda && ./target/release/b00t-candle-serve --prompt \"Q: What is the capital of France?\\nA:\" --sample-len 40"
+evidence    = "PASS: stderr reports 'device: cuda:0' (not a CPU fallback), correct completion, tok/s well above the CPU baseline"
+tier        = "sm0l"
+verifiable  = true
+# 🤓 verified 2026-08-04, RTX 3090, GPU otherwise idle: `--features cuda` build compiled
+#    clean (cudarc 0.19.8 + candle-kernels against the host's CUDA 12.4 toolkit, ~6m40s).
+#    Runtime confirmed via `device: cuda:0` in stderr + growing nvidia-smi VRAM usage
+#    (566MB -> 3.5GB as weights loaded). IMPORTANT gotcha found: a short first run
+#    (--sample-len 15) measured only 1.13 tok/s — misleadingly close to the CPU number —
+#    because one-time CUDA kernel JIT/warmup dominates a tiny sample. A --sample-len 40
+#    run (same length as the CPU baseline above) measured the real steady-state number:
+#    49.20 tok/s, ~93x the CPU baseline. Always discount the first few tokens of any
+#    CUDA-path benchmark on this binary, or use sample_len >= ~30 to amortize warmup.
+
+[[service_contract]]
 capability  = "b00t-datum-authoring"
 handler     = "b00t-cli --path _b00t_ viz entangle --datum phi-4-candle-local --format json"
 evidence    = "PASS: valid JSON graph with phi-4-candle-local node + edges"
@@ -82,8 +106,8 @@ tier        = "sm0l"
 verifiable  = true
 
 # b00t:map v1
-# summary: Phi-4 14B Q4_K GGUF served via native candle-transformers binary (b00t-candle-serve); CPU-only fallback, no GPU/container required
-# tags: ai, phi, phi4, microsoft, candle, gguf, cpu-inference, local-inference, sm0l
+# summary: Phi-4 14B Q4_K GGUF served via native candle-transformers binary (b00t-candle-serve); CPU always works (0.53 tok/s), CUDA opt-in when built+free (49.2 tok/s verified), no container required
+# tags: ai, phi, phi4, microsoft, candle, gguf, cpu-inference, cuda-inference, local-inference, sm0l
 # tier: sm0l
-# cmds: just phi-candle::download, just phi-candle::run
+# cmds: just phi-candle::download, just phi-candle::run, just phi-candle::build-info
 # complexity: 4
