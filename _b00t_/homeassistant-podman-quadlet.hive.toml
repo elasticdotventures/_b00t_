@@ -1,3 +1,4 @@
+[b00t]
 name = "homeassistant-podman-quadlet"
 type = "hive"
 hint = "Home Assistant on ROCK 5C runs via user Podman Quadlet .kube, with podman-compose.yml only as a transition path."

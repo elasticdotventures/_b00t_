@@ -1,10 +1,9 @@
+# author: b00t-aligned-agent
+# license: MIT
 [b00t]
 name = "zellij-menu-system"
 type = "cli"
-description = "🥾 Zellij Menu System - Interactive yes/no menus and user input dialogs in Zellij panes"
-author = "b00t-aligned-agent"
-license = "MIT"
-version = "1.0.0"
+hint = "🥾 Zellij Menu System - Interactive yes/no menus and user input dialogs in Zellij panes"
 
 install = '''
 # 🥾 Zellij Menu System Installation
@@ -143,7 +142,7 @@ version_regex = "(\\d+\\.\\d+\\.\\d+)"
 
 depends_on = ["zellij"]
 
-[b00t.usage]
+[[b00t.usage]]
 description = "🥾 Display yes/no menu in Zellij"
 command = "zellij-menu yesno \"Continue with deployment?\" y"
 
