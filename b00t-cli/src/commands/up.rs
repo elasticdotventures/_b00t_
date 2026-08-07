@@ -784,6 +784,13 @@ fn resolve_datum_dir() -> String {
 /// (rustup, apt via podman.cli.toml, etc). Tools whose datum has no install
 /// command (git, node — see their .cli.toml tribal notes) are reported, not
 /// force-installed, so aarch64 boxes never get an x86_64-only script run.
+///
+/// `--doctor` is the one-stop "check + fix everything" entrypoint: on top of
+/// this tool-install sweep it also runs `b00t doctor check --fix`, which
+/// covers a different, non-overlapping surface (submodule drift, missing
+/// vendor binaries) that `self_up_check()` doesn't look at. `--install`
+/// stays narrowly scoped to just the tool-install sweep — it's what
+/// `--check`'s failure hint points operators at.
 fn self_up_heal(is_doctor: bool) -> Result<()> {
     println!(
         "🥾 b00t up --{} (check → install → re-check)\n",
@@ -791,32 +798,49 @@ fn self_up_heal(is_doctor: bool) -> Result<()> {
     );
 
     let missing = self_up_check()?;
+    let datum_dir = resolve_datum_dir();
+
     if missing.is_empty() {
         println!("\n✅ nothing to fix — system already satisfies checks");
-        return Ok(());
-    }
+    } else {
+        println!(
+            "\n🔧 attempting to fix {} issue(s) via b00t datums ({})...\n",
+            missing.len(),
+            datum_dir
+        );
 
-    let datum_dir = resolve_datum_dir();
-    println!(
-        "\n🔧 attempting to fix {} issue(s) via b00t datums ({})...\n",
-        missing.len(),
-        datum_dir
-    );
-
-    for label in &missing {
-        match datum_name_for_check(label) {
-            Some(name) => {
-                println!("── {} (datum: {}) ──", label, name);
-                if let Err(e) = crate::commands::install::install_datum(&datum_dir, name, false) {
-                    eprintln!("  ⚠️  {} install failed (non-fatal): {}", name, e);
+        for label in &missing {
+            match datum_name_for_check(label) {
+                Some(name) => {
+                    println!("── {} (datum: {}) ──", label, name);
+                    if let Err(e) =
+                        crate::commands::install::install_datum(&datum_dir, name, false)
+                    {
+                        eprintln!("  ⚠️  {} install failed (non-fatal): {}", name, e);
+                    }
+                }
+                None => {
+                    println!(
+                        "── {} ── ⏭️  no b00t-memoized installer; install manually",
+                        label
+                    );
                 }
             }
-            None => {
-                println!(
-                    "── {} ── ⏭️  no b00t-memoized installer; install manually",
-                    label
-                );
-            }
+        }
+    }
+
+    if is_doctor {
+        println!(
+            "\n🩺 running 'b00t doctor check --fix' (submodule drift + vendor binaries)...\n"
+        );
+        let doctor_args = crate::commands::doctor_cmd::DoctorCommands::Check {
+            json: false,
+            probe: None,
+            fix: true,
+        };
+        if let Err(e) = crate::commands::doctor_cmd::handle_doctor_command(&doctor_args, &datum_dir)
+        {
+            eprintln!("  ⚠️  b00t doctor check --fix failed (non-fatal): {}", e);
         }
     }
 
