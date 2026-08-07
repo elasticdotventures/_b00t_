@@ -1,0 +1,82 @@
+# b00t hive profile: xpra-display — general-purpose, always-on Xpra display service
+#
+# @tribal: generalizes the RPA-scoped pattern in xpra-rpa.hive.toml (see that
+#   file for the 6 bugs/gaps found getting Xpra working on this node, and
+#   xpra.cli.toml for the full install/version tribal notes — read those
+#   before re-deriving any of this). This profile is the general-purpose
+#   counterpart: it is NOT owned by b00t-rpa, starts/stops independently of
+#   any particular RPA session, and stays up so ANY spawned GUI app (test
+#   browsers, future kiosk/dashboard apps, ad-hoc debugging tools) can attach
+#   a window to it at any time — not just the one browser-use launches.
+#
+# @tribal: distinct display number (:50) and port (10050) from xpra-rpa's
+#   (:100 / 10000) so the two profiles can never collide if both happen to
+#   be active on the same node at once.
+#
+# @tribal: unlike xpra-rpa's per-session `--start-child=<browser>` (which
+#   exits when that one child exits), this server never specifies a start
+#   child and never exits-with-children — it is a persistent seamless
+#   server. ANY process launched with `DISPLAY=:50 <app> &` on this host
+#   automatically appears as a forwarded window; no server restart needed
+#   per app. See `just xpra-display::spawn` below for the one-liner.
+#
+# @tribal: generated + managed via b00t's native hive service mechanism
+#   ([b00t.hive.service] below) — `b00t hive activate xpra-display` writes
+#   and enables ~/.config/systemd/user/b00t-hive-xpra-display.service
+#   automatically (see b00t-cli/src/hive.rs::activate_profile). No hand
+#   -written systemd unit file needed; this is the same native path
+#   mistralrs-proxy.hive.toml/serena.hive.toml use.
+
+[b00t]
+name = "xpra-display"
+type = "hive"
+hint = "General-purpose always-on Xpra seamless display service — any GUI app attaches via DISPLAY=:50, independent of b00t-rpa"
+
+[resources]
+host = "rock-5c"
+depends_on = ["xpra.cli"]
+
+[b00t.hive.service]
+description = "General-purpose Xpra seamless display server (always-on, not RPA-scoped)"
+service_type = "simple"
+restart      = "on-failure"
+restart_sec  = "5s"
+after        = ["network.target"]
+exec_start   = "/usr/bin/xpra start :50 --exit-with-children=no --bind-tcp=127.0.0.1:10050 --html=on --daemon=no"
+
+[[guards]]
+pattern = { rhai = "cmd.contains(\"xpra\") && cmd.contains(\"bind-tcp=0.0.0.0\")" }
+action = "block"
+message = "🚫 xpra-display bind-tcp MUST stay loopback (127.0.0.1) — reach it via SSH port-forward, not a routable bind. Home-network exposure of an unauthenticated display server is a real attack surface."
+
+[[guards]]
+pattern = { rhai = "cmd.contains(\"xpra\") && cmd.contains(\"start-desktop\")" }
+action = "warn"
+message = "🦨 xpra-display is seamless-mode (per-window), not a full desktop. A full-desktop VNC-style session is a different, unimplemented profile."
+
+[[usage]]
+description = "Activate (generates + starts + enables the systemd unit)"
+command = "b00t-cli hive activate xpra-display"
+
+[[usage]]
+description = "Attach an arbitrary GUI app into the running display — works for any process, any time, no server restart"
+command = "just xpra-display::spawn <cmd>"
+
+[[usage]]
+description = "Operator attach — zero-install HTML5 client (tunnel + browser tab)"
+command = "just xpra-display::attach-html5"
+
+[[usage]]
+description = "Operator attach — native xpra client (better perf/clipboard/seamless windows)"
+command = "just xpra-display::attach-native"
+
+[[usage]]
+description = "Stop the service"
+command = "systemctl --user stop b00t-hive-xpra-display.service"
+
+# b00t:map v1
+# summary: General-purpose always-on Xpra seamless display hive profile — generalizes xpra-rpa.hive.toml's RPA-scoped pattern; own systemd unit via [b00t.hive.service], own guards, distinct display/port
+# tags: xpra, hive, display, operator-experience, seamless, guard, general-purpose
+# tier: ch0nky
+# cmds: b00t-cli hive activate xpra-display, just xpra-display::spawn, just xpra-display::attach-html5, just xpra-display::attach-native, just xpra-display::stop
+# complexity: 5

@@ -114,24 +114,46 @@ impl Qwen3Composable {
         let model_dtype = detect_safetensors_dtype(&weights_path)?;
         println!("  Detected model dtype: {model_dtype:?}");
 
+        // 🤓 candle's CPU backend does not support BF16 matmul ("unsupported dtype
+        // BF16 for op matmul") — Model::new() itself fails immediately on CPU if
+        // the VarBuilder is given BF16, before any real weights are even loaded.
+        // Upcast to F32 for CPU (safe, standard candle-CPU-inference workaround);
+        // BF16 matmul IS supported on CUDA, so a future GPU device would keep the
+        // native dtype instead of paying the upcast cost.
+        let load_dtype = if device.is_cpu() { DType::F32 } else { model_dtype };
+        if load_dtype != model_dtype {
+            println!("  Upcasting {model_dtype:?} -> {load_dtype:?} for CPU inference");
+        }
+
         // Step 1: Create VarMap and build model with VarBuilder::from_varmap()
-        // using the model's native dtype so varmap.load() doesn't fail on mismatch.
+        // using load_dtype (not the file's raw model_dtype) so Model::new()'s
+        // own internal tensor ops (e.g. RoPE frequency computation) run in a
+        // CPU-matmul-supported dtype from the start.
         let varmap = Arc::new(Mutex::new(VarMap::new()));
         let model = {
             let vm = varmap.lock().unwrap();
-            let vb = VarBuilder::from_varmap(&vm, model_dtype, &device);
+            let vb = VarBuilder::from_varmap(&vm, load_dtype, &device);
             let m = Model::new(&config, vb).context("failed to build Qwen3 model with VarMap")?;
             drop(vm);
             m
         };
 
-        // Step 2: Load actual weights from safetensors into existing Vars.
-        // varmap.load() copies each tensor from the safetensors file into
-        // the corresponding VarMap entry. Dtype must match (both BF16).
+        // Step 2: Load actual weights from safetensors and set them into the
+        // VarMap. NOT using VarMap::load() here — it loads each tensor in the
+        // file's own dtype (BF16) via MmapedSafetensors, which would then fail
+        // Var::set()'s dtype-matching copy against our F32-declared Vars. Load
+        // raw (native dtype), cast each tensor to load_dtype, then set.
         {
+            let raw_tensors = candle_core::safetensors::load(&weights_path, &device)
+                .context("failed to read safetensors weights")?;
             let mut vm = varmap.lock().unwrap();
-            vm.load(&weights_path)
-                .context("failed to load safetensors weights into VarMap")?;
+            for (name, tensor) in raw_tensors {
+                let tensor = tensor
+                    .to_dtype(load_dtype)
+                    .with_context(|| format!("failed to cast tensor '{name}' to {load_dtype:?}"))?;
+                vm.set_one(&name, &tensor)
+                    .with_context(|| format!("failed to set weight '{name}' into VarMap"))?;
+            }
         }
 
         // Step 3: Save base weights for restoration during deactivation
@@ -156,7 +178,7 @@ impl Qwen3Composable {
         let registry = TensorRegistry::new(
             reg_varmap,
             device.clone(),
-            model_dtype,
+            load_dtype,
             base_weights.clone(),
         );
         let gatekeeper = LayerGateKeeper::with_architectures(vec!["qwen3", "llama", "mistral"]);
@@ -200,15 +222,20 @@ impl Qwen3Composable {
         let max_len = token_ids.iter().map(|t| t.len()).max().unwrap_or(0);
         let batch_size = token_ids.len();
 
-        let mut padded_ids = Vec::with_capacity(batch_size * max_len);
+        // 🤓 ids MUST stay an integer dtype (U32) — candle_nn::Embedding::forward
+        // does a Tensor::index_select internally, and candle's CPU backend
+        // rejects a float index tensor ("unsupported dtype F32 for op
+        // index-select"). mask is fine as F32 — it's used in float attention
+        // arithmetic and gets cast again downstream regardless (qwen3.rs:361).
+        let mut padded_ids: Vec<u32> = Vec::with_capacity(batch_size * max_len);
         let mut padded_mask = Vec::with_capacity(batch_size * max_len);
         for i in 0..batch_size {
             for j in 0..max_len {
                 if j < token_ids[i].len() {
-                    padded_ids.push(token_ids[i][j] as f32);
+                    padded_ids.push(token_ids[i][j]);
                     padded_mask.push(attention_mask[i][j] as f32);
                 } else {
-                    padded_ids.push(0.0);
+                    padded_ids.push(0);
                     padded_mask.push(0.0);
                 }
             }

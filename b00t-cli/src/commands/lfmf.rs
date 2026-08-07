@@ -1,7 +1,8 @@
 use anyhow::Result;
 use b00t_c0re_lib::LfmfSystem;
 use b00t_c0re_lib::lfmf_telemetry::{
-    LfmfAction, LfmfOutcome, LfmfTelemetryEvent, log_event, read_stats, telemetry_path,
+    LfmfAction, LfmfOutcome, LfmfTelemetryEvent, compute_health, log_event, read_stats,
+    telemetry_path,
 };
 use tiktoken_rs::o200k_base;
 
@@ -268,4 +269,48 @@ pub fn handle_lfmf_stats(tool_filter: Option<&str>) -> Result<()> {
     }
     print!("{}", stats);
     Ok(())
+}
+
+/// Cross-reference lesson-store health for a single tool: fail/skip counts,
+/// error rate, and the most recent failure timestamp — the signal a gate
+/// (or a human deciding whether to trust `lfmf advice <tool>`) needs before
+/// treating this tool's lesson store as proven/installed-and-healthy.
+/// A missing telemetry file is not an error — it reports all-zero health.
+pub fn handle_lfmf_status(tool: &str) -> Result<()> {
+    let path = telemetry_path();
+    let content = std::fs::read_to_string(&path).unwrap_or_default();
+    let health = compute_health(&content, tool);
+    println!("tool: {}", health.tool);
+    println!("fail_count: {}", health.fail_count);
+    println!("skip_count: {}", health.skip_count);
+    println!("total: {}", health.total);
+    println!("error_rate: {:.1}%", health.error_rate * 100.0);
+    match health.latest_failure {
+        Some(ts) => println!("latest_failure: {}", ts.to_rfc3339()),
+        None => println!("latest_failure: none"),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn handle_lfmf_status_missing_telemetry_file_does_not_panic() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_path = dir.path().join("does-not-exist.jsonl");
+
+        // SAFETY: test-local env mutation; no other test in this crate reads
+        // or writes B00T_LFMF_TELEMETRY concurrently.
+        unsafe {
+            std::env::set_var("B00T_LFMF_TELEMETRY", &missing_path);
+        }
+        let result = handle_lfmf_status("nonexistent-tool");
+        unsafe {
+            std::env::remove_var("B00T_LFMF_TELEMETRY");
+        }
+
+        assert!(result.is_ok());
+    }
 }

@@ -1193,15 +1193,62 @@ fn select_mcp_method(
 
 // ── MCP Installation Functions ─────────────────────────────────────────
 
+/// Resolve command/args/env for an MCP install, including generic AI-backend
+/// provisioning: if `datum.ai_provision` is set, mints a b00t-server API key
+/// scoped to it (`b00t server key create`) and merges the resulting
+/// key/base-url into the env map on top of whatever static `env` the stdio
+/// method already declares. This is what makes provisioning "the default
+/// within b00t" for ANY MCP datum, not a rust-doc-specific special case —
+/// any future datum opts in by setting `[b00t.ai_provision]`.
+///
+/// Shells out to `b00t server key create` rather than linking b00t-mcp's
+/// LlmState in-process: b00t-mcp already depends on b00t-cli, so the reverse
+/// dependency would be circular. Same duct::cmd! pattern already used below
+/// for `claude mcp add-json` etc.
+fn resolve_provisioned_command_args_env(
+    datum: &BootDatum,
+) -> Result<(String, Vec<String>, Option<std::collections::HashMap<String, String>>)> {
+    let (command, args, static_env, _transport) = select_mcp_method(datum, None, false)?;
+
+    let mut env = static_env.unwrap_or_default();
+    if let Some(provision) = &datum.ai_provision {
+        let key_output = duct::cmd!(
+            "b00t",
+            "server",
+            "key",
+            "create",
+            "--consumer",
+            &datum.name,
+            "--access",
+            &provision.scope
+        )
+        .read()
+        .with_context(|| {
+            format!(
+                "failed to provision AI-backend key for '{}' (scope: {})",
+                datum.name, provision.scope
+            )
+        })?;
+        let key = key_output.trim().to_string();
+        env.insert(provision.inject_key_as.clone(), key);
+        env.insert(provision.inject_base_as.clone(), provision.server_url.clone());
+    }
+
+    Ok((command, args, if env.is_empty() { None } else { Some(env) }))
+}
+
 pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
     let datum = crate::get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = resolve_provisioned_command_args_env(&datum)?;
 
-    let claude_json = serde_json::json!({
+    let mut claude_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env) = env {
+        claude_json["env"] = serde_json::json!(env);
+    }
 
     let json_str =
         serde_json::to_string(&claude_json).context("Failed to serialize JSON for Claude Code")?;
@@ -1234,13 +1281,16 @@ pub fn claude_code_install_mcp(name: &str, path: &str) -> Result<()> {
 
 pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
     let datum = crate::get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = resolve_provisioned_command_args_env(&datum)?;
 
-    let vscode_json = serde_json::json!({
+    let mut vscode_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env) = env {
+        vscode_json["env"] = serde_json::json!(env);
+    }
 
     let json_str =
         serde_json::to_string(&vscode_json).context("Failed to serialize JSON for VSCode")?;
@@ -1267,13 +1317,16 @@ pub fn vscode_install_mcp(name: &str, path: &str) -> Result<()> {
 
 pub fn gemini_install_mcp(name: &str, path: &str, use_repo: bool) -> Result<()> {
     let datum = crate::get_mcp_config(name, path)?;
-    let (command, args) = extract_mcp_command_args(&datum);
+    let (command, args, env) = resolve_provisioned_command_args_env(&datum)?;
 
-    let gemini_json = serde_json::json!({
+    let mut gemini_json = serde_json::json!({
         "name": datum.name,
         "command": command,
         "args": args
     });
+    if let Some(env) = env {
+        gemini_json["env"] = serde_json::json!(env);
+    }
 
     let json_str =
         serde_json::to_string(&gemini_json).context("Failed to serialize JSON for Gemini CLI")?;

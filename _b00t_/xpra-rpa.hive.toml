@@ -12,12 +12,18 @@
 #   "hive: general-purpose Xpra display service" for the broader always-on
 #   variant. This profile starts/stops with the RPA session it serves.
 #
-# @tribal: CONFIRMED WORKING END-TO-END 2026-08-04 (WSL2/WSLg client ->
-#   rock-5c server, both xpra.org repo 6.5.2-r0). All the bugs/gaps found
-#   getting here (stale-package client/server bugs, protocol-version skew,
-#   missing xpra-x11/xpra-html5 subpackages, WSLg Wayland-vs-X11 crash, SSH
-#   pubkey-auth gotcha) are memoized in _b00t_/xpra.cli.toml's @tribal notes —
-#   read those before re-deriving any of this from scratch on a new node.
+# @tribal: STATUS 2026-08-06 — HTML5 path CONFIRMED WORKING end-to-end
+#   (server-side verified: seamless window renders, real keyboard input
+#   lands in the forwarded app, output renders back through the canvas —
+#   see xpra.cli.toml's @tribal notes for the full verification method and
+#   result). Native xpra-attach from a real WSL2/WSLg operator machine is
+#   still unverified on this pass — that needs the operator's own client,
+#   not just server-side testing. All the bugs/gaps found getting this far
+#   (stale-package client/server bugs, protocol-version skew, missing
+#   xpra-x11/xpra-html5 subpackages, WSLg Wayland-vs-X11 crash, SSH
+#   pubkey-auth gotcha, DPI-mismatch dialog) are memoized in
+#   _b00t_/xpra.cli.toml's @tribal notes — read those before re-deriving
+#   any of this from scratch on a new node.
 
 [b00t]
 name = "xpra-rpa"

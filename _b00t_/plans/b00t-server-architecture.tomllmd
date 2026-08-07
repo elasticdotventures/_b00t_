@@ -191,6 +191,40 @@ natural query surface to extend.
 | 7. | Wire rust-doc: key creation + env injection | ~30 | Step 3 |
 | **Total** | | **~530 LOC** | |
 
+## LMCache research (2026-08-04, research only — no implementation this pass)
+
+Investigated as a future capability per explicit ask: "eventually offer an lmcache."
+
+**What it is**: LMCache (github.com/LMCache/LMCache) is a production-grade KV-cache
+management layer for LLM inference — turns per-request KV cache into persistent,
+reusable, multi-tier storage (GPU → CPU DRAM "hot cache" → disk/remote). Cuts TTFT
+dramatically on repeated-prefix workloads (their own numbers: 11s → 1.5s on 128K-context
+sharing across nodes). Graduated to production Jan 2026; used by Google Cloud GKE
+Inference, CoreWeave, Cohere. Storage backends: CPU RAM, local disk, Redis/Valkey,
+S3-compatible, Mooncake, InfiniStore, NIXL, GDS.
+
+**Integration constraint that matters for us**: it is Python-only and integrates
+specifically with **vLLM** — no Candle or mistral.rs bindings exist (confirmed, not
+assumed). It is not a drop-in for our Rust-native local inference stack
+(`b00t-candle-serve`, `b00t-embed-serve`) or for mistral.rs (`mistralrs-proxy` — itself
+still a stub, binary not installed).
+
+**Where it would actually plug in, when we're ready**: b00t already has a real,
+working vLLM deployment path — `b00t model serve` (`b00t-cli/src/model_manager.rs`)
+launches an actual `vllm/vllm-openai` podman container per a `.model.ai.tomllmd` datum
+(e.g. `qwen3-coder-local`). LMCache's natural integration point is alongside *that*
+path (its own vLLM production-stack wrapper / `--kv-transfer-config`-style flags),
+not alongside Candle or mistral.rs. `mistral.rs` does have its own (different,
+single-process, non-LMCache) prefix-cache flag already referenced in
+`mistralrs-proxy.hive.toml` (`--prefix-cache-n 16`) — that's a separate, much smaller
+lever, not LMCache-equivalent (no cross-instance sharing, no tiered storage).
+
+**Recommendation**: revisit once `b00t model serve`'s vLLM path is the primary local
+serving path (not an alternative to mistralrs/candle) and a real repeated-prefix
+workload exists to justify it (rust-doc-style RAG lookups are a plausible candidate —
+same crate docs re-embedded/re-queried repeatedly share long common prefixes). No
+code in this pass.
+
 ## Open Questions
 
 - **Local model backend**: mistral.rs is the reference but requires GPU (RTX 3090 per

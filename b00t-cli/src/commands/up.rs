@@ -721,8 +721,14 @@ fn self_upgrade() -> Result<()> {
 /// System readiness check: validates tools, git, _b00t_/, env
 fn self_up_check() -> Result<()> {
     let cwd = std::env::current_dir().context("current dir")?;
+    let home = dirs::home_dir();
+    let is_home = home.as_deref() == Some(cwd.as_path());
 
     println!("🥾 b00t up --check\n");
+
+    if is_home {
+        println!("  📁 running from $HOME — using global b00t context, not a project repo");
+    }
 
     // ── Git ──────────────────────────────────────────────────────────
     print!("  git .................... ");
@@ -739,20 +745,38 @@ fn self_up_check() -> Result<()> {
         } else {
             println!("⚠️  git binary not found");
         }
+    } else if is_home {
+        println!("⏭️  skipped ($HOME is not expected to be a project repo)");
     } else {
         println!("❌ not a git repository");
         anyhow::bail!("not in a git repository — run 'git init' or 'b00t init project'");
     }
 
     // ── _b00t_/ ──────────────────────────────────────────────────────
-    print!("  _b00t_/ ............... ");
-    let b00t_dirs: &[&str] = &["_b00t_", "._b00t_", ".b00t/_b00t_"];
-    let found = b00t_dirs.iter().find(|d| cwd.join(d).exists());
-    match found {
-        Some(dir) => println!("✅ {}", cwd.join(dir).display()),
-        None => {
-            println!("⚠️  not found");
-            println!("     Run 'b00t init project' to create one.");
+    if is_home {
+        print!("  _b00t_/ (global) ...... ");
+        let b00t_path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
+            home.as_deref()
+                .map(|h| h.join(".dotfiles/_b00t_").display().to_string())
+                .unwrap_or_else(|| "~/.dotfiles/_b00t_".to_string())
+        });
+        let expanded = shellexpand::tilde(&b00t_path).into_owned();
+        if Path::new(&expanded).exists() {
+            println!("✅ {}", expanded);
+        } else {
+            println!("⚠️  not found ({})", expanded);
+            println!("     Set _B00T_Path or clone your dotfiles to ~/.dotfiles/_b00t_.");
+        }
+    } else {
+        print!("  _b00t_/ ............... ");
+        let b00t_dirs: &[&str] = &["_b00t_", "._b00t_", ".b00t/_b00t_"];
+        let found = b00t_dirs.iter().find(|d| cwd.join(d).exists());
+        match found {
+            Some(dir) => println!("✅ {}", cwd.join(dir).display()),
+            None => {
+                println!("⚠️  not found");
+                println!("     Run 'b00t init project' to create one.");
+            }
         }
     }
 
@@ -801,6 +825,8 @@ fn self_up_check() -> Result<()> {
     let b00t_sh = Path::new(&workspace).join("b00t.sh");
     if b00t_sh.exists() {
         println!("✅ {}", b00t_sh.display());
+    } else if is_home {
+        println!("⏭️  skipped (no ralph loop script at $HOME — that's expected)");
     } else {
         println!("⚠️  not found");
         println!("     Run 'b00t up --repo .' to onboard this repo.");

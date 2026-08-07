@@ -83,6 +83,11 @@ fn default_soul(hostname: &str) -> SoulConfig {
                 LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+                // 🤓 b00t-embed-serve — real local candle embeddings (Qwen3-Embedding-0.6B),
+                // no external API key. kind="embeddings" (not "openai-compat") because it
+                // only implements /v1/embeddings, not /v1/chat/completions — discover_local()
+                // filters on this so chat requests never get routed here by accident.
+                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true },
             ],
             remote: vec![
                 RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
@@ -122,12 +127,18 @@ impl SoulConfig {
     }
 }
 
-fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
+/// `want_kind`: when `Some("embeddings")`, only considers backends whose `kind`
+/// is exactly "embeddings" (e.g. b00t-embed-serve, which has no /v1/chat/completions
+/// at all) — chat/models discovery must never land on an embeddings-only backend.
+/// When `None`, only considers "openai-compat" backends (the historical default,
+/// used for chat/models) — an embeddings-only backend is never a valid chat target.
+fn discover_local(soul: &SoulConfig, want_kind: Option<&str>) -> Option<(String, String)> {
+    let target_kind = want_kind.unwrap_or("openai-compat");
     for be in &soul.backends.local {
-        if !be.enabled { continue; }
+        if !be.enabled || be.kind != target_kind { continue; }
         let addr: SocketAddr = format!("127.0.0.1:{}", be.port).parse().ok()?;
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-            eprintln!("🔍 local backend (soul): {} :{}", be.name, be.port);
+            eprintln!("🔍 local backend (soul): {} :{} (kind={})", be.name, be.port, be.kind);
             return Some((be.name.clone(), format!("http://127.0.0.1:{}/v1", be.port)));
         }
     }
@@ -145,8 +156,13 @@ fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     None
 }
 
-fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
-    if let Ok(url) = std::env::var("B00T_SERVER_UPSTREAM_URL") {
+/// Resolves the upstream to proxy to. `for_embeddings` matters because a local
+/// backend can be embeddings-only (b00t-embed-serve, kind="embeddings") — a
+/// chat request must never land there, and an embeddings request should prefer
+/// it over a general chat backend that may not implement /v1/embeddings at all.
+fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String) {
+    let explicit_url_var = if for_embeddings { "B00T_SERVER_EMBEDDINGS_UPSTREAM_URL" } else { "B00T_SERVER_UPSTREAM_URL" };
+    if let Ok(url) = std::env::var(explicit_url_var) {
         if !url.is_empty() {
             let key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
                 .or_else(|_| std::env::var("OPENAI_API_KEY"))
@@ -155,7 +171,18 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
             return (url, key);
         }
     }
-    if let Some((name, url)) = discover_local(soul) {
+    if for_embeddings {
+        // Prefer an embeddings-only local backend; fall back to a general
+        // openai-compat local backend in case it also serves /v1/embeddings.
+        if let Some((name, url)) = discover_local(soul, Some("embeddings")) {
+            eprintln!("📍 upstream (soul/local {}, embeddings): {}", name, url);
+            return (url, String::new());
+        }
+        if let Some((name, url)) = discover_local(soul, None) {
+            eprintln!("📍 upstream (soul/local {}, chat backend used for embeddings): {}", name, url);
+            return (url, String::new());
+        }
+    } else if let Some((name, url)) = discover_local(soul, None) {
         eprintln!("📍 upstream (soul/local {}): {}", name, url);
         return (url, String::new());
     }
@@ -247,52 +274,111 @@ impl KeyEntry {
 pub struct LlmState {
     pub upstream_url: String,
     pub upstream_key: String,
+    // 🤓 Resolved independently from upstream_url — a local backend can be
+    // embeddings-only (b00t-embed-serve), so /v1/embeddings must not blindly
+    // share the chat upstream. See resolve_upstream's for_embeddings param.
+    pub embeddings_upstream_url: String,
+    pub embeddings_upstream_key: String,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
+    // 🤓 `b00t server key create` writes keys_file directly from a separate process
+    // (commands/server.rs) — it does not talk to a running LlmState at all. Without
+    // tracking the file's mtime and reloading on change, a key minted while the
+    // server is already running would never authenticate until restart.
+    keys_file_mtime: Arc<RwLock<Option<std::time::SystemTime>>>,
 }
 
-impl LlmState {
-    pub fn new() -> Self {
-        let soul = SoulConfig::load();
-        let (url, key) = resolve_upstream(&soul);
-        Self::from_config(&url, &key)
-    }
-
-    pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
-        let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
-        let keys_file = home.join("server-keys.json");
-        let mut keys = HashMap::new();
-        if let Ok(data) = std::fs::read_to_string(&keys_file) {
-            if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
-                if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-                    for (k, v) in obj {
-                        if let (Some(consumer), Some(created_at)) = (
-                            v.get("consumer").and_then(|c| c.as_str()),
-                            v.get("created_at").and_then(|c| c.as_str()),
-                        ) {
-                            if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                                keys.insert(k.clone(), KeyEntry {
-                                    consumer: consumer.to_string(),
-                                    created_at: ts.with_timezone(&chrono::Utc),
-                                    access: Vec::new(),
-                                });
-                            }
+/// Parses the same `{"keys": {...}}` shape `commands/server.rs`'s `KeyAction::Create`
+/// writes. Shared by `from_config` (initial load) and `reload_if_changed` (hot reload)
+/// so the two never drift apart.
+fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry> {
+    let mut keys = HashMap::new();
+    if let Ok(data) = std::fs::read_to_string(keys_file) {
+        if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
+            if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
+                for (k, v) in obj {
+                    if let (Some(consumer), Some(created_at)) = (
+                        v.get("consumer").and_then(|c| c.as_str()),
+                        v.get("created_at").and_then(|c| c.as_str()),
+                    ) {
+                        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
+                            let access = v.get("access").and_then(|a| a.as_array())
+                                .map(|arr| arr.iter().filter_map(|p| {
+                                    let class = p.get("class").and_then(|c| c.as_str())?;
+                                    let action = match p.get("action").and_then(|a| a.as_str())? {
+                                        "read" => Action::Read,
+                                        "write" => Action::Write,
+                                        _ => Action::Execute,
+                                    };
+                                    Some(ClassPermission { class: class.to_string(), action })
+                                }).collect())
+                                .unwrap_or_default();
+                            keys.insert(k.clone(), KeyEntry {
+                                consumer: consumer.to_string(),
+                                created_at: ts.with_timezone(&chrono::Utc),
+                                access,
+                            });
                         }
                     }
                 }
             }
         }
+    }
+    keys
+}
+
+impl LlmState {
+    pub fn new() -> Self {
+        let soul = SoulConfig::load();
+        let (url, key) = resolve_upstream(&soul, false);
+        let (embed_url, embed_key) = resolve_upstream(&soul, true);
+        Self::from_config_full(&url, &key, &embed_url, &embed_key)
+    }
+
+    /// Convenience for tests / callers that don't care about a distinct
+    /// embeddings backend — uses the same upstream for both.
+    pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
+        Self::from_config_full(upstream_url, upstream_key, upstream_url, upstream_key)
+    }
+
+    pub fn from_config_full(
+        upstream_url: &str,
+        upstream_key: &str,
+        embeddings_upstream_url: &str,
+        embeddings_upstream_key: &str,
+    ) -> Self {
+        let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let keys_file = home.join("server-keys.json");
+        let keys = load_keys_from_file(&keys_file);
+        let mtime = std::fs::metadata(&keys_file).and_then(|m| m.modified()).ok();
         Self {
             upstream_url: upstream_url.trim_end_matches('/').to_string(),
             upstream_key: upstream_key.to_string(),
+            embeddings_upstream_url: embeddings_upstream_url.trim_end_matches('/').to_string(),
+            embeddings_upstream_key: embeddings_upstream_key.to_string(),
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
+            keys_file_mtime: Arc::new(RwLock::new(mtime)),
+        }
+    }
+
+    /// Re-reads keys_file if its mtime changed since we last loaded it — cheap
+    /// (one stat call) on the common case where nothing changed. Called before
+    /// every validate_key/check_access so keys minted by a separate `b00t server
+    /// key create` invocation while this server is already running actually work.
+    async fn reload_if_changed(&self) {
+        let current_mtime = std::fs::metadata(&self.keys_file).and_then(|m| m.modified()).ok();
+        let mut cached = self.keys_file_mtime.write().await;
+        if current_mtime != *cached {
+            *self.keys.write().await = load_keys_from_file(&self.keys_file);
+            *cached = current_mtime;
         }
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
+        self.reload_if_changed().await;
         self.keys.read().await.get(token).cloned()
     }
 
@@ -342,18 +428,53 @@ impl LlmState {
     }
 
     async fn emit_spotlight(&self, consumer: &str, endpoint: &str, model: &str, latency_ms: u64) {
-        let event = json!({
+        self.emit_spotlight_with_usage(consumer, endpoint, model, latency_ms, None, None).await;
+    }
+
+    /// Same as `emit_spotlight`, plus opportunistic token counts. `prompt_tokens`/
+    /// `completion_tokens` come from the proxied response's OpenAI-shaped `usage`
+    /// object when present — best-effort, callers pass `None` if the upstream
+    /// didn't include one or it failed to parse; never blocks the response.
+    async fn emit_spotlight_with_usage(
+        &self,
+        consumer: &str,
+        endpoint: &str,
+        model: &str,
+        latency_ms: u64,
+        prompt_tokens: Option<u64>,
+        completion_tokens: Option<u64>,
+    ) {
+        let mut event = json!({
             "ts": chrono::Utc::now().to_rfc3339(),
             "event": format!("spotlight.llm.{}", endpoint),
             "consumer": consumer,
             "model": model,
             "latency_ms": latency_ms,
         });
+        if let Some(pt) = prompt_tokens {
+            event["prompt_tokens"] = json!(pt);
+        }
+        if let Some(ct) = completion_tokens {
+            event["completion_tokens"] = json!(ct);
+        }
         if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&self.spotlight_log) {
             use std::io::Write;
             let _ = writeln!(f, "{}", event);
         }
     }
+}
+
+/// Best-effort extraction of an OpenAI-shaped `usage.{prompt_tokens,completion_tokens}`
+/// object from a raw proxied response body. Returns `(None, None)` on any parse
+/// failure or missing fields — callers must never fail the request over this.
+fn extract_usage_tokens(body: &[u8]) -> (Option<u64>, Option<u64>) {
+    let Ok(parsed) = serde_json::from_slice::<Value>(body) else {
+        return (None, None);
+    };
+    let usage = parsed.get("usage");
+    let prompt = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_u64());
+    let completion = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_u64());
+    (prompt, completion)
 }
 
 fn dirs_next() -> Option<std::path::PathBuf> {
@@ -472,8 +593,8 @@ async fn proxy_chat(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
-    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    if !dev_mode && !state.check_access(&token, "b00t:ChatModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:ChatModel:execute"}))).into_response();
     }
 
     // Non-JSON or unparseable bodies can't carry tool injection / the verify
@@ -562,7 +683,8 @@ async fn forward_chat_verbatim(
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
             let body = resp.bytes().await.unwrap_or_default();
-            state.emit_spotlight(consumer, "chat_completions", &model, latency).await;
+            let (prompt_tokens, completion_tokens) = extract_usage_tokens(&body);
+            state.emit_spotlight_with_usage(consumer, "chat_completions", &model, latency, prompt_tokens, completion_tokens).await;
             (status, body).into_response()
         }
         Err(e) => {
@@ -580,14 +702,17 @@ async fn proxy_embeddings(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
-    let url = format!("{}/embeddings", state.upstream_url);
+    let url = format!("{}/embeddings", state.embeddings_upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
-    if !state.upstream_key.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", state.upstream_key));
+    if !state.embeddings_upstream_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", state.embeddings_upstream_key));
     }
     let start = std::time::Instant::now();
     match req.send().await {
@@ -595,7 +720,8 @@ async fn proxy_embeddings(
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
             let body = resp.bytes().await.unwrap_or_default();
-            state.emit_spotlight(&consumer, "embeddings", &model, latency).await;
+            let (prompt_tokens, _) = extract_usage_tokens(&body);
+            state.emit_spotlight_with_usage(&consumer, "embeddings", &model, latency, prompt_tokens, None).await;
             (status, body).into_response()
         }
         Err(e) => {
@@ -635,6 +761,40 @@ mod tests {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let entry = state.validate_key("bogus-key").await;
         assert!(entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_key_created_externally_is_picked_up_without_restart() {
+        // Simulates `b00t server key create` (commands/server.rs) writing directly
+        // to keys_file from a SEPARATE process while this LlmState is already
+        // running — this is the exact scenario the reload-on-mtime-change fix
+        // targets (Phase A.2). Writes the same {"keys": {...}} shape
+        // commands/server.rs produces, bypassing state.create_key() entirely.
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+
+        // Confirm the key genuinely doesn't exist yet (no accidental collision).
+        let external_key = format!("b00t-sk-test-external-{}", Uuid::new_v4().simple());
+        assert!(state.validate_key(&external_key).await.is_none());
+
+        // Read-modify-write the real keys_file exactly like KeyAction::Create does,
+        // without going through this LlmState's in-memory map at all.
+        let mut data: Value = serde_json::from_str(
+            &std::fs::read_to_string(&state.keys_file).unwrap_or_default(),
+        )
+        .unwrap_or_else(|_| serde_json::json!({"keys": {}}));
+        data["keys"][&external_key] = serde_json::json!({
+            "consumer": "external-process-consumer",
+            "created_at": chrono::Utc::now().to_rfc3339(),
+            "access": [],
+        });
+        // Ensure mtime actually advances even on filesystems with coarse mtime
+        // resolution — sleep briefly before writing.
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        std::fs::write(&state.keys_file, serde_json::to_string(&data).unwrap()).unwrap();
+
+        let entry = state.validate_key(&external_key).await;
+        assert!(entry.is_some(), "key written externally must be picked up without restart");
+        assert_eq!(entry.unwrap().consumer, "external-process-consumer");
     }
 
     #[tokio::test]
