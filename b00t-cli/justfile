@@ -5,6 +5,33 @@ list-commands:
 cli *args:
 	cargo run --bin b00t-cli -- {{args}}
 
+# Regression gate for #934 (lfmf salvage-first parsing corrupted stored lessons):
+# runs the fixture-driven unit tests, then a live write/read roundtrip through
+# the real CLI+storage path in a throwaway B00T_LEARN_DIR so a well-formed
+# lesson is verified never to pick up a spurious salvage marker or lose text.
+test-lfmf-roundtrip:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	# 🤓 -C target-cpu=native works around gemm-f16's fullfp16 inline-asm needing a
+	#    CPU feature rustc's generic aarch64 target doesn't enable by default; the
+	#    ML/embedding crates pulled into this workspace's single build graph hit it
+	#    even for an unrelated `cargo test` invocation like this one.
+	export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
+	cargo test --package b00t-cli --test lfmf_salvage_test
+	tmp_dir="$(mktemp -d)"
+	trap 'rm -rf "$tmp_dir"' EXIT
+	tool="lfmf-roundtrip-check"
+	body="commit small focused changes for the roundtrip check"
+	B00T_LEARN_DIR="$tmp_dir" cargo run --quiet --bin b00t-cli -- lfmf "$tool" "roundtrip topic: $body" >/dev/null
+	out="$(cat "$tmp_dir/${tool}.md")"
+	if grep -q '<!-- salvaged:' <<<"$out"; then
+		echo "FAIL: unexpected salvage marker in roundtrip output"; echo "$out"; exit 1
+	fi
+	if ! grep -qF "$body" <<<"$out"; then
+		echo "FAIL: roundtrip body mismatch"; echo "$out"; exit 1
+	fi
+	echo "PASS: 0 salvaged markers, input == parsed body"
+
 # Test MCP functionality with sample files
 test-mcp:
 	cargo run -- mcp add "$(cat samples/mcp/playwright.json)"
@@ -150,14 +177,15 @@ guard-compact:
 	path = os.path.expanduser('~/.b00t/guard-violations.jsonl')
 	if not os.path.exists(path):
 	    print('  No violations file found')
-	    exit(0)
+	    raise SystemExit(0)
 	counts = collections.Counter()
 	with open(path) as f:
 	    for line in f:
 	        try:
 	            entry = json.loads(line)
 	            counts[entry['pattern']] += 1
-	        except: pass
+	        except Exception:
+	            pass
 	with open(path, 'w') as f:
 	    for pattern, count in sorted(counts.items()):
 	        f.write(json.dumps({'pattern': pattern, 'count': count}) + '\n')

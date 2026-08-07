@@ -1,0 +1,39 @@
+# b00t lfmf (Learn From My Failures) — service contract for the salvage-first parser
+#
+# @tribal: the storage/parse pipeline is two layers: b00t-cli/src/commands/lfmf.rs
+#   (parse_lesson_salvage — CLI-facing, salvage-first, never bails on malformed
+#   input) fronting b00t-c0re-lib/src/lfmf.rs (LfmfSystem::record_lesson — the
+#   storage layer). Issue #934 found two example lessons on disk
+#   (_b00t_/learn/cargo-workspace-install.md, guard-session-fixtures.md) that
+#   looked corrupted — one really was (a pre-refactor hyphen-slugified,
+#   `MSRV`→`MSRS`-mangled duplicate, from before commit 969e6e09's
+#   salvage-first rewrite); the other turned out to be the CURRENT writer's
+#   correct, if verbose, no-colon salvage output (topic is a legitimately
+#   token-budgeted prefix of body, not corruption) — re-verified by literally
+#   re-running both through the current binary; see git history for this file
+#   for the byte-for-byte comparison. Both files were re-emitted with the
+#   current writer as part of closing out #934.
+#
+# @tribal: don't validate stricter in the CLI layer than the storage layer
+#   accepts — see the meta-pattern doc comment on ParsedLesson in
+#   b00t-cli/src/commands/lfmf.rs. Regression fixtures for the parser live in
+#   b00t-cli/tests/fixtures/lfmf_salvage_cases.json (JSON, not inline in test
+#   code, per repo convention).
+
+[b00t]
+name = "lfmf"
+type = "skill"
+hint = "Lessons From My Failures — salvage-first tribal-knowledge recorder; b00t-cli lfmf <tool> \"<topic>: <body>\""
+
+[[service_contract]]
+capability = "lfmf-roundtrip-lossless"
+handler    = "just --justfile b00t-cli/justfile --working-directory b00t-cli test-lfmf-roundtrip"
+evidence   = "PASS: 0 salvaged markers, input == parsed body"
+tier       = "sm0l"
+
+# b00t:map v1
+# summary: Service contract + tribal notes for the lfmf salvage-first lesson parser (issue #934 follow-up)
+# tags: lfmf, learn, tribal-knowledge, salvage, service-contract, regression
+# tier: sm0l
+# cmds: b00t-cli contract run lfmf, just b00t-cli::test-lfmf-roundtrip
+# complexity: 3
