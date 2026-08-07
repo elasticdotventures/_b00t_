@@ -51,6 +51,27 @@
       "topic": "just a body here",
       "body": "just a body here",
       "salvage": "empty_part"
+    },
+    {
+      "name": "colon_in_body_not_defeated",
+      "raw": "atomic commits: commit small then verify tests: all green",
+      "topic": "atomic commits",
+      "body": "commit small then verify tests: all green",
+      "salvage": null
+    },
+    {
+      "name": "unicode_survives_intact",
+      "raw": "emoji topic 🍰: proceed with 🚀 confidence in 中文 text",
+      "topic": "emoji topic 🍰",
+      "body": "proceed with 🚀 confidence in 中文 text",
+      "salvage": null
+    },
+    {
+      "name": "embedded_newline_preserved",
+      "raw": "multiline lesson: line one\nline two continues here",
+      "topic": "multiline lesson",
+      "body": "line one\nline two continues here",
+      "salvage": null
     }
   ]
 }

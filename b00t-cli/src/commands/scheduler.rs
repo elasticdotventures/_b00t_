@@ -1,12 +1,17 @@
 //! b00t scheduler — SQLite-backed job scheduling with agent dispatch
 //!
-//! Storage: `~/.local/share/b00t/scheduler/scheduler.db` (Linux)
+//! Storage: `~/.local/share/b00t/scheduler/scheduler.db` (Linux), override with
+//! `B00T_SCHEDULER_DB=<path>` (used by tests to avoid touching the real DB).
 //! Schema: schedules, runs, agents tables (see _b00t_/datums/SCHEDULER-SCHEMA.tomllmd)
 //!
-//! 🤓 This is the CLI skeleton — CRUD for schedules only.
-//!    The claim protocol, background daemon, and agent dispatch are NOT implemented here.
-//!    Run tracking (runs table) is reserved for the daemon.
+//! 🤓 `create`/`list`/`status`/`show` are definition-only CRUD. `run` claims one due
+//!    schedule via `crate::scheduler::claim::try_claim` and, for `agent_type = "shell"`,
+//!    executes it synchronously and closes out the run. Other agent types (llm/mcp/
+//!    webhook/b00t) are claimed but left for the caller to close via `finish` — no
+//!    background daemon or distributed tick loop exists yet (see DESIGN-SCHEDULER.md
+//!    for the target distributed-claim model this is a single-shot subset of).
 
+use crate::scheduler::{try_claim, ClaimResult};
 use anyhow::{Context, Result};
 use clap::Subcommand;
 use rusqlite::{Connection, params};
@@ -54,6 +59,12 @@ impl SchedulerDb {
     ///   - macOS:   ~/Library/Application Support/b00t/scheduler/scheduler.db
     ///   - Windows: {FOLDERID_LocalAppData}/b00t/scheduler/scheduler.db
     pub fn db_path() -> PathBuf {
+        // Test/operator seam: point the scheduler at an isolated DB file
+        // instead of the real one. Unset in normal operation.
+        if let Ok(path) = std::env::var("B00T_SCHEDULER_DB") {
+            return PathBuf::from(path);
+        }
+
         let base = dirs::data_dir().unwrap_or_else(|| {
             // Fallback to ~/.local/share/ if dirs fails
             dirs::home_dir()
@@ -323,6 +334,44 @@ impl SchedulerDb {
             db_path: Self::db_path().to_string_lossy().to_string(),
         })
     }
+
+    /// Transition a claimed run to `running` (best-effort progress marker;
+    /// terminal state is set separately via [`SchedulerDb::update_run`]).
+    pub fn set_run_running(&self, run_id: &str) -> Result<()> {
+        self.conn
+            .execute(
+                "UPDATE runs SET status = 'running' WHERE id = ?1",
+                params![run_id],
+            )
+            .context("mark run as running")?;
+        Ok(())
+    }
+
+    /// Close out a run with a terminal status (success/failed/timed_out/cancelled).
+    ///
+    /// Sets `finished_at` to now and records exit code / summary / error.
+    pub fn update_run(
+        &self,
+        run_id: &str,
+        status: &str,
+        exit_code: Option<i32>,
+        summary: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<()> {
+        let finished_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let rows = self
+            .conn
+            .execute(
+                "UPDATE runs SET status = ?1, finished_at = ?2, exit_code = ?3, summary = ?4, error = ?5 \
+                 WHERE id = ?6",
+                params![status, finished_at, exit_code, summary, error, run_id],
+            )
+            .context("update run terminal status")?;
+        if rows == 0 {
+            anyhow::bail!("run '{run_id}' not found");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -422,6 +471,55 @@ pub enum SchedulerCommands {
         /// Schedule ID to display
         schedule_id: String,
     },
+
+    /// Claim and (for shell jobs) execute one due schedule
+    ///
+    /// Atomically claims the oldest due, enabled schedule via the claim
+    /// protocol (see `scheduler::claim::try_claim`). `agent_type = "shell"`
+    /// jobs run synchronously and the run is closed out automatically.
+    /// Other agent types are left `running` — close them with `finish`.
+    ///
+    /// Examples:
+    ///   b00t scheduler run
+    ///   b00t scheduler run --agent-id my-agent --capabilities grok,hive
+    Run {
+        /// Agent ID claiming the job (default: "b00t-cli-<pid>")
+        #[arg(long)]
+        agent_id: Option<String>,
+
+        /// Capabilities this agent offers (comma-separated)
+        #[arg(long)]
+        capabilities: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Manually close out a claimed/running run (for non-shell agent types)
+    ///
+    /// Example:
+    ///   b00t scheduler finish run_abc123 --status success --summary "handled by hermes"
+    Finish {
+        /// Run ID to close out (printed by `scheduler run`)
+        run_id: String,
+
+        /// Terminal status: success, failed, timed_out, or cancelled
+        #[arg(long)]
+        status: String,
+
+        /// Process exit code, if applicable
+        #[arg(long)]
+        exit_code: Option<i32>,
+
+        /// Short summary for the dashboard
+        #[arg(long)]
+        summary: Option<String>,
+
+        /// Error message, if status is failed/timed_out
+        #[arg(long)]
+        error: Option<String>,
+    },
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -460,6 +558,24 @@ pub fn handle_scheduler_command(cmd: &SchedulerCommands) -> Result<()> {
         SchedulerCommands::List { enabled, json } => cmd_list(*enabled, *json),
         SchedulerCommands::Status { json } => cmd_status(*json),
         SchedulerCommands::Show { schedule_id } => cmd_show(schedule_id),
+        SchedulerCommands::Run {
+            agent_id,
+            capabilities,
+            json,
+        } => cmd_run(agent_id.as_deref(), capabilities.as_deref(), *json),
+        SchedulerCommands::Finish {
+            run_id,
+            status,
+            exit_code,
+            summary,
+            error,
+        } => cmd_finish(
+            run_id,
+            status,
+            *exit_code,
+            summary.as_deref(),
+            error.as_deref(),
+        ),
     }
 }
 
@@ -656,5 +772,190 @@ fn cmd_show(schedule_id: &str) -> Result<()> {
         println!("  Updated:     {}", upd);
     }
 
+    Ok(())
+}
+
+/// Truncate a string to at most `max_chars` characters (char-boundary safe).
+fn truncate_chars(s: &str, max_chars: usize) -> String {
+    s.chars().take(max_chars).collect()
+}
+
+fn cmd_run(agent_id: Option<&str>, capabilities: Option<&str>, json: bool) -> Result<()> {
+    let db = SchedulerDb::init().context("initialize scheduler database")?;
+
+    let agent_id = agent_id
+        .map(String::from)
+        .unwrap_or_else(|| format!("b00t-cli-{}", std::process::id()));
+
+    let caps: Vec<String> = capabilities
+        .map(|c| {
+            c.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let result = try_claim(&db, &agent_id, &caps).context("claim due schedule")?;
+
+    match result {
+        ClaimResult::NotDue => {
+            if json {
+                println!("{}", serde_json::json!({"status": "not_due"}));
+            } else {
+                println!("No due jobs.");
+            }
+            Ok(())
+        }
+        ClaimResult::CapabilityMismatch => {
+            if json {
+                println!("{}", serde_json::json!({"status": "capability_mismatch"}));
+            } else {
+                println!(
+                    "Due job(s) exist but require capabilities agent '{agent_id}' doesn't offer."
+                );
+            }
+            Ok(())
+        }
+        ClaimResult::AlreadyClaimed => {
+            if json {
+                println!("{}", serde_json::json!({"status": "already_claimed"}));
+            } else {
+                println!("Job was already claimed by another agent — nothing to do.");
+            }
+            Ok(())
+        }
+        ClaimResult::Claimed { schedule, run_id } => {
+            db.set_run_running(&run_id)
+                .context("mark run as running")?;
+
+            if schedule.agent_type == "shell" {
+                run_shell_job(&db, &schedule, &run_id, json)
+            } else {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "status": "claimed",
+                            "run_id": run_id,
+                            "schedule_id": schedule.id,
+                            "agent_type": schedule.agent_type,
+                            "prompt": schedule.prompt,
+                        })
+                    );
+                } else {
+                    println!(
+                        "Claimed '{}' ({}) — agent_type '{}' has no inline executor in this CLI.",
+                        schedule.name, schedule.id, schedule.agent_type
+                    );
+                    println!("  run_id: {run_id}");
+                    if let Some(prompt) = &schedule.prompt {
+                        println!("  prompt: {prompt}");
+                    }
+                    println!(
+                        "  Close it with: b00t-cli scheduler finish {run_id} --status <success|failed> --summary '...'"
+                    );
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Execute a claimed `agent_type = "shell"` job synchronously and close its run.
+fn run_shell_job(
+    db: &SchedulerDb,
+    schedule: &crate::scheduler::ScheduleDef,
+    run_id: &str,
+    json: bool,
+) -> Result<()> {
+    let Some(cmd) = &schedule.command else {
+        db.update_run(
+            run_id,
+            "failed",
+            None,
+            None,
+            Some("agent_type=shell but no command set"),
+        )?;
+        anyhow::bail!(
+            "schedule '{}' is agent_type=shell but has no command",
+            schedule.name
+        );
+    };
+
+    let mut command = std::process::Command::new("sh");
+    command.arg("-c").arg(cmd);
+    if let Some(wd) = &schedule.workdir {
+        command.current_dir(wd);
+    }
+
+    let output = command
+        .output()
+        .with_context(|| format!("execute shell job command: {cmd}"))?;
+
+    let exit_code = output.status.code().unwrap_or(-1);
+    let mut combined = String::from_utf8_lossy(&output.stdout).to_string();
+    combined.push_str(&String::from_utf8_lossy(&output.stderr));
+    let summary = truncate_chars(&combined, 2000);
+    let status = if output.status.success() {
+        "success"
+    } else {
+        "failed"
+    };
+    let error = if output.status.success() {
+        None
+    } else {
+        Some(summary.clone())
+    };
+
+    db.update_run(run_id, status, Some(exit_code), Some(&summary), error.as_deref())
+        .context("close out shell run")?;
+
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "status": status,
+                "run_id": run_id,
+                "schedule_id": schedule.id,
+                "exit_code": exit_code,
+                "summary": summary,
+            })
+        );
+    } else {
+        println!("Ran '{}' ({})", schedule.name, schedule.id);
+        println!("  run_id:    {run_id}");
+        println!("  status:    {status}");
+        println!("  exit_code: {exit_code}");
+        println!("  output:    {summary}");
+    }
+
+    if status == "failed" {
+        anyhow::bail!(
+            "job '{}' failed with exit code {}",
+            schedule.name,
+            exit_code
+        );
+    }
+    Ok(())
+}
+
+fn cmd_finish(
+    run_id: &str,
+    status: &str,
+    exit_code: Option<i32>,
+    summary: Option<&str>,
+    error: Option<&str>,
+) -> Result<()> {
+    const VALID: [&str; 4] = ["success", "failed", "timed_out", "cancelled"];
+    if !VALID.contains(&status) {
+        anyhow::bail!("invalid --status '{status}'; must be one of {VALID:?}");
+    }
+
+    let db = SchedulerDb::init().context("initialize scheduler database")?;
+    db.update_run(run_id, status, exit_code, summary, error)
+        .context("finish run")?;
+
+    println!("Run {run_id} marked {status}");
     Ok(())
 }

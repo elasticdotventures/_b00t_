@@ -191,11 +191,29 @@ pub struct InfluenceSource {
 pub struct InfluenceReceipt {
     pub subject: String,
     pub sources: Vec<InfluenceSource>,
+    /// 🤓 Provider name checked via `datum_credential::validate_subject_not_expired`,
+    ///    when the caller opted into credential-scoped attribution. `None` when no
+    ///    check was requested (backward-compatible default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_subject_check: Option<String>,
 }
 
 /// 🤓 Minimal AL-1.0 attribution: normalises raw scores into ratios summing to 1.0.
 ///    Does not persist — callers (e.g. evidence records) attach the receipt directly.
-pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<InfluenceReceipt> {
+///
+///    `credential_subject_check`: optional credential provider name. When set, the
+///    credential datum for that provider must have `subject == subject` and not be
+///    expired (see `datum_credential::validate_subject_not_expired`), or this errors.
+///    `None` skips the check entirely (default, backward-compatible).
+pub fn put_influence(
+    subject: &str,
+    scored_sources: &[(String, f64)],
+    credential_subject_check: Option<&str>,
+) -> Result<InfluenceReceipt> {
+    if let Some(provider) = credential_subject_check {
+        crate::datum_credential::validate_subject_not_expired(provider, subject)?;
+    }
+
     let total: f64 = scored_sources.iter().map(|(_, score)| score).sum();
     let sources = scored_sources
         .iter()
@@ -208,6 +226,7 @@ pub fn put_influence(subject: &str, scored_sources: &[(String, f64)]) -> Result<
     Ok(InfluenceReceipt {
         subject: subject.to_string(),
         sources,
+        credential_subject_check: credential_subject_check.map(|s| s.to_string()),
     })
 }
 
@@ -294,49 +313,83 @@ pub fn validate_consistency() -> Result<CrossEngineReport> {
     if let Ok(Ok(query_result)) = fact_results {
         report.related_facts = query_result.facts.len();
 
-        // Build a lookup: checksum → knowledge-backend IRIs
-        let mut backend_checksums: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-        for fact in &query_result.facts {
-            if let Some(checksum) = fact.object.as_str() {
-                backend_checksums.entry(checksum.to_string())
-                    .or_default()
-                    .push(fact.subject.clone());
-            }
-        }
-
-        // Cross-reference: every StoreEntry checksum should have a matching backend fact
-        for entry in &manifest.entries {
-            match backend_checksums.get(&entry.checksum) {
-                Some(subjects) => {
-                    report.hash_matches += 1;
-                    if subjects.len() > 1 {
-                        // Multiple backend entries for same checksum — normal for multiple consumers
-                    }
-                }
-                None => {
-                    report.missing_facts.push(Discrepancy {
-                        manifest_key: entry.key.clone(),
-                        checksum: entry.checksum.clone(),
-                        detail: format!("no knowledge-backend fact for checksum {}", &entry.checksum[..12]),
-                    });
-                }
-            }
-        }
-
-        // Orphan facts: backend facts without matching store entries
-        let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
-            .map(|e| e.checksum.as_str())
-            .collect();
-        for (checksum, subjects) in &backend_checksums {
-            if !manifest_checksums.contains(checksum.as_str()) {
-                report.orphan_facts += subjects.len();
-            }
-        }
+        let index = ChecksumIndex::build(&query_result.facts);
+        let (hash_matches, missing_facts, orphan_facts) = cross_reference(&manifest, &index);
+        report.hash_matches = hash_matches;
+        report.missing_facts = missing_facts;
+        report.orphan_facts = orphan_facts;
     }
 
     report.healthy = report.hash_mismatches == 0 && report.missing_facts.is_empty() && report.orphan_facts == 0;
 
     Ok(report)
+}
+
+/// Lookup index mapping a b00t:hasChecksum fact's checksum value to the
+/// knowledge-backend subject IRIs that assert it. Built once per
+/// `validate_consistency()` call so the manifest↔backend join in
+/// `cross_reference` runs in O(1) per entry instead of scanning the fact
+/// list per manifest entry.
+pub struct ChecksumIndex(std::collections::HashMap<String, Vec<String>>);
+
+impl ChecksumIndex {
+    pub fn build(facts: &[crate::irontology_bridge::FactRecord]) -> Self {
+        let mut index: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for fact in facts {
+            if let Some(checksum) = fact.object.as_str() {
+                index.entry(checksum.to_string())
+                    .or_default()
+                    .push(fact.subject.clone());
+            }
+        }
+        ChecksumIndex(index)
+    }
+
+    pub fn subjects_for(&self, checksum: &str) -> Option<&[String]> {
+        self.0.get(checksum).map(|subjects| subjects.as_slice())
+    }
+}
+
+/// Join a `StoreManifest` against a `ChecksumIndex` of knowledge-backend
+/// facts. Returns `(hash_matches, missing_facts, orphan_facts)`:
+/// - `hash_matches`: manifest entries whose checksum has a matching backend fact
+/// - `missing_facts`: manifest entries with no matching backend fact
+/// - `orphan_facts`: backend facts whose checksum has no matching manifest entry
+pub fn cross_reference(
+    manifest: &StoreManifest,
+    index: &ChecksumIndex,
+) -> (usize, Vec<Discrepancy>, usize) {
+    let mut hash_matches = 0;
+    let mut missing_facts = Vec::new();
+
+    // Cross-reference: every StoreEntry checksum should have a matching backend fact
+    for entry in &manifest.entries {
+        match index.subjects_for(&entry.checksum) {
+            Some(_subjects) => {
+                hash_matches += 1;
+            }
+            None => {
+                missing_facts.push(Discrepancy {
+                    manifest_key: entry.key.clone(),
+                    checksum: entry.checksum.clone(),
+                    detail: format!("no knowledge-backend fact for checksum {}", &entry.checksum[..12]),
+                });
+            }
+        }
+    }
+
+    // Orphan facts: backend facts without matching store entries
+    let manifest_checksums: std::collections::HashSet<&str> = manifest.entries.iter()
+        .map(|e| e.checksum.as_str())
+        .collect();
+    let mut orphan_facts = 0;
+    for (checksum, subjects) in &index.0 {
+        if !manifest_checksums.contains(checksum.as_str()) {
+            orphan_facts += subjects.len();
+        }
+    }
+
+    (hash_matches, missing_facts, orphan_facts)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -443,6 +496,88 @@ fn sha2(data: Vec<u8>) -> String {
 mod tests {
     use super::*;
 
+    fn mk_entry(key: &str, checksum: &str) -> StoreEntry {
+        StoreEntry {
+            key: key.to_string(),
+            ontology_class: "b00t:TrainingCorpus".to_string(),
+            consumer: "test".to_string(),
+            shape: "jsonl".to_string(),
+            filename: "test.jsonl".to_string(),
+            checksum: checksum.to_string(),
+            size_bytes: 0,
+            tags: BTreeMap::new(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            source_file: "test.jsonl".to_string(),
+        }
+    }
+
+    fn mk_fact(subject: &str, checksum: &str) -> crate::irontology_bridge::FactRecord {
+        crate::irontology_bridge::FactRecord {
+            subject: subject.to_string(),
+            predicate: "b00t:hasChecksum".to_string(),
+            object: serde_json::Value::String(checksum.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_cross_reference_all_checksums_match() {
+        let manifest = StoreManifest {
+            entries: vec![
+                mk_entry("key1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                mk_entry("key2", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+            ],
+            version: 1,
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let facts = vec![
+            mk_fact("urn:subj1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            mk_fact("urn:subj2", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        ];
+        let index = ChecksumIndex::build(&facts);
+
+        let (hash_matches, missing_facts, orphan_facts) = cross_reference(&manifest, &index);
+
+        assert_eq!(hash_matches, manifest.entries.len());
+        assert!(missing_facts.is_empty());
+        assert_eq!(orphan_facts, 0);
+    }
+
+    #[test]
+    fn test_cross_reference_missing_backend_fact() {
+        let manifest = StoreManifest {
+            entries: vec![mk_entry("key1", "cccccccccccccccccccccccccccccccc")],
+            version: 1,
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let facts: Vec<crate::irontology_bridge::FactRecord> = Vec::new();
+        let index = ChecksumIndex::build(&facts);
+
+        let (hash_matches, missing_facts, orphan_facts) = cross_reference(&manifest, &index);
+
+        assert_eq!(hash_matches, 0);
+        assert_eq!(missing_facts.len(), 1);
+        assert_eq!(missing_facts[0].manifest_key, "key1");
+        assert_eq!(missing_facts[0].checksum, "cccccccccccccccccccccccccccccccc");
+        assert_eq!(orphan_facts, 0);
+    }
+
+    #[test]
+    fn test_cross_reference_orphan_backend_fact() {
+        let manifest = StoreManifest {
+            entries: Vec::new(),
+            version: 1,
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let facts = vec![mk_fact("urn:subj1", "dddddddddddddddddddddddddddddddd")];
+        let index = ChecksumIndex::build(&facts);
+
+        let (hash_matches, missing_facts, orphan_facts) = cross_reference(&manifest, &index);
+
+        assert_eq!(hash_matches, 0);
+        assert!(missing_facts.is_empty());
+        assert_eq!(orphan_facts, 1);
+    }
+
     #[test]
     fn test_put_get_list_query() {
         let tmp = std::env::temp_dir().join("b00t-store-test");
@@ -468,6 +603,33 @@ mod tests {
 
         let query = query(&tags).expect("query");
         assert!(!query.is_empty());
+    }
+
+    #[test]
+    fn test_put_influence_credential_check_missing_provider_errors() {
+        // No credential datum exists for "nonexistent-provider" — the check
+        // must fail closed rather than silently skipping attribution.
+        let scored = vec![("source-a".to_string(), 1.0)];
+        let result = put_influence("subject-x", &scored, Some("nonexistent-provider"));
+        assert!(
+            result.is_err(),
+            "expected Err when credential_subject_check provider has no credential datum"
+        );
+    }
+
+    #[test]
+    fn test_put_influence_no_credential_check_is_unchanged() {
+        // Regression guard: passing None must preserve prior (pre-#715) behavior.
+        let scored = vec![
+            ("source-a".to_string(), 3.0),
+            ("source-b".to_string(), 1.0),
+        ];
+        let receipt = put_influence("subject-y", &scored, None).expect("put_influence");
+        assert_eq!(receipt.subject, "subject-y");
+        assert_eq!(receipt.sources.len(), 2);
+        assert!(receipt.credential_subject_check.is_none());
+        let source_a = receipt.sources.iter().find(|s| s.source_key == "source-a").unwrap();
+        assert!((source_a.ratio - 0.75).abs() < 1e-9);
     }
 }
 

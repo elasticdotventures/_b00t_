@@ -44,25 +44,7 @@ uv tool upgrade crawl4ai
 version = "crawl4ai --version"
 version_regex = "crawl4ai version (\\d+\\.\\d+\\.\\d+)"
 
-[[b00t.aliases]]
-name = "crawl"
-command = "crawl4ai"
-
-[[b00t.aliases]]
-name = "crawl-fast"
-command = "crawl4ai --mode fast"
-
-[[b00t.aliases]]
-name = "crawl-deep"
-command = "crawl4ai --mode deep"
-
-[[b00t.aliases]]
-name = "crawl-js"
-command = "crawl4ai --browser"
-
-[[b00t.aliases]]
-name = "crawl-wait"
-command = "crawl4ai --wait"
+aliases = ["crawl", "crawl-fast", "crawl-deep", "crawl-js", "crawl-wait"]
 
 [b00t.env]
 # User agent for crawl4ai requests
