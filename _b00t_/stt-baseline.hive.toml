@@ -1,0 +1,77 @@
+# b00t Hive Profile — audio.cpp baseline STT (spoken-command recognition)
+# 🤓 CPU-first, resident sidecar (not a batch job) — app4dog's voice/avatar
+#    digital-twin pipeline Phase 1. Deliberately CPU-only to avoid contending
+#    with GPU-resident inference (ch0nky/sm0l-vqa) for what's meant to be a
+#    cheap, always-available baseline tier — see workspace voice-pipeline plan.
+# 🤓 Engine: audio.cpp (https://github.com/0xShug0/audio.cpp, Apache-2.0,
+#    ggml-based). Starting model family: parakeet_tdt (small, Stream-capable)
+#    — swappable; more backends/models are expected over time, this is a
+#    starting point not a permanent choice.
+# 🤓 Server API is OpenAI-Whisper-compatible out of the box:
+#    POST /v1/audio/transcriptions (multipart: model=<id>, file=@audio.wav,
+#    stream=true|false) — see docs/asr.md in the audio.cpp repo. The
+#    container itself binds internal-only port 18004; b00t-stt-serve (this
+#    workspace) is the actual stable public proxy on :8004, so callers never
+#    need to know which underlying model backend is active — same soul-style
+#    discovery pattern as b00t-mcp's server_llm.rs.
+# 🤓 Shared-node resource protocol: every container MUST carry an explicit
+#    memory cap or the b00t-limits-hook OCI prestart hook rejects it outright.
+
+[b00t]
+name = "stt-baseline"
+type = "hive_profile"
+hint = "audio.cpp CPU-only STT sidecar (parakeet_tdt starting model) — spoken-command recognition, port 8004"
+depends_on = ["huggingface.cli"]
+
+[b00t.hive.resources]
+ram_gb    = 2
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1
+
+[b00t.hive.exclusion]
+group    = "cpu-inference"
+priority = 20
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman --memory/--memory-swap (b00t-limits-hook rejects uncapped containers)"
+
+# ── Environment (OpenAI-Whisper-compatible) ──────────────────────────────────
+[b00t.hive.env]
+B00T_AI_STT_BASE  = "http://127.0.0.1:8004/v1"
+B00T_AI_STT_MODEL = "stt-baseline"
+
+# ── Usage recipes ────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Pull the audio.cpp CPU image"
+command = "podman pull ghcr.io/0xshug0/audio.cpp:full-cpu"
+
+[[b00t.usage]]
+description = "Download the starting model (parakeet_tdt) via audio.cpp's model manager"
+command = "podman run --rm --memory=1g --memory-swap=1g -v $HOME/.b00t/audiocpp-models:/models:rw ghcr.io/0xshug0/audio.cpp:full-cpu python3 tools/model_manager_v2.py --family parakeet_tdt --dest /models"
+
+[[b00t.usage]]
+description = "Run the audio.cpp server (capped, CPU-only, internal-only port 18004) — config at _b00t_/stt-baseline-server-config.json"
+command = "podman run -d --name stt-baseline-engine --memory=2g --memory-swap=2g -p 127.0.0.1:18004:8080 -v $HOME/.b00t/audiocpp-models:/models:ro -v $HOME/.b00t/_b00t_/stt-baseline-server-config.json:/config.json:ro ghcr.io/0xshug0/audio.cpp:full-cpu server --config /config.json"
+
+[[b00t.usage]]
+description = "Run the b00t-stt-serve proxy (stable public port 8004, forwards to :18004)"
+command = "b00t-stt-serve --host 0.0.0.0 --port 8004 --upstream http://127.0.0.1:18004"
+
+[[b00t.usage]]
+description = "Smoke-test the transcriptions endpoint (through the proxy)"
+command = "curl -s -F model=stt-baseline -F file=@sample.wav http://127.0.0.1:8004/v1/audio/transcriptions"
+
+[[b00t.usage]]
+description = "Stop the sidecar"
+command = "podman stop stt-baseline-engine && podman rm stt-baseline-engine"
+
+# b00t:map v1
+# summary: audio.cpp CPU-only STT baseline sidecar — parakeet_tdt starting model, OpenAI-Whisper-compatible API on :8004
+# tags: hive, audio, stt, audiocpp, app4dog, voice-pipeline
+# tier: sm0l
+# cmds: b00t hive activate stt-baseline
+# complexity: 3

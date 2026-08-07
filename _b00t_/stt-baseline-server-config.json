@@ -1,0 +1,16 @@
+{
+  "host": "0.0.0.0",
+  "port": 8080,
+  "backend": "cpu",
+  "threads": 2,
+  "lazy_load": true,
+  "models": [
+    {
+      "id": "stt-baseline",
+      "family": "parakeet_tdt",
+      "path": "/models/parakeet_tdt",
+      "task": "asr",
+      "mode": "offline"
+    }
+  ]
+}
