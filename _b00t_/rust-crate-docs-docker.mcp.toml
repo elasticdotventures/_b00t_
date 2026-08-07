@@ -1,11 +1,26 @@
 [b00t]
 name = "rust-crate-docs-docker"
 type = "mcp"
-hint = "MCP server"
+hint = "DEPRECATED alias — resolves to `rust-doc` (vendor/rust-docs-mcp-b00t, our Govcraft/rust-docs-mcp-server fork). PromptExecution/rust-cargo-docs-rag-mcp is sunset/archived as of 2026-08-04; b00t's canonical rust-crate-docs tool is now the rust-doc datum."
+
+[b00t.learn]
+topic = "rust-docs"
 
 [[b00t.mcp.stdio]]
 priority = 0
+command = "/home/brianh/.local/bin/rustdocs_mcp_server"
+args = ["serde"]
+requires = ["rustdocs_mcp_server"]
 transport = "stdio"
-args = ["run", "--rm", "-i", "ghcr.io/promptexecution/rust-cargo-docs-rag-mcp:latest", "stdio"]
-requires = ["docker"]
-command = "docker"
+
+[[b00t.gate]]
+env = "OPENAI_API_BASE"
+hint = "OPENAI_API_BASE required for embeddings API (e.g. http://127.0.0.1:8001/v1)"
+
+[[b00t.gate]]
+env = "OPENAI_API_KEY"
+hint = "OPENAI_API_KEY required for embeddings endpoint"
+
+[[b00t.usage]]
+description = "Use `rust-doc` directly instead — this name is kept only as a backward-compat alias"
+command = "b00t mcp install rust-doc claudecode"

@@ -19,15 +19,18 @@ members = [
     "b00t-c0re-hierarchy",
     "b00t-c0re-a2a",
     "b00t-embed",
+    "b00t-candle-serve",
     "b00t-datum-core",
     "b00t-lsp",
     "b00t-zellij",
     "b00t-admin",
     "b00t-mermaid-wasm",
     "b00t-ui-wasm",
+    "b00t-embed-serve",
+    "b00t-stt-serve",
 ]
 exclude = ["vendor/embed-anything-b00t",
-    "vendor/rust-docs-mcp-server",
+    "vendor/rust-docs-mcp-b00t",
     "vendor/runpod-sdk"]
 resolver = "2"
 

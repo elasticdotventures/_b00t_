@@ -1,0 +1,27 @@
+[package]
+name = "b00t-stt-serve"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Stable OpenAI-Whisper-compatible /v1/audio/transcriptions proxy in front of a containerized audio.cpp STT backend — see stt-baseline.hive.toml"
+
+[[bin]]
+name = "b00t-stt-serve"
+path = "src/main.rs"
+
+[dependencies]
+# 🤓 This crate is a proxy, not an inference host (unlike b00t-embed-serve,
+#    which loads a candle model in-process) — the real STT engine is the
+#    containerized audio.cpp server (stt-baseline.hive.toml); this gives
+#    callers one stable endpoint/model-id regardless of which underlying
+#    model backend is active behind it, same soul-discovery spirit as
+#    b00t-mcp's server_llm.rs.
+axum = { version = "0.8.4", features = ["multipart"] }
+reqwest = { version = "0.12", features = ["multipart", "stream"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }

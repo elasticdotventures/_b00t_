@@ -1,0 +1,184 @@
+# b00t non-hermetic codegen catalog — sccache-safety prerequisite
+# 🤓 Issue #882: canonical catalog of b00t build steps that generate source
+#    non-hermetically (output varies with ambient env/timestamp/machine state
+#    that is NOT captured by declared Cargo build inputs), as opposed to
+#    build steps that merely generate code deterministically from declared
+#    inputs (fine — hermetic — not cataloged here).
+# schema: 1 | bump ONLY on field definition changes
+# last_updated: 2026-08-06
+#
+# ⚠️ Per the issue itself: this catalog's scope came out of a code audit, NOT
+# a symptom-description guess. Every row below was verified by reading the
+# actual build.rs / source line, and the two `build.rs` sites were additionally
+# confirmed empirically (see "Verification method" per entry). Do NOT add a
+# row without doing the same — a plausible-looking `env!()` call is not
+# evidence; read what feeds it and, where possible, rebuild and diff output.
+#
+# Explicitly OUT OF SCOPE for this audit pass (operator instruction, this
+# work session): the ufo-types / ScopeStore cluster (issues #893-#910, #899).
+# ufo-types is pulled as a workspace git dependency pinned to tag v0.10.2
+# (see root Cargo.toml [workspace.dependencies]), not a path/submodule build
+# step in this repo, so it was not a candidate site regardless.
+#
+# 🔗参 _b00t_/datums/VENDOR-PINGAP-DEVPROXY-B00T.tomllmd — format reference (vendor datum)
+# 🔗参 _b00t_/learn/minio.md — format reference (investigation-note style)
+# 🔗参 root Cargo.toml [workspace] — member crate list + exclude list
+
+[b00t]
+name = "NON-HERMETIC-CODEGEN"
+type = "specification"
+hint = "Catalog of b00t build steps confirmed to generate source non-hermetically (embedded build timestamps, git hashes, ambient env vars) — prerequisite audit for issue #882 / safe sccache adoption"
+keywords = ["sccache", "hermetic", "build.rs", "codegen", "cache", "non-hermetic", "audit", "issue-882"]
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+## ── Method ───────────────────────────────────────────────────────────────────
+
+Audit performed 2026-08-06 in an isolated worktree
+(`~/.cache/b00t-worktrees/fix-882-codegen-catalog`, branch
+`task/882-non-hermetic-codegen-catalog`, real ext4 disk) against `origin/main`
+at commit `d3240ff4`.
+
+1. `find . -name build.rs -not -path "*/target/*" -not -path "*/.claude/worktrees/*"`
+   across the full workspace, with the Rust-plausible `vendor/*` submodules
+   initialized non-recursively (`git submodule update --init <path>`) so their
+   `build.rs` files were actually on disk to read — not assumed absent.
+2. `grep -rn 'env!(' --include=*.rs .` and `grep -rn 'include_str!\|include!('`
+   across the same tree, filtered to exclude standard Cargo-provided vars
+   (`CARGO_PKG_*`, `CARGO_MANIFEST_DIR`, `OUT_DIR`) which ARE declared,
+   hermetic build inputs.
+3. `grep -rln "proc-macro = true"` — zero hits; this workspace has no
+   proc-macro crates, so that candidate category is empty.
+4. `grep -rn "GENERATED\|DO NOT EDIT\|@generated"` — all hits were runtime
+   file-writing code paths (`b00t schema import`, `b00t model train`, moltis
+   startup-time config regeneration), not `cargo build`-time codegen. Out of
+   scope: they don't affect compiler-invocation caching.
+5. Every `std::env::var("HOME"/"USER"/...)` / `hostname::get()` hit found was
+   a **runtime** read (executed when the compiled binary runs), not a
+   compile-time embed — explicitly excluded per the issue's own definition
+   ("build steps generate source code non-hermetically"), confirmed by
+   reading each call site's enclosing function.
+6. For every `build.rs` found: read the full file, then classified as
+   confirmed-non-hermetic only if it embeds a value that varies independent
+   of Cargo.toml/source content (timestamp, git state, ambient env var not
+   gated by a Cargo feature) into a `.rs` file consumed by the crate. Two
+   sites were additionally confirmed by an actual `cargo build`, `touch`,
+   rebuild, diff cycle — see entries below.
+
+## ── Confirmed non-hermetic sites ───────────────────────────────────────────────
+
+[[site]]
+crate = "b00t-admin"
+build_step = "b00t-admin/build.rs:4-32 (fn chrono(), fn git_short_hash()) → target/.../out/build_info.rs, included at b00t-admin/src/main.rs:36, read at main.rs:1125-1126"
+why_non_hermetic = "Shells out to `date -u +%Y-%m-%dT%H:%M:%SZ` and `git rev-parse --short HEAD` and writes BUILD_TIMESTAMP + GIT_HASH consts to $OUT_DIR/build_info.rs. Emits ZERO `cargo:rerun-if-changed`/`cargo:rerun-if-env-changed` directives, so Cargo falls back to its default fingerprint (rerun the build script whenever any file in the b00t-admin package changes) — every such rebuild re-embeds the *current* wall clock, not a value derived from any declared Cargo input."
+verification_method = "Empirical: built b00t-admin twice with an intervening `touch b00t-admin/src/main.rs` (no content change, no git HEAD change). BUILD_TIMESTAMP changed from 2026-08-06T01:44:15Z to 2026-08-06T01:46:12Z across the two builds; GIT_HASH stayed d3240ff4 (HEAD unchanged) — proving the embedded output is a function of build wall-clock time, not of any declared build input."
+verified_date = "2026-08-06"
+
+[[site]]
+crate = "b00t-cli"
+build_step = "b00t-cli/build.rs:9-26 → cargo:rustc-env=GIT_HASH / cargo:rustc-env=BUILD_TIMESTAMP, read via env!(\"GIT_HASH\")/env!(\"BUILD_TIMESTAMP\") at b00t-cli/src/commands/version.rs:256-257"
+why_non_hermetic = "Same shell-out pattern as b00t-admin (`git rev-parse --short=7 HEAD`, `date -u ...`), embedded via rustc-env instead of a generated file. Partially mitigated vs. b00t-admin — it DOES emit `cargo:rerun-if-changed=.git/HEAD` and `cargo:rerun-if-changed=.git/refs/heads`, so it doesn't rerun on unrelated source edits — but `.git/HEAD` / `.git/refs/heads` are not declared Cargo build inputs (not part of Cargo.toml, not part of the crate's source tree hash), and BUILD_TIMESTAMP is still wall-clock-derived rather than derived from any declared input, so the value embedded on the *first* build after a given HEAD lands is whatever the local clock read at that moment — not reproducible from source + Cargo.toml + declared env alone. A checkout without a `.git` directory (source tarball, some shallow-clone CI modes) silently degrades GIT_HASH to \"unknown\", another ambient-state dependency."
+verification_method = "Code inspection (confirmed via `find . -name build.rs` + full read of b00t-cli/build.rs) plus cross-reference of the two rustc-env consumers via `grep -rn 'env!(\"GIT_HASH\"\\|env!(\"BUILD_TIMESTAMP\"'`. Not independently rebuilt+diffed in this pass (b00t-cli is a large crate); the mechanism is unambiguous from source and directly parallels the empirically-confirmed b00t-admin case."
+verified_date = "2026-08-06"
+
+[[site]]
+crate = "vendor/moltis-b00t"
+build_step = "vendor/moltis-b00t/crates/config/src/version.rs:7-14 (VERSION, IS_DEV_BUILD consts via option_env!(\"MOLTIS_VERSION\")); same pattern at vendor/moltis-b00t/crates/common/src/http_client.rs:23"
+why_non_hermetic = "MOLTIS_VERSION is an ambient shell environment variable, not a Cargo.toml field and not set by any build.rs in this crate — it is injected only by moltis-b00t's own GitHub Actions release workflow (vendor/moltis-b00t/.github/workflows/release.yml, multiple `MOLTIS_VERSION: ${{ steps.release_version.outputs.version }}` env blocks). A build invoked with MOLTIS_VERSION set embeds that string as VERSION and sets IS_DEV_BUILD=false; the identical source tree built without it embeds CARGO_PKG_VERSION and IS_DEV_BUILD=true. Two builds of byte-identical source + Cargo.toml produce different compiled constants purely as a function of the invoking shell's environment — the textbook non-hermetic case."
+verification_method = "Code inspection: read version.rs and http_client.rs in full, then `grep -rn MOLTIS_VERSION` across vendor/moltis-b00t/ to confirm no build.rs sets it (only justfile release-packaging steps and the GitHub Actions release workflow reference it as an ambient CI-injected var)."
+verified_date = "2026-08-06"
+
+## ── Investigated and ruled out (hermetic or not codegen) ───────────────────────
+
+Documented so this audit doesn't need to be re-litigated from scratch. All
+`build.rs` files found in the workspace (core + Rust-plausible `vendor/*`
+submodules initialized for this audit) are listed; sites not in the confirmed
+table above were read in full and judged hermetic or out-of-scope for the
+reason given.
+
+| crate | build.rs / site | ruling | reason |
+|-------|-----------------|--------|--------|
+| `blessed` | `blessed/build.rs` (copies `_b00t_/blessed/rust.toml` → `blessed/rust.toml`, read via `include_str!` in `blessed/src/lib.rs:4`) | **dead code, not non-hermetic** | Build-script CWD is the package root (`blessed/`), so the hardcoded relative path `_b00t_/blessed/rust.toml` resolves to the nonexistent `blessed/_b00t_/blessed/rust.toml`; `src.exists()` is false and the copy silently no-ops. Empirically confirmed: `sha256sum`/mtime of `blessed/rust.toml` were identical before and after a real `cargo build -p blessed`. The committed `blessed/rust.toml` is what actually ships — deterministic. 🚩 worth a follow-up bugfix (dead/misleading code), tracked separately, not a hermeticity issue since it never executes. |
+| `b00t-grok` | `b00t-grok/build.rs` | hermetic | Reads `CONDA_PREFIX`/`VIRTUAL_ENV`/`CARGO_FEATURE_PYO3`/`B00T_GROK_FIRST_BUILD` only to emit `cargo:warning=`/`cargo:note=` build messages — no generated source, no embedded value. |
+| `b00t-lib-chat` | `b00t-lib-chat/build.rs` | hermetic | `CARGO_FEATURE_PYTHON`/`CARGO_FEATURE_WASM` gate `cargo:rustc-cfg` flags — these are Cargo feature flags, i.e. declared build inputs, not ambient state. |
+| `vendor/irontology-mcp` | `crates/dsl/build.rs` (`lalrpop::process_root()`) | hermetic | Grammar-to-parser codegen is a pure function of the `.lalrpop` source files (declared inputs); no ambient env/timestamp involved. |
+| `vendor/ledgrrr` | `crates/ledger-core/build.rs` | hermetic | Only emits a `cargo:warning=` when the `legal-z3` feature is enabled and libz3 isn't found on the system — no source is generated or embedded; affects developer messaging only. |
+| `vendor/ledgrrr` | `crates/ledgerr-tauri/build.rs` (`tauri_build::build()`) | hermetic (not deep-audited beyond standard tauri codegen from `tauri.conf.json` — a declared input) | Standard Tauri build-script entry point; not independently re-audited past confirming it takes no ambient-env branch in this repo's usage. |
+| `vendor/moltis-b00t` | `crates/providers/build.rs` (NCCL header detection) | **not a codegen site** (noted for completeness) | Machine-local-path dependent (`/usr/include/nccl.h` presence) — matches the issue's "machine-local paths" symptom category — but it only conditionally emits `cargo:rustc-link-lib=nccl`, a linker flag, not embedded source/generated code. Out of this catalog's scope (source codegen only) but flagged here since it's the same underlying class of problem for anyone extending this audit to link-time caching. |
+| `vendor/moltis-b00t` | `crates/schema-export/build.rs` | hermetic | Builds the GraphQL SDL schema string from the crate's own Rust type definitions (`moltis_graphql::build_schema(...).sdl()`) and writes it to `$OUT_DIR/schema.graphqls` — a pure function of declared source. |
+| `vendor/moltis-b00t` | `crates/web/build.rs` | hermetic | Only checks for the presence of pre-built web asset files and fails/warns accordingly — does not generate or embed a varying value. |
+
+No proc-macro crates exist in this workspace (`grep -rln "proc-macro = true" --include=Cargo.toml .` — zero hits), so that candidate category from the issue text is empty.
+
+## ── Vendor submodules not initialized for this pass ────────────────────────────
+
+The following `vendor/*` submodules were judged non-Rust (or Rust with no
+`Cargo.toml` reachable from this workspace) from directory/README naming and
+were not initialized for this audit: `agentsea-skillpacks`,
+`android-emulator-container-scripts`, `opencode-goal-plugin`, `aohp`,
+`pyinfra`, `runpod-sdk`* (Python/JS/infra tooling), `serena`, `linkml-b00t`
+(Python). `gemm-common` failed to clone in this environment (submodule init
+error) and was not investigated — flag for a follow-up pass if it turns out
+to be a real Rust dependency of any workspace member.
+
+\* `runpod-sdk` was subsequently initialized anyway (mid-audit) because
+`cargo build -p blessed` failed to resolve the workspace graph without it —
+it is a `path`/`git` dependency of something in the graph despite being in
+`[workspace] exclude`. Its `build.rs` presence was checked (`find` above,
+post-init) — none found.
+
+## ── Referenced files (verification manifest) ────────────────────────────────────
+
+Ground-truth list of repo-relative paths this datum cites as *existing,
+real* evidence (crate build.rs files + the source files that consume their
+output). This is the list the verification script below checks — NOT a
+blind text-regex over the prose above, because the "Investigated and ruled
+out" table intentionally also describes one path that does NOT exist
+(`blessed/_b00t_/blessed/rust.toml`, the resolved-but-missing path that
+proves `blessed/build.rs`'s copy step is dead code) — asserting that path's
+existence would be a false-negative test.
+
+```paths
+b00t-admin/build.rs
+b00t-admin/src/main.rs
+b00t-cli/build.rs
+b00t-cli/src/commands/version.rs
+vendor/moltis-b00t/crates/config/src/version.rs
+vendor/moltis-b00t/crates/common/src/http_client.rs
+blessed/build.rs
+blessed/src/lib.rs
+blessed/rust.toml
+_b00t_/blessed/rust.toml
+b00t-grok/build.rs
+b00t-lib-chat/build.rs
+vendor/irontology-mcp/crates/dsl/build.rs
+vendor/ledgrrr/crates/ledger-core/build.rs
+vendor/ledgrrr/crates/ledgerr-tauri/build.rs
+vendor/moltis-b00t/crates/providers/build.rs
+vendor/moltis-b00t/crates/schema-export/build.rs
+vendor/moltis-b00t/crates/web/build.rs
+vendor/moltis-b00t/.github/workflows/release.yml
+```
+
+## ── Verification (file-path existence check) ───────────────────────────────────
+
+Run from repo root. Extracts the fenced ` ```paths ` manifest above (the
+curated ground truth, not a blind regex over prose) and checks every entry
+resolves to a real file:
+
+```bash
+awk '/^```paths$/{f=1;next} /^```$/{f=0} f' _b00t_/datums/NON-HERMETIC-CODEGEN.tomllmd \
+  | while read -r f; do
+      [ -f "$f" ] || { echo "MISSING: $f"; exit 1; }
+    done \
+  && echo "PASS: all referenced file paths exist"
+```
+
+# b00t:map v1
+# summary: Catalog of b00t build steps confirmed non-hermetic (embedded build timestamps/git hashes in b00t-admin and b00t-cli build.rs, ambient MOLTIS_VERSION env var in vendor/moltis-b00t) vs. sites investigated and ruled out (blessed/build.rs dead code, lalrpop/tauri/graphql-schema codegen judged hermetic) — issue #882, sccache-adoption prerequisite
+# tags: sccache, hermetic, build.rs, codegen, cache, non-hermetic, audit, issue-882, b00t-admin, b00t-cli, moltis-b00t
+# tier: ch0nky
+# cmds: find . -name build.rs -not -path "*/target/*", cargo build -p b00t-admin && cat target/debug/build/b00t-admin-*/out/build_info.rs
+# complexity: 4

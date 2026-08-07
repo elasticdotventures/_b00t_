@@ -68,6 +68,7 @@ fn producer_path_writes_influence_and_log_surfaces_it() {
             "requires:role:backend",
             &[("grok-doc-1".to_string(), 4.0), ("lfmf-lesson-9".to_string(), 1.0)],
             Some("agent-alpha"),
+            None,
         )
         .unwrap();
 

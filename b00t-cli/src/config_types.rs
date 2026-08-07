@@ -367,6 +367,38 @@ pub struct McpMethods {
     pub httpstream: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
+// ── AI provisioning types ──────────────────────────────────────────────
+// 🤓 Generic "this app needs an AI-backend credential" declaration. Any datum
+//    that sets [b00t.ai_provision] gets a b00t-server API key minted and
+//    injected as env at MCP-install time (see dispatch.rs's install_mcp
+//    functions) — not rust-doc-specific, any future consumer opts in the
+//    same way. scope is an ontology-class:action string b00t-server already
+//    understands (b00t-mcp/src/server_llm.rs::ClassPermission::parse), e.g.
+//    "b00t:EmbeddingModel:execute" or "b00t:ChatModel:execute".
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct AiProvisionConfig {
+    pub scope: String,
+    #[serde(default = "default_inject_key_as")]
+    pub inject_key_as: String,
+    #[serde(default = "default_inject_base_as")]
+    pub inject_base_as: String,
+    #[serde(default = "default_server_url")]
+    pub server_url: String,
+}
+
+fn default_inject_key_as() -> String {
+    "OPENAI_API_KEY".to_string()
+}
+
+fn default_inject_base_as() -> String {
+    "OPENAI_API_BASE".to_string()
+}
+
+fn default_server_url() -> String {
+    "http://127.0.0.1:5273/v1".to_string()
+}
+
 // ── Justfile types ─────────────────────────────────────────────────────
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
