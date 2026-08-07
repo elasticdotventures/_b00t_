@@ -12,14 +12,26 @@ command = "/home/brianh/.local/bin/rustdocs_mcp_server"
 args = ["serde"]
 requires = ["rustdocs_mcp_server"]
 transport = "stdio"
+# 🤓 OPENAI_API_KEY/OPENAI_API_BASE are injected dynamically at install time
+# from [b00t.ai_provision] below, NOT declared statically here (they must be
+# a freshly-minted per-consumer b00t-server key, not a shared secret in git).
+# EMBEDDING_MODEL is static/non-secret, safe to declare directly.
+env = { EMBEDDING_MODEL = "qwen3-embed" }
+
+# Generic AI-backend provisioning (b00t-cli/src/dispatch.rs's
+# resolve_provisioned_command_args_env): mints a b00t-server API key scoped to
+# b00t:EmbeddingModel:execute for this consumer at every `b00t mcp install`,
+# injects it + the gateway base URL as OPENAI_API_KEY/OPENAI_API_BASE.
+[b00t.ai_provision]
+scope = "b00t:EmbeddingModel:execute"
 
 [[b00t.gate]]
 env = "OPENAI_API_BASE"
-hint = "OPENAI_API_BASE required for embeddings API (e.g. http://127.0.0.1:8001/v1)"
+hint = "OPENAI_API_BASE required for embeddings API — auto-provisioned via [b00t.ai_provision] on `b00t mcp install`, this gate just confirms it landed"
 
 [[b00t.gate]]
 env = "OPENAI_API_KEY"
-hint = "OPENAI_API_KEY required for embeddings endpoint"
+hint = "OPENAI_API_KEY required for embeddings endpoint — auto-provisioned via [b00t.ai_provision] on `b00t mcp install`, this gate just confirms it landed"
 
 [[b00t.usage]]
 description = "Build rust-doc MCP server"

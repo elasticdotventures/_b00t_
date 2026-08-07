@@ -815,6 +815,7 @@ pub fn build_dashboard() -> Vec<DashboardLayer> {
     inf.push(check_binary("ollama", "ollama --version"));
     inf.push(check_binary("llama.cpp", "llama-cli --version"));
     inf.push(detect_models());
+    inf.push(detect_candle_cuda());
     inf.push(detect_model_server());
     layers.push(DashboardLayer {
         z: 2,
@@ -1046,6 +1047,59 @@ fn detect_models() -> DashboardItem {
             DashboardStatus::Unknown
         },
         detail: format!("{} GGUF files", count),
+    }
+}
+
+/// Reports whether b00t-candle-serve (native Rust/candle local inference, currently
+/// serving Phi-4 — see phi.ai.tomllmd / phi-4-candle-local.model.ai.tomllmd) is
+/// running CUDA-capable, CPU-only-but-could-be-CUDA, or has no CUDA path at all.
+/// Distinct from the raw hardware `detect_gpu()` item above — this is specifically
+/// about whether the *binary* was actually built with candle's `cuda` feature, not
+/// just whether a GPU exists on the box (see `just phi-candle build-info`).
+fn detect_candle_cuda() -> DashboardItem {
+    let toolkit_present = command_output_with_timeout("nvcc", &["--version"], dashboard_probe_timeout())
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let bin = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".b00t/target/release/b00t-candle-serve");
+    if !bin.exists() {
+        return DashboardItem {
+            label: "Candle CUDA".into(),
+            status: DashboardStatus::Unknown,
+            detail: if toolkit_present {
+                "not built yet (CUDA toolkit present — `just phi-candle build` will use it)".into()
+            } else {
+                "not built yet — `just phi-candle build`".into()
+            },
+        };
+    }
+
+    let build_info = command_output_with_timeout(
+        bin.to_str().unwrap_or("b00t-candle-serve"),
+        &["--print-build-info"],
+        dashboard_probe_timeout(),
+    )
+    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    .unwrap_or_default();
+
+    match build_info.as_str() {
+        "cuda" => DashboardItem {
+            label: "Candle CUDA".into(),
+            status: DashboardStatus::Ready,
+            detail: "b00t-candle-serve built with CUDA — GPU used when free, CPU fallback otherwise".into(),
+        },
+        "cpu" if toolkit_present => DashboardItem {
+            label: "Candle CUDA".into(),
+            status: DashboardStatus::Warning,
+            detail: "CUDA toolkit available but binary is CPU-only — rebuild: just phi-candle build".into(),
+        },
+        _ => DashboardItem {
+            label: "Candle CUDA".into(),
+            status: DashboardStatus::Unknown,
+            detail: "CPU-only (no CUDA toolkit detected on this box)".into(),
+        },
     }
 }
 

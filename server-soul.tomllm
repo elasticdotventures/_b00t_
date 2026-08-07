@@ -29,6 +29,12 @@ port = 8000
 kind = "openai-compat"
 enabled = true
 
+[[backends.local]]
+name = "qwen3-embed"
+port = 8003
+kind = "embeddings"
+enabled = true
+
 [[backends.remote]]
 name = "openai"
 key_env = "OPENAI_API_KEY"

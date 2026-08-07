@@ -1,0 +1,26 @@
+[package]
+name = "b00t-embed-serve"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OpenAI-compatible /v1/embeddings HTTP server wrapping b00t-embed's local Qwen3-Embedding-0.6B candle model — no external API key required"
+
+[[bin]]
+name = "b00t-embed-serve"
+path = "src/main.rs"
+
+[dependencies]
+# 🤓 b00t-embed's Qwen3Composable already does real local candle inference
+#    (see qwen3.rs) — this crate is purely an HTTP layer on top, no model code here.
+b00t-embed = { path = "../b00t-embed" }
+axum = { version = "0.8.4" }
+# 🤓 b00t-embed's own tokio only pulls rt/macros/sync (library, no server needs).
+#    A server needs the full runtime — net for TcpListener, rt-multi-thread since
+#    Qwen3Composable::embed's forward pass is sync/blocking work run per-request.
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
