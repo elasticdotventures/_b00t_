@@ -659,7 +659,16 @@ pub fn crossref_datum_status(profile: &HiveProfile, b00t_path: &str) -> ProfileC
 }
 
 /// Load a named profile from datum dir — prefers
-/// .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
+/// .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml > .agent.toml
+///
+/// 🤓 (#860) `*.agent.toml` datums (e.g. `opencode.agent.toml`) may carry an inline
+///    `[b00t.hive.service]` table instead of a sibling `.hive.toml`. `HiveProfile::from_file`
+///    already only reads the `[b00t]`/`[b00t.hive.*]` shape (serde ignores the surrounding
+///    `[b00t.agent]`/`[b00t.env]`/`[[b00t.usage]]` sections), so an agent.toml is a drop-in
+///    hive-profile source — it's a resolution gap, not a parsing one. The systemd naming
+///    convention is `b00t@<base>-agent.service` for datum file `<base>.agent.toml` (see
+///    `opencode.agent.toml` → `b00t@opencode-agent.service`), so a requested name ending in
+///    "-agent" also probes the suffix-stripped base filename.
 pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
     // 🤓 .tomllmd currently downgrades to the generic .tomllm/TOML handling path.
     let hive_tomllmd_path = datum_dir.join(format!("{}.hive.tomllmd", name));
@@ -667,6 +676,10 @@ pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
     let stack_tomllmd_path = datum_dir.join(format!("{}.stack.tomllmd", name));
     let stack_tomllm_path = datum_dir.join(format!("{}.stack.tomllm", name));
     let hive_toml_path = datum_dir.join(format!("{}.hive.toml", name));
+    let agent_toml_direct_path = datum_dir.join(format!("{}.agent.toml", name));
+    let agent_toml_suffixed_path = name
+        .strip_suffix("-agent")
+        .map(|base| datum_dir.join(format!("{}.agent.toml", base)));
 
     let path = if hive_tomllmd_path.exists() {
         hive_tomllmd_path
@@ -678,13 +691,30 @@ pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
         stack_tomllm_path
     } else if hive_toml_path.exists() {
         hive_toml_path
+    } else if agent_toml_direct_path.exists() {
+        agent_toml_direct_path
+    } else if agent_toml_suffixed_path.as_ref().is_some_and(|p| p.exists()) {
+        agent_toml_suffixed_path.unwrap()
     } else {
         bail!(
-            "profile '{}' not found (tried .hive.tomllmd, .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml)",
+            "profile '{}' not found (tried .hive.tomllmd, .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml, .agent.toml [b00t.hive.service])",
             name
         );
     };
-    HiveProfile::from_file(&path)
+
+    let is_agent_toml = path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .is_some_and(|f| f.ends_with(".agent.toml"));
+    let mut profile = HiveProfile::from_file(&path)?;
+    if is_agent_toml {
+        // agent.toml's own [b00t].name is the agent identity (e.g. "opencode"), not the
+        // hive/systemd profile identifier ("opencode-agent"). Re-stamp to the requested
+        // name so downstream generated unit names (b00t-hive-<name>.service) match what
+        // b00t@<name>.service's PropagatesStopTo expects.
+        profile.name = name.to_string();
+    }
+    Ok(profile)
 }
 
 // ─── State Persistence ────────────────────────────────────────────────────────
@@ -2757,5 +2787,142 @@ hint = "profile with no dependencies"
             "error must mention .stack.tomllm"
         );
         assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
+        assert!(
+            msg.contains(".agent.toml"),
+            "error must mention .agent.toml (#860)"
+        );
+    }
+
+    // ── load_profile .agent.toml resolution tests (#860) ─────────────────────
+
+    /// Minimal fixture mirroring the real `opencode.agent.toml` shape: `[b00t]`
+    /// name/hint + surrounding `[b00t.agent]`/`[b00t.env]`/`[[b00t.usage]]` noise
+    /// that must be ignored, plus an inline `[b00t.hive.service]` table.
+    fn agent_toml_with_inline_service(agent_name: &str) -> String {
+        format!(
+            r#"
+[b00t]
+name = "{agent_name}"
+type = "agent"
+hint = "{agent_name} coding agent — systemd-managed ACP server"
+
+[b00t.agent]
+pid = "{agent_name}-001"
+model = "qwen36-local/ch0nky"
+
+[b00t.hive.service]
+description = "{agent_name} ACP server"
+service_type = "simple"
+restart = "on-failure"
+restart_sec = "10s"
+timeout_start_sec = "60"
+after = ["network.target"]
+environment = ["FOO=bar"]
+exec_start = "{agent_name} serve --port 3000"
+
+[b00t.hive.resources]
+ram_gb = 1
+
+[b00t.env]
+AGENT_ID = "{agent_name}"
+
+[[b00t.usage]]
+description = "Start {agent_name} agent service"
+command = "systemctl --user start b00t@{agent_name}-agent.service"
+"#
+        )
+    }
+
+    #[test]
+    fn test_load_profile_resolves_agent_toml_via_suffix_stripped_base() {
+        // systemd instance "opencode-agent" → datum file "opencode.agent.toml"
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("opencode.agent.toml"),
+            agent_toml_with_inline_service("opencode"),
+        )
+        .unwrap();
+
+        let profile = load_profile("opencode-agent", dir.path())
+            .expect("opencode-agent must resolve via opencode.agent.toml (#860)");
+
+        // Re-stamped to the requested systemd/hive identifier, not the agent's own name.
+        assert_eq!(profile.name, "opencode-agent");
+        let spec = profile
+            .service_spec
+            .expect("[b00t.hive.service] must be extracted from the agent.toml");
+        assert_eq!(spec.exec_start, "opencode serve --port 3000");
+        assert_eq!(spec.restart.as_deref(), Some("on-failure"));
+        assert_eq!(spec.after, vec!["network.target".to_string()]);
+        assert_eq!(spec.environment, vec!["FOO=bar".to_string()]);
+    }
+
+    #[test]
+    fn test_load_profile_resolves_agent_toml_direct_name() {
+        // A profile requested by the bare agent.toml basename (no "-agent" suffix)
+        // also resolves directly.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("moltis.agent.toml"),
+            agent_toml_with_inline_service("moltis"),
+        )
+        .unwrap();
+
+        let profile = load_profile("moltis", dir.path()).unwrap();
+        assert!(profile.service_spec.is_some());
+        assert_eq!(profile.name, "moltis");
+    }
+
+    #[test]
+    fn test_load_profile_still_prefers_hive_toml_over_agent_toml() {
+        // Regression guard: existing suffix precedence must not be disturbed by
+        // adding .agent.toml as a fallback.
+        let dir = tempfile::tempdir().unwrap();
+        let name = "myprofile";
+        write_profile_file(dir.path(), name, ".hive.toml", "hive-toml");
+        std::fs::write(
+            dir.path().join(format!("{}.agent.toml", name)),
+            agent_toml_with_inline_service(name),
+        )
+        .unwrap();
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.hint, "hive-toml", ".hive.toml must still win");
+    }
+
+    #[test]
+    fn test_load_profile_resolves_real_opencode_agent_datum() {
+        // End-to-end proof against the REAL production datum shipped in this repo
+        // (_b00t_/opencode.agent.toml) — the exact repro from issue #860:
+        // `systemctl --user start b00t@opencode-agent.service` failed because the
+        // resolver never looked at *.agent.toml files.
+        let b00t_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("_b00t_");
+        if !b00t_dir.join("opencode.agent.toml").exists() {
+            // Datum not present in this checkout (e.g. sparse worktree) — skip rather
+            // than fail the suite on an environment difference.
+            return;
+        }
+
+        let profile = load_profile("opencode-agent", &b00t_dir)
+            .expect("real opencode.agent.toml must resolve as profile 'opencode-agent'");
+
+        assert_eq!(profile.name, "opencode-agent");
+        let spec = profile
+            .service_spec
+            .expect("real opencode.agent.toml [b00t.hive.service] must be extracted");
+        assert_eq!(
+            spec.exec_start,
+            "opencode serve --port 3000 --model qwen36-local/ch0nky"
+        );
+        assert_eq!(spec.restart.as_deref(), Some("on-failure"));
+        assert!(spec.after.contains(&"network.target".to_string()));
+        assert!(
+            spec.environment
+                .iter()
+                .any(|e| e.starts_with("OPENCODE_CONFIG="))
+        );
     }
 }
