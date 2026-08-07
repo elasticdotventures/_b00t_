@@ -1,0 +1,87 @@
+# b00t stack datum — ROCK 5C Frigate via upstream Rocket + Mesa Teflon
+# @tribal: This is the mainline-kernel Frigate path. It is not an RKNN/RKLLM
+# replacement and does not expose the vendor /dev/rknpu0 ABI.
+
+[b00t]
+name = "rock5c-rocket-teflon-frigate"
+type = "stack"
+status = "gate_0_passed"
+hint = "Frigate object detection on RK3588S NPU through Linux Rocket DRM accel and Mesa Teflon"
+
+[stack]
+host = "rock-5c"
+board = "Radxa ROCK 5C"
+soc = "RK3588S"
+kernel_lane = "current-rockchip64"
+kernel_tested = "6.18.35-current-rockchip64"
+container_runtime = "podman"
+service_manager = "systemd user Quadlet"
+
+[accelerator]
+kernel_driver = "rocket"
+kernel_config = ["CONFIG_DRM_ACCEL=y", "CONFIG_DRM_ACCEL_ROCKET=m"]
+device_node = "/dev/accel/accel0"
+userspace = "Mesa Teflon TFLite delegate"
+frigate_detector = "teflon_tfl"
+first_model_family = "SSDLite MobileDet"
+not_supported_equivalence = "RKNN/RKLLM emulation"
+
+[current_state]
+rocket_module_present = true
+rocket_module_loaded = false
+dev_accel_present = false
+dtb_npu_nodes_present = true
+dtb_npu_nodes_enabled = false
+
+[gate_0]
+description = "Compile and inspect the ROCK 5C Rocket NPU DT overlay without touching /boot"
+command = "just rocket-overlay-build"
+pass = "overlay applies and the generated DTB shows all three NPU cores and IOMMUs status = okay"
+# 🤓 CONFIRMED 2026-08-06 — `just rocket-overlay-build` (newly implemented in
+#    justfile) compiles /home/brianh/homeassistant/boot/rock-5c-rocket-npu-overlay.dts,
+#    applies it via fdtoverlay to a SCRATCH copy of the live DTB (mktemp'd, /boot
+#    untouched, verified via mtime before/after), and confirms all 3 npu@* +
+#    3 iommu@* nodes report status = "okay" in the merged output. Also confirmed
+#    the overlay's fragment target-paths (npu@fdab0000/fdac0000/fdad0000,
+#    iommu@fdab9000/fdaca000/fdada000) exist in the live /proc/device-tree and
+#    currently read status=disabled — exactly what the overlay is meant to flip.
+#    gate_1 (install + reboot) and gate_2 (start Frigate) are NOT run — gate_1
+#    changes live boot config and reboots a host that also serves Home
+#    Assistant/esphome/mosquitto; needs an explicit operator go-ahead first.
+#    `just frigate-rocket-preflight` (also newly implemented) confirms current
+#    reality matches [current_state] below: /dev/dri, /dev/media0, /dev/video1
+#    present, /dev/accel/accel0 absent (expected pre-gate_1).
+
+[gate_1]
+description = "Install patched DTB, reboot, and prove Rocket bound to hardware"
+command = "just rocket-postboot-check"
+pass = "/dev/accel/accel0 exists and kernel log shows rocket probe without fatal errors"
+
+[gate_2]
+description = "Start Frigate through Quadlet with Teflon detector"
+command = "just frigate-start && just frigate-status"
+pass = "frigate.service active and detector logs show teflon_tfl without 'No NPU was detected'"
+
+[gate_1_5]
+description = "Verify host devices expected by Frigate before switching config"
+command = "just frigate-rocket-preflight"
+pass = "/dev/accel/accel0, /dev/dri, /dev/media0, and /dev/video1 exist"
+
+[[references]]
+name = "Linux Rocket accelerator driver"
+url = "https://docs.kernel.org/accel/rocket/index.html"
+
+[[references]]
+name = "Frigate 0.17.2 image tags"
+url = "https://newreleases.io/project/github/blakeblackshear/frigate/release/v0.17.2"
+
+[[references]]
+name = "Frigate mainline RK3588 Teflon discussion"
+url = "https://github.com/blakeblackshear/frigate/discussions/18311"
+
+# b00t:map v1
+# summary: ROCK 5C Frigate stack plan using upstream Rocket DRM accel + Mesa Teflon instead of vendor RKNN
+# tags: rock5c, rk3588s, frigate, rocket, teflon, podman, quadlet, npu
+# tier: ch0nky
+# cmds: just rocket-overlay-build, just rocket-postboot-check, just frigate-start
+# complexity: 6

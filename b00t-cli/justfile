@@ -213,6 +213,10 @@ pre-release-check:
 	echo ""
 	echo "✅ All pre-release checks passed — safe to bump version"
 
+# rpa module — b00t-rpa recipes (Xpra operator display, browser backends).
+# See b00t-cli/rpa.just. Invoke as: just rpa::xpra-start, just rpa::xpra-attach-html5, etc.
+mod rpa
+
 # MCP shortcuts - delegate to b00t.just
 b00t-mcp-chat:
 	just -f ~/.dotfiles/_b00t_/b00t.just mcp-chat

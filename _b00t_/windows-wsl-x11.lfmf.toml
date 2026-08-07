@@ -8,3 +8,13 @@ lesson = "X11 forwarding from WSL to Windows requires setting DISPLAY=127.0.0.1:
 context = "WSL2 environment on Windows 10/11"
 workaround = "export DISPLAY=127.0.0.1:0 && ssh -X brianh@host"
 tags = ["wsl", "x11", "windows", "display"]
+
+# 🤓 2026-08-03: superseded for the b00t-rpa headed-browser case specifically —
+#   raw X11Forwarding is fragile (dies on reconnect, no clipboard, needs a
+#   working Windows X server). See _b00t_/xpra.cli.toml + xpra-rpa.hive.toml:
+#   `just rpa-xpra-attach-html5` needs only an SSH tunnel + any browser tab,
+#   no X server on Windows at all. Raw ssh -X still fine for one-off ad hoc
+#   Linux GUI apps outside the RPA path.
+[lfmf.superseded_by]
+scope = "b00t-rpa headed-browser sessions"
+fix = "xpra-rpa.hive.toml — just rpa-xpra-start / just rpa-xpra-attach-html5"

@@ -1,0 +1,74 @@
+# b00t hive profile: xpra-rpa — Xpra display service scoped to b00t-rpa headed-browser sessions
+#
+# @tribal: this profile is intentionally narrow. b00t-rpa/browser-use launches a
+#   *visible* (non-headless) Chromium so the operator can watch/intervene — see
+#   _b00t_/datums/BROWSER-USE-B00T-PLUGIN.tomllmd. Today that means either raw
+#   X11Forwarding over SSH (broken from WSL2/Windows Terminal per
+#   windows-wsl-x11.lfmf.toml) or flying blind. This profile puts that one
+#   Chromium window behind Xpra instead: reconnect-safe, no DISPLAY-export
+#   dance, and a zero-install HTML5 fallback for the operator.
+#
+# @tribal: NOT a general remote-desktop service — see B00T-BACKLOG task
+#   "hive: general-purpose Xpra display service" for the broader always-on
+#   variant. This profile starts/stops with the RPA session it serves.
+#
+# @tribal: STATUS 2026-08-06 — HTML5 path CONFIRMED WORKING end-to-end
+#   (server-side verified: seamless window renders, real keyboard input
+#   lands in the forwarded app, output renders back through the canvas —
+#   see xpra.cli.toml's @tribal notes for the full verification method and
+#   result). Native xpra-attach from a real WSL2/WSLg operator machine is
+#   still unverified on this pass — that needs the operator's own client,
+#   not just server-side testing. All the bugs/gaps found getting this far
+#   (stale-package client/server bugs, protocol-version skew, missing
+#   xpra-x11/xpra-html5 subpackages, WSLg Wayland-vs-X11 crash, SSH
+#   pubkey-auth gotcha, DPI-mismatch dialog) are memoized in
+#   _b00t_/xpra.cli.toml's @tribal notes — read those before re-deriving
+#   any of this from scratch on a new node.
+
+[b00t]
+name = "xpra-rpa"
+type = "hive"
+hint = "Per-session Xpra seamless server for b00t-rpa headed-browser windows — operator watches via HTML5 tab or native xpra attach"
+
+[resources]
+host = "rock-5c"
+depends_on = ["xpra.cli"]
+
+[[services]]
+name = "xpra-rpa-display"
+cmd = "xpra start :100 --start-child='${B00T_RPA_BROWSER_CMD}' --exit-with-children=yes --bind-tcp=127.0.0.1:10000 --html=on --daemon=no"
+# 🤓 bind-tcp is loopback-only by design — see guards below. Operator reaches
+#    it via SSH port-forward (native attach or HTML5), never a routable address.
+
+[[guards]]
+pattern = { rhai = "cmd.contains(\"xpra\") && cmd.contains(\"bind-tcp=0.0.0.0\")" }
+action = "block"
+message = "🚫 xpra bind-tcp MUST stay loopback (127.0.0.1) — reach it via SSH port-forward, not a routable bind. Home-network exposure of an unauthenticated display server is a real attack surface."
+
+[[guards]]
+pattern = { rhai = "cmd.contains(\"xpra\") && cmd.contains(\"start-desktop\")" }
+action = "warn"
+message = "🦨 xpra-rpa profile is seamless-mode (single app window), not a full desktop. If you need a full desktop session, that's the separate 'general hive GUI service' backlog item, not this profile."
+
+[[usage]]
+description = "Start an Xpra-backed headed browser session for RPA"
+command = "just rpa::xpra-start"
+
+[[usage]]
+description = "Operator attach — zero-install HTML5 client (tunnel + browser tab)"
+command = "just rpa::xpra-attach-html5"
+
+[[usage]]
+description = "Operator attach — native xpra client (better perf/clipboard/seamless windows)"
+command = "just rpa::xpra-attach-native"
+
+[[usage]]
+description = "Stop the session"
+command = "just rpa::xpra-stop"
+
+# b00t:map v1
+# summary: Per-session Xpra seamless display profile for b00t-rpa headed-browser windows; loopback-only bind enforced by guard
+# tags: xpra, rpa, hive, display, operator-experience, seamless, guard
+# tier: ch0nky
+# cmds: just rpa::xpra-start, just rpa::xpra-attach-html5, just rpa::xpra-attach-native, just rpa::xpra-stop
+# complexity: 5

@@ -47,6 +47,14 @@ pub struct CredentialFields {
     /// Environment variable name for the secret
     #[serde(default)]
     pub secret_env: Option<String>,
+    /// Subject this credential is scoped to (e.g. agent/service identity).
+    /// Used by `validate_subject_not_expired` to check attribution callers
+    /// against the credential that authorized them.
+    #[serde(default)]
+    pub subject: Option<String>,
+    /// RFC3339 expiry timestamp. Past this time, the credential is considered expired.
+    #[serde(default)]
+    pub expires_at: Option<String>,
 }
 
 // ── Encryption helpers ────────────────────────────────────────────────────
@@ -117,6 +125,74 @@ mod tests {
         let encrypted = xor_crypt(secret.as_bytes(), &test_key);
         let decrypted = xor_crypt(&encrypted, &test_key);
         assert_eq!(String::from_utf8(decrypted).unwrap(), secret);
+    }
+
+    /// Shared fixture dir for `validate_subject_not_expired` tests. The
+    /// underlying `DATA_DIR_OVERRIDE` is a `OnceLock` (only the first
+    /// `_set_data_dir_for_test` call wins), so every test resolves to the
+    /// same directory and disambiguates via a unique provider name instead.
+    fn test_credential_data_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("b00t-credential-datum-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        _set_data_dir_for_test(dir.clone());
+        dir
+    }
+
+    fn write_test_credential(
+        dir: &std::path::Path,
+        provider: &str,
+        subject: Option<&str>,
+        expires_at: Option<&str>,
+    ) {
+        let subject_line = subject
+            .map(|s| format!("subject = \"{s}\"\n"))
+            .unwrap_or_default();
+        let expires_line = expires_at
+            .map(|s| format!("expires_at = \"{s}\"\n"))
+            .unwrap_or_default();
+        let content = format!(
+            "[b00t]\nname = \"{provider}\"\ntype = \"credential\"\n\n[b00t.credential]\nprovider = \"{provider}\"\n{subject_line}{expires_line}"
+        );
+        std::fs::write(dir.join(format!("{provider}.credential.toml")), content).unwrap();
+    }
+
+    #[test]
+    fn test_validate_subject_not_expired_ok() {
+        let dir = test_credential_data_dir();
+        write_test_credential(
+            &dir,
+            "test-provider-ok",
+            Some("agent-123"),
+            Some("2999-01-01T00:00:00Z"),
+        );
+        let result = validate_subject_not_expired("test-provider-ok", "agent-123");
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    #[test]
+    fn test_validate_subject_not_expired_subject_mismatch() {
+        let dir = test_credential_data_dir();
+        write_test_credential(
+            &dir,
+            "test-provider-mismatch",
+            Some("agent-123"),
+            Some("2999-01-01T00:00:00Z"),
+        );
+        let result = validate_subject_not_expired("test-provider-mismatch", "agent-999");
+        assert!(result.is_err(), "expected Err on subject mismatch");
+    }
+
+    #[test]
+    fn test_validate_subject_not_expired_expired() {
+        let dir = test_credential_data_dir();
+        write_test_credential(
+            &dir,
+            "test-provider-expired",
+            Some("agent-123"),
+            Some("2000-01-01T00:00:00Z"),
+        );
+        let result = validate_subject_not_expired("test-provider-expired", "agent-123");
+        assert!(result.is_err(), "expected Err on expired credential");
     }
 }
 
@@ -203,11 +279,78 @@ fn credential_path(provider: &str) -> std::path::PathBuf {
     b00t_data_dir().join(format!("{}.credential.toml", provider))
 }
 
+static DATA_DIR_OVERRIDE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Override the credential data directory for tests. Mirrors
+/// `store::_set_store_root_for_test`. Only the first call takes effect
+/// (OnceLock); tests should share one directory and use distinct provider
+/// names to avoid collisions.
+#[doc(hidden)]
+pub fn _set_data_dir_for_test(path: std::path::PathBuf) {
+    let _ = DATA_DIR_OVERRIDE.set(path);
+}
+
 fn b00t_data_dir() -> std::path::PathBuf {
+    if let Some(dir) = DATA_DIR_OVERRIDE.get() {
+        return dir.clone();
+    }
     dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".b00t")
         .join("_b00t_")
+}
+
+/// Validate that the credential datum for `provider` is scoped to
+/// `expected_subject` and has not expired.
+///
+/// Used by `store::put_influence` to gate attribution: if a caller passes a
+/// `credential_subject_check` provider, the influence receipt is only
+/// generated when the named credential's `subject` matches the attribution
+/// subject and its `expires_at` (if set) is still in the future.
+///
+/// Errors when: no credential datum exists for `provider`, the credential's
+/// `subject` is set and does not match `expected_subject`, or `expires_at`
+/// is set and is in the past (or fails to parse as RFC3339).
+pub fn validate_subject_not_expired(provider: &str, expected_subject: &str) -> Result<()> {
+    let cred = list_credential_files()?
+        .into_iter()
+        .find(|datum| {
+            datum.b00t.name == provider
+                || datum.b00t.credential.as_ref().map(|c| c.provider.as_str()) == Some(provider)
+        })
+        .and_then(|datum| datum.b00t.credential)
+        .ok_or_else(|| anyhow::anyhow!("no credential datum found for provider '{}'", provider))?;
+
+    if let Some(ref subject) = cred.subject {
+        if subject != expected_subject {
+            anyhow::bail!(
+                "credential subject mismatch for provider '{}': expected '{}', found '{}'",
+                provider,
+                expected_subject,
+                subject
+            );
+        }
+    }
+
+    if let Some(ref expires_at) = cred.expires_at {
+        let expiry = chrono::DateTime::parse_from_rfc3339(expires_at)
+            .with_context(|| {
+                format!(
+                    "credential expires_at for provider '{}' is not valid RFC3339: '{}'",
+                    provider, expires_at
+                )
+            })?
+            .with_timezone(&chrono::Utc);
+        if expiry < chrono::Utc::now() {
+            anyhow::bail!(
+                "credential for provider '{}' expired at {}",
+                provider,
+                expires_at
+            );
+        }
+    }
+
+    Ok(())
 }
 
 fn list_credential_files() -> Result<Vec<CredentialDatum>> {
