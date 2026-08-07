@@ -228,3 +228,22 @@ TLDR: `~/.dotfiles` is bare — never edit or build in it directly. `b00t learn 
 edges (submodule init, shared target-dir, tmpfs contention), and fixes all live in the
 datum — MUST `b00t learn worktree` before the first `git`/`cargo` command against any
 bare/worktree-layout repo rather than rediscovering them the hard way.
+
+## SeaORM Migration Sharp Edges (recorded 2026-08-07)
+
+TLDR: before writing a SeaORM Postgres migration that does `CREATE EXTENSION`/
+`CREATE TYPE`/`ALTER TYPE`, schema-qualify everything (`WITH SCHEMA public`,
+`public.foo`) and join `pg_namespace` on any `pg_type`/`pg_extension` existence check —
+those catalogs are database-wide, so an unqualified check false-positives against a
+same-named object in an unrelated schema (bites hardest under a per-test isolated-schema
+test harness). The non-obvious one: never wrap a `CREATE TYPE` in a
+`DO $$ ... EXCEPTION ... END $$` block if a later migration in the same run does
+`ALTER TYPE ... ADD VALUE` on it and a further-later migration uses that value — the
+`EXCEPTION` clause implicitly opens a Postgres subtransaction, which breaks Postgres's
+"enum value usable in this transaction only if its type was also created in this
+transaction" exemption, producing `unsafe use of new value` (SQLSTATE 55P04) even with
+zero real concurrency. A serializing `pg_advisory_xact_lock` around the shared-object
+section removes the actual concurrent-test-thread race without needing exception
+handling at all. Verify by recreating a genuinely fresh DB and running real tests
+(including a single isolated `--test-threads=1 --exact` run to rule out a race before
+assuming one) — not by code inspection alone.
