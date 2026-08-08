@@ -1886,9 +1886,6 @@ dependencies = [
 [[package]]
 name = "b00t-reflect-types"
 version = "0.10.3"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "b00t-stt-serve"
