@@ -11,6 +11,9 @@
 set -euo pipefail
 
 INPUT="${B00T_HOOK_INPUT:-$(cat)}"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${HOOK_DIR}/../../../scripts/lib/worktree-env.sh"
 TOOL="$(     echo "$INPUT" | jq -r '.tool_name           // ""' 2>/dev/null)"
 COMMAND="$(  echo "$INPUT" | jq -r '.tool_input.command  // ""' 2>/dev/null)"
 FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null)"
@@ -33,9 +36,7 @@ if [ "$TOOL" = "Bash" ] && echo "$COMMAND" | grep -qE 'git\s+commit\b'; then
         echo "✅ b00t: cargo test passed" >&2
 
     elif [ -f "$CWD/package.json" ]; then
-        PKG_MGR="npm"
-        [ -f "$CWD/pnpm-lock.yaml" ] && PKG_MGR="pnpm"
-        [ -f "$CWD/yarn.lock" ]      && PKG_MGR="yarn"
+        PKG_MGR="$(b00t_detect_package_manager "$CWD")"
         echo "🧪 b00t: running $PKG_MGR test after commit..." >&2
         TEST_OUT="$(cd "$CWD" && $PKG_MGR test --passWithNoTests 2>&1 | tail -20 || true)"
         if echo "$TEST_OUT" | grep -qiE 'FAIL|ERROR|failed'; then
