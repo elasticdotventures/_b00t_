@@ -254,6 +254,20 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     if args.vetted {
         use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
 
+        // The `systemd-run` sandbox provider runs `cmd_str` through `sh -c`
+        // using the process's own cwd, entirely bypassing `vetted_exec_path`
+        // below (which only the `direct` provider's spawn sites consult).
+        // Reject rather than silently execute an unverified path — this is
+        // an unimplemented combination, not a safe default.
+        if args.sandbox != "direct" {
+            bail!(
+                "--vetted only supports --sandbox direct today (got '{}'); \
+                 the systemd-run provider does not yet consult the verified \
+                 vetted-script path",
+                args.sandbox
+            );
+        }
+
         if args.command.len() != 1 {
             eprintln!("🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args");
             append_audit_log(
