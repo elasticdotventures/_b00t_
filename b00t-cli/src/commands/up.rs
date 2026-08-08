@@ -61,6 +61,22 @@ pub struct UpArgs {
     /// Skip pre-flight system validation (use when running in CI/degraded env)
     #[clap(long, help = "Skip system readiness check before launching agent")]
     pub no_check: bool,
+
+    /// Diagnose: run the same check as --check, auto-install what's missing via
+    /// b00t datum installers, then re-check. Exits without launching the agent loop.
+    #[clap(
+        long,
+        help = "Check + auto-install missing tools (b00t-memoized) + re-check, then exit"
+    )]
+    pub doctor: bool,
+
+    /// Install every tool the system check flagged as missing, using only
+    /// b00t-memoized datum installers (never raw pip/npm/curl in b00t itself).
+    #[clap(
+        long,
+        help = "Install missing tools found by the system check using b00t datum installers"
+    )]
+    pub install: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,7 +138,15 @@ impl UpArgs {
 
         // System check mode: `b00t up --check`
         if self.check {
-            return self_up_check();
+            return self_up_check().map(|_| ());
+        }
+
+        // Self-heal mode: `b00t up --doctor` / `b00t up --install`
+        // Both run the same check→install→re-check sequence; --doctor is the
+        // diagnose-and-treat entry point, --install is the explicit fixer an
+        // operator is told to run when --check reports issues.
+        if self.doctor || self.install {
+            return self_up_heal(self.doctor);
         }
 
         // Repo onboarding mode: `b00t up --repo [path]`
@@ -718,8 +742,127 @@ fn self_upgrade() -> Result<()> {
     Ok(())
 }
 
-/// System readiness check: validates tools, git, _b00t_/, env
-fn self_up_check() -> Result<()> {
+/// Maps a `self_up_check()` failure label to the b00t datum name that can
+/// fix it, if one exists. `None` means there's no b00t-memoized installer
+/// for that check (e.g. it's b00t itself, or the datum deliberately leaves
+/// the choice of package manager to the operator — see node.cli.toml).
+fn datum_name_for_check(label: &str) -> Option<&'static str> {
+    match label {
+        "git" => Some("git"),
+        "rustc" => Some("rustc"),
+        "python3" => Some("python"),
+        "node" => Some("node"),
+        "container runtime" => Some("podman"),
+        _ => None,
+    }
+}
+
+/// Resolve the datum directory using the same discovery order as
+/// `self_up_check()`: project-local `_b00t_/`-style dir first, else the
+/// global `_B00T_Path` (default `~/.dotfiles/_b00t_`).
+fn resolve_datum_dir() -> String {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let home = dirs::home_dir();
+    let is_home = home.as_deref() == Some(cwd.as_path());
+
+    if !is_home {
+        let b00t_dirs: &[&str] = &["_b00t_", "._b00t_", ".b00t/_b00t_"];
+        if let Some(dir) = b00t_dirs.iter().find(|d| cwd.join(d).exists()) {
+            return cwd.join(dir).to_string_lossy().to_string();
+        }
+    }
+
+    let b00t_path =
+        std::env::var("_B00T_Path").unwrap_or_else(|_| "~/.dotfiles/_b00t_".to_string());
+    shellexpand::tilde(&b00t_path).into_owned()
+}
+
+/// Self-heal: check → install missing tools via b00t datums → re-check.
+/// Shared implementation for `b00t up --doctor` and `b00t up --install`.
+/// Never shells out to apt/pip/npm/curl directly — only ever calls
+/// `install_datum()`, so every fix is a b00t-memoized, arch-aware installer
+/// (rustup, apt via podman.cli.toml, etc). Tools whose datum has no install
+/// command (git, node — see their .cli.toml tribal notes) are reported, not
+/// force-installed, so aarch64 boxes never get an x86_64-only script run.
+///
+/// `--doctor` is the one-stop "check + fix everything" entrypoint: on top of
+/// this tool-install sweep it also runs `b00t doctor check --fix`, which
+/// covers a different, non-overlapping surface (submodule drift, missing
+/// vendor binaries) that `self_up_check()` doesn't look at. `--install`
+/// stays narrowly scoped to just the tool-install sweep — it's what
+/// `--check`'s failure hint points operators at.
+fn self_up_heal(is_doctor: bool) -> Result<()> {
+    println!(
+        "🥾 b00t up --{} (check → install → re-check)\n",
+        if is_doctor { "doctor" } else { "install" }
+    );
+
+    let missing = self_up_check()?;
+    let datum_dir = resolve_datum_dir();
+
+    if missing.is_empty() {
+        println!("\n✅ nothing to fix — system already satisfies checks");
+    } else {
+        println!(
+            "\n🔧 attempting to fix {} issue(s) via b00t datums ({})...\n",
+            missing.len(),
+            datum_dir
+        );
+
+        for label in &missing {
+            match datum_name_for_check(label) {
+                Some(name) => {
+                    println!("── {} (datum: {}) ──", label, name);
+                    if let Err(e) =
+                        crate::commands::install::install_datum(&datum_dir, name, false)
+                    {
+                        eprintln!("  ⚠️  {} install failed (non-fatal): {}", name, e);
+                    }
+                }
+                None => {
+                    println!(
+                        "── {} ── ⏭️  no b00t-memoized installer; install manually",
+                        label
+                    );
+                }
+            }
+        }
+    }
+
+    if is_doctor {
+        println!(
+            "\n🩺 running 'b00t doctor check --fix' (submodule drift + vendor binaries)...\n"
+        );
+        let doctor_args = crate::commands::doctor_cmd::DoctorCommands::Check {
+            json: false,
+            probe: None,
+            fix: true,
+        };
+        if let Err(e) = crate::commands::doctor_cmd::handle_doctor_command(&doctor_args, &datum_dir)
+        {
+            eprintln!("  ⚠️  b00t doctor check --fix failed (non-fatal): {}", e);
+        }
+    }
+
+    println!("\n🔁 re-checking system state...\n");
+    let still_missing = self_up_check()?;
+    if still_missing.is_empty() {
+        println!("\n✅ b00t up --{}: all checks now pass", if is_doctor { "doctor" } else { "install" });
+    } else {
+        println!(
+            "\n⚠️  b00t up --{}: still missing: {}",
+            if is_doctor { "doctor" } else { "install" },
+            still_missing.join(", ")
+        );
+        println!("   No b00t-memoized installer for these — install manually per each tool's docs.");
+    }
+    Ok(())
+}
+
+/// System readiness check: validates tools, git, _b00t_/, env.
+/// Returns the labels of any checks that came back "not found" so callers
+/// (`--doctor`, `--install`) can drive a targeted fix without re-parsing output.
+fn self_up_check() -> Result<Vec<String>> {
     let cwd = std::env::current_dir().context("current dir")?;
     let home = dirs::home_dir();
     let is_home = home.as_deref() == Some(cwd.as_path());
@@ -781,6 +924,7 @@ fn self_up_check() -> Result<()> {
     }
 
     // ── Tools ────────────────────────────────────────────────────────
+    let mut missing: Vec<String> = Vec::new();
     let checks: &[(&str, &str, bool)] = &[
         ("b00t-cli", "b00t-cli", true),
         ("git", "git", false),
@@ -791,16 +935,31 @@ fn self_up_check() -> Result<()> {
     ];
     for (label, bin, use_which) in checks {
         print!("  {:<20} ", format!("{} ...", label));
-        if *use_which {
+        let found = if *use_which {
             match which::which(bin) {
-                Ok(p) => println!("✅ {}", p.display()),
-                Err(_) => println!("⚠️  not found"),
+                Ok(p) => {
+                    println!("✅ {}", p.display());
+                    true
+                }
+                Err(_) => {
+                    println!("⚠️  not found");
+                    false
+                }
             }
         } else {
             match which_version(bin) {
-                Some(v) => println!("✅ v{}", v),
-                None => println!("⚠️  not found"),
+                Some(v) => {
+                    println!("✅ v{}", v);
+                    true
+                }
+                None => {
+                    println!("⚠️  not found");
+                    false
+                }
             }
+        };
+        if !found {
+            missing.push(label.to_string());
         }
     }
 
@@ -815,6 +974,7 @@ fn self_up_check() -> Result<()> {
     };
     if runtime == "none" {
         println!("⚠️  not found (podman/docker)");
+        missing.push("container runtime".to_string());
     } else {
         println!("✅ {}", runtime);
     }
@@ -832,8 +992,17 @@ fn self_up_check() -> Result<()> {
         println!("     Run 'b00t up --repo .' to onboard this repo.");
     }
 
-    println!("\n✅ System check complete");
-    Ok(())
+    if missing.is_empty() {
+        println!("\n✅ System check complete");
+    } else {
+        println!(
+            "\n⚠️  System check found {} issue(s): {}",
+            missing.len(),
+            missing.join(", ")
+        );
+        println!("   Run 'b00t up --install' to auto-install using b00t's memoized datum installers.");
+    }
+    Ok(missing)
 }
 
 fn which_version(bin: &str) -> Option<String> {
@@ -928,6 +1097,8 @@ mod tests {
             self_: false,
             check: false,
             no_check: false,
+            doctor: false,
+            install: false,
         };
         assert_eq!(args.tool, "claude");
         assert_eq!(args.max_iter, 10);
