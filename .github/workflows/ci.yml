@@ -39,6 +39,14 @@ jobs:
       image: ghcr.io/elasticdotventures/ci-occt:latest
     env:
       OCCT_ROOT: /opt/occt
+    # 🤓 Container jobs don't get the `bash -eo pipefail` default that host
+    #    (`runs-on: ubuntu-latest`) jobs get — Actions falls back to plain
+    #    `sh` (dash) inside a container unless told otherwise, which chokes
+    #    on `set -o pipefail` in every `run:` step below. bash IS present in
+    #    this image; Actions just doesn't assume it without this.
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout 🥾
         uses: actions/checkout@v4
