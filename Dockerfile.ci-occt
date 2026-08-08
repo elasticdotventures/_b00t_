@@ -43,6 +43,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
+# jq: same story as python3 above — ubuntu-latest ships it, this image
+# didn't. b00t.sh gates several functions (restore_task_state among them)
+# on `command -v jq`, so its absence doesn't error, it silently no-ops —
+# which is exactly what made b00t-cli::checkpoint_restore_test fail here
+# (tasks.json never got written, not because of a visible error).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
 # Pinned to the exact release cadrum 0.8.13's build.rs requests
 # (OCCT_VERSION=V8_0_0, BUILD_REVISION=rev3 — see cadrum's build.rs). Bump
 # OCCT_TAG/OCCT_SHA256 together if/when b00t-cad's cadrum dependency moves
