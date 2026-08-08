@@ -57,6 +57,16 @@ jobs:
           #    Init only what the workspace actually needs, explicitly.
           submodules: false
 
+      # 🤓 Container-job-only wrinkle: on the host runner, actions/checkout's
+      #    own safe.directory handling is enough. Inside a container the
+      #    checked-out tree is owned by a different uid than git expects, so
+      #    a *separate* git invocation (this step's `git submodule update`)
+      #    hits "detected dubious ownership" even though Checkout itself
+      #    just succeeded. `*` covers the submodule paths too, which get
+      #    their own nested .git dirs below.
+      - name: Mark workspace as git-safe (container job)
+        run: git config --global --add safe.directory '*'
+
       - name: Init workspace-required vendor submodules
         run: |
           set -euo pipefail
