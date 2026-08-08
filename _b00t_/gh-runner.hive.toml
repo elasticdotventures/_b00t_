@@ -72,6 +72,12 @@ spec:
     securityContext:
       runAsNonRoot: true
       runAsUser: 1001
+      # Deliberately false. An abandoned stash on feat/gh-runner-podman-socket-passthrough
+      # once set this to true + added capabilities.add: [DAC_OVERRIDE, SETGID, SETUID],
+      # presumably to fix podman-socket permission errors for the rootless runner user —
+      # but it was never validated or merged, and we don't have evidence it's actually
+      # required. If the runner hits podman-socket permission failures, this is the
+      # first thing to revisit — but don't loosen it speculatively.
       allowPrivilegeEscalation: false
   volumes:
   - name: work
