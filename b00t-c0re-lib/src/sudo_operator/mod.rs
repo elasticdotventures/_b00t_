@@ -7,6 +7,7 @@
 pub mod checkpoint;
 pub mod governance;
 pub mod verdict;
+pub mod vetted;
 
 pub use checkpoint::{checkpoint_system_state, CheckpointRef};
 pub use governance::{SudoDisposition, SudoGrantConstraint, SudoGrantEvidence, SudoReviewEvent};
