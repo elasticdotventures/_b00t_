@@ -75,13 +75,19 @@ pub struct ExecArgs {
         help = "Commit hash supporting --justification (repeat for multiple); their `git show --stat` grounds the adversarial review"
     )]
     pub cites: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Treat this invocation as a vetted-script grant request: the single command argument must be a path registered in _b00t_/vetted-scripts.toml whose content matches origin/main. No --justification/--cites needed. See PRD-SUDO-OPERATOR-GOVERNANCE's vetted-script extension."
+    )]
+    pub vetted: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 struct AuditLogEntry {
     ts: String,     // ISO8601
     cmd: String,    // full command string
-    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background" | "sudo-granted" | "sudo-denied" | "sudo-escalated"
+    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background" | "sudo-granted" | "sudo-denied" | "sudo-escalated" | "sudo-vetted-granted" | "sudo-vetted-denied"
     guard_msg: Option<String>,
     pid: Option<u32>, // child PID if executed
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -295,6 +301,75 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                             },
                         );
                         eprintln!("   Not executed. Resolve the escalation and re-run.");
+                        std::process::exit(1);
+                    }
+                    SudoDisposition::VettedGrant { .. } => {
+                        unreachable!(
+                            "adversarial_review() only ever returns Grant/Deny/Escalate; \
+                             VettedGrant is produced solely by check_vetted() on the --vetted path"
+                        )
+                    }
+                }
+            } else if args.vetted {
+                use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
+
+                let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+                if args.command.len() != 1 {
+                    eprintln!("🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args");
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "sudo-vetted-denied".into(),
+                            guard_msg: Some(message.clone()),
+                            pid: None,
+                            ..Default::default()
+                        },
+                    );
+                    std::process::exit(1);
+                }
+
+                match check_vetted(&project_root, &args.command[0]) {
+                    VettedResult::Vetted { blob_hash } => {
+                        let evidence = SudoGrantEvidence::new_vetted(&args.command[0], &blob_hash);
+                        eprintln!(
+                            "✅ SUDO-VETTED-GRANT: {} blob={} evidence={}",
+                            args.command[0], blob_hash, evidence.content_hash
+                        );
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "sudo-vetted-granted".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                justification: None,
+                                cited_commits: Vec::new(),
+                                sudo_disposition: Some(evidence.disposition.clone()),
+                                checkpoint_ref: None,
+                            },
+                        );
+                        // fall through to execution below
+                    }
+                    VettedResult::NotVetted { reason } => {
+                        eprintln!("🚫 SUDO-VETTED-DENY: {}", reason);
+                        append_audit_log(
+                            &log_path,
+                            &AuditLogEntry {
+                                ts: Utc::now().to_rfc3339(),
+                                cmd: cmd_str.clone(),
+                                result: "sudo-vetted-denied".into(),
+                                guard_msg: Some(message.clone()),
+                                pid: None,
+                                justification: None,
+                                cited_commits: Vec::new(),
+                                sudo_disposition: None,
+                                checkpoint_ref: None,
+                            },
+                        );
                         std::process::exit(1);
                     }
                 }
