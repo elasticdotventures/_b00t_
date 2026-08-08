@@ -1650,6 +1650,128 @@ pub struct TaskUpdateCommand {
 }
 impl_mcp_tool!(TaskUpdateCommand, "task_update", ["task", "update"], positionals: ["id"]);
 
+/// List registered justfile datums and recipe counts
+#[derive(Parser, Clone)]
+pub struct JustfileListCommand {
+    #[arg(long, help = "Output as JSON")]
+    pub json: bool,
+}
+impl_mcp_tool!(JustfileListCommand, "justfile_list", ["justfile", "list"]);
+
+/// Query recipes for a registered justfile datum
+#[derive(Parser, Clone)]
+pub struct JustfileQueryCommand {
+    #[arg(help = "Justfile datum name")]
+    pub name: String,
+    #[arg(long, help = "Filter recipe names/docs/dependencies by substring")]
+    pub recipe: Option<String>,
+    #[arg(long, help = "Output as JSON")]
+    pub json: bool,
+}
+impl_mcp_tool!(JustfileQueryCommand, "justfile_query", ["justfile", "query"], positionals: ["name"]);
+
+/// Validate a registered justfile datum through just's AST parser
+#[derive(Parser, Clone)]
+pub struct JustfileValidateCommand {
+    #[arg(help = "Justfile datum name")]
+    pub name: String,
+}
+impl_mcp_tool!(JustfileValidateCommand, "justfile_validate", ["justfile", "validate"], positionals: ["name"]);
+
+/// Emit registered justfile paths for strict just-mcp startup
+#[derive(Parser, Clone)]
+pub struct JustfileRegistryCommand {
+    #[arg(long, default_value = "args", help = "Output format: args|lines|json")]
+    pub format: String,
+}
+impl_mcp_tool!(
+    JustfileRegistryCommand,
+    "justfile_registry",
+    ["justfile", "registry"]
+);
+
+/// Run a recipe from a registered justfile datum
+#[derive(Parser, Clone)]
+pub struct JustfileRunCommand {
+    #[arg(help = "Justfile datum name")]
+    pub name: String,
+    #[arg(help = "Recipe name")]
+    pub recipe: String,
+    #[arg(long, help = "Additional recipe arguments")]
+    pub args: Vec<String>,
+}
+
+impl McpReflection for JustfileRunCommand {
+    fn mcp_tool_name() -> String {
+        "justfile_run".to_string()
+    }
+
+    fn command_path() -> Vec<String> {
+        vec!["justfile".to_string(), "run".to_string()]
+    }
+
+    fn generate_json_schema() -> Map<String, Value> {
+        let mut schema = Map::new();
+        let mut properties = Map::new();
+        schema.insert("type".to_string(), json!("object"));
+        properties.insert(
+            "name".to_string(),
+            json!({"type": "string", "description": "Justfile datum name"}),
+        );
+        properties.insert(
+            "recipe".to_string(),
+            json!({"type": "string", "description": "Recipe name"}),
+        );
+        properties.insert(
+            "args".to_string(),
+            json!({"type": "array", "items": {"type": "string"}, "description": "Additional recipe arguments"}),
+        );
+        schema.insert("properties".to_string(), Value::Object(properties));
+        schema.insert("required".to_string(), json!(["name", "recipe"]));
+        schema
+    }
+}
+
+impl McpExecutor for JustfileRunCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let name = params
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("name is required"))?;
+        let recipe = params
+            .get("recipe")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("recipe is required"))?;
+
+        let mut all_args = Self::command_path();
+        all_args.push(name.to_string());
+        all_args.push(recipe.to_string());
+        if let Some(extra) = params.get("args") {
+            match extra {
+                Value::Array(items) => {
+                    for item in items {
+                        all_args.push(item.as_str().unwrap_or("").to_string());
+                    }
+                }
+                Value::String(item) if !item.is_empty() => all_args.push(item.clone()),
+                _ => {}
+            }
+        }
+
+        let output = std::process::Command::new("b00t-cli")
+            .args(&all_args)
+            .output()
+            .map_err(|e| anyhow::anyhow!("Failed to execute b00t-cli: {}", e))?;
+
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("b00t-cli command failed: {}", stderr)
+        }
+    }
+}
+
 // ── Autodiscovery Proxy ──────────────────────────────────────────────────────
 // 🤓 54 tools hidden here; agent discovers via b00t_discover, executes via b00t_exec
 // Sub-agents receive only 5 surface tools → lean context, sandboxed capability
@@ -1771,6 +1893,31 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
         name: "b00t_agent_progress",
         description: "Report task progress",
         subcommand: "agent progress",
+    },
+    ToolCatalogEntry {
+        name: "justfile_list",
+        description: "List registered justfile modules and recipe counts",
+        subcommand: "justfile list",
+    },
+    ToolCatalogEntry {
+        name: "justfile_query",
+        description: "Query registered recipes by justfile module",
+        subcommand: "justfile query",
+    },
+    ToolCatalogEntry {
+        name: "justfile_validate",
+        description: "Validate a registered justfile through just AST",
+        subcommand: "justfile validate",
+    },
+    ToolCatalogEntry {
+        name: "justfile_registry",
+        description: "Emit strict just-mcp --allow registry from justfile datums",
+        subcommand: "justfile registry",
+    },
+    ToolCatalogEntry {
+        name: "justfile_run",
+        description: "Run a recipe from a registered justfile module",
+        subcommand: "justfile run",
     },
     ToolCatalogEntry {
         name: "b00t_agent_complete",
@@ -2206,6 +2353,12 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<TaskAddCommand>()
         .register::<TaskDoneCommand>()
         .register::<TaskUpdateCommand>()
+        // Justfile capability discovery — wraps b00t-cli justfile registry/query
+        .register::<JustfileListCommand>()
+        .register::<JustfileQueryCommand>()
+        .register::<JustfileValidateCommand>()
+        .register::<JustfileRegistryCommand>()
+        .register::<JustfileRunCommand>()
         // Pipeline lifecycle tool — GH #717/#736
         .register::<BPipelineCommand>();
     // ACP Hive coordination tools
@@ -2644,6 +2797,27 @@ mod tests {
     fn test_pipeline_tool_in_catalog() {
         let has_entry = TOOL_CATALOG.iter().any(|e| e.name == "b00t_pipeline");
         assert!(has_entry, "b00t_pipeline must be in TOOL_CATALOG");
+    }
+
+    #[test]
+    fn test_justfile_tools_registered_and_discoverable() {
+        let full = create_full_mcp_registry();
+        let tools = full.get_tools();
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+        assert!(names.contains(&"justfile_list"));
+        assert!(names.contains(&"justfile_query"));
+        assert!(names.contains(&"justfile_validate"));
+        assert!(names.contains(&"justfile_registry"));
+        assert!(names.contains(&"justfile_run"));
+
+        assert!(
+            TOOL_CATALOG.iter().any(|e| e.name == "justfile_query"),
+            "justfile_query must be discoverable through b00t_discover"
+        );
+        assert!(
+            TOOL_CATALOG.iter().any(|e| e.name == "justfile_run"),
+            "justfile_run must be discoverable through b00t_discover"
+        );
     }
 
     #[test]

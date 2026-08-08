@@ -1,0 +1,106 @@
+# GCP — Google Cloud Platform (as a dstack backend)
+#
+# Not used directly by b00t-cli's ComputeProvider trait — GCP is wired in as
+# a dstack backend (see PROVIDER-DSTACK.provider.toml), configured in
+# ~/.dstack/server/config.yml. This datum records GCP-specific facts
+# discovered while standing that up for the mesh3d pipeline (2026-08-02),
+# not general GCP usage.
+#
+# Auth: `type: default` creds (GCPDefaultCreds in dstack's own
+#   core/backends/gcp/models.py) — reads Application Default Credentials
+#   (~/.config/gcloud/application_default_credentials.json), populated via
+#   `gcloud auth application-default login` (NOT `gcloud auth login` — that
+#   populates a different token store the ADC path doesn't read). ADC is a
+#   portable JSON refresh-token file — copying it between hosts works fine,
+#   no per-host binding.
+# Project: promptexecution (org 182343552845, elastic.ventures)
+# Billing account: "EV Amex" (010CF0-14B757-AF79DC), AUD, billingEnabled=true
+
+[b00t]
+name        = "PROVIDER-GCP"
+type        = "api"
+hint        = "GCP as a dstack backend — project promptexecution; Sydney has real GPU hardware, Melbourne has none on any cloud"
+type_tags   = ["provider", "gcp", "cloud", "dstack-backend", "gpu"]
+
+[resource]
+name        = "Google Cloud Platform"
+project_id  = "promptexecution"
+console_url = "https://console.cloud.google.com"
+
+# 🤓 quota != availability. NVIDIA_L4_GPUS and NVIDIA_V100_GPUS both show
+# limit=1 in every region we checked (us-central1, australia-southeast1,
+# australia-southeast2) but NO zone in Sydney actually has a G2 (L4) machine
+# type orderable, and V100 has no matching accelerator in any Sydney zone
+# either — verified via `machineTypes.get`/`acceleratorTypes.list`, not
+# assumed from the quota number. Only trust `acceleratorTypes.list` per
+# zone, never regional quota, when picking a GPU to target.
+[resource.regions.australia-southeast1]
+display_name = "Sydney"
+status = "has real GPU hardware"
+[resource.regions.australia-southeast1.zones.australia-southeast1-a]
+accelerators = ["nvidia-tesla-t4", "nvidia-tesla-t4-vws", "nvidia-tesla-p4", "nvidia-tesla-p4-vws"]
+[resource.regions.australia-southeast1.zones.australia-southeast1-b]
+accelerators = ["nvidia-tesla-p100", "nvidia-tesla-p100-vws", "nvidia-tesla-p4", "nvidia-tesla-p4-vws"]
+[resource.regions.australia-southeast1.zones.australia-southeast1-c]
+accelerators = ["nvidia-h100-80gb", "nvidia-h100-mega-80gb", "nvidia-tesla-t4", "nvidia-tesla-t4-vws"]
+
+[resource.regions.australia-southeast2]
+display_name = "Melbourne"
+status = "ZERO GPU accelerators of any kind in any zone (a/b/c all empty) — confirmed via acceleratorTypes.list, not a quota issue, GPU hardware simply isn't deployed there. Also true on AWS (ap-southeast-4 offers zero GPU instance types). Do not target Melbourne for GPU workloads on any cloud."
+
+[[resource.incidents]]
+date = "2026-08-02"
+summary = "Region-wide T4 capacity exhaustion in australia-southeast1 (Sydney)"
+detail = """
+Real dstack task submission (mesh-runner:v6, T4 GPU) hit NoCapacityError()
+across every N1+T4 machine shape dstack tried (n1-highmem-2, n1-standard-4,
+n1-highmem-4, n1-standard-8, n1-highmem-8, n1-highcpu-16, n1-standard-16,
+n1-highmem-16) over 10+ minutes, in both zones -a and -c. Cloud Audit Log
+confirmed the underlying GCP error: ZONE_RESOURCE_POOL_EXHAUSTED. This is a
+real, external, transient capacity constraint — not a config/quota/org-policy
+issue on our side. No ETA on when it clears. Practical fallback used:
+AWS ap-southeast-2 (Sydney) as an alternate dstack backend — confirmed real
+g4dn/g5/g6 GPU instance types offered there, a wholly separate capacity pool.
+"""
+
+[[resource.incidents]]
+date = "2026-08-02"
+summary = "Real root blocker found: project-wide GPUS_ALL_REGIONS quota = 0"
+detail = """
+The Sydney capacity exhaustion above masked a deeper, project-level problem:
+promptexecution's GPUS_ALL_REGIONS quota is 0 — a global cap that gates every
+per-region per-SKU quota (the T4=1/L4=1 numbers recorded above are moot until
+this is raised). Only surfaced once a region with real available hardware was
+tried (asia-southeast1/Singapore — confirmed real T4+L4+A100+H100 across all
+3 zones, much better-equipped than Sydney): the launch got past capacity
+checks and hit `403 FORBIDDEN QUOTA_EXCEEDED: Quota 'GPUS_ALL_REGIONS'
+exceeded. Limit: 0.0 globally.` instead.
+Increase requested via Cloud Quotas API directly (gcloud alpha quotas CLI
+uses the gcloud CLI's own token store, which was separately expired — used
+cloudquotas.googleapis.com REST with the ADC token instead, after enabling
+the Cloud Quotas API on the project and passing `X-Goog-User-Project` +
+`contactEmail` in the body, both required):
+  POST https://cloudquotas.googleapis.com/v1/projects/{project}/locations/global/quotaPreferences?quotaPreferenceId=<id>
+  body: {dimensions:{}, quotaConfig:{preferredValue:"N"}, service:"compute.googleapis.com",
+         quotaId:"GPUS-ALL-REGIONS-per-project", contactEmail:"...", justification:"..."}
+Request: projects/promptexecution/locations/global/quotaPreferences/mesh3d-gpu-quota-increase,
+status reconciling=true (Google's automated review, not a manual ticket —
+contrast with Azure's outright QuotaNotAvailableForResource rejection for the
+equivalent ask). Once cleared, retry against asia-southeast1/L4 first (better
+hardware availability than Sydney).
+"""
+
+[[resource.usages]]
+description = "Get a live ADC access token for direct API calls (bypass gcloud CLI's own separate, often-stale token)"
+command = "gcloud auth application-default print-access-token"
+
+[[resource.usages]]
+description = "Check real per-zone GPU hardware availability (not quota) before targeting a region"
+command = "curl -s -H \"Authorization: Bearer $(gcloud auth application-default print-access-token)\" 'https://compute.googleapis.com/compute/v1/projects/<project>/zones/<zone>/acceleratorTypes'"
+
+# b00t:map v1
+# summary: GCP as a dstack backend — project promptexecution; Sydney has real GPU hardware (T4/H100), Melbourne has none on any cloud; quota != availability
+# tags: provider, gcp, cloud, dstack-backend, gpu, sydney, melbourne
+# tier: frontier
+# cmds: gcloud auth application-default login, gcloud auth application-default print-access-token
+# complexity: 3

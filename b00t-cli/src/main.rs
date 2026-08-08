@@ -2409,6 +2409,8 @@ async fn main() {
                 match B00tContext::current() {
                     Ok(ctx) => {
                         let health = b00t_cli::commands::doctor_cmd::health_json();
+                        // #962: local model server state — running/ready/feasible/unavailable
+                        let model_server_status = whoami::model_server_status();
                         let output = serde_json::json!({
                             "agent": ctx.agent,
                             "pid": ctx.pid,
@@ -2422,6 +2424,7 @@ async fn main() {
                             "timestamp": ctx.timestamp,
                             "role": role.clone().or_else(|| std::env::var("_B00T_ROLE").ok()),
                             "health": health,
+                            "model_server_status": model_server_status.as_str(),
                         });
                         println!("{}", serde_json::to_string_pretty(&output).unwrap());
                     }
@@ -2887,6 +2890,13 @@ async fn main() {
                 if let Err(e) =
                     b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
                 {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            // `lfmf status <tool>` — cross-reference lesson-store health
+            // (fail/skip counts, error rate, latest failure) for one tool.
+            } else if tool == "status" {
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_status(&lesson) {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }

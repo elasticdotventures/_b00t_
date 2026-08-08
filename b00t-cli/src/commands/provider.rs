@@ -25,6 +25,12 @@ use runpod_sdk::model::{
 /// Matches the gate style already used by `[b00t.hive.resources.gate]` profiles.
 const LOCAL_GPU_FREE_MB_GATE: u32 = 4000;
 
+/// Default `--memory`/`--memory-swap` cap for local batch containers, overridable
+/// via `B00T_LOCAL_MEMORY_LIMIT`. Required by sm3lly's b00t-limits-hook (shared-node
+/// protocol, added after a 2026-07-17 uncapped-container crash) — podman run without
+/// a memory cap is hard-rejected at the OCI prestart hook.
+const LOCAL_MEMORY_LIMIT_DEFAULT: &str = "16g";
+
 // ── Public types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1043,6 +1049,13 @@ fn local_batch_args(name: &str, runtime: &ContainerRuntime, spec: &BatchJobSpec)
         }
     }
 
+    let memory_limit = std::env::var("B00T_LOCAL_MEMORY_LIMIT")
+        .unwrap_or_else(|_| LOCAL_MEMORY_LIMIT_DEFAULT.to_string());
+    args.push("--memory".into());
+    args.push(memory_limit.clone());
+    args.push("--memory-swap".into());
+    args.push(memory_limit);
+
     for (key, value) in &spec.env {
         args.push("-e".into());
         args.push(format!("{key}={value}"));
@@ -1623,6 +1636,29 @@ mod batch_job_tests {
         assert!(args.contains(&"--gpus".to_string()));
         assert!(args.contains(&"all".to_string()));
         assert!(!args.contains(&"--device".to_string()));
+    }
+
+    #[test]
+    fn local_batch_args_includes_memory_cap_by_default() {
+        // b00t-limits-hook (shared-node protocol) hard-rejects podman run
+        // without --memory/--memory-swap — regression coverage for that.
+        // Not hermetic against a caller-set $B00T_LOCAL_MEMORY_LIMIT (process-global,
+        // tests run in-process/parallel) — skip the default-value assertion then,
+        // same rationale as test_effective_kubeconfig_path.
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        let spec = sample_spec("app4dog/sam1-runner:local", &path);
+        let args = local_batch_args("b00t-batch-test", &ContainerRuntime::Podman, &spec).unwrap();
+        let mem_idx = args.iter().position(|a| a == "--memory").expect("--memory flag present");
+        let swap_idx = args
+            .iter()
+            .position(|a| a == "--memory-swap")
+            .expect("--memory-swap flag present");
+        if std::env::var("B00T_LOCAL_MEMORY_LIMIT").is_ok() {
+            return;
+        }
+        assert_eq!(args[mem_idx + 1], LOCAL_MEMORY_LIMIT_DEFAULT);
+        assert_eq!(args[swap_idx + 1], LOCAL_MEMORY_LIMIT_DEFAULT);
     }
 
     #[test]

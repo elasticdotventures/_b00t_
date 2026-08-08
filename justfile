@@ -18,6 +18,9 @@ mod? irontology-publish 'vendor/irontology-mcp/irontology-publish.just'
 mod? irontology 'vendor/irontology-mcp/irontology.just'
 # 🥾 Zellij interactive modal system (floating pane dialogs)
 mod zellij '_b00t_/zellij.just'
+# 🖥️  General-purpose always-on Xpra display service (task #12) — NOT owned
+#    by b00t-rpa; see _b00t_/xpra-display.hive.toml
+mod xpra-display '_b00t_/xpra-display.just'
 # 🛡️ Zellij mandatory interaction gate (governance: Allow/Deny/Hook)
 mod zellij-gate '_b00t_/zellij-gate.just'
 # 🌐 b00t-admin web server — dashboard, container, quadlet
@@ -46,6 +49,7 @@ mod ngc '_b00t_/ngc.just'
 mod ux 'ux.just'
 mod hf-cloud '_b00t_/justfile-hf-cloud.just'
 mod gemma '_b00t_/justfile-gemma.just'
+mod phi-candle '_b00t_/phi-candle.just'
 mod worker '_b00t_/justfile-worker.just'
 mod review '_b00t_/justfile-review.just'
 mod ufo '_b00t_/justfile-ufo.just'
@@ -117,6 +121,43 @@ gremlin-graalvm-run:
 
 stow:
     stow --adopt -d ~/.dotfiles -t ~ bash
+
+# Sync canonical _b00t_/ datum tree -> the live deployed _B00T_Path
+# (default ~/.dotfiles/_b00t_, resolved via _B00T_Path env if set).
+# Additive-only (no --delete): only adds/updates files from canonical,
+# never removes dotfiles-local files that don't exist here.
+# Default is a dry-run (rsync -n); pass `true` (positional — just recipe
+# args are positional, `apply=true` on the CLI is NOT recognized and will
+# silently stay in dry-run) to actually write.
+#
+# 🤓 bug/#13: ~/.dotfiles/_b00t_ (the live b00t-cli default _B00T_Path) drifts
+#    from this repo's canonical _b00t_/ tree with no sync mechanism — e.g.
+#    missing sonar.cli.toml causes 'b00t cli install sonar' to fail
+#    'sonar UNDEFINED' even though the datum exists here. This recipe is
+#    the documented refresh step; run it whenever a datum you just added
+#    here doesn't seem to exist for the live b00t-cli.
+#    ~/.dotfiles is a separate git repo (its own history) — this only
+#    overwrites its _b00t_/ subtree, never deletes, and the operator should
+#    `git stash` any uncommitted ~/.dotfiles changes first since rsync will
+#    silently clobber/resurrect files that differ from canonical.
+#
+# @example: just sync-g0spell-dotfiles          # dry-run, shows the drift
+# @example: just sync-g0spell-dotfiles true     # apply (positional, not apply=true)
+sync-g0spell-dotfiles apply="false" target=env_var_or_default("_B00T_Path", "~/.dotfiles/_b00t_"):
+    #!/bin/bash
+    set -euo pipefail
+    SRC="{{repo-root}}/_b00t_/"
+    DST="{{target}}"
+    DST="${DST/#\~/$HOME}"
+    echo "🔄 g0spell sync: $SRC -> $DST"
+    if [[ "{{apply}}" != "true" ]]; then
+        echo "(dry-run — pass 'true' as the first arg to write, e.g. 'just sync-g0spell-dotfiles true'; this never deletes dotfiles-local files)"
+        rsync -avn --exclude='.git' "$SRC" "$DST"
+    else
+        mkdir -p "$DST"
+        rsync -av --exclude='.git' "$SRC" "$DST"
+        echo "✅ synced. cd $DST/.. && git status to review + commit the drift."
+    fi
 
 ansible-k0s PLAYBOOK="ansible/playbooks/k0s_kata.yaml" INVENTORY="ansible/inventory.sample.yaml" EXTRA_ARGS="":
     #!/bin/bash
@@ -1089,3 +1130,327 @@ skill-wrkflw-list:
 #   - Namespaced: `just ledgrrr viz` not `just ledgrrr-viz`
 #   - Vendor owns its own lifecycle; root only adds `mod` line
 # See vendor/ledgrrr/ledgrrr.just header for full documentation.
+# ─────────────────────────────────────────────────────────────────────────────
+# ── ralph with diversity ──────────────────────────────────────────────────────
+# ralph-spawn: instantiate a ralph agent with a random personality + transferable skills.
+# Karpathy deepwiki OKR pattern: RESEARCH is a separate cycle from EXECUTION.
+# Each spawn gets: (a) random personality archetype, (b) random 2-3 transferable skills.
+# Different skills → different heuristics → better collective hive diversity.
+# 🤓 Never assign the same transferable skills to every agent — entropy is a feature.
+
+# List of transferable skills (from _b00t_/*.skill.toml type_tags=["transferable"])
+_TRANSFERABLE_SKILLS := "kaizen triz six-sigma ideo mece first-principles socratic bayesian rubber-duck pre-mortem five-whys ockham"
+
+# Personality archetypes — injected as system bias, not hard constraints
+_PERSONALITIES := "methodical-skeptic creative-synthesizer devil-advocate systems-thinker pragmatic-fixer pattern-hunter first-principles-zealot bayesian-updater"
+
+# Spawn one ralph: random personality + N random transferable skills, run GOAL
+ralph-spawn goal="" n_skills="3" tool="claude-code":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # ── Sample random personality ─────────────────────────────────────────────
+    PERSONALITIES=({{_PERSONALITIES}})
+    PERSONALITY="${PERSONALITIES[$RANDOM % ${#PERSONALITIES[@]}]}"
+    echo "[ralph:spawn] personality=$PERSONALITY"
+
+    # ── Sample N random transferable skills (no repeats) ─────────────────────
+    ALL_SKILLS=({{_TRANSFERABLE_SKILLS}})
+    SHUFFLED=($(printf '%s\n' "${ALL_SKILLS[@]}" | shuf))
+    ASSIGNED=("${SHUFFLED[@]:0:{{n_skills}}}")
+    echo "[ralph:spawn] transferable skills: ${ASSIGNED[*]}"
+
+    # ── Load blessing content for each assigned skill ─────────────────────────
+    SKILL_CONTENT=""
+    for SKILL in "${ASSIGNED[@]}"; do
+      CONTENT=$(b00t-cli learn "$SKILL" --concise 2>/dev/null || true)
+      if [ -n "$CONTENT" ]; then
+        SKILL_CONTENT=$(printf '%s\n## %s\n%s\n' "$SKILL_CONTENT" "$SKILL" "$CONTENT")
+      fi
+    done
+
+    # ── Karpathy OKR: RESEARCH phase (separate from execution) ───────────────
+    # Research soul is pre-loaded before task starts — not inline during execution.
+    # This is NOT generic RAG. It is: goal → OKR decomposition → targeted topic research.
+    GOAL_TEXT="{{goal}}"
+    if [ -z "$GOAL_TEXT" ]; then
+      GOAL_TEXT=$(b00t-cli task next --json 2>/dev/null | jq -r '.title // empty' || true)
+    fi
+    if [ -z "$GOAL_TEXT" ]; then echo "[ralph] no goal"; exit 1; fi
+
+    echo "[ralph:okr] decomposing goal: $GOAL_TEXT"
+    OKR_TOPICS=$(echo "$GOAL_TEXT" | tr '[:upper:]' '[:lower:]' \
+      | tr -cs 'a-z0-9-' '\n' | awk 'length>3' | sort -u | head -5)
+
+    echo "[ralph:research] soul topics: $(echo "$OKR_TOPICS" | tr '\n' ' ')"
+    while IFS= read -r TOPIC; do
+      [ -z "$TOPIC" ] && continue
+      SOUL=$(b00t-cli learn "$TOPIC" --concise 2>/dev/null | head -20 || true)
+      [ -n "$SOUL" ] && echo "[soul:$TOPIC] loaded ($(echo "$SOUL" | wc -c)c)"
+    done <<< "$OKR_TOPICS"
+
+    # ── Compile agent context packet ────────────────────────────────────────────
+    TOPICS_STR=$(echo "$OKR_TOPICS" | tr '\n' ' ')
+    CTX_FILE=$(mktemp /tmp/ralph-ctx-XXXXXX.md)
+    {
+      echo "## Ralph Agent Instantiation"
+      echo "personality: $PERSONALITY"
+      echo "transferable_skills: ${ASSIGNED[*]}"
+      echo "goal: $GOAL_TEXT"
+      echo "research_topics: $TOPICS_STR"
+      echo ""
+      echo "## Transferable Skills (active this session)"
+      echo "$SKILL_CONTENT"
+      echo ""
+      echo "## Operating Protocol"
+      echo "RESEARCH phase is COMPLETE. Do NOT re-research inline during execution."
+      echo "Apply personality ($PERSONALITY) as a cognitive lens, not a hard constraint."
+      echo "Transferable skills are heuristics: apply when they clarify."
+      echo "Report sharp corners: b00t lfmf <topic> <lesson>"
+      echo "Log progress: b00t task update <id> --status done"
+    } > "$CTX_FILE"
+    AGENT_CTX=$(cat "$CTX_FILE")
+    rm -f "$CTX_FILE"
+
+    echo "[ralph:ready] agent context: $(echo "$AGENT_CTX" | wc -c)c"
+    echo "$AGENT_CTX"
+
+# ralph-diverse-hive: spawn N ralph agents with independent personalities/skills for same goal
+ralph-diverse-hive goal="" n_agents="3" n_skills="3":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "[hive:diverse] spawning {{n_agents}} ralph agents for: {{goal}}"
+    for i in $(seq 1 {{n_agents}}); do
+      echo "── agent $i/$(({{n_agents}})) ──"
+      just ralph-spawn "{{goal}}" "{{n_skills}}" &
+    done
+    wait
+    echo "[hive:diverse] all agents dispatched"
+
+# compile-agent: compile a sandboxed single-file AGENTS.md for a specific role.
+# Output = AGENTS.md boilerplate prefix + role supplement + random transferable skills.
+# Operator provisions by running: just compile-agent --role=backend --out=/tmp/agent.md
+compile-agent role="worker" n_skills="3" out="/tmp/compiled-agent.md":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    B00T_ROOT=$(git -C "$HOME/.b00t" rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.b00t")
+    AGENTS_BASE="$B00T_ROOT/AGENTS.md"
+    ROLE_SUPPLEMENT="$B00T_ROOT/AGENTS/--role={{role}}.md"
+
+    # ── Base boilerplate (everything before SESSION delimiter) ─────────────────
+    BOILERPLATE=$(sed '/── SESSION/q' "$AGENTS_BASE" | head -n -1)
+
+    # ── Role supplement ────────────────────────────────────────────────────────
+    if [ -f "$ROLE_SUPPLEMENT" ]; then
+      ROLE_CONTENT=$(cat "$ROLE_SUPPLEMENT")
+    else
+      echo "⚠️  Role supplement not found: $ROLE_SUPPLEMENT"
+      ROLE_CONTENT="## Role: {{role}} (no supplement found — using base protocol only)"
+    fi
+
+    # ── Blessing manifest ──────────────────────────────────────────────────────
+    BLESSING=$(b00t-cli blessing --manifest --role="{{role}}" 2>/dev/null \
+      || echo "# blessing manifest unavailable — run: b00t blessing --manifest --role={{role}}")
+
+    # ── Random transferable skills ─────────────────────────────────────────────
+    ALL_SKILLS=(kaizen triz six-sigma ideo mece first-principles socratic bayesian rubber-duck pre-mortem five-whys ockham)
+    SHUFFLED=($(printf '%s\n' "${ALL_SKILLS[@]}" | shuf))
+    ASSIGNED=("${SHUFFLED[@]:0:{{n_skills}}}")
+    SKILL_CONTENT=""
+    for SKILL in "${ASSIGNED[@]}"; do
+      CONTENT=$(b00t-cli learn "$SKILL" --concise 2>/dev/null | head -30 || true)
+      [ -n "$CONTENT" ] && SKILL_CONTENT=$(printf '%s\n### %s\n%s\n' "$SKILL_CONTENT" "$SKILL" "$CONTENT")
+    done
+
+    # ── Assemble compiled AGENTS.md ────────────────────────────────────────────
+    COMPILED="{{out}}"
+    TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    {
+      echo "$BOILERPLATE"
+      echo ""
+      echo "## Role: {{role}}"
+      echo ""
+      echo "$ROLE_CONTENT"
+      echo ""
+      echo "## Blessing Manifest"
+      echo ""
+      echo "$BLESSING"
+      echo ""
+      echo "## Transferable Skills (randomly assigned: ${ASSIGNED[*]})"
+      echo "# Each instantiation gets a different random subset for hive diversity."
+      echo ""
+      echo "$SKILL_CONTENT"
+      echo ""
+      echo "<!-- SESSION compiled by operator, inject per instantiation"
+      echo "Role: {{role}} | Skills: ${ASSIGNED[*]} | Compiled: $TS -->"
+    } > "$COMPILED"
+
+    echo "✅ Compiled agent: {{out}} ($(wc -l < {{out}}) lines)"
+    echo "   role: {{role}}"
+    echo "   skills: ${ASSIGNED[*]}"
+
+# ── end ralph / compile-agent ──────────────────────────────────────────────────
+
+# provision-agent: operator convenience — compile + launch agent for a role+goal in one command.
+# Usage: just provision-agent worker "implement a health endpoint"
+# Usage: just provision-agent executive "plan Q3 roadmap"
+# Operator does NOT need to know about compile-agent or ralph-spawn internals.
+provision-agent role="worker" goal="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    AGENT_FILE="/tmp/b00t-agent-{{role}}-$(date +%s).md"
+    echo "[provision] role={{role}}"
+    just compile-agent "{{role}}" 3 "$AGENT_FILE"
+    echo "[provision] sandbox: $AGENT_FILE"
+    if [ -z "{{goal}}" ]; then
+      echo "[provision] no goal specified — agent file ready, launch manually:"
+      echo "  claude --agent $AGENT_FILE"
+    else
+      echo "[provision] launching agent with goal: {{goal}}"
+      GOAL_TEXT="{{goal}}"
+      echo "# Goal: $GOAL_TEXT" >> "$AGENT_FILE"
+      just ralph-spawn "$GOAL_TEXT" 3 | claude --print --agent "$AGENT_FILE" 2>/dev/null \
+        || echo "[provision] agent ready at: $AGENT_FILE (manual launch required if claude not in PATH)"
+    fi
+
+# PRD-011 G1
+b00t-metrics:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    datums="$(
+      find _b00t_ -maxdepth 1 -type f -printf '%f\n' \
+        | awk '
+            {
+              ext = "no_ext"
+              if ($0 ~ /\./) {
+                ext = $0
+                sub(/^.*\./, "", ext)
+              }
+              count[ext]++
+            }
+            END {
+              for (ext in count) {
+                printf "%s\t%d\n", ext, count[ext]
+              }
+            }
+          ' \
+        | jq -Rn '
+            reduce inputs as $line (
+              {};
+              ($line | split("\t")) as $row
+              | .[$row[0]] = ($row[1] | tonumber)
+            )
+          '
+    )"
+    train_rows=0
+    if [ -f fine-tune/train.jsonl ]; then
+      train_rows="$(wc -l < fine-tune/train.jsonl | awk '{print $1}')"
+    fi
+    jq -cn \
+      --argjson datums "$datums" \
+      --argjson train_rows "$train_rows" \
+      '{datums: $datums, train_rows: $train_rows, dangling_refs: null, probe_score: null}'
+
+# ── ROCK 5C Rocket NPU / Frigate — see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd ────
+# 🤓 Upstream Linux "Rocket" DRM accel driver + Mesa Teflon, NOT the vendor
+#    RKNN/RKLLM stack — works on the current-rockchip64 mainline kernel this
+#    host already boots, no vendor-kernel switch required. gate_0/1_5 here
+#    are read-only or scratch-only (never touch /boot); gate_1/gate_2 change
+#    live boot config or start a service — confirm with the operator before
+#    running those on a host also serving Home Assistant.
+
+# gate_0: compile the NPU overlay + apply it to a SCRATCH copy of the real DTB
+# (never touches /boot) and verify all 3 NPU cores + 3 IOMMUs report "okay".
+rocket-overlay-build src="/home/brianh/homeassistant/boot/rock-5c-rocket-npu-overlay.dts" base_dtb="/boot/dtb-6.18.35-current-rockchip64/rockchip/rk3588s-rock-5c.dtb":
+    #!/bin/bash
+    set -euo pipefail
+    command -v dtc >/dev/null || { echo "❌ dtc (device-tree-compiler) not installed"; exit 1; }
+    command -v fdtoverlay >/dev/null || { echo "❌ fdtoverlay not installed"; exit 1; }
+    WORK="$(mktemp -d)"
+    trap 'rm -rf "$WORK"' EXIT
+    echo "🔧 compiling overlay: {{src}}"
+    dtc -@ -I dts -O dtb -o "$WORK/overlay.dtbo" "{{src}}"
+    echo "🔧 applying to a scratch copy of {{base_dtb}} (NOT /boot)"
+    cp "{{base_dtb}}" "$WORK/base.dtb"
+    fdtoverlay -i "$WORK/base.dtb" -o "$WORK/merged.dtb" "$WORK/overlay.dtbo"
+    dtc -I dtb -O dts "$WORK/merged.dtb" 2>/dev/null > "$WORK/merged.dts"
+    echo "🔍 checking all 3 NPU cores + 3 IOMMUs report status = \"okay\":"
+    FAIL=0
+    for p in npu@fdab0000 iommu@fdab9000 npu@fdac0000 iommu@fdaca000 npu@fdad0000 iommu@fdada000; do
+        status="$(awk -v node="$p \\{" '$0 ~ node {f=1} f && /status =/ {print; exit} f && /};/{exit}' "$WORK/merged.dts")"
+        if echo "$status" | grep -q '"okay"'; then
+            echo "  ✅ $p: $status"
+        else
+            echo "  ❌ $p: ${status:-status line not found}"
+            FAIL=1
+        fi
+    done
+    if [ "$FAIL" -eq 0 ]; then
+        echo "✅ gate_0 PASS — overlay compiles + applies cleanly, all 6 nodes okay (scratch-only, /boot untouched)"
+    else
+        echo "❌ gate_0 FAIL — see above"
+        exit 1
+    fi
+
+# gate_1_5: read-only preflight — do the devices Frigate expects already exist?
+# Safe to run any time; reports reality, never changes anything.
+frigate-rocket-preflight:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Frigate/Rocket device preflight (read-only):"
+    FAIL=0
+    for d in /dev/accel/accel0 /dev/dri /dev/media0 /dev/video1; do
+        if [ -e "$d" ]; then
+            echo "  ✅ $d exists"
+        else
+            echo "  ❌ $d missing"
+            FAIL=1
+        fi
+    done
+    if [ "$FAIL" -eq 0 ]; then
+        echo "✅ preflight PASS"
+    else
+        echo "⚠️  preflight incomplete — expected before gate_1 (overlay install + reboot); see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd"
+    fi
+
+# gate_1: install the compiled overlay into /boot's active overlay dir + reboot.
+# ⚠️ MODIFIES LIVE BOOT CONFIG AND REBOOTS THIS HOST — this machine also runs
+#    Home Assistant/esphome/mosquitto. Confirm with the operator before running.
+#    Not auto-run by any other recipe.
+rocket-overlay-install src="/home/brianh/homeassistant/boot/rock-5c-rocket-npu-overlay.dts":
+    #!/bin/bash
+    set -euo pipefail
+    echo "⚠️  This installs a devicetree overlay into /boot and is meant to be"
+    echo "   followed by a reboot of this host (also runs Home Assistant)."
+    echo "   Not auto-executed — see _b00t_/rock5c-rocket-teflon-frigate.stack.tomllmd gate_1."
+    echo "   Manual steps once confirmed:"
+    echo "     sudo dtc -@ -I dts -O dtb -o /boot/dtb/rockchip/overlay/rock-5c-rocket-npu.dtbo {{src}}"
+    echo "     echo 'user_overlays=rock-5c-rocket-npu' | sudo tee -a /boot/armbianEnv.txt"
+    echo "     sudo reboot"
+
+# gate_1 verification: run AFTER the operator reboots post rocket-overlay-install.
+# Read-only — reports whether Rocket actually bound to hardware.
+rocket-postboot-check:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🔍 Rocket NPU postboot check (read-only):"
+    if [ -e /dev/accel/accel0 ]; then
+        echo "  ✅ /dev/accel/accel0 exists"
+    else
+        echo "  ❌ /dev/accel/accel0 missing — overlay not active or rocket module not bound"
+    fi
+    echo "  dmesg | grep -i rocket:"
+    dmesg 2>/dev/null | grep -i rocket || echo "    (no rocket entries in dmesg — may need: sudo dmesg | grep -i rocket)"
+
+# gate_2: start Frigate via Quadlet and confirm the Teflon detector is active.
+# ⚠️ Starts a systemd service. Only meaningful after gate_1 passes.
+frigate-start:
+    systemctl --user start frigate.service
+
+frigate-status:
+    #!/bin/bash
+    set -euo pipefail
+    systemctl --user status frigate.service --no-pager || true
+    echo "🔍 detector log (looking for teflon_tfl, watching for 'No NPU was detected'):"
+    journalctl --user -u frigate.service --no-pager -n 100 | grep -iE "teflon_tfl|No NPU was detected" || echo "  (no matching lines yet)"
