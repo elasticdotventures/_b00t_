@@ -24,12 +24,19 @@
 
 FROM ubuntu:24.04
 
+# python3: GitHub-hosted ubuntu-latest runners ship it by default; this
+# minimal image doesn't unless asked. b00t-cli::job_executor's
+# test_python_task_executes shells out to `python3` directly, so its
+# absence here is a real (if easy to miss) test-environment gap, not an
+# OCCT concern — add further tools here only as actual test failures
+# reveal them, rather than trying to pre-guess the host runner's full set.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     curl \
     git \
     sudo \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Pinned to the exact release cadrum 0.8.13's build.rs requests
