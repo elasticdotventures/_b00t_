@@ -243,6 +243,14 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     // this binary NOPASSWD sudo for `exec --vetted *`: the guard system
     // (mostly warn-tier, permissive by design) must never be able to
     // short-circuit this check.
+    // Set only on a successful vetted grant, to the ABSOLUTE path that was
+    // actually hash-verified (`project_root.join(&args.command[0])`) —
+    // execution below must use this exact path, never a bare
+    // `args.command[0]` resolved relative to cwd, or a caller could get a
+    // valid grant/evidence for one file while a different file (same name,
+    // different directory) actually runs.
+    let mut vetted_exec_path: Option<PathBuf> = None;
+
     if args.vetted {
         use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
 
@@ -311,6 +319,13 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                         checkpoint_ref: None,
                     },
                 )?;
+                // Pin execution to the EXACT absolute path that was just
+                // hash-verified — args.command[0] alone is resolved
+                // relative to cwd at spawn time below, which could name a
+                // different file than the one check_vetted() just checked
+                // (e.g. if cwd is a subdirectory containing a same-named,
+                // never-reviewed file). See N2 in the final-review re-review.
+                vetted_exec_path = Some(project_root.join(&args.command[0]));
                 // fall through to the "Background execution via --sleep" /
                 // synchronous execution section below (unchanged) — DO NOT
                 // return early here, and DO NOT enter `match &guard_result`.
@@ -497,7 +512,10 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     // Background execution via --sleep
     if let Some(sleep_dur) = &args.sleep {
         let sleep_secs = parse_duration(sleep_dur)?;
-        let command_clone = args.command.clone();
+        let mut command_clone = args.command.clone();
+        if let Some(verified_path) = &vetted_exec_path {
+            command_clone[0] = verified_path.to_string_lossy().into_owned();
+        }
 
         // Apply the requested delay before spawning the background process.
         std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
@@ -574,10 +592,14 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 
     // For direct provider: use raw spawn so stdin/stdout/stderr are inherited
     let exit_code = if sandbox_kind_label == "direct" {
-        let mut child = std::process::Command::new(&args.command[0])
+        let exec_path: std::borrow::Cow<'_, str> = match &vetted_exec_path {
+            Some(verified_path) => verified_path.to_string_lossy(),
+            None => std::borrow::Cow::Borrowed(args.command[0].as_str()),
+        };
+        let mut child = std::process::Command::new(exec_path.as_ref())
             .args(&args.command[1..])
             .spawn()
-            .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", args.command[0], e))?;
+            .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", exec_path, e))?;
 
         let pid = child.id();
         append_audit_log(

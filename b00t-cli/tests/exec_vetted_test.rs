@@ -277,3 +277,124 @@ fn test_justification_path_unaffected_by_vetted_registration() {
         );
     }
 }
+
+#[test]
+fn test_vetted_flag_denies_even_when_guard_tier_is_allow() {
+    // Regression test for a bug found in final-branch review: --vetted was
+    // originally only checked inside GuardResult::Block, so for any command
+    // that didn't trip a Block-tier guard (i.e. most real commands — Allow
+    // or Warn tier), --vetted was silently never consulted at all and the
+    // guard system alone (which is mostly permissive by design) decided.
+    // This removes the fixture's Block-forcing hive-guards.hive.toml
+    // entirely so the guard tier is genuinely Allow, and confirms --vetted
+    // still denies an unregistered target on its own.
+    let (_tmp, work, fake_home) = fixture_repo();
+    fs::remove_file(work.join("_b00t_/hive-guards.hive.toml")).unwrap();
+    let marker = work.join("not-vetted-marker.txt");
+
+    // Sanity check: confirm the guard tier really is now Allow (not Block)
+    // for this command, via --dry-run, before trusting the deny below.
+    let dry_run = Command::new(get_b00t_binary())
+        .args([
+            "--path",
+            work.join("_b00t_").to_str().unwrap(),
+            "exec",
+            "--dry-run",
+            "_b00t_/not-vetted.sh",
+        ])
+        .current_dir(&work)
+        .env("HOME", &fake_home)
+        .output()
+        .expect("failed to run b00t-cli");
+    let dry_run_stdout = String::from_utf8_lossy(&dry_run.stdout);
+    assert!(
+        dry_run_stdout.contains("would execute"),
+        "test setup invariant violated: expected guard tier Allow (dry-run 'would execute'), got: {dry_run_stdout}"
+    );
+
+    let output = Command::new(get_b00t_binary())
+        .args([
+            "--path",
+            work.join("_b00t_").to_str().unwrap(),
+            "exec",
+            "--vetted",
+            "_b00t_/not-vetted.sh",
+        ])
+        .current_dir(&work)
+        .env("HOME", &fake_home)
+        .output()
+        .expect("failed to run b00t-cli");
+
+    assert!(
+        !output.status.success(),
+        "--vetted must deny an unregistered target even at guard tier Allow; stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !marker.exists(),
+        "unregistered script ran despite --vetted, even though guard tier was Allow"
+    );
+}
+
+#[test]
+fn test_vetted_execution_uses_verified_path_not_cwd_relative_lookup() {
+    // Regression test for a bug found in final-branch re-review: check_vetted
+    // hashes `<repo_root>/<script_path>`, but execution used to spawn
+    // `args.command[0]` directly, which the OS resolves relative to the
+    // CALLER's cwd — not repo_root. If cwd is a subdirectory that happens to
+    // contain a same-relative-path file, the verified (repo-root) file and
+    // the executed (cwd-relative) file could silently diverge: a valid
+    // grant/evidence for the legit file, while a different, never-reviewed
+    // file actually runs.
+    let (_tmp, work, fake_home) = fixture_repo();
+
+    // Plant a same-relative-path decoy under a subdirectory, never
+    // committed/pushed — this is the file that must NOT run.
+    let sub = work.join("sub");
+    fs::create_dir_all(sub.join("_b00t_")).unwrap();
+    fs::write(
+        sub.join("_b00t_/vetted-hello.sh"),
+        "#!/bin/sh\ntouch evil-ran-marker.txt\n",
+    )
+    .unwrap();
+    fs::set_permissions(
+        sub.join("_b00t_/vetted-hello.sh"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+
+    let legit_marker = sub.join("vetted-marker.txt"); // spawned child inherits cwd=sub
+    let evil_marker = sub.join("evil-ran-marker.txt");
+
+    let output = Command::new(get_b00t_binary())
+        .args([
+            "--path",
+            work.join("_b00t_").to_str().unwrap(),
+            "exec",
+            "--vetted",
+            "_b00t_/vetted-hello.sh",
+        ])
+        // Invoke from the subdirectory containing the decoy — repo_root
+        // resolution (git rev-parse --show-toplevel) still correctly finds
+        // `work`, but a naive cwd-relative spawn would find the decoy.
+        .current_dir(&sub)
+        .env("HOME", &fake_home)
+        .output()
+        .expect("failed to run b00t-cli");
+
+    assert!(
+        output.status.success(),
+        "expected the legit, verified script to run; stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        legit_marker.exists(),
+        "the verified (repo-root-relative) script did not run"
+    );
+    assert!(
+        !evil_marker.exists(),
+        "the decoy (cwd-relative) script ran instead of the verified one"
+    );
+}

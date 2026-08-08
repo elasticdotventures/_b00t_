@@ -33,11 +33,21 @@ const VETTED_REGISTRY_PATH: &str = "_b00t_/vetted-scripts.toml";
 /// missing/unreadable path on origin/main resolves to an empty registry
 /// (fail-closed — nothing is vetted, not "trust everything").
 pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
-    let Some(text) = cmd!("git", "show", format!("origin/main:{VETTED_REGISTRY_PATH}"))
-        .dir(repo_root)
-        .stderr_capture()
-        .read()
-        .ok()
+    // Fully-qualified `refs/remotes/origin/main`, NOT the short `origin/main`
+    // — git resolves an ambiguous short name against `refs/heads/` first, so
+    // a local branch literally named `origin/main` (created by anyone with
+    // write access to this working tree, no push required) would silently
+    // shadow the real remote-tracking ref and reopen the exact "local edit
+    // expands the allowlist" hole this function exists to close.
+    let Some(text) = cmd!(
+        "git",
+        "show",
+        format!("refs/remotes/origin/main:{VETTED_REGISTRY_PATH}")
+    )
+    .dir(repo_root)
+    .stderr_capture()
+    .read()
+    .ok()
     else {
         return Vec::new();
     };
@@ -102,7 +112,9 @@ pub fn check_vetted(repo_root: &Path, script_path: &str) -> VettedResult {
         }
     };
 
-    let remote_hash = match git_blob_hash(repo_root, &format!("origin/main:{script_path}")) {
+    // Same ambiguous-refname concern as load_vetted_registry above —
+    // fully-qualified so a local `origin/main` branch can't shadow it.
+    let remote_hash = match git_blob_hash(repo_root, &format!("refs/remotes/origin/main:{script_path}")) {
         Some(h) => h,
         None => {
             return VettedResult::NotVetted {
@@ -265,6 +277,44 @@ mod tests {
         assert!(
             elapsed < std::time::Duration::from_secs(10),
             "fetch should have been bounded to ~5s by fetch_origin_main's timeout, took {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn test_local_branch_named_origin_slash_main_does_not_shadow_remote_tracking_ref() {
+        let (_tmp, work) = fixture_repo();
+
+        // Add an "evil" script and register it, but only in a LOCAL commit
+        // — never pushed to the real origin. Then create a local branch
+        // literally named `origin/main` pointing at this commit: git
+        // resolves an ambiguous short name against refs/heads/ before
+        // refs/remotes/, so before the refs/remotes/origin/main fix this
+        // local branch would have silently shadowed the real
+        // remote-tracking ref.
+        fs::write(work.join("_b00t_/evil.sh"), "#!/bin/sh\necho PWNED\n").unwrap();
+        let mut registry_text =
+            fs::read_to_string(work.join("_b00t_/vetted-scripts.toml")).unwrap();
+        registry_text.push_str(
+            "\n[[vetted]]\npath = \"_b00t_/evil.sh\"\ndescription = \"never reviewed\"\n",
+        );
+        fs::write(work.join("_b00t_/vetted-scripts.toml"), registry_text).unwrap();
+        Command::new("git").args(["add", "-A"]).current_dir(&work).status().unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "local-only: add evil.sh"])
+            .current_dir(&work)
+            .status()
+            .unwrap();
+        // NOT pushed — this commit never reaches the real origin/main.
+        Command::new("git")
+            .args(["branch", "-f", "origin/main", "HEAD"])
+            .current_dir(&work)
+            .status()
+            .unwrap();
+
+        let result = check_vetted(&work, "_b00t_/evil.sh");
+        assert!(
+            matches!(result, VettedResult::NotVetted { .. }),
+            "a local branch shadowing the short name 'origin/main' must not be trusted: {result:?}"
         );
     }
 }
