@@ -2,7 +2,7 @@ name: Build and Publish CI OCCT base image
 
 on:
   push:
-    branches: [ main, fix/ci-occt-container-image ]
+    branches: [ main ]
     paths:
       - 'Dockerfile.ci-occt'
       - '.github/workflows/ci-occt-image.yml'
