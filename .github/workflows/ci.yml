@@ -26,6 +26,19 @@ jobs:
     name: cargo check + test (workspace)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # 🤓 OCCT (b00t-cad's `cadrum` dependency) lives here instead of being
+    #    downloaded into `target/` by cadrum's own build.rs. That path used to
+    #    ride along with Swatinem/rust-cache's cached `target/` tarball below,
+    #    and cadrum's cache-hit check only verifies `include/`+`lib/` *exist*,
+    #    not that they're complete — so one run cancelled mid-extraction by
+    #    `cancel-in-progress` above was enough to cache a permanently-broken
+    #    OCCT tree that every run after it silently inherited (see #926).
+    #    Baking OCCT into this image instead means it's never touched by that
+    #    cache at all. Image: Dockerfile.ci-occt / .github/workflows/ci-occt-image.yml.
+    container:
+      image: ghcr.io/elasticdotventures/ci-occt:latest
+    env:
+      OCCT_ROOT: /opt/occt
     steps:
       - name: Checkout 🥾
         uses: actions/checkout@v4
