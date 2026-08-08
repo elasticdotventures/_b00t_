@@ -224,15 +224,17 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 // is supplied. Justification-less Block behavior (the `else`
                 // branch) is completely unchanged.
                 use b00t_c0re_lib::sudo_operator::{
-                    SudoDisposition, SudoGrantEvidence, adversarial_review, checkpoint_system_state,
+                    AdversarialVerdict, SudoDisposition, SudoGrantEvidence, adversarial_review,
+                    checkpoint_system_state,
                 };
 
                 let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                let (review_event, disposition) =
+                let (review_event, verdict) =
                     adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
+                let disposition: SudoDisposition = verdict.clone().into();
 
-                match &disposition {
-                    SudoDisposition::Grant { ttl_seconds } => {
+                match &verdict {
+                    AdversarialVerdict::Grant { ttl_seconds } => {
                         let checkpoint_id = now_unix().to_string();
                         let checkpoint =
                             checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
@@ -259,7 +261,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                         );
                         // fall through to execution below
                     }
-                    SudoDisposition::Deny { reason } => {
+                    AdversarialVerdict::Deny { reason } => {
                         eprintln!("🚫 SUDO-DENY: {}", reason);
                         append_audit_log(
                             &log_path,
@@ -277,7 +279,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                         );
                         std::process::exit(1);
                     }
-                    SudoDisposition::Escalate { reason } => {
+                    AdversarialVerdict::Escalate { reason } => {
                         eprintln!("📡 SUDO-ESCALATE: {}", reason);
                         crate::budget_controller::fire_sudo_escalation(
                             &cmd_str,
@@ -302,12 +304,6 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                         );
                         eprintln!("   Not executed. Resolve the escalation and re-run.");
                         std::process::exit(1);
-                    }
-                    SudoDisposition::VettedGrant { .. } => {
-                        unreachable!(
-                            "adversarial_review() only ever returns Grant/Deny/Escalate; \
-                             VettedGrant is produced solely by check_vetted() on the --vetted path"
-                        )
                     }
                 }
             } else if args.vetted {
