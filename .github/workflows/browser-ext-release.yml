@@ -2,8 +2,13 @@
 name: b00t Browser Extension Release
 
 on:
+  pull_request:
+    paths:
+      - 'b00t-browser-ext/**'
+      - '.github/workflows/browser-ext-release.yml'
   push:
     branches: [ main ]
+    tags: [ 'b00t-browser-ext-v*' ]
     paths:
       - 'b00t-browser-ext/**'
       - '.github/workflows/browser-ext-release.yml'
@@ -47,6 +52,13 @@ jobs:
         run: |
           cd b00t-browser-ext
           npm run package
+
+      - name: Validate Microsoft Edge package input
+        run: |
+          cd b00t-browser-ext
+          test -f build/chrome-mv3-prod/manifest.json
+          node -e "JSON.parse(require('node:fs').readFileSync('build/chrome-mv3-prod/manifest.json', 'utf8'))"
+          unzip -t build/chrome-mv3-prod.zip
           
       - name: Create release artifacts
         run: |
@@ -59,12 +71,14 @@ jobs:
           
           # Create ZIP package
           cd build/chrome-mv3-prod
-          zip -r "../../artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip" .
+          zip -r "../../../artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip" .
+          cp "../../../artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip" \
+            "../../../artifacts/b00t-browser-ext-edge-v${{ steps.version.outputs.version }}.zip"
           
           # Create Firefox package if available
           if [ -d "../firefox-mv3-prod" ]; then
             cd ../firefox-mv3-prod
-            zip -r "../../artifacts/b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip" .
+            zip -r "../../../artifacts/b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip" .
           fi
           
       - name: Upload Chrome extension artifact
@@ -72,6 +86,14 @@ jobs:
         with:
           name: b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}
           path: artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip
+          retention-days: 90
+
+      - name: Upload Edge Add-ons submission package
+        uses: actions/upload-artifact@v4
+        with:
+          name: b00t-browser-ext-edge-v${{ steps.version.outputs.version }}
+          path: artifacts/b00t-browser-ext-edge-v${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
           retention-days: 90
           
       - name: Upload build directory
@@ -82,11 +104,12 @@ jobs:
           retention-days: 90
           
       - name: Create GitHub Release (on tag)
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/b00t-browser-ext-v')
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/b00t-browser-ext-chrome-v${{ steps.version.outputs.version }}.zip
+            artifacts/b00t-browser-ext-edge-v${{ steps.version.outputs.version }}.zip
             artifacts/b00t-browser-ext-firefox-v${{ steps.version.outputs.version }}.zip
           name: b00t Browser Extension v${{ steps.version.outputs.version }}
           body: |

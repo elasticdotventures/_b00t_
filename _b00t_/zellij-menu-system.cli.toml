@@ -140,7 +140,7 @@ echo "✅ Zellij Menu System uninstalled"
 version = "echo '1.0.0'"
 version_regex = "(\\d+\\.\\d+\\.\\d+)"
 
-depends_on = ["zellij"]
+depends_on = ["zellij.cli"]
 
 [[b00t.usage]]
 description = "🥾 Display yes/no menu in Zellij"

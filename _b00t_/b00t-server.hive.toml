@@ -11,7 +11,7 @@
 name = "b00t-server"
 type = "hive_profile"
 hint = "b00t-server gateway at :5273 — API-key authority + per-consumer usage telemetry, always on"
-depends_on = ["b00t-mcp.cli"]
+depends_on = ["b00t-mcp.mcp"]
 
 [b00t.hive.resources]
 ram_gb = 1

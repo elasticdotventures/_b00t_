@@ -1,17 +1,25 @@
-name: Build b00t Windows Tray
+name: Package ledgrrr Desktop for Windows
 
 on:
-  push:
-    branches: [main, feat/*]
+  pull_request:
     paths:
-      - 'vendor/ledgrrr/crates/ledgerr-tauri/**'
+      - 'vendor/ledgrrr/crates/ledgerr-host/**'
+      - 'vendor/ledgrrr/crates/ledgerr-host/src/tray/**'
+      - '.github/workflows/build-tauri-windows.yml'
+  push:
+    branches: [main, feat/*, task/*]
+    tags: ['ledgrrr-desktop-v*']
+    paths:
+      - 'vendor/ledgrrr/crates/ledgerr-host/**'
       - 'vendor/ledgrrr/crates/ledgerr-host/src/tray/**'
       - '.github/workflows/build-tauri-windows.yml'
   workflow_dispatch:  # manual trigger
 
 jobs:
-  build-windows:
+  package-windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,14 +36,60 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           rustup show
 
-      - name: Build ledgerr-tauri (release)
-        run: |
-          cd vendor/ledgrrr
-          cargo build --release -p ledgerr-tauri
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Upload artifact
+      - name: Build MSI and NSIS installers
+        run: |
+          cd vendor/ledgrrr/crates/ledgerr-host
+          cargo tauri build --bundles msi,nsis
+
+      - name: Upload Windows installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ledgerr-tauri-windows
-          path: vendor/ledgrrr/target/release/ledgerr-tauri.exe
-          retention-days: 7
+          name: ledgrrr-desktop-windows
+          path: |
+            vendor/ledgrrr/target/release/bundle/msi/*.msi
+            vendor/ledgrrr/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Compute installer SHA256 hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd vendor/ledgrrr/target/release/bundle
+          for f in msi/*.msi nsis/*.exe; do
+            sha256sum "$f" > "$f.sha256"
+          done
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/ledgrrr-desktop-v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            vendor/ledgrrr/target/release/bundle/msi/*.msi
+            vendor/ledgrrr/target/release/bundle/msi/*.msi.sha256
+            vendor/ledgrrr/target/release/bundle/nsis/*.exe
+            vendor/ledgrrr/target/release/bundle/nsis/*.exe.sha256
+          name: ledgrrr Desktop ${{ github.ref_name }}
+          body: |
+            # ledgrrr Desktop ${{ github.ref_name }}
+
+            Unsigned Windows installer build (MSI + NSIS).
+
+            ## Installation
+
+            Download the `.msi` (Windows Installer) or `.exe` (NSIS) installer below.
+
+            ## Verification
+
+            Each installer has a matching `.sha256` sidecar file. Verify with:
+
+            ```
+            certutil -hashfile <file> SHA256
+            ```
+
+            and compare against the value in the corresponding `.sha256` file.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

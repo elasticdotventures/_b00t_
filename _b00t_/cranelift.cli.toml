@@ -8,7 +8,7 @@ name = "cranelift"
 type = "cli"
 hint = "Rustc Cranelift codegen backend — 2x faster debug builds than LLVM"
 desires = "latest"
-depends_on = ["rustup.cli"]
+depends_on = ["rustc.cli"]
 
 [install]
 command = "rustup component add rustc-codegen-cranelift-preview --toolchain nightly"

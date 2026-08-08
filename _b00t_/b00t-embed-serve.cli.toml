@@ -1,0 +1,33 @@
+[b00t]
+name = "b00t-embed-serve"
+type = "cli"
+hint = "OpenAI-compatible /v1/embeddings HTTP server wrapping b00t-embed's local Qwen3-Embedding-0.6B candle model — no external API key required"
+auto_install = true
+
+install = '''
+# b00t-embed-serve is a workspace crate — install from the b00t repo (parent of _b00t_)
+cargo install --path "${B00T_DIR:-$HOME/.b00t}/b00t-embed-serve" --locked --force
+'''
+
+update = '''
+cargo install --path "${B00T_DIR:-$HOME/.b00t}/b00t-embed-serve" --locked --force
+'''
+
+version = "b00t-embed-serve --version"
+version_regex = 'b00t-embed-serve (\d+\.\d+\.\d+)'
+desires = "latest"
+
+[[b00t.usage]]
+description = "Start the local Qwen3 embeddings server on :8003"
+command = "b00t-embed-serve --host 127.0.0.1 --port 8003"
+
+[[b00t.usage]]
+description = "Test the embeddings endpoint"
+command = "curl -s http://localhost:8003/v1/embeddings -d '{\"input\":\"test\",\"model\":\"qwen3-embed\"}' | python3 -m json.tool"
+
+# b00t:map v1
+# summary: b00t-embed-serve — persistent local candle Qwen3-Embedding-0.6B HTTP server, OpenAI /v1/embeddings-compatible
+# tags: candle, qwen3, embeddings, local-inference, cpu-inference, http-server
+# tier: sm0l
+# cmds: b00t-embed-serve --host 127.0.0.1 --port 8003
+# complexity: 2
