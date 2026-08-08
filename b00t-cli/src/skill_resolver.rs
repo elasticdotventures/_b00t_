@@ -24,8 +24,11 @@
 //! 3. `./_b00t_/*.skill.toml[l][md]` — project b00t native (.skill.toml, .skill.tomllm, .skill.tomllmd)
 //! 4. `~/.config/opencode/skills/` — global opencode, SKILL.md format
 //! 5. `~/.claude/skills/`      — Claude Code native, SKILL.md format
-//! 6. `~/.agents/skills/`      — Agent-compatible, SKILL.md format
-//! 7. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
+//! 6. `~/.claude/plugins/**/skills/` — skills bundled in installed Claude Code
+//!    plugins (e.g. `superpowers@claude-plugins-official`), discovered via
+//!    `~/.claude/plugins/installed_plugins.json`. See `datum_claude_plugin`.
+//! 7. `~/.agents/skills/`      — Agent-compatible, SKILL.md format
+//! 8. `~/.b00t/_b00t_/*.skill.toml[l][md]` — global b00t
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -218,6 +221,18 @@ impl SkillResolver {
             if claude_skills.is_dir() {
                 dirs.push(SkillDir {
                     path: claude_skills,
+                    format: SkillFormat::SkillMd,
+                });
+            }
+            // Skills bundled in installed Claude Code plugins (e.g. Superpowers'
+            // brainstorming/TDD/subagent-driven-development skills), discovered
+            // via ~/.claude/plugins/installed_plugins.json.
+            let claude_dir = home.join(".claude");
+            for (_plugin_key, skills_dir) in
+                crate::datum_claude_plugin::plugin_skill_dirs(&claude_dir)
+            {
+                dirs.push(SkillDir {
+                    path: skills_dir,
                     format: SkillFormat::SkillMd,
                 });
             }

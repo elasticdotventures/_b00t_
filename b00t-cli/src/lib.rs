@@ -52,6 +52,7 @@ pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
+pub mod datum_claude_plugin;
 pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_database;
