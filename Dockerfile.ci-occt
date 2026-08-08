@@ -52,6 +52,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
+# man-db: ubuntu:24.04's Docker base is Canonical's "minimized" cloud image —
+# /usr/bin/man exists but is a stub that always exits 0 with a generic
+# "this system has been minimized" notice, regardless of input. That broke
+# b00t-c0re-lib::man_page's test_man_page_parsing, which asserts a *real*
+# failure (non-zero exit, "No manual entry") for a nonexistent command —
+# true on ubuntu-latest's non-minimized runner, false against the stub.
+# Installing man-db for real replaces the stub with actual behavior.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    man-db \
+    && rm -rf /var/lib/apt/lists/*
+
 # Pinned to the exact release cadrum 0.8.13's build.rs requests
 # (OCCT_VERSION=V8_0_0, BUILD_REVISION=rev3 — see cadrum's build.rs). Bump
 # OCCT_TAG/OCCT_SHA256 together if/when b00t-cad's cadrum dependency moves

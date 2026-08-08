@@ -67,12 +67,6 @@ jobs:
       - name: Mark workspace as git-safe (container job)
         run: git config --global --add safe.directory '*'
 
-      - name: TEMP DEBUG man
-        run: |
-          which man || echo "man: not found"
-          man --version || true
-          man nonexistent_command_xyz123; echo "exit=$?"
-
       - name: Init workspace-required vendor submodules
         run: |
           set -euo pipefail
