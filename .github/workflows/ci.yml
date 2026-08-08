@@ -129,14 +129,6 @@ jobs:
           sudo mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
           sudo chown -R "$(id -u):$(id -g)" /home/brianh
 
-      - name: TEMP DEBUG lockfile drift
-        run: |
-          cargo check --workspace || true
-          echo "--- git diff Cargo.lock ---"
-          git diff --stat -- Cargo.lock || true
-          git diff -- Cargo.lock || true
-          exit 1
-
       # --locked is the point: it makes lockfile/manifest disagreement a hard
       # failure instead of a silent re-resolve that differs from local builds.
       - name: cargo check --workspace --locked
