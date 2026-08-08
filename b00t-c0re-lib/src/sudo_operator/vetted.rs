@@ -35,15 +35,23 @@ pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
         .unwrap_or_default()
 }
 
-/// `git fetch origin main` — failure is non-fatal to the caller; it just means
-/// the local `origin/main` ref may be stale, which check_vetted treats as grounds
-/// for NotVetted via the subsequent rev-parse failing or a genuine mismatch.
+/// Bounded `git fetch origin main` — never hangs indefinitely. Failure is
+/// non-fatal to the caller; it just means the local `origin/main` ref may
+/// be stale, which check_vetted treats as grounds for NotVetted via the
+/// subsequent rev-parse failing or a genuine mismatch.
 fn fetch_origin_main(repo_root: &Path) -> Result<()> {
-    cmd!("git", "fetch", "origin", "main", "--quiet")
+    let handle = cmd!("git", "fetch", "origin", "main", "--quiet")
         .dir(repo_root)
         .stdout_to_stderr()
-        .run()?;
-    Ok(())
+        .start()?;
+
+    match handle.wait_timeout(std::time::Duration::from_secs(5))? {
+        Some(_) => Ok(()),
+        None => {
+            let _ = handle.kill();
+            Err(anyhow::anyhow!("git fetch timed out after 5 seconds"))
+        }
+    }
 }
 
 fn git_blob_hash(repo_root: &Path, rev_and_path: &str) -> Option<String> {
