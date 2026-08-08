@@ -5,7 +5,7 @@
 # Non-blocking — use this for logging/observability, not gating.
 #
 # Lifecycle:
-#   1. Worktree isolation — git worktree in .b00t/worktrees/<agent-id>/
+#   1. Worktree isolation — git worktree in .claude/worktrees/<agent-id>/
 #   2. Ledgerr registration — yei registers for resource budget (GPU, network)
 #   3. Role-specific hooks — roles/<agent-type>/agent.start.sh
 #
@@ -20,16 +20,21 @@ AGENT_ID="$(echo "$INPUT"   | jq -r '.agent_id   // "unknown"' 2>/dev/null || ec
 SESSION_ID="$(echo "$INPUT" | jq -r '.session_id  // "unknown"' 2>/dev/null || echo "unknown")"
 TASK_ID="${B00T_TASK_ID:-${SESSION_ID}}"
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+PROJECT_ROOT="${B00T_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${HOOK_DIR}/../../../scripts/lib/worktree-env.sh"
 
 # ── Phase 1: Worktree isolation ──────────────────────────────────────────
 if [ "${B00T_NO_WORKTREE:-0}" != "1" ] && [ -n "${PROJECT_ROOT}" ] && [ -f "${PROJECT_ROOT}/.git/🥾.tomllmd" ]; then
-  WT_DIR="${PROJECT_ROOT}/.b00t/worktrees/${AGENT_ID}"
+  WT_ROOT="$(b00t_default_agent_worktree_root "${PROJECT_ROOT}")"
+  WT_DIR="${WT_ROOT}/${AGENT_ID}"
   if [ ! -d "${WT_DIR}" ]; then
-    mkdir -p "${PROJECT_ROOT}/.b00t/worktrees"
+    mkdir -p "${WT_ROOT}"
     REF=$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null || echo "")
     if [ -n "${REF}" ]; then
       git -C "${PROJECT_ROOT}" worktree add --detach "${WT_DIR}" "${REF}" 2>/dev/null && {
+        b00t_init_required_submodules "${WT_DIR}"
         ln -sf "${PROJECT_ROOT}/.git/🥾.tomllmd" "${WT_DIR}/.git/🥾.tomllmd" 2>/dev/null || true
         # Stamp per-worktree git identity with the b00t agent + session id so
         # commits made here are attributable, instead of silently inheriting

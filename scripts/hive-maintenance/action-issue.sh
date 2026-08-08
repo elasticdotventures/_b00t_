@@ -5,12 +5,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${SCRIPT_DIR}/../lib/worktree-env.sh"
+
 ISSUE_NUM="${1:?issue_num required}"
 CLUSTER="${2:?cluster required}"
 ISSUE_TITLE="${3:?issue_title required}"
 REPO="${REPO:-elasticdotventures/_b00t_}"
 MAX_CODEX_ITER="${MAX_CODEX_ITER:-3}"
-WORKTREE_ROOT="${WORKTREE_ROOT:-/tmp/b00t-worktrees}"
+WORKTREE_ROOT="${WORKTREE_ROOT:-$(b00t_default_hive_worktree_root)}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(b00t_shared_cargo_target_dir)}"
 
 SLUG=$(echo "${ISSUE_TITLE}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40 | sed 's/-$//')
 BRANCH="issue-${ISSUE_NUM}-${SLUG}"
@@ -38,6 +43,7 @@ ISSUE_BODY=$(gh issue view "${ISSUE_NUM}" --repo "${REPO}" --json body -q '.body
 
 # ── 2. Create worktree on feature branch ─────────────────────────────────────
 mkdir -p "${WORKTREE_ROOT}"
+mkdir -p "${CARGO_TARGET_DIR}"
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 # Check if branch already exists
@@ -51,6 +57,8 @@ else
     log "creating branch ${BRANCH}"
     git -C "${REPO_ROOT}" worktree add -b "${BRANCH}" "${WORKTREE}" main
 fi
+
+b00t_init_required_submodules "${WORKTREE}"
 
 # ── 3. Write implementation prompt ───────────────────────────────────────────
 IMPL_PROMPT="${WORKTREE}/.codex-impl-prompt.md"
@@ -199,5 +207,7 @@ gh issue comment "${ISSUE_NUM}" --repo "${REPO}" \
 **PR:** ${PR_URL}
 
 Implementation dispatched via action-issue.sh (codex worker, iter ${ITER}/${MAX_CODEX_ITER})" 2>/dev/null || true
+
+git -C "${REPO_ROOT}" worktree remove --force "${WORKTREE}" 2>/dev/null || true
 
 log "✅ done — issue #${ISSUE_NUM}"
