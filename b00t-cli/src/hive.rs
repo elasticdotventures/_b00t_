@@ -334,6 +334,10 @@ pub struct HiveProfile {
 
     // inline service spec (generates b00t-hive-<name>.service on activate)
     pub service_spec: Option<HiveServiceSpec>,
+
+    // datum keys this profile depends on (b00t hive status --datum-crossref)
+    #[serde(default)]
+    pub depends_on: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -373,6 +377,8 @@ struct HiveToml {
 struct HiveTomlB00t {
     name: String,
     hint: String,
+    #[serde(default)]
+    depends_on: Vec<String>,
     hive: Option<HiveTomlHive>,
 }
 
@@ -538,6 +544,7 @@ impl HiveProfile {
             mcp_activate,
             mcp_deactivate,
             service_spec,
+            depends_on: raw.b00t.depends_on,
         })
     }
 }
@@ -596,8 +603,72 @@ pub fn discover_profiles(datum_dir: &Path) -> Vec<(String, PathBuf)> {
     result
 }
 
+// ─── Datum crossref (b00t hive status --datum-crossref) ───────────────────────
+
+/// Result of cross-referencing a single hive profile's `depends_on` datums
+/// against their `BootDatum.status`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileCrossrefResult {
+    pub profile: String,
+    pub healthy: bool,
+    /// Reasons the profile is degraded, e.g. "dep agent-qwen disabled" or
+    /// "dep agent-qwen missing". Empty when healthy.
+    pub reasons: Vec<String>,
+}
+
+/// Cross-reference a hive profile's `depends_on` datum keys against their
+/// `BootDatum.status`/`BootDatum.enabled` in the `_b00t_` datum store.
+///
+/// A profile is degraded when any dependency's backing datum is disabled, or
+/// when no datum matches the dependency at all. A profile with an empty
+/// `depends_on` (or where every dependency resolves to an enabled datum) is
+/// healthy.
+///
+/// "Disabled" is `enabled == Some(false)` OR `status == Some("disabled")`.
+/// The former is the real-world signal: datums in this repo are disabled via
+/// `.gitattributes` (`b00t.enabled=false`), almost always paired with
+/// `status=sunset` rather than a literal `status=disabled` — see
+/// `_b00t_/.gitattributes`. Checking `status` alone would silently miss
+/// every disabled datum actually in use. `status == "disabled"` is kept too,
+/// for hand-authored datums that set it directly without a git-attribute
+/// override.
+pub fn crossref_datum_status(profile: &HiveProfile, b00t_path: &str) -> ProfileCrossrefResult {
+    let mut reasons = Vec::new();
+
+    for dep in &profile.depends_on {
+        match crate::datum_utils::find_datum_by_pattern(b00t_path, dep) {
+            Ok(Some(datum)) => {
+                if datum.enabled == Some(false) || datum.status.as_deref() == Some("disabled") {
+                    reasons.push(format!("dep {} disabled", dep));
+                }
+            }
+            Ok(None) => {
+                reasons.push(format!("dep {} missing", dep));
+            }
+            Err(_) => {
+                reasons.push(format!("dep {} missing", dep));
+            }
+        }
+    }
+
+    ProfileCrossrefResult {
+        profile: profile.name.clone(),
+        healthy: reasons.is_empty(),
+        reasons,
+    }
+}
+
 /// Load a named profile from datum dir — prefers
-/// .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml
+/// .hive.tomllmd > .hive.tomllm > .stack.tomllmd > .stack.tomllm > .hive.toml > .agent.toml
+///
+/// 🤓 (#860) `*.agent.toml` datums (e.g. `opencode.agent.toml`) may carry an inline
+///    `[b00t.hive.service]` table instead of a sibling `.hive.toml`. `HiveProfile::from_file`
+///    already only reads the `[b00t]`/`[b00t.hive.*]` shape (serde ignores the surrounding
+///    `[b00t.agent]`/`[b00t.env]`/`[[b00t.usage]]` sections), so an agent.toml is a drop-in
+///    hive-profile source — it's a resolution gap, not a parsing one. The systemd naming
+///    convention is `b00t@<base>-agent.service` for datum file `<base>.agent.toml` (see
+///    `opencode.agent.toml` → `b00t@opencode-agent.service`), so a requested name ending in
+///    "-agent" also probes the suffix-stripped base filename.
 pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
     // 🤓 .tomllmd currently downgrades to the generic .tomllm/TOML handling path.
     let hive_tomllmd_path = datum_dir.join(format!("{}.hive.tomllmd", name));
@@ -605,6 +676,10 @@ pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
     let stack_tomllmd_path = datum_dir.join(format!("{}.stack.tomllmd", name));
     let stack_tomllm_path = datum_dir.join(format!("{}.stack.tomllm", name));
     let hive_toml_path = datum_dir.join(format!("{}.hive.toml", name));
+    let agent_toml_direct_path = datum_dir.join(format!("{}.agent.toml", name));
+    let agent_toml_suffixed_path = name
+        .strip_suffix("-agent")
+        .map(|base| datum_dir.join(format!("{}.agent.toml", base)));
 
     let path = if hive_tomllmd_path.exists() {
         hive_tomllmd_path
@@ -616,13 +691,30 @@ pub fn load_profile(name: &str, datum_dir: &Path) -> Result<HiveProfile> {
         stack_tomllm_path
     } else if hive_toml_path.exists() {
         hive_toml_path
+    } else if agent_toml_direct_path.exists() {
+        agent_toml_direct_path
+    } else if agent_toml_suffixed_path.as_ref().is_some_and(|p| p.exists()) {
+        agent_toml_suffixed_path.unwrap()
     } else {
         bail!(
-            "profile '{}' not found (tried .hive.tomllmd, .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml)",
+            "profile '{}' not found (tried .hive.tomllmd, .hive.tomllm, .stack.tomllmd, .stack.tomllm, .hive.toml, .agent.toml [b00t.hive.service])",
             name
         );
     };
-    HiveProfile::from_file(&path)
+
+    let is_agent_toml = path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .is_some_and(|f| f.ends_with(".agent.toml"));
+    let mut profile = HiveProfile::from_file(&path)?;
+    if is_agent_toml {
+        // agent.toml's own [b00t].name is the agent identity (e.g. "opencode"), not the
+        // hive/systemd profile identifier ("opencode-agent"). Re-stamp to the requested
+        // name so downstream generated unit names (b00t-hive-<name>.service) match what
+        // b00t@<name>.service's PropagatesStopTo expects.
+        profile.name = name.to_string();
+    }
+    Ok(profile)
 }
 
 // ─── State Persistence ────────────────────────────────────────────────────────
@@ -2405,6 +2497,7 @@ message = "ledgerr-mcp requires supervised execution"
             mcp_activate: vec![],
             mcp_deactivate: vec![],
             service_spec: None,
+            depends_on: vec![],
         };
         let issues = snapshot.satisfies_gate(&profile);
         assert!(!issues.is_empty(), "should fail gate with only 2GB free");
@@ -2467,6 +2560,150 @@ working_directory = "/tmp/test"
         assert_eq!(spec.exec_start, "/usr/bin/sleep 3600");
         assert_eq!(spec.limit_nofile, Some(1024));
         assert_eq!(spec.working_directory.as_deref(), Some("/tmp/test"));
+    }
+
+    // ── datum crossref tests (b00t hive status --datum-crossref, #713) ─────────
+
+    #[test]
+    fn test_hive_profile_depends_on_parses_from_toml() {
+        let toml_str = r#"
+[b00t]
+name = "test-crossref-parse"
+type = "hive_profile"
+hint = "test depends_on parsing"
+depends_on = ["agent-qwen", "serena.mcp"]
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test-crossref-parse.hive.toml");
+        std::fs::write(&path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&path).unwrap();
+        assert_eq!(
+            profile.depends_on,
+            vec!["agent-qwen".to_string(), "serena.mcp".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_degraded_when_dep_disabled() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // backing datum: disabled
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+status = "disabled"
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with disabled dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(!result.healthy);
+        assert_eq!(
+            result.reasons,
+            vec!["dep agent-qwen.mcp disabled".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_degraded_when_dep_enabled_false() {
+        // Real-world disabled datums in this repo use `enabled = false`
+        // (typically paired with `status = "sunset"`, set via
+        // `.gitattributes` — see _b00t_/.gitattributes), NOT a literal
+        // `status = "disabled"`. Regression guard: crossref must catch this
+        // shape too, not just the synthetic status="disabled" case above.
+        let dir = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+status = "sunset"
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with sunset+enabled=false dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(!result.healthy);
+        assert_eq!(
+            result.reasons,
+            vec!["dep agent-qwen.mcp disabled".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_datum_crossref_healthy_when_deps_enabled_or_empty() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // backing datum: enabled (no status field means not disabled)
+        std::fs::write(
+            dir.path().join("agent-qwen.mcp.toml"),
+            r#"
+[b00t]
+name = "agent-qwen"
+type = "mcp"
+hint = "qwen inference agent"
+"#,
+        )
+        .unwrap();
+
+        let toml_str = r#"
+[b00t]
+name = "serena"
+type = "hive_profile"
+hint = "test profile with healthy dep"
+depends_on = ["agent-qwen.mcp"]
+"#;
+        let profile_path = dir.path().join("serena.hive.toml");
+        std::fs::write(&profile_path, toml_str).unwrap();
+        let profile = HiveProfile::from_file(&profile_path).unwrap();
+
+        let result = crossref_datum_status(&profile, dir.path().to_str().unwrap());
+        assert!(result.healthy);
+        assert!(result.reasons.is_empty());
+
+        // empty depends_on is also healthy
+        let toml_str_empty = r#"
+[b00t]
+name = "no-deps"
+type = "hive_profile"
+hint = "profile with no dependencies"
+"#;
+        let empty_path = dir.path().join("no-deps.hive.toml");
+        std::fs::write(&empty_path, toml_str_empty).unwrap();
+        let empty_profile = HiveProfile::from_file(&empty_path).unwrap();
+        let empty_result = crossref_datum_status(&empty_profile, dir.path().to_str().unwrap());
+        assert!(empty_result.healthy);
+        assert!(empty_result.reasons.is_empty());
     }
 
     // ── load_profile precedence tests ─────────────────────────────────────────
@@ -2550,5 +2787,142 @@ working_directory = "/tmp/test"
             "error must mention .stack.tomllm"
         );
         assert!(msg.contains(".hive.toml"), "error must mention .hive.toml");
+        assert!(
+            msg.contains(".agent.toml"),
+            "error must mention .agent.toml (#860)"
+        );
+    }
+
+    // ── load_profile .agent.toml resolution tests (#860) ─────────────────────
+
+    /// Minimal fixture mirroring the real `opencode.agent.toml` shape: `[b00t]`
+    /// name/hint + surrounding `[b00t.agent]`/`[b00t.env]`/`[[b00t.usage]]` noise
+    /// that must be ignored, plus an inline `[b00t.hive.service]` table.
+    fn agent_toml_with_inline_service(agent_name: &str) -> String {
+        format!(
+            r#"
+[b00t]
+name = "{agent_name}"
+type = "agent"
+hint = "{agent_name} coding agent — systemd-managed ACP server"
+
+[b00t.agent]
+pid = "{agent_name}-001"
+model = "qwen36-local/ch0nky"
+
+[b00t.hive.service]
+description = "{agent_name} ACP server"
+service_type = "simple"
+restart = "on-failure"
+restart_sec = "10s"
+timeout_start_sec = "60"
+after = ["network.target"]
+environment = ["FOO=bar"]
+exec_start = "{agent_name} serve --port 3000"
+
+[b00t.hive.resources]
+ram_gb = 1
+
+[b00t.env]
+AGENT_ID = "{agent_name}"
+
+[[b00t.usage]]
+description = "Start {agent_name} agent service"
+command = "systemctl --user start b00t@{agent_name}-agent.service"
+"#
+        )
+    }
+
+    #[test]
+    fn test_load_profile_resolves_agent_toml_via_suffix_stripped_base() {
+        // systemd instance "opencode-agent" → datum file "opencode.agent.toml"
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("opencode.agent.toml"),
+            agent_toml_with_inline_service("opencode"),
+        )
+        .unwrap();
+
+        let profile = load_profile("opencode-agent", dir.path())
+            .expect("opencode-agent must resolve via opencode.agent.toml (#860)");
+
+        // Re-stamped to the requested systemd/hive identifier, not the agent's own name.
+        assert_eq!(profile.name, "opencode-agent");
+        let spec = profile
+            .service_spec
+            .expect("[b00t.hive.service] must be extracted from the agent.toml");
+        assert_eq!(spec.exec_start, "opencode serve --port 3000");
+        assert_eq!(spec.restart.as_deref(), Some("on-failure"));
+        assert_eq!(spec.after, vec!["network.target".to_string()]);
+        assert_eq!(spec.environment, vec!["FOO=bar".to_string()]);
+    }
+
+    #[test]
+    fn test_load_profile_resolves_agent_toml_direct_name() {
+        // A profile requested by the bare agent.toml basename (no "-agent" suffix)
+        // also resolves directly.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("moltis.agent.toml"),
+            agent_toml_with_inline_service("moltis"),
+        )
+        .unwrap();
+
+        let profile = load_profile("moltis", dir.path()).unwrap();
+        assert!(profile.service_spec.is_some());
+        assert_eq!(profile.name, "moltis");
+    }
+
+    #[test]
+    fn test_load_profile_still_prefers_hive_toml_over_agent_toml() {
+        // Regression guard: existing suffix precedence must not be disturbed by
+        // adding .agent.toml as a fallback.
+        let dir = tempfile::tempdir().unwrap();
+        let name = "myprofile";
+        write_profile_file(dir.path(), name, ".hive.toml", "hive-toml");
+        std::fs::write(
+            dir.path().join(format!("{}.agent.toml", name)),
+            agent_toml_with_inline_service(name),
+        )
+        .unwrap();
+
+        let profile = load_profile(name, dir.path()).unwrap();
+        assert_eq!(profile.hint, "hive-toml", ".hive.toml must still win");
+    }
+
+    #[test]
+    fn test_load_profile_resolves_real_opencode_agent_datum() {
+        // End-to-end proof against the REAL production datum shipped in this repo
+        // (_b00t_/opencode.agent.toml) — the exact repro from issue #860:
+        // `systemctl --user start b00t@opencode-agent.service` failed because the
+        // resolver never looked at *.agent.toml files.
+        let b00t_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("_b00t_");
+        if !b00t_dir.join("opencode.agent.toml").exists() {
+            // Datum not present in this checkout (e.g. sparse worktree) — skip rather
+            // than fail the suite on an environment difference.
+            return;
+        }
+
+        let profile = load_profile("opencode-agent", &b00t_dir)
+            .expect("real opencode.agent.toml must resolve as profile 'opencode-agent'");
+
+        assert_eq!(profile.name, "opencode-agent");
+        let spec = profile
+            .service_spec
+            .expect("real opencode.agent.toml [b00t.hive.service] must be extracted");
+        assert_eq!(
+            spec.exec_start,
+            "opencode serve --port 3000 --model qwen36-local/ch0nky"
+        );
+        assert_eq!(spec.restart.as_deref(), Some("on-failure"));
+        assert!(spec.after.contains(&"network.target".to_string()));
+        assert!(
+            spec.environment
+                .iter()
+                .any(|e| e.starts_with("OPENCODE_CONFIG="))
+        );
     }
 }

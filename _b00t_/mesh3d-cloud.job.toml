@@ -58,7 +58,7 @@ image = "docker.io/elasticdotventures/mesh-runner:v6"
 config_path = "/workspace/request.json"
 flavor = "RTX_4090"
 timeout_hours = 2.0
-inputs = ["request.json"]
+inputs = ["request.json", "input.jpg"]
 
 [b00t.job.steps.batch.env]
 MESH_RESOLUTION = "1024"

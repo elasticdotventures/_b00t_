@@ -35,9 +35,10 @@ models = ["b00t-sm0l", "ch0nky"]
 
 [[b00t.providers.upstreams]]
 name = "claude"
-type = "claude"
-oauth = "claude_code"
-enabled = false
+type = "openai"
+endpoint = "${ANTHROPIC_FOUNDRY_BASE_URL}/v1"
+models = ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-5"]
+enabled = true
 
 [[b00t.providers.upstreams]]
 name = "codex"

@@ -50,10 +50,10 @@ ping_test "b00t:system-normal" \
     "git status --porcelain 2>/dev/null | grep -c '^UU' || echo 0" \
     "0"
 
-# 5. Cargo — unit tests
-ping_test "cargo:ufo-types" \
-    "cargo test -p ufo-types --lib" \
-    "test result: ok"
+# 5. Cargo — external ufo-types consumer compatibility
+ping_test "cargo:ufo-types-consumer" \
+    "cargo check -p b00t-c0re-lib -p b00t-chat" \
+    "Finished"
 
 echo "╠══════════════════════════════════════════════════╣"
 echo "║  RESULT: $PASS/$((PASS + FAIL)) passed"

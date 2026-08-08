@@ -111,6 +111,19 @@ pub trait FilterLogic {
     fn evaluate_constraints(&self, require: &[String]) -> bool;
 }
 
+/// Shared default for `FilterLogic::is_available`: "not installed AND
+/// prerequisites satisfied." Mirrors `ConstraintEvaluator::evaluate_constraints_default`
+/// — implement the type-specific pieces (`DatumChecker::is_installed`,
+/// `FilterLogic::prerequisites_satisfied`), delegate `is_available` to this.
+/// NOT every `FilterLogic` impl wants this semantics (some diverge deliberately)
+/// — opt in per type, don't force it via a supertrait bound.
+pub trait AvailabilityEvaluator: DatumChecker + FilterLogic {
+    fn is_available_default(&self) -> bool {
+        !DatumChecker::is_installed(self) && FilterLogic::prerequisites_satisfied(self)
+    }
+}
+impl<T: DatumChecker + FilterLogic> AvailabilityEvaluator for T {}
+
 pub trait DatumProvider: DatumChecker + StatusProvider + FilterLogic + Send + Sync {
     /// Used by ConstraintEvaluator trait methods (compiler doesn't detect indirect usage)
     #[allow(dead_code)]
@@ -226,6 +239,36 @@ pub trait ConstraintEvaluator {
                 .unwrap_or(false) // Unknown constraints → fail-closed
         })
     }
+}
+
+/// Generates `TryFrom<(&str, &str)>` (delegating to `Self::from_config`) plus the
+/// `ConstraintEvaluator`/`DatumProvider` `datum()` accessors, for datum types whose
+/// state is a single `datum: BootDatum` field. Does NOT touch `from_config` itself
+/// (type-specific per datum type) or `StatusProvider`/`DatumChecker` (genuinely
+/// type-specific) — those stay hand-written per file.
+#[macro_export]
+macro_rules! impl_boot_datum_accessors {
+    ($ty:ty) => {
+        impl TryFrom<(&str, &str)> for $ty {
+            type Error = anyhow::Error;
+
+            fn try_from((name, path): (&str, &str)) -> Result<Self, Self::Error> {
+                Self::from_config(name, path)
+            }
+        }
+
+        impl $crate::traits::ConstraintEvaluator for $ty {
+            fn datum(&self) -> &$crate::BootDatum {
+                &self.datum
+            }
+        }
+
+        impl $crate::traits::DatumProvider for $ty {
+            fn datum(&self) -> &$crate::BootDatum {
+                &self.datum
+            }
+        }
+    };
 }
 
 // ── Sandbox type hierarchy ────────────────────────────────────────────────────

@@ -48,6 +48,7 @@ b00t-bouncer = { path = "../b00t-bouncer" }
 blessed = { path = "../blessed" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }
+ufo-types = { workspace = true }
 openssl-sys = { workspace = true }
 duct = "1.0"
 shellexpand = "3.1"

@@ -1,0 +1,126 @@
+[b00t]
+name = "ssh"
+trigger_words = ["ssh", "tunnel", "jumpbox", "bastion", "port-forward", "vpn", "socks", "wsl", "browser"]
+type = "cli"
+desires = "latest"
+install = "sudo apt install openssh-client -y"
+version = "ssh -V"
+version_regex = "OpenSSH_[0-9]+\\.[0-9]+"
+hint = "OpenSSH client and tunnel patterns for remote-browser demos, WSL-to-jumpbox access, and pod/cloud migration without reinventing a webserver tier."
+keywords = ["ssh", "openssh", "tunnel", "jumpbox", "bastion", "wsl", "kubernetes", "pod", "browser", "vpn", "socks", "port-forward"]
+unlocks = ["ssh *", "autossh *"]
+depends_on = ["socat.cli", "podman.cli", "k8s.cli"]
+entangled_cli = ["sshuttle.cli"]
+
+# The datum's purpose is decision support and command templating. Keep the
+# service tier ordinary: localhost HTTP on the workload side, SSH transport on
+# the operator side, and Pingap/ingress only where host routing or TLS actually
+# belongs.
+
+[b00t.abstracts.demo_local_forward]
+description = "Preferred remote-browser demo tunnel: remote service binds localhost; operator browser opens a local forwarded URL."
+remote_service = "python3 -m http.server {remote_port} --bind 127.0.0.1 --directory {docroot}"
+operator_tunnel = "ssh -N -L 127.0.0.1:{local_port}:127.0.0.1:{remote_port} {jump_host}"
+operator_url = "http://127.0.0.1:{local_port}/{path}"
+tokens = ["local_port", "remote_port", "jump_host", "docroot", "path"]
+default_when = "One known HTTP service must be viewed in the operator's local browser."
+security = "Loopback-only on both ends; no LAN exposure and no repo-root serving unless explicitly chosen."
+
+[b00t.abstracts.multi_service_socks]
+description = "Dynamic SOCKS tunnel for several remote ports/hosts without allocating one -L per service."
+operator_tunnel = "ssh -N -D 127.0.0.1:{socks_port} {jump_host}"
+browser_proxy = "SOCKS5 127.0.0.1:{socks_port}; optionally proxy DNS through SOCKS."
+tokens = ["socks_port", "jump_host"]
+default_when = "A browser needs remote Grafana, app, API, and docs at the same time."
+tradeoff = "Requires browser/proxy configuration; less explicit than -L, but better for exploratory dashboards."
+
+[b00t.abstracts.reverse_forward]
+description = "Reverse tunnel: remote jumpbox/pod gets a listener that forwards back to a service reachable from the WSL node."
+operator_tunnel = "ssh -N -R 127.0.0.1:{remote_port}:127.0.0.1:{local_port} {jump_host}"
+tokens = ["remote_port", "local_port", "jump_host"]
+default_when = "A pod-side process or remote browser must call back into a local WSL service."
+security = "Keep the remote listen address on 127.0.0.1 unless the sshd GatewayPorts policy intentionally allows wider access."
+
+[b00t.abstracts.pod_jumpbox_local_forward]
+description = "Join a WSL node to a jumpbox running inside Kubernetes by using kubectl/podman port-forward to expose pod sshd locally, then ordinary ssh -L through that listener."
+kube_port_forward = "kubectl -n {namespace} port-forward pod/{pod_name} 2222:22"
+podman_port_forward = "podman port inspect {pod_name} 22/tcp"
+operator_tunnel = "ssh -p 2222 -N -L 127.0.0.1:{local_port}:127.0.0.1:{remote_port} {pod_user}@127.0.0.1"
+tokens = ["namespace", "pod_name", "pod_user", "local_port", "remote_port"]
+default_when = "The jumpbox is inside a cluster/pod and should not expose sshd through a public load balancer."
+cloud_path = "Replace kubectl port-forward with a cloud load balancer, Tailscale/WireGuard sidecar, or Gateway API TCPRoute only after the loopback tunnel contract is proven."
+
+[b00t.abstracts.pingap_edge_proxy]
+description = "Use Pingap as the pod/cloud edge for hostname/TLS/reverse-proxy concerns, not as a tunnel replacement."
+local_pattern = "app/browser -> ssh -L/SOCKS -> localhost service; Pingap routes named HTTPS hosts to stable pod or host backends."
+pod_pattern = "Pingap pod reads generated TOML, routes hostnames to Services or host.containers.internal, and supports shadow/cutover ports."
+shared_vendor = "~/.b00t/vendor/pingap-devproxy-b00t"
+vendor_datum = "~/.b00t/_b00t_/datums/VENDOR-PINGAP-DEVPROXY-B00T.tomllmd"
+app4dog_reference = "/home/brianh/promptexecution/app4dog/_b00t_/datums/PINGAP-DEV-PROXY.tomllmd"
+default_when = "You need host-based routing, TLS cert selection, shadow/cutover deployment, or a future Gateway/Ingress-like edge."
+do_not_use_for = "Plain single-port browser demo tunneling; ssh -L is simpler and safer."
+
+[b00t.abstracts.sshuttle_route]
+description = "VPN-like TCP session routing over SSH for a WSL node that should see a remote subnet as local."
+operator_tunnel = "sshuttle -r {jump_host} {subnets}"
+with_dns = "sshuttle --dns -r {jump_host} {subnets}"
+datum = "sshuttle.cli"
+tokens = ["jump_host", "subnets"]
+default_when = "Many remote IPs/ports must be reachable and browser proxy settings are too awkward."
+requirements = "Local sudo/root for transparent proxying; Python on the remote end."
+tradeoff = "Convenient for WSL-to-cluster access; heavier than -L and should be explicit because it rewrites local routing."
+install_when = "Install sshuttle only when this broad subnet route is needed; keep plain ssh -L/-D for single-service browser demos."
+
+[b00t.abstracts.tun_tap_vpn]
+description = "OpenSSH tun/tap mode for packet-level joining of networks."
+operator_tunnel = "ssh -w {local_tun}:{remote_tun} {jump_host}"
+tokens = ["local_tun", "remote_tun", "jump_host"]
+default_when = "You need real L3 routing, not just TCP service access."
+requirements = "Privilege on both ends, sshd PermitTunnel, interface/IP route setup."
+tradeoff = "Powerful but operationally heavier; avoid for demos unless packet-level routing is the actual requirement."
+
+[b00t.abstracts.autossh_supervision]
+description = "Keep an SSH tunnel alive during demos or long-running WSL-to-jumpbox sessions."
+command = "autossh -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:{local_port}:127.0.0.1:{remote_port} {jump_host}"
+tokens = ["local_port", "remote_port", "jump_host"]
+default_when = "A human demo or dashboard session should survive transient network drops."
+tradeoff = "Adds one dependency; can also be replaced by a systemd user unit around plain ssh."
+
+[wsl_jumpbox_architecture]
+problem = "A WSL development node needs to reach services behind or inside a Kubernetes pod jumpbox now, while leaving a path to cloud deployment later."
+baseline = "Run services on loopback; expose only through ssh -L/-D/-R. This proves the browser/demo contract without a public ingress."
+pod_join = "Expose pod sshd with kubectl port-forward or a restricted TCP Service; the WSL node connects to the pod as a bastion, then layers -L/-D/-R tunnels over it."
+pingap_enhancement = "Pingap adds generated, auditable hostname/TLS routing at the edge. Its app4dog pattern keeps services.mjs as route source of truth, generates TOML, renders a pod template, and provides JSON status."
+cloud_scale = "Promote the same pieces: jumpbox pod becomes a hardened bastion Deployment; Pingap becomes ingress/Gateway-compatible edge; ssh -L/SOCKS remains the operator path; sshuttle/tun are opt-in for broader network joins."
+anti_pattern = "Do not create a custom webserver/service tier for tunnel semantics. Use OpenSSH/sshuttle/autossh for transport and Pingap/Gateway API for edge routing."
+
+[[b00t.usage]]
+description = "Remote browser demo through a single localhost tunnel."
+command = "ssh -N -L 127.0.0.1:8008:127.0.0.1:8008 fung1"
+
+[[b00t.usage]]
+description = "Browser reaches many remote services through SOCKS."
+command = "ssh -N -D 127.0.0.1:1080 fung1"
+
+[[b00t.usage]]
+description = "Connect to a Kubernetes jumpbox pod without exposing sshd publicly."
+command = "kubectl -n jumpbox port-forward pod/jumpbox 2222:22"
+
+[[b00t.usage]]
+description = "Then open a local browser tunnel through the jumpbox pod."
+command = "ssh -p 2222 -N -L 127.0.0.1:8008:127.0.0.1:8008 jump@127.0.0.1"
+
+[validate]
+command = "ssh -V"
+regex = "OpenSSH_[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = ["developer", "operator"]
+optional_for = ["executive", "reviewer"]
+
+# b00t:map v1
+# summary: OpenSSH tunnel datum — -L/-D/-R, pod jumpbox, Pingap edge, sshuttle, tun/tap, autossh patterns for WSL remote-browser demos and cloud-ready bastion evolution
+# tags: ssh, tunnel, jumpbox, bastion, wsl, kubernetes, pod, pingap, sshuttle, autossh, socks, vpn
+# tier: ch0nky
+# cmds: ssh -L, ssh -D, ssh -R, sshuttle -r, autossh -M 0
+# complexity: 5

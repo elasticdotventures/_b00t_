@@ -425,13 +425,15 @@ impl B00tMcpServerRusty {
             success: bool,
             server_type: String,
             working_dir: String,
-            indicator: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            indicator: Option<String>,
         }
 
-        let decorated_output = if output.trim().is_empty() {
-            indicator.to_string()
-        } else {
-            format!("{}\n{}", output, indicator)
+        let decorated_output = match (output.trim().is_empty(), indicator.trim().is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => indicator.to_string(),
+            (false, true) => output.to_string(),
+            (false, false) => format!("{}\n{}", output, indicator),
         };
 
         let result = B00tOutput {
@@ -439,7 +441,7 @@ impl B00tMcpServerRusty {
             success: true,
             server_type: "rusty".to_string(),
             working_dir: self.working_dir.display().to_string(),
-            indicator: indicator.to_string(),
+            indicator: (!indicator.trim().is_empty()).then(|| indicator.to_string()),
         };
 
         let content = serde_json::to_string_pretty(&result)
@@ -456,13 +458,15 @@ impl B00tMcpServerRusty {
             success: bool,
             server_type: String,
             working_dir: String,
-            indicator: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            indicator: Option<String>,
         }
 
-        let decorated_error = if error.trim().is_empty() {
-            indicator.to_string()
-        } else {
-            format!("{}\n{}", error, indicator)
+        let decorated_error = match (error.trim().is_empty(), indicator.trim().is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => indicator.to_string(),
+            (false, true) => error.to_string(),
+            (false, false) => format!("{}\n{}", error, indicator),
         };
 
         let result = B00tError {
@@ -470,7 +474,7 @@ impl B00tMcpServerRusty {
             success: false,
             server_type: "rusty".to_string(),
             working_dir: self.working_dir.display().to_string(),
-            indicator: indicator.to_string(),
+            indicator: (!indicator.trim().is_empty()).then(|| indicator.to_string()),
         };
 
         let content = serde_json::to_string_pretty(&result)
@@ -565,18 +569,40 @@ mod tests {
             let temp_dir = TempDir::new().unwrap();
             let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
 
-            let indicator = "<🥾>{ \"chat\": { \"msgs\": 0 } }</🥾>";
-            let success_result = server.create_success_result("Test output", indicator);
+            let success_result = server.create_success_result("Test output", "");
             assert!(!success_result.content.is_empty());
+            let success_value = serde_json::to_value(&success_result).unwrap();
+            let success_text = success_value["content"][0]["text"].as_str().unwrap();
+            let success_payload: serde_json::Value = serde_json::from_str(success_text).unwrap();
+            assert_eq!(success_payload["output"], "Test output");
+            assert!(success_payload.get("indicator").is_none());
+            assert!(!success_text.contains("<🥾>"));
 
-            let error_result = server.create_error_result("Test error", indicator);
+            let error_result = server.create_error_result("Test error", "");
             assert!(!error_result.content.is_empty());
+            let error_value = serde_json::to_value(&error_result).unwrap();
+            let error_text = error_value["content"][0]["text"].as_str().unwrap();
+            let error_payload: serde_json::Value = serde_json::from_str(error_text).unwrap();
+            assert_eq!(error_payload["error"], "Test error");
+            assert!(error_payload.get("indicator").is_none());
+            assert!(!error_text.contains("<🥾>"));
+        });
+    }
 
-            // Verify the content can be parsed
-            if let Some(_content) = success_result.content.get(0) {
-                // Verify we have content
-                assert!(!success_result.content.is_empty());
-            }
+    #[test]
+    fn nonempty_indicator_is_preserved() {
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
+            let indicator = "<🥾>{ \"chat\": { \"msgs\": 1 } }</🥾>";
+
+            let result = server.create_success_result("Test output", indicator);
+            let value = serde_json::to_value(&result).unwrap();
+            let text = value["content"][0]["text"].as_str().unwrap();
+            let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+
+            assert_eq!(payload["indicator"], indicator);
+            assert!(payload["output"].as_str().unwrap().contains(indicator));
         });
     }
 }

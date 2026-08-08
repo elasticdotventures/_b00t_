@@ -8,7 +8,7 @@ name = "cranelift"
 type = "cli"
 hint = "Rustc Cranelift codegen backend — 2x faster debug builds than LLVM"
 desires = "latest"
-depends_on = ["rustup.cli"]
+depends_on = ["rustc.cli"]
 
 [install]
 command = "rustup component add rustc-codegen-cranelift-preview --toolchain nightly"
@@ -27,10 +27,12 @@ command = "CARGO_CODEGEN_BACKEND=cranelift cargo build -p b00t-admin"
 
 [[b00t.usage]]
 description = "Set cranelift as default for all builds (add to ~/.cargo/config.toml)"
-command = "cat >> ~/.cargo/config.toml << 'EOF'
+command = '''
+cat >> ~/.cargo/config.toml << 'EOF'
 [target.'cfg(all())']
-rustflags = [\"-Zcodegen-backend=cranelift\"]
-EOF"
+rustflags = ["-Zcodegen-backend=cranelift"]
+EOF
+'''
 
 [roles]
 required_for = ["developer"]

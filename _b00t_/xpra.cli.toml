@@ -1,0 +1,153 @@
+# b00t datum: xpra — seamless remote display server (X11 app forwarding, HTML5 client)
+# type: cli
+#
+# @tribal: Xpra is treated as a REQUIREMENT (system package via its own apt repo),
+#   NOT vendored. It's a full GPL2 app (Python + C + HTML5 client) — b00t
+#   contributes zero code to it, so vendoring would only buy build/maintenance
+#   liability. Same pattern as docker/node/chrome elsewhere in this catalogue:
+#   detect/install/version wraps the upstream package, nothing more.
+#
+# @tribal: solves the WSL2/Windows-Terminal X11-forwarding pain documented in
+#   windows-wsl-x11.lfmf.toml — Xpra owns its own virtual display (no separate
+#   Xvfb to manage) and exposes it two ways: native `xpra attach` client
+#   (reconnect-safe, seamless per-window integration, clipboard) or the
+#   built-in HTML5 client over ws:// (zero client install — any browser tab).
+#
+# @tribal: seamless mode forwards individual application windows, not a full
+#   desktop — right fit for "watch this one headed Chrome the RPA agent is
+#   driving", not a VNC-style remote desktop. Use `xpra start-desktop` only
+#   if a full desktop session is ever needed (out of scope here — see
+#   xpra-rpa.hive.toml).
+#
+# @tribal: STATUS 2026-08-06 — HTML5 PATH CONFIRMED WORKING end-to-end.
+#   Server: rock-5c (armbian/noble, aarch64), xpra.org repo build 6.5.2-r0.
+#   Verified server-side via Playwright driving a real (non-headless-shell)
+#   Chromium against `http://127.0.0.1:10000` directly (no SSH tunnel needed
+#   for this verification since it ran on rock-5c itself): `xpra start :100
+#   --start-child=xterm ...` renders the seamless window in the HTML5 canvas,
+#   real OS-level keystrokes (Playwright `press_key`, not synthetic
+#   `dispatchEvent` — that path is untrustworthy, see below) land in the
+#   forwarded xterm, Enter executes the command, and the shell's stdout
+#   renders back through the canvas. Full round-trip confirmed: browser
+#   keystroke → HTML5 client → xpra server → X11 app → shell → X11 update →
+#   xpra encode → HTML5 canvas → visible.
+#   The DPI-mismatch dialog ("DPI set to 27 x 52, wanted 96 x 96") IS real
+#   and reproducible on connect — confirmed cosmetic/non-blocking, dismissed
+#   via clicking its `.dismiss` div (not part of the forwarded X11 window,
+#   it's the xpra HTML5 client's own overlay UI).
+#   NOT yet re-verified on this pass: `attach_native` (GTK3 client path) and
+#   a real WSL2/WSLg client machine specifically — those need the operator's
+#   own client machine, not just server-side testing. Getting this far
+#   originally took 6 real, distinct bugs/gaps — every one is memoized below
+#   because each is non-obvious and WILL recur for the next agent/operator
+#   who sets this up on a new node.
+#
+# @tribal: if re-verifying keyboard input programmatically (e.g. via
+#   Playwright), use real OS-level key events (Playwright's `press_key` /
+#   CDP `Input.dispatchKeyEvent`), NOT `document.dispatchEvent(new
+#   KeyboardEvent(...))` — synthetic DOM events are untrusted
+#   (`event.isTrusted === false`) and some xpra HTML5 client keyboard paths
+#   may silently ignore them depending on version/build. (In this session
+#   the synthetic-event characters DID land, so it's not a hard requirement
+#   on 6.5.2-r0, but don't rely on it — use real key events.)
+#
+# @tribal: DON'T use plain `apt-get install xpra` (Ubuntu universe, 3.1.5) on
+#   either side — it's a stale build with real bugs, not just an old version
+#   number:
+#     1. CLIENT bug: under an environment with no dbus/systemd (WSLg is
+#        exactly this), the AppIndicator tray-icon fallback path in
+#        os_util.py references an undefined `_saved_env` (should be
+#        `saved_env`); the NameError kills the whole `xpra attach` connection,
+#        not just the tray icon. `--tray=no` works around it but doesn't fix it.
+#     2. SERVER bug/gap: 3.1.5's optional `python3-lz4` isn't pulled in by
+#        default, so a modern client's compression negotiation gets
+#        "invalid compression: lz4 is not available" and the connection is
+#        dropped.
+#     3. Even with lz4 fixed, a 3.1.5 server paired with a 6.x client still
+#        fails picture-encoding negotiation outright: "client failed to
+#        specify any supported encodings". This is a real protocol gap across
+#        a 3-major-version jump, not a config knob — match versions instead
+#        of trying to bridge it.
+#   USE THE OFFICIAL xpra.org REPO ON BOTH SIDES instead (bootstrap below).
+#
+# @tribal: xpra.org's repo packaging for 6.x splits what used to be one
+#   `xpra` deb (3.1.x) into many subpackages. The base `xpra` meta-package
+#   alone is NOT enough on the SERVER side — `xpra start` fails outright with
+#   "you must install `xpra-x11` to use 'seamless'". Server needs
+#   `xpra-server xpra-x11 xpra-html5 xpra-codecs` explicitly (see [install]).
+#   Client side, the base `xpra` meta-package was sufficient (pulls in the
+#   GTK3 client deps on its own) — confirmed on the WSL2 side.
+#
+# @tribal: client-side gotchas seen ONLY on WSLg, both required for a
+#   successful `xpra attach`, neither obvious from the error text alone:
+#     - `GDK_BACKEND=x11` — the GTK3 client auto-detects WSLg's native
+#       Wayland (Weston WM) and tries to render natively, but its keyboard
+#       XKB-layout query unconditionally needs X11 root-window bindings and
+#       crashes ("cannot load X11 bindings on non-X11 platform") instead of
+#       falling back. WSLg bundles XWayland for exactly this; force GTK onto it.
+#     - `--tray=no` — belt-and-suspenders even on 6.x/6.x pairs; see bug #1 above.
+#
+# @tribal: SSH auth — `xpra attach ssh://user@host/N` uses xpra's own bundled
+#   SSH client (paramiko), not your system `ssh`. If pubkey auth fails it does
+#   NOT reliably fall back to an interactive password prompt the way a normal
+#   `ssh` command does — it can just hard-fail with no prompt at all. Don't
+#   chase that behavior; make pubkey auth actually succeed instead:
+#   `ssh-copy-id <user>@<host>` from the client once, so `~/.ssh/authorized_keys`
+#   exists server-side. (`--ssh=ssh` also works, forcing xpra to shell out to
+#   your real OpenSSH client, but fixing the key is the durable fix.)
+#
+# @tribal: cosmetic-only, seen once, did not block rendering — a DPI mismatch
+#   warning on connect (WSLg reports a virtual multi-monitor desktop, e.g.
+#   3840x1080 across two outputs at 96dpi). If it turns out to matter, the
+#   client-side knob is `--dpi=<value>` on the `xpra attach` command.
+
+[b00t]
+name = "xpra"
+type = "cli"
+hint = "Seamless X11 app forwarding + built-in HTML5 client — replaces raw X11Forwarding for watching headed RPA browser sessions"
+source = "https://github.com/Xpra-org/xpra"
+
+[version]
+desires = "6.5"
+cmd     = "xpra --version 2>&1"
+regex   = "xpra v?(\\d+\\.\\d+(?:\\.\\d+)?)"
+
+[install]
+# 🤓 run on BOTH the RPA server node (e.g. rock-5c) and the operator's client
+#    machine (WSL2/Linux) — this bootstraps the xpra.org repo; plain
+#    `apt-get install xpra` pulls the stale, buggy Ubuntu-universe 3.1.5.
+#    `<codename>` is the Ubuntu release codename (noble/jammy/etc, `. /etc/os-release`).
+cmd = """
+set -euo pipefail
+DISTRO_CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-noble}")"
+sudo apt-get install -y ca-certificates wget
+sudo wget -O /usr/share/keyrings/xpra.asc https://xpra.org/xpra.asc
+cd /etc/apt/sources.list.d
+sudo wget -O "xpra-${DISTRO_CODENAME}.sources" \
+  "https://raw.githubusercontent.com/Xpra-org/xpra/master/packaging/repos/${DISTRO_CODENAME}/xpra.sources"
+sudo apt-get update
+# server needs the split-out subpackages explicitly; client is fine with the meta-package
+sudo apt-get install -y xpra-server xpra-x11 xpra-html5 xpra-codecs xpra
+xpra --version
+"""
+
+[runtime_deps]
+apt = ["xpra", "xpra-server", "xpra-x11", "xpra-html5", "xpra-codecs"]
+
+[usage]
+# 🤓 host below is rock-5c's LAN IP (192.168.1.131), not the "rock-5c" mDNS
+#    name — WSL2 clients frequently can't resolve .local/mDNS names on the
+#    LAN, the IP always works regardless of client-side mDNS setup. Swap it
+#    for `$(whoami)@<your-rock-5c-ip>` if the node's address changes.
+start          = "xpra start :100 --start-child='<headed-browser-cmd>' --exit-with-children=yes --bind-tcp=127.0.0.1:10000 --html=on --daemon=no"
+authorize_once = "ssh-copy-id $(whoami)@192.168.1.131   # one-time: makes pubkey auth actually succeed"
+attach_native  = "GDK_BACKEND=x11 xpra attach ssh://$(whoami)@192.168.1.131/100 --tray=no"
+attach_html5   = "ssh -L 10000:127.0.0.1:10000 $(whoami)@192.168.1.131   # then open http://127.0.0.1:10000 in Edge/Chrome/Firefox, NOT Internet Explorer"
+stop           = "xpra stop :100"
+
+# b00t:map v1
+# summary: Xpra seamless display/HTML5 server — requirement (not vendored) for headed-browser RPA sessions. xpra.org repo required on both ends; see @tribal notes for 6 confirmed bugs/gaps and their fixes.
+# tags: xpra, x11, display, remote, html5, rpa, operator-experience, wslg
+# tier: ch0nky
+# cmds: b00t-cli detect xpra, just rpa::xpra-start, just rpa::xpra-attach-html5, just rpa::xpra-attach-native
+# complexity: 6

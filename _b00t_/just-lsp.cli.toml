@@ -1,0 +1,18 @@
+# just-lsp.cli — cli datum
+# Assimilated from: github:terror/just-lsp
+
+[b00t]
+name        = "just-lsp"
+type        = "cli"
+hint        = "just-lsp — terror/just-lsp — language server for the `just` command runner (tree-sitter-backed, CC0-1.0)"
+
+install = "cargo install just-lsp"
+version = "just-lsp --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+# b00t:map v1
+# summary: datum for github:terror/just-lsp — language server for the `just` command runner
+# tags: just-lsp, terror, lsp, justfile
+# tier: sm0l
+# cmds: b00t install just-lsp
+# complexity: 1

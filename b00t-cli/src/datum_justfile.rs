@@ -307,7 +307,7 @@ impl CliExecutor for JustfileDatum {
                             kind: p.kind.clone(),
                         })
                         .collect(),
-                    dependencies: r.dependencies.clone(),
+                    dependencies: r.dependencies.iter().map(|d| d.name()).collect(),
                     private: r.private,
                 })
                 .collect()

@@ -2,11 +2,12 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use ufo_types::{Stereotyped, UfoStereotype};
 
 use crate::{
-    ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig, K0mmand3rDatumConfig,
-    KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods, OrchestrationConfig, PipelineConfig,
-    PolysemeConfig, RuntimeConfig, UsageExample,
+    AiProvisionConfig, ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig,
+    K0mmand3rDatumConfig, KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods,
+    OrchestrationConfig, PipelineConfig, PolysemeConfig, RuntimeConfig, UsageExample,
 };
 
 // warn-once registry — one warning per unknown datum type string per process
@@ -32,6 +33,8 @@ fn is_known_content_tag(s: &str) -> bool {
             | "ai_provider"
             | "pyinfra"
             | "wow"
+            | "lfmf"
+            | "capability"
     )
 }
 
@@ -180,6 +183,11 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp: Option<McpMethods>,
 
+    // Generic AI-backend credential provisioning (b00t-server key minting +
+    // env injection at MCP-install time) — see AiProvisionConfig doc comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_provision: Option<AiProvisionConfig>,
+
     // Gate preconditions
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<Vec<GateSpec>>,
@@ -306,6 +314,19 @@ impl BootDatum {
 
     pub fn install_command_string(&self) -> Option<String> {
         self.install.as_ref().and_then(InstallSpec::command_string)
+    }
+}
+
+impl Stereotyped for BootDatum {
+    /// Delegates to `DatumType`'s lattice (#925) — this impl declares no
+    /// mapping of its own. Missing/unrecognized type degrades to
+    /// `Kind("Unknown")` — never panics, per Postel's Law (CLAUDE.md:
+    /// "be liberal in what you accept"). BootDatum is an open struct; the
+    /// stereotype is derived from the *declared* type, never field presence.
+    fn ufo_stereotype(&self) -> UfoStereotype {
+        self.datum_type
+            .map(|dt| dt.ufo_stereotype())
+            .unwrap_or_else(|| UfoStereotype::Kind("Unknown".into()))
     }
 }
 
@@ -477,5 +498,36 @@ mod load_all_datums_tests {
         let path = temp_dir.path().to_str().unwrap();
         let datums = load_all_datums(path).unwrap();
         assert_eq!(datums.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod stereotype_tests {
+    use super::*;
+
+    #[test]
+    fn stereotype_degrades_to_unknown_for_untyped_datum() {
+        let d = BootDatum {
+            name: "synthetic".into(),
+            datum_type: None,
+            ..Default::default()
+        };
+        assert_eq!(d.ufo_stereotype(), UfoStereotype::Kind("Unknown".into()));
+    }
+
+    #[test]
+    fn stereotype_delegates_to_datum_type() {
+        let d = BootDatum {
+            name: "x".into(),
+            datum_type: Some(DatumType::Docker),
+            ..Default::default()
+        };
+        assert_eq!(
+            d.ufo_stereotype(),
+            UfoStereotype::SubKind {
+                name: "Docker".into(),
+                parent: "ContainerRuntime".into()
+            }
+        );
     }
 }

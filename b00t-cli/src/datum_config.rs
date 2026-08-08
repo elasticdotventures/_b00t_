@@ -134,7 +134,7 @@ impl B00tConfig {
     }
 
     /// Find git repository root by looking for .git directory
-    fn find_git_root() -> Result<PathBuf> {
+    pub fn find_git_root() -> Result<PathBuf> {
         let current_dir = std::env::current_dir()?;
         let mut dir = current_dir.as_path();
 

@@ -5,16 +5,21 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${SCRIPT_DIR}/../lib/worktree-env.sh"
+
 REPO="${REPO:-elasticdotventures/_b00t_}"
 MAX_OODA="${MAX_OODA:-5}"
-WORKTREE_ROOT="${WORKTREE_ROOT:-/tmp/b00t-wt}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="${WORKTREE_ROOT:-$(b00t_default_hive_worktree_root)}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$(b00t_shared_cargo_target_dir)}"
 OODA="${SCRIPT_DIR}/ooda-issue.sh"
 START_FROM="${1:-0}"
 [[ "${1:-}" == "--start-from" ]] && START_FROM="${2:-0}"
 
 RESULTS_LOG="${SCRIPT_DIR}/logs/sequential-$(date +%Y%m%d-%H%M%S).log"
 mkdir -p "$(dirname "${RESULTS_LOG}")"
+mkdir -p "${WORKTREE_ROOT}" "${CARGO_TARGET_DIR}"
 chmod +x "${OODA}"
 
 log() { echo "[sequential] $*" | tee -a "${RESULTS_LOG}"; }

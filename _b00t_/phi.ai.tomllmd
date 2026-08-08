@@ -1,0 +1,89 @@
+# b00t AI family/lineage datum — Microsoft Phi model family
+# 🤓 There is no dedicated "family" DatumType variant in b00t-cli/src/datum_types.rs
+#    (checked: enum DatumType has Ai as the umbrella, with model/ai_model as sub-tokens —
+#    no Family variant exists). Per this repo's convention for grouping/overview entries
+#    (see huggingface.ai.toml, anthropic.ai.toml — provider-level datums that list member
+#    models in a `[models.*]` table without themselves being servable), this datum uses
+#    type = "ai" and plays that same "lineage overview, not itself served" role.
+#    Adding a real Family variant would be a DatumType enum change — out of scope here.
+
+[b00t]
+name = "phi"
+type = "ai"
+hint = "Microsoft Phi small-language-model family lineage (phi-1 .. phi-4) — MIT licensed, candle-native GGUF support; see phi-4-candle-local for the installed member"
+aliases = ["phi-family", "phi-slm"]
+
+# ── Lineage — one entry per generation, not all of these are downloaded/installed ──
+# candle_support reflects candle-transformers' src/models/{quantized_,}phi*.rs coverage
+# (checked candle-transformers 0.9.2 locally cached + 0.11.0 upstream main branch).
+
+[models.phi-1]
+params = "1.3B"
+released = "2023-06"
+license = "MIT"
+candle_support = "no (not shipped as a candle-transformers example/model)"
+note = "textbook-quality-data research model; superseded, not a serving target"
+
+[models.phi-1_5]
+params = "1.3B"
+released = "2023-09"
+license = "MIT"
+candle_support = "no"
+note = "phi-1 follow-up; superseded"
+
+[models.phi-2]
+params = "2.7B"
+released = "2023-12"
+license = "MIT"
+candle_support = "yes — candle_transformers::models::{phi,quantized_phi}"
+note = "smallest phi with first-class candle quantized support; good future low-RAM fallback"
+
+[models.phi-3]
+params = "3.8B (mini) / 7B (small) / 14B (medium)"
+released = "2024-04"
+license = "MIT"
+candle_support = "yes — candle_transformers::models::{phi3,quantized_phi3}"
+note = "phi3/phi3.5 share the GGUF 'phi3' architecture tag with phi-4"
+
+[models.phi-3_5]
+params = "3.8B (mini) / 4.2B (MoE) / 4.2B (vision)"
+released = "2024-08"
+license = "MIT"
+candle_support = "yes (via phi3/quantized_phi3, text variants only — no vision head in candle)"
+note = "mini/MoE/vision-instruct sub-variants; only text variants map onto candle's phi3 module"
+
+[models.phi-4]
+params = "14B"
+released = "2024-12"
+license = "MIT"
+context_window = 16384
+candle_support = "yes — candle_transformers::models::quantized_phi3 (Phi-4 reuses the phi3 GGUF arch tag; see upstream candle-examples/examples/quantized-phi/main.rs: `Which::Phi3 | Which::Phi4 => Model::Phi3(...)`)"
+note = "CURRENTLY INSTALLED — see b00t datum phi-4-candle-local (candle-native, CPU-friendly, no vLLM/podman)"
+hf_repo = "microsoft/phi-4"
+
+[models.phi-4-mini]
+params = "3.8B"
+released = "2025-02"
+license = "MIT"
+candle_support = "likely yes via quantized_phi3 (same phi3 arch family); not verified/installed here"
+note = "smaller phi-4 sibling; candidate for an even-lower-RAM fallback if phi-4-candle-local proves too slow on CPU"
+
+[models.phi-4-reasoning]
+params = "14B"
+released = "2025-04"
+license = "MIT"
+candle_support = "likely yes via quantized_phi3 (same base arch, reasoning-tuned); not verified/installed here"
+note = "chain-of-thought fine-tune of phi-4; not installed, noted for future reference"
+
+# ── References ──────────────────────────────────────────────────────────────
+# - https://huggingface.co/microsoft/phi-4
+# - https://github.com/microsoft/PhiCookBook (has an explicit "Inference Phi with Rust" section)
+# - https://github.com/huggingface/candle — candle-transformers ships quantized-phi natively,
+#   no from-scratch forward pass needed (see b00t-candle-serve crate for the b00t-side runner)
+
+# b00t:map v1
+# summary: Microsoft Phi SLM family lineage (phi-1 through phi-4-reasoning); candle-transformers coverage noted per generation; phi-4-candle-local is the installed member
+# tags: ai, phi, microsoft, slm, candle, cpu-inference, family-overview
+# tier: sm0l
+# cmds: b00t-cli datum show phi-4-candle-local
+# complexity: 2

@@ -82,6 +82,7 @@ use b00t_cli::datum_apt::AptDatum;
 use b00t_cli::datum_bash::BashDatum;
 use b00t_cli::datum_cli::CliDatum;
 use b00t_cli::datum_docker::DockerDatum;
+use b00t_cli::datum_k8s::K8sDatum;
 use b00t_cli::datum_podman::PodmanDatum;
 use b00t_cli::datum_mcp::McpDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
@@ -102,6 +103,7 @@ use b00t_cli::commands::{
     StoreCommands,
     ContractCommands,
     GrokCommands, HiveCommands,
+    InfluenceCommands,
     InitCommands,
     JobCommands,
     provider::ProviderCommands,
@@ -512,6 +514,11 @@ The system will:
     Grok {
         #[clap(subcommand)]
         grok_command: GrokCommands,
+    },
+    #[clap(about = "AL-1.0 influence attribution audit trail — log/trail/stats (#691)")]
+    Influence {
+        #[clap(subcommand)]
+        influence_command: InfluenceCommands,
     },
     #[clap(
         about = "Install a datum (auto-resolves dependencies) or run bootstrap install when no name is provided"
@@ -1117,12 +1124,18 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         BashDatum,
     >(path, ".bash.toml")?));
+    // ContainerRuntime SubKind siblings (see datum_types.rs's `datum_type_table!`
+    // ContainerRuntime declaration) — Docker, Podman, K8s. If a 4th
+    // ContainerRuntime variant is ever added there, wire its provider in here too.
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         DockerDatum,
     >(path, ".docker.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         PodmanDatum,
     >(path, ".podman.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        K8sDatum,
+    >(path, ".k8s.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         VscodeDatum,
     >(path, ".vscode.toml")?));
@@ -1990,11 +2003,51 @@ fn execute_k0mmand3r_dispatch(path: &str, slash: &str, passthrough_args: &[Strin
     Ok(exit_code)
 }
 
+/// True when the caller explicitly named a datum directory (`--path`/`-p`
+/// flag, or `_B00T_Path` env var) rather than relying on the built-in
+/// default. Scans `raw_args` directly rather than clap's parsed output so
+/// it works even on the parse-failure path (datum-dispatch), which never
+/// gets a successfully-parsed `Cli` to inspect.
+fn path_was_explicit(raw_args: &[String]) -> bool {
+    if std::env::var("_B00T_Path").is_ok() {
+        return true;
+    }
+    raw_args
+        .iter()
+        .any(|a| a == "--path" || a == "-p" || a.starts_with("--path=") || a.starts_with("-p="))
+}
+
+/// Resolve the effective b00t datum directory. Fixes #866: previously
+/// `--path`/`_B00T_Path` always fell back to a fixed home-directory path
+/// even when running inside a git repo with its own `_b00t_/`, so
+/// project-local datums were invisible unless `--path` was passed on every
+/// single invocation. An explicit override still always wins (Postel's
+/// law) -- auto-detection only fires for the implicit/default case, by
+/// walking up from cwd for a git root the same way `_b00t_.toml` config
+/// resolution already does (`B00tConfig::find_git_root`), so this doesn't
+/// introduce a second, divergent notion of "repo root."
+fn resolve_datum_dir(fallback_path: &str, explicit: bool) -> String {
+    if explicit {
+        return fallback_path.to_string();
+    }
+    if let Ok(repo_root) = b00t_cli::datum_config::B00tConfig::find_git_root() {
+        let candidate = repo_root.join("_b00t_");
+        if candidate.is_dir() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+    fallback_path.to_string()
+}
+
 #[tokio::main]
 async fn main() {
     let raw_args: Vec<String> = std::env::args().collect();
+    let path_explicit = path_was_explicit(&raw_args);
     let cli = match Cli::try_parse_from(normalize_slash_args(raw_args.clone())) {
-        Ok(cli) => cli,
+        Ok(mut cli) => {
+            cli.path = resolve_datum_dir(&cli.path, path_explicit);
+            cli
+        }
         Err(e) => {
             // --help / --version: let clap print and exit 0
             if matches!(
@@ -2007,8 +2060,15 @@ async fn main() {
             if raw_args.len() > 1 {
                 let candidate = &raw_args[1];
                 if !candidate.starts_with('-') && !candidate.starts_with('/') {
-                    let path = std::env::var("_B00T_Path")
-                        .unwrap_or_else(|_| "~/.b00t/_b00t_".to_string());
+                    // 🤓 historical fallback literal differs from Cli::path's
+                    //    default (~/.dotfiles/_b00t_ vs ~/.b00t/_b00t_) --
+                    //    pre-existing inconsistency, left as-is here rather
+                    //    than silently unified; both are still overridden by
+                    //    project-local auto-detection when not explicit.
+                    let path = resolve_datum_dir(
+                        &std::env::var("_B00T_Path").unwrap_or_else(|_| "~/.b00t/_b00t_".to_string()),
+                        path_explicit,
+                    );
                     let expanded = b00t_cli::get_expanded_path(&path)
                         .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_else(|_| shellexpand::tilde(&path).to_string());
@@ -2349,6 +2409,8 @@ async fn main() {
                 match B00tContext::current() {
                     Ok(ctx) => {
                         let health = b00t_cli::commands::doctor_cmd::health_json();
+                        // #962: local model server state — running/ready/feasible/unavailable
+                        let model_server_status = whoami::model_server_status();
                         let output = serde_json::json!({
                             "agent": ctx.agent,
                             "pid": ctx.pid,
@@ -2362,6 +2424,7 @@ async fn main() {
                             "timestamp": ctx.timestamp,
                             "role": role.clone().or_else(|| std::env::var("_B00T_ROLE").ok()),
                             "health": health,
+                            "model_server_status": model_server_status.as_str(),
                         });
                         println!("{}", serde_json::to_string_pretty(&output).unwrap());
                     }
@@ -2517,6 +2580,13 @@ async fn main() {
         Some(Commands::Grok { grok_command }) => {
             use b00t_cli::commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Influence { influence_command }) => {
+            use b00t_cli::commands::influence::handle_influence_command;
+            if let Err(e) = handle_influence_command(influence_command) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2820,6 +2890,13 @@ async fn main() {
                 if let Err(e) =
                     b00t_cli::commands::lfmf::handle_lfmf_advice(&cli.path, &lesson, None).await
                 {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
+            // `lfmf status <tool>` — cross-reference lesson-store health
+            // (fail/skip counts, error rate, latest failure) for one tool.
+            } else if tool == "status" {
+                if let Err(e) = b00t_cli::commands::lfmf::handle_lfmf_status(&lesson) {
                     eprintln!("Error: {}", e);
                     std::process::exit(1);
                 }
@@ -3711,5 +3788,110 @@ mod k0mmand3r_dispatch_tests {
         );
         // If a datum named "gh" is not in k0mmand_verbs it will not be shadowed.
         assert!(!k0mmand_verbs.contains(&"gh"), "/gh is NOT shadowed");
+    }
+}
+
+#[cfg(test)]
+mod datum_dir_resolution_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // `resolve_datum_dir`/`path_was_explicit` read the real process cwd and
+    // the real _B00T_Path env var -- serialize these tests so they don't
+    // race each other's env::set_current_dir / env::set_var.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn args(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn path_was_explicit_true_for_long_flag() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("_B00T_Path");
+        }
+        assert!(path_was_explicit(&args(&["b00t-cli", "--path", "/tmp/x"])));
+        assert!(path_was_explicit(&args(&["b00t-cli", "--path=/tmp/x"])));
+    }
+
+    #[test]
+    fn path_was_explicit_true_for_short_flag() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("_B00T_Path");
+        }
+        assert!(path_was_explicit(&args(&["b00t-cli", "-p", "/tmp/x"])));
+    }
+
+    #[test]
+    fn path_was_explicit_true_for_env_var() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_Path", "/tmp/x");
+        }
+        assert!(path_was_explicit(&args(&["b00t-cli", "whoami"])));
+        unsafe {
+            std::env::remove_var("_B00T_Path");
+        }
+    }
+
+    #[test]
+    fn path_was_explicit_false_with_nothing_set() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::remove_var("_B00T_Path");
+        }
+        assert!(!path_was_explicit(&args(&["b00t-cli", "whoami"])));
+    }
+
+    #[test]
+    fn resolve_datum_dir_respects_explicit_override() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        // explicit=true short-circuits before touching cwd/git at all --
+        // no need to fake a repo for this case.
+        assert_eq!(
+            resolve_datum_dir("/explicit/path", true),
+            "/explicit/path"
+        );
+    }
+
+    #[test]
+    fn resolve_datum_dir_finds_project_local_b00t_dir() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        std::fs::create_dir(dir.path().join("_b00t_")).unwrap();
+
+        let original_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let resolved = resolve_datum_dir("~/.dotfiles/_b00t_", false);
+
+        std::env::set_current_dir(original_cwd).unwrap();
+
+        let expected = dir.path().join("_b00t_");
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&expected).unwrap(),
+            "expected project-local _b00t_/ to win over the global fallback (#866)"
+        );
+    }
+
+    #[test]
+    fn resolve_datum_dir_falls_back_when_no_project_local_dir() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        // deliberately no _b00t_/ subdirectory
+
+        let original_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let resolved = resolve_datum_dir("~/.dotfiles/_b00t_", false);
+
+        std::env::set_current_dir(original_cwd).unwrap();
+
+        assert_eq!(resolved, "~/.dotfiles/_b00t_");
     }
 }

@@ -1,0 +1,60 @@
+# b00t Hive Profile — qwen3-embed-local (b00t-embed-serve)
+# 🤓 NO static .service file — b00t@.service template generates unit from inline spec below.
+# Real local candle embeddings (Qwen/Qwen3-Embedding-0.6B via b00t-embed's
+# Qwen3Composable), no external API key. This is the default local backend
+# b00t-server's soul config (server_llm.rs::default_soul()) discovers on :8003
+# for /v1/embeddings — kind="embeddings", never used for /v1/chat/completions.
+# Start: systemctl --user start b00t@qwen3-embed-local
+
+[b00t]
+name = "qwen3-embed-local"
+type = "hive_profile"
+hint = "b00t-embed-serve gateway at :8003 — local Qwen3-Embedding-0.6B, no external API key, always on"
+depends_on = ["b00t-embed-serve.cli"]
+
+[b00t.hive.resources]
+ram_gb = 2
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 1.0
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ai-embeddings"
+priority = 90  # always on; small footprint, CPU-only
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+# ── Inline service spec — b00t generates b00t-hive-qwen3-embed-local.service ──
+[b00t.hive.service]
+description = "b00t-embed-serve local Qwen3 embeddings (port 8003)"
+service_type = "simple"
+restart      = "on-failure"
+restart_sec  = "10s"
+after        = ["network.target"]
+environment  = [
+  "PATH=/home/brianh/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
+]
+exec_start = "/home/brianh/.cargo/bin/b00t-embed-serve --host 127.0.0.1 --port 8003"
+
+[b00t.hive.env]
+QWEN3_EMBED_BASE = "http://127.0.0.1:8003/v1"
+
+[[b00t.usage]]
+description = "Start qwen3-embed-local via b00t generic service"
+command = "systemctl --user start b00t@qwen3-embed-local"
+
+[[b00t.usage]]
+description = "Test embeddings endpoint directly"
+command = "curl -s http://localhost:8003/v1/embeddings -d '{\"input\":\"test\",\"model\":\"qwen3-embed\"}' | python3 -m json.tool"
+
+# b00t:map v1
+# summary: qwen3-embed-local hive profile — always-on local candle embeddings server (b00t-embed-serve), no external API key
+# tags: b00t-embed-serve, qwen3, embeddings, candle, local-inference, cpu-inference
+# tier: sm0l
+# cmds: systemctl --user start b00t@qwen3-embed-local
+# complexity: 3

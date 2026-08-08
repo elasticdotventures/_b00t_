@@ -25,7 +25,16 @@ pub enum Role {
     /// Legacy human/user marker kept for backward wire/storage compatibility.
     /// Prefer `Agent::is_player` / `Team::player_ids` for new writes.
     Player,
-    /// Operator — system operator with administrative privileges
+    /// Operator — system operator with administrative privileges.
+    ///
+    /// ⚠️ NOT the same role as `b00t_cli::agentic_role::Operator`
+    /// ("crew dispatch and specialist routing — spins typed crews via
+    /// k0mmand3r"). Both use the bare string `"operator"` with no
+    /// disambiguating prefix — a known, tracked, currently-unresolved
+    /// naming collision. See
+    /// `_b00t_/linkml/schema/hive_role_vocabulary.yaml`'s top-level
+    /// description for the full context (Phase 2 of the ScopeStore+LinkML
+    /// epic, #905/#909 "no parallel vocabularies").
     Operator,
     /// Specialist — domain-specific work (coding, research, analysis)
     Specialist,

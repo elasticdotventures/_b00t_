@@ -420,3 +420,9 @@ justfile scope: b00t root justfile is for b00t commands only; repo-specific CI/w
 
 ---
 source_file vs justfile: In just modules, justfile() returns the ROOT justfile path; use source_file() to get the current module file path for cross-recipe calls within a module.
+
+---
+variadic-args-quoting: just splices {{ARGS}} unquoted into the recipe line — args with spaces/parens fail with sh syntax errors. Callers pass inner quotes (just nb-verify NB --marker '"two words"'); recipes document this with a 🤓 comment
+
+---
+MCP-recipe-routing: prefer the b00t_just MCP tool over shelling out to just — it takes the recipe name and args as typed parameters, so args bypass shell parsing entirely (see variadic-args-quoting above). Registered recipes carry higher action scores and produce verification evidence.

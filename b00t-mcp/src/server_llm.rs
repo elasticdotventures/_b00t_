@@ -83,6 +83,11 @@ fn default_soul(hostname: &str) -> SoulConfig {
                 LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+                // 🤓 b00t-embed-serve — real local candle embeddings (Qwen3-Embedding-0.6B),
+                // no external API key. kind="embeddings" (not "openai-compat") because it
+                // only implements /v1/embeddings, not /v1/chat/completions — discover_local()
+                // filters on this so chat requests never get routed here by accident.
+                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true },
             ],
             remote: vec![
                 RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
@@ -122,12 +127,18 @@ impl SoulConfig {
     }
 }
 
-fn discover_local(soul: &SoulConfig) -> Option<(String, String)> {
+/// `want_kind`: when `Some("embeddings")`, only considers backends whose `kind`
+/// is exactly "embeddings" (e.g. b00t-embed-serve, which has no /v1/chat/completions
+/// at all) — chat/models discovery must never land on an embeddings-only backend.
+/// When `None`, only considers "openai-compat" backends (the historical default,
+/// used for chat/models) — an embeddings-only backend is never a valid chat target.
+fn discover_local(soul: &SoulConfig, want_kind: Option<&str>) -> Option<(String, String)> {
+    let target_kind = want_kind.unwrap_or("openai-compat");
     for be in &soul.backends.local {
-        if !be.enabled { continue; }
+        if !be.enabled || be.kind != target_kind { continue; }
         let addr: SocketAddr = format!("127.0.0.1:{}", be.port).parse().ok()?;
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-            eprintln!("🔍 local backend (soul): {} :{}", be.name, be.port);
+            eprintln!("🔍 local backend (soul): {} :{} (kind={})", be.name, be.port, be.kind);
             return Some((be.name.clone(), format!("http://127.0.0.1:{}/v1", be.port)));
         }
     }
@@ -145,8 +156,13 @@ fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
     None
 }
 
-fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
-    if let Ok(url) = std::env::var("B00T_SERVER_UPSTREAM_URL") {
+/// Resolves the upstream to proxy to. `for_embeddings` matters because a local
+/// backend can be embeddings-only (b00t-embed-serve, kind="embeddings") — a
+/// chat request must never land there, and an embeddings request should prefer
+/// it over a general chat backend that may not implement /v1/embeddings at all.
+fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String) {
+    let explicit_url_var = if for_embeddings { "B00T_SERVER_EMBEDDINGS_UPSTREAM_URL" } else { "B00T_SERVER_UPSTREAM_URL" };
+    if let Ok(url) = std::env::var(explicit_url_var) {
         if !url.is_empty() {
             let key = std::env::var("B00T_SERVER_UPSTREAM_KEY")
                 .or_else(|_| std::env::var("OPENAI_API_KEY"))
@@ -155,7 +171,18 @@ fn resolve_upstream(soul: &SoulConfig) -> (String, String) {
             return (url, key);
         }
     }
-    if let Some((name, url)) = discover_local(soul) {
+    if for_embeddings {
+        // Prefer an embeddings-only local backend; fall back to a general
+        // openai-compat local backend in case it also serves /v1/embeddings.
+        if let Some((name, url)) = discover_local(soul, Some("embeddings")) {
+            eprintln!("📍 upstream (soul/local {}, embeddings): {}", name, url);
+            return (url, String::new());
+        }
+        if let Some((name, url)) = discover_local(soul, None) {
+            eprintln!("📍 upstream (soul/local {}, chat backend used for embeddings): {}", name, url);
+            return (url, String::new());
+        }
+    } else if let Some((name, url)) = discover_local(soul, None) {
         eprintln!("📍 upstream (soul/local {}): {}", name, url);
         return (url, String::new());
     }
@@ -247,52 +274,111 @@ impl KeyEntry {
 pub struct LlmState {
     pub upstream_url: String,
     pub upstream_key: String,
+    // 🤓 Resolved independently from upstream_url — a local backend can be
+    // embeddings-only (b00t-embed-serve), so /v1/embeddings must not blindly
+    // share the chat upstream. See resolve_upstream's for_embeddings param.
+    pub embeddings_upstream_url: String,
+    pub embeddings_upstream_key: String,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
+    // 🤓 `b00t server key create` writes keys_file directly from a separate process
+    // (commands/server.rs) — it does not talk to a running LlmState at all. Without
+    // tracking the file's mtime and reloading on change, a key minted while the
+    // server is already running would never authenticate until restart.
+    keys_file_mtime: Arc<RwLock<Option<std::time::SystemTime>>>,
 }
 
-impl LlmState {
-    pub fn new() -> Self {
-        let soul = SoulConfig::load();
-        let (url, key) = resolve_upstream(&soul);
-        Self::from_config(&url, &key)
-    }
-
-    pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
-        let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
-        let keys_file = home.join("server-keys.json");
-        let mut keys = HashMap::new();
-        if let Ok(data) = std::fs::read_to_string(&keys_file) {
-            if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
-                if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-                    for (k, v) in obj {
-                        if let (Some(consumer), Some(created_at)) = (
-                            v.get("consumer").and_then(|c| c.as_str()),
-                            v.get("created_at").and_then(|c| c.as_str()),
-                        ) {
-                            if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                                keys.insert(k.clone(), KeyEntry {
-                                    consumer: consumer.to_string(),
-                                    created_at: ts.with_timezone(&chrono::Utc),
-                                    access: Vec::new(),
-                                });
-                            }
+/// Parses the same `{"keys": {...}}` shape `commands/server.rs`'s `KeyAction::Create`
+/// writes. Shared by `from_config` (initial load) and `reload_if_changed` (hot reload)
+/// so the two never drift apart.
+fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry> {
+    let mut keys = HashMap::new();
+    if let Ok(data) = std::fs::read_to_string(keys_file) {
+        if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
+            if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
+                for (k, v) in obj {
+                    if let (Some(consumer), Some(created_at)) = (
+                        v.get("consumer").and_then(|c| c.as_str()),
+                        v.get("created_at").and_then(|c| c.as_str()),
+                    ) {
+                        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
+                            let access = v.get("access").and_then(|a| a.as_array())
+                                .map(|arr| arr.iter().filter_map(|p| {
+                                    let class = p.get("class").and_then(|c| c.as_str())?;
+                                    let action = match p.get("action").and_then(|a| a.as_str())? {
+                                        "read" => Action::Read,
+                                        "write" => Action::Write,
+                                        _ => Action::Execute,
+                                    };
+                                    Some(ClassPermission { class: class.to_string(), action })
+                                }).collect())
+                                .unwrap_or_default();
+                            keys.insert(k.clone(), KeyEntry {
+                                consumer: consumer.to_string(),
+                                created_at: ts.with_timezone(&chrono::Utc),
+                                access,
+                            });
                         }
                     }
                 }
             }
         }
+    }
+    keys
+}
+
+impl LlmState {
+    pub fn new() -> Self {
+        let soul = SoulConfig::load();
+        let (url, key) = resolve_upstream(&soul, false);
+        let (embed_url, embed_key) = resolve_upstream(&soul, true);
+        Self::from_config_full(&url, &key, &embed_url, &embed_key)
+    }
+
+    /// Convenience for tests / callers that don't care about a distinct
+    /// embeddings backend — uses the same upstream for both.
+    pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
+        Self::from_config_full(upstream_url, upstream_key, upstream_url, upstream_key)
+    }
+
+    pub fn from_config_full(
+        upstream_url: &str,
+        upstream_key: &str,
+        embeddings_upstream_url: &str,
+        embeddings_upstream_key: &str,
+    ) -> Self {
+        let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let keys_file = home.join("server-keys.json");
+        let keys = load_keys_from_file(&keys_file);
+        let mtime = std::fs::metadata(&keys_file).and_then(|m| m.modified()).ok();
         Self {
             upstream_url: upstream_url.trim_end_matches('/').to_string(),
             upstream_key: upstream_key.to_string(),
+            embeddings_upstream_url: embeddings_upstream_url.trim_end_matches('/').to_string(),
+            embeddings_upstream_key: embeddings_upstream_key.to_string(),
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
+            keys_file_mtime: Arc::new(RwLock::new(mtime)),
+        }
+    }
+
+    /// Re-reads keys_file if its mtime changed since we last loaded it — cheap
+    /// (one stat call) on the common case where nothing changed. Called before
+    /// every validate_key/check_access so keys minted by a separate `b00t server
+    /// key create` invocation while this server is already running actually work.
+    async fn reload_if_changed(&self) {
+        let current_mtime = std::fs::metadata(&self.keys_file).and_then(|m| m.modified()).ok();
+        let mut cached = self.keys_file_mtime.write().await;
+        if current_mtime != *cached {
+            *self.keys.write().await = load_keys_from_file(&self.keys_file);
+            *cached = current_mtime;
         }
     }
 
     pub async fn validate_key(&self, token: &str) -> Option<KeyEntry> {
+        self.reload_if_changed().await;
         self.keys.read().await.get(token).cloned()
     }
 
@@ -342,18 +428,53 @@ impl LlmState {
     }
 
     async fn emit_spotlight(&self, consumer: &str, endpoint: &str, model: &str, latency_ms: u64) {
-        let event = json!({
+        self.emit_spotlight_with_usage(consumer, endpoint, model, latency_ms, None, None).await;
+    }
+
+    /// Same as `emit_spotlight`, plus opportunistic token counts. `prompt_tokens`/
+    /// `completion_tokens` come from the proxied response's OpenAI-shaped `usage`
+    /// object when present — best-effort, callers pass `None` if the upstream
+    /// didn't include one or it failed to parse; never blocks the response.
+    async fn emit_spotlight_with_usage(
+        &self,
+        consumer: &str,
+        endpoint: &str,
+        model: &str,
+        latency_ms: u64,
+        prompt_tokens: Option<u64>,
+        completion_tokens: Option<u64>,
+    ) {
+        let mut event = json!({
             "ts": chrono::Utc::now().to_rfc3339(),
             "event": format!("spotlight.llm.{}", endpoint),
             "consumer": consumer,
             "model": model,
             "latency_ms": latency_ms,
         });
+        if let Some(pt) = prompt_tokens {
+            event["prompt_tokens"] = json!(pt);
+        }
+        if let Some(ct) = completion_tokens {
+            event["completion_tokens"] = json!(ct);
+        }
         if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&self.spotlight_log) {
             use std::io::Write;
             let _ = writeln!(f, "{}", event);
         }
     }
+}
+
+/// Best-effort extraction of an OpenAI-shaped `usage.{prompt_tokens,completion_tokens}`
+/// object from a raw proxied response body. Returns `(None, None)` on any parse
+/// failure or missing fields — callers must never fail the request over this.
+fn extract_usage_tokens(body: &[u8]) -> (Option<u64>, Option<u64>) {
+    let Ok(parsed) = serde_json::from_slice::<Value>(body) else {
+        return (None, None);
+    };
+    let usage = parsed.get("usage");
+    let prompt = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_u64());
+    let completion = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_u64());
+    (prompt, completion)
 }
 
 fn dirs_next() -> Option<std::path::PathBuf> {
@@ -446,6 +567,25 @@ async fn list_models(
     }
 }
 
+/// POST one chat-completion body upstream, honoring the caller's upstream
+/// key. Shared by the plain forward path and the verify tool loop's re-entry
+/// sends (`verify_tool_loop::run_tool_loop`'s `send` parameter).
+async fn send_upstream_chat(upstream_url: &str, upstream_key: &str, body: Value) -> anyhow::Result<Value> {
+    let url = format!("{upstream_url}/chat/completions");
+    let client = reqwest::Client::new();
+    let mut req = client.post(&url).header("Content-Type", "application/json").json(&body);
+    if !upstream_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {upstream_key}"));
+    }
+    let resp = req.send().await?;
+    let status = resp.status();
+    let parsed: Value = resp.json().await?;
+    if !status.is_success() {
+        anyhow::bail!("upstream {status}: {parsed}");
+    }
+    Ok(parsed)
+}
+
 async fn proxy_chat(
     State((state, dev_mode)): State<AppState>,
     headers: HeaderMap,
@@ -453,12 +593,81 @@ async fn proxy_chat(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
-    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    if !dev_mode && !state.check_access(&token, "b00t:ChatModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:ChatModel:execute"}))).into_response();
     }
-    let model = serde_json::from_slice::<Value>(&body)
-        .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
-        .unwrap_or_else(|| "unknown".to_string());
+
+    // Non-JSON or unparseable bodies can't carry tool injection / the verify
+    // loop — forward verbatim exactly as before (#596/#597 wiring is
+    // best-effort, never a hard requirement for basic proxying to work).
+    let Ok(mut request) = serde_json::from_slice::<Value>(&body) else {
+        return forward_chat_verbatim(&state, &consumer, &headers, body).await;
+    };
+    let model = request["model"].as_str().unwrap_or("unknown").to_string();
+    let is_streaming = request["stream"].as_bool().unwrap_or(false);
+
+    // Opt-in tool injection (default off — see verify_tool_loop doc comment).
+    if std::env::var("B00T_VERIFY_TOOL_INJECT").as_deref() == Ok("1") {
+        crate::verify_tool_loop::inject_verify_tool(&mut request);
+    }
+
+    let start = std::time::Instant::now();
+    let first = match send_upstream_chat(&state.upstream_url, &state.upstream_key, request.clone()).await {
+        Ok(v) => v,
+        Err(e) => {
+            let latency = start.elapsed().as_millis() as u64;
+            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            return (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response();
+        }
+    };
+
+    // Streaming bypasses the loop entirely (SSE bytes aren't JSON messages to
+    // splice into) — the doc comment on verify_tool_loop covers this as
+    // known follow-up work, not a bug.
+    let mut final_response = if is_streaming {
+        first
+    } else {
+        crate::verify_tool_loop::run_tool_loop(
+            &request,
+            first,
+            |next_body| send_upstream_chat(&state.upstream_url, &state.upstream_key, next_body),
+            crate::verify_tool_loop::execute_verify_call,
+        )
+        .await
+    };
+
+    // Grammar-shape audit (#596 bridge): if content contains
+    // `[tool_call: verify assertion="X"] -> [result: R] ->`, re-run the
+    // assertion through real Z3 and correct any hallucinated result token.
+    // No-op (regex doesn't match) for the overwhelming majority of requests
+    // that never produced grammar-shaped output.
+    let content = final_response["choices"][0]["message"]["content"]
+        .as_str()
+        .map(str::to_string);
+    if let Some(content) = content {
+        if let Some((audited, _summary)) =
+            crate::verify_tool_loop::audit_grammar_content(&content, crate::verify_tool_loop::z3_result_of)
+        {
+            final_response["choices"][0]["message"]["content"] = Value::String(audited);
+        }
+    }
+
+    let latency = start.elapsed().as_millis() as u64;
+    state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+    Json(final_response).into_response()
+}
+
+/// Pre-#596/#597 behavior: forward the raw request body upstream unmodified
+/// and return the upstream response verbatim (status + bytes). Used when the
+/// body isn't valid JSON, so there's no `Value` to inject tools into or loop
+/// over.
+async fn forward_chat_verbatim(
+    state: &LlmState,
+    consumer: &str,
+    headers: &HeaderMap,
+    body: Bytes,
+) -> axum::response::Response {
+    let model = "unknown".to_string();
     let url = format!("{}/chat/completions", state.upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
@@ -474,12 +683,13 @@ async fn proxy_chat(
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
             let body = resp.bytes().await.unwrap_or_default();
-            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            let (prompt_tokens, completion_tokens) = extract_usage_tokens(&body);
+            state.emit_spotlight_with_usage(consumer, "chat_completions", &model, latency, prompt_tokens, completion_tokens).await;
             (status, body).into_response()
         }
         Err(e) => {
             let latency = start.elapsed().as_millis() as u64;
-            state.emit_spotlight(&consumer, "chat_completions", &model, latency).await;
+            state.emit_spotlight(consumer, "chat_completions", &model, latency).await;
             (StatusCode::BAD_GATEWAY, Json(json!({"error": format!("upstream unreachable: {}", e)}))).into_response()
         }
     }
@@ -492,14 +702,17 @@ async fn proxy_embeddings(
 ) -> impl IntoResponse {
     let token = extract_bearer_token(&headers, dev_mode).unwrap_or_default();
     let consumer = state.validate_key(&token).await.map(|k| k.consumer).unwrap_or_else(|| "unknown".to_string());
+    if !dev_mode && !state.check_access(&token, "b00t:EmbeddingModel", Action::Execute).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "access denied: b00t:EmbeddingModel:execute"}))).into_response();
+    }
     let model = serde_json::from_slice::<Value>(&body)
         .ok().and_then(|v| v.get("model").and_then(|m| m.as_str().map(|s| s.to_string())))
         .unwrap_or_else(|| "unknown".to_string());
-    let url = format!("{}/embeddings", state.upstream_url);
+    let url = format!("{}/embeddings", state.embeddings_upstream_url);
     let client = reqwest::Client::new();
     let mut req = client.post(&url).header("Content-Type", "application/json").body(body.clone());
-    if !state.upstream_key.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", state.upstream_key));
+    if !state.embeddings_upstream_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", state.embeddings_upstream_key));
     }
     let start = std::time::Instant::now();
     match req.send().await {
@@ -507,7 +720,8 @@ async fn proxy_embeddings(
             let latency = start.elapsed().as_millis() as u64;
             let status = resp.status();
             let body = resp.bytes().await.unwrap_or_default();
-            state.emit_spotlight(&consumer, "embeddings", &model, latency).await;
+            let (prompt_tokens, _) = extract_usage_tokens(&body);
+            state.emit_spotlight_with_usage(&consumer, "embeddings", &model, latency, prompt_tokens, None).await;
             (status, body).into_response()
         }
         Err(e) => {
@@ -550,6 +764,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_key_created_externally_is_picked_up_without_restart() {
+        // Simulates `b00t server key create` (commands/server.rs) writing directly
+        // to keys_file from a SEPARATE process while this LlmState is already
+        // running — this is the exact scenario the reload-on-mtime-change fix
+        // targets (Phase A.2). Writes the same {"keys": {...}} shape
+        // commands/server.rs produces, bypassing state.create_key() entirely.
+        let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
+
+        // Confirm the key genuinely doesn't exist yet (no accidental collision).
+        let external_key = format!("b00t-sk-test-external-{}", Uuid::new_v4().simple());
+        assert!(state.validate_key(&external_key).await.is_none());
+
+        // Read-modify-write the real keys_file exactly like KeyAction::Create does,
+        // without going through this LlmState's in-memory map at all.
+        let mut data: Value = serde_json::from_str(
+            &std::fs::read_to_string(&state.keys_file).unwrap_or_default(),
+        )
+        .unwrap_or_else(|_| serde_json::json!({"keys": {}}));
+        data["keys"][&external_key] = serde_json::json!({
+            "consumer": "external-process-consumer",
+            "created_at": chrono::Utc::now().to_rfc3339(),
+            "access": [],
+        });
+        // Ensure mtime actually advances even on filesystems with coarse mtime
+        // resolution — sleep briefly before writing.
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        std::fs::write(&state.keys_file, serde_json::to_string(&data).unwrap()).unwrap();
+
+        let entry = state.validate_key(&external_key).await;
+        assert!(entry.is_some(), "key written externally must be picked up without restart");
+        assert_eq!(entry.unwrap().consumer, "external-process-consumer");
+    }
+
+    #[tokio::test]
     async fn test_spotlight_emit() {
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         state.emit_spotlight("test-consumer", "chat_completions", "test-model", 42).await;
@@ -557,5 +805,115 @@ mod tests {
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
+    }
+
+    // ── proxy_chat #596/#597 wiring — end-to-end against a fake upstream ─────
+
+    /// Minimal fake upstream: first call returns a `verify` tool_calls
+    /// response, second call (the loop's re-entry) returns a plain stop
+    /// response. Proves `proxy_chat` actually drives `run_tool_loop` over a
+    /// real HTTP round trip, not just that the loop functions are unit-correct
+    /// in isolation.
+    async fn spawn_fake_upstream(responses: Vec<Value>) -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let responses = Arc::new(responses);
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let app = Router::new().route(
+            "/chat/completions",
+            axum::routing::post({
+                let responses = responses.clone();
+                let call_count = call_count.clone();
+                move |_body: Bytes| {
+                    let responses = responses.clone();
+                    let call_count = call_count.clone();
+                    async move {
+                        let i = call_count.fetch_add(1, Ordering::SeqCst);
+                        Json(responses[i.min(responses.len() - 1)].clone())
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    fn tool_call_upstream_response(assertion: &str) -> Value {
+        json!({"choices": [{"finish_reason": "tool_calls", "message": {
+            "role": "assistant",
+            "tool_calls": [{"id": "call_1", "type": "function", "function": {
+                "name": "verify",
+                "arguments": format!("{{\"assertion\": \"{assertion}\"}}"),
+            }}]
+        }}]})
+    }
+
+    fn stop_upstream_response(content: &str) -> Value {
+        json!({"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}]})
+    }
+
+    #[tokio::test]
+    async fn proxy_chat_drives_verify_tool_loop_end_to_end() {
+        let upstream_url = spawn_fake_upstream(vec![
+            tool_call_upstream_response("(assert true)(check-sat)"),
+            stop_upstream_response("verified via loop"),
+        ])
+        .await;
+        let state = Arc::new(LlmState::from_config(&upstream_url, ""));
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "is this satisfiable?"}]
+        });
+        let body = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        let resp = proxy_chat(State((state, true)), HeaderMap::new(), body)
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            parsed["choices"][0]["message"]["content"],
+            json!("verified via loop"),
+            "proxy_chat must return the loop's final response, not the first tool_calls hop: {parsed}"
+        );
+    }
+
+    #[tokio::test]
+    async fn proxy_chat_audits_hallucinated_grammar_shaped_result() {
+        // execute_verify_call shells out to `b00t-cli admin verify`, which
+        // shells out to `z3` — skip gracefully when it's not in PATH rather
+        // than asserting against an "error"/"unknown" result (matches the
+        // z3-subprocess skip convention in b00t-datum-core's own tests).
+        if std::process::Command::new("z3").arg("--version").output().is_err() {
+            eprintln!("skipping proxy_chat_audits_hallucinated_grammar_shaped_result: z3 not in PATH");
+            return;
+        }
+        // Model emits grammar-shaped content claiming "sat" for an assertion
+        // that is actually unsat — proxy_chat must correct it before
+        // returning to the client (#596 grammar-shape audit bridge).
+        let claim = "[tool_call: verify assertion=\"(declare-const x Int)(assert (and (> x 0) (< x 0)))(check-sat)\"] → [result: sat] → contradiction holds.";
+        let upstream_url = spawn_fake_upstream(vec![stop_upstream_response(claim)]).await;
+        let state = Arc::new(LlmState::from_config(&upstream_url, ""));
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "can x be both positive and negative?"}]
+        });
+        let body = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        let resp = proxy_chat(State((state, true)), HeaderMap::new(), body)
+            .await
+            .into_response();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let parsed: Value = serde_json::from_slice(&bytes).unwrap();
+        let content = parsed["choices"][0]["message"]["content"].as_str().unwrap();
+        assert!(
+            content.contains("[result: unsat]"),
+            "hallucinated 'sat' must be corrected to real z3 result: {content}"
+        );
+        assert!(content.contains("contradiction holds."), "surrounding text preserved: {content}");
     }
 }

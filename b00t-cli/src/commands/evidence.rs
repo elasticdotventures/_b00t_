@@ -73,6 +73,18 @@ fn evidence_log_path() -> Result<PathBuf> {
         return Ok(path);
     }
 
+    // B00T_EVIDENCE_LOG_PATH env override — for hermetic integration tests in
+    // b00t-cli/tests/, which can't reach the #[cfg(test)]-gated thread_local
+    // override above since they compile against the crate as a normal
+    // dependency (see #691).
+    if let Ok(p) = std::env::var("B00T_EVIDENCE_LOG_PATH") {
+        let path = PathBuf::from(p);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).context("create evidence dir")?;
+        }
+        return Ok(path);
+    }
+
     let dir = dirs::home_dir()
         .ok_or_else(|| anyhow::anyhow!("no home dir"))?
         .join(".b00t")
@@ -136,12 +148,23 @@ pub fn prove_skill(skill: &str) -> Result<Vec<EvidenceRecord>> {
 
 /// Record that `skill` satisfies `constraint` with AL-1.0 influence attribution.
 /// Generates influence receipt in store, attaches receipt key to evidence record.
+///
+/// `agent_id` (if given) is stamped onto the record for `b00t influence log --agent`
+/// and `b00t influence stats` top-agent aggregation (#691).
+///
+/// `credential_subject_check`: optional credential provider name (see
+/// `b00t_c0re_lib::store::put_influence`). Pass `None` for the prior,
+/// unchecked behavior; pass `Some(provider)` to require that provider's
+/// credential datum be scoped to `skill` and not expired.
 pub fn record_satisfies_with_influence(
     skill: &str,
     constraint: &str,
     scored_sources: &[(String, f64)],
+    agent_id: Option<&str>,
+    credential_subject_check: Option<&str>,
 ) -> Result<()> {
-    let receipt = b00t_c0re_lib::store::put_influence(skill, scored_sources)?;
+    let receipt =
+        b00t_c0re_lib::store::put_influence(skill, scored_sources, credential_subject_check)?;
     let weights: Vec<InfluenceWeight> = receipt
         .sources
         .iter()
@@ -153,9 +176,27 @@ pub fn record_satisfies_with_influence(
         .collect();
 
     let mut rec = EvidenceRecord::satisfies(skill, constraint);
+    rec.agent_id = agent_id.map(|s| s.to_string());
     rec.influence = Some(weights);
     append_evidence(&rec)?;
     Ok(())
+}
+
+/// Parse a `--influence` CLI arg of the form "source_key=score[,source_key2=score2,...]"
+/// into scored_sources pairs for `record_satisfies_with_influence`.
+fn parse_influence_arg(spec: &str) -> Result<Vec<(String, f64)>> {
+    spec.split(',')
+        .map(|pair| {
+            let (key, score) = pair.split_once('=').ok_or_else(|| {
+                anyhow::anyhow!("invalid --influence entry '{pair}', expected source=score")
+            })?;
+            let score: f64 = score
+                .trim()
+                .parse()
+                .map_err(|_| anyhow::anyhow!("invalid score '{score}' in --influence entry '{pair}'"))?;
+            Ok((key.trim().to_string(), score))
+        })
+        .collect()
 }
 
 /// Record that `skill` satisfies `constraint` (idempotent: skips if same
@@ -259,6 +300,11 @@ pub enum EvidenceCommand {
         constraint: String,
         #[clap(long)]
         agent_id: Option<String>,
+        /// AL-1.0 influence attribution: "source_key=score[,source_key2=score2,...]".
+        /// When present, routes through record_satisfies_with_influence() instead of
+        /// the plain satisfies() path, computing normalized influence weights (#691).
+        #[clap(long, value_name = "source=score,...")]
+        influence: Option<String>,
     },
     #[clap(about = "Prove which constraints a skill satisfies")]
     Prove {
@@ -309,10 +355,16 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
             skill,
             constraint,
             agent_id,
+            influence,
         } => {
-            let mut rec = EvidenceRecord::satisfies(skill, constraint);
-            rec.agent_id = agent_id.clone();
-            append_evidence(&rec)?;
+            if let Some(spec) = influence {
+                let scored_sources = parse_influence_arg(spec)?;
+                record_satisfies_with_influence(skill, constraint, &scored_sources, agent_id.as_deref(), None)?;
+            } else {
+                let mut rec = EvidenceRecord::satisfies(skill, constraint);
+                rec.agent_id = agent_id.clone();
+                append_evidence(&rec)?;
+            }
             println!("recorded: {skill} satisfies {constraint}");
         }
         EvidenceCommand::Prove { skill, format } => {
@@ -484,6 +536,53 @@ mod tests {
             // Just verify it compiles and runs without panic when home exists
             // (idempotency guard will return Ok(()) if evidence already present)
         });
+    }
+
+    #[test]
+    fn record_satisfies_with_influence_persists_weights() {
+        let dir = TempDir::new().unwrap();
+        let log_path = dir.path().join("satisfies.jsonl");
+        with_test_evidence_log_path(log_path, || {
+            record_satisfies_with_influence(
+                "rust.skill",
+                "requires:role:backend",
+                &[("source-a".to_string(), 3.0), ("source-b".to_string(), 1.0)],
+                Some("agent-1"),
+                None,
+            )
+            .unwrap();
+
+            let all = read_evidence().unwrap();
+            assert_eq!(all.len(), 1);
+            let record = &all[0];
+            assert_eq!(record.subject, "rust.skill");
+            assert_eq!(record.predicate, "satisfies");
+            assert_eq!(record.agent_id.as_deref(), Some("agent-1"));
+
+            let weights = record.influence.as_ref().expect("influence weights present");
+            assert_eq!(weights.len(), 2);
+            let total_ratio: f64 = weights.iter().map(|w| w.ratio).sum();
+            assert!((total_ratio - 1.0).abs() < 1e-9, "ratios should normalize to 1.0, got {total_ratio}");
+
+            let a = weights.iter().find(|w| w.source_key == "source-a").unwrap();
+            assert!((a.ratio - 0.75).abs() < 1e-9);
+            assert_eq!(a.score, 3.0);
+        });
+    }
+
+    #[test]
+    fn parse_influence_arg_parses_multiple_pairs() {
+        let parsed = parse_influence_arg("src-a=2.5,src-b=1.5").unwrap();
+        assert_eq!(parsed, vec![
+            ("src-a".to_string(), 2.5),
+            ("src-b".to_string(), 1.5),
+        ]);
+    }
+
+    #[test]
+    fn parse_influence_arg_rejects_malformed_entry() {
+        assert!(parse_influence_arg("no-equals-sign").is_err());
+        assert!(parse_influence_arg("key=not-a-number").is_err());
     }
 }
 

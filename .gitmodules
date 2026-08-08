@@ -38,16 +38,8 @@
 	path = python.🐍/DALLE2-pytorch
 	url = https://github.com/lucidrains/DALLE2-pytorch.git
 
-[submodule "rmcp-rust-sdk"]
-	path = rmcp-rust-sdk
-	url = https://github.com/modelcontextprotocol/rust-sdk.git
-
 [submodule "vendor/agent-framework"]
 	path = vendor/agent-framework
-	url = https://github.com/microsoft/agent-framework
-
-[submodule "vendor/agentfm-core"]
-	path = vendor/agentfm-core
 	url = https://github.com/microsoft/agent-framework
 
 [submodule "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"]
@@ -91,10 +83,6 @@
 	path = vendor/opencode-b00t
 	url = https://github.com/PromptExecution/opencode-b00t.git
 
-[submodule "vendor/rust-docs-mcp-server"]
-	path = vendor/rust-docs-mcp-server
-	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
-
 [submodule "vendor/rust-docs-mcp-b00t"]
 	path = vendor/rust-docs-mcp-b00t
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
@@ -127,3 +115,6 @@
 [submodule "vendor/serena"]
 	path = vendor/serena
 	url = https://github.com/oraios/serena
+[submodule "vendor/linkml-b00t"]
+	path = vendor/linkml-b00t
+	url = https://github.com/linkml/linkml.git

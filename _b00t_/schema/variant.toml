@@ -1,11 +1,4 @@
 [b00t.variant]
-# Detected at install time. 'core' = SFW public, 'nsfw0r1d' = personal
 name = "core"
-description = "SFW public variant — inspiration stripped, no crypto"
+description = "SFW public variant — stripped from upstream, no crypto"
 features = ["sfw", "no-crypto"]
-
-[b00t.variant.overrides]
-# When variant = nsfw0r1d, enable these features
-[b00t.variant.overrides.nsfw0r1d]
-features = ["nsfw-inspiration", "crypto-enabled"]
-description = "Personal variant — full inspiration, crypto features"

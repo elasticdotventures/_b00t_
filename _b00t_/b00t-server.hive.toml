@@ -1,0 +1,65 @@
+# b00t Hive Profile — b00t-server (OpenAI-compat gateway + API-key authority)
+# 🤓 NO static .service file — b00t@.service template generates unit from inline spec below.
+# Mints/validates b00t-sk-* API keys, proxies /v1/{models,chat/completions,embeddings}
+# to whichever local/remote backend is discovered (see server_llm.rs SoulConfig), and
+# logs per-consumer usage ("Spotlight", ~/.b00t/spotlight.jsonl).
+# This is what `[b00t.ai_provision]` datums (e.g. rust-doc.mcp.toml) get provisioned
+# against — see _b00t_/plans/b00t-server-architecture.tomllmd.
+# Start: systemctl --user start b00t@b00t-server
+
+[b00t]
+name = "b00t-server"
+type = "hive_profile"
+hint = "b00t-server gateway at :5273 — API-key authority + per-consumer usage telemetry, always on"
+depends_on = ["b00t-mcp.mcp"]
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 0.5
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group = "ai-gateway"
+priority = 90  # always on; not exclusive with inference profiles
+
+[b00t.hive.services]
+start = []
+stop  = []
+
+# ── Inline service spec — b00t generates b00t-hive-b00t-server.service ─────
+[b00t.hive.service]
+description = "b00t-server OpenAI-compat gateway + API-key authority (port 5273)"
+service_type = "simple"
+restart      = "on-failure"
+restart_sec  = "10s"
+after        = ["network.target"]
+environment  = [
+  "PATH=/home/brianh/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
+]
+exec_start = "/home/brianh/.cargo/bin/b00t server start --port 5273 --host 127.0.0.1"
+
+[b00t.hive.env]
+B00T_SERVER_URL = "http://127.0.0.1:5273/v1"
+
+[[b00t.usage]]
+description = "Start b00t-server via b00t generic service"
+command = "systemctl --user start b00t@b00t-server"
+
+[[b00t.usage]]
+description = "Check gateway models"
+command = "curl -s http://localhost:5273/v1/models -H 'Authorization: Bearer b00t-sk-...' | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Mint a scoped API key for a new consumer"
+command = "b00t server key create --consumer <name> --access b00t:EmbeddingModel:execute"
+
+# b00t:map v1
+# summary: b00t-server hive profile — always-on OpenAI-compat gateway, API-key authority, Spotlight usage telemetry
+# tags: b00t-server, gateway, openai-compat, api-key, spotlight, ai-provision
+# tier: frontier
+# cmds: systemctl --user start b00t@b00t-server, b00t server key create
+# complexity: 4

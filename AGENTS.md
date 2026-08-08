@@ -135,7 +135,7 @@ b00t types are Rust structs/enums in `b00t-cli/src/lib.rs`. Agents navigate via:
 - `b00t-cli ontology sparql --subject <X> --predicate type` — just type triples
 - `b00t-cli learn <topic>` — DWIW fanout: `DatumSearchSource(w=3)` + `GraphAdjacencySource(w=2)`
 - `b00t-cli blessing --manifest --role <R>` — walk `depends_on` graph for role
-- Key types: `BootDatum` (open struct) · `DatumType` (22-variant enum: Cli/Skill/Role/Mcp/Agent…)
+- Key types: `BootDatum` (open struct) · `DatumType` (open enum — see `b00t-cli/src/datum_types.rs` for the current variant list, do not hardcode a count here)
 - Chalk Interner pattern: `DatumStore` trait would abstract TOML/SQLite/Qdrant storage behind same API
 - `b00t learn chalk-interner` — load Chalk Interner → b00t DatumStore mapping
 - `b00t learn datum-macro` — load Rust macro → dynamic datum feasibility analysis
@@ -147,6 +147,10 @@ Sharp corner or bug found? REPORT IT — silence hides systemic issues.
 - `b00t task add "bug: <description>"` — creates tracked issue for operator review
 - Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
 - Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
+- 🚩 known-broken (2026-08-04): `b00t lfmf`'s vector-DB backend silently fails to persist
+  ("✅ Lesson recorded" prints even when the write errors) — verify with `b00t lfmf advice
+  <tool>` after recording, don't trust the success message alone. Direct file edits are
+  the reliable fallback until fixed.
 
 ## Hive A2A Collaboration
 
@@ -209,3 +213,49 @@ notes (e.g. workflow-tool experiments) live in that project's own datums —
 check the current repo's `_b00t_/` and `SOUL.tomllm` before adding ML/workflow
 code, not this file. `b00t lfmf mvp` holds the durable, repo-agnostic version
 of this lesson.
+
+## Just Recipe Boundary (recorded 2026-07-25)
+
+Before editing a justfile, agents MUST run `b00t learn just`.
+Just recipes MUST remain thin command surfaces. Move stateful shell logic, request
+generation, heredocs, and provider orchestration into descriptively named scripts;
+the recipe invokes the script and exposes its contract.
+
+## Worktree Discipline (recorded 2026-08-04)
+
+TLDR: `~/.dotfiles` is bare — never edit or build in it directly. `b00t learn worktree`
+→ `git worktree add <path> <branch>` on real disk (never `/tmp`) → build. Detail, sharp
+edges (submodule init, shared target-dir, tmpfs contention), and fixes all live in the
+datum — MUST `b00t learn worktree` before the first `git`/`cargo` command against any
+bare/worktree-layout repo rather than rediscovering them the hard way.
+
+## SeaORM Migration Sharp Edges (recorded 2026-08-07)
+
+TLDR: before writing a SeaORM Postgres migration that does `CREATE EXTENSION`/
+`CREATE TYPE`/`ALTER TYPE`, schema-qualify everything (`WITH SCHEMA public`,
+`public.foo`) and join `pg_namespace` on any `pg_type` existence check — that catalog is
+database-wide, so an unqualified check false-positives against a same-named type in an
+unrelated schema (bites hardest under a per-test isolated-schema test harness). This does
+NOT apply to `pg_extension`: extension names are unique database-wide (Postgres rejects
+installing the same extension into a second schema outright), so there's no cross-schema
+false positive to guard against there — `WITH SCHEMA public` still matters for
+extensions, but only for where the extension's own objects land, not for existence
+checks. The non-obvious one, confirmed on PostgreSQL 17.5 (re-confirmed twice against a
+real instance, not just reasoned about — an independent check against PostgreSQL 15.13
+reported different behavior for the non-`EXCEPTION` case, unreproduced and unexplained,
+so verify on your own major version before trusting this claim): never wrap a
+`CREATE TYPE` in a `DO $$ ... EXCEPTION ... END $$` block if a later migration in the
+same run does `ALTER TYPE ... ADD VALUE` on it and a further-later migration uses that
+value — the `EXCEPTION` clause implicitly opens a Postgres subtransaction, which breaks
+Postgres's "enum value usable in this transaction only if its type was also created in
+this transaction" exemption, producing `unsafe use of new value` (SQLSTATE 55P04) even
+with zero real concurrency. A serializing `pg_advisory_xact_lock` around the shared-object
+section removes the actual concurrent-test-thread race without needing exception handling
+at all — but note that lock only serializes *concurrent* migrations within one deploy; an
+`ALTER TYPE ... ADD VALUE` migration whose type-creating migration already committed in an
+*earlier, separate* deploy still needs its own connection to add+commit the value
+independently (Postgres's other safe case: value committed in a prior transaction), or the
+identical error resurfaces. Verify by recreating a genuinely fresh DB and running real
+tests (including a single isolated `--test-threads=1 --exact` run to rule out a race
+before assuming one, and a real two-batch incremental-deploy repro for the ADD VALUE
+case) — not by code inspection alone.

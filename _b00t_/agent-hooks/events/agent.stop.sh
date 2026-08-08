@@ -23,7 +23,10 @@ AGENT_TYPE="$(echo "$INPUT" | jq -r '.agent_type          // "unknown"' 2>/dev/n
 AGENT_ID="$(  echo "$INPUT" | jq -r '.agent_id            // "unknown"' 2>/dev/null || echo "unknown")"
 LAST_MSG="$(  echo "$INPUT" | jq -r '.last_assistant_message // ""'    2>/dev/null || echo "")"
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+PROJECT_ROOT="${B00T_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${HOOK_DIR}/../../../scripts/lib/worktree-env.sh"
 
 # ── Phase 1: Ledgerr audit receipt (release resource budget) ──────────────
 if [ -n "${PROJECT_ROOT}" ] && [ "${B00T_NO_LEDGERR:-0}" != "1" ]; then
@@ -48,7 +51,8 @@ fi
 
 # ── Phase 2: Worktree cleanup ────────────────────────────────────────────
 if [ -n "${PROJECT_ROOT}" ]; then
-  WT_DIR="${PROJECT_ROOT}/.b00t/worktrees/${AGENT_ID}"
+  WT_ROOT="$(b00t_default_agent_worktree_root "${PROJECT_ROOT}")"
+  WT_DIR="${WT_ROOT}/${AGENT_ID}"
   if [ -d "${WT_DIR}" ]; then
     git -C "${PROJECT_ROOT}" worktree remove "${WT_DIR}" --force 2>/dev/null || {
       rm -rf "${WT_DIR}"

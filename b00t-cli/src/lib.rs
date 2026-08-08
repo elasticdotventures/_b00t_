@@ -52,6 +52,7 @@ pub mod datum_ai_model;
 pub mod datum_api;
 pub mod datum_apt;
 pub mod datum_bash;
+pub mod datum_claude_plugin;
 pub mod datum_cli;
 pub mod datum_config;
 pub mod datum_database;
@@ -434,7 +435,7 @@ hint = "containers"
             chart_path: None, namespace: None, values_file: None,
             keywords: None, package_name: None, ansible: None,
             env: None, require: None, aliases: None, k0mmand3r: None,
-            knowledge: None, mcp: None, gate: None, url: None, branch: None,
+            knowledge: None, mcp: None, ai_provision: None, gate: None, url: None, branch: None,
             clone_path: None, entangled_agents: None, entangled_cli: None,
             entangled_mcp: None, entangled_ai_models: None, entangled_apis: None,
             entangled_docker: None, entangled_k8s: None, channel_prefix: None,

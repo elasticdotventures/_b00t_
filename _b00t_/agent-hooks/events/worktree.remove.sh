@@ -4,8 +4,13 @@
 set -euo pipefail
 
 AGENT_ID="${1:-${B00T_AGENT_ID:-unknown}}"
-PROJECT_ROOT="${B00T_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
-WORKTREE_DIR="${PROJECT_ROOT}/.b00t/worktrees/${AGENT_ID}"
+PROJECT_ROOT="${B00T_PROJECT_DIR:-${B00T_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}}"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/worktree-env.sh
+source "${HOOK_DIR}/../../../scripts/lib/worktree-env.sh"
+
+WORKTREE_ROOT="$(b00t_default_agent_worktree_root "${PROJECT_ROOT}")"
+WORKTREE_DIR="${WORKTREE_ROOT}/${AGENT_ID}"
 
 echo "[worktree.remove] agent=${AGENT_ID}"
 

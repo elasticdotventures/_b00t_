@@ -21,6 +21,22 @@ pub enum ServerCommands {
         #[clap(subcommand)]
         action: KeyAction,
     },
+    #[clap(about = "Query per-consumer usage telemetry (Spotlight)")]
+    Spotlight {
+        #[clap(subcommand)]
+        action: SpotlightAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SpotlightAction {
+    #[clap(about = "Aggregate usage by consumer/model/endpoint")]
+    Query {
+        #[clap(long, help = "Filter to a single consumer (e.g. rust-doc)")]
+        consumer: Option<String>,
+        #[clap(long, help = "Only count events in the last N (e.g. 24h, 7d, 30m)")]
+        since: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -135,5 +151,90 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                 Ok(())
             }
         },
+        ServerCommands::Spotlight { action } => match action {
+            SpotlightAction::Query { consumer, since } => {
+                spotlight_query(consumer.as_deref(), since.as_deref())
+            }
+        },
     }
+}
+
+/// Parses a simple duration suffix (m/h/d — minutes/hours/days), e.g. "24h",
+/// "7d", "30m". No external duration-parsing dependency needed for this scope.
+fn parse_since(since: &str) -> anyhow::Result<chrono::Duration> {
+    let since = since.trim();
+    let (num_str, unit) = since.split_at(since.len().saturating_sub(1));
+    let n: i64 = num_str
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid --since '{}': expected e.g. 24h, 7d, 30m", since))?;
+    match unit {
+        "m" => Ok(chrono::Duration::minutes(n)),
+        "h" => Ok(chrono::Duration::hours(n)),
+        "d" => Ok(chrono::Duration::days(n)),
+        _ => anyhow::bail!("invalid --since '{}': unit must be m, h, or d", since),
+    }
+}
+
+fn spotlight_query(consumer_filter: Option<&str>, since: Option<&str>) -> anyhow::Result<()> {
+    let log_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".b00t")
+        .join("spotlight.jsonl");
+    let content = std::fs::read_to_string(&log_path).unwrap_or_default();
+
+    let cutoff = since
+        .map(parse_since)
+        .transpose()?
+        .map(|d| chrono::Utc::now() - d);
+
+    #[derive(Default)]
+    struct Agg {
+        requests: u64,
+        prompt_tokens: u64,
+        completion_tokens: u64,
+    }
+    let mut by_consumer_model: std::collections::BTreeMap<(String, String), Agg> =
+        std::collections::BTreeMap::new();
+
+    for line in content.lines() {
+        let Ok(event) = serde_json::from_str::<Value>(line) else { continue };
+        let consumer = event.get("consumer").and_then(|c| c.as_str()).unwrap_or("unknown");
+        if let Some(filter) = consumer_filter {
+            if consumer != filter {
+                continue;
+            }
+        }
+        if let Some(cutoff) = cutoff {
+            let ts_ok = event
+                .get("ts")
+                .and_then(|t| t.as_str())
+                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                .map(|t| t.with_timezone(&chrono::Utc) >= cutoff)
+                .unwrap_or(false);
+            if !ts_ok {
+                continue;
+            }
+        }
+        let model = event.get("model").and_then(|m| m.as_str()).unwrap_or("unknown");
+        let entry = by_consumer_model
+            .entry((consumer.to_string(), model.to_string()))
+            .or_default();
+        entry.requests += 1;
+        entry.prompt_tokens += event.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        entry.completion_tokens += event.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+    }
+
+    if by_consumer_model.is_empty() {
+        println!("No spotlight events found (log: {})", log_path.display());
+        return Ok(());
+    }
+
+    println!("{:<20} {:<20} {:>10} {:>15} {:>15}", "consumer", "model", "requests", "prompt_tok", "completion_tok");
+    for ((consumer, model), agg) in &by_consumer_model {
+        println!(
+            "{:<20} {:<20} {:>10} {:>15} {:>15}",
+            consumer, model, agg.requests, agg.prompt_tokens, agg.completion_tokens
+        );
+    }
+    Ok(())
 }

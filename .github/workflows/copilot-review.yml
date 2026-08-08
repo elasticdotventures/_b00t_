@@ -1,10 +1,16 @@
 name: copilot-pr-review
 
+# Disabled (dispatch-only) — see #920.
+# `pull_request_review_request:` is not a real GitHub Actions event (the real
+# mechanism is `pull_request: types: [..., review_requested]`), so GitHub
+# rejected this entire workflow file with a 0s "workflow file issue" failure
+# on every push to main. Even fixed, the job body below shells out to
+# `gh copilot explain`, which needs a Copilot-entitled token — no such PAT is
+# configured in this repo's secrets (only CARGO_REGISTRY_TOKEN is), and
+# GitHub's native App-based "Copilot code review" workflow already covers PR
+# review. Re-enable only if a Copilot-entitled PAT is deliberately added.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-  pull_request_review_request:
-    types: [requested]
+  workflow_dispatch:
 
 permissions:
   contents: read
