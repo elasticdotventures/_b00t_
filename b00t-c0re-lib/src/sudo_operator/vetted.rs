@@ -23,11 +23,22 @@ struct VettedRegistryFile {
 
 const VETTED_REGISTRY_PATH: &str = "_b00t_/vetted-scripts.toml";
 
-/// Load the vetted-script registry from `<repo_root>/_b00t_/vetted-scripts.toml`.
-/// A missing file is not an error — it just means no scripts are registered yet.
+/// Load the vetted-script registry from `origin/main`'s
+/// `_b00t_/vetted-scripts.toml` — deliberately NOT the local working tree.
+/// The registry is itself part of the trust boundary (it's the allowlist),
+/// so it must come from the same origin/main-reviewed source as the
+/// scripts it names; reading it off local disk would let an uncommitted
+/// local edit expand the allowlist without going through PR review.
+/// Caller must fetch first (`check_vetted` does this before calling); a
+/// missing/unreadable path on origin/main resolves to an empty registry
+/// (fail-closed — nothing is vetted, not "trust everything").
 pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
-    let registry_path = repo_root.join(VETTED_REGISTRY_PATH);
-    let Ok(text) = std::fs::read_to_string(&registry_path) else {
+    let Some(text) = cmd!("git", "show", format!("origin/main:{VETTED_REGISTRY_PATH}"))
+        .dir(repo_root)
+        .stderr_capture()
+        .read()
+        .ok()
+    else {
         return Vec::new();
     };
     toml::from_str::<VettedRegistryFile>(&text)
@@ -36,9 +47,8 @@ pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
 }
 
 /// Bounded `git fetch origin main` — never hangs indefinitely. Failure is
-/// non-fatal to the caller; it just means the local `origin/main` ref may
-/// be stale, which check_vetted treats as grounds for NotVetted via the
-/// subsequent rev-parse failing or a genuine mismatch.
+/// fail-closed and immediate: `check_vetted` returns `NotVetted` as soon as
+/// this errors, before any registry lookup or rev-parse is attempted.
 fn fetch_origin_main(repo_root: &Path) -> Result<()> {
     let handle = cmd!("git", "fetch", "origin", "main", "--quiet")
         .dir(repo_root)
@@ -70,16 +80,16 @@ fn git_blob_hash(repo_root: &Path, rev_and_path: &str) -> Option<String> {
 /// fetch timeout, path not present on origin/main) resolves to NotVetted.
 /// Never resolves to Vetted on an error path.
 pub fn check_vetted(repo_root: &Path, script_path: &str) -> VettedResult {
-    let registry = load_vetted_registry(repo_root);
-    if !registry.iter().any(|e| e.path == script_path) {
-        return VettedResult::NotVetted {
-            reason: format!("'{script_path}' is not a registered vetted script"),
-        };
-    }
-
     if let Err(e) = fetch_origin_main(repo_root) {
         return VettedResult::NotVetted {
             reason: format!("git fetch origin main failed: {e}"),
+        };
+    }
+
+    let registry = load_vetted_registry(repo_root);
+    if !registry.iter().any(|e| e.path == script_path) {
+        return VettedResult::NotVetted {
+            reason: format!("'{script_path}' is not a registered vetted script on origin/main"),
         };
     }
 
@@ -212,5 +222,49 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let entries = load_vetted_registry(tmp.path());
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_locally_edited_registry_entry_is_not_vetted() {
+        let (_tmp, work) = fixture_repo();
+        // Simulate the attack: add a NEW script and register it LOCALLY only
+        // (write to disk, never commit/push) — origin/main's registry doesn't
+        // know about it.
+        fs::write(work.join("_b00t_/local-only.sh"), "#!/bin/sh\necho local-only\n").unwrap();
+        let mut registry_text =
+            fs::read_to_string(work.join("_b00t_/vetted-scripts.toml")).unwrap();
+        registry_text.push_str(
+            "\n[[vetted]]\npath = \"_b00t_/local-only.sh\"\ndescription = \"not actually reviewed\"\n",
+        );
+        fs::write(work.join("_b00t_/vetted-scripts.toml"), registry_text).unwrap();
+
+        let result = check_vetted(&work, "_b00t_/local-only.sh");
+        assert!(
+            matches!(result, VettedResult::NotVetted { .. }),
+            "a locally-added, never-committed registry entry must NOT be trusted: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_fetch_timeout_resolves_to_not_vetted() {
+        let (_tmp, work) = fixture_repo();
+        // Point origin at an address that will stall rather than fail-fast, so
+        // this exercises the bounded-timeout branch specifically (not just
+        // "any fetch error").
+        Command::new("git")
+            .args(["remote", "set-url", "origin", "http://10.255.255.1/unreachable.git"])
+            .current_dir(&work)
+            .status()
+            .unwrap();
+
+        let start = std::time::Instant::now();
+        let result = check_vetted(&work, "_b00t_/hello.sh");
+        let elapsed = start.elapsed();
+
+        assert!(matches!(result, VettedResult::NotVetted { .. }));
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "fetch should have been bounded to ~5s by fetch_origin_main's timeout, took {elapsed:?}"
+        );
     }
 }

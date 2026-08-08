@@ -202,3 +202,78 @@ fn test_vetted_flag_grants_when_content_matches_origin_main() {
         "no sudo-vetted-granted entry found in exec-log.jsonl:\n{log}"
     );
 }
+
+#[test]
+fn test_vetted_flag_denies_when_content_mismatches_origin_main() {
+    let (_tmp, work, fake_home) = fixture_repo();
+    let marker = work.join("vetted-marker.txt");
+
+    // Tamper AFTER fixture_repo()'s commit+push — origin/main still has
+    // the original content; the working tree now differs.
+    fs::write(
+        work.join("_b00t_/vetted-hello.sh"),
+        "#!/bin/sh\ntouch vetted-marker.txt\necho TAMPERED\n",
+    )
+    .unwrap();
+
+    let output = Command::new(get_b00t_binary())
+        .args([
+            "--path",
+            work.join("_b00t_").to_str().unwrap(),
+            "exec",
+            "--vetted",
+            "_b00t_/vetted-hello.sh",
+        ])
+        .current_dir(&work)
+        .env("HOME", &fake_home)
+        .output()
+        .expect("failed to run b00t-cli");
+
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit for content-mismatched --vetted target"
+    );
+    assert!(
+        !marker.exists(),
+        "tampered script's side effect occurred despite content mismatch"
+    );
+}
+
+#[test]
+fn test_justification_path_unaffected_by_vetted_registration() {
+    let (_tmp, work, fake_home) = fixture_repo();
+    let log_path = fake_home.join(".b00t/exec-log.jsonl");
+
+    // Target the SAME script that's registered+vetted, but use
+    // --justification instead of --vetted — must NOT take the vetted-grant
+    // shortcut just because the path happens to be registered.
+    let _output = Command::new(get_b00t_binary())
+        .args([
+            "--path",
+            work.join("_b00t_").to_str().unwrap(),
+            "exec",
+            "--justification",
+            "test justification",
+            "_b00t_/vetted-hello.sh",
+        ])
+        .current_dir(&work)
+        .env("HOME", &fake_home)
+        .output()
+        .expect("failed to run b00t-cli");
+
+    // No live adversarial-model endpoint in this test environment, so we
+    // only assert on what --vetted's presence must NOT cause: a
+    // sudo-vetted-granted entry. The adversarial path's own Grant/Deny/
+    // Escalate behavior is covered by verdict.rs's/governance.rs's own
+    // tests, not this one.
+    if let Ok(log) = fs::read_to_string(&log_path) {
+        let has_vetted_grant = log
+            .lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .any(|v| v.get("result").and_then(|r| r.as_str()) == Some("sudo-vetted-granted"));
+        assert!(
+            !has_vetted_grant,
+            "--justification must never take the vetted-grant shortcut, even on a registered script:\n{log}"
+        );
+    }
+}
