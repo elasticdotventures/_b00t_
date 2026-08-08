@@ -26,6 +26,27 @@ jobs:
     name: cargo check + test (workspace)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # 🤓 OCCT (b00t-cad's `cadrum` dependency) lives here instead of being
+    #    downloaded into `target/` by cadrum's own build.rs. That path used to
+    #    ride along with Swatinem/rust-cache's cached `target/` tarball below,
+    #    and cadrum's cache-hit check only verifies `include/`+`lib/` *exist*,
+    #    not that they're complete — so one run cancelled mid-extraction by
+    #    `cancel-in-progress` above was enough to cache a permanently-broken
+    #    OCCT tree that every run after it silently inherited (see #926).
+    #    Baking OCCT into this image instead means it's never touched by that
+    #    cache at all. Image: Dockerfile.ci-occt / .github/workflows/ci-occt-image.yml.
+    container:
+      image: ghcr.io/elasticdotventures/ci-occt:latest
+    env:
+      OCCT_ROOT: /opt/occt
+    # 🤓 Container jobs don't get the `bash -eo pipefail` default that host
+    #    (`runs-on: ubuntu-latest`) jobs get — Actions falls back to plain
+    #    `sh` (dash) inside a container unless told otherwise, which chokes
+    #    on `set -o pipefail` in every `run:` step below. bash IS present in
+    #    this image; Actions just doesn't assume it without this.
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout 🥾
         uses: actions/checkout@v4
@@ -35,6 +56,16 @@ jobs:
           #    recursive checkout aborts on orphan//gutted gitlinks (see #924).
           #    Init only what the workspace actually needs, explicitly.
           submodules: false
+
+      # 🤓 Container-job-only wrinkle: on the host runner, actions/checkout's
+      #    own safe.directory handling is enough. Inside a container the
+      #    checked-out tree is owned by a different uid than git expects, so
+      #    a *separate* git invocation (this step's `git submodule update`)
+      #    hits "detected dubious ownership" even though Checkout itself
+      #    just succeeded. `*` covers the submodule paths too, which get
+      #    their own nested .git dirs below.
+      - name: Mark workspace as git-safe (container job)
+        run: git config --global --add safe.directory '*'
 
       - name: Init workspace-required vendor submodules
         run: |

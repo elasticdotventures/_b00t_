@@ -1,0 +1,87 @@
+# syntax=docker/dockerfile:latest
+#
+# CI base image with OpenCASCADE (OCCT) pre-baked at a fixed path.
+#
+# Why this exists: `cadrum` (the OCCT bridge crate behind b00t-cad) resolves
+# OCCT via `OCCT_ROOT`, falling back to a directory under `target/` that it
+# populates itself on first use — either from a prebuilt GitHub Release
+# tarball, or by building from source. Its cache-hit check only tests that
+# `include/opencascade` and `lib` exist under that root; it does not verify
+# they're *complete*. When that directory lives under `target/` on a bare
+# `ubuntu-latest` runner, it rides along with Swatinem/rust-cache's cached
+# `target/` tarball across every run. A single interrupted extraction
+# (e.g. a superseded run cancelled mid-download by this repo's
+# `concurrency: cancel-in-progress: true`) is enough to leave a directory
+# that passes the existence check but is missing headers — and that broken
+# snapshot then gets cached and silently reused by every run after it,
+# forever, since nothing ever re-triggers a real download.
+#
+# Baking OCCT into an immutable image layer instead removes the whole
+# failure class: nothing under `target/` is involved, so nothing here is
+# subject to that cache. `OCCT_ROOT=/opt/occt` is set below so `cadrum`'s
+# cache-hit check succeeds immediately against content we've verified here
+# at image-build time, and its own download path is never invoked in CI.
+
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# python3: GitHub-hosted ubuntu-latest runners ship it by default; this
+# minimal image doesn't unless asked. b00t-cli::job_executor's
+# test_python_task_executes shells out to `python3` directly, so its
+# absence here is a real (if easy to miss) test-environment gap, not an
+# OCCT concern — add further tools here only as actual test failures
+# reveal them, rather than trying to pre-guess the host runner's full set.
+# Own layer so it can change independently of the base toolchain above.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# jq: same story as python3 above — ubuntu-latest ships it, this image
+# didn't. b00t.sh gates several functions (restore_task_state among them)
+# on `command -v jq`, so its absence doesn't error, it silently no-ops —
+# which is exactly what made b00t-cli::checkpoint_restore_test fail here
+# (tasks.json never got written, not because of a visible error).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# man-db + unminimize: ubuntu:24.04's Docker base is Canonical's "minimized"
+# cloud image — /usr/bin/man exists but is a diverted stub that always exits
+# 0 with a generic "this system has been minimized" notice, regardless of
+# input. That broke b00t-c0re-lib::man_page's test_man_page_parsing, which
+# asserts a *real* failure (non-zero exit, "No manual entry") for a
+# nonexistent command — true on ubuntu-latest's non-minimized runner, false
+# against the stub. `apt-get install man-db` alone does NOT undo the
+# diversion (confirmed: the stub still won empirically after adding just
+# that) — Ubuntu's own stub message says so explicitly: "You will still
+# need to ensure the 'man-db' package is installed" (to unminimize) — the
+# actual un-diversion only happens via `unminimize` itself.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    man-db \
+    && yes | unminimize \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pinned to the exact release cadrum 0.8.13's build.rs requests
+# (OCCT_VERSION=V8_0_0, BUILD_REVISION=rev3 — see cadrum's build.rs). Bump
+# OCCT_TAG/OCCT_SHA256 together if/when b00t-cad's cadrum dependency moves
+# to a newer revision.
+ARG OCCT_TAG=occt-8_0_0_rev3
+ARG OCCT_ASSET=occt-8_0_0_rev3-x86_64_unknown_linux_gnu.tar.gz
+ARG OCCT_SHA256=586cfb0f9053df463b3f85beb247ae645741e8ee7622f2eb84bbb96f758213f5
+
+RUN curl -fsSL "https://github.com/lzpel/cadrum/releases/download/${OCCT_TAG}/${OCCT_ASSET}" -o /tmp/occt.tar.gz \
+    && echo "${OCCT_SHA256}  /tmp/occt.tar.gz" | sha256sum -c - \
+    && mkdir -p /opt/occt \
+    && tar -xzf /tmp/occt.tar.gz -C /opt/occt --strip-components=1 \
+    && rm /tmp/occt.tar.gz \
+    && test -f /opt/occt/include/opencascade/TopoDS_Shape.hxx \
+    && test -f /opt/occt/lib/libTKernel.a
+
+ENV OCCT_ROOT=/opt/occt
