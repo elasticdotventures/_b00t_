@@ -12,3 +12,4 @@ pub mod vetted;
 pub use checkpoint::{checkpoint_system_state, CheckpointRef};
 pub use governance::{SudoDisposition, SudoGrantConstraint, SudoGrantEvidence, SudoReviewEvent};
 pub use verdict::adversarial_review;
+pub use vetted::{check_vetted, load_vetted_registry, VettedResult, VettedScriptEntry};
