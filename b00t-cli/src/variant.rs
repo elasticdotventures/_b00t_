@@ -74,10 +74,19 @@ pub fn detect_variant(b00t_path: &PathBuf) -> B00tVariant {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::Mutex;
+
+    // 🤓 B00T_VARIANT is process-global state. cargo test runs tests in parallel
+    // threads by default, so two tests mutating the same env var race each other
+    // (one test's remove_var can land between the other's set_var and its assert).
+    // This mutex serializes only the env-var-mutating tests below; other tests in
+    // this module are unaffected since they don't touch B00T_VARIANT.
+    static ENV_VAR_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_env_override_core() {
-        // SAFETY: test-only env var modification in single-threaded test context
+        let _guard = ENV_VAR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: test-only env var modification, serialized by ENV_VAR_TEST_LOCK
         unsafe { std::env::set_var("B00T_VARIANT", "core") };
         assert_eq!(
             detect_variant(&PathBuf::from("/nonexistent")),
@@ -88,7 +97,8 @@ mod tests {
 
     #[test]
     fn test_env_override_nsfw() {
-        // SAFETY: test-only env var modification in single-threaded test context
+        let _guard = ENV_VAR_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: test-only env var modification, serialized by ENV_VAR_TEST_LOCK
         unsafe { std::env::set_var("B00T_VARIANT", "nsfw0r1d") };
         assert_eq!(
             detect_variant(&PathBuf::from("/nonexistent")),

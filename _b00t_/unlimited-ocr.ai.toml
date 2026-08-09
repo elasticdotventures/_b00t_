@@ -1,8 +1,8 @@
 [b00t]
 name = "unlimited-ocr"
-type = "cli"
+type = "ai"
 desires = "latest"
-hint = "Baidu Unlimited-OCR — OCR engine for unlimited-length text recognition via podman container"
+hint = "Baidu Unlimited-OCR — OCR model for unlimited-length text recognition, served via podman container"
 depends_on = ["podman.cli"]
 
 install = '''
@@ -41,6 +41,13 @@ version = "podman image inspect ghcr.io/baidu/unlimited-ocr:latest --format '{{.
 version_regex = '(.+)'
 lfmf_category = "ocr"
 
+[b00t.ai]
+provider = "baidu"
+model = "unlimited-ocr"
+runtime = "podman"
+capabilities = "ocr,text-recognition"
+tier = "ch0nky"
+
 [b00t.learn]
 topic = "unlimited-ocr"
 auto_digest = false
@@ -57,6 +64,16 @@ command = "unlimited-ocr scan.png output.txt"
 description = "Update to latest image"
 command = "podman pull ghcr.io/baidu/unlimited-ocr:latest"
 
+[[b00t.references]]
+name = "Unlimited-OCR on HuggingFace"
+url = "https://huggingface.co/baidu/Unlimited-OCR"
+type = "model"
+
+[[b00t.references]]
+name = "Unlimited-OCR GitHub"
+url = "https://github.com/baidu/Unlimited-OCR"
+type = "source"
+
 [validate]
 command = "podman image exists ghcr.io/baidu/unlimited-ocr:latest || podman pull ghcr.io/baidu/unlimited-ocr:latest"
 regex = ""
@@ -65,9 +82,14 @@ regex = ""
 required_for = []
 optional_for = ["developer", "analyst"]
 
+[b00t.metadata]
+category = "ocr"
+tags = ["ocr", "podman", "gpu", "baidu", "text-recognition"]
+maturity = "unknown"
+
 # b00t:map v1
-# summary: Baidu Unlimited-OCR — unlimited-length text recognition via podman container
-# tags: ocr, podman, gpu, baidu, text-recognition
+# summary: Baidu Unlimited-OCR — canonical AiModel datum (consolidated from cli+grok-assimilated datums, #751), unlimited-length text recognition via podman container
+# tags: ocr, podman, gpu, baidu, text-recognition, ai
 # tier: ch0nky
 # cmds: b00t install unlimited-ocr, b00t detect unlimited-ocr, unlimited-ocr input.png
 # complexity: 3
