@@ -1,0 +1,62 @@
+[b00t]
+name = "cvat"
+depends_on = ["b00t.cli", "docker.cli"]
+type = "docker"
+hint = "CVAT (Computer Vision Annotation Tool) — open-source, self-hosted image/video annotation platform for ML/CV dataset labeling. Multi-container app (server, ui, db, redis, opa) shipped as its own docker-compose stack."
+desires = "latest"
+keywords = ["computer-vision", "annotation", "labeling", "cvat", "dataset", "machine-learning", "image-annotation", "video-annotation"]
+
+# CVAT is not a single-container image — the upstream project ships its own
+# docker-compose.yml (cvat_server, cvat_ui, cvat_db/postgres, cvat_redis_inmem,
+# cvat_redis_ondisk, cvat_opa, traefik). image/oci_uri below identify the
+# primary server component; deployment is via docker compose, not docker run.
+image = "cvat/server:latest"
+oci_uri = "docker.io/cvat/server:latest"
+resource_path = "docker.🐳/cvat-stack"  # points at CVAT's own docker-compose.yml, see references
+
+[b00t.env]
+CVAT_HOST = "${CVAT_HOST:-localhost}"
+CVAT_VERSION = "${CVAT_VERSION:-dev}"
+
+[b00t.learn]
+topic = "cvat"
+auto_digest = false
+
+[[b00t.usage]]
+description = "Clone CVAT and bring up the full stack via docker-compose"
+command = "git clone https://github.com/cvat-ai/cvat && cd cvat && docker compose up -d"
+
+[[b00t.usage]]
+description = "Access CVAT web interface"
+command = "open http://localhost:8080"
+
+[[b00t.usage]]
+description = "Create a CVAT superuser"
+command = "docker exec -it cvat_server bash -ic 'python3 ~/manage.py createsuperuser'"
+
+[[b00t.usage]]
+description = "View CVAT server logs"
+command = "docker logs -f cvat_server"
+
+[[b00t.usage]]
+description = "Stop the CVAT stack"
+command = "docker compose down"
+
+[[b00t.references]]
+name = "CVAT Website"
+url = "https://www.cvat.ai/"
+
+[[b00t.references]]
+name = "CVAT GitHub"
+url = "https://github.com/cvat-ai/cvat"
+
+[[b00t.references]]
+name = "CVAT Documentation"
+url = "https://docs.cvat.ai/"
+
+# b00t:map v1
+# summary: cvat — open-source computer vision annotation tool, docker-compose deployment
+# tags: cvat, computer-vision, annotation, labeling, dataset, ml, docker-compose
+# tier: ch0nky
+# cmds: git clone https://github.com/cvat-ai/cvat && docker compose up -d
+# complexity: 4

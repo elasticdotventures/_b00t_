@@ -263,10 +263,18 @@ pub fn load_runtime_datum(name: &str, path: &str) -> Result<RuntimeConfig> {
     let config: UnifiedConfig =
         toml::from_str(&content).context(format!("Failed to parse {}", file_path.display()))?;
 
-    config
+    let datum_gate = config.b00t.gate.clone();
+    let mut runtime = config
         .b00t
         .runtime
-        .ok_or_else(|| anyhow::anyhow!("datum '{}' missing [b00t.runtime] section", name))
+        .ok_or_else(|| anyhow::anyhow!("datum '{}' missing [b00t.runtime] section", name))?;
+    // 🤓 #712: gate preconditions live on the datum (`[[b00t.gate]]`), not
+    //    nested under `[b00t.runtime]` — carry them onto RuntimeConfig here so
+    //    spawn_sandboxed can evaluate them before forking the sandbox.
+    if runtime.gate.is_none() {
+        runtime.gate = datum_gate;
+    }
+    Ok(runtime)
 }
 
 // ── Generic datum provider loader ──────────────────────────────────────
