@@ -10,7 +10,7 @@
 //!
 //! `--sleep=<duration>` → spawn background detached process; returns immediately
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::hive::{GuardContext, GuardResult, SystemSnapshot, check_guards, load_profile};
+use crate::hive::{check_guards, load_profile, GuardContext, GuardResult, SystemSnapshot};
 use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SystemdRunSandbox};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
@@ -75,13 +75,19 @@ pub struct ExecArgs {
         help = "Commit hash supporting --justification (repeat for multiple); their `git show --stat` grounds the adversarial review"
     )]
     pub cites: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Treat this invocation as a vetted-script grant request: the single command argument must be a path registered in _b00t_/vetted-scripts.toml whose content matches origin/main. No --justification/--cites needed. See PRD-SUDO-OPERATOR-GOVERNANCE's vetted-script extension."
+    )]
+    pub vetted: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 struct AuditLogEntry {
     ts: String,     // ISO8601
     cmd: String,    // full command string
-    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background" | "sudo-granted" | "sudo-denied" | "sudo-escalated"
+    result: String, // "allow" | "warn" | "block-rejected" | "block-forced" | "background" | "sudo-granted" | "sudo-denied" | "sudo-escalated" | "sudo-vetted-granted" | "sudo-vetted-denied"
     guard_msg: Option<String>,
     pid: Option<u32>, // child PID if executed
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -121,6 +127,37 @@ fn append_audit_log(log_path: &PathBuf, entry: &AuditLogEntry) {
             let _ = f.write_all(line.as_bytes());
         }
     }
+}
+
+/// Fail-closed variant of `append_audit_log` for paths where the caller's
+/// safety invariant depends on the write actually happening (currently
+/// only the vetted-grant path: "never executes without recorded evidence"
+/// must not be satisfied by a write that silently failed).
+fn append_audit_log_or_bail(log_path: &PathBuf, entry: &AuditLogEntry) -> Result<()> {
+    let mut line = serde_json::to_string(entry)
+        .map_err(|e| anyhow::anyhow!("failed to serialize audit log entry: {e}"))?;
+    line.push('\n');
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .map_err(|e| anyhow::anyhow!("failed to open audit log {}: {e}", log_path.display()))?;
+    f.write_all(line.as_bytes())
+        .map_err(|e| anyhow::anyhow!("failed to write audit log entry: {e}"))?;
+    Ok(())
+}
+
+/// Resolve the repo root the same way `sudo` preserves the caller's cwd —
+/// via `git rev-parse --show-toplevel`, per the vetted-sudo-mechanism
+/// design spec, NOT `std::env::current_dir()` (which only works when
+/// invoked from exactly the repo root, not any subdirectory).
+fn resolve_repo_toplevel() -> Result<PathBuf> {
+    use duct::cmd;
+    let top = cmd!("git", "rev-parse", "--show-toplevel")
+        .read()
+        .map_err(|e| anyhow::anyhow!("git rev-parse --show-toplevel failed: {e}"))?;
+    Ok(PathBuf::from(top.trim()))
 }
 
 fn now_unix() -> u64 {
@@ -200,155 +237,286 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         return Ok(());
     }
 
-    match &guard_result {
-        GuardResult::Allow => {
-            // no-op
+    // --vetted is a distinct, unconditional authorization path: the guard
+    // tier (Allow/Warn/Block) is NOT consulted when this flag is set.
+    // check_vetted() alone decides — this is what makes it safe to grant
+    // this binary NOPASSWD sudo for `exec --vetted *`: the guard system
+    // (mostly warn-tier, permissive by design) must never be able to
+    // short-circuit this check.
+    // Set only on a successful vetted grant, to the ABSOLUTE path that was
+    // actually hash-verified (`project_root.join(&args.command[0])`) —
+    // execution below must use this exact path, never a bare
+    // `args.command[0]` resolved relative to cwd, or a caller could get a
+    // valid grant/evidence for one file while a different file (same name,
+    // different directory) actually runs.
+    let mut vetted_exec_path: Option<PathBuf> = None;
+
+    if args.vetted {
+        use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
+
+        // The `systemd-run` sandbox provider runs `cmd_str` through `sh -c`
+        // using the process's own cwd, entirely bypassing `vetted_exec_path`
+        // below (which only the `direct` provider's spawn sites consult).
+        // Reject rather than silently execute an unverified path — this is
+        // an unimplemented combination, not a safe default.
+        if args.sandbox != "direct" {
+            bail!(
+                "--vetted only supports --sandbox direct today (got '{}'); \
+                 the systemd-run provider does not yet consult the verified \
+                 vetted-script path",
+                args.sandbox
+            );
         }
-        GuardResult::Warn { message, redirect } => {
-            eprintln!("⚠️  {}", message);
-            if let Some(alt) = redirect {
-                eprintln!("   suggested: {}", alt);
-            }
-            // broad authority: proceed without user gate
+
+        if args.command.len() != 1 {
+            eprintln!("🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args");
+            append_audit_log(
+                &log_path,
+                &AuditLogEntry {
+                    ts: Utc::now().to_rfc3339(),
+                    cmd: cmd_str.clone(),
+                    result: "sudo-vetted-denied".into(),
+                    guard_msg: None,
+                    pid: None,
+                    ..Default::default()
+                },
+            );
+            std::process::exit(1);
         }
-        GuardResult::Block { message } => {
-            if let Some(justification) = &args.justification {
-                // Adversarial-review path (PRD-SUDO-OPERATOR-GOVERNANCE) —
-                // replaces the anonymous TTL-bypass below when a justification
-                // is supplied. Justification-less Block behavior (the `else`
-                // branch) is completely unchanged.
-                use b00t_c0re_lib::sudo_operator::{
-                    SudoDisposition, SudoGrantEvidence, adversarial_review, checkpoint_system_state,
-                };
 
-                let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                let (review_event, disposition) =
-                    adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
+        // repo_root resolution — see I6 for why this uses
+        // `git rev-parse --show-toplevel` instead of `current_dir()`.
+        let project_root = resolve_repo_toplevel()?;
 
-                match &disposition {
-                    SudoDisposition::Grant { ttl_seconds } => {
-                        let checkpoint_id = now_unix().to_string();
-                        let checkpoint =
-                            checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
-                        let evidence = SudoGrantEvidence::new(&review_event, &disposition)
-                            .with_checkpoint(checkpoint.as_evidence_string());
+        match check_vetted(&project_root, &args.command[0]) {
+            VettedResult::Vetted { blob_hash } => {
+                let evidence = SudoGrantEvidence::new_vetted(&args.command[0], &blob_hash);
 
-                        eprintln!(
-                            "✅ SUDO-GRANT: {} (ttl={}s) evidence={}",
-                            cmd_str, ttl_seconds, evidence.content_hash
-                        );
-                        append_audit_log(
-                            &log_path,
-                            &AuditLogEntry {
-                                ts: Utc::now().to_rfc3339(),
-                                cmd: cmd_str.clone(),
-                                result: "sudo-granted".into(),
-                                guard_msg: Some(message.clone()),
-                                pid: None,
-                                justification: Some(justification.clone()),
-                                cited_commits: args.cites.clone(),
-                                sudo_disposition: Some(disposition.to_string()),
-                                checkpoint_ref: Some(checkpoint.as_evidence_string()),
-                            },
-                        );
-                        // fall through to execution below
-                    }
-                    SudoDisposition::Deny { reason } => {
-                        eprintln!("🚫 SUDO-DENY: {}", reason);
-                        append_audit_log(
-                            &log_path,
-                            &AuditLogEntry {
-                                ts: Utc::now().to_rfc3339(),
-                                cmd: cmd_str.clone(),
-                                result: "sudo-denied".into(),
-                                guard_msg: Some(message.clone()),
-                                pid: None,
-                                justification: Some(justification.clone()),
-                                cited_commits: args.cites.clone(),
-                                sudo_disposition: Some(disposition.to_string()),
-                                checkpoint_ref: None,
-                            },
-                        );
-                        std::process::exit(1);
-                    }
-                    SudoDisposition::Escalate { reason } => {
-                        eprintln!("📡 SUDO-ESCALATE: {}", reason);
-                        crate::budget_controller::fire_sudo_escalation(
-                            &cmd_str,
-                            justification,
-                            &args.cites,
-                            reason,
-                        );
-                        notify_send(&format!("b00t sudo escalation: {cmd_str}"), reason);
-                        append_audit_log(
-                            &log_path,
-                            &AuditLogEntry {
-                                ts: Utc::now().to_rfc3339(),
-                                cmd: cmd_str.clone(),
-                                result: "sudo-escalated".into(),
-                                guard_msg: Some(message.clone()),
-                                pid: None,
-                                justification: Some(justification.clone()),
-                                cited_commits: args.cites.clone(),
-                                sudo_disposition: Some(disposition.to_string()),
-                                checkpoint_ref: None,
-                            },
-                        );
-                        eprintln!("   Not executed. Resolve the escalation and re-run.");
-                        std::process::exit(1);
-                    }
+                // I3: the execution-readiness invariant Task 2 built must
+                // actually gate execution, not just exist unused.
+                if !evidence.verify() || !evidence.grant_is_execution_ready() {
+                    eprintln!("🚫 SUDO-VETTED-DENY: evidence failed execution-readiness check (internal invariant violation)");
+                    append_audit_log(
+                        &log_path,
+                        &AuditLogEntry {
+                            ts: Utc::now().to_rfc3339(),
+                            cmd: cmd_str.clone(),
+                            result: "sudo-vetted-denied".into(),
+                            guard_msg: None,
+                            pid: None,
+                            justification: None,
+                            cited_commits: Vec::new(),
+                            sudo_disposition: Some(evidence.disposition.clone()),
+                            checkpoint_ref: None,
+                        },
+                    );
+                    std::process::exit(1);
                 }
-            } else {
-                let mut cache = load_block_cache(&cache_path);
-                let now = now_unix();
 
-                match cache.get(&cmd_str).copied() {
-                    Some(first_ts) if now.saturating_sub(first_ts) < BLOCK_TTL_SECS => {
-                        // Re-submission within TTL → force-execute with audit warning
-                        eprintln!(
-                            "🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)",
-                            message, BLOCK_TTL_SECS
-                        );
-                        eprintln!("   Executing with audit trail.");
-                        cache.remove(&cmd_str); // consume the bypass
-                        save_block_cache(&cache_path, &cache);
+                eprintln!(
+                    "✅ SUDO-VETTED-GRANT: {} blob={} evidence={}",
+                    args.command[0], blob_hash, evidence.content_hash
+                );
+                // I4: evidence recording must be fail-closed on this path —
+                // see append_audit_log_or_bail above.
+                append_audit_log_or_bail(
+                    &log_path,
+                    &AuditLogEntry {
+                        ts: Utc::now().to_rfc3339(),
+                        cmd: cmd_str.clone(),
+                        result: "sudo-vetted-granted".into(),
+                        guard_msg: None,
+                        pid: None,
+                        justification: None,
+                        cited_commits: Vec::new(),
+                        sudo_disposition: Some(evidence.disposition.clone()),
+                        checkpoint_ref: None,
+                    },
+                )?;
+                // Pin execution to the EXACT absolute path that was just
+                // hash-verified — args.command[0] alone is resolved
+                // relative to cwd at spawn time below, which could name a
+                // different file than the one check_vetted() just checked
+                // (e.g. if cwd is a subdirectory containing a same-named,
+                // never-reviewed file). See N2 in the final-review re-review.
+                vetted_exec_path = Some(project_root.join(&args.command[0]));
+                // fall through to the "Background execution via --sleep" /
+                // synchronous execution section below (unchanged) — DO NOT
+                // return early here, and DO NOT enter `match &guard_result`.
+            }
+            VettedResult::NotVetted { reason } => {
+                eprintln!("🚫 SUDO-VETTED-DENY: {}", reason);
+                append_audit_log(
+                    &log_path,
+                    &AuditLogEntry {
+                        ts: Utc::now().to_rfc3339(),
+                        cmd: cmd_str.clone(),
+                        result: "sudo-vetted-denied".into(),
+                        guard_msg: None,
+                        pid: None,
+                        justification: None,
+                        cited_commits: Vec::new(),
+                        sudo_disposition: None,
+                        checkpoint_ref: None,
+                    },
+                );
+                std::process::exit(1);
+            }
+        }
+    } else {
+        match &guard_result {
+            GuardResult::Allow => {
+                // no-op
+            }
+            GuardResult::Warn { message, redirect } => {
+                eprintln!("⚠️  {}", message);
+                if let Some(alt) = redirect {
+                    eprintln!("   suggested: {}", alt);
+                }
+                // broad authority: proceed without user gate
+            }
+            GuardResult::Block { message } => {
+                if let Some(justification) = &args.justification {
+                    // Adversarial-review path (PRD-SUDO-OPERATOR-GOVERNANCE) —
+                    // replaces the anonymous TTL-bypass below when a justification
+                    // is supplied. Justification-less Block behavior (the `else`
+                    // branch) is completely unchanged.
+                    use b00t_c0re_lib::sudo_operator::{
+                        adversarial_review, checkpoint_system_state, AdversarialVerdict,
+                        SudoDisposition, SudoGrantEvidence,
+                    };
 
-                        append_audit_log(
-                            &log_path,
-                            &AuditLogEntry {
-                                ts: Utc::now().to_rfc3339(),
-                                cmd: cmd_str.clone(),
-                                result: "block-forced".into(),
-                                guard_msg: Some(message.clone()),
-                                pid: None,
-                                ..Default::default()
-                            },
-                        );
-                        // fall through to execution below
+                    let project_root =
+                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                    let (review_event, verdict) =
+                        adversarial_review(&project_root, &cmd_str, justification, &args.cites)?;
+                    let disposition: SudoDisposition = verdict.clone().into();
+
+                    match &verdict {
+                        AdversarialVerdict::Grant { ttl_seconds } => {
+                            let checkpoint_id = now_unix().to_string();
+                            let checkpoint =
+                                checkpoint_system_state(Some(&project_root), &checkpoint_id, None)?;
+                            let evidence = SudoGrantEvidence::new(&review_event, &disposition)
+                                .with_checkpoint(checkpoint.as_evidence_string());
+
+                            eprintln!(
+                                "✅ SUDO-GRANT: {} (ttl={}s) evidence={}",
+                                cmd_str, ttl_seconds, evidence.content_hash
+                            );
+                            append_audit_log(
+                                &log_path,
+                                &AuditLogEntry {
+                                    ts: Utc::now().to_rfc3339(),
+                                    cmd: cmd_str.clone(),
+                                    result: "sudo-granted".into(),
+                                    guard_msg: Some(message.clone()),
+                                    pid: None,
+                                    justification: Some(justification.clone()),
+                                    cited_commits: args.cites.clone(),
+                                    sudo_disposition: Some(disposition.to_string()),
+                                    checkpoint_ref: Some(checkpoint.as_evidence_string()),
+                                },
+                            );
+                            // fall through to execution below
+                        }
+                        AdversarialVerdict::Deny { reason } => {
+                            eprintln!("🚫 SUDO-DENY: {}", reason);
+                            append_audit_log(
+                                &log_path,
+                                &AuditLogEntry {
+                                    ts: Utc::now().to_rfc3339(),
+                                    cmd: cmd_str.clone(),
+                                    result: "sudo-denied".into(),
+                                    guard_msg: Some(message.clone()),
+                                    pid: None,
+                                    justification: Some(justification.clone()),
+                                    cited_commits: args.cites.clone(),
+                                    sudo_disposition: Some(disposition.to_string()),
+                                    checkpoint_ref: None,
+                                },
+                            );
+                            std::process::exit(1);
+                        }
+                        AdversarialVerdict::Escalate { reason } => {
+                            eprintln!("📡 SUDO-ESCALATE: {}", reason);
+                            crate::budget_controller::fire_sudo_escalation(
+                                &cmd_str,
+                                justification,
+                                &args.cites,
+                                reason,
+                            );
+                            notify_send(&format!("b00t sudo escalation: {cmd_str}"), reason);
+                            append_audit_log(
+                                &log_path,
+                                &AuditLogEntry {
+                                    ts: Utc::now().to_rfc3339(),
+                                    cmd: cmd_str.clone(),
+                                    result: "sudo-escalated".into(),
+                                    guard_msg: Some(message.clone()),
+                                    pid: None,
+                                    justification: Some(justification.clone()),
+                                    cited_commits: args.cites.clone(),
+                                    sudo_disposition: Some(disposition.to_string()),
+                                    checkpoint_ref: None,
+                                },
+                            );
+                            eprintln!("   Not executed. Resolve the escalation and re-run.");
+                            std::process::exit(1);
+                        }
                     }
-                    _ => {
-                        // First rejection (or expired TTL): record + reject
-                        cache.insert(cmd_str.clone(), now);
-                        save_block_cache(&cache_path, &cache);
+                } else {
+                    let mut cache = load_block_cache(&cache_path);
+                    let now = now_unix();
 
-                        append_audit_log(
-                            &log_path,
-                            &AuditLogEntry {
-                                ts: Utc::now().to_rfc3339(),
-                                cmd: cmd_str.clone(),
-                                result: "block-rejected".into(),
-                                guard_msg: Some(message.clone()),
-                                pid: None,
-                                ..Default::default()
-                            },
-                        );
+                    match cache.get(&cmd_str).copied() {
+                        Some(first_ts) if now.saturating_sub(first_ts) < BLOCK_TTL_SECS => {
+                            // Re-submission within TTL → force-execute with audit warning
+                            eprintln!(
+                                "🔶 BLOCK-OVERRIDE: {} (re-submission within {}s TTL)",
+                                message, BLOCK_TTL_SECS
+                            );
+                            eprintln!("   Executing with audit trail.");
+                            cache.remove(&cmd_str); // consume the bypass
+                            save_block_cache(&cache_path, &cache);
 
-                        eprintln!("🚫 BLOCKED: {}", message);
-                        eprintln!(
-                            "   Re-submit within {}s to force execution.",
-                            BLOCK_TTL_SECS
-                        );
-                        std::process::exit(1);
+                            append_audit_log(
+                                &log_path,
+                                &AuditLogEntry {
+                                    ts: Utc::now().to_rfc3339(),
+                                    cmd: cmd_str.clone(),
+                                    result: "block-forced".into(),
+                                    guard_msg: Some(message.clone()),
+                                    pid: None,
+                                    ..Default::default()
+                                },
+                            );
+                            // fall through to execution below
+                        }
+                        _ => {
+                            // First rejection (or expired TTL): record + reject
+                            cache.insert(cmd_str.clone(), now);
+                            save_block_cache(&cache_path, &cache);
+
+                            append_audit_log(
+                                &log_path,
+                                &AuditLogEntry {
+                                    ts: Utc::now().to_rfc3339(),
+                                    cmd: cmd_str.clone(),
+                                    result: "block-rejected".into(),
+                                    guard_msg: Some(message.clone()),
+                                    pid: None,
+                                    ..Default::default()
+                                },
+                            );
+
+                            eprintln!("🚫 BLOCKED: {}", message);
+                            eprintln!(
+                                "   Re-submit within {}s to force execution.",
+                                BLOCK_TTL_SECS
+                            );
+                            std::process::exit(1);
+                        }
                     }
                 }
             }
@@ -358,7 +526,10 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     // Background execution via --sleep
     if let Some(sleep_dur) = &args.sleep {
         let sleep_secs = parse_duration(sleep_dur)?;
-        let command_clone = args.command.clone();
+        let mut command_clone = args.command.clone();
+        if let Some(verified_path) = &vetted_exec_path {
+            command_clone[0] = verified_path.to_string_lossy().into_owned();
+        }
 
         // Apply the requested delay before spawning the background process.
         std::thread::sleep(std::time::Duration::from_secs(sleep_secs));
@@ -435,10 +606,14 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
 
     // For direct provider: use raw spawn so stdin/stdout/stderr are inherited
     let exit_code = if sandbox_kind_label == "direct" {
-        let mut child = std::process::Command::new(&args.command[0])
+        let exec_path: std::borrow::Cow<'_, str> = match &vetted_exec_path {
+            Some(verified_path) => verified_path.to_string_lossy(),
+            None => std::borrow::Cow::Borrowed(args.command[0].as_str()),
+        };
+        let mut child = std::process::Command::new(exec_path.as_ref())
             .args(&args.command[1..])
             .spawn()
-            .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", args.command[0], e))?;
+            .map_err(|e| anyhow::anyhow!("exec failed '{}': {}", exec_path, e))?;
 
         let pid = child.id();
         append_audit_log(

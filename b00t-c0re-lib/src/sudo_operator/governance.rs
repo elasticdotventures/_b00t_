@@ -29,6 +29,10 @@ pub enum SudoDisposition {
     Deny { reason: String },
     /// The model can't confidently decide — escalate to a human, deny for now.
     Escalate { reason: String },
+    /// Deterministic grant: script_path's on-disk content matched
+    /// origin/main's blob hash for that path. No adversarial review, no
+    /// checkpoint. See PRD-SUDO-OPERATOR-GOVERNANCE's vetted-script extension.
+    VettedGrant { script_path: String, blob_hash: String },
 }
 
 impl std::fmt::Display for SudoDisposition {
@@ -37,6 +41,9 @@ impl std::fmt::Display for SudoDisposition {
             SudoDisposition::Grant { ttl_seconds } => write!(f, "GRANT(ttl={ttl_seconds}s)"),
             SudoDisposition::Deny { reason } => write!(f, "DENY({reason})"),
             SudoDisposition::Escalate { reason } => write!(f, "ESCALATE({reason})"),
+            SudoDisposition::VettedGrant { script_path, blob_hash } => {
+                write!(f, "VETTED_GRANT(path={script_path}, blob={blob_hash})")
+            }
         }
     }
 }
@@ -44,7 +51,10 @@ impl std::fmt::Display for SudoDisposition {
 impl SudoDisposition {
     /// Whether this disposition permits the command to execute.
     pub fn permits_execution(&self) -> bool {
-        matches!(self, SudoDisposition::Grant { .. })
+        matches!(
+            self,
+            SudoDisposition::Grant { .. } | SudoDisposition::VettedGrant { .. }
+        )
     }
 }
 
@@ -114,6 +124,32 @@ impl SudoGrantEvidence {
         }
     }
 
+    /// Evidence for a deterministic vetted-script grant. Distinct from
+    /// `new()` because a vetted grant has no SudoReviewEvent (no
+    /// justification, no cited commits, no adversarial review) — the
+    /// content being hashed is just the script path + blob hash + a fixed
+    /// disposition tag, which is sufficient to make the evidence
+    /// deterministic and content-addressed the same way new() is.
+    pub fn new_vetted(script_path: &str, blob_hash: &str) -> Self {
+        let disposition = SudoDisposition::VettedGrant {
+            script_path: script_path.to_string(),
+            blob_hash: blob_hash.to_string(),
+        };
+        let mut hasher = Sha256::new();
+        hasher.update(script_path.as_bytes());
+        hasher.update(blob_hash.as_bytes());
+        hasher.update(disposition.to_string().as_bytes());
+        let content_hash = format!("{:x}", hasher.finalize());
+
+        Self {
+            content_hash,
+            disposition: disposition.to_string(),
+            command: script_path.to_string(),
+            checkpoint_ref: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
     pub fn with_checkpoint(mut self, checkpoint_ref: impl Into<String>) -> Self {
         self.checkpoint_ref = Some(checkpoint_ref.into());
         self
@@ -127,10 +163,15 @@ impl SudoGrantEvidence {
             && !self.command.is_empty()
     }
 
-    /// Governance invariant: a Grant's evidence MUST carry a checkpoint
-    /// reference before the command it authorizes may execute.
+    /// Governance invariant: an adversarially-reviewed Grant's evidence
+    /// MUST carry a checkpoint reference before the command it authorizes
+    /// may execute. A VettedGrant is execution-ready with evidence alone —
+    /// by design it never has a checkpoint (see design spec's "Why no
+    /// checkpoint" section) — its safety instead comes from the content
+    /// having already gone through normal PR review on origin/main.
     pub fn grant_is_execution_ready(&self) -> bool {
-        self.disposition.starts_with("GRANT") && self.checkpoint_ref.is_some()
+        (self.disposition.starts_with("GRANT(") && self.checkpoint_ref.is_some())
+            || self.disposition.starts_with("VETTED_GRANT(")
     }
 }
 
@@ -278,5 +319,55 @@ mod tests {
                 .with_checkpoint("git_tag=checkpoint/sudo/abc123");
         evidence.content_hash = "not-a-hash".into();
         assert!(evidence.satisfies(&SudoGrantConstraint::ExecutionReady).is_violated());
+    }
+
+    #[test]
+    fn test_vetted_grant_display() {
+        let d = SudoDisposition::VettedGrant {
+            script_path: "_b00t_/ci/vetted/pg-setup.sh".into(),
+            blob_hash: "abc123".into(),
+        };
+        assert_eq!(
+            d.to_string(),
+            "VETTED_GRANT(path=_b00t_/ci/vetted/pg-setup.sh, blob=abc123)"
+        );
+    }
+
+    #[test]
+    fn test_vetted_grant_permits_execution() {
+        let d = SudoDisposition::VettedGrant {
+            script_path: "x.sh".into(),
+            blob_hash: "abc".into(),
+        };
+        assert!(d.permits_execution());
+    }
+
+    #[test]
+    fn test_new_vetted_evidence_is_execution_ready_without_checkpoint() {
+        let evidence = SudoGrantEvidence::new_vetted("_b00t_/ci/vetted/pg-setup.sh", "abc123");
+        assert!(evidence.checkpoint_ref.is_none());
+        assert!(evidence.verify());
+        assert!(evidence.grant_is_execution_ready());
+    }
+
+    #[test]
+    fn test_new_vetted_evidence_deterministic_hash() {
+        let a = SudoGrantEvidence::new_vetted("x.sh", "abc");
+        let b = SudoGrantEvidence::new_vetted("x.sh", "abc");
+        assert_eq!(a.content_hash, b.content_hash);
+    }
+
+    #[test]
+    fn test_new_vetted_evidence_differs_by_blob_hash() {
+        let a = SudoGrantEvidence::new_vetted("x.sh", "abc");
+        let b = SudoGrantEvidence::new_vetted("x.sh", "def");
+        assert_ne!(a.content_hash, b.content_hash);
+    }
+
+    #[test]
+    fn test_satisfies_execution_ready_for_vetted_grant_without_checkpoint() {
+        let evidence = SudoGrantEvidence::new_vetted("x.sh", "abc");
+        let result = evidence.satisfies(&SudoGrantConstraint::ExecutionReady);
+        assert!(result.satisfied);
     }
 }

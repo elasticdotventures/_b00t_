@@ -121,26 +121,53 @@ fn extract_json_object(text: &str) -> Option<&str> {
     }
 }
 
-fn parse_verdict(raw_content: &str) -> SudoDisposition {
+/// The adversarial-review path's own verdict space — deliberately narrower
+/// than `SudoDisposition` (no `VettedGrant`: that variant is only ever
+/// produced by `check_vetted()` on the deterministic `--vetted` path, never
+/// by this LLM-judged path). Keeping this as its own type makes that
+/// exclusion a compile-time fact for every match over an
+/// `adversarial_review()` result, rather than a comment + `unreachable!()`
+/// at each call site.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AdversarialVerdict {
+    /// Command may execute; grant expires after ttl_seconds.
+    Grant { ttl_seconds: u64 },
+    /// Command must not execute.
+    Deny { reason: String },
+    /// The model can't confidently decide — escalate to a human, deny for now.
+    Escalate { reason: String },
+}
+
+impl From<AdversarialVerdict> for SudoDisposition {
+    fn from(verdict: AdversarialVerdict) -> Self {
+        match verdict {
+            AdversarialVerdict::Grant { ttl_seconds } => SudoDisposition::Grant { ttl_seconds },
+            AdversarialVerdict::Deny { reason } => SudoDisposition::Deny { reason },
+            AdversarialVerdict::Escalate { reason } => SudoDisposition::Escalate { reason },
+        }
+    }
+}
+
+fn parse_verdict(raw_content: &str) -> AdversarialVerdict {
     let Some(json_str) = extract_json_object(raw_content) else {
-        return SudoDisposition::Escalate {
+        return AdversarialVerdict::Escalate {
             reason: "adversarial model response contained no parseable JSON".into(),
         };
     };
 
     let Ok(raw) = serde_json::from_str::<RawVerdict>(json_str) else {
-        return SudoDisposition::Escalate {
+        return AdversarialVerdict::Escalate {
             reason: "adversarial model response JSON did not match expected shape".into(),
         };
     };
 
     match raw.disposition.to_lowercase().as_str() {
-        "grant" => SudoDisposition::Grant {
+        "grant" => AdversarialVerdict::Grant {
             ttl_seconds: raw.ttl_seconds.unwrap_or(300),
         },
-        "deny" => SudoDisposition::Deny { reason: raw.reason },
-        "escalate" => SudoDisposition::Escalate { reason: raw.reason },
-        other => SudoDisposition::Escalate {
+        "deny" => AdversarialVerdict::Deny { reason: raw.reason },
+        "escalate" => AdversarialVerdict::Escalate { reason: raw.reason },
+        other => AdversarialVerdict::Escalate {
             reason: format!("adversarial model returned unrecognized disposition '{other}'"),
         },
     }
@@ -155,7 +182,7 @@ pub fn adversarial_review(
     command: &str,
     justification: &str,
     cited_commits: &[String],
-) -> Result<(SudoReviewEvent, SudoDisposition)> {
+) -> Result<(SudoReviewEvent, AdversarialVerdict)> {
     let event = build_review_event(project_root, command, justification, cited_commits);
     let prompt = build_prompt(&event);
 
@@ -206,11 +233,11 @@ pub fn adversarial_review(
     let disposition = match outcome {
         Ok(parsed) => match parsed.choices.first() {
             Some(choice) => parse_verdict(&choice.message.content),
-            None => SudoDisposition::Escalate {
+            None => AdversarialVerdict::Escalate {
                 reason: "adversarial model returned no choices".into(),
             },
         },
-        Err(reason) => SudoDisposition::Escalate { reason },
+        Err(reason) => AdversarialVerdict::Escalate { reason },
     };
 
     Ok((event, disposition))
@@ -243,36 +270,36 @@ mod tests {
     #[test]
     fn test_parse_verdict_grant() {
         let v = parse_verdict(r#"{"disposition": "grant", "reason": "plausible", "ttl_seconds": 120}"#);
-        assert_eq!(v, SudoDisposition::Grant { ttl_seconds: 120 });
+        assert_eq!(v, AdversarialVerdict::Grant { ttl_seconds: 120 });
     }
 
     #[test]
     fn test_parse_verdict_grant_default_ttl() {
         let v = parse_verdict(r#"{"disposition": "GRANT", "reason": "plausible"}"#);
-        assert_eq!(v, SudoDisposition::Grant { ttl_seconds: 300 });
+        assert_eq!(v, AdversarialVerdict::Grant { ttl_seconds: 300 });
     }
 
     #[test]
     fn test_parse_verdict_deny() {
         let v = parse_verdict(r#"{"disposition": "deny", "reason": "vague justification"}"#);
-        assert_eq!(v, SudoDisposition::Deny { reason: "vague justification".into() });
+        assert_eq!(v, AdversarialVerdict::Deny { reason: "vague justification".into() });
     }
 
     #[test]
     fn test_parse_verdict_malformed_json_escalates_not_grants() {
         let v = parse_verdict("not json at all");
-        assert!(matches!(v, SudoDisposition::Escalate { .. }));
+        assert!(matches!(v, AdversarialVerdict::Escalate { .. }));
     }
 
     #[test]
     fn test_parse_verdict_unrecognized_disposition_escalates() {
         let v = parse_verdict(r#"{"disposition": "maybe", "reason": "unsure"}"#);
-        assert!(matches!(v, SudoDisposition::Escalate { .. }));
+        assert!(matches!(v, AdversarialVerdict::Escalate { .. }));
     }
 
     #[test]
     fn test_parse_verdict_missing_field_escalates() {
         let v = parse_verdict(r#"{"foo": "bar"}"#);
-        assert!(matches!(v, SudoDisposition::Escalate { .. }));
+        assert!(matches!(v, AdversarialVerdict::Escalate { .. }));
     }
 }
