@@ -1,0 +1,48 @@
+# dtolnay-rustacean-archetype — canonical reference datum for David Tolnay
+# (dtolnay) as the "rustacean next-level extreme" archetype, addressing
+# issue #786. Follows the type="reference" precedent from #754
+# (the-missing-layer.reference.toml) and #769 (linus-torvalds-ai-skills.reference.toml).
+# 🤓 Facts below (crate ownership, serde maintainer-since date, repo/crate
+#    counts) were verified live against github.com/dtolnay, github.com/serde-rs/serde,
+#    and web search at datum-creation time (2026-08-09) — see [summary].source.
+#    The issue body's claimed blog URL (https://blog.torilh.com/) does NOT
+#    resolve (DNS failure) and is OMITTED here as unverifiable/likely
+#    hallucinated — do not re-add it without independent verification.
+
+[b00t]
+name = "dtolnay-rustacean-archetype"
+type = "reference"
+hint = "David Tolnay (dtolnay) — canonical \"rustacean next-level extreme\" archetype: primary maintainer of serde since 2017, original author of syn/quote/proc-macro-workshop (the proc-macro ecosystem foundation), anyhow/thiserror (standard error-handling pair), trybuild/cargo-expand (macro test/debug tooling), and cxx (Rust/C++ interop); 160+ crates published, minimalist composable API design philosophy."
+keywords = ["rust", "archetype", "dtolnay", "serde", "syn", "quote", "proc-macro", "next-level", "expert"]
+
+[references]
+github = "https://github.com/dtolnay"
+serde = "https://github.com/serde-rs/serde"
+syn = "https://github.com/dtolnay/syn"
+crates_io = "https://crates.io/users/dtolnay"
+
+[summary]
+title = "David Tolnay (dtolnay) — Rustacean next-level extreme archetype"
+author = "David Tolnay (github.com/dtolnay)"
+source = "Verified live (WebFetch/WebSearch, 2026-08-09) against github.com/dtolnay profile, github.com/dtolnay/syn, github.com/dtolnay/trybuild, and search results on serde ownership history. Issue #786's claimed blog URL (blog.torilh.com) does not resolve and is excluded — see file header."
+thesis = "b00t's 'rustacean next-level extreme' archetype (Rust analogue to Karpathy in AI or Carmack in graphics engineering): a developer whose prolific, foundational open-source output defines the frontier of idiomatic Rust API design. dtolnay is the canonical instance — his crates form load-bearing infrastructure for a majority of the Rust ecosystem (2024 measurements: ~60% of published crates transitively depend on syn, ~40% on serde)."
+key_concepts = [
+    "serde: the de facto standard (de)serialization framework — dtolnay became sole maintainer/owner in November 2017 (original author: Erick Tryzelaar); not the originating author but the definitive long-term steward",
+    "syn + quote + proc-macro2: dtolnay-authored parsing/quasi-quotation foundation underpinning most Rust derive macros, including serde's own",
+    "anyhow + thiserror: dtolnay-authored, complementary error-handling pair — anyhow for application code, thiserror for library-defined error types",
+    "trybuild + cargo-expand: dtolnay-authored macro-development tooling (UI/compile-fail testing; macro-expansion inspection)",
+    "cxx: dtolnay-authored safe Rust/C++ interop layer",
+    "minimalist composable API design: small, orthogonal crates over monolithic frameworks — evidenced across the above catalog",
+    "160+ crates published under his crates.io account (2024 measurement), ~42.5% of crates.io depending directly on at least one",
+]
+
+[metadata]
+tags = ["reference", "rust", "archetype", "dtolnay", "serde", "syn", "proc-macro", "error-handling"]
+tier = "sm0l"
+
+# b00t:map v1
+# summary: Canonical reference datum for David Tolnay (dtolnay) as the rustacean next-level extreme archetype (#786)
+# tags: reference, rust, archetype, dtolnay, serde, syn, proc-macro
+# tier: sm0l
+# cmds: b00t datum show dtolnay-rustacean-archetype.reference
+# complexity: 1
