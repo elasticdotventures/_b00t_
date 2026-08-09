@@ -1,0 +1,34 @@
+[b00t]
+name = "sysmd"
+type = "repo"
+hint = "SysMD — executable SysML v2 / KerML models with integrated constraint solving (SAT/SMT-like consistency checks + auto-compute missing values)"
+url = "https://github.com/tukcps/SysMD"
+type_tags = ["sysml", "kerml", "executable-models", "constraint-solving", "sat", "smt"]
+
+# References and links
+[b00t.references]
+sysmd = "https://github.com/tukcps/SysMD"
+sysml_v2 = "https://www.omg.org/spec/SysML/2.0/"
+kerml = "https://www.omg.org/spec/KerML/1.0/"
+
+[[b00t.references.documentation]]
+name = "SysMD"
+url = "https://github.com/tukcps/SysMD"
+description = "Executable SysML v2 models integrated with an SAT/SMT-like constraint solver: verifies model consistency and auto-computes missing values from requirements, constraints, and calculations."
+
+[[b00t.references.documentation]]
+name = "SysML v2 Specification (OMG)"
+url = "https://www.omg.org/spec/SysML/2.0/"
+description = "Systems Modeling Language v2 standard that SysMD targets."
+
+[[b00t.references.documentation]]
+name = "KerML Specification (OMG)"
+url = "https://www.omg.org/spec/KerML/1.0/"
+description = "Kernel Modeling Language — the metamodel SysMD translates model cells into, underlying SysML v2."
+
+# b00t:map v1
+# summary: SysMD — executable SysML v2/KerML systems models with an integrated SAT/SMT-like constraint solver; verifies consistency and computes missing values.
+# tags: sysml, kerml, executable-models, constraint-solving, sat, smt
+# tier: frontier
+# cmds: b00t-cli datum validate --strict _b00t_/sysmd.repo.toml
+# complexity: 4

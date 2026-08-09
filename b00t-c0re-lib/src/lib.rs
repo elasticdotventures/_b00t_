@@ -69,6 +69,7 @@ pub mod redis;
 pub mod reviewer;
 pub mod rhai_engine;
 pub mod runtime_env;
+pub mod satisfies;
 pub mod secret_validation;
 pub mod sm0l_dispatch;
 pub mod state_introspection;

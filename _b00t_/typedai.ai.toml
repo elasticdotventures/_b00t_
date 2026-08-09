@@ -1,0 +1,52 @@
+# b00t TypedAI Datum — reference-only pattern datum (issue #760)
+# 🤓 TypedAI (TrafficGuard) is a TypeScript-first agent/LLM-workflow platform
+# (web UI, Slack bot, SSO, multi-user deploy). b00t does NOT install or run
+# it — this datum exists purely to pin the canonical reference and distill
+# its typed/ergonomic tool-schema pattern for b00t's own AI client layer.
+# See [b00t.pattern] below for the extraction notes.
+#
+# ⚠️ Naming/type note: issue #760 requested `typedai.repo.toml` (type="repo").
+# `_b00t_/repo.datum.toml` defines DatumType::Repo as the git+gh+josh
+# supply-chain ontology binder, not a generic "external project reference"
+# bucket — using it here would collide with that meaning. `crewai.ai.toml`
+# and `foundry-local.ai.toml` are the established shape for "AI
+# framework/pattern reference" datums, so this uses type="ai" instead.
+
+[b00t]
+name = "typedai"
+type = "ai"
+hint = "TypedAI (TrafficGuard) — TS-first typed/ergonomic AI agent interface. Reference-only: not installed by b00t."
+
+[b00t.ai]
+provider = "typedai"
+api_type = "typed-agent-platform"
+models = ["gpt-4", "claude-3-5-sonnet", "gemini-1.5-pro", "groq"]  # multi-provider, pass-through
+context_window = 200000  # pass-through — depends on selected provider/model
+pricing_model = "pass-through"  # uses underlying LLM pricing
+
+# ── Pattern extraction notes (issue #760 requirement) ──────────────────────
+# 🤓 What b00t should mine from TypedAI's design, not from its runtime.
+[b00t.pattern]
+target = "b00t_c0re_lib::ai_client, b00t-cli AI dispatch layer"
+technique = "TS decorators (e.g. @func()) generate JSON-schema tool/function definitions straight from typed method signatures at compile/build time — one source of truth instead of hand-duplicated schema + implementation."
+contrast = "Explicitly positions against LangChain-style stringly-typed prompt/chain wiring; favors static typing + ordinary control flow over graph DSLs, for refactor-safety and IDE-checkable agent code."
+b00t_relevance = "Analogous move for b00t: a Rust proc-macro (e.g. #[b00t_tool]) deriving MCP/tool-call JSON schema from a fn's typed signature, so datum .mcp/.cli schemas stop being hand-maintained duplicates of the Rust API they describe."
+status = "pattern-only — nothing wired into b00t yet; interface-design work (whether/how to build such a macro) is a distinct follow-up, out of scope for this datum"
+
+[[b00t.references]]
+name = "TypedAI GitHub Repository"
+url = "https://github.com/TrafficGuard/typedai"
+type = "source"
+
+[b00t.metadata]
+category = "ai-agent-framework"
+tags = ["typed-ai", "pattern", "ergonomic", "interface", "typescript", "reference-only"]
+maturity = "reference"
+license = "MIT"
+
+# b00t:map v1
+# summary: TypedAI (TrafficGuard) reference-only pattern datum — typed/ergonomic AI tool-schema pattern to mine for b00t's ai_client layer; not an installable tool
+# tags: typed-ai, pattern, ergonomic, interface, typescript, reference
+# tier: frontier
+# cmds: b00t datum view typedai.ai
+# complexity: 2

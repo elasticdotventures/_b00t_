@@ -1,0 +1,73 @@
+[b00t]
+name = "mastra"
+type = "ai"
+hint = "TypeScript AI SDK framework — agents, workflows, provider abstraction (40+ providers incl. Cloudflare Workers AI)"
+version = "npm view @mastra/core version"
+version_regex = '\d+\.\d+\.\d+'
+install = "npm install @mastra/core"
+update = "npm update @mastra/core"
+
+[b00t.ai]
+provider = "mastra"
+api_type = "multi-agent-framework"
+models = ["gpt-4", "claude-3", "gemini", "cloudflare-workers-ai"]  # 40+ providers via model router, pass-through to underlying LLM
+context_window = 128000  # Depends on underlying LLM
+pricing_model = "pass-through"  # Uses underlying LLM pricing
+
+[b00t.node]
+package_manager = "npm"  # or pnpm
+dependencies = [
+    "@mastra/core",
+]
+
+[b00t.env]
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+CLOUDFLARE_API_KEY = "${CLOUDFLARE_API_KEY}"
+CLOUDFLARE_ACCOUNT_ID = "${CLOUDFLARE_ACCOUNT_ID}"
+
+[b00t.learn]
+topic = "mastra"
+auto_digest = true
+
+[[b00t.usage]]
+example = "Scaffold a new Mastra project"
+command = "npx create-mastra@latest"
+
+[[b00t.usage]]
+example = "Install core package"
+command = "npm install @mastra/core"
+
+[[b00t.references]]
+name = "Website"
+url = "https://mastra.ai"
+type = "docs"
+
+[[b00t.references]]
+name = "GitHub Repository"
+url = "https://github.com/mastra-ai/mastra"
+type = "source"
+
+[[b00t.references]]
+name = "Cloudflare Workers AI Provider Docs"
+url = "https://mastra.ai/models/providers/cloudflare-workers-ai"
+type = "docs"
+
+[b00t.metadata]
+category = "ai-agents"
+tags = ["typescript", "ai-sdk", "providers", "cloudflare", "agents", "workflows"]
+maturity = "stable"
+license = "Apache-2.0"  # core; enterprise features separately licensed
+
+# 🤓 Filed as _b00t_/mastra.repo.toml with type="repo" in issue #761, but DatumType::Repo
+# (see b00t-cli/src/datum_types.rs) is the "source trees / workspaces / git+gh+josh
+# ontology" category (SemanticClass::Repo) — not for third-party SDK/framework datums.
+# Existing precedent for TS/Python AI SDKs (crewai.ai.toml, langchain.ai.toml,
+# openai.ai.toml) uses type="ai" (SemanticClass::Agent). Followed that convention here.
+
+# b00t:map v1
+# summary: Mastra — TypeScript AI SDK framework for agents/workflows with 40+ provider model router (incl. Cloudflare Workers AI)
+# tags: typescript, ai-sdk, mastra, agents, workflows, providers, cloudflare
+# tier: sm0l
+# cmds: npx create-mastra@latest ; npm install @mastra/core
+# complexity: 2

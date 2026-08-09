@@ -60,6 +60,9 @@ const B00T_CLIENT = {
     { action: 'list_enriched', args: '<type_filter>', desc: 'List enriched elements (filter by type)',
       eval: (type) => `JSON.stringify(window.__b00t?.findB00t(${type ? `'${type}'` : ''}) || [])` },
 
+    { action: 'resolve_selector', args: '<type> <label>',
+      desc: 'selector-forge propose→verify→settle: rank candidates, return the first that re-verifies' },
+
     { action: 'enrich_counts', args: '', desc: 'Count enriched elements by type',
       eval: () => {
         const counts = {};
@@ -146,6 +149,19 @@ const B00T_CLIENT = {
       return new Promise((resolve) => {
         chrome.tabs.update(this.tabId, { url: args[0] }, resolve);
       }).then(() => 'navigating...');
+    }
+    if (cmd.action === 'resolve_selector') {
+      // Routed via chrome.tabs.sendMessage (not CDP Runtime.evaluate, which
+      // only reaches the MAIN world) to content.js's isolated-world bridge,
+      // which calls the tested selector-forge.js module directly.
+      const [type, label] = args;
+      return new Promise((resolve) => {
+        chrome.tabs.sendMessage(
+          this.tabId,
+          { action: 'b00t_resolve_selector', type, label },
+          (result) => resolve(JSON.stringify(result ?? null))
+        );
+      });
     }
     const js = typeof cmd.eval === 'function' ? cmd.eval(...args) : cmd.eval;
     return await this.evaluate(js);

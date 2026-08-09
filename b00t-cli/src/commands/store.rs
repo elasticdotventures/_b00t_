@@ -102,6 +102,17 @@ fn parse_key_val(s: &str) -> Result<(String, String), String> {
     Ok((k.to_string(), v.to_string()))
 }
 
+/// 🤓 #707: read the active agentic role from `_B00T_ROLE`, set by `b00t learn
+///    --agent/--role`. Store/pipeline/viz/install previously never consulted
+///    it, so role context set during `learn` was silently lost downstream.
+///    This is the first (store status) of several call sites; see #707 for
+///    the remaining pipeline/viz/install scope, deliberately deferred here.
+fn active_role() -> Option<String> {
+    std::env::var("_B00T_ROLE")
+        .ok()
+        .filter(|r| !r.is_empty())
+}
+
 pub async fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
     match cmd {
         StoreCommands::Put {
@@ -171,6 +182,10 @@ pub async fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
             println!("Backend: {}", b00t_c0re_lib::compiled_knowledge_backend());
             println!("Objects: {}", count);
             println!("Bytes:   {}", bytes);
+            println!(
+                "Role:    {}",
+                active_role().unwrap_or_else(|| "(none)".to_string())
+            );
         }
         StoreCommands::Validate => {
             let report = b00t_c0re_lib::store::validate_consistency()?;
@@ -254,4 +269,47 @@ async fn serve_nats(nats_url: Option<String>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Serialize env-mutating tests — process env is global state (same
+    // pattern as whoami.rs::tests::ENV_MUTEX).
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn test_active_role_none_when_unset() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+        assert_eq!(active_role(), None);
+    }
+
+    #[test]
+    fn test_active_role_none_when_empty() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "");
+        }
+        assert_eq!(active_role(), None);
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+    }
+
+    #[test]
+    fn test_active_role_propagates_from_env() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            std::env::set_var("_B00T_ROLE", "executive");
+        }
+        assert_eq!(active_role(), Some("executive".to_string()));
+        unsafe {
+            std::env::remove_var("_B00T_ROLE");
+        }
+    }
 }

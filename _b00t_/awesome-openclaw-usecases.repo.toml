@@ -1,0 +1,35 @@
+# b00t Repo Datum — awesome-openclaw-usecases (curated OpenClaw use-case catalog)
+# 🤓 Community "awesome list" cataloging real-world OpenClaw use cases, setups, and plugins.
+# 🤓 Reference-only: not vendored, no build/install steps — this datum exists so the hive
+#    can discover and cite the catalog when researching OpenClaw usage patterns.
+# 🤓 OpenClaw context: moltis-b00t (vendor/moltis-b00t) is the b00t-native Rust successor
+#    to OpenClaw — see VENDOR-MOLTIS-B00T.tomllmd.
+
+[b00t]
+name = "awesome-openclaw-usecases"
+type = "repo"
+hint = "Curated community list of OpenClaw use cases, setups, and plugins (github.com/hesamsheikh/awesome-openclaw-usecases)"
+
+[b00t.source]
+url = "https://github.com/hesamsheikh/awesome-openclaw-usecases"
+
+[b00t.repo]
+description = "A community collection of OpenClaw use cases for making life easier."
+license = "MIT"
+topics = ["awesome-list", "clawdbot", "moltbot", "openclaw", "openclaw-plugin", "openclaw-setup", "openclaw-skills", "usecase"]
+# ⚠️ verify: star/fork counts drift over time; last checked 2026-08-09 via GitHub API (31.6k★ / 2.7k forks, MIT, not archived)
+
+[[b00t.references]]
+name = "awesome-openclaw-usecases (GitHub)"
+url = "https://github.com/hesamsheikh/awesome-openclaw-usecases"
+
+[[b00t.references]]
+name = "moltis-b00t — b00t-native Rust successor to OpenClaw"
+url = "https://github.com/promptexecution/moltis-b00t"
+
+# b00t:map v1
+# summary: Curated catalog of OpenClaw use-cases (external awesome-list); reference-only, not vendored
+# tags: openclaw, awesome-list, reference, moltis, clawdbot, catalog
+# tier: sm0l
+# cmds: b00t-cli datum show awesome-openclaw-usecases.repo
+# complexity: 1

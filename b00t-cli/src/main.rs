@@ -2099,6 +2099,7 @@ async fn main() {
                                         match b00t_cli::runtime_sandbox::spawn_sandboxed(
                                             &cfg,
                                             &passthrough,
+                                            &expanded,
                                         ) {
                                             Ok(code) => std::process::exit(code),
                                             Err(err) => {
@@ -2154,7 +2155,11 @@ async fn main() {
 
                     match matches.into_iter().next() {
                         Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
-                            match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                            match b00t_cli::runtime_sandbox::spawn_sandboxed(
+                                &cfg,
+                                &passthrough,
+                                &expanded,
+                            ) {
                                 Ok(code) => std::process::exit(code),
                                 Err(err) => {
                                     eprintln!("[b00t] runtime launch failed: {err}");
@@ -2186,6 +2191,7 @@ async fn main() {
                                             match b00t_cli::runtime_sandbox::spawn_sandboxed(
                                                 &cfg,
                                                 &passthrough,
+                                                &expanded,
                                             ) {
                                                 Ok(code) => std::process::exit(code),
                                                 Err(err) => {
@@ -3310,7 +3316,8 @@ async fn main() {
             let passthrough: Vec<String> = args.iter().map(|s| s.to_string()).collect();
             match b00t_cli::resolve_datum_dispatch(name, &expanded) {
                 Some(b00t_cli::DatumDispatch::Runtime(cfg)) => {
-                    match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough) {
+                    match b00t_cli::runtime_sandbox::spawn_sandboxed(&cfg, &passthrough, &expanded)
+                    {
                         Ok(code) => std::process::exit(code),
                         Err(err) => {
                             eprintln!("[b00t] runtime launch failed: {err}");

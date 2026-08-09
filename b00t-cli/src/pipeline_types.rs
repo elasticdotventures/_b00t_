@@ -96,6 +96,38 @@ impl ResourceFit for ResourceRequirements {
     }
 }
 
+// ── GH #780: Satisfies<ResourceRequirements> bridge — one concrete audit case ──
+// 🤓 Wraps the existing ResourceFit::fits_on check and lifts its bool result
+//    into an EvidenceReport, so a scheduling decision can be appended to the
+//    JSONL audit trail (`b00t-cli audit trail --path .b00t/audit.jsonl`).
+
+impl b00t_c0re_lib::satisfies::Satisfies<ResourceRequirements> for HostResources {
+    fn satisfies(
+        &self,
+        constraint: &ResourceRequirements,
+    ) -> anyhow::Result<b00t_c0re_lib::satisfies::EvidenceReport> {
+        let passed = constraint.fits_on(self);
+        let detail = if passed {
+            format!(
+                "host(ram={}GB,vram={}GB,gpu={},cores={}) satisfies requirements(min_ram={}GB,min_vram={}GB,requires_gpu={},cores={:?})",
+                self.ram_gb, self.vram_gb, self.gpu_count, self.cpu_cores,
+                constraint.min_ram_gb, constraint.min_vram_gb, constraint.requires_gpu, constraint.cpu_cores
+            )
+        } else {
+            format!(
+                "host(ram={}GB,vram={}GB,gpu={},cores={}) does NOT satisfy requirements(min_ram={}GB,min_vram={}GB,requires_gpu={},cores={:?})",
+                self.ram_gb, self.vram_gb, self.gpu_count, self.cpu_cores,
+                constraint.min_ram_gb, constraint.min_vram_gb, constraint.requires_gpu, constraint.cpu_cores
+            )
+        };
+        Ok(b00t_c0re_lib::satisfies::EvidenceReport::new(
+            "ResourceRequirements",
+            passed,
+            detail,
+        ))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CapsuleProfile {
     pub name: String,
@@ -884,6 +916,75 @@ mod tests {
         };
         let back: StagePort = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(p, back);
+    }
+
+    // ── #780: Satisfies<ResourceRequirements> tests ──
+
+    #[test]
+    fn satisfies_resource_requirements_produces_passing_evidence() {
+        use b00t_c0re_lib::satisfies::Satisfies;
+
+        let req = ResourceRequirements {
+            min_ram_gb: 4.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 8.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
+        let report = host.satisfies(&req).unwrap();
+        assert!(report.passed);
+        assert_eq!(report.constraint_type, "ResourceRequirements");
+        assert!(report.node_id.starts_with("sat:"));
+        assert!(!report.is_violated());
+    }
+
+    #[test]
+    fn satisfies_resource_requirements_produces_violated_evidence() {
+        use b00t_c0re_lib::satisfies::Satisfies;
+
+        let req = ResourceRequirements {
+            min_ram_gb: 64.0,
+            min_vram_gb: 0.0,
+            requires_gpu: false,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 8.0,
+            vram_gb: 0.0,
+            gpu_count: 0,
+            cpu_cores: 4,
+        };
+        let report = host.satisfies(&req).unwrap();
+        assert!(!report.passed);
+        assert!(report.is_violated());
+        assert!(report.detail.contains("does NOT satisfy"));
+    }
+
+    #[test]
+    fn satisfies_resource_requirements_agrees_with_fits_on() {
+        use b00t_c0re_lib::satisfies::Satisfies;
+
+        let req = ResourceRequirements {
+            min_ram_gb: 1.0,
+            min_vram_gb: 8.0,
+            requires_gpu: true,
+            cpu_cores: None,
+            scratch_disk_gb: None,
+        };
+        let host = HostResources {
+            ram_gb: 16.0,
+            vram_gb: 16.0,
+            gpu_count: 1,
+            cpu_cores: 8,
+        };
+        assert_eq!(req.fits_on(&host), host.satisfies(&req).unwrap().passed);
     }
 
     // ── #720 tests ──

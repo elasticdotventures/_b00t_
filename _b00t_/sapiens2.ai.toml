@@ -1,0 +1,44 @@
+[b00t]
+name = "sapiens2"
+type = "ai"
+hint = "Sapiens2 — Meta AI human-centric vision model for pose, segmentation, normals, pointmap, and albedo estimation"
+
+[b00t.ai]
+provider = "meta"
+api_type = "vision-model"
+models = ["sapiens2"]
+capabilities = "pose,segmentation,normals,pointmap,albedo"
+pricing_model = "open-weights"
+
+[[b00t.references]]
+name = "Meta AI releases Sapiens2 — MarkTechPost article"
+url = "https://www.marktechpost.com/2026/04/27/meta-ai-releases-sapiens2-a-high-resolution-human-centric-vision-model-for-pose-segmentation-normals-pointmap-and-albedo/"
+type = "article"
+
+[[b00t.references]]
+name = "Sapiens2 Paper (arXiv)"
+url = "https://arxiv.org/pdf/2604.21681"
+type = "paper"
+
+[[b00t.references]]
+name = "Sapiens2 HuggingFace Collection"
+url = "https://huggingface.co/collections/facebook/sapiens2"
+type = "huggingface"
+
+[[b00t.references]]
+name = "Sapiens2 GitHub Repository"
+url = "https://github.com/facebookresearch/sapiens2"
+type = "source"
+
+[b00t.metadata]
+category = "vision-model"
+tags = ["sapiens2", "meta", "vision", "pose-estimation", "segmentation", "human-centric"]
+maturity = "preview"
+license = "unknown"
+
+# b00t:map v1
+# summary: Sapiens2 — Meta AI human-centric vision model (pose, segmentation, normals, pointmap, albedo)
+# tags: sapiens2, meta, vision, pose-estimation
+# tier: ch0nky
+# cmds: b00t datum list --type ai, b00t grok ask sapiens2
+# complexity: 3

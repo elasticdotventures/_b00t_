@@ -1,0 +1,52 @@
+# Canonical datum for Cloudflare "Markdown for Agents".
+# 🤓 This is HTTP content negotiation at Cloudflare's edge, not an installable
+#    tool/SDK — DatumType::Api is the closest typed fit (Protocol semantic
+#    class): a client sends `Accept: text/markdown`, Cloudflare converts the
+#    origin's HTML to Markdown on the fly and returns it with agent-oriented
+#    headers. No DatumType::Article variant exists in datum_types.rs; do not
+#    invent one for a single datum — see datum_types.rs's own note that new
+#    variants belong ONLY in that file's enum + table, as a considered change.
+
+[b00t]
+name = "cloudflare-markdown-for-agents"
+type = "api"
+hint = "Cloudflare edge feature: HTTP content-negotiated Markdown responses (send Accept: text/markdown) for AI agents — converts origin HTML to Markdown at the edge, ~80% token reduction vs raw HTML"
+protocol = "http-content-negotiation"
+keywords = ["cloudflare", "markdown", "agents", "content-negotiation", "http", "edge", "ai", "token-efficiency", "llms-txt-adjacent"]
+
+[b00t.provides]
+capability = "markdown-content-negotiation"
+
+# ── How to invoke ────────────────────────────────────────────────────────────
+[[b00t.usage]]
+description = "Request the Markdown-negotiated form of a Cloudflare-fronted page"
+command = "curl -s https://developers.cloudflare.com/agents/ -H 'Accept: text/markdown'"
+output = "Markdown body; response headers include content-type: text/markdown, x-markdown-tokens, x-original-tokens, content-signal: ai-train=yes, search=yes, ai-input=yes"
+
+# ── References ───────────────────────────────────────────────────────────────
+[b00t.references]
+blog = "https://blog.cloudflare.com/markdown-for-agents/"
+
+[[b00t.references.documentation]]
+name = "Cloudflare Blog: Markdown for Agents"
+url = "https://blog.cloudflare.com/markdown-for-agents/"
+description = "Announcement post: edge converts origin HTML to Markdown when a client sends Accept: text/markdown, ~80% token reduction claimed vs raw HTML"
+
+# ── Verification handler ─────────────────────────────────────────────────────
+# 🤓 Live-verified 2026-08-09 against developers.cloudflare.com/agents/ (a
+#    Cloudflare-documented enabled property): HTTP/2 200, content-type:
+#    text/markdown; charset=utf-8, x-markdown-tokens: 1880, x-original-tokens:
+#    33719, content-signal: ai-train=yes, search=yes, ai-input=yes.
+[[service_contract]]
+capability = "markdown-content-negotiation"
+handler = "curl -s -D - -o /dev/null https://developers.cloudflare.com/agents/ -H 'Accept: text/markdown' | grep -qi '^content-type: text/markdown'"
+evidence = "response content-type header is text/markdown when Accept: text/markdown is sent to a markdown-for-agents-enabled Cloudflare property"
+tier = "sm0l"
+verifiable = true
+
+# b00t:map v1
+# summary: Cloudflare edge content-negotiation feature — serves Markdown to AI agents via Accept: text/markdown, ~80% token reduction vs HTML
+# tags: cloudflare, markdown, agents, content-negotiation, http, edge, token-efficiency
+# tier: sm0l
+# cmds: curl -H "Accept: text/markdown" <cloudflare-fronted-url>
+# complexity: 2
