@@ -178,6 +178,27 @@ pub enum K8sCommands {
     },
 }
 
+/// Validate a `k8s delete` request before touching the cluster.
+///
+/// 🤓 issue #83 Task 4.2/4.7: only `pod` is wired to `crate::k8s::K8sClient::delete_pod`
+/// today (that's the only resource type the existing wrapper supports). Reject anything
+/// else with a clear message instead of silently no-op'ing, and require an explicit
+/// `--all` or a `resource_name` so a bare `k8s delete pod` can't nuke a namespace by accident.
+fn validate_delete_request(resource_type: &str, resource_name: Option<&str>, all: bool) -> Result<()> {
+    if resource_type != "pod" {
+        anyhow::bail!(
+            "k8s delete: resource type '{resource_type}' is not wired yet (only 'pod' uses crate::k8s::K8sClient::delete_pod, see issue #83)"
+        );
+    }
+    match (resource_name, all) {
+        (None, false) => anyhow::bail!("k8s delete pod: provide a resource name or pass --all"),
+        (Some(_), true) => {
+            anyhow::bail!("k8s delete pod: --all conflicts with an explicit resource name")
+        }
+        _ => Ok(()),
+    }
+}
+
 impl K8sCommands {
     pub fn execute(&self, _path: &str) -> Result<()> {
         let rt = tokio::runtime::Runtime::new().context("failed to create async runtime")?;
@@ -225,8 +246,43 @@ impl K8sCommands {
                 println!("🚀 K8s deploy-mcp — requires MCP→helm chart mapping (see #83)");
                 Ok(())
             }
-            K8sCommands::Delete { .. } => {
-                println!("🗑️ K8s delete — requires resource safety gates (see #83)");
+            K8sCommands::Delete {
+                resource_type,
+                resource_name,
+                all,
+                namespace,
+            } => {
+                validate_delete_request(resource_type, resource_name.as_deref(), *all)?;
+
+                // 🤓 reuse the existing, unit-tested crate::k8s::K8sClient wrapper instead of
+                // duplicating a second kube-rs client here (DRY + NRtW, see issue #83).
+                let config = crate::k8s::K8sConfig {
+                    namespace: namespace.clone().unwrap_or_else(|| "default".to_string()),
+                    // Deleting shouldn't have the side effect of creating the namespace first.
+                    auto_create_namespace: false,
+                    ..Default::default()
+                };
+                let client = rt.block_on(crate::k8s::K8sClient::with_config(config))?;
+
+                if *all {
+                    let pods = rt.block_on(client.list_b00t_pods())?;
+                    if pods.is_empty() {
+                        println!("no b00t-managed pods found");
+                        return Ok(());
+                    }
+                    for pod in &pods {
+                        if let Some(name) = &pod.metadata.name {
+                            rt.block_on(client.delete_pod(name))?;
+                            println!("🗑️  deleted pod/{name}");
+                        }
+                    }
+                    println!("deleted {} b00t-managed pod(s)", pods.len());
+                } else {
+                    // Safe: validate_delete_request guarantees Some(name) when !all.
+                    let name = resource_name.as_deref().unwrap();
+                    rt.block_on(client.delete_pod(name))?;
+                    println!("🗑️  deleted pod/{name}");
+                }
                 Ok(())
             }
         }
@@ -261,5 +317,33 @@ mod tests {
         };
         let json = serde_json::to_string(&pod).unwrap();
         assert!(json.contains("Running"));
+    }
+
+    #[test]
+    fn test_validate_delete_request_rejects_unsupported_resource_type() {
+        let err = validate_delete_request("service", Some("web"), false).unwrap_err();
+        assert!(err.to_string().contains("not wired yet"));
+    }
+
+    #[test]
+    fn test_validate_delete_request_requires_name_or_all() {
+        let err = validate_delete_request("pod", None, false).unwrap_err();
+        assert!(err.to_string().contains("provide a resource name or pass --all"));
+    }
+
+    #[test]
+    fn test_validate_delete_request_rejects_name_and_all_together() {
+        let err = validate_delete_request("pod", Some("web"), true).unwrap_err();
+        assert!(err.to_string().contains("conflicts with"));
+    }
+
+    #[test]
+    fn test_validate_delete_request_accepts_name_only() {
+        assert!(validate_delete_request("pod", Some("web"), false).is_ok());
+    }
+
+    #[test]
+    fn test_validate_delete_request_accepts_all_only() {
+        assert!(validate_delete_request("pod", None, true).is_ok());
     }
 }
