@@ -3003,6 +3003,8 @@ async fn main() {
                             );
                             // emit FOCUS records to ledgrrr-mcp MCP server (best-effort)
                             experiment::emit_focus_to_ledgrrr_mcp(&cmp, "http://localhost:8001");
+                            // emit OTEL span for regression tracking (issue #404)
+                            experiment::emit_experiment_otel_span(&cmp);
                             // Calculate and issue cake payout
                             experiment::calculate_and_issue_cake(&cmp);
                         }
