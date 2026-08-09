@@ -9,7 +9,7 @@ from returns.result import Failure, Success
 
 from ralph.config import RalphConfig
 from ralph.executors import ExecutorError
-from ralph.runner import run_ralph
+from ralph.runner import _orient_many, run_ralph, run_ralph_parallel
 from ralph.taskmaster_adapter import Task
 
 
@@ -197,6 +197,118 @@ def test_run_ralph_logs_configuration(mock_config: RalphConfig, mock_taskmaster)
 
     log_calls = [str(call) for call in mock_log_info.call_args_list]
     assert any("ralph OODA start" in c for c in log_calls)
+
+
+def test_orient_many_selects_up_to_n_unblocked_pending_tasks() -> None:
+    """_orient_many() fans out to N pending, unblocked tasks sorted by priority."""
+    tasks = [
+        _make_task(id="3", status="pending"),
+        _make_task(id="1", status="pending"),
+        _make_task(id="2", status="pending"),
+    ]
+    logger = Mock()
+
+    batch = _orient_many(tasks, 2, logger)
+
+    assert [t.id for t in batch] == ["3", "1"]  # equal priority -> stable sort by list order
+
+
+def test_orient_many_skips_blocked_and_non_pending_tasks() -> None:
+    """_orient_many() excludes blocked and non-pending tasks from the batch."""
+    from datetime import datetime
+
+    blocked = Task(
+        id="blocked", title="blocked", description="", status="pending",
+        priority=1, acceptance_criteria=[], depends_on=[],
+        blocked_by=["0"], notes=[], created_at=datetime.now().isoformat(),
+        updated_at=datetime.now().isoformat(),
+    )
+    done = _make_task(id="done-task", status="done")
+    available = _make_task(id="available", status="pending")
+    logger = Mock()
+
+    batch = _orient_many([blocked, done, available], 3, logger)
+
+    assert [t.id for t in batch] == ["available"]
+
+
+def test_orient_many_returns_empty_when_no_actionable_tasks() -> None:
+    """_orient_many() returns an empty batch when nothing is actionable."""
+    done = _make_task(id="1", status="done")
+    logger = Mock()
+
+    batch = _orient_many([done], 4, logger)
+
+    assert batch == []
+
+
+def test_run_ralph_parallel_fans_out_and_completes(
+    mock_config: RalphConfig, mock_taskmaster
+) -> None:
+    """run_ralph_parallel() runs a batch of tasks concurrently and joins results."""
+    tasks_batch = [_make_task(id="1"), _make_task(id="2")]
+    with (
+        patch("ralph.runner.AmpExecutor") as mock_executor_class,
+        patch("ralph.runner.create_client", return_value=mock_taskmaster),
+    ):
+        mock_executor = Mock()
+        mock_executor.run.return_value = Success("<promise>COMPLETE</promise>")
+        mock_executor_class.return_value = mock_executor
+        done_batch = [_make_task(id="1", status="done"), _make_task(id="2", status="done")]
+        mock_taskmaster.get_all_tasks.side_effect = [
+            Success(tasks_batch),
+            Success(done_batch),
+        ]
+
+        exit_code = run_ralph_parallel(mock_config, max_iterations=3, parallel_n=2)
+
+    assert exit_code == 0
+    assert mock_executor.run.call_count == 2
+    mock_taskmaster.update_task_status.assert_any_call("1", "done")
+    mock_taskmaster.update_task_status.assert_any_call("2", "done")
+
+
+def test_run_ralph_parallel_reverts_failed_task_to_pending(
+    mock_config: RalphConfig, mock_taskmaster
+) -> None:
+    """run_ralph_parallel() reverts a failed task to pending instead of losing it."""
+    tasks_batch = [_make_task(id="1"), _make_task(id="2")]
+    with (
+        patch("ralph.runner.AmpExecutor") as mock_executor_class,
+        patch("ralph.runner.create_client", return_value=mock_taskmaster),
+        patch("ralph.runner.time.sleep"),
+    ):
+        mock_executor = Mock()
+        error = ExecutorError(detail="boom", returncode=1)
+        mock_executor.run.return_value = Failure(error)
+        mock_executor_class.return_value = mock_executor
+        mock_taskmaster.get_all_tasks.return_value = Success(tasks_batch)
+
+        exit_code = run_ralph_parallel(mock_config, max_iterations=1, parallel_n=2)
+
+    assert exit_code == 1
+    mock_taskmaster.update_task_status.assert_any_call("1", "pending")
+    mock_taskmaster.update_task_status.assert_any_call("2", "pending")
+
+
+def test_run_ralph_parallel_respects_max_iterations(
+    mock_config: RalphConfig, mock_taskmaster
+) -> None:
+    """run_ralph_parallel() halts after max_iterations when no marker ever appears."""
+    with (
+        patch("ralph.runner.AmpExecutor") as mock_executor_class,
+        patch("ralph.runner.create_client", return_value=mock_taskmaster),
+        patch("ralph.runner.time.sleep"),
+    ):
+        mock_executor = Mock()
+        mock_executor.run.return_value = Success("Regular output without marker")
+        mock_executor_class.return_value = mock_executor
+        mock_taskmaster.get_all_tasks.return_value = Success([_make_task()])
+
+        exit_code = run_ralph_parallel(mock_config, max_iterations=3, parallel_n=2)
+
+    assert exit_code == 1
+    assert mock_executor.run.call_count == 3
 
 
 def test_run_ralph_unsupported_tool() -> None:

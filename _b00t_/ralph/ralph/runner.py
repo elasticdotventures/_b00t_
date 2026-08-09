@@ -7,6 +7,7 @@ Terminates when no pending tasks remain or tool emits <promise>COMPLETE</promise
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TypeVar
 
@@ -105,6 +106,26 @@ def _orient(tasks: list[Task], logger) -> Task | None:
     return task
 
 
+def _orient_many(tasks: list[Task], n: int, logger) -> list[Task]:
+    """ORIENT (fan-out): find up to n highest-priority actionable tasks.
+
+    Generalizes _orient() for the swarm/parallel path (#311): instead of a
+    single task, returns a batch of unblocked pending tasks sized to the
+    requested parallelism so the caller can fan them out concurrently.
+    """
+    available = [
+        t for t in tasks
+        if t.status == "pending" and not t.blocked_by
+    ]
+    if not available:
+        return []
+    available.sort(key=lambda t: t.priority)
+    batch = available[:n]
+    for task in batch:
+        log_info(logger, f"  orient → #{task.id} {task.title!r} (P{task.priority})")
+    return batch
+
+
 def _decide(task: Task | None, iteration: int, max_iter: int, logger) -> str:
     """DECIDE: return action string or 'halt'."""
     if task is None:
@@ -198,4 +219,92 @@ def run_ralph(config: RalphConfig, max_iterations: int) -> int:
     return 1
 
 
-__all__ = ["run_ralph"]
+# ── Parallel (fan-out/join) OODA loop — issue #311 ──────────────────────────
+
+def run_ralph_parallel(config: RalphConfig, max_iterations: int, parallel_n: int) -> int:
+    """Run the OODA loop, fanning each cycle out to up to parallel_n tasks.
+
+    Swarm/fan-out pattern (gist.github.com/kieranklaassen/4f2aba89594a4aea4ad64d753984b2ea
+    as assimilated in issue #311): each OODA cycle selects a batch of up to
+    parallel_n unblocked pending tasks and runs one executor per task
+    concurrently via a thread pool (executors are stateless frozen dataclasses
+    wrapping subprocess.Popen — safe to invoke concurrently), then joins by
+    marking each task done/pending from its own output. parallel_n=1 callers
+    should use run_ralph() instead; this path exists for parallel_n > 1.
+    """
+    logger = configure_logging()
+
+    log_info(
+        logger,
+        f"ralph OODA start (parallel={parallel_n}) — tool={config.tool} max={max_iterations}",
+    )
+
+    taskmaster = create_client(prefer_mcp=config.use_mcp, mcp_url=config.taskmaster_url)
+    executor = _build_executor(config.tool, config)
+
+    for iteration in range(1, max_iterations + 1):
+        log_info(logger, "")
+        log_info(logger, f"{'═' * 63}")
+        log_info(logger, f"OODA cycle {iteration}/{max_iterations} (batch ≤{parallel_n})")
+        log_info(logger, f"{'═' * 63}")
+
+        # OBSERVE
+        tasks = _observe(taskmaster, logger)
+        if not tasks:
+            log_warning(logger, "No tasks found — halting")
+            break
+
+        summary = display_progress_summary(tasks)
+        log_info(logger, "\n" + summary)
+
+        pending = _pending_count(tasks)
+        if pending == 0:
+            log_success(logger, f"All tasks done!  {CAKE}  Mission accomplished.  {CAKE}")
+            return 0
+
+        # ORIENT (fan-out)
+        batch = _orient_many(tasks, parallel_n, logger)
+        if not batch:
+            log_info(logger, "  decide → no actionable tasks; halt")
+            break
+
+        # ACT (parallel)
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+            future_to_task = {
+                pool.submit(_act, task, executor, taskmaster, logger): task
+                for task in batch
+            }
+            outputs: dict[str, str | None] = {}
+            for future in as_completed(future_to_task):
+                task = future_to_task[future]
+                outputs[task.id] = future.result()
+
+        # JOIN
+        completed_any = False
+        for task in batch:
+            output = outputs.get(task.id)
+            if output is None:
+                log_warning(logger, f"Task #{task.id}: executor returned no output; will retry")
+                continue
+            if _check_for_completion(output):
+                taskmaster.update_task_status(task.id, "done")
+                completed_any = True
+                log_info(logger, f"Task #{task.id} done")
+            else:
+                log_info(logger, f"Task #{task.id}: iteration complete, continuing OODA…")
+
+        tasks = _observe(taskmaster, logger)
+        if _pending_count(tasks) == 0:
+            log_success(logger, "")
+            log_success(logger, f"  {CAKE}  Ralph completed the mission!  {CAKE}")
+            log_success(logger, "")
+            return 0
+
+        if not completed_any:
+            time.sleep(1)
+
+    log_warning(logger, f"OODA loop ended without mission completion after {max_iterations} cycles.")
+    return 1
+
+
+__all__ = ["run_ralph", "run_ralph_parallel"]
