@@ -1,0 +1,49 @@
+# linus-torvalds-ai-skills — canonical reference datum for the Reddit
+# discussion thread + GitHub repo cataloguing Linus Torvalds' "AI skills"
+# take, addressing issue #769.
+# 🤓 The GitHub repo content below was fetched live from the repo URL at
+#    datum-creation time (2026-08-09) — see [summary].source for provenance.
+#    The Reddit thread (r/linusrants) could NOT be fetched (network-blocked:
+#    both www.reddit.com and old.reddit.com refused automated/WebFetch
+#    requests, and web search returned no cached copy of thread 1st75hv).
+#    Its title/URL below are taken verbatim from issue #769's body only —
+#    no claim is made about its comment content.
+
+[b00t]
+name = "linus-torvalds-ai-skills"
+type = "reference"
+hint = "leopiney/linus-torvalds-skills (GitHub) — a CLAUDE.md-style AI coding-assistant skill distilling Linus Torvalds' Linux-kernel code-review ethos (data-structures-first, ruthless simplicity, surgical diffs, \"show me the code\") into an installable prompt; r/linusrants Reddit thread discusses/links the same repo."
+keywords = ["linus-torvalds", "ai", "discussion", "reddit", "skills", "code-review", "linux-kernel", "claude-md"]
+
+[references]
+github = "https://github.com/leopiney/linus-torvalds-skills"
+reddit = "https://www.reddit.com/r/linusrants/comments/1st75hv/linus_torvalds_ai_skills/"
+
+[summary]
+title = "Linus-Torvalds-inspired AI coding guidelines (leopiney/linus-torvalds-skills)"
+author = "leopiney (GitHub)"
+source = "GitHub repo fetched directly (WebFetch, 2026-08-09). Reddit thread title/URL taken from issue #769 body only — thread body/comments were unreachable (Reddit blocks automated fetches) and are NOT summarized here."
+thesis = "AI coding assistants tend to overcomplicate solutions, make unfounded assumptions, and introduce unnecessary abstraction. A single CLAUDE.md-style instruction file, styled after Linus Torvalds' LKML code-review voice, can steer them toward ruthless pragmatism instead of polish-for-its-own-sake."
+key_concepts = [
+    "data-first: design data structures before logic; eliminate special cases through proper modeling",
+    "simplicity-first: write minimal working code; reject speculative features and enterprise overengineering",
+    "surgical-changes: modify only what's necessary; no drive-by refactoring or unrelated cleanup",
+    "show-me-the-code: demand measurable proof; prefer working patches over theoretical plans",
+    "critique the code/design, not the person — LKML-style direct review language",
+    "install via `npx skills` or by dropping the CLAUDE.md file into a project",
+]
+notable_quotes = [
+    "Code is cheap. Show me the prompt.",
+    "Bad code is not an opinion. It's a bug with a PR.",
+]
+
+[metadata]
+tags = ["reference", "discussion", "linus-torvalds", "ai", "reddit", "skills", "code-review"]
+tier = "sm0l"
+
+# b00t:map v1
+# summary: Canonical reference datum for the Linus Torvalds AI-skills discussion (#769)
+# tags: reference, discussion, linus-torvalds, ai, reddit, skills, code-review
+# tier: sm0l
+# cmds: b00t datum show linus-torvalds-ai-skills.reference
+# complexity: 1
