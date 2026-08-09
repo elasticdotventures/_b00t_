@@ -27,6 +27,10 @@ path = "src/lib.rs"
 [dependencies]
 rpassword = "7"
 tiktoken-rs = "0.7.0"
+# 🤓 strsim already resolved workspace-wide (transitive via clap's suggestion
+#    engine) — declaring it directly for `b00t task find` reuses the already-
+#    fetched crate instead of hand-rolling Levenshtein/Jaro-Winkler (DRY+NRtW).
+strsim = "0.11"
 # Shared workspace dependencies
 serde = { version = "1.0", features = ["derive"] }
 hostname = "0.4"

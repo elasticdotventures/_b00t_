@@ -359,6 +359,13 @@ pub enum TaskCommands {
     },
     #[clap(about = "Show task storage path")]
     Path,
+    #[clap(about = "Fuzzy/substring search across title, description, tags")]
+    Find {
+        #[clap(help = "Search query")]
+        query: String,
+        #[clap(long, help = "Output as JSON")]
+        json: bool,
+    },
 }
 
 #[derive(Parser, Clone)]
@@ -414,6 +421,7 @@ pub fn handle_task_command(cmd: TaskCommands) -> Result<()> {
             println!("{}", tasks_path().display());
             Ok(())
         }
+        TaskCommands::Find { query, json } => cmd_find(&query, json),
     }
 }
 
@@ -710,6 +718,70 @@ fn cmd_show(id: u32) -> Result<()> {
     Ok(())
 }
 
+/// Score a task against a lowercased query: 0.0 = substring hit (best,
+/// beads_rust-style "no exact match required" search), otherwise
+/// `1.0 - jaro_winkler(title, query)` when that similarity clears
+/// `FUZZY_THRESHOLD`, else `None` (excluded). Reuses `strsim` — already
+/// resolved workspace-wide via clap's suggestion engine — instead of
+/// hand-rolling Levenshtein/Jaro-Winkler (DRY+NRtW).
+const FUZZY_THRESHOLD: f64 = 0.7;
+
+fn score_task(t: &Task, query_lower: &str) -> Option<f64> {
+    let title_l = t.title.to_lowercase();
+    let desc_l = t.description.as_deref().unwrap_or("").to_lowercase();
+    let tag_hit = t.tags.iter().any(|tg| tg.to_lowercase().contains(query_lower));
+    if title_l.contains(query_lower) || desc_l.contains(query_lower) || tag_hit {
+        return Some(0.0);
+    }
+    let sim = strsim::jaro_winkler(&title_l, query_lower);
+    if sim >= FUZZY_THRESHOLD {
+        Some(1.0 - sim)
+    } else {
+        None
+    }
+}
+
+fn cmd_find(query: &str, json: bool) -> Result<()> {
+    let store = load_store()?;
+    let query_lower = query.to_lowercase();
+    let mut hits: Vec<(f64, &Task)> = store
+        .tasks
+        .iter()
+        .filter_map(|t| score_task(t, &query_lower).map(|score| (score, t)))
+        .collect();
+    // best match first; ties broken by priority (1=critical first), then id
+    hits.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.priority.cmp(&b.1.priority))
+            .then_with(|| a.1.id.cmp(&b.1.id))
+    });
+
+    if json {
+        let tasks: Vec<&Task> = hits.iter().map(|(_, t)| *t).collect();
+        println!("{}", serde_json::to_string_pretty(&tasks)?);
+        return Ok(());
+    }
+
+    if hits.is_empty() {
+        println!("no matches for '{query}'");
+        return Ok(());
+    }
+    for (_, t) in &hits {
+        let tags = if t.tags.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", t.tags.join(","))
+        };
+        println!(
+            "[{}] {:>2} P{} {}{}",
+            t.status, t.id, t.priority, t.title, tags
+        );
+    }
+    println!("  {} match(es)", hits.len());
+    Ok(())
+}
+
 fn cmd_import(path: Option<PathBuf>, force: bool) -> Result<()> {
     let src = path.unwrap_or_else(|| PathBuf::from(".taskmaster/tasks/tasks.json"));
     let dest = tasks_path();
@@ -882,6 +954,78 @@ mod tests {
         let s = r#"{"id":2,"title":"b","status":"pending","created_at":1783671462}"#;
         let t: Task = serde_json::from_str(s).unwrap();
         assert_eq!(t.created_at, "2026-07-10T08:17:42Z");
+    }
+
+    #[test]
+    fn test_find_substring_match_is_case_insensitive() {
+        with_tmp_store(|_| {
+            cmd_add("Fix the login button bug".into(), None, 3, None, vec![]).unwrap(); // id=1
+            cmd_add("Unrelated task".into(), None, 3, None, vec![]).unwrap(); // id=2
+            let store = load_store().unwrap();
+            let hits: Vec<u32> = store
+                .tasks
+                .iter()
+                .filter_map(|t| score_task(t, &"LOGIN".to_lowercase()).map(|s| (s, t.id)))
+                .map(|(_, id)| id)
+                .collect();
+            assert_eq!(hits, vec![1]);
+        });
+    }
+
+    #[test]
+    fn test_find_matches_description_and_tags() {
+        with_tmp_store(|_| {
+            cmd_add(
+                "generic title".into(),
+                Some("touches the auth flow".into()),
+                3,
+                Some("urgent".into()),
+                vec![],
+            )
+            .unwrap(); // id=1
+            let store = load_store().unwrap();
+            let t = &store.tasks[0];
+            assert!(score_task(t, "auth").is_some());
+            assert!(score_task(t, "urgent").is_some());
+            assert!(score_task(t, "nonexistent-xyz").is_none());
+        });
+    }
+
+    #[test]
+    fn test_find_fuzzy_no_exact_match_required() {
+        with_tmp_store(|_| {
+            cmd_add("login button".into(), None, 3, None, vec![]).unwrap(); // id=1
+            let store = load_store().unwrap();
+            let t = &store.tasks[0];
+            // typo'd query, no substring match, but close enough for jaro_winkler
+            assert!(score_task(t, "login buttn").is_some());
+            // wildly different query should not match
+            assert!(score_task(t, "zzzzzzzzzzzz").is_none());
+        });
+    }
+
+    #[test]
+    fn test_find_ranks_substring_hits_before_fuzzy_and_by_priority() {
+        with_tmp_store(|_| {
+            cmd_add("low prio auth bug".into(), None, 4, None, vec![]).unwrap(); // id=1
+            cmd_add("critical auth outage".into(), None, 1, None, vec![]).unwrap(); // id=2
+            cmd_add("unrelated".into(), None, 2, None, vec![]).unwrap(); // id=3
+            let store = load_store().unwrap();
+            let mut hits: Vec<(f64, u8, u32)> = store
+                .tasks
+                .iter()
+                .filter_map(|t| score_task(t, "auth").map(|s| (s, t.priority, t.id)))
+                .collect();
+            hits.sort_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap()
+                    .then_with(|| a.1.cmp(&b.1))
+                    .then_with(|| a.2.cmp(&b.2))
+            });
+            let ids: Vec<u32> = hits.iter().map(|(_, _, id)| *id).collect();
+            // both substring hits (score 0.0) tie, broken by priority: id=2 (P1, critical) before id=1 (P4)
+            assert_eq!(ids, vec![2, 1]);
+        });
     }
 
     #[test]
