@@ -4,6 +4,9 @@
 # 🤓 Servo uses WebDriver (W3C), NOT Chrome DevTools Protocol (CDP)
 #    For CDP-based RPA use qutebrowser --remote-debugging-port or chrome-headless
 # 🤓 Always use podman (not docker) — rootless, no daemon
+# 🚩 x86_64 only (see servo.cli.toml #772 note): upstream ships no aarch64-linux-gnu
+#    binary, so `just servo::build` will pull an x86_64 tarball that cannot run on
+#    aarch64 hosts (rockchip64, RPi, Apple Silicon Linux VMs) without QEMU emulation.
 
 IMAGE  := "localhost/b00t-servo:latest"
 CFILE  := "_b00t_/Containerfile.servo"
