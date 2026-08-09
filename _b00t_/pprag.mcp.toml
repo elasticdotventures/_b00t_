@@ -1,0 +1,58 @@
+[b00t]
+name = "pprag"
+type = "mcp"
+hint = "STATUS: design-only, no server exists yet (#788). Proposed MCP wrapper around the Proxy-Pointer-RAG (pprag) Python CLI, following the grok-guru.mcp.toml pattern. See _b00t_/plans/pprag-rag-integration-plan.md — integration vector 1 (recommended first landing)."
+
+entangled_cli = ["pprag.cli"]
+lfmf_category = "pprag"
+
+# Capability-based dependency, mirrors grok-guru.mcp.toml's rag-composite-v1 declaration.
+# pprag additionally needs a Gemini embeddings capability not yet modeled in this repo.
+[b00t.requires.rag]
+capability = "rag"
+protocol = "rag-composite-v1"
+prefer = ["pprag"]
+fallback = "rag-api"
+
+[b00t.requires.embeddings]
+capability = "embeddings"
+protocol = "gemini-embeddings-v1"
+prefer = ["gemini-embeddings"]
+fallback = ""
+
+# 🤓 No [[b00t.mcp.stdio]] block yet — there is no `b00t_pprag_mcp` server module
+# to invoke. A real entry would look like:
+#
+# [[b00t.mcp.stdio]]
+# command = "uv"
+# args = ["run", "python", "-m", "b00t_pprag_mcp.server"]
+# transport = "stdio"
+# priority = 0
+# requires = ["python", "pprag.cli"]
+#
+# ...once a wrapper module exists (not written by this issue — see plan doc
+# section 5, "Deliverable for #788").
+
+[b00t.env]
+# GEMINI_API_KEY sourced from secret-vault once a vault entry exists
+# (see plan doc section 4, "Open questions / blockers")
+GEMINI_API_KEY = ""
+
+[[b00t.usage]]
+description = "(design-only, not runnable) proposed: structural RAG query via MCP"
+command = "Use MCP to query: 'pprag_text_ask' tool with question + index path"
+
+[[b00t.references]]
+name = "b00t integration plan (#788)"
+url = "_b00t_/plans/pprag-rag-integration-plan.md"
+
+[[b00t.references]]
+name = "Precedent: grok-guru.mcp.toml"
+url = "_b00t_/grok-guru.mcp.toml"
+
+# b00t:map v1
+# summary: Proxy-Pointer-RAG (pprag) MCP wrapper datum — design-only stub for #788, no server exists
+# tags: pprag, proxy-pointer-rag, mcp, rag, grok, design-pending
+# tier: frontier
+# cmds: (none runnable yet — see hint)
+# complexity: 3

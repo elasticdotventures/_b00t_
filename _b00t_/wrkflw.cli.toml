@@ -9,6 +9,44 @@ desires = "0.8.0"
 version_regex = 'wrkflw (?P<version>[\d.]+)'
 detect = ["wrkflw --version"]
 
+# @tribal: v0.8.0 feature set (verified against bahdotsh/wrkflw README.md +
+# BREAKING_CHANGES.md at the v0.8.0 tag — not release-note paraphrase):
+# - Expression evaluator: `${{ ... }}` supports toJSON/fromJSON, contains,
+#   startsWith, matrix.*, secrets.*, needs.<id>.outputs.*, nested
+#   github/env/steps/needs/secrets/matrix objects (wrkflw-executor crate).
+# - Composite actions: step outputs propagate to the caller, env expressions
+#   resolve, and `validate` cross-checks required composite-action inputs.
+# - Watch + diff-aware execution: `wrkflw watch` is a first-class subcommand;
+#   `wrkflw run --diff` auto-detects the changed-file set from git
+#   (origin/HEAD → main → master → HEAD~1); `--diff-base`/`--diff-head` pin
+#   the range; `--changed-files` supplies it explicitly.
+# - Artifacts/cache/outputs: actions/upload-artifact, actions/download-artifact,
+#   actions/cache, and needs.<id>.outputs.* are emulated (wrkflw-executor).
+# - TUI rewrite: ratatui-based redesign (Workflows/Execution/DAG/Logs/Trigger/
+#   Secrets/Help tabs), job-selection mode, Tweaks overlay (`,` key), gated
+#   behind a cargo feature flag (wrkflw-ui crate).
+# - Shell now matches GHA: bash runs as
+#   `bash --noprofile --norc -e -o pipefail -c`; sh runs as `sh -e -c` —
+#   scripts that relied on silently continuing past a failing command now
+#   abort at the first non-zero exit (see BREAKING CHANGES below).
+#
+# @tribal: BREAKING CHANGES in v0.8.0 (see upstream BREAKING_CHANGES.md):
+# 1. `--strict-filter` is ON by default: `wrkflw run --event <e>` without
+#    `--diff`/`--changed-files` now exits 1 instead of silently proceeding
+#    with an empty change set (which used to make every `paths:`-gated
+#    workflow report "not triggering" with no visible reason). Simulating
+#    `pull_request`/`pull_request_target` additionally requires
+#    `--base-branch`. Opt out (not recommended) with `--no-strict-filter`.
+# 2. Shell semantics changed as above — multi-command `run:` scripts that
+#    depended on a failing intermediate command NOT aborting the step will
+#    now fail fast. Mitigate with `|| true`, `continue-on-error: true`, or
+#    `set +e`/`set +o pipefail` at the top of the script.
+# 3. `EncryptedSecretStore` serialization format changed: the shared `nonce`
+#    field was removed (fixed a nonce-reuse vuln under AES-GCM); each secret
+#    now carries its own nonce prepended to the ciphertext. Old persisted
+#    secret stores cannot be decrypted by 0.8.0 — must decrypt under the old
+#    version and re-encrypt.
+
 # @tribal: gh CLI is a REQUIRED mandatory prerequisite — install commands use
 # `gh release download` for audit logging and version pinning.
 # If gh is missing: b00t install gh
@@ -49,7 +87,35 @@ command = "wrkflw validate"
 description = "Run specific workflow"
 command = "wrkflw run .github/workflows/<workflow>.yml"
 
+[[b00t.usage]]
+description = "Diff-aware run — only workflows whose 'on:' matches the git-detected changed files (strict-filter requires --diff or --changed-files with --event)"
+command = "wrkflw run --diff --event push .github/workflows/<workflow>.yml"
+
+[[b00t.usage]]
+description = "Simulate a pull_request event locally (--base-branch required under strict-filter)"
+command = "wrkflw run --event pull_request --base-branch main --diff .github/workflows/<workflow>.yml"
+
+[[b00t.usage]]
+description = "Watch mode — auto-rerun affected workflows on file changes, trigger-aware"
+command = "wrkflw watch --event pull_request --base-branch main .github/workflows"
+
+[[b00t.usage]]
+description = "List jobs in a workflow without running it"
+command = "wrkflw run --jobs .github/workflows/<workflow>.yml"
+
+[[b00t.usage]]
+description = "Cross-check composite action required inputs during validation"
+command = "wrkflw validate --verbose .github/workflows/<workflow>.yml"
+
 [[b00t.references]]
 name = "bahdotsh/wrkflw"
 depends_on = ["example-workflow.job", "parallel-tasks.job", "test-workflow.job"]
 url = "https://github.com/bahdotsh/wrkflw"
+
+[[b00t.references]]
+name = "wrkflw v0.8.0 breaking changes"
+url = "https://github.com/bahdotsh/wrkflw/blob/main/BREAKING_CHANGES.md"
+
+[[b00t.references]]
+name = "wrkflw README (features, expression evaluator, watch mode, TUI)"
+url = "https://github.com/bahdotsh/wrkflw#readme"

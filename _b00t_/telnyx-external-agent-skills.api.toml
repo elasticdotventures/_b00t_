@@ -1,0 +1,17 @@
+[b00t]
+name = "telnyx-external-agent-skills"
+type = "api"
+hint = "Telnyx External Agent Skills — 175 publicly available skills teaching AI coding assistants (Claude Code, Cursor, Windsurf, etc.) to correctly use Telnyx SDKs. Covers 35 Telnyx products across 5 languages (Python, Node.js/JavaScript, Go, Java, Ruby), generated from Telnyx's OpenAPI spec so agents get accurate SDK usage without web search/guesswork."
+keywords = ["telnyx", "agent-skills", "release-notes", "sdk", "ai-coding-assistant"]
+
+[[b00t.references]]
+name = "Telnyx External Agent Skills — release notes"
+url = "https://telnyx.com/release-notes/telnyx-external-agent-skills"
+description = "Announcement (2026-02-06, verified via WebFetch 2026-08-09): 175 skills across 35 Telnyx products in 5 SDK languages, for AI coding assistants to generate accurate Telnyx integrations."
+
+# b00t:map v1
+# summary: Telnyx External Agent Skills — canonical reference datum for Telnyx's AI-coding-assistant SDK skill pack (issue #757)
+# tags: telnyx, agent-skills, release-notes, sdk, api
+# tier: sm0l
+# cmds: b00t-cli datum show telnyx-external-agent-skills.api
+# complexity: 1

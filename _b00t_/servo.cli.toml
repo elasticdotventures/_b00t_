@@ -17,6 +17,52 @@
 #
 # WebGPU: --pref dom_webgpu_enabled  (RTX3090 supported via Vulkan)
 # Headless: requires Xvfb or Wayland; Vello CPU renderer is now default
+#
+# ── #772 findings (2026-08-09) ──────────────────────────────────────────────
+# 🚩 PLATFORM GAP: upstream v0.3.0 releases ship servo-x86_64-linux-gnu.tar.gz
+#   ONLY for standard glibc Linux. There is NO native aarch64-linux-gnu build —
+#   the only aarch64 Linux artifact is servo-aarch64-linux-ohos (OpenHarmony,
+#   a different libc/ABI, not Ubuntu/Debian-compatible). Confirmed 3 ways:
+#   GitHub Releases API asset list for v0.3.0, servo.org/download/, and
+#   independent web search — all agree. On aarch64 hosts (e.g. rockchip64,
+#   Raspberry Pi, Apple Silicon Linux VMs) the [install] cmd below downloads a
+#   binary that CANNOT execute (wrong ELF machine type) without QEMU
+#   user-mode emulation, which was judged out of scope here since emulated
+#   timings would not be honest "Chrome benchmark" data. Building Servo from
+#   source (servo-v0.3.0-src-vendored.tar.gz) is a multi-hour, huge-dependency
+#   Rust build — infeasible under this hive's disk/time guard rails. On
+#   x86_64 hosts the [install] cmd is expected to work as documented; nobody
+#   has run it end-to-end from this datum yet (unverified — flagging rather
+#   than claiming tested).
+# ⚠️ Consequence: the "install servo, X11-render, benchmark vs Chrome headless"
+#   tasks in #772 could NOT be executed in this (aarch64) sandbox. No
+#   benchmark numbers are recorded here — none were fabricated. Re-attempt
+#   task on x86_64 hardware/CI runner with both `servo` and `chromium
+#   --headless` installed; use a shared harness (e.g. Speedometer 3, see
+#   below) and report wall-clock + the exact CPU/OS so numbers are comparable.
+# 🤓 Servo's own benchmarking story: servo/servo wiki "Benchmarks" page is a
+#   methodology/candidate-list doc (JetStream, Octane, RoboHornet, Dromaeo),
+#   not a scoreboard — it names NO published Servo-vs-Chrome numbers.
+#   servo/servospeedometer packages the shared Speedometer 3 harness
+#   (browserbench.org/Speedometer3.1) for Servo, but it's a live-run
+#   dashboard, not a static results table — no head-to-head score is
+#   published anywhere found. Do not cite a number without running it
+#   yourself on matching hardware.
+# 🤓 CDP vs WebDriver, confirmed against this repo's own architecture note
+#   (`_b00t_/ARCHITECTURE-REVIEW-BROWSER-RPA.tomllmd`, layer_1_protocol):
+#   b00t's RPA stack is "CDP via chromiumoxide primary (Chrome), WebDriver
+#   secondary via fantoccini (Firefox/Safari/other engines)". Servo speaks
+#   WebDriver (W3C) only — no CDP endpoint exists or is planned — so it maps
+#   to the fantoccini path, not chromiumoxide. `playwright.mcp`
+#   (`_b00t_/playwright.mcp.toml`) does NOT bridge here: Playwright drives
+#   its own team-patched Chromium/Firefox/WebKit binaries over CDP or its
+#   internal protocol, not arbitrary W3C WebDriver servers — it has no
+#   "connect to any WebDriver endpoint" mode, so it cannot drive Servo.
+#   Selenium (or fantoccini, Rust-native, already the b00t-preferred crate)
+#   IS the correct bridge for `servo --webdriver=4444`. No `kuri` datum or
+#   tool exists anywhere in this repo (`grep -ril kuri _b00t_/` → no hits);
+#   #772's "kuri CDP" reference is unconfirmed/external — not evaluated here
+#   rather than guessed at.
 
 [b00t]
 name    = "servo"
@@ -71,8 +117,9 @@ devtools  = "servo --devtools=6080 https://example.com"
 webgpu    = "servo --pref dom_webgpu_enabled https://demo.servo.org"
 
 # b00t:map v1
-# summary: Rust browser engine (servoshell) — install + WebDriver automation guide
-# tags: browser, servo, rust, webdriver, embedding, webgpu, headless
+# summary: Rust browser engine (servoshell) — install + WebDriver automation guide;
+#   x86_64-linux-gnu only (no aarch64 Linux build), WebDriver-not-CDP confirmed
+# tags: browser, servo, rust, webdriver, embedding, webgpu, headless, aarch64-gap
 # tier: ch0nky
 # cmds: just servo::browse, just servo::webdriver
 # complexity: 4

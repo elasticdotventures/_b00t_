@@ -1,0 +1,30 @@
+# b00t Repo Datum — awesome-android-agent-skills (curated Android agent-skills catalog)
+# 🤓 Standardized "Agent Skills" that teach GitHub Copilot, Claude, Gemini, and Cursor
+#    modern Android development conventions (Kotlin, Jetpack Compose, etc.).
+# 🤓 Reference-only: not vendored, no build/install steps — this datum exists so the hive
+#    can discover and cite the catalog when researching Android agent-skill conventions.
+
+[b00t]
+name = "awesome-android-agent-skills"
+type = "repo"
+hint = "Curated collection of standardized Agent Skills for modern Android development (Kotlin, Jetpack Compose) across Copilot, Claude, Gemini, Cursor (github.com/new-silvermoon/awesome-android-agent-skills)"
+
+[b00t.source]
+url = "https://github.com/new-silvermoon/awesome-android-agent-skills"
+
+[b00t.repo]
+description = "A collection of standardized Agent Skills to teach GitHub Copilot, Claude, Gemini and Cursor about modern Android development (Kotlin, Jetpack Compose, etc.)."
+license = "Apache-2.0"
+topics = ["android", "agent-skills", "awesome-list", "mobile-automation"]
+# ⚠️ verify: star/fork counts drift over time; last checked 2026-08-09 via GitHub API (915★ / 88 forks, Apache-2.0, not archived)
+
+[[b00t.references]]
+name = "awesome-android-agent-skills (GitHub)"
+url = "https://github.com/new-silvermoon/awesome-android-agent-skills"
+
+# b00t:map v1
+# summary: Curated catalog of standardized Android Agent Skills (external awesome-list); reference-only, not vendored
+# tags: android, agent-skills, awesome-list, mobile-automation, catalog
+# tier: sm0l
+# cmds: b00t-cli datum show awesome-android-agent-skills.repo
+# complexity: 1

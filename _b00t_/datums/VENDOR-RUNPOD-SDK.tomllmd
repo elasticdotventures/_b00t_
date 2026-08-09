@@ -1,0 +1,97 @@
+# b00t Vendor Datum — runpod-sdk (RunPod Rust SDK)
+# 🤓 Canonical upstream SDK: ernestas-poskus/runpod (crates.io: "runpod").
+#    Vendored via fork-fix-forward (see CLAUDE.md "Core Laws"): PromptExecution/runpod-sdk
+#    is a GitHub fork of ernestas-poskus/runpod carrying local fixes for fields upstream
+#    was missing at vendor time, pending upstream PR merge.
+#    Repo: github.com/ernestas-poskus/runpod (canonical) / github.com/PromptExecution/runpod-sdk (vendored fork)
+#    Language: Rust
+#    Path: vendor/runpod-sdk (git submodule; see .gitmodules)
+#    Consumer: b00t-cli/Cargo.toml — `runpod-sdk = { path = "../vendor/runpod-sdk" }`
+#
+# What is it?
+#   The Rust client for the RunPod GPU cloud API (serverless endpoints +
+#   on-demand/spot pods), used by b00t-cli/src/commands/runpod.rs to deploy,
+#   monitor, and tear down GPU inference/training resources.
+#
+# Key interfaces:
+#   RunpodClient::new(api_key) — client construction (auth via RUNPOD_API_KEY)
+#   .create_endpoint(EndpointCreateInput{..}) / .list_endpoints() /
+#   .get_endpoint(id) / .delete_endpoint(id) — serverless endpoint lifecycle
+#   Pod lifecycle types (on-demand/spot) — sharp corners already documented
+#   in _b00t_/learn/runpod.md (docker_args payload drop, template_id required,
+#   GPU enum string format)
+#
+# Cross-references (do not duplicate):
+#   _b00t_/datums/PROVIDER-RUNPOD.provider.tomllmd — RunPod as a b00t compute
+#     provider (GPU flavors, pricing, endpoint defaults, `b00t-cli provider
+#     endpoint ...` surface). That datum is the usage/config record; this
+#     datum is the SDK-vendoring record.
+#     🤓 that provider datum's rust_version="0.1.30" predates vendoring
+#     (pre-submodule crates.io pin) — the actually-vendored tag is v0.3.1.
+#     Left unedited here to keep this change scoped to #778; flagged for a
+#     follow-up correction.
+#   _b00t_/learn/runpod.md — tribal knowledge / lfmf entries for this SDK.
+#   b00t-cli/Cargo.toml — the path-dependency wiring and fork-fix-forward
+#     comment this datum formalizes.
+#
+# Build notes:
+#   No standalone build — library crate pulled in transitively when b00t-cli
+#   builds. To initialize: git submodule update --init vendor/runpod-sdk
+#   then cargo check -p runpod-sdk --manifest-path b00t-cli/Cargo.toml
+#
+# Upstream tracking:
+#   Local fixes in the PromptExecution fork are intended to be upstreamed to
+#   ernestas-poskus/runpod via PR. Once merged and released, prefer switching
+#   b00t-cli/Cargo.toml's runpod-sdk dependency to the crates.io "runpod"
+#   release and retiring this vendored fork/submodule.
+#
+# Security considerations:
+#   Auth via RUNPOD_API_KEY environment variable only — no credentials
+#   embedded in this datum or the vendored source. Fork is source-auditable
+#   (public GitHub repo); no binary vendoring.
+
+[b00t]
+name = "VENDOR-RUNPOD-SDK"
+type = "vendor"
+hint = "runpod-sdk — vendored fork of ernestas-poskus/runpod (canonical RunPod GPU cloud Rust SDK), local fixes pending upstream PR"
+
+[b00t.version]
+schema = 1
+content = "stable"
+
+[b00t.vendor]
+path = "vendor/runpod-sdk"
+upstream = "https://github.com/ernestas-poskus/runpod"
+fork = "https://github.com/PromptExecution/runpod-sdk"
+branch = "main"
+# Not a standalone binary — consumed as a Cargo path dependency by b00t-cli.
+# No separate build/install step; building b00t-cli builds this transitively.
+build_command = "cargo check -p runpod-sdk --manifest-path b00t-cli/Cargo.toml"
+health_check = "git submodule status vendor/runpod-sdk"
+required_tools = ["rustc", "cargo", "git"]
+
+[b00t.maintenance]
+update_frequency = "monthly"
+# review_required=true: fork carries local fixes pending an upstream PR merge —
+# re-check periodically whether upstream ernestas-poskus/runpod has absorbed
+# them and the fork/path-dependency can be dropped for the crates.io release.
+review_required = true
+
+[[references]]
+name = "ernestas-poskus/runpod (canonical upstream SDK)"
+url = "https://github.com/ernestas-poskus/runpod"
+
+[[references]]
+name = "PromptExecution/runpod-sdk (vendored fork with local fixes)"
+url = "https://github.com/PromptExecution/runpod-sdk"
+
+[[references]]
+name = "b00t-cli consumer: Cargo.toml path dependency"
+url = "https://github.com/elasticdotventures/_b00t_/blob/main/b00t-cli/Cargo.toml"
+
+# b00t:map v1
+# summary: Vendored runpod-sdk (PromptExecution fork of canonical ernestas-poskus/runpod) — GPU cloud Rust SDK backing b00t-cli's RunPod provider commands
+# tags: runpod, sdk, vendor, gpu, cloud, rust, fork-fix-forward
+# tier: ch0nky
+# cmds: cargo check -p runpod-sdk --manifest-path b00t-cli/Cargo.toml
+# complexity: 2

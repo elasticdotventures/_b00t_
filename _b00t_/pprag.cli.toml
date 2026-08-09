@@ -1,0 +1,67 @@
+[b00t]
+name = "pprag"
+type = "cli"
+desires = "0.0.0"
+hint = "STATUS: design-only, not installable via this datum yet (#788). Proxy-Pointer-RAG (PromptExecution fork) — Python structural-pointer RAG CLI: 'pprag text ask' / 'pprag multimodal serve' / 'pprag compare serve'. See _b00t_/plans/pprag-rag-integration-plan.md before enabling install/update below."
+depends_on = ["python.cli", "uv.cli"]
+lfmf_category = "pprag"
+
+# 🤓 Not wired to `b00t install pprag` yet. This is intentionally NOT executable:
+# no fork commit/tag is pinned, and pprag requires a GEMINI_API_KEY that has no
+# secret-vault entry in this repo yet. Flip `install`/`update`/`version` on once
+# both are resolved (see plan doc section 4, "Open questions / blockers").
+# install = "uv pip install --python ${B00T_PPRAG_VENV:-$HOME/.venv}/bin/python git+https://github.com/PromptExecution/Proxy-Pointer-RAG@<pin-me>"
+# update  = "uv pip install --python ${B00T_PPRAG_VENV:-$HOME/.venv}/bin/python --upgrade pprag"
+# version = "${B00T_PPRAG_VENV:-$HOME/.venv}/bin/python -c \"import importlib.metadata; print(importlib.metadata.version('pprag'))\" 2>/dev/null || echo 'not installed'"
+
+[b00t.learn]
+topic = "pprag"
+auto_digest = false
+
+[b00t.pprag]
+venv_env = "B00T_PPRAG_VENV"
+default_venv = "$HOME/.venv"
+upstream_repo = "https://github.com/Proxy-Pointer/Proxy-Pointer-RAG"
+fork_repo = "https://github.com/PromptExecution/Proxy-Pointer-RAG"
+embedder = "gemini-embedding-001@1536d"
+vector_index = "faiss"
+data_dir = "$HOME/.local/share/pprag"
+
+[[b00t.gate]]
+command = "uv"
+hint = "uv is required to install pprag once a fork commit is pinned"
+
+[[b00t.gate]]
+rhai = "false"
+hint = "pprag.cli is design-only (#788) — no verified install path yet, gate intentionally fails closed"
+
+[[b00t.usage]]
+description = "(design-only, not yet runnable) text-only structural RAG query"
+command = "pprag text ask \"query\" --index <path>"
+
+[[b00t.usage]]
+description = "(design-only, not yet runnable) multimodal anchor-aware retrieval server"
+command = "pprag multimodal serve"
+
+[[b00t.usage]]
+description = "(design-only, not yet runnable) agentic cross-document comparison server"
+command = "pprag compare serve"
+
+[[b00t.references]]
+name = "Proxy-Pointer-RAG upstream"
+url = "https://github.com/Proxy-Pointer/Proxy-Pointer-RAG"
+
+[[b00t.references]]
+name = "Proxy-Pointer-RAG PromptExecution fork"
+url = "https://github.com/PromptExecution/Proxy-Pointer-RAG"
+
+[[b00t.references]]
+name = "b00t integration plan (#788)"
+url = "_b00t_/plans/pprag-rag-integration-plan.md"
+
+# b00t:map v1
+# summary: Proxy-Pointer-RAG (pprag) CLI datum — design-only stub for #788, not installable yet
+# tags: pprag, proxy-pointer-rag, rag, grok, faiss, gemini-embeddings, design-pending
+# tier: frontier
+# cmds: (none runnable yet — see hint)
+# complexity: 3

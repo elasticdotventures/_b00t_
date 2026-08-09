@@ -149,3 +149,37 @@ complexity: 6
 
 ---
 cargo-toml-duplicate-dep: Keep CLAUDE.md dependency list in sync with Cargo.toml. When CLAUDE.md omits a dep used in source, agents try to re-add it, creating duplicate lines after hook runs. Always add new crates to both CLAUDE.md and Cargo.toml together.
+
+---
+# 8 defensive patterns from the uutils CVE audit (2026-08-09, issue #785)
+# Source: Matthias Endler, "Bugs Rust Won't Catch" (corrode.dev, 2026-04-29) —
+# https://corrode.dev/blog/bugs-rust-wont-catch/ — analyzing 44 CVEs Canonical
+# disclosed in uutils (Rust reimplementation of GNU coreutils, default since
+# Ubuntu 25.10), from the Zellic security assessment commissioned ahead of
+# 26.04 LTS (Jan 2026). Zero were memory-safety bugs — all were logic bugs at
+# the Rust/OS boundary. Every CVE below was independently re-verified against
+# NVD / Ubuntu Security / GitLab Advisory DB / Red Hat Bugzilla, not taken on
+# the article's word alone.
+
+toctou-paths: Never trust a path across two syscalls — an attacker can swap a symlink into the gap between check and use. uutils `install` unlinked the destination then recreated it by pathname without `O_EXCL` (CVE-2026-35355, CVSS 6.3, CWE-367) — a symlink planted in the window redirected privileged writes to overwrite arbitrary files. Anchor on file descriptors: `OpenOptions::create_new(true)`, or the `*at` family (`openat`, `renameat`) — never remove-then-recreate by path.
+
+---
+permissions-at-creation: Set permissions at creation time, never `chmod` after — the gap between create and chmod is a race window. uutils `mkdir -m` created the directory with umask-derived permissions (typically 0755) then `chmod`'d it separately afterward (CVE-2026-35353) — in a multi-user environment, another user could read/write during the window. Use `OpenOptions::mode()` / `DirBuilderExt::mode()` to set permissions atomically at creation, not as a follow-up call.
+
+---
+path-identity: String comparison of paths is not identity — canonicalize before comparing, or compare `(dev, inode)` pairs. uutils `rm` correctly refused to delete `.`/`..` by string match but missed the equivalent `./` and `.///` (CVE-2026-35363, CWE-22, CVSS 5.6) — `rm -rf ./` silently deleted the entire contents of the current directory while printing a misleading "Invalid input" error that obscured the data loss. Normalize/canonicalize paths before any identity or safety check.
+
+---
+bytes-not-utf8: At Unix boundaries, stay in bytes — use `Path`/`OsStr`/`&[u8]`, not `String`. uutils `comm` ran `String::from_utf8_lossy()` on every line (CVE-2026-35346) — invalid UTF-8 byte sequences were silently replaced with U+FFFD, corrupting output when comparing binary files or files in legacy encodings. `from_utf8_lossy` on untrusted/raw input is data corruption, not a safe fallback.
+
+---
+panic-is-dos: Every `unwrap()`/`expect()`/index on untrusted input is a denial-of-service CVE, not just a code-quality nit. uutils `sort --files0-from` called `.expect()` converting filenames to UTF-8 (CVE-2026-35348) — one non-UTF-8 filename in a NUL-separated list panicked the process and broke automated pipelines. Turn bad input into `Result`s: `?`, `.get()`, `checked_*`, `TryFrom`, never index/unwrap on attacker-reachable data.
+
+---
+dont-discard-errors: Never `.ok()` / `.unwrap_or_default()` / `let _ =` a `Result` without a comment justifying why — propagate the *worst* error across a batch, not the last one. uutils `chmod -R` / `chown -R` overwrote the running result on each file instead of accumulating it, so the exit code reflected only the last file processed (CVE-2026-35339 chmod, CVE-2026-35340 chown/chgrp) — scripts saw exit 0 while earlier files silently kept wrong permissions or ownership.
+
+---
+bug-for-bug-compat: For reimplementations of established tools, matching upstream's exact behavior (exit codes, error messages, edge-case argument parsing) is a security feature, not pedantry. uutils `kill -1` parsed `-1` as PID -1 instead of GNU's "signal 1, prompt for PID" (CVE-2026-35369) — sent SIGTERM to every process visible to the caller, a mass-kill DoS triggered by a single familiar command.
+
+---
+resolve-before-crossing: Resolve users/paths BEFORE crossing a chroot/sandbox trust boundary — once inside, every library call may execute attacker-controlled code. uutils `chroot --userspec` called `getpwnam()` (via glibc NSS) AFTER entering the chroot but before dropping root (CVE-2026-35368) — an attacker who could plant a file in NEWROOT got NSS to load a malicious shared library and ran code as uid 0 (local root / container escape). Resolve identity first, cross the boundary second, never the reverse.
