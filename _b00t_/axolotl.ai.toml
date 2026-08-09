@@ -1,0 +1,63 @@
+# b00t AI Framework Datum — Axolotl finetuning framework
+#
+# 🤓 Alternative to unsloth (see learn/unsloth*.md): axolotl replaces unsloth's
+# Python SFTTrainer API with a single declarative YAML config. Native Qwen3/MoE
+# support + FSDP2 multi-GPU, where unsloth targets single-GPU custom-kernel speed.
+#
+# No canonical unsloth.ai.toml exists yet — unsloth is documented only via
+# learn/unsloth*.md tribal-knowledge entries, not a typed datum. The [comparison]
+# table below records the alternative-provider relationship in prose rather than
+# an entangled_ai_models reference: that field resolves to model-checkpoint
+# datums (e.g. qwen3-coder-local.model.ai), not framework alternatives — pointing
+# it at a nonexistent "unsloth.ai" would fail `b00t-cli datum validate --graph`.
+# If/when unsloth gets its own canonical datum, promote this to
+# entangled_ai_models = ["unsloth.ai"] (or a new entangled_frameworks field).
+
+[b00t]
+name = "axolotl"
+type = "ai"
+hint = "Axolotl finetuning framework — single-YAML QLoRA/FSDP2, alternative to unsloth"
+type_tags = ["finetuning", "axolotl", "unsloth", "sft", "qwen", "moe", "fsdp"]
+
+entangled_cli = ["hf.cli"]
+
+[b00t.ai]
+provider = "axolotl-ai-cloud"
+api_type = "yaml_config"
+image = "axolotlai/axolotl:main-latest"
+models = ["qwen3", "qwen3-moe", "llama3", "mistral"]
+distributed = "fsdp2"
+
+# ── Comparison vs unsloth — this IS the "entangled as alternative" relationship
+#    from issue #777, encoded as data since unsloth has no datum key to entangle
+#    against yet ──
+[comparison.unsloth]
+config      = "single YAML file vs unsloth's Python SFTTrainer API"
+moe_support = "native Qwen3/MoE vs unsloth MoE kernels"
+image       = "axolotlai/axolotl:main-latest vs unsloth pip package / container"
+distributed = "FSDP2 multi-GPU vs unsloth custom single-GPU kernels"
+status      = "not yet wired into b00t-finetune.cli pipeline — tracked as FRAMEWORK=axolotl, sprint 2"
+learn_docs  = ["_b00t_/learn/axolotl.md", "_b00t_/learn/unsloth.md"]
+
+[[b00t.usage]]
+description = "Run axolotl QLoRA finetune from YAML config"
+command = "axolotl train config.yaml"
+
+[[b00t.usage]]
+description = "Pull axolotl container image"
+command = "podman pull axolotlai/axolotl:main-latest"
+
+[[b00t.references]]
+name = "Axolotl GitHub"
+url = "https://github.com/axolotl-ai-cloud/axolotl"
+
+[[b00t.references]]
+name = "b00t tribal knowledge: axolotl vs unsloth"
+url = "_b00t_/learn/axolotl.md"
+
+# b00t:map v1
+# summary: Axolotl YAML-config finetuning framework — alternative to unsloth SFTTrainer
+# tags: finetuning, axolotl, unsloth, sft, qwen, moe, fsdp
+# tier: ch0nky
+# cmds: axolotl train config.yaml
+# complexity: 4
