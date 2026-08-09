@@ -1,3 +1,20 @@
+// b00t-c0re-lib/src/sudo_operator/vetted.rs
+// 🤓 Deterministic sudo-grant path: NOPASSWD execution authorized by a
+//    git-content-hash match against origin/main, not human/LLM judgment.
+//    See PRD-SUDO-OPERATOR-GOVERNANCE's vetted-script extension and the
+//    design spec at app4dog/workspace's
+//    docs/superpowers/specs/2026-08-08-vetted-sudo-mechanism-design.md.
+//
+//    KNOWN LIMITATION — no trust-anchor pinning, tracked as
+//    elasticdotventures/_b00t_#991: this mechanism verifies a repo's
+//    internal self-consistency, never that the repo itself is one anyone
+//    should trust, and "matches origin/main" alone doesn't distinguish a
+//    human-approved release from an agent's own merged PR. Safe today only
+//    because the sudoers grant targets the operator's own login account
+//    (see check_vetted()'s doc comment for the full explanation). Do not
+//    extend the sudoers grant to a more-restricted principal (e.g. a
+//    dedicated service/CI account) without implementing #991 first.
+
 use anyhow::Result;
 use duct::cmd;
 use serde::Deserialize;
@@ -89,6 +106,34 @@ fn git_blob_hash(repo_root: &Path, rev_and_path: &str) -> Option<String> {
 /// Fail-closed: any git operation failing (missing repo, network error,
 /// fetch timeout, path not present on origin/main) resolves to NotVetted.
 /// Never resolves to Vetted on an error path.
+///
+/// # Known limitation: no trust-anchor pinning (tracked: elasticdotventures/_b00t_#991)
+///
+/// `repo_root` is resolved from the caller's cwd (see `resolve_repo_toplevel`
+/// in `exec.rs`) with no check on WHICH repos are actually trusted — this
+/// function only verifies internal self-consistency ("does this repo's
+/// working tree match that same repo's own origin/main"), never that the
+/// repo itself is one anyone should trust. A git working tree with a
+/// self-authored `origin/main` (any repo, any origin, self-created is fine)
+/// satisfies this check for its own content.
+///
+/// This is safe today ONLY because the sudoers NOPASSWD grant currently
+/// targets the operator's own login account — that principal already has
+/// root-equivalent access via the same grant regardless of what repo it
+/// points at, so "create your own repo" isn't a new privilege escalation
+/// in the current deployment. It stops being safe the moment this grant
+/// is extended to any more-restricted principal (e.g. a dedicated
+/// service/CI account) without first adding an origin-URL trust-anchor
+/// allowlist checked BEFORE this function's registry/hash logic runs.
+///
+/// A deeper, related gap (also tracked in #991): even with trust-anchor
+/// pinning, "content matches a trusted repo's own origin/main" is a check
+/// an agent with ordinary commit/PR-merge access can already satisfy for
+/// its own changes — closing that requires a human-signed release gate
+/// (e.g. a signed git tag verified via `git verify-tag` against an
+/// allowed-signers file that lives outside any git repo), not just a
+/// wider allowlist. Do not extend this mechanism's sudoers grant to a
+/// more-restricted principal without implementing #991 first.
 pub fn check_vetted(repo_root: &Path, script_path: &str) -> VettedResult {
     if let Err(e) = fetch_origin_main(repo_root) {
         return VettedResult::NotVetted {
