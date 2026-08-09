@@ -1,0 +1,80 @@
+# b00t Agent Framework Datum — installable-package quick reference (issue #477)
+# 🤓 Division of labor across the three agent-framework datums already in this repo —
+#    this one is new, the other two pre-date this issue and are NOT duplicated here:
+#      - `_b00t_/datums/VENDOR-AGENT-FRAMEWORK.tomllmd` — deep architecture/package-map
+#        write-up + b00t integration strategy (MCP bridge, tier alignment, ourobourus).
+#        Read that for "how does this fit into b00t".
+#      - `_b00t_/agent_framework-51402821.datum.toml` — raw assimilated upstream repo
+#        content (`b00t grok assimilate`), stored as a gzip git blob.
+#      - THIS file (`agent-framework.ai.toml`) — the installable-package quick-reference,
+#        following the `crewai.ai.toml` / `mastra.ai.toml` / `typedai.ai.toml` convention
+#        (type="ai", SemanticClass::Agent) so `b00t learn agent-framework` and
+#        `b00t install agent-framework` resolve to something.
+# PyPI package name confirmed stable as `agent-framework` (checked via
+# `pip index versions agent-framework` on 2026-08-09, current 1.13.0) — this was the
+# blocking concern noted in the prior issue-477 analysis comment.
+
+[b00t]
+name = "agent-framework"
+type = "ai"
+hint = "Microsoft Agent Framework — multi-agent orchestration SDK (AutoGen successor), Python + .NET"
+source = "https://github.com/microsoft/agent-framework"
+version = "python -c 'import agent_framework; print(agent_framework.__version__)'"
+version_regex = '\d+\.\d+\.\d+'
+install = "uv pip install agent-framework"
+update = "uv pip install --upgrade agent-framework"
+depends_on = ["python.cli", "uv.cli"]
+
+[b00t.ai]
+provider = "microsoft-agent-framework"
+api_type = "multi-agent-framework"
+models = ["gpt-4", "claude-3", "gemini", "ollama-local", "bedrock", "azure-foundry"]  # pass-through to underlying LLM connector packages
+context_window = 128000  # depends on underlying LLM connector
+pricing_model = "pass-through"  # uses underlying LLM pricing
+
+[b00t.python]
+min_version = "3.10"
+package_manager = "uv"
+dependencies = [
+    "agent-framework",
+]
+
+[b00t.env]
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+AZURE_AI_FOUNDRY_ENDPOINT = "${AZURE_AI_FOUNDRY_ENDPOINT}"
+
+[b00t.learn]
+topic = "agent-framework"
+auto_digest = true
+
+[[b00t.usage]]
+example = "Install the SDK"
+command = "uv pip install agent-framework"
+
+[[b00t.usage]]
+example = "Register b00t-mcp as an agent-framework MCP tool (bridge pattern)"
+command = "python -c \"from agent_framework.tools import MCPStdioTool; MCPStdioTool(command='b00t-cli', args=['mcp', 'serve'])\""
+
+[[b00t.references]]
+name = "GitHub Repository"
+url = "https://github.com/microsoft/agent-framework"
+type = "source"
+
+[[b00t.references]]
+name = "b00t architecture/integration analysis"
+url = "_b00t_/datums/VENDOR-AGENT-FRAMEWORK.tomllmd"
+type = "internal"
+
+[b00t.metadata]
+category = "ai-agents"
+tags = ["python", "dotnet", "multi-agent", "orchestration", "autogen", "mcp", "microsoft"]
+maturity = "stable"
+license = "MIT"
+
+# b00t:map v1
+# summary: Microsoft Agent Framework — installable-package datum (uv pip install agent-framework); pairs with VENDOR-AGENT-FRAMEWORK.tomllmd for architecture detail
+# tags: ai, agent-framework, microsoft, autogen, multi-agent, mcp, python, dotnet
+# tier: sm0l
+# cmds: uv pip install agent-framework, b00t learn agent-framework
+# complexity: 2
