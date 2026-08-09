@@ -1,0 +1,56 @@
+[b00t]
+name = "huggingface-storage"
+type = "config"
+hint = "HuggingFace Storage Buckets exposed as an S3-compatible gateway — usable as a rustfs S3 backend"
+
+lfmf_category = "rustfs"
+
+[[b00t.usage]]
+description = "List buckets in your HF Storage namespace (AWS CLI, path-style addressing required)"
+command = "aws --endpoint-url https://s3.hf.co/$HF_STORAGE_NAMESPACE --region us-east-1 s3 ls"
+
+[[b00t.usage]]
+description = "Upload an object to an HF Storage bucket"
+command = "aws --endpoint-url https://s3.hf.co/$HF_STORAGE_NAMESPACE --region us-east-1 s3 cp ./model.safetensors s3://my-bucket/models/model.safetensors"
+
+[[b00t.usage]]
+description = "Point rustfs-mcp at HF Storage as its S3 backend (see rustfs-mcp.mcp.toml)"
+command = "RUSTFS_S3_ENDPOINT=https://s3.hf.co/$HF_STORAGE_NAMESPACE RUSTFS_S3_REGION=us-east-1 RUSTFS_S3_ADDRESSING_STYLE=path RUSTFS_S3_ACCESS_KEY=$HF_STORAGE_ACCESS_KEY_ID RUSTFS_S3_SECRET_KEY=$HF_STORAGE_SECRET_ACCESS_KEY cargo run --package rustfs-mcp -- mcp-server"
+
+[[b00t.references]]
+name = "HuggingFace Storage Buckets (product overview)"
+url = "https://huggingface.co/storage"
+
+[[b00t.references]]
+name = "HuggingFace Storage S3 Compatibility (endpoint, credentials, limitations)"
+url = "https://huggingface.co/docs/hub/en/storage-buckets-s3"
+
+[[b00t.references]]
+name = "RustFS MCP datum (S3-compatible consumer this endpoint targets)"
+url = "https://github.com/rustfs/rustfs"
+
+[env]
+# S3-compatible gateway credentials — NOT the same HF_TOKEN used by huggingface.ai.toml
+# for Inference API calls. Generate via https://huggingface.co/settings/tokens ->
+# token row dropdown -> "Generate S3 credentials". Access key ID is prefixed "HFAK...".
+# The token's own permission (Read/Write) becomes the S3 credential's permission.
+HF_STORAGE_NAMESPACE = ""
+HF_STORAGE_ACCESS_KEY_ID = ""
+HF_STORAGE_SECRET_ACCESS_KEY = ""
+
+# 🤓 tribal knowledge (verified against docs.huggingface.co/hub/storage-buckets-s3, 2026-08-09):
+# - Gateway is single-region (us-east-1) and namespace-scoped:
+#   https://s3.hf.co/<namespace> (namespace = your username or org). The bucket name
+#   passed to the S3 client is the bare HF bucket name, NOT "namespace/bucket" — most
+#   S3 SDKs reject "/" in a bucket name.
+# - MUST use path-style addressing (s3.addressing_style=path / force_path_style=true);
+#   virtual-hosted style (bucket.s3.hf.co) is not served by the gateway.
+# - Set request_checksum_calculation=when_required and
+#   response_checksum_validation=when_required — AWS CLI >=2.23 / recent boto3 send
+#   trailing CRC32 checksums by default that the gateway does not parse.
+# - ListObjectsV1 unsupported (ListObjectsV2 only). No ACLs, bucket policies, object
+#   tagging, versioning, SSE, or bucket notifications. Cross-namespace CopyObject /
+#   UploadPartCopy unsupported — server-side copy works only within one namespace.
+# - GetObject typically 302-redirects to the nearest HF CDN edge; aws-cli/botocore/
+#   aws-sdk-rust are proxied transparently, other clients (rclone, s5cmd, curl) must
+#   follow the redirect themselves.
