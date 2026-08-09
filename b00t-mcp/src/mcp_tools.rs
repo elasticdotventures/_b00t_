@@ -1277,6 +1277,28 @@ pub struct GrokStatusCommand;
 
 impl_mcp_tool!(GrokStatusCommand, "grok_status", ["grok", "status"]);
 
+/// Random walk through the knowledge graph — surfaces unexpected connections
+/// 🤓 ENTANGLED: b00t-cli/src/commands/grok.rs GrokCommands::Wander
+/// 🤓 #247: gap identified vs Cortex's 44-tool ideation (no exploratory
+///    traversal existed — `ontology sparql` is targeted-query only).
+/// 🤓 No required fields — zero-friction serendipity by design, per the
+///    Reddit post's own lesson: "more than three required fields, nobody
+///    will call it voluntarily."
+#[derive(Parser, Clone)]
+pub struct GrokWanderCommand {
+    #[arg(long, help = "Restrict wandering to one topic (default: random)")]
+    pub topic: Option<String>,
+
+    #[arg(
+        long,
+        default_value = "both",
+        help = "RAG: raglite | irontology | both"
+    )]
+    pub rag: Option<String>,
+}
+
+impl_mcp_tool!(GrokWanderCommand, "grok_wander", ["grok", "wander"]);
+
 // ACP Hive coordination MCP tools
 
 /// MCP command for joining a hive mission
@@ -2369,6 +2391,7 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<GrokAskCommand>()
         .register::<GrokLearnCommand>()
         .register::<GrokStatusCommand>()
+        .register::<GrokWanderCommand>()
         // Tutorial progression tools
         .register::<TutorialStatusCommand>()
         .register::<TutorialNextCommand>()
