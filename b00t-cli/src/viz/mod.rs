@@ -489,10 +489,15 @@ pub fn datum_graph_to_scene(graph: &DatumGraph) -> SceneGraph {
 pub fn datum_graph_to_mermaid(graph: &DatumGraph) -> String {
     let mut out = String::from("graph LR\n");
     for node in &graph.nodes {
+        // 🤓 #714: emit the canonical lowercase type_prefix() token (e.g.
+        // "cli"), not the PascalCase Debug string. Downstream consumers
+        // (b00t-admin/graph_json.rs) round-trip this through
+        // DatumType::from_type_token() to resolve SemanticClass shape/colour
+        // for the dashboard's graph renderer.
         let datum_type = node
             .datum_type
             .as_ref()
-            .map(|dtype| format!("{dtype:?}"))
+            .map(|dtype| dtype.type_prefix().to_string())
             .unwrap_or_else(|| "?".into());
         out.push_str(&format!(
             "    {}[\"{}\"]\n",
@@ -746,6 +751,15 @@ mod tests {
         assert!(mermaid.contains("b00t.cli"));
         assert!(mermaid.contains("rust.c"));
         assert!(mermaid.contains("-->"));
+        // 🤓 #714: the embedded type suffix must be DatumType::type_prefix()'s
+        // canonical lowercase token (e.g. "cli"), not the PascalCase Debug
+        // string ("Cli") — downstream consumers (b00t-admin/graph_json.rs)
+        // round-trip it through DatumType::from_type_token() to recover
+        // SemanticClass shape/colour, which only recognizes the token form.
+        assert!(
+            mermaid.contains("\\ncli"),
+            "expected lowercase type_prefix token '\\ncli' in mermaid output: {mermaid}"
+        );
         let scene = datum_graph_to_scene(&graph);
         assert_eq!(scene.nodes.len(), 2);
         assert_eq!(scene.edges.len(), 1);
