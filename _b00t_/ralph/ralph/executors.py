@@ -292,6 +292,9 @@ class PiExecutor:
     Invokes pi in non-interactive (-p) mode against the local ch0nky slot
     via llama-cpp provider. Requires pi installed and local inference running
     on the OpenAI-compatible endpoint configured in ~/.pi/agent/models.json.
+
+    pi takes the task as a trailing positional argument, not stdin
+    (`pi [options] [@files...] [messages...]` per `pi --help`).
     """
 
     prompt_path: Path
@@ -317,8 +320,8 @@ class PiExecutor:
         ]
         if self.extra_args:
             command.extend(self.extra_args.split())
-        # pi reads task from stdin when -p flag is set
-        return _run_subprocess(tuple(command), input_text=prompt_text, cwd=cwd_value)
+        command.append(prompt_text)
+        return _run_subprocess(tuple(command), input_text=None, cwd=cwd_value)
 
 
 __all__ = [
