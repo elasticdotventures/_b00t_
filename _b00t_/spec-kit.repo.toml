@@ -1,0 +1,33 @@
+# b00t spec-kit Repository Datum
+#
+# spec-kit (github:github/spec-kit) — GitHub's open-source toolkit for
+# "Spec-Driven Development" (SDD): write detailed, executable specifications
+# before implementation, then let AI coding agents (Copilot, Claude, Gemini,
+# etc.) generate working code from them. Provides slash commands
+# (/speckit.specify, /speckit.plan, /speckit.tasks, ...) via the `specify`
+# CLI. Install via `uv tool install specify-cli --from
+# git+https://github.com/github/spec-kit.git`. MIT licensed, Python.
+
+[b00t]
+name = "spec-kit"
+type = "repo"
+status = "reference"
+hint = "spec-kit — GitHub's Spec-Driven Development toolkit; `specify` CLI drives spec/plan/task slash-commands consumed by AI coding agents. uv tool install specify-cli --from git+https://github.com/github/spec-kit.git"
+url = "https://github.com/github/spec-kit"
+
+[[b00t.references]]
+name = "spec-kit GitHub"
+url = "https://github.com/github/spec-kit"
+description = "Source repo, README, releases, and issue tracker for spec-kit."
+
+[[b00t.references]]
+name = "spec-kit PyPI (specify-cli)"
+url = "https://pypi.org/project/specify-cli/"
+description = "specify-cli package on PyPI — pip/uv installable Spec-Driven Development CLI."
+
+# b00t:map v1
+# summary: spec-kit repo datum — GitHub's Spec-Driven Development toolkit (specify CLI), canonical reference link
+# tags: github, spec, specifications, spec-driven-development, sdd, ai-agents
+# tier: sm0l
+# cmds: b00t-cli datum show spec-kit.repo
+# complexity: 1
