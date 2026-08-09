@@ -161,6 +161,19 @@ impl ChatTransport {
             }
         }
     }
+
+    /// Escape hatch to the underlying `async_nats::Client` for callers that
+    /// need patterns this wrapper doesn't cover yet (e.g. request-reply
+    /// servers — see #716's `store serve --nats`). Prefer the typed
+    /// send/subscribe helpers above where they fit.
+    pub async fn raw_nats_client(&self) -> ChatResult<async_nats::Client> {
+        match self {
+            ChatTransport::Nats(t) => t.client().await,
+            ChatTransport::Local(_) => Err(ChatError::Other(
+                "raw_nats_client requires NATS transport".into(),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +247,12 @@ impl RealNatsTransport {
             max_reconnect_attempts: 3,
             reconnect_delay_ms: 1000,
         }
+    }
+
+    /// Public accessor for the underlying connected `async_nats::Client`,
+    /// reusing the same connect/reconnect machinery as the typed helpers.
+    pub async fn client(&self) -> ChatResult<async_nats::Client> {
+        self.ensure_connected().await
     }
 
     async fn ensure_connected(&self) -> ChatResult<async_nats::Client> {

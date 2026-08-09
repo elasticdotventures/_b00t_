@@ -109,6 +109,13 @@ impl ChatClient {
     pub async fn send_raw(&self, subject: &str, payload: &[u8]) -> ChatResult<()> {
         self.transport.send_raw(subject, payload).await
     }
+
+    /// Escape hatch to the underlying `async_nats::Client` (NATS transport
+    /// only) for request-reply servers and other patterns not yet wrapped
+    /// by this client. See #716's `store serve --nats`.
+    pub async fn raw_nats_client(&self) -> ChatResult<async_nats::Client> {
+        self.transport.raw_nats_client().await
+    }
 }
 
 impl From<ChatTransportKind> for ChatTransportConfig {
