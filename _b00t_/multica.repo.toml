@@ -1,0 +1,89 @@
+# b00t multica Repository Datum
+#
+# multica (github:multica-ai/multica) — self-hostable workspace that assigns
+# GitHub/GitLab/Gitea/Forgejo issues to coding-agent CLIs (Claude Code, Codex,
+# Cursor, Copilot, and 17 others) the way a human would assign work to a
+# teammate. A local daemon spawns the chosen agent CLI on the user's own
+# machine (code never leaves the host), replays every tool call/command/error
+# as timestamped logs, and gates the result behind human review before it
+# ships. Stack: Next.js 16 frontend (TypeScript) + Go backend (Chi router,
+# WebSocket) + Postgres 17/pgvector. Ships web, desktop (macOS/Windows/Linux),
+# and iOS clients, plus Slack/Lark/DingTalk/WeCom notification channels.
+#
+# @tribal: issue #401 asked for a gap analysis. Two prior comments on that
+#   issue (2026-06-21) guessed multica was a "multi-agent task coordination
+#   framework" (concurrent agent spawning, shared task queue, capability
+#   routing) purely from the repo name/pattern, before the repo was actually
+#   fetched — that guess is WRONG. multica does not decompose tasks, run
+#   agents concurrently against each other, or maintain a shared memory bus;
+#   it is a human-facing issue-assignment dashboard with one agent CLI per
+#   issue and a review gate. Do not carry the "60% coverage, gap in parallel
+#   execution + shared memory bus" conclusion from those comments forward —
+#   it's an assessment of a different, imagined tool.
+#
+# Actual capability comparison vs b00t:
+#   - Issue -> agent assignment, execution transparency (replayed logs),
+#     human review gate: THIS is what a b00t operator does today by hand
+#     (see: this very datum was produced by an agent triaging a GitHub
+#     issue in an isolated worktree). multica packages that loop as a
+#     hosted product with a UI; b00t is the in-session protocol substrate
+#     an agent follows once assigned — different layer, not a duplicate.
+#   - Multi-git-forge support (GitHub/GitLab/Gitea/Forgejo) and chat
+#     notification channels (Slack/Lark/DingTalk/WeCom): b00t has neither
+#     today. Real gap, but out of scope for a hive protocol datum store —
+#     these are product/UI features, not agent-operating-protocol features.
+#   - 20-agent-CLI catalog with a daemon that spawns each: b00t's
+#     `just compile-agent <role>` provisions one agent (typically Claude)
+#     per task; it does not maintain a catalog of interchangeable agent
+#     binaries. Gap acknowledged, not pursued — b00t deliberately runs
+#     *inside* whichever agent CLI invoked it rather than launching one.
+#
+# Interface points to b00t (if multica were ever run alongside b00t):
+#   - Rhai guards (_b00t_/hive-guards.hive.toml): commands multica's daemon
+#     spawns on a b00t-managed host could be gated through the same
+#     `b00t.hive.rhai_macros` guard registry used for `b00t sh --`.
+#   - Datum system: multica's per-agent-CLI adapters map naturally onto
+#     b00t `*.cli.toml`/`*.mcp.toml` datums (one datum per supported agent).
+#   - Tier routing: multica's per-issue agent choice is a coarser analogue
+#     of b00t's sm0l/ch0nky/frontier tier dispatch.
+#
+# Prerequisite datums the issue asked for (Go, TypeScript) already exist and
+# need no uplift: go.cli.toml installs the Go toolchain; node.cli.toml
+# covers the JS/TS runtime multica's Next.js frontend needs (no dedicated
+# `typescript.cli.toml` — `tsc` is a project devDependency, not a system
+# tool b00t should install standalone).
+#
+# Decision (2026-08-09): reference-only, NOT integrated. multica solves a
+# different problem (human-facing multi-agent-CLI SaaS dashboard) than b00t
+# (in-session agent operating protocol + hive). No b00t extension is
+# warranted; revisit only if b00t grows an actual daemon/dashboard layer.
+
+[b00t]
+name = "multica"
+type = "repo"
+status = "reference"
+hint = "multica — self-hostable dashboard assigning GitHub/GitLab/Gitea/Forgejo issues to coding-agent CLIs (Claude Code, Codex, Cursor, Copilot, +17); Go+Next.js/TS, Postgres/pgvector, local daemon runs agents on your own machine. Different layer than b00t (product/UI vs in-session protocol) — reference only, not integrated."
+url = "https://github.com/multica-ai/multica"
+depends_on = ["go.cli", "node.cli"]
+
+[[b00t.references]]
+name = "multica GitHub"
+url = "https://github.com/multica-ai/multica"
+description = "Source repo, README, issue tracker for multica."
+
+[[b00t.references]]
+name = "multica homepage"
+url = "https://multica.ai"
+description = "Product homepage."
+
+[[b00t.references]]
+name = "b00t issue #401"
+url = "https://github.com/elasticdotventures/_b00t_/issues/401"
+description = "Original gap-analysis request; corrected assessment recorded in this datum."
+
+# b00t:map v1
+# summary: multica repo datum — self-hostable issue-to-coding-agent-CLI dashboard (Go+TS); reference only, different layer than b00t, not integrated
+# tags: multica, agents, coding-agent-cli, github-issues, reference, gap-analysis
+# tier: sm0l
+# cmds: b00t-cli datum show multica.repo
+# complexity: 1
