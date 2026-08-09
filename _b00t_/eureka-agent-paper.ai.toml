@@ -1,0 +1,105 @@
+# b00t datum — EurekAgent paper digest, assimilated for issue #791
+# 🤓 Paper existence + content independently verified via WebFetch against
+#    huggingface.co/papers/2606.13662 and github.com/THU-Team-Eureka/EurekAgent
+#    on 2026-08-09. Title, authors, and the four environment-engineering
+#    dimensions below are confirmed against the live source, not taken on
+#    faith from the issue body alone (though the issue body's own extraction
+#    turned out to match the source exactly).
+
+[b00t]
+name    = "eureka-agent-paper"
+type    = "ai"
+hint    = "EurekAgent: Agent Environment Engineering is All You Need for Autonomous Scientific Discovery — Tsinghua/Zhipu AI, arXiv/HF 2606.13662"
+source  = "https://huggingface.co/papers/2606.13662"
+
+[b00t.paper]
+title   = "Agent Environment Engineering is All You Need for Autonomous Scientific Discovery"
+authors = ["Amy Xin", "Jiening Siow", "Junjie Wang", "Zijun Yao", "Fanjin Zhang", "Jian Song", "Lei Hou", "Juanzi Li"]
+affiliation = "Tsinghua University / Zhipu AI"
+paper_url = "https://huggingface.co/papers/2606.13662"
+code_url  = "https://github.com/THU-Team-Eureka/EurekAgent"
+license   = "AGPL-3.0 (commercial licensing available)"
+verified  = true
+verified_on = "2026-08-09"
+verified_via = "WebFetch against huggingface.co/papers/2606.13662 and github.com/THU-Team-Eureka/EurekAgent"
+
+[b00t.paper.abstract]
+summary = """
+As LLM agents grow more capable, the bottleneck for autonomous scientific
+discovery shifts from prescribing agent workflows to designing the agent's
+environment. EurekAgent achieves state-of-the-art results on mathematics,
+kernel engineering, and machine learning tasks through environment
+engineering rather than complex agent architectures — including solving a
+26-circle packing problem for under $11 in API cost. Built on Claude Code,
+Python 3.12, Docker; coordinates agents to propose approaches, implement
+code, evaluate submissions, and iterate toward better results with minimal
+human intervention.
+"""
+
+[b00t.paper.dimensions]
+# 🤓 The four environment-engineering dimensions — this is the payload the
+#    issue's grok digest/ask experiment was built to make queryable.
+permissions_engineering        = "Docker isolation, hidden evaluator via grading service, same-round isolation for parallel sessions, GPU default-deny with lease API — grants useful capabilities/resources while preventing research-integrity violations"
+artifact_engineering           = "Filesystem + Git history as shared long-term memory — ranked solution history, system-managed artifacts (web search cache, official scores), cross-session communication and traceability"
+budget_engineering              = "Wall-clock time limits per stage, API cost tracking, time-checking helper API for agents, resume/interruption recovery — controls resources along time and cost axes"
+human_in_the_loop_engineering  = "TUI with per-session output + input box, web monitor with score evolution visualization — human oversight and intervention during autonomous research"
+
+# ── Assimilation experiment (issue #791 protocol) ──────────────────────────
+#
+# 🤓 This section documents what was ACTUALLY run, not a fabricated demo.
+#    See section below marked "environment-blocked" for what could not be
+#    executed in this sandbox and why.
+
+[b00t.experiment]
+protocol_source = "issue body, elasticdotventures/_b00t_#791"
+
+[[b00t.experiment.steps]]
+step   = "digest"
+command = 'b00t grok digest --topic eureka "<paper content>"'
+status = "reported succeeded (prior run, per issue body)"
+detail = "RAGLight job_id: 24987a8c-7b25-4259-8f0b-57ea4b18ab87 (async indexing)"
+
+[[b00t.experiment.steps]]
+step   = "ask"
+command = 'b00t grok ask --topic eureka "what are the four environment engineering dimensions?"'
+status = "FAILED — environment-blocked, not re-attempted live in this triage"
+detail = "Irontology/HelixDB backend on localhost:6969 unreachable. Independently reconfirmed 2026-08-09 in this sandbox: `bash -c 'cat < /dev/null > /dev/tcp/localhost/6969'` -> Connection refused. RAGLight's async indexer completion also unconfirmed. Root cause matches issue body: dual-backend query falls through with 0 results when one backend is down."
+
+[b00t.experiment.demo_command]
+# 🤓 This is the command an operator should run once HelixDB/Irontology is
+#    live, to actually demonstrate Q&A against the assimilated content —
+#    NOT executed here, and its output is NOT fabricated anywhere in this datum.
+command = 'b00t grok ask --topic eureka "what are the four environment engineering dimensions?"'
+blocked_reason = "HelixDB (Irontology backend, localhost:6969) not running in this sandbox — confirmed via direct TCP probe, matches prior report in issue #791"
+unblock_steps = [
+  "start the Irontology/HelixDB service (see _b00t_ HelixDB references in datums/CAP-ONTOLOGY-INDEX.tomllmd and b00t-cli/src/commands/install.rs)",
+  "re-run `b00t grok digest --topic eureka \"<paper content>\"` if RAGLite index is stale",
+  "run `b00t grok ask --topic eureka \"<question>\"` and record the ACTUAL returned items — do not hand-write an answer and pass it off as tool output",
+]
+
+[b00t.paper.manual_reference_answer]
+# 🤓 Manually extracted from the verified paper source (WebFetch), NOT from a
+#    live grok query. Kept here as ground truth to compare against once the
+#    demo_command above can actually be run — the two should match if the
+#    assimilation pipeline is working correctly.
+note = "This is a human/agent-authored reference answer, explicitly not a grok query result."
+answer = """
+The four EurekAgent environment engineering dimensions are:
+1. Permissions Engineering — Docker isolation, hidden evaluator via grading
+   service, same-round isolation for parallel sessions, GPU default-deny
+   with lease API.
+2. Artifact Engineering — filesystem + Git as shared long-term memory,
+   ranked solution history, system-managed artifacts.
+3. Budget Engineering — wall-clock time limits per stage, API cost
+   tracking, time-checking helper API, resume/interruption recovery.
+4. Human-in-the-loop Engineering — TUI with per-session output/input,
+   web monitor with score evolution visualization.
+"""
+
+# b00t:map v1
+# summary: EurekAgent paper (arXiv/HF 2606.13662) assimilated as eureka-topic knowledge; grok Q&A demo documented as HelixDB-blocked, not fabricated
+# tags: eureka, eurekagent, grok, assimilate, environment-engineering, autonomous-discovery, ai, paper
+# tier: ch0nky
+# cmds: b00t grok digest --topic eureka "<content>"; b00t grok ask --topic eureka "<question>"
+# related: _b00t_/eureka-composite-capability.skill.tomllmd; _b00t_/eurekas/al10-influence-ratios.tomllmd; _b00t_/grok.stack.toml; b00t-cli/src/commands/grok.rs
+# complexity: 3
