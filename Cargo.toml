@@ -34,6 +34,7 @@ members = [
     "b00t-isometric-wasm",
     "b00t-embed-serve",
     "b00t-stt-serve",
+    "b00t-council",
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",

@@ -1,0 +1,18 @@
+[package]
+name = "b00t-council"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared abstraction layer for player identity, serializable player-to-player messages, and generic (pluggable-quorum) voting across the b00t hive"
+
+[lib]
+name = "b00t_council"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { version = "1.0", features = ["v4", "serde"] }

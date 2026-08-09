@@ -43,6 +43,7 @@ pub mod dbus_client;
 pub mod dbus_interface;
 
 use anyhow::{Context, Result};
+use b00t_council::{Ballot, Envelope, MessageSink, NoopSink, Outcome, Quorum, Recipient, tally};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -179,6 +180,30 @@ pub enum Message {
     },
 }
 
+/// Best-effort `(from, to)` for recording a [`Message`] as an [`Envelope`] —
+/// variants without an explicit recipient (broadcasts, status, crew-wide
+/// announcements) route to [`Recipient::Broadcast`].
+fn message_route(msg: &Message) -> (String, Recipient) {
+    match msg {
+        Message::Handshake { from, to, .. }
+        | Message::HandshakeReply { from, to, .. }
+        | Message::Delegate { from, to, .. } => (from.clone(), Recipient::Direct(to.clone())),
+        Message::Vote {
+            from, proposal_id, ..
+        } => (from.clone(), Recipient::Channel(proposal_id.clone())),
+        Message::CrewForm { initiator, .. } => (initiator.clone(), Recipient::Broadcast),
+        Message::Status { agent_id, .. } => (agent_id.clone(), Recipient::Broadcast),
+        Message::Negotiate { from, .. } | Message::Broadcast { from, .. } => {
+            (from.clone(), Recipient::Broadcast)
+        }
+        Message::Ahoy { from, ahoy_id, .. }
+        | Message::Apply { from, ahoy_id, .. }
+        | Message::Award { from, ahoy_id, .. } => {
+            (from.clone(), Recipient::Channel(ahoy_id.clone()))
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum VoteChoice {
     Yes,
@@ -193,7 +218,10 @@ pub struct Proposal {
     pub description: String,
     pub initiator: String,
     pub votes: HashMap<String, VoteChoice>,
-    pub quorum: usize,
+    /// Pluggable pass/reject threshold — see [`b00t_council::tally`].
+    /// Default `AtLeast(2)` preserves this type's original "2 yes votes"
+    /// behavior exactly.
+    pub quorum: Quorum,
     pub expires_at: Option<std::time::SystemTime>,
 }
 
@@ -204,7 +232,7 @@ impl Proposal {
             description: description.into(),
             initiator: initiator.into(),
             votes: HashMap::new(),
-            quorum: 2, // Simple majority
+            quorum: Quorum::AtLeast(2),
             expires_at: None,
         }
     }
@@ -213,22 +241,30 @@ impl Proposal {
         self.votes.insert(agent, vote);
     }
 
-    pub fn is_passed(&self) -> bool {
-        let yes_votes = self
+    /// Tally `self.votes` as a two-option ballot (`true` = yes, `false` =
+    /// no; `Abstain` doesn't count toward quorum) via [`b00t_council::tally`].
+    fn outcome(&self) -> Outcome<bool> {
+        let ballots: Vec<(String, Ballot<bool>)> = self
             .votes
-            .values()
-            .filter(|v| matches!(v, VoteChoice::Yes))
-            .count();
-        yes_votes >= self.quorum
+            .iter()
+            .filter_map(|(agent, vote)| {
+                let ballot = match vote {
+                    VoteChoice::Yes => Ballot::Cast(true),
+                    VoteChoice::No => Ballot::Cast(false),
+                    VoteChoice::Abstain => return None,
+                };
+                Some((agent.clone(), ballot))
+            })
+            .collect();
+        tally(&[true, false], &ballots, &self.quorum)
+    }
+
+    pub fn is_passed(&self) -> bool {
+        matches!(self.outcome(), Outcome::Passed(true))
     }
 
     pub fn is_rejected(&self) -> bool {
-        let no_votes = self
-            .votes
-            .values()
-            .filter(|v| matches!(v, VoteChoice::No))
-            .count();
-        no_votes >= self.quorum
+        matches!(self.outcome(), Outcome::Passed(false))
     }
 }
 
@@ -238,16 +274,28 @@ pub struct MessageBus {
     proposals: Arc<RwLock<HashMap<String, Proposal>>>,
     tx: mpsc::UnboundedSender<Message>,
     rx: Arc<RwLock<mpsc::UnboundedReceiver<Message>>>,
+    /// Where every sent [`Message`] is recorded for observability. Defaults
+    /// to [`NoopSink`], so existing callers see no behavior change unless
+    /// they opt in via [`MessageBus::with_sink`].
+    sink: Arc<dyn MessageSink>,
 }
 
 impl MessageBus {
     pub async fn new() -> Result<Self> {
+        Self::with_sink(Arc::new(NoopSink)).await
+    }
+
+    /// Same as [`MessageBus::new`], but every [`Message`] sent through this
+    /// bus is also recorded via `sink` (e.g. a `b00t_council::JsonlSink`),
+    /// making traffic durable/observable instead of purely in-process.
+    pub async fn with_sink(sink: Arc<dyn MessageSink>) -> Result<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
         Ok(Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
             proposals: Arc::new(RwLock::new(HashMap::new())),
             tx,
             rx: Arc::new(RwLock::new(rx)),
+            sink,
         })
     }
 
@@ -258,8 +306,15 @@ impl MessageBus {
         Ok(())
     }
 
-    /// Send a message
+    /// Send a message, recording it through this bus's [`MessageSink`]
+    /// before enqueueing it.
     pub async fn send(&self, msg: Message) -> Result<()> {
+        let (from, to) = message_route(&msg);
+        let envelope = Envelope::new(from, to, false, serde_json::to_value(&msg)?);
+        // Sink failures are observability-only — never block message delivery.
+        if let Err(e) = self.sink.record(&envelope) {
+            eprintln!("MessageBus sink record failed: {e:#}");
+        }
         self.tx.send(msg).context("Failed to send message to bus")?;
         Ok(())
     }

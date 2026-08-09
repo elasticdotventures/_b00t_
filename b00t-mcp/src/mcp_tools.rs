@@ -2,6 +2,7 @@ use crate::clap_reflection::{McpCommandRegistry, McpExecutor, McpReflection};
 use crate::impl_mcp_tool;
 use crate::tools::pipeline::BPipelineCommand;
 use anyhow::Result;
+use b00t_council::MessageSink;
 use clap::Parser;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -359,6 +360,12 @@ impl crate::clap_reflection::McpExecutor for AgentMessageCommand {
             .and_then(|v| v.as_str())
             .unwrap_or("message");
 
+        record_message(
+            &caller_agent_id(),
+            b00t_council::Recipient::Direct(to_agent.to_string()),
+            serde_json::json!({"subject": subject, "content": content}),
+        );
+
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
             let client = get_nats_client().await?;
@@ -546,20 +553,63 @@ impl crate::clap_reflection::McpExecutor for AgentVoteCreateCommand {
             .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        let vote_type = params
+            .get("vote_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let deadline_minutes = params.get("deadline").and_then(|v| v.as_u64()).unwrap_or(0);
+        let voters: Vec<String> = params
+            .get("voters")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
 
+        // `options` arrives as a JSON array (per the tool's own help text);
+        // fall back to a single literal option if it isn't valid JSON so a
+        // caller passing a bare string doesn't just fail outright.
+        let raw_options = params
+            .get("options")
+            .and_then(|v| v.as_str())
+            .unwrap_or("[]");
+        let options: Vec<String> = serde_json::from_str(raw_options)
+            .unwrap_or_else(|_| vec![raw_options.to_string()]);
+
+        let proposal = b00t_council::Proposal {
+            id: uuid::Uuid::new_v4().to_string(),
+            subject: subject.to_string(),
+            options,
+            quorum: quorum_for_vote_type(vote_type),
+            deadline: (deadline_minutes > 0)
+                .then(|| chrono::Utc::now() + chrono::Duration::minutes(deadline_minutes as i64)),
+            eligible_voters: voters,
+        };
+
+        record_message(
+            &caller_agent_id(),
+            b00t_council::Recipient::Channel(proposal.id.clone()),
+            serde_json::json!({"kind": "proposal", "description": description, "proposal": proposal}),
+        );
+
+        let proposal_id = proposal.id.clone();
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
             let client = get_nats_client().await?;
             let notification = NotificationMessage::new(
                 "vote",
                 "create",
-                serde_json::json!({"subject": subject, "description": description}),
+                serde_json::json!({"proposal_id": proposal_id, "subject": subject, "description": description}),
             );
             client
                 .publish_notification(&notification)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to create vote: {}", e))?;
-            Ok(format!("Vote created: {}", subject))
+            Ok(format!(
+                "Vote created: {} (proposal_id={}) — submit with agent_vote_submit, resolve with agent_vote_tally",
+                subject, proposal_id
+            ))
         })
     }
 }
@@ -601,6 +651,17 @@ impl crate::clap_reflection::McpExecutor for AgentVoteSubmitCommand {
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
         let vote = params.get("vote").and_then(|v| v.as_str()).unwrap_or("");
+        let reasoning = params
+            .get("reasoning")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let voter = caller_agent_id();
+
+        record_message(
+            &voter,
+            b00t_council::Recipient::Channel(proposal_id.to_string()),
+            serde_json::json!({"kind": "vote", "voter": voter, "choice": vote, "reasoning": reasoning}),
+        );
 
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
@@ -614,8 +675,116 @@ impl crate::clap_reflection::McpExecutor for AgentVoteSubmitCommand {
                 .publish_notification(&notification)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to submit vote: {}", e))?;
-            Ok(format!("Vote submitted for proposal {}", proposal_id))
+            Ok(format!(
+                "Vote submitted for proposal {} — check outcome with agent_vote_tally",
+                proposal_id
+            ))
         })
+    }
+}
+
+/// MCP command for tallying a vote — replays the durable message log for a
+/// proposal's `Channel(proposal_id)` traffic and resolves it via
+/// `b00t_council::tally`. This is the fix for the two stub tools above: a
+/// vote now has an actual, checkable outcome instead of two indistinguishable
+/// NATS notifications.
+#[derive(Parser, Clone)]
+pub struct AgentVoteTallyCommand {
+    #[arg(help = "Proposal ID")]
+    pub proposal_id: String,
+}
+
+impl crate::clap_reflection::McpReflection for AgentVoteTallyCommand {
+    fn mcp_tool_name() -> String {
+        "agent_vote_tally".to_string()
+    }
+    fn command_path() -> Vec<String> {
+        vec![
+            "agent".to_string(),
+            "vote".to_string(),
+            "tally".to_string(),
+        ]
+    }
+}
+
+impl crate::clap_reflection::McpExecutor for AgentVoteTallyCommand {
+    fn execute_mcp_call(
+        params: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> anyhow::Result<String> {
+        let proposal_id = params
+            .get("proposal_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        let envelopes = message_sink()
+            .replay(&b00t_council::ReplayFilter::channel(proposal_id))
+            .map_err(|e| anyhow::anyhow!("Failed to replay message log: {}", e))?;
+
+        let mut proposal: Option<b00t_council::Proposal<String>> = None;
+        let mut ballots: Vec<(String, b00t_council::Ballot<String>)> = Vec::new();
+
+        for env in &envelopes {
+            let kind = env.body.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+            match kind {
+                "proposal" => {
+                    if let Some(p) = env.body.get("proposal") {
+                        if let Ok(p) = serde_json::from_value::<b00t_council::Proposal<String>>(p.clone()) {
+                            proposal = Some(p);
+                        }
+                    }
+                }
+                "vote" => {
+                    let voter = env
+                        .body
+                        .get("voter")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&env.from)
+                        .to_string();
+                    let choice = env.body.get("choice").and_then(|v| v.as_str()).unwrap_or("");
+                    let ballot = if choice.eq_ignore_ascii_case("veto") {
+                        b00t_council::Ballot::Veto { alternative: None }
+                    } else if choice.eq_ignore_ascii_case("abstain") {
+                        b00t_council::Ballot::Abstain
+                    } else {
+                        b00t_council::Ballot::Cast(choice.to_string())
+                    };
+                    ballots.push((voter, ballot));
+                }
+                _ => {}
+            }
+        }
+
+        let Some(proposal) = proposal else {
+            return Ok(format!(
+                "No proposal found for {} — has agent_vote_create been called for it?",
+                proposal_id
+            ));
+        };
+
+        let outcome = b00t_council::tally(&proposal.options, &ballots, &proposal.quorum);
+        let breakdown: std::collections::HashMap<&str, usize> =
+            ballots.iter().fold(std::collections::HashMap::new(), |mut acc, (_, b)| {
+                let key = match b {
+                    b00t_council::Ballot::Cast(o) => o.as_str(),
+                    b00t_council::Ballot::Veto { .. } => "veto",
+                    b00t_council::Ballot::Abstain => "abstain",
+                };
+                *acc.entry(key).or_insert(0) += 1;
+                acc
+            });
+
+        let outcome_str = match &outcome {
+            b00t_council::Outcome::Passed(option) => format!("Passed({option})"),
+            b00t_council::Outcome::Rejected => "Rejected".to_string(),
+            b00t_council::Outcome::Pending => "Pending".to_string(),
+        };
+
+        Ok(format!(
+            "Proposal {} ({}): {outcome_str} — {} ballots cast, breakdown: {breakdown:?}",
+            proposal_id,
+            proposal.subject,
+            ballots.len(),
+        ))
     }
 }
 
@@ -964,6 +1133,12 @@ impl crate::clap_reflection::McpExecutor for AgentNotifyCommand {
             .get("details")
             .map(|v| v.clone())
             .unwrap_or(serde_json::Value::Null);
+
+        record_message(
+            source,
+            b00t_council::Recipient::Broadcast,
+            serde_json::json!({"event_type": event_type, "details": details}),
+        );
 
         let rt = tokio::runtime::Runtime::new()?;
         rt.block_on(async {
@@ -1957,6 +2132,11 @@ pub static TOOL_CATALOG: &[ToolCatalogEntry] = &[
         subcommand: "agent vote submit",
     },
     ToolCatalogEntry {
+        name: "b00t_agent_vote_tally",
+        description: "Resolve a vote's outcome from the durable message log",
+        subcommand: "agent vote tally",
+    },
+    ToolCatalogEntry {
         name: "b00t_session_init",
         description: "Initialize a b00t session",
         subcommand: "session init",
@@ -2380,6 +2560,7 @@ pub fn create_full_mcp_registry() -> McpCommandRegistry {
         .register::<AgentProgressCommand>()
         .register::<AgentVoteCreateCommand>()
         .register::<AgentVoteSubmitCommand>()
+        .register::<AgentVoteTallyCommand>()
         .register::<DelegateDatumCommand>()
         .register::<AgentWaitCommand>()
         .register::<AgentNotifyCommand>()
@@ -2443,6 +2624,61 @@ lazy_static::lazy_static! {
 
 lazy_static::lazy_static! {
     static ref NATS_CLIENT: tokio::sync::Mutex<Option<b00t_chat::ChatClient>> = tokio::sync::Mutex::new(None);
+}
+
+// ┌──────────────────────────────────────────────────────────────────────────────┐
+// │ b00t-council wiring: durable/observable player messages + real vote tally     │
+// └──────────────────────────────────────────────────────────────────────────────┘
+
+/// Durable message/vote log, shared by the agent_message/notify/vote MCP
+/// tools. NATS delivery is unchanged (still fire-and-forget) — this adds the
+/// durable record NATS never provided. Path overridable via
+/// `B00T_MESSAGE_LOG_PATH` (used by tests to avoid writing into a real
+/// `~/.local/share/b00t/messages.jsonl`).
+fn message_sink() -> b00t_council::JsonlSink {
+    match std::env::var_os("B00T_MESSAGE_LOG_PATH") {
+        Some(path) => b00t_council::JsonlSink::at(path),
+        None => b00t_council::JsonlSink::default_location(),
+    }
+}
+
+/// Best-effort identity of whichever process is calling these MCP tools.
+/// None of the agent_message/notify/vote tool params carry an explicit
+/// sender id today, so this is the fallback used to attribute recorded
+/// envelopes and to look up `sender_is_player`.
+fn caller_agent_id() -> String {
+    std::env::var("B00T_AGENT_ID")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "mcp-anonymous".to_string())
+}
+
+/// Record one [`b00t_council::Envelope`] to the durable log. Failures are
+/// observability-only and never fail the caller's MCP tool invocation —
+/// mirrors `b00t-ipc::MessageBus::send`'s non-blocking sink write.
+fn record_message<T: serde::Serialize>(from: &str, to: b00t_council::Recipient, body: T) {
+    let sender_is_player = b00t_cli::commands::crew_handler::is_player(from);
+    let envelope = b00t_council::Envelope::new(from, to, sender_is_player, body);
+    match envelope.to_value_envelope() {
+        Ok(erased) => {
+            if let Err(e) = message_sink().record(&erased) {
+                eprintln!("b00t-mcp: message log record failed: {e:#}");
+            }
+        }
+        Err(e) => eprintln!("b00t-mcp: message log serialize failed: {e:#}"),
+    }
+}
+
+/// `vote_type` (from `AgentVoteCreateCommand`) -> `b00t_council::Quorum`.
+/// `"veto_capable"` matches `b00t_c0re_lib::agent_coordination::VotingType::
+/// VetoCapable`'s naming. Unrecognized/absent types fall back to
+/// `AtLeast(2)`, matching `b00t-ipc::Proposal`'s original default.
+fn quorum_for_vote_type(vote_type: &str) -> b00t_council::Quorum {
+    match vote_type {
+        "unanimous" => b00t_council::Quorum::Unanimous,
+        "majority" | "single_choice" | "ranked_choice" => b00t_council::Quorum::Majority,
+        "veto_capable" => b00t_council::Quorum::LiberumVeto,
+        _ => b00t_council::Quorum::AtLeast(2),
+    }
 }
 
 async fn get_nats_client() -> anyhow::Result<b00t_chat::ChatClient> {
