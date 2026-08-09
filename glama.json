@@ -5,7 +5,7 @@
   "license": "MIT",
   "homepage": "https://github.com/elasticdotventures/_b00t_",
   "repository": "https://github.com/elasticdotventures/_b00t_",
-  "icon": "https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/_b00t_/assets/b00t-icon.png",
+  "icon": "https://raw.githubusercontent.com/elasticdotventures/_b00t_/main/b00t-vscode/icons/b00t.png",
   "keywords": ["agent", "rust", "datum", "mcp", "hive", "ooda", "autonomous"],
   "category": "Development Tools",
   "server": {
