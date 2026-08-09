@@ -1,0 +1,130 @@
+[b00t]
+name = "kuri"
+type = "cli"
+desires = "latest"
+hint = "kuri — Zig-native CDP browser automation & web crawling toolkit for AI agents. Zero Node.js, sub-2MB binaries: kuri (CDP server), kuri-fetch (standalone fetcher), kuri-browse (terminal browser), kuri-agent (scriptable CLI)."
+keywords = ["browser-automation", "cdp", "zig", "web-crawling", "agent", "ai-agent"]
+
+# Official one-line install (macOS arm64/x86_64, Linux x86_64/arm64)
+install = """
+curl -fsSL https://kuri.trilok.ai/download | sh
+"""
+
+# Alternative: npm/bun-managed native binary
+# bun install -g kuri-agent
+# npm install -g kuri-agent
+
+update = """
+curl -fsSL https://kuri.trilok.ai/download | sh
+"""
+
+version = "kuri --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+depends_on = []
+
+[b00t.env]
+# CDP server listen port (kuri default)
+KURI_PORT = "9223"
+
+[[b00t.usage]]
+description = "Start the CDP automation server"
+command = "kuri"
+
+[[b00t.usage]]
+description = "Standalone fetch (no Chrome, QuickJS for JS execution)"
+command = "kuri-fetch https://example.com"
+
+[[b00t.usage]]
+description = "Interactive terminal browser"
+command = "kuri-browse https://example.com"
+
+[[b00t.usage]]
+description = "Scriptable agentic CLI automation loop"
+command = "kuri-agent go https://example.com"
+
+[[b00t.usage]]
+description = "Batch execute N commands in one HTTP call"
+command = "curl -X POST localhost:9223/batch -d @commands.json"
+
+[[b00t.references]]
+name = "kuri GitHub"
+url = "https://github.com/justrach/kuri"
+
+[[b00t.references]]
+name = "kuri install/download"
+url = "https://kuri.trilok.ai/download"
+
+[b00t.learn]
+content = """
+# kuri CLI Usage
+
+kuri is a Zig-native browser automation & web crawling toolkit built for AI
+agent loops (not QA engineers) — no Playwright, no npm, no Node.js runtime.
+
+## Binaries
+
+```bash
+kuri           # CDP server: Chrome automation, a11y snapshots, HAR recording, 135 HTTP endpoints
+kuri-fetch     # standalone fetcher (~2 MB), QuickJS for JS execution, no Chrome required
+kuri-browse    # interactive terminal browser (navigate, follow links, search)
+kuri-agent     # scriptable agentic CLI (Chrome automation + security testing)
+```
+
+An additional `kuri-mobile` mode controls iOS/Android devices via a native ADB
+wire protocol (no Appium).
+
+## Why agents prefer it over Playwright/agent-browser
+
+- **Token-efficient snapshots** — compact `@eN` ref format saves 7-12% tokens
+  vs agent-browser on real pages; `/page/state` gives a 48-token lightweight
+  observation vs ~2,124 tokens for a full snapshot (44x lighter).
+- **Batch execution** — `POST /batch` sends N commands in a single HTTP call,
+  eliminating N-1 round-trips.
+- **Anti-detection** — stealth patches (WebGL spoofing, navigator.webdriver
+  masking), UA rotation, and bot-block detection (Akamai/Cloudflare/
+  PerimeterX/DataDome).
+- **Sub-2MB binaries**, no node_modules, no browser-download step beyond Chrome
+  itself (kuri drives an existing Chrome via CDP).
+
+## Basic loop
+
+```bash
+# Start the CDP server (background)
+kuri &
+
+# Drive it with the agentic CLI
+kuri-agent go https://example.com
+kuri-agent snap                 # accessibility snapshot with @eN refs
+kuri-agent click @e12
+kuri-agent eval 'document.title'
+```
+
+## Standalone fetch (no Chrome)
+
+```bash
+kuri-fetch --dump markdown https://example.com
+```
+
+## Tips
+
+1. Prefer `/page/state` over a full `snap` when you only need url/title/scroll%.
+2. Use `POST /batch` to collapse multi-step interactions into one HTTP call.
+3. `kuri-fetch` needs no running Chrome — use it for lightweight, JS-capable
+   fetches when full CDP automation is unnecessary.
+"""
+
+[validate]
+command = "kuri --version"
+regex = '\d+\.\d+\.\d+'
+
+[roles]
+required_for = []
+optional_for = ["developer", "browser-automation"]
+
+# b00t:map v1
+# summary: kuri — Zig-native CDP browser automation & web crawling for AI agents (zero Node.js)
+# tags: browser-automation, cdp, zig, web-crawling, agent, ai-agent, kuri-fetch, kuri-browse, kuri-agent
+# tier: ch0nky
+# cmds: kuri, kuri-fetch <url>, kuri-browse <url>, kuri-agent go <url>
+# complexity: 3
