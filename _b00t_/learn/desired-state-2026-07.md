@@ -25,6 +25,7 @@
 - **Governance**: Auto-selection by confidence. Operator approval for mutations.
 - **Ralph loop**: Agent REPL outer-loop for autonomous execution.
 - **Ooda as Plan subtype**: Not a Skill. Teal rectangle (Tool class).
+- **Canonical types**: `ufo-types::dare` (DaredProposal, OodaStateMachine, OodaPhase, OodaGuards) — OODA state-change workflow types now belong to the crate, not hand-rolled shapes here.
 
 ## Build / Deploy
 - **b00t-buildd**: Background daemon watches git diff, maps files→crates, auto-builds. Auto-restarts b00t-admin.
