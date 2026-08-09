@@ -3068,7 +3068,7 @@ async fn main() {
             }
         }
         Some(Commands::Store(args)) => {
-            if let Err(e) = b00t_cli::commands::store::handle_store_command(&args) {
+            if let Err(e) = b00t_cli::commands::store::handle_store_command(&args).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

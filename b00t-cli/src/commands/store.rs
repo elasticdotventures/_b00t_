@@ -49,6 +49,50 @@ pub enum StoreCommands {
     Status,
     #[clap(about = "Cross-engine consistency check: Store ↔ knowledge backend ↔ blobs")]
     Validate,
+    #[clap(about = "Serve store.status over a NATS request-reply subject (#716 proof-of-concept)")]
+    Serve {
+        #[clap(long, help = "NATS server URL (defaults to NATS_URL env or nats://localhost:4222)")]
+        nats_url: Option<String>,
+    },
+}
+
+/// NATS subject exposing `store::status()` as a request-reply endpoint.
+///
+/// 🤓 #716 proof-of-concept: only `status` is exposed for this first slice.
+/// `store.get` / `store.validate` are natural follow-ups on the same pattern
+/// once this subject is proven out on the hive-lan NATS deployment.
+pub const STORE_STATUS_SUBJECT: &str = "b00t.store.status";
+
+/// Build the JSON reply payload for a `store.status` request.
+/// Pure/sync so it is unit-testable without a live NATS broker.
+pub fn store_status_reply_payload(count: usize, bytes: u64) -> Vec<u8> {
+    serde_json::json!({
+        "object_count": count,
+        "total_bytes": bytes,
+    })
+    .to_string()
+    .into_bytes()
+}
+
+#[cfg(test)]
+mod nats_serve_tests {
+    use super::*;
+
+    #[test]
+    fn store_status_subject_is_stable() {
+        // 🤓 subject naming follows the existing b00t.<domain>.<verb> convention
+        // used by b00t-lib-chat (b00t.tasks.*, b00t.notify.>).
+        assert_eq!(STORE_STATUS_SUBJECT, "b00t.store.status");
+    }
+
+    #[test]
+    fn store_status_reply_payload_round_trips() {
+        let payload = store_status_reply_payload(42, 1024);
+        let parsed: serde_json::Value = serde_json::from_slice(&payload)
+            .expect("store_status_reply_payload must produce valid JSON");
+        assert_eq!(parsed["object_count"], 42);
+        assert_eq!(parsed["total_bytes"], 1024);
+    }
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -69,7 +113,7 @@ fn active_role() -> Option<String> {
         .filter(|r| !r.is_empty())
 }
 
-pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
+pub async fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
     match cmd {
         StoreCommands::Put {
             file,
@@ -165,7 +209,65 @@ pub fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {
                 println!("\n⚠️  Cross-engine consistency: DEGRADED");
             }
         }
+        StoreCommands::Serve { nats_url } => {
+            serve_nats(nats_url.clone()).await?;
+        }
     }
+    Ok(())
+}
+
+/// #716: expose `store.status` as a NATS request-reply subject so agents on
+/// other hosts can query the store without SSH/shelling into this host.
+///
+/// Proof-of-concept scope: one subject (`b00t.store.status`). `store.get` and
+/// `store.validate` follow the identical pattern once this is proven on the
+/// hive-lan NATS deployment — see issue #716.
+async fn serve_nats(nats_url: Option<String>) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use futures::StreamExt;
+
+    // Auth (B00T_HIVE_NATS_USER/PASSWORD) and URL (NATS_URL) env fallbacks are
+    // applied inside b00t_chat::ChatTransport::from_config regardless of what
+    // we pass here — matches the existing `b00t chat send --transport nats` path.
+    let client = b00t_chat::ChatClient::nats(nats_url, None, None)
+        .context("failed to configure NATS chat client")?;
+    let nats = client
+        .raw_nats_client()
+        .await
+        .context("failed to connect to NATS")?;
+
+    let mut subscriber = nats
+        .subscribe(STORE_STATUS_SUBJECT.to_string())
+        .await
+        .context("failed to subscribe to store.status subject")?;
+
+    println!("🥾 Serving store.status on NATS subject: {STORE_STATUS_SUBJECT}");
+    println!("   Ctrl-C to stop.");
+
+    loop {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                println!("\n🥾 store serve --nats shutting down");
+                break;
+            }
+            msg = subscriber.next() => {
+                let Some(msg) = msg else {
+                    println!("⚠️  NATS subscription closed");
+                    break;
+                };
+                let Some(reply) = msg.reply else {
+                    tracing::warn!("store.status request on {} had no reply subject; ignoring", msg.subject);
+                    continue;
+                };
+                let (count, bytes) = b00t_c0re_lib::store::status();
+                let payload = store_status_reply_payload(count, bytes);
+                if let Err(e) = nats.publish(reply, payload.into()).await {
+                    tracing::warn!("failed to publish store.status reply: {}", e);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
