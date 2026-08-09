@@ -1,0 +1,27 @@
+# b00t browser-harness Repo Datum — self-healing LLM browser automation
+# 🤓 Companion project to browser-use, entangled via entangled_mcp on
+#    browser-use.mcp — browser-harness wraps browser-use to add self-healing
+#    task completion (LLM retries/repairs failed browser steps automatically).
+
+[b00t]
+name = "browser-harness"
+type = "repo"
+hint = "Self-healing browser automation harness for LLM agents — companion to browser-use"
+url = "https://github.com/browser-use/browser-harness"
+
+entangled_mcp = ["browser-use.mcp"]
+
+[[b00t.references]]
+name = "browser-harness GitHub"
+url = "https://github.com/browser-use/browser-harness"
+
+[[b00t.references]]
+name = "browser-harness homepage"
+url = "https://browser-harness.com"
+
+# b00t:map v1
+# summary: Canonical datum for browser-harness — self-healing LLM browser automation harness, entangled with browser-use.mcp
+# tags: browser-automation, harness, testing, browser-use
+# tier: ch0nky
+# cmds: b00t-cli datum show browser-harness.repo
+# complexity: 2
