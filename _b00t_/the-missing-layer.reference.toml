@@ -1,0 +1,40 @@
+# the-missing-layer — canonical reference datum for Jim Yagmin's article
+# "The Missing Layer" (yagmin.com), addressing issue #754.
+# 🤓 Content below (author/date/key-concepts) was fetched live from the
+#    article URL at datum-creation time (2026-08-09), not just paraphrased
+#    from the issue body — see [summary].source for provenance.
+
+[b00t]
+name = "the-missing-layer"
+type = "reference"
+hint = "Jim Yagmin, \"The Missing Layer\" (yagmin.com, 2026-02-05) — argues vibe coding and spec-driven development both leave a gap between business context and source code; proposes a human/LLM-editable \"context layer\" plus \"process engineering\" (LLMs in the loop through feature development, not just codegen)."
+keywords = ["article", "abstraction", "ai-engineering", "software-engineering", "yagmin", "vibe-coding", "spec-driven-development", "context-layer"]
+
+[references]
+article = "https://yagmin.com/blog/the-missing-layer/"
+
+[summary]
+title = "The Missing Layer"
+author = "Jim Yagmin"
+published = "2026-02-05"
+source = "Fetched from the article URL directly (WebFetch, 2026-08-09) — not solely the issue-754 paraphrase."
+thesis = "Vibe coding produces uncontrolled technical debt; spec-driven development avoids that but duplicates effort by making engineers re-contextualize decisions already settled in stakeholder meetings, causing documentation debt. The fix is a new abstraction layer connecting business context directly to source code, enabling 'process engineering' — LLMs participating throughout feature development, not only at code-generation time."
+key_concepts = [
+    "vibe-coding: generating code without human oversight, producing unchecked technical debt",
+    "tolerance-flaw: inherent precision issues automated fixes cannot resolve without outside information",
+    "spec-driven-development: detailed specs reduce vibe-coding risk but create documentation debt",
+    "documentation-debt: maintenance burden from disconnected context files that drift into contradiction",
+    "context-layer: the proposed missing abstraction bridging business decisions and code, editable by both humans and LLMs",
+    "process-engineering: including LLMs throughout feature development, not only at implementation/codegen",
+]
+
+[metadata]
+tags = ["article", "reference", "abstraction", "ai-engineering", "software-engineering", "yagmin", "vibe-coding", "spec-driven-development"]
+tier = "sm0l"
+
+# b00t:map v1
+# summary: Canonical reference datum for Jim Yagmin's "The Missing Layer" article (#754)
+# tags: article, reference, yagmin, abstraction, ai-engineering, context-layer
+# tier: sm0l
+# cmds: b00t datum show the-missing-layer.reference
+# complexity: 1

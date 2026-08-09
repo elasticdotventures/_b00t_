@@ -25,86 +25,139 @@ pub enum DatumDispatch {
     Info(String),
 }
 
-/// Search the datum space for `candidate` and resolve ALL matching dispatch actions.
-/// Returns multiple matches when a name is polysemous or has multiple datum types.
-pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDispatch> {
-    let mut results = Vec::new();
+// ── Dispatch Mode Trait Chain (#706) ─────────────────────────────────────
+//
+// Each datum kind resolves independently via `DispatchMode::try_resolve`.
+// `default_dispatch_chain()` is the ordered Vec<Box<dyn DispatchMode>> that
+// `resolve_all_datum_dispatches` walks; adding a new dispatch kind (e.g. a
+// future DockerMode or AgentMode) means appending a new implementor here,
+// not editing resolve_all_datum_dispatches' body. Cross-mode precedence
+// (e.g. "CLI is suppressed when a Runtime datum also matches") is NOT
+// encoded per-mode — it's handled uniformly afterward by the existing
+// `result_is_implied_by` stereotype filter, so modes stay independent.
 
-    let expanded = match get_expanded_path(path) {
-        Ok(p) => p,
-        Err(_) => return results,
-    };
+/// A single resolution strategy for `b00t <name>` dispatch.
+pub trait DispatchMode {
+    /// Attempt to resolve `candidate` (looked up under `path`) into a dispatch action.
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch>;
+}
 
-    // Runtime — if a runtime datum exists, it's the primary dispatch.
-    let mut has_runtime = false;
-    let runtime_suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
-    for suffix in &runtime_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            if let Ok(cfg) = load_runtime_datum(candidate, path) {
-                results.push(DatumDispatch::Runtime(cfg));
-                has_runtime = true;
-                break;
-            }
-        }
-    }
-
-    // CLI — only auto-dispatched when NO runtime datum exists.
-    if !has_runtime {
-        let cli_suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
-        for suffix in &cli_suffixes {
+struct RuntimeMode;
+impl DispatchMode for RuntimeMode {
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
+        let expanded = get_expanded_path(path).ok()?;
+        let suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
+        for suffix in &suffixes {
             let p = expanded.join(format!("{candidate}{suffix}"));
             if p.exists() {
-                if let Ok(datum) = load_cli_datum(candidate, path) {
-                    let cmd = datum.command.unwrap_or_else(|| candidate.to_string());
-                    let args: Vec<String> = datum.args.unwrap_or_default();
-                    results.push(DatumDispatch::CliPassthrough { command: cmd, args });
-                    break;
+                if let Ok(cfg) = load_runtime_datum(candidate, path) {
+                    return Some(DatumDispatch::Runtime(cfg));
                 }
             }
         }
+        None
     }
+}
 
-    // Polyseme
-    let poly_suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
-    for suffix in &poly_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            if let Ok(refs) = crate::load_polyseme_refs(candidate, path) {
-                results.push(DatumDispatch::Polyseme {
-                    name: candidate.to_string(),
-                    refs,
-                });
-                break;
+struct CliPassthroughMode;
+impl DispatchMode for CliPassthroughMode {
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
+        let expanded = get_expanded_path(path).ok()?;
+        let suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
+        for suffix in &suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                if let Ok(datum) = load_cli_datum(candidate, path) {
+                    let command = datum.command.unwrap_or_else(|| candidate.to_string());
+                    let args: Vec<String> = datum.args.unwrap_or_default();
+                    return Some(DatumDispatch::CliPassthrough { command, args });
+                }
             }
         }
+        None
+    }
+}
+
+struct PolysemeMode;
+impl DispatchMode for PolysemeMode {
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
+        let expanded = get_expanded_path(path).ok()?;
+        let suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
+        for suffix in &suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                if let Ok(refs) = crate::load_polyseme_refs(candidate, path) {
+                    return Some(DatumDispatch::Polyseme {
+                        name: candidate.to_string(),
+                        refs,
+                    });
+                }
+            }
+        }
+        None
+    }
+}
+
+struct OodaMode;
+impl DispatchMode for OodaMode {
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
+        let expanded = get_expanded_path(path).ok()?;
+        let suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
+        for suffix in &suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                return Some(DatumDispatch::Info(format!(
+                    "ooda loop '{}' — run with: b00t ooda run {}",
+                    candidate, candidate
+                )));
+            }
+        }
+        None
+    }
+}
+
+struct McpInfoMode;
+impl DispatchMode for McpInfoMode {
+    fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
+        let expanded = get_expanded_path(path).ok()?;
+        let suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
+        for suffix in &suffixes {
+            let p = expanded.join(format!("{candidate}{suffix}"));
+            if p.exists() {
+                return Some(DatumDispatch::Info(format!(
+                    "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
+                    candidate, candidate
+                )));
+            }
+        }
+        None
+    }
+}
+
+/// Ordered chain of dispatch strategies, tried in priority order
+/// (most-specific/actionable first). Extend by appending a new
+/// `Box<dyn DispatchMode>` implementor — no match-block edits required.
+pub fn default_dispatch_chain() -> Vec<Box<dyn DispatchMode>> {
+    vec![
+        Box::new(RuntimeMode),
+        Box::new(CliPassthroughMode),
+        Box::new(PolysemeMode),
+        Box::new(OodaMode),
+        Box::new(McpInfoMode),
+    ]
+}
+
+/// Search the datum space for `candidate` and resolve ALL matching dispatch actions.
+/// Returns multiple matches when a name is polysemous or has multiple datum types.
+pub fn resolve_all_datum_dispatches(candidate: &str, path: &str) -> Vec<DatumDispatch> {
+    if get_expanded_path(path).is_err() {
+        return Vec::new();
     }
 
-    // OODA
-    let ooda_suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
-    for suffix in &ooda_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            results.push(DatumDispatch::Info(format!(
-                "ooda loop '{}' — run with: b00t ooda run {}",
-                candidate, candidate
-            )));
-            break;
-        }
-    }
-
-    // MCP
-    let mcp_suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
-    for suffix in &mcp_suffixes {
-        let p = expanded.join(format!("{candidate}{suffix}"));
-        if p.exists() {
-            results.push(DatumDispatch::Info(format!(
-                "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
-                candidate, candidate
-            )));
-            break;
-        }
-    }
+    let mut results: Vec<DatumDispatch> = default_dispatch_chain()
+        .iter()
+        .filter_map(|mode| mode.try_resolve(candidate, path))
+        .collect();
 
     // ── Stereotype hierarchy: eliminate less-specific matches ──────────────
     if results.len() > 1 {
@@ -1720,5 +1773,85 @@ pub fn mcp_sync_bidirectional(
             )
         }
         _ => anyhow::bail!("Invalid operation '{}'", operation),
+    }
+}
+
+// ── Dispatch Mode Trait Chain (#706) tests ──────────────────────────────
+//
+// resolve_all_datum_dispatches() used to be a linear function that tried
+// runtime -> cli -> polyseme -> ooda -> mcp in sequence, inline. These
+// tests exercise the trait-based replacement: each datum kind is now an
+// independent `DispatchMode` implementor, and the chain is an ordered
+// Vec<Box<dyn DispatchMode>>. Adding a new dispatch kind means appending a
+// new implementor, not editing a match block.
+#[cfg(test)]
+mod dispatch_mode_tests {
+    use super::*;
+
+    /// Proves the chain is extensible: a brand-new mode, defined entirely
+    /// in this test, participates in resolution without touching any of
+    /// the built-in modes or resolve_all_datum_dispatches' body.
+    struct AlwaysHitMode;
+    impl DispatchMode for AlwaysHitMode {
+        fn try_resolve(&self, candidate: &str, _path: &str) -> Option<DatumDispatch> {
+            Some(DatumDispatch::Info(format!("always-hit:{candidate}")))
+        }
+    }
+
+    #[test]
+    fn default_chain_has_one_mode_per_datum_kind() {
+        // Runtime, CliPassthrough, Polyseme, Ooda, Mcp
+        assert_eq!(default_dispatch_chain().len(), 5);
+    }
+
+    #[test]
+    fn chain_is_extensible_without_editing_existing_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+
+        // Nothing on disk matches any built-in mode.
+        let chain = default_dispatch_chain();
+        assert!(chain.iter().all(|m| m.try_resolve("nope", path).is_none()));
+
+        // Appending a new implementor is the only change needed to add a
+        // dispatch kind — no match block to edit.
+        let mut chain = default_dispatch_chain();
+        chain.push(Box::new(AlwaysHitMode));
+        let hit = chain.iter().find_map(|m| m.try_resolve("nope", path));
+        assert!(matches!(hit, Some(DatumDispatch::Info(_))));
+    }
+
+    #[test]
+    fn runtime_mode_matches_only_runtime_datum() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        std::fs::write(
+            dir.path().join("rt.runtime.toml"),
+            "[b00t]\nname = \"rt\"\ntype = \"runtime\"\n\n[b00t.runtime]\nbinary = \"/bin/true\"\n",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            RuntimeMode.try_resolve("rt", path),
+            Some(DatumDispatch::Runtime(_))
+        ));
+        assert!(CliPassthroughMode.try_resolve("rt", path).is_none());
+    }
+
+    #[test]
+    fn cli_mode_matches_only_cli_datum() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap();
+        std::fs::write(
+            dir.path().join("c.cli.toml"),
+            "[b00t]\nname = \"c\"\ntype = \"cli\"\ncommand = \"echo\"\n",
+        )
+        .unwrap();
+
+        match CliPassthroughMode.try_resolve("c", path) {
+            Some(DatumDispatch::CliPassthrough { command, .. }) => assert_eq!(command, "echo"),
+            other => panic!("expected CliPassthrough, got {:?}", other.is_some()),
+        }
+        assert!(RuntimeMode.try_resolve("c", path).is_none());
     }
 }

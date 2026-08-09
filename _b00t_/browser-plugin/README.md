@@ -143,11 +143,31 @@ window.__b00t.enrichAll()
 browser-plugin/
 ├── manifest.json       # Chrome extension v3 manifest
 ├── content.js          # DOM Enrichment Engine (injected into every page)
+├── selector-forge.js   # propose→verify→settle selector resolution (see below)
+├── selector-forge.test.js # node --test unit tests for selector-forge.js
 ├── b00t-client.js      # CDP bridge + RPA command definitions
 ├── panel.html          # Side panel UI (dark terminal theme)
 ├── panel.js            # Panel UI logic (search, filter, script curation)
 ├── icon.png            # Generated green dot icon
 └── README.md           # This file
+```
+
+### 5. Selector Resolution (`selector-forge.js`)
+Deterministic "propose → verify → settle" selector resolution, adapted from
+[Intuned/selector-forge](https://github.com/Intuned/selector-forge)'s trust
+boundary (see `_b00t_/datums/VENDOR-SELECTOR-FORGE.tomllmd`): candidates are
+ranked by a stability heuristic (`#id` > `[data-b00t-*]` > `[name]` > class
+> nth-child) and each is re-verified against the live DOM — the browser
+decides, not a ranking score — before one is returned. No AI/network call;
+this is the local, offline re-verification loop the datum's integration
+point #2 describes, reused as a building block b00t's own automation
+pipeline can call. Exposed as the `resolve_selector <type> <label>` command
+in the side panel, routed via `chrome.tabs.sendMessage` to a bridge in
+`content.js` (CDP `Runtime.evaluate` only reaches the MAIN world, and this
+logic lives in the isolated content-script world alongside `document`).
+Unit-tested with Node's built-in test runner:
+```bash
+node --test selector-forge.test.js
 ```
 
 ## Roadmap
@@ -157,6 +177,7 @@ browser-plugin/
 - [x] Side panel with command palette + script curation
 - [x] Visible + full-page screenshot capture
 - [x] MutationObserver for SPA compatibility
+- [x] selector-forge propose→verify→settle resolution loop (issue #770 — local/offline; AI-backed ranking and MCP exposure still open)
 - [ ] monty WASM MObject integration for animation
 - [ ] Blender-MCP bridge for 3D visualization
 - [ ] Record/replay: capture user interactions as b00t scripts

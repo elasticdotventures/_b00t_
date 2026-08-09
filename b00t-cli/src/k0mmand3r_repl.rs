@@ -10,12 +10,31 @@
 use anyhow::{Context, Result};
 use b00t_ipc::{Agent, Message, MessageBus, VoteChoice};
 use std::io::{self, Write};
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct Repl {
     agent: Agent,
     bus: Arc<MessageBus>,
+}
+
+/// Why the REPL command loop should stop.
+///
+/// # 🤓 issue #799 PoC: `ControlFlow<B, C>` compositional flow control
+/// `handle_command` previously returned `Result<bool>`, overloading the
+/// `Ok`/`Err` split for genuine errors while separately smuggling
+/// continue-vs-quit intent through the wrapped `bool`. That's the exact
+/// anti-pattern flagged in issue #799: a caller has to remember "true means
+/// keep going" out-of-band instead of reading it off the type. Swapping the
+/// inner `bool` for `ControlFlow<QuitReason, ()>` keeps `Result` doing only
+/// its one job (did this call itself fail?) while `ControlFlow` carries the
+/// loop's actual decision (`Break` = stop, with why; `Continue` = keep
+/// going) — compositional and self-documenting at the call site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuitReason {
+    /// User issued `/quit` or `/exit`.
+    UserExit,
 }
 
 /// Resolve executable templates `<|:code:|>` in a command string.
@@ -77,11 +96,8 @@ impl Repl {
             let input = resolved.as_str();
 
             match self.handle_command(input).await {
-                Ok(should_continue) => {
-                    if !should_continue {
-                        break;
-                    }
-                }
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(QuitReason::UserExit)) => break,
                 Err(e) => {
                     eprintln!("❌ Error: {}", e);
                 }
@@ -91,8 +107,12 @@ impl Repl {
         Ok(())
     }
 
-    /// Returns Ok(true) to continue, Ok(false) to quit
-    async fn handle_command(&mut self, input: &str) -> Result<bool> {
+    /// `Ok(ControlFlow::Continue(()))` to keep the loop running,
+    /// `Ok(ControlFlow::Break(QuitReason::UserExit))` to stop it.
+    /// `Err` is reserved for genuine failures (e.g. bus send errors) —
+    /// unlike the `bool` this replaces, it is never overloaded to mean
+    /// "quit".
+    async fn handle_command(&mut self, input: &str) -> Result<ControlFlow<QuitReason, ()>> {
         if !input.starts_with('/') {
             // Non-command input, broadcast to crew
             self.bus
@@ -101,7 +121,7 @@ impl Repl {
                     content: input.to_string(),
                 })
                 .await?;
-            return Ok(true);
+            return Ok(ControlFlow::Continue(()));
         }
 
         let parts: Vec<&str> = input.split_whitespace().collect();
@@ -113,7 +133,7 @@ impl Repl {
             }
             "/quit" | "/exit" => {
                 println!("👋 Goodbye!");
-                return Ok(false);
+                return Ok(ControlFlow::Break(QuitReason::UserExit));
             }
             "/handshake" => {
                 self.cmd_handshake(&parts[1..]).await?;
@@ -151,7 +171,7 @@ impl Repl {
             }
         }
 
-        Ok(true)
+        Ok(ControlFlow::Continue(()))
     }
 
     fn print_help(&self) {
@@ -466,5 +486,44 @@ mod tests {
 
         assert_eq!(repl.agent.id, "test-agent");
         assert_eq!(repl.agent.skills, vec!["rust", "testing"]);
+    }
+
+    /// issue #799 PoC: `/quit` must yield `Break(QuitReason::UserExit)`,
+    /// matching the old contract where it returned `Ok(false)`.
+    #[tokio::test]
+    async fn test_handle_command_quit_breaks_with_user_exit() {
+        let mut repl = Repl::new("test-agent".to_string(), vec!["rust".to_string()])
+            .await
+            .unwrap();
+
+        let flow = repl.handle_command("/quit").await.unwrap();
+        assert_eq!(flow, ControlFlow::Break(QuitReason::UserExit));
+
+        let flow = repl.handle_command("/exit").await.unwrap();
+        assert_eq!(flow, ControlFlow::Break(QuitReason::UserExit));
+    }
+
+    /// issue #799 PoC: any non-quit command must yield `Continue(())`,
+    /// matching the old contract where it returned `Ok(true)`.
+    #[tokio::test]
+    async fn test_handle_command_help_continues() {
+        let mut repl = Repl::new("test-agent".to_string(), vec!["rust".to_string()])
+            .await
+            .unwrap();
+
+        let flow = repl.handle_command("/help").await.unwrap();
+        assert_eq!(flow, ControlFlow::Continue(()));
+    }
+
+    /// issue #799 PoC: an unknown slash command still keeps the loop
+    /// running rather than being mistaken for a quit signal.
+    #[tokio::test]
+    async fn test_handle_command_unknown_continues() {
+        let mut repl = Repl::new("test-agent".to_string(), vec!["rust".to_string()])
+            .await
+            .unwrap();
+
+        let flow = repl.handle_command("/nonexistent").await.unwrap();
+        assert_eq!(flow, ControlFlow::Continue(()));
     }
 }

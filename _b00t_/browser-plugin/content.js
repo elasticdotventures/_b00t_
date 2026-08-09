@@ -115,4 +115,35 @@
   `;
   document.documentElement.appendChild(script);
   script.remove();
+
+  // Bridge for selector-forge resolve requests from the side panel
+  // (b00t-client.js). Handled here, in the isolated content-script world,
+  // rather than the MAIN-world injection above, so the tested logic in
+  // selector-forge.js (loaded before this file — see manifest.json) stays
+  // the single source of truth instead of being duplicated into the
+  // injected script string, which CDP Runtime.evaluate cannot reach it
+  // from anyway. See _b00t_/datums/VENDOR-SELECTOR-FORGE.tomllmd.
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (!msg || msg.action !== 'b00t_resolve_selector') return;
+      const el = document.querySelector(
+        '[data-b00t-type="' + msg.type + '"][data-b00t-label="' + msg.label + '"]'
+      );
+      if (!el) { sendResponse(null); return; }
+      const desc = {
+        id: el.id || '',
+        tagName: el.tagName.toLowerCase(),
+        dataB00tType: el.dataset.b00tType,
+        dataB00tLabel: el.dataset.b00tLabel,
+        dataB00tName: el.dataset.b00tName,
+        name: el.getAttribute('name') || '',
+        classList: Array.from(el.classList || []),
+      };
+      const verify = (sel) => {
+        try { return document.querySelectorAll(sel).length; } catch (e) { return 0; }
+      };
+      sendResponse(window.__b00tSelectorForge.resolveSelector(desc, verify));
+      return true; // keep the message channel open (sendResponse called sync above, but harmless)
+    });
+  }
 })();

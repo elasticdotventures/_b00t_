@@ -355,6 +355,12 @@ pub struct RuntimeConfig {
     pub isolation: Option<IsolationConfig>,
     pub hook_pre: Option<String>,
     pub hook_post: Option<String>,
+    /// Gate preconditions carried over from the owning datum's `[[b00t.gate]]`
+    /// list (#712). Populated by `load_runtime_datum`, not read directly from
+    /// a `[b00t.runtime]` TOML table — evaluated by `spawn_sandboxed` before
+    /// the sandbox forks, so a `requires_gpu`-style gate fails with a clear
+    /// pre-flight message instead of a confusing in-sandbox crash.
+    pub gate: Option<Vec<crate::GateSpec>>,
 }
 
 // ── MCP method types ───────────────────────────────────────────────────

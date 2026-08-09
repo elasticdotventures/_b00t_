@@ -1,0 +1,109 @@
+[b00t]
+name = "boo"
+type = "cli"
+hint = "GNU screen-style terminal multiplexer on libghostty, with agent-native send/peek/wait automation primitives — no TTY required."
+source = "https://github.com/coder/boo"
+desires = "latest"
+auto_install = false
+# 🤓 Zig binary (~2 MB), no cargo/pkgx path yet — installs via upstream install.sh into
+# /usr/local/bin (if writable) or ~/.local/bin. Set BOO_VERSION to pin a release.
+
+install = '''
+curl -fsSL https://raw.githubusercontent.com/coder/boo/main/install.sh | sh
+'''
+
+update = '''
+curl -fsSL https://raw.githubusercontent.com/coder/boo/main/install.sh | sh
+'''
+
+version = "boo --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+[[b00t.usage]]
+description = "New attached session running $SHELL"
+command = "boo new"
+
+[[b00t.usage]]
+description = "New named, detached session running a command"
+command = "boo new build -d -- make"
+
+[[b00t.usage]]
+description = "Reattach to a session"
+command = "boo attach build"
+
+[[b00t.usage]]
+description = "List sessions (machine-readable)"
+command = "boo ls --json"
+
+[[b00t.usage]]
+description = "Type text into a detached session, submitting with Enter"
+command = "boo send build --text 'make' --enter"
+
+[[b00t.usage]]
+description = "Block until output is quiet for 2s (or use --text <pattern>)"
+command = "boo wait build --idle --timeout 30s"
+
+[[b00t.usage]]
+description = "Read rendered screen state, including scrollback, as JSON"
+command = "boo peek build --scrollback --json"
+
+[[b00t.usage]]
+description = "End a session"
+command = "boo kill build"
+
+[b00t.skill]
+type_tags = ["cli", "terminal-multiplexer", "automation", "agent-native", "job-runner", "zig", "libghostty"]
+description = """
+boo — GNU screen-style terminal multiplexer built on libghostty (Zig, MIT,
+coder/boo, ~750 stars). Every session's output is parsed through Ghostty's
+VT core, so boo always knows the exact screen state (contents, styles,
+cursor, scrollback) of every session — including detached ones.
+
+AGENT AUTOMATION LOOP (works without a TTY)
+  boo new build -d -- bash               # 1. headless session
+  boo send build --text 'make' --enter   # 2. type into it
+  boo wait build --idle                  # 3. let output settle (or --text <pattern>)
+  boo peek build --scrollback --json     # 4. read the rendered screen
+  boo kill build                         # 5. clean up
+
+  Exit codes: 0 success, 1 error, 2 usage error, 3 no such session,
+  4 wait timed out. `--json` on `ls`/`peek` for machine-readable output.
+
+ARCHITECTURE
+  client (raw tty) <-unix socket-> daemon (forked per session, owns PTY +
+  a persistent ghostty-vt TerminalStream). Same client<->daemon shape as
+  b00t-mcp (stdio/HTTP transport instead of a socket) — a reference point
+  for the b00t-ipc effort, not a reason to depend on it there.
+
+CAVEATS (young project, per upstream README)
+  - One attached client per session (attaching steals; no screen -x sharing).
+  - One window per session: no splits/tabs — one session per task, `boo ui` to juggle them.
+  - `C-a` prefix not yet configurable.
+  - Sessions run with TERM=xterm-256color.
+
+EVALUATION — fit with b00t task/job system (#793)
+  b00t's job datum (b00t-cli/src/datum_job.rs, JobDatum/JobStep) is a
+  workflow orchestrator: sequential/parallel/DAG steps, git checkpoints,
+  sub-agent spawning. Its executor (job_executor.rs::execute_bash_step)
+  shells out via plain subprocess — no PTY, no screen-state capture, no
+  wait-for-idle/wait-for-text. boo does NOT overlap with the job DAG/
+  checkpoint layer; it is a candidate EXECUTION BACKEND for one step kind:
+  interactive or long-running PTY-bound commands (installers, REPLs, TUIs,
+  builds you want to poll without sleep loops) where today's job_executor
+  would need to fall back to sleep-and-poll or can't drive a program that
+  expects a real terminal at all.
+
+  Recommendation: install as a plain CLI tool now (this datum). Do NOT
+  wire it into job_executor.rs blind — that requires a JobStep variant
+  (e.g. `type = "boo"` with new/send/wait/peek/kill fields), an idle/text
+  wait-condition mapping, and a teardown-on-failure path, which is a
+  scoped follow-up implementation task, not a datum-only change. Track
+  under a fresh issue if the b00t job system needs PTY-aware steps for
+  installers/TUIs.
+
+INSTALL
+  curl -fsSL https://raw.githubusercontent.com/coder/boo/main/install.sh | sh
+  # Set BOO_VERSION to pin a release, BOO_INSTALL_DIR to change target dir.
+
+Reference: https://github.com/coder/boo (README, Architecture, Automation sections)
+"""

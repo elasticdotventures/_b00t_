@@ -1,0 +1,30 @@
+# b00t rotz Repository Datum
+#
+# rotz (github:volllly/rotz) — fully cross-platform dotfile manager and dev
+# environment bootstrapper, written in Rust. Links dotfiles from a repo to
+# the local system and drives per-machine application install via YAML/TOML/
+# JSON config. Install via `cargo install rotz`, Homebrew (volllly/tap/rotz),
+# or Scoop (volllly/rotz).
+
+[b00t]
+name = "rotz"
+type = "repo"
+status = "reference"
+hint = "rotz — cross-platform dotfile manager & dev environment bootstrapper (Rust). Links dotfiles + drives per-machine install via rotz.yaml. cargo install rotz."
+url = "https://github.com/volllly/rotz"
+
+[[b00t.references]]
+name = "rotz GitHub"
+url = "https://github.com/volllly/rotz"
+description = "Source repo, README, releases, and issue tracker for rotz."
+
+[[b00t.references]]
+name = "rotz crates.io"
+url = "https://crates.io/crates/rotz"
+description = "cargo install rotz — Rust crate registry entry."
+
+# b00t:map v1
+# summary: rotz repo datum — cross-platform Rust dotfile manager/bootstrapper, canonical reference link
+# tags: rotz, dotfiles, bootstrap, rust, volllly
+# tier: sm0l
+# complexity: 1

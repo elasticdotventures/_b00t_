@@ -1,0 +1,26 @@
+[b00t]
+name = "mujoco"
+type = "repo"
+status = "active"
+hint = "MuJoCo (Multi-Joint dynamics with Contact) — Google DeepMind's physics simulation engine for robotics, biomechanics, graphics/animation, and other domains requiring fast, accurate rigid/soft-body dynamics with contact. C/C++ core with official Python bindings; MJX provides a JAX reimplementation for hardware-accelerated, differentiable, massively parallel simulation."
+url = "https://github.com/google-deepmind/mujoco"
+keywords = ["physics", "simulation", "robotics", "deepmind", "mujoco"]
+
+[[b00t.usage]]
+description = "Install Python bindings"
+command = "uv pip install mujoco"
+
+[[b00t.usage]]
+description = "Verify install and print version"
+command = "python -c 'import mujoco; print(mujoco.__version__)'"
+
+[[b00t.usage]]
+description = "Launch the interactive MuJoCo viewer on a model"
+command = "python -m mujoco.viewer --mjcf=/path/to/model.xml"
+
+# b00t:map v1
+# summary: MuJoCo — DeepMind physics simulation engine (rigid/soft-body dynamics, contact); Python + MJX/JAX bindings
+# tags: physics, simulation, robotics, deepmind, mujoco
+# tier: sm0l
+# cmds: uv pip install mujoco, python -m mujoco.viewer
+# complexity: 2
