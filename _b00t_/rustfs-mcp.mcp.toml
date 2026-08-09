@@ -41,6 +41,13 @@ url = "https://modelcontextprotocol.io"
 name = "S3 Compatible Storage"
 url = "https://aws.amazon.com/s3/"
 
+# HuggingFace Storage Buckets are a supported S3-compatible backend for this
+# server — see huggingface-storage.config.toml for endpoint, credential, and
+# limitation details (path-style addressing, single-region, namespace-scoped).
+[[b00t.references]]
+name = "HuggingFace Storage as an S3 backend (see huggingface-storage.config.toml)"
+url = "https://huggingface.co/docs/hub/en/storage-buckets-s3"
+
 [env]
 RUSTFS_MCP_PORT = "8080"
 RUSTFS_MCP_HOST = "127.0.0.1"
