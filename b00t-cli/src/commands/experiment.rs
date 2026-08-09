@@ -1187,6 +1187,67 @@ pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> b00t_c0re_a2a::ta
     )
 }
 
+// ── OTEL span emission (issue #404: checkmate A/B → OTEL interface) ─────────
+//
+// Closes the gap flagged in github.com/elasticdotventures/_b00t_/issues/404:
+// "CakeLedger → emit OTEL span with agent_tier, task_id, vote, claim_score
+// attributes → Grafana/Jaeger for regression tracking." Reuses the tracer
+// pattern already established by `K0mmand3rTelemetry` in
+// `b00t-cli/src/k0mmand3r/mod.rs` (NRtW: no new tracing plumbing invented).
+
+/// Pure extraction of OTEL span attributes from an experiment comparison.
+/// Kept separate from the actual `tracer.start()` call so it's unit-testable
+/// without an OTEL SDK/exporter wired up (the default global tracer is a
+/// no-op, which makes asserting on emitted attributes impossible upstream).
+pub fn experiment_otel_attributes(cmp: &ExperimentComparison) -> Vec<(String, String)> {
+    let control_claim_score = cmp.control.scores.get("accuracy").copied().unwrap_or(0.0);
+    let treatment_claim_score = cmp
+        .treatment
+        .scores
+        .get("accuracy")
+        .copied()
+        .unwrap_or(0.0);
+
+    vec![
+        ("task_id".to_string(), cmp.experiment_id.clone()),
+        ("vote".to_string(), cmp.recommendation.clone()),
+        (
+            "tie_breaker".to_string(),
+            cmp.tie_breaker.clone().unwrap_or_else(|| "none".to_string()),
+        ),
+        ("control.agent_tier".to_string(), cmp.control.variant.clone()),
+        (
+            "control.claim_score".to_string(),
+            format!("{:.4}", control_claim_score),
+        ),
+        (
+            "treatment.agent_tier".to_string(),
+            cmp.treatment.variant.clone(),
+        ),
+        (
+            "treatment.claim_score".to_string(),
+            format!("{:.4}", treatment_claim_score),
+        ),
+        ("focus_delta".to_string(), format!("{:.4}", cmp.focus_delta)),
+    ]
+}
+
+/// Emit a single OTEL span summarizing the A/B experiment outcome.
+/// Best-effort: with no SDK/exporter configured, the global tracer is a
+/// no-op and this call is inert — matches `emit_focus_to_ledgrrr_mcp`'s
+/// best-effort contract elsewhere in this module.
+pub fn emit_experiment_otel_span(cmp: &ExperimentComparison) {
+    use opentelemetry::KeyValue;
+    use opentelemetry::trace::{Span, Tracer};
+
+    let tracer = opentelemetry::global::tracer("b00t.experiment");
+    let mut span = tracer.start("b00t.experiment.checkmate");
+    for (key, value) in experiment_otel_attributes(cmp) {
+        span.set_attribute(KeyValue::new(key, value));
+    }
+    span.end();
+}
+
 // ── Personality profiles ─────────────────────────────────────────────────────
 
 fn personality(label: &str, c: f64, o: f64, e: f64, a: f64, n: f64) -> PersonalityProfile {
@@ -1247,6 +1308,73 @@ mod tests {
         assert!(cmp.deltas.contains_key("roi"));
         assert!(cmp.deltas.contains_key("cost"));
         assert!(!cmp.recommendation.is_empty());
+    }
+
+    #[test]
+    fn test_experiment_otel_attributes_carries_task_vote_and_claim_scores() {
+        let config = make_config("test-otel-001", TEST_PROMPTS[0]);
+        let cmp = dispatch_experiment(&config).unwrap();
+
+        let attrs = experiment_otel_attributes(&cmp);
+        let get = |k: &str| -> String {
+            attrs
+                .iter()
+                .find(|(key, _)| key == k)
+                .unwrap_or_else(|| panic!("missing OTEL attribute: {k}"))
+                .1
+                .clone()
+        };
+
+        assert_eq!(get("task_id"), "test-otel-001");
+        assert_eq!(get("vote"), cmp.recommendation);
+        assert_eq!(get("control.agent_tier"), "control");
+        assert_eq!(get("treatment.agent_tier"), "treatment");
+        // OTEL attributes are formatted to 4 decimal places for readability, so compare
+        // against the raw f64 with an epsilon rather than exact equality.
+        assert!(
+            (get("control.claim_score").parse::<f64>().unwrap()
+                - cmp.control.scores.get("accuracy").copied().unwrap_or(0.0))
+            .abs()
+                < 1e-4
+        );
+        assert!(
+            (get("treatment.claim_score").parse::<f64>().unwrap()
+                - cmp.treatment
+                    .scores
+                    .get("accuracy")
+                    .copied()
+                    .unwrap_or(0.0))
+            .abs()
+                < 1e-4
+        );
+        assert!(
+            (get("focus_delta").parse::<f64>().unwrap() - cmp.focus_delta).abs() < 1e-4
+        );
+    }
+
+    #[test]
+    fn test_experiment_otel_attributes_defaults_tie_breaker_to_none() {
+        let config = make_config("test-otel-002", TEST_PROMPTS[1]);
+        let cmp = dispatch_experiment(&config).unwrap();
+        assert!(cmp.tie_breaker.is_none(), "dispatch_experiment never sets tie_breaker directly");
+
+        let attrs = experiment_otel_attributes(&cmp);
+        let tie_breaker = attrs
+            .iter()
+            .find(|(key, _)| key == "tie_breaker")
+            .unwrap()
+            .1
+            .clone();
+        assert_eq!(tie_breaker, "none");
+    }
+
+    #[test]
+    fn test_emit_experiment_otel_span_does_not_panic() {
+        // Best-effort emission against the default (no-op) global tracer —
+        // this must never panic even with no OTEL SDK/exporter configured.
+        let config = make_config("test-otel-003", TEST_PROMPTS[0]);
+        let cmp = dispatch_experiment(&config).unwrap();
+        emit_experiment_otel_span(&cmp);
     }
 
     #[test]
