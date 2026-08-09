@@ -20,6 +20,11 @@ status_of() {
     echo "$json" | jq -r --arg p "$path" '.[] | select(.path==$p) | .status'
 }
 
+branch_status_of() {
+    local json="$1" path="$2"
+    echo "$json" | jq -r --arg p "$path" '.[] | select(.path==$p) | .branch_status'
+}
+
 setup() {
     FIXTURE_DIR="$(mktemp -d)"
 
@@ -38,6 +43,7 @@ setup() {
     echo "v2" > "$SRC/file.txt"
     git -C "$SRC" commit -q -am c2
     C2_SHA="$(git -C "$SRC" rev-parse HEAD)"
+    SRC_DEFAULT_BRANCH="$(git -C "$SRC" symbolic-ref --short HEAD)"
 
     # 2. Origin superproject: sub-a, sub-b, sub-c, sub-d all pinned @c2.
     #    Modern git disables the file:// submodule transport by default —
@@ -65,7 +71,7 @@ setup() {
     chmod +x "$SUPER/_b00t_/scripts/check-submodule-drift.sh"
     SCRIPT="$SUPER/_b00t_/scripts/check-submodule-drift.sh"
 
-    export FIXTURE_DIR SRC ORIGIN SUPER SCRIPT C1_SHA C2_SHA
+    export FIXTURE_DIR SRC ORIGIN SUPER SCRIPT C1_SHA C2_SHA SRC_DEFAULT_BRANCH
 }
 
 teardown() {
@@ -150,4 +156,50 @@ EOF
     assert_equal "$(git -C "$SUPER/sub-c" rev-parse HEAD)" "$C2_SHA"
     # The untracked file survives the sync (git checkout never touches it).
     assert [ -f "$SUPER/sub-c/newfile.txt" ]
+}
+
+@test "branch-ok: recorded pin is an ancestor of the declared branch's tip" {
+    git -C "$SUPER" -c protocol.file.allow=always submodule update --init -- sub-d
+    git -C "$SUPER" config --file .gitmodules "submodule.sub-d.branch" "$SRC_DEFAULT_BRANCH"
+
+    # Recorded pin is C2, which IS the current tip of SRC_DEFAULT_BRANCH —
+    # `submodule update --init` clones all branches by default, so
+    # refs/remotes/origin/<branch> already exists inside sub-d.
+    run bash "$SCRIPT" --json
+    assert_equal "$(branch_status_of "$output" "sub-d")" "ok"
+}
+
+@test "branch-stale: declared branch moved (force-push/rebase) out from under the recorded pin (2026-08-09 ledgrrr regression)" {
+    git -C "$SUPER" -c protocol.file.allow=always submodule update --init -- sub-d
+    git -C "$SUPER" config --file .gitmodules "submodule.sub-d.branch" "$SRC_DEFAULT_BRANCH"
+
+    # Simulate a force-push/rebase on the upstream branch that drops the
+    # commit our pin (C2) points at — exactly what stranded vendor/ledgrrr's
+    # pin off b00t-patches until a manual audit caught it.
+    git -C "$SRC" checkout -q "$SRC_DEFAULT_BRANCH"
+    git -C "$SRC" reset --hard "$C1_SHA"
+    git -C "$SUPER/sub-d" fetch -q origin "$SRC_DEFAULT_BRANCH"
+
+    run bash "$SCRIPT" --json
+    assert_equal "$status" 1
+    assert_equal "$(status_of "$output" "sub-d")" "ok"
+    assert_equal "$(branch_status_of "$output" "sub-d")" "stale"
+
+    run bash "$SCRIPT"
+    assert_output --partial "stale-branch-pin: 1"
+}
+
+@test "branch-unknown: declared branch not yet fetched locally is inconclusive, not a failure" {
+    # --single-branch limits the submodule's own clone to whichever branch
+    # is configured at init time, so only refs/remotes/origin/$SRC_DEFAULT_BRANCH
+    # ends up fetched. Re-pointing .gitmodules at a different branch
+    # afterward reproduces "declared branch changed, nothing's fetched it
+    # locally yet" without needing a real second remote branch.
+    git -C "$SUPER" config --file .gitmodules "submodule.sub-d.branch" "$SRC_DEFAULT_BRANCH"
+    git -C "$SUPER" -c protocol.file.allow=always submodule update --init --single-branch -- sub-d
+    git -C "$SUPER" config --file .gitmodules "submodule.sub-d.branch" "never-fetched-branch"
+
+    run bash "$SCRIPT" --json
+    assert_success
+    assert_equal "$(branch_status_of "$output" "sub-d")" "unknown"
 }

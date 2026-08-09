@@ -25,6 +25,26 @@
 #                    only — NEVER touched, regardless of --fix. Always
 #                    counted as a failure.
 #
+# Orthogonal to the above: for any submodule with a `branch = ` declared in
+# .gitmodules, each entry also carries a `branch_status` field (2026-08-09,
+# after the vendor/ledgrrr incident — see `b00t lfmf ledgrrr-sync`):
+#   n/a      — no branch= declared for this path.
+#   unknown  — branch= declared, but refs/remotes/origin/<branch> isn't
+#              fetched locally. Never fetches over the network itself (this
+#              runs on every `b00t doctor check`; a network call per
+#              submodule would be slow and, per the same day's WSL/WARP MTU
+#              incident, can hang indefinitely) — not a failure, just
+#              inconclusive. Run `git -C <path> fetch origin <branch>` first.
+#   ok       — the RECORDED pin is an ancestor of origin/<branch>.
+#   stale    — the recorded pin is NOT reachable from origin/<branch>: the
+#              declared branch moved (force-push/rebase) out from under a
+#              pin that used to be on it, or the pin was bumped straight to
+#              a side branch that was never merged into the declared one.
+#              This is exactly how vendor/ledgrrr silently stranded 34
+#              commits until a manual audit caught it. Counted as a failure
+#              — there is no mechanical fix (see the doc comment above);
+#              reconcile upstream, don't just re-bump the pin.
+#
 # "Dirty" means uncommitted changes to TRACKED files only
 # (`git status --porcelain --untracked-files=no`), NOT any untracked file.
 # `git submodule update` only moves the checked-out ref via `git checkout`,
@@ -67,6 +87,7 @@ cd "$REPO_ROOT"
 FAIL_COUNT=0
 DIRTY_COUNT=0
 UNFIXED_CLEAN_COUNT=0
+STALE_BRANCH_COUNT=0
 ITEMS=()
 HUMAN_LINES=()
 
@@ -74,31 +95,65 @@ HUMAN_LINES=()
 # Uses jq -n to build it (handles quoting/escaping of non-ASCII paths like
 # python.🐍/DALLE2-pytorch correctly, avoids hand-rolled JSON escaping).
 emit_json() {
-    local path="$1" recorded="$2" checked_out="$3" status="$4" action="$5"
+    local path="$1" recorded="$2" checked_out="$3" status="$4" action="$5" branch_status="$6" branch_detail="$7"
     jq -nc \
         --arg path "$path" \
         --arg recorded "$recorded" \
         --arg checked_out "$checked_out" \
         --arg status "$status" \
         --arg action "$action" \
+        --arg branch_status "$branch_status" \
+        --arg branch_detail "$branch_detail" \
         '{path:$path,
           recorded: (if $recorded == "" then null else $recorded end),
           checked_out: (if $checked_out == "" then null else $checked_out end),
           status: $status,
-          action: $action}'
+          action: $action,
+          branch_status: $branch_status,
+          branch_detail: $branch_detail}'
 }
 
 # Record one submodule's classification: builds the JSON item, tracks
 # failure counts, and queues a human-readable line (OK lines only shown
 # with --verbose).
 record() {
-    local path="$1" recorded="$2" checked_out="$3" status="$4" action="$5" is_fail="$6"
-    ITEMS+=("$(emit_json "$path" "$recorded" "$checked_out" "$status" "$action")")
+    local path="$1" recorded="$2" checked_out="$3" status="$4" action="$5" is_fail="$6" branch_status="${7:-n/a}" branch_detail="${8:-}"
+    ITEMS+=("$(emit_json "$path" "$recorded" "$checked_out" "$status" "$action" "$branch_status" "$branch_detail")")
     if [[ "$is_fail" == "1" ]]; then
         FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
-    if [[ "$status" != "ok" || "$VERBOSE" == "true" ]]; then
+    if [[ "$status" != "ok" || "$branch_status" == "stale" || "$VERBOSE" == "true" ]]; then
         HUMAN_LINES+=("  $(printf '%-14s' "$status") $path  recorded=${recorded:-<none>} checked_out=${checked_out:-<none>}  -- $action")
+        if [[ "$branch_status" == "stale" ]]; then
+            HUMAN_LINES+=("                 ⚠️  branch_status=stale -- $branch_detail")
+        fi
+    fi
+}
+
+# Declared-branch ancestry check (2026-08-09, see doc comment at top).
+# Deliberately local-only: never fetches. Sets globals BRANCH_STATUS /
+# BRANCH_DETAIL for the caller to pass into record().
+check_branch_ancestry() {
+    local path="$1" recorded="$2"
+    BRANCH_STATUS="n/a"
+    BRANCH_DETAIL=""
+    local branch
+    branch=$(git config --file .gitmodules --get "submodule.$path.branch" 2>/dev/null || true)
+    [[ -z "$branch" ]] && return
+
+    if ! git -C "$path" rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null 2>&1; then
+        BRANCH_STATUS="unknown"
+        BRANCH_DETAIL="origin/$branch not fetched locally in the submodule -- run: git -C $path fetch origin $branch"
+        return
+    fi
+
+    if git -C "$path" merge-base --is-ancestor "$recorded" "refs/remotes/origin/$branch" 2>/dev/null; then
+        BRANCH_STATUS="ok"
+        BRANCH_DETAIL="recorded pin is an ancestor of origin/$branch"
+    else
+        BRANCH_STATUS="stale"
+        BRANCH_DETAIL="recorded pin is NOT reachable from origin/$branch -- the declared branch moved (force-push/rebase?) and stranded this pin, or it was bumped straight to an unmerged side branch. Reconcile upstream (merge/rebase both lineages together, verify, then re-bump) -- do not just fast-forward the pin, that silently drops whatever the pin has that the declared branch doesn't. See: b00t lfmf ledgrrr-sync"
+        STALE_BRANCH_COUNT=$((STALE_BRANCH_COUNT + 1))
     fi
 }
 
@@ -124,9 +179,16 @@ while IFS= read -r path; do
         continue
     fi
 
+    # Declared-branch ancestry — orthogonal to the recorded-vs-checked-out
+    # comparison below, so computed once here and threaded into every
+    # record() call in this iteration regardless of which status it gets.
+    check_branch_ancestry "$path" "$rec"
+    branch_is_fail=0
+    [[ "$BRANCH_STATUS" == "stale" ]] && branch_is_fail=1
+
     if [[ "$rec" == "$act" ]]; then
         # OK — HEAD matches recorded pin.
-        record "$path" "$rec" "$act" "ok" "none" 0
+        record "$path" "$rec" "$act" "ok" "none" "$branch_is_fail" "$BRANCH_STATUS" "$BRANCH_DETAIL"
         continue
     fi
 
@@ -137,21 +199,21 @@ while IFS= read -r path; do
     if [[ -n "$dirty" ]]; then
         # DRIFTED+DIRTY — report only, NEVER touched regardless of --fix.
         DIRTY_COUNT=$((DIRTY_COUNT + 1))
-        record "$path" "$rec" "$act" "drifted_dirty" "manual resolution required (tracked changes present) — NOT touched" 1
+        record "$path" "$rec" "$act" "drifted_dirty" "manual resolution required (tracked changes present) — NOT touched" 1 "$BRANCH_STATUS" "$BRANCH_DETAIL"
         continue
     fi
 
     # DRIFTED+CLEAN — safe to auto-sync.
     if [[ "$FIX" == "true" ]]; then
         if git submodule update -- "$path" >/dev/null 2>&1; then
-            record "$path" "$rec" "$act" "drifted_fixed" "synced to recorded pin ($act -> $rec)" 0
+            record "$path" "$rec" "$act" "drifted_fixed" "synced to recorded pin ($act -> $rec)" "$branch_is_fail" "$BRANCH_STATUS" "$BRANCH_DETAIL"
         else
             UNFIXED_CLEAN_COUNT=$((UNFIXED_CLEAN_COUNT + 1))
-            record "$path" "$rec" "$act" "drifted_clean" "sync attempted but failed" 1
+            record "$path" "$rec" "$act" "drifted_clean" "sync attempted but failed" 1 "$BRANCH_STATUS" "$BRANCH_DETAIL"
         fi
     else
         UNFIXED_CLEAN_COUNT=$((UNFIXED_CLEAN_COUNT + 1))
-        record "$path" "$rec" "$act" "drifted_clean" "sync available — safe, run with --fix" 1
+        record "$path" "$rec" "$act" "drifted_clean" "sync available — safe, run with --fix" 1 "$BRANCH_STATUS" "$BRANCH_DETAIL"
     fi
 done < <(git config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | cut -d' ' -f2- || true)
 
@@ -169,7 +231,7 @@ else
     if [[ "$FAIL_COUNT" -eq 0 ]]; then
         echo "PASS: 0 drifted submodules"
     else
-        echo "FAIL: $FAIL_COUNT drifted submodules (dirty: $DIRTY_COUNT, clean-unfixed: $UNFIXED_CLEAN_COUNT)"
+        echo "FAIL: $FAIL_COUNT drifted submodules (dirty: $DIRTY_COUNT, clean-unfixed: $UNFIXED_CLEAN_COUNT, stale-branch-pin: $STALE_BRANCH_COUNT)"
     fi
 fi
 
