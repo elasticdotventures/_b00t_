@@ -1380,6 +1380,7 @@ version = "0.10.3"
 dependencies = [
  "axum 0.8.9",
  "b00t-c0re-lib",
+ "b00t-cli",
  "b00t-l3dg3rr-viz",
  "chrono",
  "futures",
@@ -1789,6 +1790,15 @@ dependencies = [
  "tokio-test",
  "uuid",
  "zbus",
+]
+
+[[package]]
+name = "b00t-isometric-wasm"
+version = "0.10.3"
+dependencies = [
+ "b00t-l3dg3rr-viz",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]

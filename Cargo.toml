@@ -26,6 +26,12 @@ members = [
     "b00t-admin",
     "b00t-mermaid-wasm",
     "b00t-ui-wasm",
+    # 🤓 #714: tracked in git (feat 50d13d82) but missing from workspace
+    # members — this is the WASM renderer that actually consumes
+    # /api/admin/viz/entangle/json (see its own module doc), yet was
+    # unbuildable via `cargo build --workspace`. Restoring membership so it
+    # participates in workspace builds/tests again.
+    "b00t-isometric-wasm",
     "b00t-embed-serve",
     "b00t-stt-serve",
 ]
