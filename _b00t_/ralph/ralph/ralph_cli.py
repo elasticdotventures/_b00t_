@@ -12,7 +12,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     from ralph.config import RalphConfig
     from ralph.file_manager import initialize_progress_file
-    from ralph.runner import run_ralph
+    from ralph.runner import run_ralph, run_ralph_parallel
 
     # Initialize progress file if it doesn't exist
     result = initialize_progress_file()
@@ -25,10 +25,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Handle dry-run mode
     if args.dry_run:
         print(f"[DRY RUN] Would execute: tool={args.tool}, max_iterations={args.max_iterations}")
+        if args.parallel > 1:
+            print(f"[DRY RUN] Would fan out {args.parallel} tasks per OODA cycle (swarm mode)")
         if args.task_id:
             print(f"[DRY RUN] Would target task: {args.task_id}")
         return 0
 
+    if args.parallel > 1:
+        return run_ralph_parallel(config, args.max_iterations, args.parallel)
     return run_ralph(config, args.max_iterations)
 
 
@@ -107,6 +111,9 @@ Examples:
   # Run with OpenCode
   ralph run --tool opencode
 
+  # Swarm: fan out to 3 tasks per OODA cycle (issue #311)
+  ralph run --tool claude --parallel 3
+
   # Show current task status
   ralph status
 
@@ -155,6 +162,13 @@ Examples:
         "--task-id",
         metavar="TASK",
         help="Target a specific task ID",
+    )
+    run_parser.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Fan out to N tasks per OODA cycle via a thread pool, swarm-style (default: 1, sequential)",
     )
     run_parser.add_argument(
         "--dry-run",

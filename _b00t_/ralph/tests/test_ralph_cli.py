@@ -84,6 +84,49 @@ def test_main_run_dry_run() -> None:
     assert exit_code == 0
 
 
+def test_main_run_default_parallel_is_one() -> None:
+    """Test main() defaults --parallel to 1 (sequential path, run_ralph)."""
+    with (
+        patch.object(sys, "argv", ["ralph", "run"]),
+        patch("ralph.runner.run_ralph", return_value=0) as mock_run,
+        patch("ralph.runner.run_ralph_parallel") as mock_run_parallel,
+    ):
+        exit_code = main()
+
+    assert exit_code == 0
+    mock_run.assert_called_once()
+    mock_run_parallel.assert_not_called()
+
+
+def test_main_run_with_parallel_argument_dispatches_to_run_ralph_parallel() -> None:
+    """Test main() with --parallel N routes to run_ralph_parallel with N."""
+    with (
+        patch.object(sys, "argv", ["ralph", "run", "--parallel", "3"]),
+        patch("ralph.runner.run_ralph") as mock_run,
+        patch("ralph.runner.run_ralph_parallel", return_value=0) as mock_run_parallel,
+    ):
+        exit_code = main()
+
+    assert exit_code == 0
+    mock_run.assert_not_called()
+    mock_run_parallel.assert_called_once()
+    args = mock_run_parallel.call_args
+    config = args[0][0]
+    max_iterations = args[0][1]
+    parallel_n = args[0][2]
+    assert config.tool == "amp"
+    assert max_iterations == 10
+    assert parallel_n == 3
+
+
+def test_main_run_dry_run_with_parallel() -> None:
+    """Test main() --dry-run --parallel N reports swarm mode without executing."""
+    with patch.object(sys, "argv", ["ralph", "run", "--dry-run", "--parallel", "3"]):
+        exit_code = main()
+
+    assert exit_code == 0
+
+
 def test_main_status_subcommand() -> None:
     """Test main() with 'status' subcommand."""
     with (
