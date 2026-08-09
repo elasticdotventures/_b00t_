@@ -1,0 +1,53 @@
+# kyushu.runtime.toml — tracking datum, NOT an integration (#798)
+# 🤓 Issue #798 suggested filename `kyushu.wasm-sandbox.toml`, but "wasm-sandbox" is not
+#    a DatumType variant (see b00t-cli/src/datum_types.rs). "runtime" is the closest real
+#    variant (Runtime => .runtime suffix) and matches the sibling sandbox-runtime datum
+#    `bubblewrap.runtime.toml`. No [b00t.runtime] exec block is declared here on purpose —
+#    this datum tracks a project, it does not wire b00t up to run it.
+
+[b00t]
+name = "kyushu"
+type = "runtime"
+hint = "DEFERRED — self-hostable Wasm sandbox for JS/TS Workers-style handlers (kyu build/run); early experiment, not integrated"
+
+[b00t.metadata]
+category = "wasm-sandbox"
+tags = ["wasm", "sandbox", "workers", "javascript", "edge", "deferred"]
+maturity = "experimental"
+license = "MIT"
+
+[b00t.defer]
+status = "deferred"
+reason = "Early-stage experiment per upstream README: 'expect breaking changes, missing features, and rough edges. Not recommended for production use.' Single maintainer, unaudited third-party polyfills, project itself unaudited."
+re_evaluate_when = "upstream tags a v1.0 release, OR 6 months from 2026-08-09, whichever comes first"
+tracked_since = "2026-08-09"
+
+[[b00t.references]]
+name = "Website"
+url = "https://kyushu.dev/"
+type = "docs"
+
+[[b00t.references]]
+name = "GitHub Repository"
+url = "https://github.com/peterpeterparker/kyushu"
+type = "source"
+
+[[b00t.references]]
+name = "GitHub Issue #798"
+url = "https://github.com/elasticdotventures/_b00t_/issues/798"
+type = "issue"
+
+# 🤓 b00t relevance sketched in #798 (not committed to — re-review at v1.0):
+#    - could run untrusted user scripts in a Wasm sandbox instead of a subprocess
+#    - b00t plugins as dynamically-loaded Wasm binaries
+#    - lighter-weight alternative to Podman for `--runtime emulation` (complementary,
+#      not a replacement — Kyushu's Wasm sandbox IS the isolation layer, no container
+#      needed at runtime; Podman analysis in #798 confirms this is not either/or)
+#    - intersects with b00t-ui-wasm (b00t already ships client-side WASM)
+
+# b00t:map v1
+# summary: tracking-only datum for Kyushu Wasm sandbox — deferred until upstream stabilizes (#798)
+# tags: wasm, sandbox, workers, javascript, edge, deferred, tracking
+# tier: sm0l
+# cmds: b00t-cli datum validate --graph
+# complexity: 1
