@@ -57,6 +57,30 @@ pub enum GrokCommands {
         )]
         rag: Option<String>,
     },
+    /// Random walk through the knowledge graph — surfaces unexpected connections
+    ///
+    /// No query required: picks a random known topic (or uses --topic if given),
+    /// then surfaces one random result from it. Serendipity as a service —
+    /// useful when starting a session and you don't know what to work on.
+    ///
+    /// Examples:
+    ///   b00t grok wander
+    ///   b00t grok wander --topic rust
+    ///   b00t grok wander --rag=irontology
+    Wander {
+        /// Restrict wandering to one topic (default: pick a random known topic)
+        #[arg(short, long)]
+        topic: Option<String>,
+        /// Backend: raglite, irontology, or both (default: both)
+        #[arg(
+            long = "rag",
+            value_name = "BACKEND",
+            num_args = 0..=1,
+            default_missing_value = "both",
+            help = "Backend: raglite | irontology | both (default: both)"
+        )]
+        rag: Option<String>,
+    },
     /// Learn from URLs or files
     ///
     /// Examples:
@@ -156,6 +180,10 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             handle_dual_ask(&query, topic.as_deref(), limit, backend).await
+        }
+        GrokCommands::Wander { topic, rag } => {
+            let backend = GrokBackend::from_flag(rag.as_deref())?;
+            handle_wander(topic.as_deref(), backend).await
         }
         GrokCommands::Learn {
             source,
@@ -288,6 +316,91 @@ async fn handle_dual_ask(
     if result.total_found == 0 && !result.warnings.is_empty() {
         eprintln!("❌ No results — all backends returned warnings");
     }
+    Ok(())
+}
+
+// ── Wander: random graph walk (#247 — gap identified vs Cortex's 44-tool ideation) ──
+
+/// Pure helper: pick one random element from a slice. `None` for an empty slice.
+/// Kept side-effect-free (thread_rng() is the only impurity) so callers can pass
+/// deterministic fixtures in tests and just assert membership.
+fn pick_random<'a, T>(items: &'a [T]) -> Option<&'a T> {
+    if items.is_empty() {
+        return None;
+    }
+    use rand::Rng;
+    let idx = rand::thread_rng().gen_range(0..items.len());
+    items.get(idx)
+}
+
+/// Enumerate known topics from local b00t datum TOMLs (`_b00t_/*.toml`).
+/// Reuses `ontology::scan_datums` (DRY — same datum-dir scan `b00t-cli ontology`
+/// already performs) rather than re-implementing TOML directory walking.
+fn known_topics(datum_dir: &str) -> Result<Vec<String>> {
+    let datums = crate::commands::ontology::scan_datums(datum_dir)?;
+    Ok(datums
+        .into_iter()
+        .map(|d| d.b00t.name)
+        .filter(|n| !n.is_empty())
+        .collect())
+}
+
+async fn handle_wander(topic: Option<&str>, backend: GrokBackend) -> Result<()> {
+    let owned_topic: String;
+    let chosen_topic: &str = match topic {
+        Some(t) => t,
+        None => {
+            let workspace = crate::utils::get_workspace_root();
+            let datum_dir = format!("{}/_b00t_", workspace);
+            let topics = known_topics(&datum_dir)?;
+            match pick_random(&topics) {
+                Some(t) => {
+                    owned_topic = t.clone();
+                    &owned_topic
+                }
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "No known topics to wander into — provide --topic or ingest content first (see `b00t grok digest`)"
+                    ));
+                }
+            }
+        }
+    };
+
+    println!(
+        "🚶 wandering into topic: {} [{}]",
+        chosen_topic,
+        backend.display_name()
+    );
+
+    let client = DualGrokClient::new();
+    // Broad query (topic itself) — we're not searching for anything specific,
+    // just surfacing what the backend already has filed under this topic.
+    let result = client
+        .query(chosen_topic, Some(chosen_topic), Some(10), backend)
+        .await?;
+
+    for warn in &result.warnings {
+        eprintln!("  ⚠️  {}", warn);
+    }
+
+    match pick_random(&result.items) {
+        Some(item) => {
+            println!("\n✨ [{}] topic: {}", item.backend, item.topic);
+            let preview: String = item.content.chars().take(240).collect();
+            println!("   💬 {}", preview);
+            if !item.tags.is_empty() {
+                println!("   🏷️  {}", item.tags.join(", "));
+            }
+        }
+        None => {
+            println!(
+                "   (nothing found under '{}' yet — the graph is quiet here)",
+                chosen_topic
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -1059,5 +1172,73 @@ impl ChildExt for std::process::Child {
                 .context("writing to git stdin")?;
         }
         self.wait_with_output().context("waiting for git")
+    }
+}
+
+// ── Wander unit tests (#247) ──────────────────────────────────────────────────
+
+#[cfg(test)]
+mod wander_tests {
+    use super::*;
+
+    #[test]
+    fn pick_random_empty_slice_is_none() {
+        let items: Vec<String> = vec![];
+        assert!(pick_random(&items).is_none());
+    }
+
+    #[test]
+    fn pick_random_single_item_returns_it() {
+        let items = vec!["only-one".to_string()];
+        assert_eq!(pick_random(&items), Some(&items[0]));
+    }
+
+    #[test]
+    fn pick_random_always_returns_a_member() {
+        let items = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        // Run many times — flaky-test guard: every draw must be one of the
+        // known members, never an out-of-bounds/fabricated value.
+        for _ in 0..200 {
+            let picked = pick_random(&items).expect("non-empty slice must yield Some");
+            assert!(items.contains(picked));
+        }
+    }
+
+    #[test]
+    fn known_topics_empty_dir_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let topics = known_topics(dir.path().to_str().unwrap()).unwrap();
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn known_topics_nonexistent_dir_returns_empty() {
+        let topics = known_topics("/nonexistent/b00t/dir/247-wander-test").unwrap();
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn known_topics_reads_datum_names() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rust.cli.toml"),
+            r#"[b00t]
+name = "rust"
+type = "cli"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("python.cli.toml"),
+            r#"[b00t]
+name = "python"
+type = "cli"
+"#,
+        )
+        .unwrap();
+
+        let mut topics = known_topics(dir.path().to_str().unwrap()).unwrap();
+        topics.sort();
+        assert_eq!(topics, vec!["python".to_string(), "rust".to_string()]);
     }
 }
