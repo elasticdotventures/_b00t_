@@ -1,0 +1,48 @@
+[b00t]
+name = "grit"
+type = "cli"
+desires = "latest"
+install = '''
+curl -fsSL https://grit-scm.com/install | sh
+'''
+update = '''
+curl -fsSL https://grit-scm.com/install | sh
+'''
+version = "grit --version"
+version_regex = '\d+\.\d+\.\d+'
+hint = "grit (gitbutlerapp/grit) is a from-scratch Rust reimplementation of Git, built nearly entirely by AI coding agents, targeting the C Git test suite for behavior parity (42k+ tests passing). `grit` is a simplified, workflow-oriented CLI (status as home screen, plain-language output); `grit-git` (cargo install grit-git) is a drop-in git-compatible CLI with 140+ commands. Do NOT confuse with `gritql` (see gritql.tomllmd) — an unrelated AST query language from biomejs."
+unlocks = ["grit *", "grit-git *"]
+lfmf_category = "grit"
+
+# 🤓 Maintenance: deterministic version-check automation
+[b00t.maintenance]
+check_interval_days = 30
+check_command = "curl -sL https://api.github.com/repos/gitbutlerapp/grit/releases/latest | jq -r '.tag_name // empty' | sed 's/^v//'"
+version_source = "github:gitbutlerapp/grit"
+check_regex = "(\\d+\\.\\d+\\.\\d+)"
+
+[[b00t.usage]]
+description = "Check repo status (grit's home screen)"
+command = "grit status"
+
+[[b00t.usage]]
+description = "Install the drop-in git-compatible CLI (140+ commands)"
+command = "cargo install grit-git"
+
+[[b00t.usage]]
+description = "Use grit-git as a git-compatible binary"
+command = "grit-git <git-subcommand>"
+
+[validate]
+command = "grit --version"
+regex = "\\d+\\.\\d+\\.\\d+"
+
+[roles]
+optional_for = ["developer"]
+
+# b00t:map v1
+# summary: grit (gitbutlerapp/grit) — Rust reimplementation of Git, AI-agent-built, targets C Git test suite parity; NOT gritql
+# tags: git, rust, gitbutler, grit, version-control, agent-written
+# tier: sm0l
+# cmds: curl -fsSL https://grit-scm.com/install | sh, grit status, cargo install grit-git
+# complexity: 2
