@@ -1,0 +1,41 @@
+# b00t datum — living knowledge reference (issue #398)
+# 🤓 NOT content-blobbed via `b00t grok assimilate`: the upstream awesome-list is
+#    continually updated, so a one-time git-blob snapshot (the opencode.ai docs
+#    pattern, #460) would go stale. Track source_url + refresh cadence instead;
+#    re-ingest periodically via `b00t grok digest`.
+
+[b00t]
+name = "latent-space"
+type = "datum"
+hint = "Awesome-Latent-Space — curated ML papers on LLM latent-space structure, failure modes, and enhancements. Living reference, periodic refresh (not a static snapshot)."
+
+[datum]
+topic      = "latent-space"
+class      = "Concept"
+tags       = ["ml", "llm", "latent-space", "research"]
+source_url = "https://github.com/YU-deep/Awesome-Latent-Space"
+tier       = "frontier"
+
+[datum.refresh]
+schedule   = "periodic"
+cadence    = "monthly"
+ingest_cmd = "b00t-cli grok digest --topic latent-space --source-url https://github.com/YU-deep/Awesome-Latent-Space"
+rationale  = "Awesome-list is continually updated upstream (see issue #398 discussion). Snapshot-blobbing goes stale; re-ingest content on cadence instead of assimilating once."
+
+[datum.memoized_insights]
+# 🤓 Lessons already extracted from this topic's papers during #398 triage,
+#    memoized so future re-ingestion can diff against what's already known
+#    rather than re-deriving it.
+kv_cache_boilerplate_top = "Lost-in-the-middle degradation validates b00t's CLAUDE.md pattern: stable boilerplate at TOP (KV-cache target), variable session content at BOTTOM."
+skill_description_phrasing = "Prompt sensitivity research implies datum [b00t.skill].description phrasing should be canonical (imperative, specific) for consistent retrieval."
+tier_routing_thresholds = "Emergent-capability-threshold research implies sm0l-tier models are qualitatively incapable of some ch0nky-tier tasks, not just slower — reinforces cognitive-tier routing table in CLAUDE.md."
+
+[validation]
+validate = "b00t-cli datum validate _b00t_/latent-space.datum.toml"
+
+# b00t:map v1
+# summary: living-reference knowledge datum for Awesome-Latent-Space (LLM latent-space research); periodic re-ingestion via grok digest, not a one-time blob snapshot
+# tags: ml, llm, latent-space, research
+# tier: frontier
+# cmds: b00t-cli grok digest --topic latent-space --source-url https://github.com/YU-deep/Awesome-Latent-Space
+# complexity: 2
