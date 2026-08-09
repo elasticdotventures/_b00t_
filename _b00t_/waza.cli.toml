@@ -1,0 +1,66 @@
+[b00t]
+name = "waza"
+type = "cli"
+hint = "Waza (tw93/Waza) — collection of 8 AI engineering skills (think/ui/check/hunt/write/learn/read/health) installed as slash-commands into Claude Code, Codex, Cursor, and other agent CLIs via the `skills` npx tool."
+source = "https://github.com/tw93/Waza"
+desires = "latest"
+install = "npx skills add tw93/Waza -a claude-code codex cursor antigravity-cli -g -y"
+update = "npx skills update -g -y"
+# 🤓 No `waza --version`/binary exists — Waza ships as a skills bundle, not an
+#    executable. Installed-state is the presence of the skill directory, not a
+#    version string; there is no documented version command upstream.
+version = "test -d ~/.agents/skills/waza && echo installed"
+version_regex = '(installed)'
+depends_on = ["node.cli"]
+
+[[b00t.references]]
+name = "Waza GitHub"
+url = "https://github.com/tw93/Waza"
+
+[[b00t.usage]]
+description = "Install all 8 Waza skills for Claude Code, Codex, Cursor, Antigravity"
+command = "npx skills add tw93/Waza -a claude-code codex cursor antigravity-cli -g -y"
+
+[[b00t.usage]]
+description = "Update installed Waza skills"
+command = "npx skills update -g -y"
+
+[[b00t.usage]]
+description = "Claude Code native plugin install (alternative to npx)"
+command = "/plugin marketplace add tw93/Waza"
+
+[b00t.skill]
+type_tags = ["cli", "ai", "skills", "agent", "claude-code", "codex", "cursor"]
+description = """
+Waza — AI engineering skills bundle by tw93.
+
+8 skills, invoked as slash-commands once installed:
+  /think    design planning and pressure-testing
+  /ui       frontend interface development
+  /check    diff review and release verification
+  /hunt     systematic debugging
+  /write    prose editing (Chinese/English)
+  /learn    research workflows
+  /read     URL and PDF processing
+  /health   agent health auditing
+
+INSTALL
+  npx skills add tw93/Waza -a claude-code codex cursor antigravity-cli -g -y
+  # deploys to shared dir ~/.agents/skills, auto-discovered by supported agents
+
+UPDATE
+  npx skills update -g -y
+
+NOT A STANDALONE BINARY
+  No `waza` executable and no version flag — this is a skills library consumed
+  through host-agent slash commands, not a CLI you invoke directly.
+"""
+tier = "sm0l"
+complexity = 2
+
+# b00t:map v1
+# summary: Waza (tw93/Waza) — 8-skill AI engineering slash-command bundle for Claude Code/Codex/Cursor
+# tags: cli, ai, skills, agent, claude-code, codex, cursor, npx
+# tier: sm0l
+# cmds: npx skills add tw93/Waza -a claude-code codex cursor antigravity-cli -g -y
+# complexity: 2
