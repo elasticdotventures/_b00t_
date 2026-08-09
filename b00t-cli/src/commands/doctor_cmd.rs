@@ -117,6 +117,20 @@ fn check_submodule_drift(b00t_path: &str, fix: bool) -> Value {
                             .count()
                     })
                     .unwrap_or(0);
+                // branch_status: stale (2026-08-09, see check-submodule-drift.sh
+                // doc comment) — recorded pin unreachable from the .gitmodules
+                // branch=; a separate axis from checked-out-vs-recorded drift,
+                // so counted separately here even though it's the same
+                // `pass`/exit-code from the script.
+                let stale_branch_pins: Vec<&str> = submodules
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter(|s| s["branch_status"].as_str() == Some("stale"))
+                            .filter_map(|s| s["path"].as_str())
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 let pass = o.status.success();
                 json!({
                     "id": "submodule-drift",
@@ -124,7 +138,15 @@ fn check_submodule_drift(b00t_path: &str, fix: bool) -> Value {
                     "detail": if pass {
                         "0 drifted submodules".to_string()
                     } else {
-                        format!("{unresolved} unresolved submodule drift (see submodules[])")
+                        format!(
+                            "{unresolved} unresolved submodule drift, {} stale branch pin(s){} (see submodules[])",
+                            stale_branch_pins.len(),
+                            if stale_branch_pins.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" [{}]", stale_branch_pins.join(", "))
+                            }
+                        )
                     },
                     "submodules": submodules,
                     "latency_ms": ms,
@@ -738,6 +760,17 @@ pub fn handle_doctor_command(args: &DoctorCommands, b00t_path: &str) -> Result<(
                                         status,
                                         s["path"].as_str().unwrap_or("?"),
                                         s["action"].as_str().unwrap_or("")
+                                    );
+                                }
+                                // branch_status: stale can co-occur with an
+                                // otherwise-clean "ok" status — surfaced
+                                // separately since it's a different failure
+                                // mode (see check-submodule-drift.sh).
+                                if s["branch_status"] == "stale" {
+                                    println!(
+                                        "      ⚠️  stale-branch-pin  {}  {}",
+                                        s["path"].as_str().unwrap_or("?"),
+                                        s["branch_detail"].as_str().unwrap_or("")
                                     );
                                 }
                             }
