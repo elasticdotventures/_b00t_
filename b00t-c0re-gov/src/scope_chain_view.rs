@@ -107,6 +107,7 @@ impl ScopeChainView {
             key: key.to_string(),
             boundaries_crossed: crossings,
             resolved_at,
+            direction: AuditDirection::Read,
         })?;
 
         Ok(result)
@@ -122,6 +123,12 @@ impl ScopeChainView {
     /// every scope, not just repo-scope — see scope_credential_guard.rs
     /// for why "everywhere" replaced the original "repo-scope only"
     /// framing.
+    ///
+    /// Unaudited. Prefer `set_raw_with_audit` (or the `Writable` trait,
+    /// which is backed by it) at real call sites — kept `pub` rather than
+    /// made implementation-private because backends/tests still construct
+    /// scopes directly, but `set_raw_with_audit` is the seam #895 asks
+    /// call sites to depend on.
     pub fn set_raw(&mut self, target: &ScopeId, key: &str, val: Value) -> ScopeResult<()> {
         crate::scope_credential_guard::guard_write(key)?;
         for store in &mut self.chain {
@@ -132,6 +139,72 @@ impl ScopeChainView {
         Err(ScopeError::InvalidScopeId(format!(
             "scope {target} is not part of this chain"
         )))
+    }
+
+    /// Same explicit-target-only write as `set_raw`, but records an
+    /// `AuditEvent` (#900) to `logger` on success — the write-side mirror
+    /// of `get_raw_with_audit`. A write never chain-walks (there's exactly
+    /// one target, chosen by the caller, not resolved by search), so
+    /// `boundaries_crossed` is always empty and `resolved_at` is always
+    /// `Some(target)`; the event's top-level `direction` is what actually
+    /// distinguishes it from a read in the log — see `AuditEvent::direction`
+    /// for why that field exists.
+    ///
+    /// Only a *successful* write is audited: a credential-guard rejection
+    /// or an out-of-chain target returns its error without appending
+    /// anything — there's no write to attest to.
+    pub fn set_raw_with_audit(
+        &mut self,
+        target: &ScopeId,
+        key: &str,
+        val: Value,
+        logger: &AuditLogger,
+    ) -> ScopeResult<()> {
+        self.set_raw(target, key, val)?;
+
+        logger.append(&AuditEvent {
+            timestamp: Utc::now(),
+            key: key.to_string(),
+            boundaries_crossed: Vec::new(),
+            resolved_at: Some(target.clone()),
+            direction: AuditDirection::Write,
+        })?;
+
+        Ok(())
+    }
+}
+
+/// Path-addressed, explicit-target-only, audited write — the write-side
+/// counterpart to `Queryable`. `path` is a flat, dot-namespaced key (the
+/// same addressing `set_raw`/`ScopeStore::set_raw` already use, e.g.
+/// `"openai.credential"` or `"b00t.name"`), not a JSONPath expression into
+/// an existing stored document — that's a separate, underspecified
+/// follow-up (create-vs-overwrite-vs-array-append semantics need their own
+/// design note, per #895's triage) deliberately not folded in here.
+///
+/// The trait exists so call sites depend on this seam instead of reaching
+/// for a concrete type's `set_raw`/`set_raw_with_audit` directly — #893's
+/// own issue body calls out "every call site reaches for `set_raw`
+/// directly" as the gap this closes.
+pub trait Writable {
+    fn set_path(
+        &mut self,
+        target: &ScopeId,
+        path: &str,
+        val: Value,
+        logger: &AuditLogger,
+    ) -> ScopeResult<()>;
+}
+
+impl Writable for ScopeChainView {
+    fn set_path(
+        &mut self,
+        target: &ScopeId,
+        path: &str,
+        val: Value,
+        logger: &AuditLogger,
+    ) -> ScopeResult<()> {
+        self.set_raw_with_audit(target, path, val, logger)
     }
 }
 
@@ -407,5 +480,105 @@ mod tests {
             chain.get_raw("greeting").unwrap(),
             Some(Value::String("hi".into()))
         );
+    }
+
+    #[test]
+    fn audited_write_logs_a_write_direction_event_with_no_boundary_crossings() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        chain
+            .set_raw_with_audit(
+                &ScopeId::Node("myhost".into()),
+                "k",
+                Value::String("v".into()),
+                &logger,
+            )
+            .unwrap();
+
+        // The write itself actually landed.
+        assert_eq!(chain.get_raw("k").unwrap(), Some(Value::String("v".into())));
+
+        let events = logger.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].key, "k");
+        assert_eq!(events[0].direction, crate::scope_audit::AuditDirection::Write);
+        assert_eq!(
+            events[0].resolved_at,
+            Some(ScopeId::Node("myhost".into()))
+        );
+        assert!(
+            events[0].boundaries_crossed.is_empty(),
+            "a write targets exactly one scope directly -- no chain walk to cross"
+        );
+    }
+
+    #[test]
+    fn audited_write_rejected_by_credential_guard_logs_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        let err = chain
+            .set_raw_with_audit(
+                &ScopeId::Global,
+                "openai.credential",
+                Value::String("sk-...".into()),
+                &logger,
+            )
+            .unwrap_err();
+        assert!(matches!(err, ScopeError::WriteRejected(_)));
+
+        assert_eq!(
+            logger.read_all().unwrap(),
+            Vec::new(),
+            "a rejected write never happened -- nothing to attest to"
+        );
+    }
+
+    #[test]
+    fn audited_write_to_scope_not_in_chain_logs_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        let err = chain
+            .set_raw_with_audit(
+                &ScopeId::Repo("some-other-repo".into()),
+                "k",
+                Value::from(1),
+                &logger,
+            )
+            .unwrap_err();
+        assert!(matches!(err, ScopeError::InvalidScopeId(_)));
+        assert_eq!(logger.read_all().unwrap(), Vec::new());
+    }
+
+    /// Exercises `Writable` as a trait object -- the actual seam #895 asks
+    /// for: a call site written against `&mut dyn Writable` never sees
+    /// `ScopeChainView`'s concrete `set_raw`/`set_raw_with_audit` methods,
+    /// only `set_path`.
+    fn write_via_seam(target: &mut dyn Writable, scope: &ScopeId, logger: &AuditLogger) {
+        target
+            .set_path(scope, "seam-key", Value::String("via-trait".into()), logger)
+            .unwrap();
+    }
+
+    #[test]
+    fn writable_trait_seam_reaches_the_backend_and_the_audit_log() {
+        let dir = tempfile::tempdir().unwrap();
+        let logger = crate::scope_audit::AuditLogger::open(dir.path().join("audit.jsonl"));
+
+        let mut chain = three_tier_chain();
+        write_via_seam(&mut chain, &ScopeId::Global, &logger);
+
+        assert_eq!(
+            chain.get_raw("seam-key").unwrap(),
+            Some(Value::String("via-trait".into()))
+        );
+        let events = logger.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].direction, crate::scope_audit::AuditDirection::Write);
     }
 }
