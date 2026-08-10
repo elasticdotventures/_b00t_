@@ -53,6 +53,20 @@ A single test run produces both the outbound `fax.delivered` and inbound
 exercised together, bi-directional-capable architecture validated, without
 needing a second party.
 
+## Document ingestion into ledgrrr
+
+Once a fax completes (either direction), its PDF should land in ledgrrr,
+not just Telnyx's own temporary storage. `ledgerr-mcp` already has the
+right hook for this: `proxy_docling_ingest_pdf`
+(`ledgerr-mcp::mcp_adapter::handle_ingest_pdf`) — a working, already-wired
+tool that runs a PDF through `docling` extraction and calls
+`service.ingest_pdf(request)`, landing rows in ledgrrr's transaction system
+with `docling`-tagged provenance (source, tool version, backend call id).
+No new ledgrrr-side code needed for P0 — wrangler calls this existing MCP
+tool with the fax's PDF (outbound: the same test PDF already being sent;
+inbound: `fax.received`'s media, fetched from Telnyx first) once the
+`fax.delivered`/`fax.received` webhook confirms the transfer completed.
+
 ## Error handling
 
 `fax.failed` webhook (carries Telnyx's error code/message) is logged
