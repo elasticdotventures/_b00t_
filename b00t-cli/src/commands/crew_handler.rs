@@ -255,6 +255,19 @@ fn update_meta(store: &AgentStore, name: &str, f: impl FnOnce(&mut CrewMeta)) {
     save_meta(&mp, &meta);
 }
 
+/// Look up whether `agent_id` is recorded as a human player in the crew
+/// roster (`Agent::is_player`, via `_crew_meta.json`). Returns `false` for
+/// unknown agent ids — i.e. "assume software agent" absent other evidence.
+/// Used by `b00t-mcp` to tag outgoing messages/votes with sender identity.
+pub fn is_player(agent_id: &str) -> bool {
+    let store = AgentStore::with_path(default_store_dir());
+    all_agents(&store)
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .map(|a| a.is_player)
+        .unwrap_or(false)
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------

@@ -10,3 +10,4 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 b00t-c0re-gov = { path = "../b00t-c0re-gov" }
+b00t-council = { path = "../b00t-council" }

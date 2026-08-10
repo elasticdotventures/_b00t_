@@ -53,6 +53,19 @@ pub struct Agent {
     pub is_player: bool,            // true if this Agent represents a human user
 }
 
+/// First behavioral use of `is_player` in this codebase — previously set at
+/// construction but never read. Lets hive messaging (`b00t-council`) tag
+/// traffic as human- vs. software-originated.
+impl b00t_council::Player for Agent {
+    fn player_id(&self) -> &str {
+        &self.id
+    }
+
+    fn is_human(&self) -> bool {
+        self.is_player
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
     pub captain_id: String,
