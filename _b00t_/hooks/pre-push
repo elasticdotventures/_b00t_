@@ -37,6 +37,13 @@ while read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
     echo "🚫 pre-push: force-delete of main is BLOCKED" >&2
     exit 1
   fi
+
+  if [[ "$REMOTE_REF" == "refs/heads/main" && "$REMOTE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+    if ! git merge-base --is-ancestor "$REMOTE_SHA" "$LOCAL_SHA" 2>/dev/null; then
+      echo "🚫 pre-push: force-push to main is BLOCKED (not a fast-forward)" >&2
+      exit 1
+    fi
+  fi
   REMOTE_TIP="$REMOTE_SHA"
 done
 
