@@ -55,15 +55,20 @@ self-hosting outside Cloudflare's edge).
 The container image needs: Node.js, `pnpm` (the repo's declared package
 manager, per `pnpm-workspace.yaml`/`pnpm-lock.yaml`), and a clone of
 `cloudflare-os` at build or run time. Port 8787 (the README's documented
-local URL) is published from the container.
+local URL) is published from the container bound to `0.0.0.0`, not just
+loopback — matching how the qwen36-27b inference profile is already
+reachable from other machines on the network (`ss` shows `*:8001`, not
+`127.0.0.1:8001`), so this instance is reachable the same way rather than
+being accidentally localhost-only.
 
 ## What this spec delivers
 
-- A podman-run cloudflare-os instance, reachable at `http://localhost:8787`
-  from the host, running the agent chat UI, sandboxed "Gadget" app
-  creation, and the built-in Gatekeepers cloudflare-os already ships with
-  (whatever those are — GitHub/Google integrations are mentioned in the
-  README's example prompts) — all with zero custom code from this hive.
+- A podman-run cloudflare-os instance, reachable at `http://0.0.0.0:8787`
+  (i.e. from any machine on the network, not just this host) running the
+  agent chat UI, sandboxed "Gadget" app creation, and the built-in
+  Gatekeepers cloudflare-os already ships with (whatever those are —
+  GitHub/Google integrations are mentioned in the README's example
+  prompts) — all with zero custom code from this hive.
 - Nothing that talks to ledgrrr, b00t, or Telnyx. That is explicitly
   deferred.
 
