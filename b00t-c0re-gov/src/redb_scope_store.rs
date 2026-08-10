@@ -153,7 +153,11 @@ impl TransactionalScopeStore for RedbScopeStore {
                     ScopeOp::Put { key, value, expires_at, .. } => {
                         let current_gen = read_envelope(&table, &key)?.map(|e| e.generation).unwrap_or(0);
                         let new_gen = current_gen + 1;
-                        let env = ScopeEnvelope { v: value, generation: new_gen, expires_at };
+                        let env = ScopeEnvelope {
+                            v: value,
+                            generation: new_gen,
+                            expires_at: expires_at.map(|e| e.timestamp()),
+                        };
                         let serialized = serde_json::to_string(&env)?;
                         table
                             .insert(key.as_str(), serialized.as_str())

@@ -85,13 +85,22 @@ pub struct ScopeEnvelope {
     pub v: Value,
     #[serde(rename = "gen")]
     pub generation: u64,
-    pub expires_at: Option<DateTime<Utc>>,
+    /// Unix seconds, not `DateTime<Utc>` -- this is the wire representation
+    /// shared with the Lua transaction script (`redis_scope_store.rs`),
+    /// which builds the envelope with `cjson.encode` and has no RFC3339
+    /// support. Keeping both backends on the exact same on-the-wire number
+    /// type is the point: a `DateTime<Utc>` here would serialize as an
+    /// RFC3339 string via chrono's serde impl, which the Lua-written
+    /// envelope's plain numeric `expires_at` would then fail to
+    /// deserialize into -- an interchangeability gap of the same shape
+    /// ADR #902 warns about, just one field over.
+    pub expires_at: Option<i64>,
 }
 
 impl ScopeEnvelope {
     /// True when `now` is at or past this envelope's expiry, if it has one.
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
-        self.expires_at.map(|exp| exp <= now).unwrap_or(false)
+        self.expires_at.map(|exp| exp <= now.timestamp()).unwrap_or(false)
     }
 }
 
@@ -267,7 +276,11 @@ mod tests {
                             .map(|e| e.generation)
                             .unwrap_or(0);
                         let new_gen = current_gen + 1;
-                        let env = ScopeEnvelope { v: value, generation: new_gen, expires_at };
+                        let env = ScopeEnvelope {
+                            v: value,
+                            generation: new_gen,
+                            expires_at: expires_at.map(|e| e.timestamp()),
+                        };
                         self.data.insert(key, serde_json::to_value(&env).unwrap());
                         results.push(ScopeOpResult::Written { generation: new_gen });
                     }
