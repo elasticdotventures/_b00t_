@@ -12,7 +12,7 @@
 //!    abstractions; a third one reinventing either is exactly the
 //!    duplication this trait exists to consolidate away, not add to.
 
-use crate::errors::{ScopeError, ScopeResult};
+use crate::errors::ScopeResult;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
