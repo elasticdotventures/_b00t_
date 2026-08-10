@@ -69,7 +69,7 @@
 [submodule "vendor/ledgrrr"]
 	path = vendor/ledgrrr
 	url = https://github.com/PromptExecution/ledgrrr.git
-	branch = b00t-patches
+	branch = main
 
 [submodule "vendor/llama-patch"]
 	path = vendor/llama-patch
