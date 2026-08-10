@@ -9,9 +9,22 @@
 //! Backend detection: Valkey > Redis > ForgeKV > File
 
 use anyhow::Result;
+use b00t_c0re_gov::redis_scope_store::RedisScopeStore;
+use b00t_c0re_gov::scope_store::{ScopeId, ScopeOp, ScopeStore, TransactionalScopeStore};
 use b00t_c0re_lib::kv_store::{KvBackend, KvConfig, KvStore};
-use b00t_c0re_lib::redis::BroadcastPriority;
+use b00t_c0re_lib::redis::{BroadcastPriority, RedisConfig};
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
+
+/// The one company-wide `ScopeStore::Global` instance, backed by
+/// `RedisConfig::default()` (localhost:6379) — same connection default
+/// `KvConfig`/`kv_store.rs` already use. `RedisScopeStore::open` never
+/// fails without a live connection (lazy client handle), matching
+/// `get_kv_store()`'s always-succeeds contract below.
+fn global_scope_store() -> RedisScopeStore {
+    RedisScopeStore::open(RedisConfig::default(), ScopeId::Global, None)
+        .expect("RedisScopeStore::open is infallible without a live connection")
+}
 
 /// Get internal KV store with auto-detected backend
 /// 🤓 Silent detection - no output, used internally
@@ -70,20 +83,40 @@ pub mod kv {
     }
 }
 
-/// Agent coordination helpers using KV store
+/// Agent coordination helpers, now backed by `ScopeStore::Global` (kept as
+/// a permanent, idiomatically-named facade — not a shim to delete later).
 pub mod agent_kv {
     use super::*;
 
-    /// Register agent status
+    /// Register agent status. TTL 5 minutes, same as before — now enforced
+    /// via `ScopeEnvelope`'s `expires_at` instead of Redis SETEX.
     pub fn register_agent(agent_id: &str, status: &str) -> Result<()> {
         let key = format!("b00t:agents:{}", agent_id);
-        kv::set(&key, status, Some(300)) // 5 min TTL
+        let mut store = global_scope_store();
+        store.transaction(vec![ScopeOp::Put {
+            key,
+            value: serde_json::Value::String(status.to_string()),
+            expect_gen: None,
+            expires_at: Some(Utc::now() + Duration::seconds(300)),
+        }])?;
+        Ok(())
     }
 
-    /// Get agent status
+    /// Get agent status.
     pub fn get_agent_status(agent_id: &str) -> Result<Option<String>> {
         let key = format!("b00t:agents:{}", agent_id);
-        kv::get(&key)
+        let store = global_scope_store();
+        match store.get_raw(&key)? {
+            None => Ok(None),
+            Some(envelope_json) => {
+                let envelope: b00t_c0re_gov::scope_store::ScopeEnvelope =
+                    serde_json::from_value(envelope_json)?;
+                if envelope.is_expired(Utc::now()) {
+                    return Ok(None);
+                }
+                Ok(envelope.v.as_str().map(|s| s.to_string()))
+            }
+        }
     }
 
     /// List all registered agents
@@ -105,36 +138,57 @@ pub mod agent_kv {
     }
 }
 
-/// Session storage using KV backend
+/// Session storage, now backed by `ScopeStore::Global` (permanent facade,
+/// same reasoning as `agent_kv` above).
 pub mod session_kv {
     use super::*;
 
-    /// Store session data
+    /// Store session data. TTL 1 hour, same as before.
     pub fn store_session(
         session_id: &str,
         data: &HashMap<String, serde_json::Value>,
     ) -> Result<()> {
         let key = format!("b00t:sessions:{}", session_id);
-        let json = serde_json::to_string(data)?;
-        kv::set(&key, &json, Some(3600)) // 1 hour TTL
+        let value = serde_json::to_value(data)?;
+        let mut store = global_scope_store();
+        store.transaction(vec![ScopeOp::Put {
+            key,
+            value,
+            expect_gen: None,
+            expires_at: Some(Utc::now() + Duration::seconds(3600)),
+        }])?;
+        Ok(())
     }
 
-    /// Retrieve session data
+    /// Retrieve session data.
     pub fn get_session(session_id: &str) -> Result<Option<HashMap<String, serde_json::Value>>> {
         let key = format!("b00t:sessions:{}", session_id);
-        match kv::get(&key)? {
-            Some(json) => {
-                let data: HashMap<String, serde_json::Value> = serde_json::from_str(&json)?;
+        let store = global_scope_store();
+        match store.get_raw(&key)? {
+            None => Ok(None),
+            Some(envelope_json) => {
+                let envelope: b00t_c0re_gov::scope_store::ScopeEnvelope =
+                    serde_json::from_value(envelope_json)?;
+                if envelope.is_expired(Utc::now()) {
+                    return Ok(None);
+                }
+                let data: HashMap<String, serde_json::Value> = serde_json::from_value(envelope.v)?;
                 Ok(Some(data))
             }
-            None => Ok(None),
         }
     }
 
-    /// Clear session data
+    /// Clear session data. Returns 1 if a key was deleted, 0 if it was
+    /// already absent — matches the old `kv::del` return-count contract.
     pub fn clear_session(session_id: &str) -> Result<usize> {
         let key = format!("b00t:sessions:{}", session_id);
-        kv::del(&key)
+        let mut store = global_scope_store();
+        let existed = store.get_raw(&key)?.is_some();
+        if !existed {
+            return Ok(0);
+        }
+        store.transaction(vec![ScopeOp::Delete { key, expect_gen: None }])?;
+        Ok(1)
     }
 }
 
@@ -160,5 +214,35 @@ mod tests {
             backend,
             KvBackend::Valkey | KvBackend::Redis | KvBackend::ForgeKV | KvBackend::File
         ));
+    }
+
+    #[test]
+    fn agent_kv_register_and_get_status_round_trip_when_redis_is_actually_available() {
+        let store = global_scope_store();
+        if !store.is_available() {
+            eprintln!("skipping: no Redis reachable in this environment");
+            return;
+        }
+        agent_kv::register_agent("parity-test-agent", "online").unwrap();
+        let status = agent_kv::get_agent_status("parity-test-agent").unwrap();
+        assert_eq!(status, Some("online".to_string()));
+    }
+
+    #[test]
+    fn session_kv_store_and_get_round_trip_when_redis_is_actually_available() {
+        let store = global_scope_store();
+        if !store.is_available() {
+            eprintln!("skipping: no Redis reachable in this environment");
+            return;
+        }
+        let mut data = HashMap::new();
+        data.insert("k".to_string(), serde_json::json!("v"));
+        session_kv::store_session("parity-test-session", &data).unwrap();
+        let round_tripped = session_kv::get_session("parity-test-session").unwrap();
+        assert_eq!(round_tripped, Some(data));
+
+        let deleted = session_kv::clear_session("parity-test-session").unwrap();
+        assert_eq!(deleted, 1);
+        assert_eq!(session_kv::get_session("parity-test-session").unwrap(), None);
     }
 }
