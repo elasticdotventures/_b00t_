@@ -64,11 +64,12 @@ exec_start = """/bin/bash -c '\
     -e NVIDIA_VISIBLE_DEVICES=0 \
     -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     --security-opt=label=disable \
+    --memory=4g --memory-swap=4g \
     -p 8001:8080 \
     -v ${HOME}/.cache/huggingface/hub/models--unsloth--Qwen3.6-27B-MTP-GGUF:/models:ro \
     ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 \
     --host 0.0.0.0 --port 8080 \
-    -m /models/snapshots/${SNAP}/Qwen3.6-27B-Q4_K_M.gguf \
+    -m /models/snapshots/$${SNAP}/Qwen3.6-27B-Q4_K_M.gguf \
     -c 131072 \
     -b 4096 \
     -ub 1024 \
