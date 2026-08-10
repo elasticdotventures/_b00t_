@@ -344,6 +344,127 @@ fn check_vendor_binaries(repo_root: &Path, fix: bool) -> Value {
     })
 }
 
+/// Detect WSL2 the same way `b00t-cli/src/bin/rpa.rs`'s `detect_wsl()` does.
+fn is_wsl() -> bool {
+    Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
+        || std::fs::read_to_string("/proc/version")
+            .map(|v| v.contains("Microsoft") || v.contains("WSL"))
+            .unwrap_or(false)
+}
+
+/// Run a PowerShell command on the Windows host via `powershell.exe`
+/// interop, invoked directly (no intermediate `sh -c`) so `$`-prefixed
+/// PowerShell syntax (`$_.Name`, etc.) never gets shell-expanded first.
+fn powershell(script: &str) -> (bool, String) {
+    Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            (o.status.success() && !s.is_empty(), s)
+        })
+        .unwrap_or((false, String::new()))
+}
+
+/// Parse a single integer (MTU value) out of a PowerShell one-liner's
+/// trimmed stdout — tolerant of trailing blank lines.
+fn parse_mtu(output: &str) -> Option<u32> {
+    output.trim().lines().next()?.trim().parse().ok()
+}
+
+/// True once the local interface's MTU exceeds the tunnel's advertised
+/// MTU — the exact shape of the WSL2 + Cloudflare WARP path-MTU blackhole
+/// diagnosed 2026-08-09 (see `check_wsl_warp_mtu` doc comment).
+fn mtu_at_risk(local_mtu: u32, tunnel_mtu: u32) -> bool {
+    local_mtu > tunnel_mtu
+}
+
+/// WSL2 + Cloudflare WARP path-MTU blackhole (documented 2026-08-09, this
+/// node). When Cloudflare WARP is active on the Windows host, its
+/// WireGuard tunnel advertises a lower MTU (commonly ~1300) than WSL's
+/// `eth0` vEthernet, which stays at 1500 regardless of what the host
+/// actually routes through. Windows doesn't relay an ICMP "fragmentation
+/// needed" back into the WSL guest, so PMTUD never corrects it (and
+/// `net.ipv4.tcp_mtu_probing=0` by default means Linux won't self-heal
+/// either): TCP connections complete their handshake fine (small packets)
+/// and then hang forever the instant a larger payload has to cross —
+/// TLS ServerHello, SSH channel data, `git-upload-pack` responses. Symptom
+/// is `git fetch`/`curl`/`ssh` hanging indefinitely with no error, not a
+/// clean failure.
+///
+/// Only meaningful under WSL2 (no-op pass everywhere else) and only when
+/// WARP is actually up (pass if absent/disconnected). `eth0` is assumed —
+/// WSL2's default NAT networking mode always names it that; a host running
+/// "mirrored" networking mode (a different interface topology) is out of
+/// scope here.
+///
+/// `--fix` attempts `ip link set dev eth0 mtu <tunnel_mtu>` in-process,
+/// which requires `CAP_NET_ADMIN` (root); most agent/CI contexts have no
+/// TTY for a `sudo` password prompt, so on failure the detail string
+/// carries the exact command to run manually instead of blocking on one.
+fn check_wsl_warp_mtu(fix: bool) -> Value {
+    let start = Instant::now();
+    let id = "wsl-warp-mtu";
+    let elapsed = |start: Instant| start.elapsed().as_millis();
+
+    if !is_wsl() {
+        return json!({"id": id, "pass": true, "detail": "not WSL, skipped", "latency_ms": elapsed(start)});
+    }
+
+    let warp = powershell(
+        "(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -like '*Cloudflare WARP*' -and $_.Status -eq 'Up' }).Name",
+    );
+    if !warp.0 || warp.1.is_empty() {
+        return json!({"id": id, "pass": true, "detail": "Cloudflare WARP not active on Windows host", "latency_ms": elapsed(start)});
+    }
+    let warp_adapter = warp.1.lines().next().unwrap_or("").trim().to_string();
+
+    let warp_mtu_out = powershell(&format!(
+        "(Get-NetIPInterface -InterfaceAlias '{warp_adapter}' -AddressFamily IPv4 -ErrorAction SilentlyContinue).NlMtu"
+    ));
+    let local_mtu_str = std::fs::read_to_string("/sys/class/net/eth0/mtu").unwrap_or_default();
+
+    let (Some(warp_mtu), Some(local_mtu)) =
+        (parse_mtu(&warp_mtu_out.1), parse_mtu(&local_mtu_str))
+    else {
+        return json!({
+            "id": id, "pass": true,
+            "detail": format!("WARP active ({warp_adapter}) but couldn't read MTU values to compare — inconclusive, not failing"),
+            "latency_ms": elapsed(start),
+        });
+    };
+
+    if !mtu_at_risk(local_mtu, warp_mtu) {
+        return json!({
+            "id": id, "pass": true,
+            "detail": format!("WARP active ({warp_adapter}, tunnel MTU {warp_mtu}), eth0 MTU {local_mtu} already <= tunnel MTU"),
+            "latency_ms": elapsed(start),
+        });
+    }
+
+    let mut detail = format!(
+        "WARP active ({warp_adapter}, tunnel MTU {warp_mtu}) but eth0 MTU is {local_mtu} — \
+         packets above {warp_mtu} bytes are silently dropped (path-MTU blackhole, no ICMP \
+         frag-needed feedback). git fetch/curl/ssh will hang forever with no error. \
+         Fix: sudo ip link set dev eth0 mtu {warp_mtu}"
+    );
+    let mut pass = false;
+    if fix {
+        let applied = Command::new("ip")
+            .args(["link", "set", "dev", "eth0", "mtu", &warp_mtu.to_string()])
+            .output();
+        match applied {
+            Ok(o) if o.status.success() => {
+                pass = true;
+                detail = format!("eth0 MTU lowered to {warp_mtu} to match WARP tunnel");
+            }
+            _ => detail.push_str(" (--fix attempted without root; run the sudo command above manually)"),
+        }
+    }
+
+    json!({"id": id, "pass": pass, "detail": detail, "latency_ms": elapsed(start)})
+}
+
 fn all_deps(fix: bool) -> Vec<Value> {
     let mut results: Vec<Value> = vec![
         check_version("b00t-cli"),
@@ -442,6 +563,10 @@ fn all_deps(fix: bool) -> Vec<Value> {
     // comment. Shares the $HOME/.b00t repo-root convention with the
     // submodule-drift check above rather than the `b00t_path` fn parameter.
     results.push(check_vendor_binaries(&repo_root, fix));
+
+    // WSL2 + Cloudflare WARP path-MTU blackhole: see check_wsl_warp_mtu()
+    // doc comment. No-op pass on non-WSL hosts.
+    results.push(check_wsl_warp_mtu(fix));
 
     results
 }
@@ -1366,5 +1491,40 @@ mod vendor_binary_tests {
         let result = check_vendor_binaries(dir.path(), false);
         assert_eq!(result["pass"], json!(true));
         assert_eq!(result["vendor_binaries"].as_array().unwrap().len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod wsl_warp_mtu_tests {
+    use super::*;
+
+    // is_wsl()/powershell() are real host I/O and not mocked here — these
+    // cover the pure decision logic the check is built on: parsing a
+    // PowerShell one-liner's stdout, and the actual "is this a blackhole"
+    // comparison (#confirmed 2026-08-09 against a live WSL2 + WARP host).
+
+    #[test]
+    fn parses_single_line_numeric_mtu() {
+        assert_eq!(parse_mtu("1300\n"), Some(1300));
+        assert_eq!(parse_mtu("1500"), Some(1500));
+    }
+
+    #[test]
+    fn parse_mtu_rejects_empty_or_non_numeric() {
+        assert_eq!(parse_mtu(""), None);
+        assert_eq!(parse_mtu("\n\n"), None);
+        assert_eq!(parse_mtu("not-a-number"), None);
+    }
+
+    #[test]
+    fn flags_risk_when_local_mtu_exceeds_tunnel_mtu() {
+        // The diagnosed shape: eth0 stuck at 1500, WARP tunnel at 1300.
+        assert!(mtu_at_risk(1500, 1300));
+    }
+
+    #[test]
+    fn no_risk_when_local_mtu_already_at_or_below_tunnel_mtu() {
+        assert!(!mtu_at_risk(1280, 1300));
+        assert!(!mtu_at_risk(1300, 1300));
     }
 }
