@@ -42,6 +42,15 @@ pub struct AuditEvent {
     pub key: String,
     pub boundaries_crossed: Vec<BoundaryCrossing>,
     pub resolved_at: Option<ScopeId>,
+    /// Whether this event as a whole is a read or a write. Distinct from
+    /// `BoundaryCrossing::direction` (which describes crossings made while
+    /// *resolving* a read): a write never chain-walks (#893 -- explicit
+    /// target only, no silent shadowing), so `boundaries_crossed` is always
+    /// empty for a write event and this top-level field is the only place
+    /// `AuditDirection::Write` is ever recorded. Without it the `Write`
+    /// variant would exist in the enum but never be constructed anywhere
+    /// outside a test -- see #895.
+    pub direction: AuditDirection,
 }
 
 /// Appends `AuditEvent`s as one JSON object per line to a file, one logger
@@ -114,6 +123,7 @@ mod tests {
                 direction: AuditDirection::Read,
             }],
             resolved_at: Some(ScopeId::Node("myhost".into())),
+            direction: AuditDirection::Read,
         }
     }
 
@@ -171,6 +181,7 @@ mod tests {
             key: "immediate-hit".to_string(),
             boundaries_crossed: Vec::new(),
             resolved_at: Some(ScopeId::Repo("myrepo".into())),
+            direction: AuditDirection::Read,
         };
         logger.append(&event).unwrap();
 
