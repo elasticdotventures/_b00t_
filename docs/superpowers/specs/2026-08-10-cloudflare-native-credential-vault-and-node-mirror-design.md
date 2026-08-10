@@ -68,8 +68,28 @@ high rates" that don't need strict global consistency.
 storing OAuth tokens, refreshed proactively, inaccessible outside the
 Worker. b00t's per-user MCP key vault should follow the same shape: one
 `McpKeyAccount`-style DO per user, written once at enrollment, read by the
-Gatekeeper Worker on each request; KV as a read-mirror only if request
-volume ever makes DO reads a bottleneck (not needed for P0).
+Gatekeeper Worker on each request.
+
+**Confirmed by reading the actual source** (`packages/gatekeeper-mcp/src/mcp.ts`
+and the shared base at `packages/mcp-shared/src/account.ts`, cloned locally
+2026-08-10): `McpAccount extends McpAccountBase<Env>`, an abstract class
+requiring only `baseUrl()`, `log()`, and `mintAccount()` from each
+subclass. Its actual persistence is `this.ctx.storage.kv` — the Durable
+Object's own built-in transactional key-value storage, not Workers KV, not
+Secrets Store, not any external service. Keys observed: `server`,
+`connectionGeneration`, `callback`, `nonce`, `tokens`, `oauthClient`,
+`oauthDiscovery`, `oauthVerifier`, `pendingAuth`, `expiredNotified`,
+`reconnecting`, `mcpSessionId` — a full connection-lifecycle state machine,
+not just a flat secret store. **This retracts the earlier "KV as a
+read-mirror" suggestion** — it was speculative before this read; the real
+pattern doesn't need one. A single DO instance's own `ctx.storage.kv` is
+already the complete, strongly-consistent, durable store for one user's
+account state, matching the actual scope needed (per-user, not
+cross-region). `McpKeyAccount` should extend `McpAccountBase` directly
+(or closely mirror its shape) rather than reimplementing state management
+from scratch — `mintAccount()`'s existing pattern (`this.ctx.exports.GatekeeperUserImpl(...)`,
+Cloudflare's newer RPC-exports mechanism) is also the concrete, working
+example of how a Gatekeeper Worker is meant to reach into its account DO.
 
 **What this does not solve:** how a secret gets from its origin (e.g. the
 operator's Windows machine, per the backlogged credproxy spec) into
