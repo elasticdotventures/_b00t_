@@ -1,6 +1,7 @@
 //! Multi-provider compute abstraction — inference endpoints + training jobs.
 //!
-//! Providers: runpod (native crate), hf (CLI wrapper for `hf jobs`), local (podman)
+//! Providers: runpod (native crate), hf (CLI wrapper for `hf jobs`), local (podman),
+//! dstack, vultr (v2 REST API — VPS-only, no serverless endpoints or job queue)
 //! Single source of truth: PROVIDER-*.provider.tomllmd datums
 //!
 //! b00t provider endpoint deploy|status|teardown|list --provider runpod|hf
@@ -146,8 +147,9 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
         "hf" => Ok(Box::new(HfProvider::new())),
         "local" => Ok(Box::new(LocalProvider::new())),
         "dstack" => Ok(Box::new(DstackProvider::new())),
+        "vultr" => Ok(Box::new(VultrProvider::new()?)),
         other => bail!(
-            "unknown provider '{}'; supported: runpod, hf, local, dstack",
+            "unknown provider '{}'; supported: runpod, hf, local, dstack, vultr",
             other
         ),
     }
@@ -1191,6 +1193,165 @@ impl ComputeProvider for LocalProvider {
     }
 }
 
+// ── Vultr provider ──────────────────────────────────────────────────────────
+//
+// Vultr has no serverless-inference or managed-job-queue primitive of its
+// own — it's plain VPS hosting (see PROVIDER-VULTR.provider.tomllmd, role
+// #4: general VPS hosting, concretely a VPS running NATS as part of a DAPR
+// mesh). deploy/status/teardown/list map onto Vultr's real v2 Instances API
+// (https://api.vultr.com/v2/instances); the job/training methods bail, same
+// pattern HfProvider uses for the endpoint methods it doesn't support.
+//
+// Registered lowest-priority of Vultr's four confirmed roles (dstack GPU
+// backend, this direct ComputeProvider impl, the ACME DNS-01 delegate-zone
+// workaround, and general VPS hosting) — the DNS-01 workaround was the one
+// with a concrete, currently-broken dependency on it (see infrastructure
+// repo PR #90); this exists mainly so `b00t provider endpoint --provider
+// vultr` is a real, working option rather than a documented-but-absent one.
+
+const VULTR_API_BASE: &str = "https://api.vultr.com/v2";
+/// Defaults match the scaffold in the infrastructure repo's
+/// `terraform/app4dog/vultr_app4dog.tf` — keep the two in sync if either
+/// changes. Override via VULTR_REGION/VULTR_PLAN/VULTR_OS_ID for anything
+/// other than the still-open NATS/DAPR sizing decision noted there.
+const VULTR_DEFAULT_REGION: &str = "syd";
+const VULTR_DEFAULT_PLAN: &str = "vc2-1c-1gb";
+const VULTR_DEFAULT_OS_ID: u32 = 2136; // Debian 12 x64
+
+pub struct VultrProvider {
+    api_key: String,
+    client: reqwest::Client,
+}
+
+impl VultrProvider {
+    pub fn new() -> Result<Self> {
+        let api_key = std::env::var("VULTR_API_KEY")
+            .context("VULTR_API_KEY not set — see PROVIDER-VULTR.provider.tomllmd")?;
+        Ok(Self {
+            api_key,
+            client: reqwest::Client::new(),
+        })
+    }
+
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let url = format!("{VULTR_API_BASE}{path}");
+        let mut req = self.client.request(method.clone(), &url).bearer_auth(&self.api_key);
+        if let Some(b) = &body {
+            req = req.json(b);
+        }
+        let resp = req
+            .send()
+            .await
+            .with_context(|| format!("vultr {method} {path} request failed"))?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            bail!("vultr {method} {path} failed ({status}): {text}");
+        }
+        if text.is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
+        serde_json::from_str(&text)
+            .with_context(|| format!("vultr {method} {path} returned non-JSON body: {text}"))
+    }
+}
+
+/// Pure builder, unit-testable without VULTR_API_KEY or the network —
+/// mirrors `hf_batch_args`/`local_batch_args`. Vultr's Instance Create body.
+fn vultr_create_instance_body(cfg: &EndpointConfig) -> serde_json::Value {
+    let region = std::env::var("VULTR_REGION").unwrap_or_else(|_| VULTR_DEFAULT_REGION.into());
+    let plan = std::env::var("VULTR_PLAN").unwrap_or_else(|_| VULTR_DEFAULT_PLAN.into());
+    let os_id: u32 = std::env::var("VULTR_OS_ID")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(VULTR_DEFAULT_OS_ID);
+    serde_json::json!({
+        "region": region,
+        "plan": plan,
+        "os_id": os_id,
+        "label": cfg.name,
+        "tags": ["b00t"],
+    })
+}
+
+fn vultr_instance_to_handle(v: &serde_json::Value) -> EndpointHandle {
+    EndpointHandle {
+        id: v["id"].as_str().unwrap_or_default().to_string(),
+        provider: "vultr".into(),
+        name: v["label"].as_str().map(str::to_string),
+        status: v["status"].as_str().map(str::to_string),
+    }
+}
+
+#[async_trait]
+impl ComputeProvider for VultrProvider {
+    fn name(&self) -> &str {
+        "vultr"
+    }
+
+    async fn deploy_inference_endpoint(&self, cfg: &EndpointConfig) -> Result<EndpointHandle> {
+        let body = vultr_create_instance_body(cfg);
+        let resp = self.request(reqwest::Method::POST, "/instances", Some(body)).await?;
+        Ok(vultr_instance_to_handle(&resp["instance"]))
+    }
+
+    async fn endpoint_status(&self, id: &str) -> Result<EndpointHandle> {
+        let resp = self
+            .request(reqwest::Method::GET, &format!("/instances/{id}"), None)
+            .await?;
+        Ok(vultr_instance_to_handle(&resp["instance"]))
+    }
+
+    async fn teardown_endpoint(&self, id: &str) -> Result<()> {
+        self.request(reqwest::Method::DELETE, &format!("/instances/{id}"), None)
+            .await?;
+        Ok(())
+    }
+
+    async fn list_endpoints(&self) -> Result<Vec<EndpointHandle>> {
+        let resp = self.request(reqwest::Method::GET, "/instances", None).await?;
+        Ok(resp["instances"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter(|v| {
+                        v["tags"]
+                            .as_array()
+                            .map(|tags| tags.iter().any(|t| t.as_str() == Some("b00t")))
+                            .unwrap_or(false)
+                    })
+                    .map(vultr_instance_to_handle)
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    async fn submit_training_job(&self, _spec: &TrainingJobSpec) -> Result<JobHandle> {
+        bail!("vultr provider is VPS-only (no managed job queue); use provider=runpod or provider=hf for training jobs")
+    }
+
+    async fn submit_batch_job(&self, _spec: &BatchJobSpec) -> Result<JobHandle> {
+        bail!("vultr provider is VPS-only (no managed job queue); use provider=runpod, provider=hf, or provider=local for batch jobs")
+    }
+
+    async fn job_status(&self, _handle: &JobHandle) -> Result<String> {
+        bail!("vultr provider has no job management; use provider=runpod or provider=hf")
+    }
+
+    async fn cancel_job(&self, _handle: &JobHandle) -> Result<()> {
+        bail!("vultr provider has no job management; use provider=runpod or provider=hf")
+    }
+
+    async fn list_jobs(&self) -> Result<Vec<JobHandle>> {
+        Ok(vec![])
+    }
+}
+
 // ── CLI commands ──────────────────────────────────────────────────────────────
 
 #[derive(Parser, Clone)]
@@ -1913,6 +2074,59 @@ mod batch_job_tests {
         let copied = dest_dir.path().join("photo.png");
         assert!(copied.exists());
         assert_eq!(std::fs::read(&copied).unwrap(), b"fake-image-bytes");
+    }
+}
+
+#[cfg(test)]
+mod vultr_tests {
+    use super::*;
+
+    fn sample_cfg(name: &str) -> EndpointConfig {
+        EndpointConfig {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn create_instance_body_uses_terraform_scaffold_defaults() {
+        // Not hermetic against a caller-set $VULTR_REGION/$VULTR_PLAN/$VULTR_OS_ID
+        // (process-global env, same caveat as B00T_LOCAL_MEMORY_LIMIT above) —
+        // only assert the defaults when nothing has overridden them.
+        let body = vultr_create_instance_body(&sample_cfg("b00t-nats-dapr"));
+        assert_eq!(body["label"], "b00t-nats-dapr");
+        assert_eq!(body["tags"], serde_json::json!(["b00t"]));
+        if std::env::var("VULTR_REGION").is_err() {
+            assert_eq!(body["region"], VULTR_DEFAULT_REGION);
+        }
+        if std::env::var("VULTR_PLAN").is_err() {
+            assert_eq!(body["plan"], VULTR_DEFAULT_PLAN);
+        }
+        if std::env::var("VULTR_OS_ID").is_err() {
+            assert_eq!(body["os_id"], VULTR_DEFAULT_OS_ID);
+        }
+    }
+
+    #[test]
+    fn instance_to_handle_maps_expected_fields() {
+        let v = serde_json::json!({
+            "id": "abc-123",
+            "label": "b00t-nats-dapr",
+            "status": "active",
+        });
+        let handle = vultr_instance_to_handle(&v);
+        assert_eq!(handle.id, "abc-123");
+        assert_eq!(handle.provider, "vultr");
+        assert_eq!(handle.name.as_deref(), Some("b00t-nats-dapr"));
+        assert_eq!(handle.status.as_deref(), Some("active"));
+    }
+
+    #[test]
+    fn instance_to_handle_tolerates_missing_fields() {
+        let handle = vultr_instance_to_handle(&serde_json::json!({}));
+        assert_eq!(handle.id, "");
+        assert_eq!(handle.name, None);
+        assert_eq!(handle.status, None);
     }
 }
 
