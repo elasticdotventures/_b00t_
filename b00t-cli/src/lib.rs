@@ -130,6 +130,7 @@ pub mod pipeline_auth;
 pub mod pipeline_k8s;
 pub mod pipeline_statemachine;
 pub mod pipeline_store_nats;
+pub mod pipeline_transitions;
 pub mod stage_registry;
 pub mod transmogrifier;
 #[cfg(feature = "rpa")]

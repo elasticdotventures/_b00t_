@@ -99,6 +99,7 @@ use b00t_cli::commands::{
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
     PipelineCommands,
+    SecretCommands,
     StageCommands,
     StoreCommands,
     ContractCommands,
@@ -619,6 +620,8 @@ The system will:
     Server(ServerCommands),
     #[clap(subcommand)]
     Pipeline(PipelineCommands),
+    #[clap(subcommand)]
+    Secret(SecretCommands),
     #[clap(subcommand)]
     Stage(StageCommands),
     #[clap(subcommand)]
@@ -3059,6 +3062,12 @@ async fn main() {
         }
         Some(Commands::Pipeline(cmd)) => {
             if let Err(e) = b00t_cli::commands::pipeline::handle_pipeline_command(&cmd, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Secret(cmd)) => {
+            if let Err(e) = b00t_cli::commands::secret::handle_secret_command(&cmd) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
