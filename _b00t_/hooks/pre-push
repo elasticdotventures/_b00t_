@@ -154,8 +154,33 @@ for p in "${SELECTED[@]}"; do
   [ "$p" = "b00t-cli" ] && { git submodule update --init vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t 2>/dev/null || true; break; }
 done
 
-# Single invocation: Cargo dedups compilation across selected packages.
-if ! cargo test --lib --quiet $(printf -- '-p %s ' "${SELECTED[@]}") 2>&1; then
+# `--lib` errors ("no library targets found") on any selected package that is
+# bin-only (e.g. b00t-azure-cp), even when other selected packages do have a
+# lib target — cargo validates the requested target-kind per -p, not just
+# somewhere-in-the-selection. Split the selection accordingly: lib-having
+# packages keep the fast/scoped `--lib` (unit tests only, no doctests/
+# integration tests); bin-only packages run under `--bins` instead (covers
+# any inline #[test] in their main.rs, and is a no-op — not an error — for
+# packages with zero bin targets).
+LIB_PKGS=()
+BIN_ONLY_PKGS=()
+for p in "${SELECTED[@]}"; do
+  if jq -e --arg p "$p" '.packages[] | select(.name == $p) | .targets[] | select(.kind[] == "lib")' <<<"$META" >/dev/null 2>&1; then
+    LIB_PKGS+=("$p")
+  else
+    BIN_ONLY_PKGS+=("$p")
+  fi
+done
+
+FAILED=0
+if [ "${#LIB_PKGS[@]}" -gt 0 ]; then
+  cargo test --lib --quiet $(printf -- '-p %s ' "${LIB_PKGS[@]}") 2>&1 || FAILED=1
+fi
+if [ "${#BIN_ONLY_PKGS[@]}" -gt 0 ]; then
+  cargo test --bins --quiet $(printf -- '-p %s ' "${BIN_ONLY_PKGS[@]}") 2>&1 || FAILED=1
+fi
+
+if [ "$FAILED" -eq 1 ]; then
   echo "🚫 pre-push: tests failed — push blocked" >&2
   exit 1
 fi
