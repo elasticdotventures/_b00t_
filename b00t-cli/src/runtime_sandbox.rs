@@ -24,6 +24,7 @@ use std::ffi::CString;
 /// `evaluate_gates`/`GatePreconditions` elsewhere) — needed to resolve
 /// relative `file` gates. Pass whatever `path` was used to resolve the
 /// runtime datum in the first place.
+#[cfg(target_os = "linux")]
 pub fn spawn_sandboxed(
     config: &RuntimeConfig,
     passthrough_args: &[String],
@@ -146,7 +147,9 @@ pub fn spawn_sandboxed(
 }
 
 // ── Child-only functions — async-signal-safe (no heap, no format, no alloc) ──
+// Linux-only: unshare(2)/mount(2)/prctl(2) below don't exist in macOS's libc.
 
+#[cfg(target_os = "linux")]
 fn child_sandbox(
     iso: &Option<IsolationConfig>,
     cwd: Option<&std::ffi::CStr>,
@@ -182,6 +185,7 @@ fn child_sandbox(
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn child_enter_namespaces(iso: &IsolationConfig) -> Result<(), u8> {
     let mut ns_flags = libc::CLONE_NEWNS;
 
@@ -204,6 +208,7 @@ fn child_enter_namespaces(iso: &IsolationConfig) -> Result<(), u8> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn child_mount_root() -> Result<(), u8> {
     if unsafe {
         libc::mount(
@@ -220,6 +225,7 @@ fn child_mount_root() -> Result<(), u8> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn child_apply_mounts(mounts: &[crate::MountEntry]) -> Result<(), u8> {
     for mnt in mounts {
         let src = CString::new(mnt.src.as_str()).map_err(|_| 4u8)?;
@@ -261,6 +267,7 @@ fn child_apply_mounts(mounts: &[crate::MountEntry]) -> Result<(), u8> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn child_bind_mount(
     src: &[u8],
     dest: &CString,
@@ -368,6 +375,7 @@ static ALL_CAPS: &[(&str, u32)] = &[
     ("CAP_CHECKPOINT_RESTORE", CAP_CHECKPOINT_RESTORE),
 ];
 
+#[cfg(target_os = "linux")]
 fn child_drop_capabilities(iso: &IsolationConfig) {
     let retain: std::collections::HashSet<&str> = iso
         .caps_retain
@@ -382,6 +390,21 @@ fn child_drop_capabilities(iso: &IsolationConfig) {
             }
         }
     }
+}
+
+/// Non-Linux stub — the real implementation forks and uses unshare(2)/
+/// mount(2)/prctl(2), none of which exist outside Linux. `resolve_binary`
+/// below stays portable/unguarded since the test suite exercises it on
+/// every platform independent of sandboxing support.
+#[cfg(not(target_os = "linux"))]
+pub fn spawn_sandboxed(
+    _config: &RuntimeConfig,
+    _passthrough_args: &[String],
+    _datum_path: &str,
+) -> Result<i32> {
+    bail!(
+        "sandboxed runtime execution requires Linux (namespace isolation via unshare(2)/mount(2)/prctl(2)); unsupported on this platform"
+    )
 }
 
 /// Resolve a binary name to an absolute path (searches PATH).
