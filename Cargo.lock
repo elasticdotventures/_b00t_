@@ -1376,7 +1376,7 @@ version = "0.1.0"
 
 [[package]]
 name = "b00t-admin"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "axum 0.8.9",
  "b00t-c0re-lib",
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ast"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1415,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-azure-cp"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-bouncer"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1453,7 +1453,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-a2a"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "chrono",
  "serde",
@@ -1466,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-gov"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "async-trait",
  "b00t-c0re-lib",
@@ -1483,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-hierarchy"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "b00t-c0re-gov",
  "b00t-council",
@@ -1496,7 +1496,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-c0re-lib"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1558,7 +1558,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-candle-serve"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "candle-core 0.11.0",
@@ -1571,7 +1571,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-chat"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "arrow",
@@ -1614,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-cli"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "apalis",
@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-council"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-datum-core"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1734,7 +1734,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-embed"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1755,7 +1755,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-embed-serve"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1768,7 +1768,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-grok"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -1787,7 +1787,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ipc"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -1808,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-isometric-wasm"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "b00t-l3dg3rr-viz",
  "serde_json",
@@ -1817,7 +1817,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-l3dg3rr-viz"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "blake3",
  "kasuari",
@@ -1828,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-lsp"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "b00t-datum-core",
@@ -1842,7 +1842,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mcp"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-mermaid-wasm"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "mermaid-rs-renderer",
  "wasm-bindgen",
@@ -1895,7 +1895,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-pyverse"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "b00t-c0re-lib",
@@ -1910,11 +1910,11 @@ dependencies = [
 
 [[package]]
 name = "b00t-reflect-types"
-version = "0.10.3"
+version = "0.10.4"
 
 [[package]]
 name = "b00t-stt-serve"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -1927,7 +1927,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-ui-wasm"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "dioxus",
  "dioxus-web",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "b00t-zellij"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "b00t-c0re-lib",
  "chrono",
@@ -7208,7 +7208,7 @@ dependencies = [
 
 [[package]]
 name = "k0mmand3r"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "decimal-rs",
  "indexmap 2.14.0",
