@@ -11,23 +11,40 @@ use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub enum SecretCommands {
-    #[clap(about = "Resolve a single secret from a file or environment variable and print it to stdout")]
+    #[clap(about = "Resolve a single secret from a file, environment variable, or Azure Key Vault, and print it to stdout")]
     Resolve {
         #[clap(long, help = "Resolve from this file path (whitespace-trimmed)")]
         file: Option<String>,
         #[clap(long, help = "Resolve from this environment variable name")]
         env: Option<String>,
+        #[clap(long, help = "Resolve from this Azure Key Vault name (requires --azure-secret; uses the active `az login` session)", requires = "azure_secret")]
+        azure_vault: Option<String>,
+        #[clap(long, help = "Secret name within --azure-vault", requires = "azure_vault")]
+        azure_secret: Option<String>,
     },
 }
 
 pub fn handle_secret_command(cmd: &SecretCommands) -> Result<()> {
     match cmd {
-        SecretCommands::Resolve { file, env } => {
-            let source = match (file, env) {
-                (Some(path), None) => SecretSource::File { path: path.clone() },
-                (None, Some(name)) => SecretSource::EnvVar { name: name.clone() },
-                (Some(_), Some(_)) => bail!("pass exactly one of --file or --env, not both"),
-                (None, None) => bail!("pass one of --file <path> or --env <name>"),
+        SecretCommands::Resolve {
+            file,
+            env,
+            azure_vault,
+            azure_secret,
+        } => {
+            let source = match (file, env, azure_vault, azure_secret) {
+                (Some(path), None, None, None) => SecretSource::File { path: path.clone() },
+                (None, Some(name), None, None) => SecretSource::EnvVar { name: name.clone() },
+                (None, None, Some(vault), Some(name)) => SecretSource::AzureKeyVault {
+                    vault: vault.clone(),
+                    name: name.clone(),
+                },
+                (None, None, None, None) => {
+                    bail!("pass one of --file <path>, --env <name>, or --azure-vault <vault> --azure-secret <name>")
+                }
+                _ => bail!(
+                    "pass exactly one of --file, --env, or --azure-vault/--azure-secret together, not a mix"
+                ),
             };
             let value = load_secret(&SecretRef {
                 key: "cli-resolve".to_string(),

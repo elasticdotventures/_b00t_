@@ -33,6 +33,17 @@ pub enum SecretSource {
         /// Human-readable prompt shown to the user.
         description: String,
     },
+    /// Read a secret's value from an Azure Key Vault, via the `az` CLI using
+    /// whatever `az login`/service-principal session is already active on
+    /// this host. Prototype/backup path — see `b00t-azure-cp`'s
+    /// `azure.keyvault_get_secret` MCP tool for the server-side counterpart
+    /// used by agents with no local `az` session.
+    AzureKeyVault {
+        /// Key Vault name (the `xyz` in `https://xyz.vault.azure.net`).
+        vault: String,
+        /// Secret name within the vault.
+        name: String,
+    },
 }
 
 // ── SecretRef ─────────────────────────────────────────────────────────────
@@ -172,6 +183,41 @@ pub fn load_secret(ref_: &SecretRef) -> Result<String> {
             let prompt = format!("{}: ", description);
             rpassword::prompt_password(&prompt)
                 .map_err(|e| anyhow!("failed to read secret from prompt: {}", e))
+        }
+        SecretSource::AzureKeyVault { vault, name } => {
+            let output = std::process::Command::new("az")
+                .args([
+                    "keyvault",
+                    "secret",
+                    "show",
+                    "--vault-name",
+                    vault,
+                    "--name",
+                    name,
+                    "--query",
+                    "value",
+                    "-o",
+                    "tsv",
+                ])
+                .output()
+                .with_context(|| {
+                    format!(
+                        "failed to run `az keyvault secret show` for '{}/{}' — is the az CLI installed and on PATH?",
+                        vault, name
+                    )
+                })?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                anyhow::bail!(
+                    "az keyvault secret show failed for '{}/{}': {}",
+                    vault,
+                    name,
+                    stderr.trim()
+                );
+            }
+            let value = String::from_utf8(output.stdout)
+                .with_context(|| format!("az output for '{}/{}' was not valid UTF-8", vault, name))?;
+            Ok(value.trim().to_string())
         }
     }
 }
@@ -521,6 +567,10 @@ mod tests {
             },
             SecretSource::Prompt {
                 description: "Enter token".into(),
+            },
+            SecretSource::AzureKeyVault {
+                vault: "my-vault".into(),
+                name: "my-secret".into(),
             },
         ];
         for v in variants {
