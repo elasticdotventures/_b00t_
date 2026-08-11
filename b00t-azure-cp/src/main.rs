@@ -1,11 +1,12 @@
 //! b00t Azure Control Plane — MCP server for on-demand ACI compute.
 //!
-//! Exposes five MCP tools:
-//!   azure.provision_aci  — spin up an ACI container, return endpoint_url + lease_id
-//!   azure.deprovision    — tear down by lease_id
-//!   azure.heartbeat      — renew lease TTL
-//!   azure.list_leases    — active resources + TTLs
-//!   azure.cost_estimate  — current-month spend for the control plane RG
+//! Exposes six MCP tools:
+//!   azure.provision_aci        — spin up an ACI container, return endpoint_url + lease_id
+//!   azure.deprovision          — tear down by lease_id
+//!   azure.heartbeat            — renew lease TTL
+//!   azure.list_leases          — active resources + TTLs
+//!   azure.cost_estimate        — current-month spend for the control plane RG
+//!   azure.keyvault_get_secret  — fetch a secret by (vault_name, secret_name)
 //!
 //! Lease state stored in Azure Table Storage (b00tLeases table).
 //! Background watchdog tears down leases where expires_at < now().
@@ -154,6 +155,17 @@ struct HeartbeatInput {
     /// New TTL from now in minutes. Defaults to server-configured default.
     #[serde(default)]
     ttl_minutes: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+struct KeyvaultGetSecretInput {
+    /// Key Vault name (the `xyz` in `https://xyz.vault.azure.net`), not the full URL.
+    vault_name: String,
+    /// Secret name within the vault.
+    secret_name: String,
+    /// Specific version to fetch. Defaults to the latest enabled version.
+    #[serde(default)]
+    version: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -654,6 +666,78 @@ impl AzureCpServer {
                         .map_err(|e| McpError::internal_error(e.to_string(), None))?,
                 ]))
             }
+        }
+    }
+
+    /// Fetch a secret's value from an Azure Key Vault by (vault_name, secret_name).
+    ///
+    /// Uses the same managed-identity credential as every other tool on this
+    /// server — the identity needs the "Key Vault Secrets User" role (or
+    /// equivalent access policy) on the target vault. This is the
+    /// server-side counterpart to `b00t secret resolve --azure-vault/--azure-secret`
+    /// in b00t-cli, which instead shells out to `az keyvault secret show`
+    /// using the developer's own `az login` session — that path is for local,
+    /// one-shot CLI/script use; this tool is for agents talking to the
+    /// deployed control plane, where no local `az` session exists.
+    #[tool(name = "azure.keyvault_get_secret")]
+    async fn keyvault_get_secret(
+        &self,
+        input: Parameters<KeyvaultGetSecretInput>,
+    ) -> Result<CallToolResult, McpError> {
+        let input = input.0;
+
+        let path = match &input.version {
+            Some(v) => format!("secrets/{}/{}", input.secret_name, v),
+            None => format!("secrets/{}", input.secret_name),
+        };
+        let url = format!(
+            "https://{}.vault.azure.net/{}?api-version=7.4",
+            input.vault_name, path
+        );
+
+        let token = self
+            .credential
+            .get_token(&["https://vault.azure.net/.default"])
+            .await
+            .map_err(|e| McpError::internal_error(format!("credential error: {e}"), None))?;
+
+        let resp = self
+            .http_client
+            .get(&url)
+            .bearer_auth(token.token.secret())
+            .send()
+            .await
+            .map_err(|e| McpError::internal_error(format!("keyvault request failed: {e}"), None))?;
+
+        if resp.status().is_success() {
+            let body: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            let value = body.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
+                McpError::internal_error("keyvault response had no 'value' field", None)
+            })?;
+            {
+                let _mjson = serde_json::json!({
+                    "vault_name": input.vault_name,
+                    "secret_name": input.secret_name,
+                    "value": value,
+                });
+                Ok(CallToolResult::success(vec![
+                    Content::json(_mjson)
+                        .map_err(|e| McpError::internal_error(e.to_string(), None))?,
+                ]))
+            }
+        } else {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            Err(McpError::internal_error(
+                format!(
+                    "keyvault get_secret failed: HTTP {} for '{}/{}': {}",
+                    status, input.vault_name, input.secret_name, text
+                ),
+                None,
+            ))
         }
     }
 }
