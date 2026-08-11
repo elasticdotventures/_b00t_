@@ -70,7 +70,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve-release.outputs.tag }}
-          submodules: recursive
+          submodules: false
+
+      - name: Checkout submodules (excluding unrelated non-Rust submodules)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # python.🐍/DALLE2-pytorch is a Python ML repo, not a Cargo
+          # workspace member (confirmed: absent from root Cargo.toml) — and
+          # its emoji path hits a real actions/checkout + git bug on hosted
+          # runners: `git submodule update --init --recursive` errors with
+          # `ENOENT .../. git/modules/python.🐍/DALLE2-pytorch/config`
+          # (first release attempt after the #1082 recursive-submodule fix,
+          # 2026-08-11). Deactivating it lets everything else — including
+          # vendor/l3dg3rr, the actual submodule this workflow needs —
+          # init normally.
+          git config submodule."python.🐍/DALLE2-pytorch".active false
+          git submodule update --init --recursive
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
