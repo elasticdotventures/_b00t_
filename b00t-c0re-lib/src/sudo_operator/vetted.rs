@@ -62,6 +62,14 @@ pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
         format!("refs/remotes/origin/main:{VETTED_REGISTRY_PATH}")
     )
     .dir(repo_root)
+    // GIT_DIR/GIT_WORK_TREE, if set in the ambient environment (git hooks
+    // export both into their own process env, inherited by anything they
+    // spawn), take priority over .dir() in git's own repo-discovery logic —
+    // clearing them here makes repo_root actually authoritative. See the
+    // fixture_repo() doc comment in this file's test module for how this
+    // gap was found (it corrupted this repo's own shared .git/config).
+    .env_remove("GIT_DIR")
+    .env_remove("GIT_WORK_TREE")
     .stderr_capture()
     .read()
     .ok()
@@ -79,6 +87,8 @@ pub fn load_vetted_registry(repo_root: &Path) -> Vec<VettedScriptEntry> {
 fn fetch_origin_main(repo_root: &Path) -> Result<()> {
     let handle = cmd!("git", "fetch", "origin", "main", "--quiet")
         .dir(repo_root)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
         .stdout_to_stderr()
         .start()?;
 
@@ -93,9 +103,19 @@ fn fetch_origin_main(repo_root: &Path) -> Result<()> {
 
 fn git_blob_hash(repo_root: &Path, rev_and_path: &str) -> Option<String> {
     if let Some(path) = rev_and_path.strip_prefix("WORKTREE:") {
-        cmd!("git", "hash-object", path).dir(repo_root).read().ok()
+        cmd!("git", "hash-object", path)
+            .dir(repo_root)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .read()
+            .ok()
     } else {
-        cmd!("git", "rev-parse", rev_and_path).dir(repo_root).read().ok()
+        cmd!("git", "rev-parse", rev_and_path)
+            .dir(repo_root)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .read()
+            .ok()
     }
 }
 
@@ -183,6 +203,37 @@ mod tests {
     use std::fs;
     use std::process::Command;
 
+    /// `git` subprocess builder for test fixtures — always clears
+    /// GIT_DIR/GIT_WORK_TREE before running.
+    ///
+    /// Without this, every raw `git_cmd()` call in this module
+    /// was vulnerable to a real, confirmed bug: git hooks (this repo's own
+    /// pre-push hook included) export GIT_DIR/GIT_WORK_TREE into their own
+    /// process environment, which every subprocess they spawn inherits —
+    /// and git's own repo-discovery logic prefers GIT_DIR over the
+    /// process's cwd, so `.current_dir(&work)` alone does NOT isolate a
+    /// child `git` invocation from an inherited GIT_DIR. Running this
+    /// crate's tests from inside the pre-push hook (i.e. on every `git
+    /// push`) caused `fixture_repo()`'s `git init`/`remote add`/`push` and
+    /// `test_fetch_timeout_resolves_to_not_vetted`'s `remote set-url` to
+    /// silently retarget the REAL b00t repo's shared `.git/config` instead
+    /// of the intended isolated tempdir fixture — observed directly:
+    /// `origin`'s URL got overwritten with this test's own
+    /// `http://10.255.255.1/unreachable.git` fixture value, and
+    /// `core.bare` was corrupted, breaking `git push`/`git fetch` for the
+    /// whole repo (all worktrees, since they share one `.git/config`)
+    /// until manually restored. `datum_utils.rs` already had this exact
+    /// fix (`.env_remove("GIT_DIR").env_remove("GIT_WORK_TREE")`,
+    /// documented there) for its own git-spawning tests; this module never
+    /// got it. See also the hardening added to `load_vetted_registry`,
+    /// `fetch_origin_main`, and `git_blob_hash` above, which had the same
+    /// gap in production code, not just tests.
+    fn git_cmd() -> Command {
+        let mut cmd = Command::new("git");
+        cmd.env_remove("GIT_DIR").env_remove("GIT_WORK_TREE");
+        cmd
+    }
+
     /// Builds a throwaway git repo with a committed `origin` remote
     /// pointing at an equally throwaway bare repo, and one file
     /// registered in `_b00t_/vetted-scripts.toml`. Returns the tempdir
@@ -194,19 +245,19 @@ mod tests {
         fs::create_dir_all(&bare).unwrap();
         fs::create_dir_all(&work).unwrap();
 
-        Command::new("git").args(["init", "--bare"]).arg(&bare).status().unwrap();
-        Command::new("git").arg("init").current_dir(&work).status().unwrap();
-        Command::new("git")
+        git_cmd().args(["init", "--bare"]).arg(&bare).status().unwrap();
+        git_cmd().arg("init").current_dir(&work).status().unwrap();
+        git_cmd()
             .args(["config", "user.email", "test@example.com"])
             .current_dir(&work)
             .status()
             .unwrap();
-        Command::new("git")
+        git_cmd()
             .args(["config", "user.name", "test"])
             .current_dir(&work)
             .status()
             .unwrap();
-        Command::new("git")
+        git_cmd()
             .args(["remote", "add", "origin"])
             .arg(&bare)
             .current_dir(&work)
@@ -221,13 +272,13 @@ mod tests {
         .unwrap();
         fs::write(work.join("_b00t_/hello.sh"), "#!/bin/sh\necho hello\n").unwrap();
 
-        Command::new("git").args(["add", "-A"]).current_dir(&work).status().unwrap();
-        Command::new("git")
+        git_cmd().args(["add", "-A"]).current_dir(&work).status().unwrap();
+        git_cmd()
             .args(["commit", "-m", "init"])
             .current_dir(&work)
             .status()
             .unwrap();
-        Command::new("git")
+        git_cmd()
             .args(["push", "-u", "origin", "HEAD:main"])
             .current_dir(&work)
             .status()
@@ -308,7 +359,7 @@ mod tests {
         // Point origin at an address that will stall rather than fail-fast, so
         // this exercises the bounded-timeout branch specifically (not just
         // "any fetch error").
-        Command::new("git")
+        git_cmd()
             .args(["remote", "set-url", "origin", "http://10.255.255.1/unreachable.git"])
             .current_dir(&work)
             .status()
@@ -343,14 +394,14 @@ mod tests {
             "\n[[vetted]]\npath = \"_b00t_/evil.sh\"\ndescription = \"never reviewed\"\n",
         );
         fs::write(work.join("_b00t_/vetted-scripts.toml"), registry_text).unwrap();
-        Command::new("git").args(["add", "-A"]).current_dir(&work).status().unwrap();
-        Command::new("git")
+        git_cmd().args(["add", "-A"]).current_dir(&work).status().unwrap();
+        git_cmd()
             .args(["commit", "-m", "local-only: add evil.sh"])
             .current_dir(&work)
             .status()
             .unwrap();
         // NOT pushed — this commit never reaches the real origin/main.
-        Command::new("git")
+        git_cmd()
             .args(["branch", "-f", "origin/main", "HEAD"])
             .current_dir(&work)
             .status()
