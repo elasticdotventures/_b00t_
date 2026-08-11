@@ -1,0 +1,56 @@
+# Vultr — Multi-Role Cloud Provider
+#
+# Registered 2026-08-11 while scoping Azure Key Vault integration. Confirmed
+# roles (interview with user, not yet provisioned — VULTR_API_KEY does not
+# exist yet, will be provisioned into the PromptExecution Azure Key Vault):
+#
+#   1. dstack backend — GPU compute for training/inference jobs, same shape
+#      as PROVIDER-GCP.provider.tomllmd (configured in dstack's own
+#      ~/.dstack/server/config.yml, NOT b00t-cli's ComputeProvider trait).
+#   2. Direct ComputeProvider impl in b00t-cli/src/commands/provider.rs
+#      (VultrProvider, alongside RunpodProvider/HfProvider/DstackProvider/
+#      LocalProvider) — lowest priority of the four roles; bypasses dstack
+#      entirely. Landed: maps deploy/status/teardown/list onto Vultr's real
+#      v2 Instances API (VPS create/get/delete/list); Vultr has no
+#      serverless-inference or managed-job-queue primitive, so the
+#      training/batch job methods bail with a pointer to provider=runpod/hf.
+#      Instance region/plan/os_id default to the same placeholders as
+#      infrastructure repo's vultr_app4dog.tf ("syd" / vc2-1c-1gb / Debian
+#      12), overridable via VULTR_REGION/VULTR_PLAN/VULTR_OS_ID.
+#   3. DNS-01 ACME challenge provider — a concrete, currently-live need found
+#      independently while researching this: app4dog's SSL cert automation
+#      for app4.dog/play.app4.dog/api.app4.dog is disabled
+#      (infrastructure/terraform/app4dog/CERTIFICATE-ISSUE.md) because
+#      terraform-provider-acme/lego's zone autodetection breaks on the `.dog`
+#      TLD. cloudflare.tf already sketches the fix: delegate
+#      `_acme-challenge.*` via CNAME to a stable zone on a different DNS
+#      provider — Vultr DNS is the natural target (native DNS-01 support in
+#      both lego and terraform-provider-acme, env var VULTR_API_KEY).
+#   4. General VPS hosting — concretely, a Vultr VPS will run NATS as a
+#      pub/sub component within a larger DAPR service mesh (see
+#      dapr.cli.tomllm). Not yet provisioned.
+#
+# Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
+# 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
+#    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
+#    against Vultr's current console at datum-authoring time. Verify at
+#    my.vultr.com before budget-gating any real job against this provider.
+
+[b00t]
+name        = "PROVIDER-VULTR"
+type        = "api"
+hint        = "Vultr — multi-role: dstack GPU backend, direct ComputeProvider (VPS-only, landed), DNS-01 ACME delegate zone for the app4.dog TLD bug, VPS host for NATS/DAPR"
+type_tags   = ["provider", "cloud", "dns", "gpu", "vps", "dstack-backend"]
+
+[resource]
+name          = "Vultr"
+api_key_env   = "VULTR_API_KEY"
+console_url   = "https://my.vultr.com"
+
+[[resource.usages]]
+description = "DNS-01 ACME challenge provider (lego / terraform-provider-acme)"
+command = "dns_challenge { provider = \"vultr\" }  # see terraform-provider-acme docs/guides/dns-providers-vultr.md"
+
+[[resource.usages]]
+description = "b00t CLI compute provider dispatch — VPS lifecycle only, no jobs/training"
+command = "b00t provider endpoint deploy|status|teardown|list --provider vultr"
