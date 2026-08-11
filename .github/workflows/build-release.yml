@@ -16,6 +16,11 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # macos-latest runners hit a libgit2 SSL trust error fetching nested
+  # submodules (e.g. b00t-c0re-lib -> zvec -> arrow -> arrow-testing) —
+  # cargo's own error suggests this exact fix. Linux runners aren't
+  # affected, but setting it globally is harmless there too.
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   resolve-release:
@@ -45,6 +50,11 @@ jobs:
     name: Build ${{ matrix.target }}
     needs: resolve-release
     runs-on: ${{ matrix.os }}
+    # macOS legs are not required for this release's actual consumers
+    # (Vultr cloud-init only needs x86_64-unknown-linux-gnu); don't let a
+    # macOS-only toolchain/dependency issue block upload-assets from
+    # publishing the Linux targets that did succeed.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
       fail-fast: false
       matrix:
