@@ -186,7 +186,7 @@ fn test_experiment_focus_pipeline() {
             "--control=hello",
             "--treatment=world",
         ])
-        .env("LEDGERR_MCP_DISABLE", "1")
+        .env("LEDGRRR_MCP_DISABLE", "1")
         .output()
         .expect("failed to run experiment");
 
@@ -219,7 +219,10 @@ fn test_experiment_focus_pipeline() {
 fn test_focus_fallback_creates_temp_file() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let experiment_id = "integ-fallback-temp";
-    let tmp_path = format!("/tmp/b00t-mcp-payload-{experiment_id}.json");
+    let tmp_path = std::env::temp_dir()
+        .join(format!("b00t-mcp-payload-{experiment_id}.json"))
+        .to_string_lossy()
+        .to_string();
 
     // Remove any leftover file from a previous run
     let _ = fs::remove_file(&tmp_path);
@@ -239,7 +242,7 @@ fn test_focus_fallback_creates_temp_file() {
             "--control=hello",
             "--treatment=world",
         ])
-        .env("LEDGERR_MCP_DISABLE", "1")
+        .env("LEDGRRR_MCP_DISABLE", "1")
         .output()
         .expect("failed to run experiment");
 
@@ -280,7 +283,10 @@ fn test_focus_fallback_creates_temp_file() {
 fn test_focus_emit_creates_valid_json_payload() {
     let _guard = INTEGRATION_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let experiment_id = "integ-valid-json";
-    let tmp_path = format!("/tmp/b00t-mcp-payload-{experiment_id}.json");
+    let tmp_path = std::env::temp_dir()
+        .join(format!("b00t-mcp-payload-{experiment_id}.json"))
+        .to_string_lossy()
+        .to_string();
 
     // Remove any leftover file from a previous run
     let _ = fs::remove_file(&tmp_path);
@@ -300,7 +306,7 @@ fn test_focus_emit_creates_valid_json_payload() {
             "--control=hello",
             "--treatment=world",
         ])
-        .env("LEDGERR_MCP_DISABLE", "1")
+        .env("LEDGRRR_MCP_DISABLE", "1")
         .output()
         .expect("failed to run experiment");
 
@@ -412,7 +418,7 @@ fn test_focus_governance_gate_blocks_dangerous_prompt() {
             "--control=hello",
             "--treatment=do something; rm -rf /",
         ])
-        .env("LEDGERR_MCP_DISABLE", "1")
+        .env("LEDGRRR_MCP_DISABLE", "1")
         .output()
         .expect("failed to run experiment");
 

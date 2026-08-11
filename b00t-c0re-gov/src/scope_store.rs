@@ -13,6 +13,7 @@
 //!    duplication this trait exists to consolidate away, not add to.
 
 use crate::errors::ScopeResult;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -73,6 +74,76 @@ pub trait ScopeStore: Send + Sync {
     /// submodule parent `Repo` (if any) or `Node`; a `Node` scope's parent
     /// is `Global`.
     fn parent(&self) -> Option<&ScopeId>;
+}
+
+/// Envelope wrapping every value written through `TransactionalScopeStore` —
+/// carries the generation used for CAS and an optional lazy-checked expiry.
+/// Shared by every backend so they can never silently diverge on wire
+/// format (the exact interchangeability gap ADR #902 flags for `set_raw`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScopeEnvelope {
+    pub v: Value,
+    #[serde(rename = "gen")]
+    pub generation: u64,
+    /// Unix seconds, not `DateTime<Utc>` -- this is the wire representation
+    /// shared with the Lua transaction script (`redis_scope_store.rs`),
+    /// which builds the envelope with `cjson.encode` and has no RFC3339
+    /// support. Keeping both backends on the exact same on-the-wire number
+    /// type is the point: a `DateTime<Utc>` here would serialize as an
+    /// RFC3339 string via chrono's serde impl, which the Lua-written
+    /// envelope's plain numeric `expires_at` would then fail to
+    /// deserialize into -- an interchangeability gap of the same shape
+    /// ADR #902 warns about, just one field over.
+    pub expires_at: Option<i64>,
+}
+
+impl ScopeEnvelope {
+    /// True when `now` is at or past this envelope's expiry, if it has one.
+    pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
+        self.expires_at.map(|exp| exp <= now.timestamp()).unwrap_or(false)
+    }
+}
+
+/// A single operation within a `TransactionalScopeStore::transaction()` batch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ScopeOp {
+    Get {
+        key: String,
+    },
+    Put {
+        key: String,
+        value: Value,
+        /// CAS guard: fail the whole batch if the key's current generation
+        /// doesn't match. `None` means unconditional write.
+        expect_gen: Option<u64>,
+        expires_at: Option<DateTime<Utc>>,
+    },
+    Delete {
+        key: String,
+        expect_gen: Option<u64>,
+    },
+}
+
+/// Result of one `ScopeOp` within a successful transaction.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ScopeOpResult {
+    Value { value: Option<Value>, generation: u64 },
+    Written { generation: u64 },
+    Deleted,
+}
+
+/// Additive capability on top of `ScopeStore`: atomic, same-scope,
+/// multi-key batches with per-key CAS. Not every `ScopeStore` needs to
+/// implement this — most `Repo`/`Node` callers use plain `get_raw`/`set_raw`.
+/// Kept as a separate trait (rather than widening `ScopeStore` itself) per
+/// #894's existing object-safety caution.
+///
+/// A CAS mismatch anywhere in the batch aborts the ENTIRE batch — no
+/// partial writes — and returns `ScopeError::WriteRejected`, identically on
+/// every backend (this is #897 and the concrete fix for ADR #902's gap:
+/// "nothing in the trait says the consistency model is interchangeable").
+pub trait TransactionalScopeStore: ScopeStore {
+    fn transaction(&mut self, ops: Vec<ScopeOp>) -> ScopeResult<Vec<ScopeOpResult>>;
 }
 
 #[cfg(test)]
@@ -156,5 +227,145 @@ mod tests {
         assert!(!ScopeError::NotFound("k".into()).is_transient());
         assert!(!ScopeError::WriteRejected("secret".into()).is_transient());
         assert!(!ScopeError::InvalidScopeId("??".into()).is_transient());
+    }
+
+    impl TransactionalScopeStore for MemScopeStore {
+        fn transaction(&mut self, ops: Vec<ScopeOp>) -> ScopeResult<Vec<ScopeOpResult>> {
+            let now = Utc::now();
+            // Pass 1: CAS pre-check.
+            for op in &ops {
+                let (key, expect_gen) = match op {
+                    ScopeOp::Put { key, expect_gen, .. } => (key, *expect_gen),
+                    ScopeOp::Delete { key, expect_gen } => (key, *expect_gen),
+                    ScopeOp::Get { .. } => continue,
+                };
+                if let Some(expected) = expect_gen {
+                    let current_gen = self
+                        .data
+                        .get(key)
+                        .and_then(|v| serde_json::from_value::<ScopeEnvelope>(v.clone()).ok())
+                        .map(|e| e.generation)
+                        .unwrap_or(0);
+                    if current_gen != expected {
+                        return Err(ScopeError::WriteRejected(format!(
+                            "CAS mismatch on {key}: expected generation {expected}, found {current_gen}"
+                        )));
+                    }
+                }
+            }
+            // Pass 2: apply.
+            let mut results = Vec::with_capacity(ops.len());
+            for op in ops {
+                match op {
+                    ScopeOp::Get { key } => {
+                        let env = self
+                            .data
+                            .get(&key)
+                            .and_then(|v| serde_json::from_value::<ScopeEnvelope>(v.clone()).ok())
+                            .filter(|e| !e.is_expired(now));
+                        results.push(ScopeOpResult::Value {
+                            value: env.as_ref().map(|e| e.v.clone()),
+                            generation: env.map(|e| e.generation).unwrap_or(0),
+                        });
+                    }
+                    ScopeOp::Put { key, value, expires_at, .. } => {
+                        let current_gen = self
+                            .data
+                            .get(&key)
+                            .and_then(|v| serde_json::from_value::<ScopeEnvelope>(v.clone()).ok())
+                            .map(|e| e.generation)
+                            .unwrap_or(0);
+                        let new_gen = current_gen + 1;
+                        let env = ScopeEnvelope {
+                            v: value,
+                            generation: new_gen,
+                            expires_at: expires_at.map(|e| e.timestamp()),
+                        };
+                        self.data.insert(key, serde_json::to_value(&env).unwrap());
+                        results.push(ScopeOpResult::Written { generation: new_gen });
+                    }
+                    ScopeOp::Delete { key, .. } => {
+                        self.data.remove(&key);
+                        results.push(ScopeOpResult::Deleted);
+                    }
+                }
+            }
+            Ok(results)
+        }
+    }
+
+    #[test]
+    fn transaction_put_then_get_round_trips_with_generation() {
+        let mut store = MemScopeStore { id: ScopeId::Global, parent: None, data: HashMap::new() };
+        let results = store
+            .transaction(vec![ScopeOp::Put {
+                key: "k".into(),
+                value: Value::String("v1".into()),
+                expect_gen: None,
+                expires_at: None,
+            }])
+            .unwrap();
+        assert_eq!(results, vec![ScopeOpResult::Written { generation: 1 }]);
+
+        let results = store.transaction(vec![ScopeOp::Get { key: "k".into() }]).unwrap();
+        assert_eq!(
+            results,
+            vec![ScopeOpResult::Value { value: Some(Value::String("v1".into())), generation: 1 }]
+        );
+    }
+
+    #[test]
+    fn transaction_cas_mismatch_rejects_whole_batch() {
+        let mut store = MemScopeStore { id: ScopeId::Global, parent: None, data: HashMap::new() };
+        store
+            .transaction(vec![ScopeOp::Put {
+                key: "k".into(),
+                value: Value::String("v1".into()),
+                expect_gen: None,
+                expires_at: None,
+            }])
+            .unwrap();
+
+        let err = store
+            .transaction(vec![
+                ScopeOp::Put {
+                    key: "k".into(),
+                    value: Value::String("v2".into()),
+                    expect_gen: Some(99), // wrong — actual generation is 1
+                    expires_at: None,
+                },
+                ScopeOp::Put {
+                    key: "other".into(),
+                    value: Value::String("should-not-land".into()),
+                    expect_gen: None,
+                    expires_at: None,
+                },
+            ])
+            .unwrap_err();
+        assert!(matches!(err, ScopeError::WriteRejected(_)));
+        // Second op in the batch must NOT have landed — all-or-nothing.
+        assert_eq!(store.get_raw("other").unwrap(), None);
+    }
+
+    #[test]
+    fn transaction_multi_key_batch_is_atomic_on_success() {
+        let mut store = MemScopeStore { id: ScopeId::Global, parent: None, data: HashMap::new() };
+        let results = store
+            .transaction(vec![
+                ScopeOp::Put {
+                    key: "sm:state".into(),
+                    value: Value::String("Y".into()),
+                    expect_gen: None,
+                    expires_at: None,
+                },
+                ScopeOp::Put {
+                    key: "sm:log".into(),
+                    value: Value::String("transitioned to Y".into()),
+                    expect_gen: None,
+                    expires_at: None,
+                },
+            ])
+            .unwrap();
+        assert_eq!(results, vec![ScopeOpResult::Written { generation: 1 }, ScopeOpResult::Written { generation: 1 }]);
     }
 }
