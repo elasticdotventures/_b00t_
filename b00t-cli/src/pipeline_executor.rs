@@ -15,6 +15,8 @@ use crate::pipeline_checkpoint::{CheckpointStore, PipelineCheckpoint, compute_da
 use crate::pipeline_flowctl::{FlowControl, FlowGate, StageFlowConfig};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
+use crate::pipeline_statemachine::{PipelineEvent, StateMachine};
+use crate::pipeline_transitions::TransitionSink;
 use crate::pipeline_types::{PipelineDag, PipelineError, StagePort, StageSpec};
 use anyhow::Result;
 use chrono::Utc;
@@ -136,6 +138,7 @@ pub struct PipelineExecutor {
     checkpoint_store: Option<Arc<dyn CheckpointStore>>,
     flow_gates: HashMap<String, FlowGate>,
     timeout_predictor: Option<Arc<Mutex<TimeoutPredictor>>>,
+    transition_sink: Option<Arc<dyn TransitionSink>>,
 }
 
 impl PipelineExecutor {
@@ -149,6 +152,7 @@ impl PipelineExecutor {
             flow_gates: HashMap::new(),
             checkpoint_store: None,
             timeout_predictor: None,
+            transition_sink: None,
         }
     }
 
@@ -182,6 +186,18 @@ impl PipelineExecutor {
     /// previous run.
     pub fn with_checkpoint_store(mut self, store: Arc<dyn CheckpointStore>) -> Self {
         self.checkpoint_store = Some(store);
+        self
+    }
+
+    /// Attach a transition sink (e.g. `FileTransitionLog`, `NatsTransitionSink`,
+    /// or a `MultiTransitionSink` fanning out to both).
+    ///
+    /// When set, `execute()` drives an internal `StateMachine` alongside its
+    /// existing `StageStatus`/`RunStatus` tracking, and every state
+    /// transition is recorded to this sink — a durable/live ledger of the
+    /// run's lifecycle, independent of and in parallel with `log_store`.
+    pub fn with_transition_sink(mut self, sink: Arc<dyn TransitionSink>) -> Self {
+        self.transition_sink = Some(sink);
         self
     }
 
@@ -332,6 +348,28 @@ impl PipelineExecutor {
             }
             0
         };
+
+        // ── State machine: drive PipelineState transitions in parallel with
+        // the StageStatus/RunStatus tracking above, recording each one via
+        // the optional transition_sink (durable file log +/or live NATS).
+        // This is a separate concern from StageStatus/RunStatus, not a
+        // replacement for them.
+        let mut sm = StateMachine::new(self.dag.clone()).with_run_id(run_id);
+        if let Some(sink) = &self.transition_sink {
+            sm = sm.with_transition_sink(sink.clone());
+        }
+        let _ = sm.transition(PipelineEvent::Validate);
+        let _ = sm.transition(PipelineEvent::Schedule);
+        let _ = sm.transition(PipelineEvent::Execute);
+        // Resuming from a checkpoint skips already-completed stages in the
+        // loop below (start_idx > 0) — fast-forward the state machine
+        // through synthetic StageComplete transitions so the ledger stays
+        // gap-free and still reaches `Completed`. These synthetic entries
+        // carry resume-time timestamps, not the stages' original completion
+        // times (accepted tradeoff).
+        for skip_idx in 0..start_idx {
+            let _ = sm.transition(PipelineEvent::StageComplete(skip_idx as u32));
+        }
 
         for (idx, stage_name) in order.iter().enumerate().skip(start_idx) {
             // Look up the stage spec.
@@ -493,7 +531,17 @@ impl PipelineExecutor {
 
             let is_failure = matches!(&result.status, StageStatus::Failed(_));
             let stage_output = result.output.clone();
+            let stage_error = result.error.clone();
             stage_results.push(result);
+
+            // ── State machine: record this stage's outcome as a transition ──
+            if is_failure {
+                let err = stage_error
+                    .unwrap_or_else(|| PipelineError::StageCrashed("unknown".into()));
+                let _ = sm.transition(PipelineEvent::StageFailed(err));
+            } else {
+                let _ = sm.transition(PipelineEvent::StageComplete(idx as u32));
+            }
 
             // ── Persist checkpoint after each completed stage ────────────
             if !is_failure {

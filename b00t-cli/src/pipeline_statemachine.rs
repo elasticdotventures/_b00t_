@@ -41,9 +41,11 @@
 //!               (StageFailed) ──────────────────────────────┘
 //! ```
 
+use crate::pipeline_transitions::{TransitionRecord, TransitionSink};
 use crate::pipeline_types::{PipelineDag, PipelineError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 // ── GH #743: Pipeline state machine ──
 
@@ -113,7 +115,7 @@ pub enum PipelineEvent {
 /// | `Paused(n)` | `Cancel` | `Failed` |
 /// | `Failed` | `Validate` | `Idle` |
 /// | `Completed` | `Validate` | `Idle` |
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StateMachine {
     /// Current pipeline state.
     current: PipelineState,
@@ -123,6 +125,26 @@ pub struct StateMachine {
     dag: PipelineDag,
     /// Optional external run identifier for traceability.
     run_id: Option<String>,
+    /// Optional sink every transition is durably/live recorded to, in
+    /// addition to `history`. A trait object, so it can't be
+    /// serialized/deserialized — skipped on both; deserialized machines
+    /// start with no sink attached (attach one explicitly via
+    /// `with_transition_sink` after deserializing, if needed).
+    #[serde(skip)]
+    sink: Option<Arc<dyn TransitionSink>>,
+}
+
+/// Hand-written since `sink`'s trait object isn't `Debug` — everything else
+/// is delegated to the derived-equivalent fields, plus a `has_sink` flag.
+impl std::fmt::Debug for StateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StateMachine")
+            .field("current", &self.current)
+            .field("history_len", &self.history.len())
+            .field("run_id", &self.run_id)
+            .field("has_sink", &self.sink.is_some())
+            .finish()
+    }
 }
 
 impl StateMachine {
@@ -134,7 +156,22 @@ impl StateMachine {
             history: Vec::new(),
             dag,
             run_id: None,
+            sink: None,
         }
+    }
+
+    /// Attach an external run identifier for traceability. Also included in
+    /// every [`TransitionRecord`] sent to an attached sink.
+    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
+        self.run_id = Some(run_id.into());
+        self
+    }
+
+    /// Attach a sink that every future `transition()` call durably/live
+    /// records to, in addition to updating the in-memory `history`.
+    pub fn with_transition_sink(mut self, sink: Arc<dyn TransitionSink>) -> Self {
+        self.sink = Some(sink);
+        self
     }
 
     /// Attempt a state transition driven by `event`.
@@ -197,6 +234,24 @@ impl StateMachine {
         let timestamp = Utc::now();
         self.history.push((self.current.clone(), event, timestamp));
         self.current = next_state.clone();
+
+        if let Some(sink) = &self.sink {
+            // Read back the entry just pushed rather than re-deriving it —
+            // `event` was moved into `history` above.
+            let (from_state, recorded_event, _) = self.history.last().expect("just pushed");
+            let rec = TransitionRecord {
+                run_id: self.run_id.clone().unwrap_or_default(),
+                seq: self.history.len() as u64,
+                from_state: from_state.clone(),
+                event: recorded_event.clone(),
+                to_state: next_state.clone(),
+                timestamp,
+            };
+            if let Err(e) = sink.record(&rec) {
+                eprintln!("[pipeline_statemachine] failed to persist transition: {e}");
+            }
+        }
+
         Ok(next_state)
     }
 

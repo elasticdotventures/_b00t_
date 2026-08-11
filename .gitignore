@@ -168,6 +168,10 @@
 .env
 .env.test
 .envrc
+# 🤓 raw secret material (nats-user/nats-password/rustfs-*-key etc.) — canonical
+# location is ~/.b00t/secrets/ (see b00t-cli/scripts/sync-*-secrets.sh), but a
+# stray duplicate has appeared at repo-root before; never let either in.
+/secrets/
 .eslintcache
 .fusebox/
 .grunt

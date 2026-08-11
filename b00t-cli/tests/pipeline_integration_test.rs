@@ -791,3 +791,153 @@ async fn test_cost_reporting() {
     // ✅ Positive: cost report has non-zero values and correct calculations.
     // ❌ Negative: zero usage produces zero cost.
 }
+
+// ── Test: Transition ledger (file-backed) ───────────────────────────────────
+
+/// Objective: Verify `PipelineExecutor` drives an internal
+/// `pipeline_statemachine::StateMachine` alongside its existing
+/// `StageStatus`/`RunStatus` tracking, and records every transition to an
+/// attached `TransitionSink` — the durable transaction ledger.
+///
+/// Coverage:
+///   - `PipelineExecutor::with_transition_sink` wiring
+///   - Transition ordering: Validate, Schedule, Execute, StageComplete(0..N-1)
+///   - Final recorded `to_state` is `PipelineState::Completed`
+///   - `seq` is 1-based and monotonically increasing
+#[tokio::test]
+async fn test_transitions_recorded_to_file_log() {
+    use b00t_cli::pipeline_statemachine::PipelineState;
+    use b00t_cli::pipeline_transitions::FileTransitionLog;
+
+    let mut harness = PipelineTestHarness::new();
+    harness.add_stage(
+        "T-A",
+        input_port(PortMediaType::Bytes),
+        output_port(PortMediaType::Bytes),
+    );
+    harness.add_stage(
+        "T-B",
+        input_port(PortMediaType::Bytes),
+        output_port(PortMediaType::Bytes),
+    );
+
+    let dir = tempfile::tempdir().expect("temp dir");
+    let log = Arc::new(FileTransitionLog::new(dir.path().to_path_buf()).expect("new log"));
+
+    let dag = harness.build_dag();
+    let executor = PipelineExecutor::new(dag).with_transition_sink(log.clone());
+    let report = executor
+        .execute("test-transitions", Some(b"input".to_vec()))
+        .await;
+    assert_completed(&report);
+
+    let recs = log.read_all("test-transitions").expect("read_all");
+    // Validate, Schedule, Execute, StageComplete(0), StageComplete(1) = 5.
+    assert_eq!(
+        recs.len(),
+        5,
+        "expected 5 transitions for a 2-stage pipeline, got {:?}",
+        recs
+    );
+    assert_eq!(recs[0].to_state, PipelineState::Validating);
+    assert_eq!(recs[1].to_state, PipelineState::Scheduling);
+    assert_eq!(recs[2].to_state, PipelineState::Running(0));
+    assert_eq!(recs[3].to_state, PipelineState::Running(1));
+    assert_eq!(recs[4].to_state, PipelineState::Completed);
+    assert_eq!(
+        recs.iter().map(|r| r.seq).collect::<Vec<_>>(),
+        vec![1, 2, 3, 4, 5],
+        "seq should be 1-based and monotonically increasing"
+    );
+    for r in &recs {
+        assert_eq!(r.run_id, "test-transitions");
+    }
+
+    // ✅ Positive: every FSM transition durably recorded, in order, ending in Completed.
+    // ❌ Negative: not applicable — success path.
+}
+
+// ── Test: Transition ledger (live NATS, requires a running server) ──────────
+
+/// Objective: Verify `NatsTransitionSink` publishes each transition live to
+/// `pipeline.{run_id}.transition`, observable by an independent subscriber.
+///
+/// Requires the shared b00t NATS bus — not exercised by default (`#[ignore]`d).
+///
+/// app4dog is a promptexecution sub-project and owns no infrastructure of
+/// its own (no app4dog-scoped NATS): pipeline transitions authenticate
+/// against the existing b00t ACP agent-coordination bus (systemd unit
+/// `nats-server.service`, always-on on hosts that run it — currently local,
+/// moving to a Vultr host once that's provisioned; override the target with
+/// `B00T_NATS_URL` when it does).
+///
+/// Prerequisite: `b00t-cli/scripts/sync-nats-secrets.sh` has been run at
+/// least once on this host (materializes `~/.b00t/secrets/{nats-user,
+/// nats-password}` from `~/.b00t/nats/nats.conf`), then:
+///   `cargo test --ignored nats_transition_sink_publishes_live -- --nocapture`
+#[tokio::test]
+#[ignore]
+async fn nats_transition_sink_publishes_live() {
+    use b00t_cli::pipeline_nats::{AsyncNatsTransport, NatsTransport};
+    use b00t_cli::pipeline_secrets::{SecretRef, SecretSource, load_secret};
+    use b00t_cli::pipeline_transitions::{NatsTransitionSink, TransitionRecord};
+
+    let user = load_secret(&SecretRef {
+        key: "nats-user".into(),
+        env_var: "B00T_NATS_USER".into(),
+        source: SecretSource::File {
+            path: "~/.b00t/secrets/nats-user".into(),
+        },
+    })
+    .expect("resolve nats-user — run b00t-cli/scripts/sync-nats-secrets.sh first");
+    let password = load_secret(&SecretRef {
+        key: "nats-password".into(),
+        env_var: "B00T_NATS_PASSWORD".into(),
+        source: SecretSource::File {
+            path: "~/.b00t/secrets/nats-password".into(),
+        },
+    })
+    .expect("resolve nats-password — run b00t-cli/scripts/sync-nats-secrets.sh first");
+    let url =
+        std::env::var("B00T_NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
+
+    let client = async_nats::ConnectOptions::new()
+        .user_and_password(user, password)
+        .connect(&url)
+        .await
+        .unwrap_or_else(|e| panic!("connect to b00t NATS bus at {url}: {e}"));
+    let transport = Arc::new(AsyncNatsTransport::new(client));
+    let sink = Arc::new(NatsTransitionSink::new(transport.clone()));
+
+    // Subscribe before executing — a live NATS subscription only sees
+    // messages published after it is established.
+    let mut sub = transport
+        .subscribe("pipeline.test-nats-live.transition")
+        .expect("subscribe");
+
+    let mut harness = PipelineTestHarness::new();
+    harness.add_stage(
+        "N-A",
+        input_port(PortMediaType::Bytes),
+        output_port(PortMediaType::Bytes),
+    );
+    let dag = harness.build_dag();
+    let executor = PipelineExecutor::new(dag).with_transition_sink(sink);
+    let report = executor
+        .execute("test-nats-live", Some(b"input".to_vec()))
+        .await;
+    assert_completed(&report);
+
+    // `AsyncNatsSubscription::next()` blocks on a std mpsc recv — run it via
+    // spawn_blocking (matches pipeline_nats.rs's own `nats_client_adapter_*`
+    // test pattern) so it doesn't starve the current-thread test runtime.
+    let msg = tokio::task::spawn_blocking(move || sub.next())
+        .await
+        .expect("spawn_blocking join")
+        .expect("should receive at least one live transition");
+    let rec: TransitionRecord = serde_json::from_slice(&msg).expect("parse published transition");
+    assert_eq!(rec.run_id, "test-nats-live");
+
+    // ✅ Positive: live NATS delivery of a real transition, end-to-end.
+    // ❌ Negative: not applicable — success path (requires a live server, hence #[ignore]).
+}
