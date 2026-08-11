@@ -1,0 +1,45 @@
+[b00t]
+name = "dapr"
+type = "cli"
+hint = "Distributed Application Runtime — sidecar-based building blocks (state, pub/sub, service invocation, bindings, secrets) for polyglot service meshes"
+
+install = "curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | /bin/bash"
+version = "dapr --version"
+
+[b00t.source]
+url = "https://github.com/dapr/dapr"
+docs = "https://docs.dapr.io/"
+license = "Apache-2.0"
+language = "Go"
+stars_approx = 24000
+
+# Key concept: `dapr init` stands up a local control plane (placement,
+# sentry, operator) + Redis-backed state/pubsub defaults; `dapr run --app-id
+# <name> -- <cmd>` attaches a sidecar to any process regardless of language.
+# Building blocks relevant to b00t: pub/sub (backed by NATS, Redis, Kafka,
+# etc. via a component YAML), state management, and secrets (a component
+# that can itself point at Azure Key Vault — see PROVIDER-VULTR.provider.tomllmd
+# and b00t-azure-cp's azure.keyvault_get_secret for the two other secret
+# paths already in b00t).
+#
+# Registered 2026-08-11: first concrete use case is a Vultr VPS running NATS
+# as a pub/sub component within a larger DAPR mesh — not yet provisioned.
+
+[[b00t.usage]]
+description = "Initialize local DAPR control plane + default Redis state/pubsub"
+command = "dapr init"
+
+[[b00t.usage]]
+description = "Attach a DAPR sidecar to an app process"
+command = "dapr run --app-id myapp --app-port 8080 -- python app.py"
+
+[[b00t.usage]]
+description = "Inspect running DAPR applications and sidecar health"
+command = "dapr dashboard"
+
+# b00t:map v1
+# summary: dapr — CNCF distributed application runtime; sidecar pattern for state/pub-sub/service-invocation/secrets across polyglot services; pub/sub component can back onto NATS
+# tags: infrastructure, service-mesh, sidecar, pubsub, cncf, go, dapr
+# tier: ch0nky
+# cmds: b00t learn dapr
+# complexity: 5
