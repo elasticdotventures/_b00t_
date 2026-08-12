@@ -47,6 +47,29 @@ function log_📢_记录() {
     echo "$@"
 }
 export -f log_📢_记录
+
+unset -f _b00t_shell_session_marker
+function _b00t_shell_session_marker() {
+    local key="${1:-context}"
+    local sid
+    sid="$(ps -o sid= -p "$$" 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$sid" ] || sid="$$"
+    key="${key//[^A-Za-z0-9_.-]/_}"
+    printf '/tmp/b00t-shell-%s-%s-%s' "$key" "${UID:-$(id -u)}" "$sid"
+}
+export -f _b00t_shell_session_marker
+
+unset -f _b00t_log_once_per_session
+function _b00t_log_once_per_session() {
+    local key="$1"
+    shift || return 0
+    local marker
+    marker="$(_b00t_shell_session_marker "$key")"
+    [ ! -e "$marker" ] || return 0
+    log_📢_记录 "$@"
+    : > "$marker" 2>/dev/null || true
+}
+export -f _b00t_log_once_per_session
 ## 记录 //
 
 ## this will allow b00t to restart itself. 
@@ -75,7 +98,7 @@ pathAdd "$HOME/.yarn/bin"
 ## * * * * * //
 
 if [ "/usr/bin/docker" ] ; then 
-    echo "🐳 has d0cker! loading docker extensions"
+    _b00t_log_once_per_session docker-loader "🐳 has d0cker! loading docker extensions"
     source "$_B00T_C0DE_Path/docker.🐳/_bashrc.sh"
 
     ## 😔 docker context? 
@@ -918,4 +941,3 @@ export _user="$(id -u -n)"
 export _uid="$(id -u)" 
 echo "🙇‍♂️ \$_user: $_user  \$_uid : $_uid"
 set +o nounset 
-
