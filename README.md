@@ -35,12 +35,27 @@ git clone https://github.com/elasticdotventures/_b00t_.git && cd _b00t_ && cargo
 
 ## 🪟 Windows desktop and browser extension
 
-**Public Windows distribution is being prepared.** There is currently no published
-`l3dg3rr` Winget package and no Microsoft Edge Add-ons listing for `b00t-browser-ext`.
-Do not use a guessed Winget package identifier or install an extension from an
-untrusted ZIP.
+**`ledgrrr` desktop (Windows x64)** — MSI and NSIS installers are published on
+[GitHub Releases](https://github.com/elasticdotventures/_b00t_/releases/tag/ledgrrr-desktop-v1.9.0):
 
-Until release artifacts are published, build the desktop installer locally:
+```powershell
+# MSI
+curl -LO https://github.com/elasticdotventures/_b00t_/releases/download/ledgrrr-desktop-v1.9.0/ledgrrr_1.9.0_x64_en-US.msi
+curl -LO https://github.com/elasticdotventures/_b00t_/releases/download/ledgrrr-desktop-v1.9.0/ledgrrr_1.9.0_x64_en-US.msi.sha256
+certutil -hashfile ledgrrr_1.9.0_x64_en-US.msi SHA256   # compare against the .sha256 file
+
+# or NSIS
+curl -LO https://github.com/elasticdotventures/_b00t_/releases/download/ledgrrr-desktop-v1.9.0/ledgrrr_1.9.0_x64-setup.exe
+curl -LO https://github.com/elasticdotventures/_b00t_/releases/download/ledgrrr-desktop-v1.9.0/ledgrrr_1.9.0_x64-setup.exe.sha256
+certutil -hashfile ledgrrr_1.9.0_x64-setup.exe SHA256   # compare against the .sha256 file
+```
+
+These are unsigned installer builds — verify the SHA256 before running. A Winget
+package (`PromptExecution.ledgrrr`) has been prepared and is pending submission; there is
+still no published Microsoft Edge Add-ons listing for `b00t-browser-ext`. Do not use a
+guessed Winget package identifier or install an extension from an untrusted ZIP.
+
+To build the desktop installer from source instead (e.g. other architectures):
 
 ```powershell
 git clone --recurse-submodules https://github.com/elasticdotventures/_b00t_.git
@@ -60,10 +75,9 @@ Expand-Archive build/chrome-mv3-prod.zip build/edge-unpacked
 # In Edge: edge://extensions → enable Developer mode → Load unpacked → build/edge-unpacked
 ```
 
-Release artifacts will be available from [GitHub Releases](https://github.com/elasticdotventures/_b00t_/releases).
-The desktop installer will then be submitted to Winget; the extension will be submitted
-to Microsoft Edge Add-ons. These are separate channels: Winget does not install browser
-extensions.
+The desktop installer is submitted to Winget separately from the browser extension, which
+is submitted to Microsoft Edge Add-ons — these are separate channels: Winget does not
+install browser extensions.
 
 ---
 
