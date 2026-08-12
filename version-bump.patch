@@ -1,0 +1,98 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 7b22620..16cbdfa 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -740,7 +740,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-azure-cp"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "axum 0.8.9",
+@@ -764,7 +764,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-c0re-lib"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "async-trait",
+@@ -797,7 +797,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-chat"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "async-nats",
+@@ -835,7 +835,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-cli"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "apalis",
+@@ -898,7 +898,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-grok"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "async-openai",
+@@ -917,7 +917,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-ipc"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "async-nats",
+@@ -937,7 +937,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-mcp"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "axum 0.8.9",
+@@ -977,7 +977,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "b00t-py"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "anyhow",
+  "b00t-c0re-lib",
+@@ -3505,7 +3505,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "k0mmand3r"
+-version = "0.7.48"
++version = "0.7.49"
+ dependencies = [
+  "decimal-rs",
+  "indexmap 2.14.0",
+diff --git a/Cargo.toml b/Cargo.toml
+index 017dd91..b154267 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -15,7 +15,7 @@ resolver = "2"
+ [workspace.package]
+ # 🤓 Version management centralized in b00t-c0re-lib
+ # All workspace crates inherit from the single source of truth
+-version = "0.7.48"
++version = "0.7.49"
+ edition = "2021"
+ authors = ["Brian Horakh <brian@promptexecution.com>"]
+ license = "MIT"
