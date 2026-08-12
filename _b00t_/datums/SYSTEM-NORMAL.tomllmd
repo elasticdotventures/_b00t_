@@ -94,6 +94,7 @@ git submodule update --remote vendor/<name>  # pull merged commit
 restore_stash   = "git stash list | awk -F: '{print $1}' | tac | xargs -I{} git stash drop {}"
 check_command   = "just system-normal"
 report_command  = "b00t exec just system-normal --check"
+sweep_cargo     = "just chore tidy-cargo"  # prunes cargo target/ artifacts untouched >7 days, workspace + vendor/* sub-repos
 
 # ─── INTEGRATION ─────────────────────────────────────────────────────────────
 [system_normal.integration]

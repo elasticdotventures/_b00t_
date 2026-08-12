@@ -37,8 +37,17 @@ tidy-tilde:
     @echo "🗑️  Removing backup files..."
     @fdfind --max-depth 5 -g '*~' --exclude .git --exclude node_modules --exclude target --exclude vendor -x rm {} \; 2>/dev/null && echo "✅ Tilde files removed"
 
-# Full workspace tidy: branches + stashes + tilde files
-tidy: tidy-branches tidy-stashes tidy-tilde
+# Sweep cargo build artifacts untouched in the last 7 days — recursively
+# across the b00t workspace root AND every independent sub-repo under
+# vendor/ (each has its own Cargo.toml/target/, not part of the root
+# [workspace] members list, so a plain workspace-root sweep would miss them).
+tidy-cargo:
+    @echo "🧹 Sweeping cargo build artifacts older than 7 days (workspace + vendor sub-repos)..."
+    @cargo sweep --recursive --time 7 . 2>&1 | tail -20
+    @echo "✅ Cargo sweep complete"
+
+# Full workspace tidy: branches + stashes + tilde files + cargo build cache
+tidy: tidy-branches tidy-stashes tidy-tilde tidy-cargo
     @echo ""
     @echo "✅ Workspace tidy complete"
     @just submodule-status
