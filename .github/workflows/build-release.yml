@@ -156,7 +156,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "${{ needs.resolve-release.outputs.tag }}" dist/* --clobber
+          # This job has no actions/checkout step (it only needs the built
+          # artifacts, not the source tree), so `gh` has no local git repo to
+          # infer --repo from and fails with "not a git repository" without
+          # this flag being explicit (confirmed failure, run 31565030616).
+          gh release upload "${{ needs.resolve-release.outputs.tag }}" dist/* --clobber --repo "${{ github.repository }}"
 
   verify:
     name: Verify x86_64 Linux release bundle
