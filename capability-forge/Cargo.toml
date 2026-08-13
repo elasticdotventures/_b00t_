@@ -1,0 +1,28 @@
+[package]
+name = "capability-forge"
+version.workspace = true
+edition = "2021"
+description = "Skill-scoped NATS JWT authorization service — mint/revoke, three-tier policy, LLM-judged escalation"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+b00t-c0re-gov = { path = "../b00t-c0re-gov" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+chrono = { workspace = true, features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "2"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+async-nats = "0.45"
+nkeys = "0.4"
+nats-jwt = "0.3"
+base64 = "0.22"
+async-openai = "0.30.1"
+
+[dev-dependencies]
+tempfile = "3"
