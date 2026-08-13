@@ -5,7 +5,13 @@
 
 ## HIGH PRIORITY
 
-### H1: Automated regression suite for b00t-cli
+### H1: Automated regression suite for b00t-cli ✅
+**Status (verified 2026-08-12): DONE.** `b00t-cli/tests/hive_whoami_integration_test.rs`
+covers all four cases (H1-a..d: `--help`, `whoami`, `hive status`, `up --help`) using
+`assert_cmd`, runnable via `cargo test -p b00t-cli` with no external services. Tests
+live flat in `tests/` (idiomatic Rust — each file is already its own integration
+binary), not a `tests/integration/` subdirectory as originally literally specified;
+functionally equivalent, criteria otherwise met as written.
 **Acceptance criteria:**
 - MUST add `tests/integration/` directory under `b00t-cli/` with at least 3 integration tests
 - Tests MUST cover: `b00t hive status`, `b00t whoami`, `b00t-cli up --help`
@@ -22,14 +28,22 @@
 
 ## MEDIUM PRIORITY
 
-### M1: pi --mode rpc systemd service wiring
+### M1: pi --mode rpc systemd service wiring ✅
+**Status (verified 2026-08-12): DONE.** `justfile`'s `validate-mcp` recipe already
+has the `pi --mode rpc` smoke test wired in (explicitly commented "M1: pi --mode rpc
+smoke test — verify pi supports rpc mode (gap-fill #343)"); `pi --help` does list
+`--mode <mode>` including `rpc`, confirmed by re-running it directly.
 **Acceptance criteria:**
 - MUST verify pi --mode rpc flag exists (run: pi --help | grep rpc)
 - IF exists: add b00t hive activate pi-agent smoke test to just validate-mcp
 - IF missing: document gap in _b00t_/pi.agent.toml as epiphany
 - MUST NOT block on missing functionality
 
-### M2: Provider agnosticism documentation
+### M2: Provider agnosticism documentation ✅
+**Status (verified 2026-08-12): DONE.** `_b00t_/docs/liter-llm-gateway.tomllm` exists
+and covers all three points: gateway (:1234, optional) vs direct gemma4 (:8001,
+canonical) with auto-fallback via `b00t.sh resolve_pi_transport()`, and both model
+aliases (`ch0nky` gemma4 26B-A4B, `sm0l` qwen2.5-3B) with their ports.
 **Acceptance criteria:**
 - MUST add _b00t_/liter-llm-gateway.tomllm datum documenting :1234 gateway profiles
 - MUST include: how to switch gemma4 direct (:8001) vs gateway (:1234)
