@@ -1,7 +1,7 @@
 [package]
 name = "capability-forge"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Skill-scoped NATS JWT authorization service — mint/revoke, three-tier policy, LLM-judged escalation"
 license.workspace = true
 authors.workspace = true

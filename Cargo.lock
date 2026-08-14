@@ -2518,6 +2518,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "capability-forge"
+version = "0.10.3"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "async-openai",
+ "async-trait",
+ "b00t-c0re-gov",
+ "base64 0.22.1",
+ "chrono",
+ "nats-jwt",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "cassowary"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8181,6 +8203,19 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "nats-jwt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51104ed9bd9e7d1f9117603e1186a56a3a437ceaf0761383910180f5879b801"
+dependencies = [
+ "data-encoding",
+ "nkeys",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
