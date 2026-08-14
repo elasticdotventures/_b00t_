@@ -22,6 +22,14 @@ pub fn skill_subject(agent_pubkey: &str, skill: &str) -> String {
 /// `now + ttl` here. `Token::sign` itself returns a bare `String` (it panics internally on
 /// pre-epoch system time rather than erroring), so nothing in this function's own body can
 /// fail except the `ttl` arithmetic below — the `Result` return type exists for that.
+///
+/// `granted_skills` must be non-empty. `nats-jwt`'s `NatsPermissions` serializes with
+/// `skip_serializing_if = "NatsPermissions::is_empty"`, so an empty skills list would leave
+/// both `nats.pub` and `nats.sub` absent from the JWT entirely rather than present-and-empty —
+/// and per NATS server semantics, an absent permission block grants unrestricted access to
+/// every subject, the exact opposite of what this function exists to produce. Rejecting the
+/// empty case here (rather than trusting every future caller to pre-check it, as the current
+/// `service.rs` design happens to) keeps this a least-privilege-or-error function.
 pub fn mint_user_jwt(
     account_signing_key: &KeyPair,
     account_pubkey: &str,
@@ -30,6 +38,10 @@ pub fn mint_user_jwt(
     ttl: chrono::Duration,
 ) -> Result<String> {
     anyhow::ensure!(ttl > chrono::Duration::zero(), "ttl must be positive");
+    anyhow::ensure!(
+        !granted_skills.is_empty(),
+        "granted_skills must not be empty (an empty NATS permission block means unrestricted access, not none)"
+    );
 
     let expires_at = chrono::Utc::now()
         .checked_add_signed(ttl)
@@ -122,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn mint_rejects_non_positive_ttl() {
+    fn mint_rejects_zero_ttl() {
         let account = KeyPair::new_account();
         let agent = KeyPair::new_user();
         let err = mint_user_jwt(
@@ -134,5 +146,41 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("ttl"));
+    }
+
+    #[test]
+    fn mint_rejects_negative_ttl() {
+        let account = KeyPair::new_account();
+        let agent = KeyPair::new_user();
+        let err = mint_user_jwt(
+            &account,
+            &account.public_key(),
+            &agent.public_key(),
+            &["skill.read".to_string()],
+            chrono::Duration::minutes(-5),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("ttl"));
+    }
+
+    // Security regression test: an empty granted_skills list must never mint a token. Per
+    // NATS server semantics an *absent* nats.pub/nats.sub permission block (which is what
+    // nats-jwt produces when NatsPermissions is empty, via skip_serializing_if) means
+    // unrestricted access to every subject -- the opposite of the least-privilege guarantee
+    // this function exists to provide. Proven by rejection here rather than by inspecting a
+    // minted JWT's claims, since the fix is to refuse the call outright.
+    #[test]
+    fn mint_rejects_empty_granted_skills_to_avoid_producing_an_unrestricted_token() {
+        let account = KeyPair::new_account();
+        let agent = KeyPair::new_user();
+        let err = mint_user_jwt(
+            &account,
+            &account.public_key(),
+            &agent.public_key(),
+            &[],
+            chrono::Duration::minutes(30),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("granted_skills"));
     }
 }
