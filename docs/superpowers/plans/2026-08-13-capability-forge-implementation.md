@@ -1817,3 +1817,33 @@ git commit -m "test(capability-forge): end-to-end flow against ephemeral local n
 - Tasks 1–8 are pure-Rust, no external process, and should go smoothly with normal TDD iteration.
 - Task 9 (binary) and Task 10 (CLI) are glue; low risk, no new logic.
 - Task 11 is where real-world friction lives: two third-party crates (`nkeys`, `nats-jwt`) whose exact builder APIs this plan matched to their documented shape but not to a byte-verified compile, and `nats-server`'s own config/reload semantics. Budget the most iteration time there. If `nats-jwt` proves unworkable against the installed version, the fallback is building the JWT claims JSON by hand (NATS JWT v2 is a documented, stable wire format: base64url(header) + "." + base64url(claims) + "." + base64url(nkeys-Ed25519-signature-over-the-first-two-segments)) signed via `nkeys::KeyPair::sign` directly — more code, zero new dependency risk.
+
+## Status: implemented, reviewed, merge-ready (2026-08-14)
+
+All 11 tasks complete via subagent-driven development (fresh implementer + independent
+reviewer per task, fix loops for every finding, final whole-branch review on the most capable
+available model). Full crate suite: 44/44 tests passing, including a true end-to-end test
+against an ephemeral local `nats-server` proving server-side NATS scope enforcement and a
+genuine `AuthorizationViolation`-specific rejection on revoked-JWT reconnect.
+
+**Known follow-ups, deliberately not fixed here** (real, disclosed, non-blocking for phase-1
+merge):
+
+1. **Revocation has no production wiring.** `grant.rs`'s `revoke_grant`/`is_revoked` are
+   real, tested, and correct as bookkeeping — but nothing in production code (the NATS
+   service binary, the CLI) actually pushes an updated NATS account JWT or triggers a server
+   reload. `tests/e2e_local_nats.rs` proves the underlying NATS mechanism works by performing
+   that push/reload by hand. The design spec's Revocation section already flagged this as
+   "real machinery, not an afterthought" (capability-forge holding operator-level authority
+   over live account claims); it needs its own design pass before phase 2, not a bolt-on fix.
+   Until then, "revoke" is a persisted intention with no automatic enforcement path.
+2. Minor hardening items parked by the final review and its fix-wave re-review: `mint_user_jwt`
+   should be `pub(crate)` not `pub`; `tiers.rs`/`grant.rs` use two different persistence
+   conventions on the same store (`add_to_allowlist` is an unguarded read-modify-write, unlike
+   `revoke_grant`'s CAS-retry loop); `b00t-cli`'s `capability-forge` dependency isn't
+   feature-gated and pulls a heavy transitive stack (reqwest et al.) into every `b00t-cli`
+   build; the oversized-request denial path in `service.rs` echoes the full attacker-controlled
+   skill list back (response-amplification shape); `is_valid_skill_name` bounds the charset but
+   not the length; the LLM judge's prompt-injection defense delimiters aren't escaped against a
+   crafted `justification` forging a closing tag; `bin/main.rs` never cross-checks
+   `CAPFORGE_ACCOUNT_SEED`'s derived pubkey against `CAPFORGE_ACCOUNT_PUBKEY`.
