@@ -1641,6 +1641,7 @@ dependencies = [
  "candle-core 0.10.2",
  "candle-nn 0.10.2",
  "candle-transformers 0.10.2",
+ "capability-forge",
  "chromiumoxide",
  "chrono",
  "clap",
