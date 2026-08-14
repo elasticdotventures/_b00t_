@@ -51,8 +51,21 @@ async fn main() -> Result<()> {
         };
         let reply = forge.handle_request(signed).await;
 
-        let payload = serde_json::to_vec(&reply).context("serializing reply")?;
-        client.publish(reply_subject, payload.into()).await.context("publishing reply")?;
+        // Serialize/publish failures are per-message hiccups (transient NATS
+        // blip, a future reply field that fails to serialize), not reasons
+        // to take the whole service down for every other agent depending on
+        // it -- same log-and-continue treatment as the malformed-request and
+        // missing-reply-subject branches above.
+        let payload = match serde_json::to_vec(&reply) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("failed to serialize reply: {e}");
+                continue;
+            }
+        };
+        if let Err(e) = client.publish(reply_subject, payload.into()).await {
+            tracing::warn!("failed to publish reply: {e}");
+        }
     }
 
     Ok(())
