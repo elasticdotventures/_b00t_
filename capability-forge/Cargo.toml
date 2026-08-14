@@ -7,6 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "capability-forge"
+path = "src/bin/main.rs"
+
 [dependencies]
 b00t-c0re-gov = { path = "../b00t-c0re-gov" }
 serde = { workspace = true, features = ["derive"] }
@@ -23,6 +27,8 @@ nkeys = "0.4"
 nats-jwt = "0.3"
 base64 = "0.22"
 async-openai = "0.30.1"
+futures = "0.3.34"
+tracing-subscriber = "0.3.23"
 
 [dev-dependencies]
 tempfile = "3"
