@@ -2,8 +2,7 @@ use anyhow::{Context, Result};
 use b00t_c0re_gov::redb_scope_store::RedbScopeStore;
 use b00t_c0re_gov::scope_store::ScopeId;
 use capability_forge::judge::OpenAiJudge;
-use capability_forge::request::SignedRequest;
-use capability_forge::service::CapabilityForge;
+use capability_forge::service::{handle_wire_request, CapabilityForge};
 use futures::StreamExt;
 use nkeys::KeyPair;
 use std::env;
@@ -34,14 +33,11 @@ async fn main() -> Result<()> {
             continue;
         };
 
-        let signed: SignedRequest = match serde_json::from_slice(&msg.payload) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::warn!("malformed request: {e}");
-                continue;
-            }
-        };
-
+        // Per-message deserialize -> handle_request -> serialize -> reply logic (including
+        // its log-and-continue error handling) lives in `handle_wire_request` so it can be
+        // exercised directly in tests against a real NATS connection -- see
+        // `capability-forge/tests/e2e_local_nats.rs`'s
+        // `wire_request_round_trips_through_publish_subscribe_reply` test.
         let mut forge = CapabilityForge {
             store: &mut store,
             judge: &judge,
@@ -49,23 +45,7 @@ async fn main() -> Result<()> {
             account_pubkey: &account_pubkey,
             grant_ttl: chrono::Duration::minutes(30),
         };
-        let reply = forge.handle_request(signed).await;
-
-        // Serialize/publish failures are per-message hiccups (transient NATS
-        // blip, a future reply field that fails to serialize), not reasons
-        // to take the whole service down for every other agent depending on
-        // it -- same log-and-continue treatment as the malformed-request and
-        // missing-reply-subject branches above.
-        let payload = match serde_json::to_vec(&reply) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("failed to serialize reply: {e}");
-                continue;
-            }
-        };
-        if let Err(e) = client.publish(reply_subject, payload.into()).await {
-            tracing::warn!("failed to publish reply: {e}");
-        }
+        handle_wire_request(&mut forge, &client, reply_subject, &msg.payload).await;
     }
 
     Ok(())

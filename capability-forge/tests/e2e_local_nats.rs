@@ -1,5 +1,6 @@
 //! End-to-end integration test against a REAL, ephemeral local `nats-server` process
-//! (v2.14.5, binary at `/home/brianh/.local/bin/nats-server`).
+//! (v2.14.5; resolved via the `NATS_SERVER_BIN` env var if set, otherwise `nats-server`
+//! on `PATH` -- see `nats_server_bin()` below).
 //!
 //! This is the capstone test for the whole `capability-forge` plan: enroll an agent,
 //! sign a capability request, mint a JWT through `CapabilityForge::handle_request` (not a
@@ -56,15 +57,22 @@ use capability_forge::enroll::enroll_agent;
 use capability_forge::grant::revoke_grant;
 use capability_forge::judge::FakeJudge;
 use capability_forge::jwt_mint::skill_subject;
-use capability_forge::request::{CapabilityRequest, SignedRequest};
-use capability_forge::service::CapabilityForge;
+use capability_forge::request::{CapabilityReply, CapabilityRequest, SignedRequest};
+use capability_forge::service::{handle_wire_request, CapabilityForge};
+use futures::StreamExt;
 use nats_jwt::Token;
 use nkeys::KeyPair;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
-const NATS_SERVER_BIN: &str = "/home/brianh/.local/bin/nats-server";
+/// Resolves the `nats-server` binary to spawn for these tests: an explicit
+/// `NATS_SERVER_BIN` override (for CI or any machine where it is not on `PATH`) if set,
+/// otherwise the bare command name resolved via `PATH` -- as opposed to a single
+/// hardcoded machine-specific path, which cannot run on CI or any other machine.
+fn nats_server_bin() -> String {
+    std::env::var("NATS_SERVER_BIN").unwrap_or_else(|_| "nats-server".into())
+}
 
 struct NatsFixture {
     child: Child,
@@ -99,13 +107,14 @@ impl NatsFixture {
         let config_path = tempdir.path().join("nats.conf");
         std::fs::write(&config_path, render_config(port, &operator_jwt, &account_pubkey, &account_jwt)).unwrap();
 
-        let mut child = Command::new(NATS_SERVER_BIN)
+        let bin = nats_server_bin();
+        let mut child = Command::new(&bin)
             .arg("-c")
             .arg(&config_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn nats-server — is it installed at /home/brianh/.local/bin/nats-server?");
+            .unwrap_or_else(|e| panic!("spawn nats-server (resolved as {bin:?}, override with NATS_SERVER_BIN): {e}"));
 
         wait_for_port_or_panic(&mut child, port);
 
@@ -133,7 +142,7 @@ impl NatsFixture {
         // <pid>`: a short-lived second invocation of the binary that resolves <pid> (accepts
         // either a bare PID or a path to a pidfile -- `child.id()` gives a bare PID) and sends
         // the OS signal, then exits; it is not a second long-running server.
-        let status = Command::new(NATS_SERVER_BIN)
+        let status = Command::new(nats_server_bin())
             .arg("--signal")
             .arg(format!("reload={}", self.child.id()))
             .status()
@@ -410,6 +419,93 @@ async fn full_flow_enroll_request_connect_scope_enforced_then_revoked() {
     );
 
     drop(client);
+}
+
+/// Finding-6 coverage: every other test in this crate calls `CapabilityForge::handle_request`
+/// directly (a library-level shortcut), so nothing previously exercised the actual production
+/// path -- a `SignedRequest` serialized to JSON, published to `capability.request.*`, received
+/// by `handle_wire_request` (the exact function `bin/main.rs`'s subscribe loop calls per
+/// message), deserialized, handled, and replied. This test drives exactly that, against a real
+/// NATS connection from `NatsFixture`, proving the wire format round-trips through the real
+/// subscribe/reply mechanics -- not a second copy of the full-flow test's scenario coverage
+/// above, just the one happy path through the actual wire boundary.
+#[tokio::test]
+async fn wire_request_round_trips_through_publish_subscribe_reply() {
+    let fixture = NatsFixture::start();
+
+    let db_dir = tempfile::tempdir().unwrap();
+    let mut store = RedbScopeStore::open(db_dir.path().join("capforge.redb"), ScopeId::Global, None).unwrap();
+    let agent_kp = enroll_agent(&mut store, "agent-wire", &["skill.read".to_string()]).unwrap();
+
+    let judge = FakeJudge::always_grant();
+
+    // `NatsFixture`'s server requires every connection to present a valid user JWT (it's the
+    // same operator/account trust chain the full-flow test above uses to prove skill-scoped
+    // enforcement) -- there is no anonymous access. The service and requester connections
+    // here are exercising the wire *mechanics* of the capability.request.* control-plane
+    // channel, not the skill-scoped grant it hands out, so each gets an unrestricted user JWT
+    // (no `.allow_publish`/`.allow_subscribe` calls -- per `jwt_mint.rs`'s own doc comment, an
+    // absent NatsPermissions block means unrestricted access) rather than a `mint_user_jwt`
+    // skill-scoped one.
+    let service_creds = mint_unrestricted_user_creds(&fixture);
+    let requester_creds = mint_unrestricted_user_creds(&fixture);
+
+    // Service-side connection: subscribes on the real production subject, mirroring
+    // bin/main.rs's `client.subscribe("capability.request.*")`.
+    let service_client =
+        async_nats::ConnectOptions::new().credentials_file(&service_creds).await.unwrap().connect(fixture.url()).await.unwrap();
+    let mut sub = service_client.subscribe("capability.request.*").await.unwrap();
+
+    let signed = SignedRequest::sign(
+        &agent_kp,
+        CapabilityRequest {
+            agent_id: "agent-wire".into(),
+            requested_skills: vec!["skill.read".into()],
+            justification: "".into(),
+        },
+    )
+    .unwrap();
+    let payload = serde_json::to_vec(&signed).unwrap();
+
+    // Requester-side connection, separate from the service connection above -- a real agent
+    // and the service are distinct NATS clients. `Client::request` is a request-reply call
+    // that only resolves once a reply is published to the subject it generates, so it's
+    // spawned to run concurrently with the service side actually answering it below.
+    let requester_client =
+        async_nats::ConnectOptions::new().credentials_file(&requester_creds).await.unwrap().connect(fixture.url()).await.unwrap();
+    let reply_handle = tokio::spawn(async move {
+        requester_client.request("capability.request.agent-wire".to_string(), payload.into()).await
+    });
+
+    // Drive exactly one message through the real wire-handling function -- the same one
+    // bin/main.rs's subscribe loop calls per message, not a call back into handle_request.
+    let msg = sub.next().await.expect("service should receive the published request");
+    let reply_subject = msg.reply.clone().expect("Client::request sets a reply subject");
+    let mut forge = CapabilityForge {
+        store: &mut store,
+        judge: &judge,
+        account_signing_key: &fixture.account_signing_key,
+        account_pubkey: &fixture.account_pubkey,
+        grant_ttl: chrono::Duration::minutes(30),
+    };
+    handle_wire_request(&mut forge, &service_client, reply_subject, &msg.payload).await;
+
+    let reply_msg = reply_handle.await.unwrap().expect("requester should receive a reply");
+    let capability_reply: CapabilityReply = serde_json::from_slice(&reply_msg.payload).unwrap();
+    assert!(capability_reply.jwt.is_some(), "expected a minted jwt, got denials: {:?}", capability_reply.denied);
+    assert_eq!(capability_reply.granted, vec!["skill.read".to_string()]);
+}
+
+/// Mints a user JWT under the fixture's account with no `.allow_publish`/`.allow_subscribe`
+/// calls at all -- an unrestricted user, distinct from `jwt_mint::mint_user_jwt`'s always
+/// skill-scoped output. Used only for this test's internal service/requester plumbing
+/// connections, which need to move `capability.request.*` control-plane traffic and aren't
+/// themselves what's being proven here (the full-flow test above already proves skill-scoped
+/// NATS enforcement).
+fn mint_unrestricted_user_creds(fixture: &NatsFixture) -> std::path::PathBuf {
+    let user_kp = KeyPair::new_user();
+    let jwt = Token::new_user(&fixture.account_pubkey, user_kp.public_key()).sign(&fixture.account_signing_key);
+    write_creds_file(&jwt, &user_kp.seed().unwrap())
 }
 
 fn write_creds_file(jwt: &str, seed: &str) -> std::path::PathBuf {

@@ -16,6 +16,39 @@ pub struct CapabilityForge<'a> {
     pub grant_ttl: Duration,
 }
 
+/// Cap on `requested_skills` per request. Every unregistered skill defaults to
+/// `SkillTier::Escalatable` and costs one serially-awaited judge call (`judge.rs`'s
+/// `OpenAiJudge` gives each up to a 15s timeout), and `bin/main.rs`'s subscribe loop awaits
+/// `handle_request` inline with no per-message concurrency -- so an unbounded skill list in a
+/// single request can occupy the whole service, blocking every other agent's request behind
+/// it. 20 comfortably covers any legitimate agent's real skill list for one grant request
+/// while bounding the worst case (all escalatable, all timing out) to a few minutes instead
+/// of unbounded.
+const MAX_REQUESTED_SKILLS: usize = 20;
+
+/// Skill names become a raw NATS subject token via `jwt_mint::skill_subject`
+/// (`capforge.<agent_pubkey>.<skill>`). An unvalidated skill name lets an agent-supplied
+/// string reach that subject directly: `*` or `>` are NATS wildcards that would grant far
+/// more than the single requested skill (including this agent's own Restricted-tier skills,
+/// since the wildcard is scoped only by the agent's own pubkey prefix, e.g. requesting the
+/// literal skill name `>` grants `capforge.<pubkey>.>`). Whitespace and other control/subject-
+/// delimiter-adjacent characters are rejected the same way, via an allowlist charset rather
+/// than a denylist that would have to anticipate every dangerous character.
+///
+/// Deliberately still allows `.`, despite the review's suggestion to reject it too: this
+/// codebase's own skill-naming convention is dotted hierarchy (`skill.read`, `skill.write`,
+/// `skill.delete-infra` -- used throughout `enroll.rs`, this file's own tests, and the real
+/// production flow proven end-to-end in `tests/e2e_local_nats.rs`), and NATS subjects are
+/// themselves conventionally dot-delimited. A `.` in a skill name only adds a further
+/// *literal* token to the minted subject (`capforge.<pubkey>.skill.read` is an exact-match
+/// subject, not a pattern) -- it does not confer wildcard matching the way `*`/`>` do, so it
+/// does not defeat the tier system's guarantee this validation exists to protect. Rejecting
+/// it would break the established naming convention (54 call sites) without closing any
+/// additional attack surface beyond what rejecting `*`/`>` already closes.
+fn is_valid_skill_name(skill: &str) -> bool {
+    !skill.is_empty() && skill.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.')
+}
+
 impl<'a> CapabilityForge<'a> {
     pub async fn handle_request(&mut self, signed: SignedRequest) -> CapabilityReply {
         let deny_all = |reason: &str, skills: &[String]| CapabilityReply {
@@ -28,6 +61,12 @@ impl<'a> CapabilityForge<'a> {
 
         if signed.verify().is_err() {
             return deny_all("invalid signature", &signed.body.requested_skills);
+        }
+
+        // Reject oversized requests before any store lookups or judge calls -- see
+        // MAX_REQUESTED_SKILLS's doc comment for why this bound exists.
+        if signed.body.requested_skills.len() > MAX_REQUESTED_SKILLS {
+            return deny_all("too many requested skills in a single request", &signed.body.requested_skills);
         }
 
         let agent_id = &signed.body.agent_id;
@@ -45,13 +84,28 @@ impl<'a> CapabilityForge<'a> {
             return deny_all("agent suspended", &signed.body.requested_skills);
         }
 
-        let allowlist = get_agent_allowlist(self.store, agent_id).unwrap_or_default();
+        // Fail closed, same rationale as the tier-read error case a few lines below: a
+        // genuine store I/O error here (not the normal "agent has no allowlist yet" case,
+        // which `get_agent_allowlist` already resolves to an empty Vec on its own) must not
+        // silently collapse into an empty allowlist via `.unwrap_or_default()`. An empty
+        // allowlist doesn't deny anything by itself -- every requested skill just falls
+        // through to tier lookup, where an unregistered skill still reaches the LLM judge
+        // (SkillTier::default() is Escalatable). A store failure must produce a hard deny.
+        let allowlist = match get_agent_allowlist(self.store, agent_id) {
+            Ok(list) => list,
+            Err(_) => return deny_all("failed to read agent allowlist", &signed.body.requested_skills),
+        };
 
         let mut granted: Vec<String> = Vec::new();
         let mut denied: Vec<(String, String)> = Vec::new();
         let mut tier_source: HashMap<String, SkillTier> = HashMap::new();
 
         for skill in &signed.body.requested_skills {
+            if !is_valid_skill_name(skill) {
+                denied.push((skill.clone(), "invalid skill name — must be non-empty and match ^[A-Za-z0-9_.-]+$".into()));
+                continue;
+            }
+
             if allowlist.contains(skill) {
                 granted.push(skill.clone());
                 tier_source.insert(skill.clone(), SkillTier::Base);
@@ -120,6 +174,45 @@ impl<'a> CapabilityForge<'a> {
         };
 
         CapabilityReply { granted, denied, jwt: Some(jwt), expires_at: Some(grant.expires_at), jti: Some(grant.jti.clone()) }
+    }
+}
+
+/// Handles exactly one wire-format request: deserialize `payload` as a `SignedRequest`, run
+/// it through `handle_request`, serialize the reply, and publish it to `reply_subject` on
+/// `client`. This is the real production per-message logic -- `bin/main.rs`'s subscribe loop
+/// does nothing more than resolve `reply_subject` from the incoming `Message` and call this
+/// function, so tests exercising this function against a real NATS connection are exercising
+/// the actual wire path, not a library-level shortcut back to `handle_request` alone.
+///
+/// Error handling mirrors what `bin/main.rs` did inline before this was extracted: a
+/// malformed payload or a reply serialize/publish failure is logged and swallowed rather than
+/// propagated, so one bad message never takes the whole service down for other agents relying
+/// on it.
+pub async fn handle_wire_request(
+    forge: &mut CapabilityForge<'_>,
+    client: &async_nats::Client,
+    reply_subject: async_nats::Subject,
+    payload: &[u8],
+) {
+    let signed: SignedRequest = match serde_json::from_slice(payload) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("malformed request: {e}");
+            return;
+        }
+    };
+
+    let reply = forge.handle_request(signed).await;
+
+    let reply_payload = match serde_json::to_vec(&reply) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("failed to serialize reply: {e}");
+            return;
+        }
+    };
+    if let Err(e) = client.publish(reply_subject, reply_payload.into()).await {
+        tracing::warn!("failed to publish reply: {e}");
     }
 }
 
@@ -345,17 +438,17 @@ mod tests {
         assert!(reply.jwt.is_none());
     }
 
-    /// Wraps a real `RedbScopeStore` and returns a simulated backend error
-    /// for reads of one specific key, standing in for a genuine store I/O
-    /// failure -- as opposed to the normal "key never written" case, which
-    /// `get_skill_tier` already resolves to `Escalatable` on its own without
-    /// any help from this wrapper.
-    struct FailingTierRead {
+    /// Wraps a real `RedbScopeStore` and returns a simulated backend error for reads of one
+    /// specific key, standing in for a genuine store I/O failure -- as opposed to the normal
+    /// "key never written" case, which `get_skill_tier`/`get_agent_allowlist` already resolve
+    /// on their own (to `Escalatable` and `vec![]` respectively) without any help from this
+    /// wrapper. Shared by the tier-read and allowlist-read fail-closed tests below.
+    struct FailingKeyRead {
         inner: RedbScopeStore,
         failing_key: String,
     }
 
-    impl b00t_c0re_gov::scope_store::ScopeStore for FailingTierRead {
+    impl b00t_c0re_gov::scope_store::ScopeStore for FailingKeyRead {
         fn get_raw(&self, key: &str) -> b00t_c0re_gov::errors::ScopeResult<Option<serde_json::Value>> {
             if key == self.failing_key {
                 return Err(b00t_c0re_gov::errors::ScopeError::BackendUnavailable("simulated read failure".into()));
@@ -373,7 +466,7 @@ mod tests {
         }
     }
 
-    impl TransactionalScopeStore for FailingTierRead {
+    impl TransactionalScopeStore for FailingKeyRead {
         fn transaction(
             &mut self,
             ops: Vec<b00t_c0re_gov::scope_store::ScopeOp>,
@@ -388,7 +481,7 @@ mod tests {
         let path = dir.path().join("test.redb");
         std::mem::forget(dir);
         let inner = RedbScopeStore::open(path, ScopeId::Global, None).unwrap();
-        let mut s = FailingTierRead { inner, failing_key: "capforge:skill:skill.mystery:tier".to_string() };
+        let mut s = FailingKeyRead { inner, failing_key: "capforge:skill:skill.mystery:tier".to_string() };
 
         let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
         // Judge would grant anything asked of it -- if the fail-open bug
@@ -413,5 +506,168 @@ mod tests {
         assert!(reply.granted.is_empty());
         assert!(reply.jwt.is_none());
         assert_eq!(reply.denied[0].0, "skill.mystery");
+    }
+
+    #[tokio::test]
+    async fn allowlist_read_error_denies_the_request_without_falling_through_to_the_judge() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.redb");
+        std::mem::forget(dir);
+        let mut inner = RedbScopeStore::open(path, ScopeId::Global, None).unwrap();
+        // Enroll on the plain store first, so the allowlist is actually persisted before the
+        // failing wrapper goes on -- this test is about a read failure on the *lookup* path
+        // `handle_request` uses, not about enrollment's own write failing.
+        let kp = enroll_agent(&mut inner, "agent-1", &["skill.read".into()]).unwrap();
+        let mut s = FailingKeyRead { inner, failing_key: "capforge:agent:agent-1:allowlist".to_string() };
+
+        // Judge would grant anything asked of it -- if the fail-open bug regressed
+        // (allowlist read error collapsing to an empty allowlist via `.unwrap_or_default()`,
+        // letting the request fall through to tier lookup and then the judge), this judge
+        // would grant the skill and this test would catch it.
+        let judge = FakeJudge::always_grant();
+        let account = KeyPair::new_account();
+        let mut forge = CapabilityForge {
+            store: &mut s,
+            judge: &judge,
+            account_signing_key: &account,
+            account_pubkey: &account.public_key(),
+            grant_ttl: Duration::minutes(30),
+        };
+        let signed = crate::request::SignedRequest::sign(
+            &kp,
+            CapabilityRequest { agent_id: "agent-1".into(), requested_skills: vec!["skill.read".into()], justification: "".into() },
+        )
+        .unwrap();
+        let reply = forge.handle_request(signed).await;
+        assert!(reply.granted.is_empty());
+        assert!(reply.jwt.is_none());
+        assert_eq!(reply.denied[0].0, "skill.read");
+        assert!(
+            reply.denied[0].1.contains("allowlist"),
+            "expected a denial reason naming the allowlist read failure, got: {}",
+            reply.denied[0].1
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_skill_names_are_denied_without_reaching_the_judge() {
+        let mut s = store();
+        let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
+        // Judge would grant anything asked of it -- none of these should ever reach it: `>`
+        // and `*` are NATS wildcards that would expand the minted subject to cover this
+        // agent's entire skill namespace (including Restricted-tier skills) instead of the
+        // single leaf requested, an empty name is meaningless, and embedded whitespace has no
+        // legitimate use in a subject token. `skill.read`-style dotted names are deliberately
+        // NOT included here -- they're valid (see `is_valid_skill_name`'s doc comment).
+        let judge = FakeJudge::always_grant();
+        let account = KeyPair::new_account();
+        let mut forge = CapabilityForge {
+            store: &mut s,
+            judge: &judge,
+            account_signing_key: &account,
+            account_pubkey: &account.public_key(),
+            grant_ttl: Duration::minutes(30),
+        };
+        let bad_names = vec![">".to_string(), "*".to_string(), "".to_string(), "skill with space".to_string()];
+        let signed = crate::request::SignedRequest::sign(
+            &kp,
+            CapabilityRequest { agent_id: "agent-1".into(), requested_skills: bad_names.clone(), justification: "".into() },
+        )
+        .unwrap();
+        let reply = forge.handle_request(signed).await;
+        assert!(reply.granted.is_empty(), "no invalid skill name should ever be granted");
+        assert!(reply.jwt.is_none());
+        assert_eq!(reply.denied.len(), bad_names.len());
+        for (name, reason) in &reply.denied {
+            assert!(bad_names.contains(name));
+            assert!(reason.contains("invalid skill name"), "unexpected denial reason for {name:?}: {reason}");
+        }
+    }
+
+    #[tokio::test]
+    async fn dotted_skill_names_remain_valid() {
+        // Companion to invalid_skill_names_are_denied_without_reaching_the_judge: proves the
+        // deliberate deviation from the review's "reject dots too" suggestion actually works
+        // end-to-end, not just that is_valid_skill_name's unit logic allows it.
+        let mut s = store();
+        let kp = enroll_agent(&mut s, "agent-1", &["skill.delete-infra.confirm".into()]).unwrap();
+        let judge = FakeJudge::always_deny("should not be called");
+        let account = KeyPair::new_account();
+        let mut forge = CapabilityForge {
+            store: &mut s,
+            judge: &judge,
+            account_signing_key: &account,
+            account_pubkey: &account.public_key(),
+            grant_ttl: Duration::minutes(30),
+        };
+        let signed = crate::request::SignedRequest::sign(
+            &kp,
+            CapabilityRequest {
+                agent_id: "agent-1".into(),
+                requested_skills: vec!["skill.delete-infra.confirm".into()],
+                justification: "".into(),
+            },
+        )
+        .unwrap();
+        let reply = forge.handle_request(signed).await;
+        assert_eq!(reply.granted, vec!["skill.delete-infra.confirm".to_string()]);
+        assert!(reply.jwt.is_some());
+    }
+
+    #[tokio::test]
+    async fn too_many_requested_skills_is_denied_before_any_judge_call() {
+        let mut s = store();
+        let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
+        // Judge would grant anything asked of it -- if the request weren't rejected up front
+        // by the MAX_REQUESTED_SKILLS cap, every one of these unregistered (thus
+        // Escalatable-by-default) skills would reach this judge and all would be granted.
+        let judge = FakeJudge::always_grant();
+        let account = KeyPair::new_account();
+        let mut forge = CapabilityForge {
+            store: &mut s,
+            judge: &judge,
+            account_signing_key: &account,
+            account_pubkey: &account.public_key(),
+            grant_ttl: Duration::minutes(30),
+        };
+        let too_many: Vec<String> = (0..(MAX_REQUESTED_SKILLS + 1)).map(|i| format!("skill.n{i}")).collect();
+        let signed = crate::request::SignedRequest::sign(
+            &kp,
+            CapabilityRequest { agent_id: "agent-1".into(), requested_skills: too_many.clone(), justification: "".into() },
+        )
+        .unwrap();
+        let reply = forge.handle_request(signed).await;
+        assert!(reply.granted.is_empty());
+        assert!(reply.jwt.is_none());
+        assert_eq!(reply.denied.len(), too_many.len());
+        assert!(reply.denied.iter().all(|(_, reason)| reason.contains("too many requested skills")));
+    }
+
+    #[tokio::test]
+    async fn requested_skills_at_the_cap_is_not_rejected_for_size() {
+        // Boundary check: exactly MAX_REQUESTED_SKILLS must not trip the too-many-skills
+        // denial (only exceeding it should) -- proven by using base-tier allowlisted skills
+        // so a pass here can only be explained by the cap not firing, not by the judge
+        // happening to grant everything.
+        let mut s = store();
+        let skills: Vec<String> = (0..MAX_REQUESTED_SKILLS).map(|i| format!("skill.n{i}")).collect();
+        let kp = enroll_agent(&mut s, "agent-1", &skills).unwrap();
+        let judge = FakeJudge::always_deny("should not be called");
+        let account = KeyPair::new_account();
+        let mut forge = CapabilityForge {
+            store: &mut s,
+            judge: &judge,
+            account_signing_key: &account,
+            account_pubkey: &account.public_key(),
+            grant_ttl: Duration::minutes(30),
+        };
+        let signed = crate::request::SignedRequest::sign(
+            &kp,
+            CapabilityRequest { agent_id: "agent-1".into(), requested_skills: skills.clone(), justification: "".into() },
+        )
+        .unwrap();
+        let reply = forge.handle_request(signed).await;
+        assert_eq!(reply.granted.len(), skills.len());
+        assert!(reply.jwt.is_some());
     }
 }
