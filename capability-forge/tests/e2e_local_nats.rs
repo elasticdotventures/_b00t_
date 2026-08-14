@@ -394,7 +394,20 @@ async fn full_flow_enroll_request_connect_scope_enforced_then_revoked() {
     // against a NEW auth handshake, since an already-established connection wouldn't
     // necessarily be torn down by a revocation the same way a fresh CONNECT would be refused.
     let reconnect = async_nats::ConnectOptions::new().credentials_file(&creds).await.unwrap().connect(fixture.url()).await;
-    assert!(reconnect.is_err(), "revoked agent should be refused on reconnect, got: {reconnect:?}");
+    // A bare `is_err()` would accept *any* connect failure -- DNS, IO, timeout, or nats-server
+    // simply failing to come back up after `reload()` -- none of which would prove revocation
+    // specifically worked. `ConnectError::kind()` (confirmed in async-nats-0.45.0/src/lib.rs)
+    // distinguishes `ConnectErrorKind::AuthorizationViolation` (the server rejected the JWT
+    // itself) from every other failure mode, so asserting on the kind is what actually proves
+    // the rejection came from the revocation, mirroring the same rigor already applied to the
+    // disallowed-publish assertion above (checking the real error content, not just "an Err
+    // happened").
+    let reconnect_err = reconnect.expect_err("revoked agent should be refused on reconnect");
+    assert_eq!(
+        reconnect_err.kind(),
+        async_nats::ConnectErrorKind::AuthorizationViolation,
+        "expected reconnect to fail specifically with AuthorizationViolation (proving the revocation was what rejected it), got: {reconnect_err:?}"
+    );
 
     drop(client);
 }
