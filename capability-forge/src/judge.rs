@@ -81,12 +81,29 @@ impl EscalationJudge for OpenAiJudge {
             Err(e) => return JudgeOutcome::Denied { reason: format!("request build failed: {e}") },
         };
 
-        let chat = self.client.chat();
-        let call = chat.create(request);
-        let response = match tokio::time::timeout(self.timeout, call).await {
-            Ok(Ok(r)) => r,
-            Ok(Err(e)) => return JudgeOutcome::Denied { reason: format!("llm call failed: {e}") },
-            Err(_) => return JudgeOutcome::Denied { reason: "llm call timed out".into() },
+        // `async-openai`'s `OpenAIConfig::headers()` builds the Authorization header
+        // with `.parse().unwrap()` on the raw API key — a malformed OPENAI_API_KEY
+        // (stray newline/non-ASCII byte from a bad secrets-injection path) panics
+        // *inside* the client call, not as a returned Err. Running the call in a
+        // spawned task turns that into a catchable JoinError instead of an unwind
+        // through this function, preserving fail-closed even against that panic.
+        let chat_client = self.client.clone();
+        let timeout = self.timeout;
+        let handle = tokio::spawn(async move {
+            let chat = chat_client.chat();
+            let call = chat.create(request);
+            tokio::time::timeout(timeout, call).await
+        });
+
+        let response = match handle.await {
+            Ok(Ok(Ok(r))) => r,
+            Ok(Ok(Err(e))) => return JudgeOutcome::Denied { reason: format!("llm call failed: {e}") },
+            Ok(Err(_)) => return JudgeOutcome::Denied { reason: "llm call timed out".into() },
+            Err(join_err) => {
+                return JudgeOutcome::Denied {
+                    reason: format!("llm call panicked or was cancelled: {join_err}"),
+                }
+            }
         };
 
         let content = response
