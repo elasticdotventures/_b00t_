@@ -36,6 +36,13 @@ pub struct CapabilityReply {
     pub denied: Vec<(String, String)>,
     pub jwt: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
+    /// The persisted [`crate::grant::Grant`]'s `jti` when a grant was minted — the key a
+    /// caller needs to later call [`crate::grant::revoke_grant`] on *this specific* grant.
+    /// Distinct from the NATS JWT's own internal `jti` claim embedded in `jwt` (that one is a
+    /// sha256-hash-derived id nats-jwt computes for the wire token itself and is never
+    /// persisted anywhere on our side); the two are unrelated identifiers in unrelated
+    /// namespaces, so this field cannot be reconstructed by decoding `jwt`.
+    pub jti: Option<String>,
 }
 
 #[cfg(test)]

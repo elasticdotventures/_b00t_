@@ -23,6 +23,7 @@ impl<'a> CapabilityForge<'a> {
             denied: skills.iter().map(|s| (s.clone(), reason.to_string())).collect(),
             jwt: None,
             expires_at: None,
+            jti: None,
         };
 
         if signed.verify().is_err() {
@@ -99,7 +100,7 @@ impl<'a> CapabilityForge<'a> {
         }
 
         if granted.is_empty() {
-            return CapabilityReply { granted, denied, jwt: None, expires_at: None };
+            return CapabilityReply { granted, denied, jwt: None, expires_at: None, jti: None };
         }
 
         let grant = Grant::new(agent_id, granted.clone(), tier_source, self.grant_ttl);
@@ -118,7 +119,7 @@ impl<'a> CapabilityForge<'a> {
             Err(_) => return deny_all("failed to mint jwt after persisting grant", &signed.body.requested_skills),
         };
 
-        CapabilityReply { granted, denied, jwt: Some(jwt), expires_at: Some(grant.expires_at) }
+        CapabilityReply { granted, denied, jwt: Some(jwt), expires_at: Some(grant.expires_at), jti: Some(grant.jti.clone()) }
     }
 }
 
