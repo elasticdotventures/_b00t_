@@ -80,3 +80,61 @@ The user asked for a handoff and to stop pursuing the live-test goal for this se
 after confirming `gcloud auth` succeeded — deliberately not proceeding straight into live
 infrastructure changes on a freshly-authenticated session without a fresh look. This doc is
 that stopping point.
+
+## Update 2026-08-15: bootstrap pattern built, operator seed still missing
+
+Confirmed via `gcloud auth list` that GCloud auth now works, and re-ran
+`./export-gcloud-dotenv.sh --tf --zone global` from the `infrastructure` repo root — the full
+secret dump has no NATS/operator-related entry (only Azure/Cloudflare/Grafana/HuggingFace/etc.
+credentials unrelated to this work). Combined with the earlier AWS `global`/`live` zone checks,
+**the operator signing seed is not in either cloud secret store under the `global` zone.** It
+most likely only ever existed in the local `nsc-setup` checkout on whichever machine originally
+ran `nsc` to create it — not reachable from this session.
+
+Also discovered `pods/nats/nats-pod-configured.yaml` (committed, not a secret — JWTs are
+public/verifiable by design) already has a **real operator baked in**: `b00t-operator`,
+identity pubkey `OCTX6B2BDFWGOJVN3PTBBDR6Y3WZIZJMKYAVGFV23OKK3J4EYXKPJ74T`, with one designated
+signing key `ODMSVCODGVEUVCCQUV36MPVDTQJ36Z4EA2BMW6X6KQCRG2FGF6OX2DJL`. Only the `SYS` account
+is currently preloaded — no account exists yet for capability-forge/agents to live under.
+
+**Built** (commit `a6aab28a`): `capability-forge/src/bin/mint_account` — a one-time bootstrap
+tool. Given `NATS_OPERATOR_SIGNING_SEED` (the seed for that designated signing key, not the
+operator's root identity key), it mints a new `CAPFORGE` account and prints:
+1. The `resolver_preload` entry to append to `pods/nats/nats-pod-configured.yaml`.
+2. `CAPFORGE_ACCOUNT_SEED`/`CAPFORGE_ACCOUNT_PUBKEY` — what capability-forge's running service
+   actually needs day to day. **The operator key is never needed again after this one run.**
+
+Tested against a locally-generated fake operator keypair (2 passing tests: a real mint proving
+the JWT is well-formed and signed correctly, and a rejection test for an invalid seed) — the
+tool itself is proven correct. It has not been run against the real operator key, which still
+isn't available anywhere reachable.
+
+### Still needed before a real live deployment
+
+1. **The actual operator signing seed**, from wherever the original `nsc-setup` run's output
+   lives (not found on this machine or in either checked secret store) — or a decision to
+   generate a *new* operator+account structure from scratch if the original is truly
+   unrecoverable (would orphan the existing `SYS` account/live NATS trust chain, a bigger
+   decision, not one to make unilaterally).
+2. Once `mint_account` runs for real: update `pods/nats/nats-pod-configured.yaml` with the new
+   resolver_preload entry, store `CAPFORGE_ACCOUNT_SEED`/`_PUBKEY` in the secret store (matching
+   the `VULTR_API_KEY` pattern — `config/global/capforge-account-seed` etc. — wired into
+   `terraform/b00t/nsc-data-sources.tf` or a new file alongside it), and push/reload the live
+   `nats-server`.
+3. **A second, smaller mint**: agents need *some* initial NATS credential just to reach the
+   `capability.request.*` subject before they have any real scope — per the design doc, "a
+   shared, narrowly-scoped requester NATS credential baked into the node's cloud-init" (publish
+   to `capability.request.>` only, subscribe to its own inbox). That's a NATS *user* JWT under
+   the new CAPFORGE account, not another account-level mint — capability-forge itself can
+   already mint arbitrary-permission user JWTs once it holds the account signing key, so this
+   could be a one-line addition to `mint_account` or a separate tiny tool.
+4. **The "authenticate via b00t.promptexecution.com" question the user raised** is still open:
+   for an agent with *zero* prior NATS credentials (not even the shared requester one — e.g. a
+   brand-new external integration), is there an HTTP-fronted enrollment path through
+   b00t.promptexecution.com/pingap, or is the shared requester credential itself distributed
+   out-of-band (e.g. baked into the b00t-cli release binary, or handed out at agent
+   provisioning time)? This is exactly the Phase 2 HTTP dashboard scope the original design
+   doc deferred — worth an explicit decision before building it, not an assumption.
+5. Cloud-init/systemd wiring for capability-forge itself on the Vultr node (binary
+   distribution, `b00t-capability-forge.service` unit, env vars sourced via `module.globalEnvy`)
+   — none of this exists yet, unlike `b00t-nats`/`b00t-pingap`/`b00t-daprd`/`b00t-maintenance`.
