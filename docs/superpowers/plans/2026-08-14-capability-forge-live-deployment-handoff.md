@@ -138,3 +138,39 @@ isn't available anywhere reachable.
 5. Cloud-init/systemd wiring for capability-forge itself on the Vultr node (binary
    distribution, `b00t-capability-forge.service` unit, env vars sourced via `module.globalEnvy`)
    — none of this exists yet, unlike `b00t-nats`/`b00t-pingap`/`b00t-daprd`/`b00t-maintenance`.
+
+## Update 2026-08-15 (later): operator regenerated, validated, PRs open
+
+Per explicit user decision, generated a brand-new NATS operator trust root from scratch
+(old signing key confirmed unrecoverable — see above) via `capability-forge/src/bin/bootstrap_operator`:
+new operator + designated signing key, new SYS account/user, new CAPFORGE account.
+
+**Validated for real**, not just generated: ran an actual local `nats-server` v2.14.5 against
+the exact committed `pods/nats/nats-pod-configured.yaml` content (extracted, not paraphrased)
+— clean startup, `Trusted Operators: Operator: "b00t-operator"` logged. Then minted a real
+user JWT under the new CAPFORGE account via `jwt_mint::mint_user_jwt` and connected/published
+successfully. This is `capability-forge/examples/validate_local_bootstrap.rs`, kept in the
+repo as a repeatable tool.
+
+**Open PRs:**
+- elasticdotventures/_b00t_#1091 — capability-forge phase-1 implementation (unchanged status).
+- elasticdotventures/_b00t_ `task/capability-forge` also now has `capability-forge/src/bootstrap.rs`,
+  `src/bin/bootstrap_operator`, and the validation example (commit `a8191249`).
+- PromptExecution/infrastructure#95 — the regenerated `pods/nats/nats-pod-configured.yaml`,
+  on a new branch (`capforge-nats-operator-genesis`), not the retirement branch this handoff
+  doc originally lived on.
+
+**Still not done, still needs explicit human action:**
+1. Store the seeds (`NATS_OPERATOR_ROOT_SEED`, `NATS_OPERATOR_SIGNING_SEED`,
+   `NATS_SYS_ACCOUNT_SEED`, `NATS_SYS_USER_SEED`, `CAPFORGE_ACCOUNT_SEED`) in the secret store
+   — they exist only in this session's conversation transcript and the `bootstrap_operator`
+   run's stdout right now, nowhere durable. **Treat this run's specific values as sensitive
+   and get them into the secret store (or regenerate fresh) before relying on them.**
+2. The actual live cutover: `tofu apply` (once the secrets above are wired into
+   `terraform/b00t/nsc-data-sources.tf` or similar) + reloading the real Vultr node's
+   `nats-server` — real production action with brief downtime, deliberately not done this
+   session, needs its own explicit go-ahead at the moment it happens.
+3. Item 3 from the "still needed" list above (the shared low-privilege "requester" NATS user
+   for agents with zero prior credentials, and the open `b00t.promptexecution.com` bootstrap
+   question) is unchanged — still open.
+4. Cloud-init/systemd wiring for capability-forge itself on the node — still doesn't exist.
