@@ -204,3 +204,65 @@ this one GCP secret version if rotated; the shared low-privilege "requester" NAT
 for zero-prior-credential agents; the `b00t.promptexecution.com` bootstrap question; cloud-init/
 systemd wiring for capability-forge itself (it isn't deployed on the node yet, only the NATS
 trust root it will eventually use).
+
+## Update 2026-08-15 (deferred-work pass): production wiring gap + node deployment scaffolding
+
+Picked up two of the four items above.
+
+1. **Production NATS wiring bug found and fixed.** `bin/main.rs` was calling
+   `async_nats::connect()` — an anonymous connect — which the live operator-mode server
+   (`auth_required: true`) rejects outright. The service, as committed, could never actually run
+   in production. Fixed to connect via a real credentials file
+   (`CAPFORGE_SERVICE_CREDS_FILE`).
+2. **Shared low-privilege "requester" credential — resolved for phase 1.** Added
+   `jwt_mint::mint_service_jwt` (general pub/sub allow-list minting, distinct from the per-skill
+   `mint_user_jwt`) and `bin/mint_service_creds.rs`, which mints two long-lived (1yr default)
+   fixed identities under the CAPFORGE account: `capforge-service` (the binary's own connection:
+   sub `capability.request.*`, pub `>`) and `capforge-requester` (the shared credential any agent
+   uses to publish a request before it holds a grant: pub `capability.request.*`, sub
+   `_INBOX.>`). Per-agent requester identity remains explicitly out of scope (unchanged — still
+   tied to the parked `b00t.promptexecution.com`/OAuth question).
+3. **Validated for real, not just in-process.** `examples/validate_service_request.rs` (new,
+   committed) proves this against a genuinely separate, externally-running `capability-forge`
+   process — not the `tests/e2e_local_nats.rs` in-process harness. Manually run against a
+   throwaway local operator/NATS trust root (not the live one): started a real `nats-server`,
+   started the real `capability-forge` binary against it with `CAPFORGE_SERVICE_CREDS_FILE` set,
+   enrolled a test agent directly via `enroll_agent`, then connected as `capforge-requester` and
+   received a real granted skill + minted JWT back over the wire. All processes and the
+   throwaway trust root were torn down afterward; nothing touched the live operator or account.
+4. **CI**: `_b00t_`'s `build-release.yml` never built `capability-forge` — only `b00t-cli`/
+   `b00t-mcp`. Added a target-scoped extra build step (x86_64-unknown-linux-gnu only, the Vultr
+   node's actual target — deliberately not added to the cross-compiled aarch64/armv7/macOS
+   matrix entries, since capability-forge's `async-openai`/`reqwest` dependency is a real native-
+   TLS cross-compilation risk those targets don't need to take on for a binary they'll never run).
+5. **Cloud-init/systemd wiring — scaffolded, not applied.** `infrastructure` PR #96
+   (`feat/capability-forge-node-wiring`) adds a `b00t-capability-forge.service` unit and wires
+   `CAPFORGE_ACCOUNT_SEED`/`CAPFORGE_ACCOUNT_PUBKEY` (already live) plus `CAPFORGE_SERVICE_CREDS`
+   (**not yet minted against the real live account** — deliberately hard-fails `tofu plan` via
+   direct map indexing until it's added, not silently degraded). `tofu validate`/`fmt` clean;
+   `tofu plan -target` confirmed the template renders correctly (tested with a throwaway
+   placeholder, reverted before commit) and confirmed the deliberate hard-fail on the real,
+   unmodified config. That plan run also surfaced a real fact worth flagging loudly: **the Vultr
+   provider force-replaces the instance on any `user_data` change** — applying PR #96 later is a
+   full destroy/recreate of the live node (108.61.169.5), not an in-place update.
+6. **Minting real production `CAPFORGE_SERVICE_CREDS`/`CAPFORGE_REQUESTER_CREDS` was deliberately
+   NOT done this pass** — the auto-mode permission classifier flagged writing the real
+   `CAPFORGE_ACCOUNT_SEED` (a live production secret) to a file for this purpose, which is the
+   right instinct: minting and storing new live secrets, and especially the destroy/recreate
+   apply that would follow, are exactly the kind of hard-to-reverse production actions that need
+   an explicit human go-ahead at the moment they happen, not a default-yes in an autonomous pass.
+
+**Still open**: OPENAI_API_KEY (the escalation judge's real backing key) does not exist in the
+global secret store — the judge fails closed on this by design, so base-tier requests still work,
+but escalatable-tier requests are denied until it's added. The `b00t.promptexecution.com`
+bootstrap / per-agent identity question remains unchanged. Revocation still has no production
+wiring (a service holding operator-level authority to actually revoke a live grant) — not
+attempted this pass; it's a bigger architecture question than the other three, not a mechanical
+gap.
+
+**Next concrete step, when ready for the live cutover**: mint
+`CAPFORGE_SERVICE_CREDS`/`CAPFORGE_REQUESTER_CREDS` against the real `CAPFORGE_ACCOUNT_SEED` in
+`config-global-nats-operator`, add them to that secret, then `tofu apply` PR #96 — with the
+understanding that this recreates the live node (brief downtime, DNS auto-updates to the new IP,
+`b00t-daprd`'s pre-existing crash-loop is unaffected either way since it's unrelated to this
+change).
