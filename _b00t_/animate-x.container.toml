@@ -1,0 +1,31 @@
+[b00t]
+name = "animate-x"
+type = "docker"
+hint = "Animate-X character image animation — async job-queue service. POST /jobs (image, motion) -> job_id; GET /jobs/{id} -> status. Not OpenAI-compatible: generation is too slow for sync request/response."
+
+[b00t.container]
+image = "localhost/animate-x-service:latest"
+build_file = "animate-x-service/Containerfile"
+runtime = "podman"
+port = 8000
+api = "b00t-job-queue"
+gpu_device = "nvidia.com/gpu=all"
+
+[[b00t.container.volumes]]
+host = "runpod-network-volume:checkpoints"
+container = "/checkpoints"
+
+[[b00t.usage]]
+description = "Submit a transmogrify job (image + motion -> animated video)"
+command = "curl -s -X POST http://localhost:8000/jobs -F image=@<path> -F motion=@<path>"
+
+[[b00t.usage]]
+description = "Poll job status"
+command = "curl -s http://localhost:8000/jobs/<job_id>"
+
+# b00t:map v1
+# summary: Animate-X async job-queue service — image+motion -> animated video, first transmogrify backend
+# tags: container, animate-x, transmogrify, character-animation, runpod, gpu, async-job-queue
+# tier: ch0nky
+# cmds: b00t datum call animate-x.container transmogrify --token image=<path> --token motion=<path>
+# complexity: 5
