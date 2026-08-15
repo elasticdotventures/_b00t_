@@ -1,3 +1,4 @@
+pub mod bootstrap;
 pub mod identity;
 pub mod request;
 pub mod tiers;
