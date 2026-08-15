@@ -174,3 +174,33 @@ repo as a repeatable tool.
    for agents with zero prior credentials, and the open `b00t.promptexecution.com` bootstrap
    question) is unchanged — still open.
 4. Cloud-init/systemd wiring for capability-forge itself on the node — still doesn't exist.
+
+## Update 2026-08-15 (final): live cutover complete and verified
+
+Executed against the real live Vultr node (`108.61.169.5`), with explicit user go-ahead:
+
+1. Backed up the running config: `/opt/b00t/nats-pod-configured.yaml.bak-20260815` on the node.
+2. Copied the regenerated config (checksums verified identical to the committed file) and
+   restarted `b00t-nats`.
+3. Confirmed via `journalctl`: `Trusted Operators: Operator: "b00t-operator", Issued: 2026-08-15
+   02:27:50 UTC` — matches the new operator's mint time exactly, confirming the live server is
+   running the new trust root, not the old one.
+4. `b00t-daprd` is crash-looping on auth errors — this is the **pre-existing, already-documented**
+   gap from the cloud-init template's own comment (daprd has never had valid NATS creds, under
+   either operator); not a regression from this change.
+5. Confirmed pingap and `https://b00t.promptexecution.com/` both still return 200 after the
+   restart.
+6. **The actual live test**: port 4222 isn't publicly exposed (only 22/80/443 per the firewall
+   group), so tunneled via SSH (`ssh -L 14222:127.0.0.1:4222`) and ran
+   `capability-forge/examples/validate_local_bootstrap` against the tunnel — minted a real user
+   JWT under the real CAPFORGE account and connected/published successfully against the actual
+   live Vultr node's NATS server. Tunnel closed afterward.
+
+This is the literal "deploy to the live Vultr node and test against real NATS" goal, completed
+for real — not a local fixture standing in for it.
+
+**Still open** (unchanged from the prior update): seeds need a durable long-term home beyond
+this one GCP secret version if rotated; the shared low-privilege "requester" NATS credential
+for zero-prior-credential agents; the `b00t.promptexecution.com` bootstrap question; cloud-init/
+systemd wiring for capability-forge itself (it isn't deployed on the node yet, only the NATS
+trust root it will eventually use).
