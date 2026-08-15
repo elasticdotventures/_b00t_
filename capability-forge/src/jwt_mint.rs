@@ -58,6 +58,47 @@ pub fn mint_user_jwt(
     Ok(token.sign(account_signing_key))
 }
 
+/// Mints a NATS user JWT with an explicit, caller-supplied pub/sub allow-list rather than
+/// the per-skill `capforge.{agent}.{skill}` derivation [`mint_user_jwt`] uses. Exists for the
+/// two fixed, non-skill-scoped identities the running service itself needs under the CAPFORGE
+/// account: the service's own listener (subscribes `capability.request.*`, publishes replies
+/// to arbitrary requester inbox subjects) and the shared "requester" credential every agent
+/// uses to publish a request before it holds any grant. See `bin/mint_service_creds.rs`.
+///
+/// Same least-privilege-or-error stance as `mint_user_jwt`: at least one of `pub_allow`/
+/// `sub_allow` must be non-empty, since an absent permission block grants unrestricted access
+/// under nats-jwt 0.3.0's serialization (see `mint_user_jwt`'s doc comment for why).
+pub fn mint_service_jwt(
+    account_signing_key: &KeyPair,
+    account_pubkey: &str,
+    user_pubkey: &str,
+    pub_allow: &[String],
+    sub_allow: &[String],
+    ttl: chrono::Duration,
+) -> Result<String> {
+    anyhow::ensure!(ttl > chrono::Duration::zero(), "ttl must be positive");
+    anyhow::ensure!(
+        !pub_allow.is_empty() || !sub_allow.is_empty(),
+        "at least one of pub_allow/sub_allow must be non-empty (both empty means unrestricted access, not none)"
+    );
+
+    let expires_at = chrono::Utc::now()
+        .checked_add_signed(ttl)
+        .context("ttl overflows a representable expiry timestamp")?
+        .timestamp();
+
+    let mut token = Token::new_user(account_pubkey, user_pubkey);
+    for subject in pub_allow {
+        token = token.allow_publish(subject.clone());
+    }
+    for subject in sub_allow {
+        token = token.allow_subscribe(subject.clone());
+    }
+    token = token.expires(expires_at);
+
+    Ok(token.sign(account_signing_key))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,5 +223,65 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("granted_skills"));
+    }
+
+    #[test]
+    fn mint_service_jwt_grants_exactly_the_given_pub_and_sub_lists() {
+        let account = KeyPair::new_account();
+        let user = KeyPair::new_user();
+        let jwt = mint_service_jwt(
+            &account,
+            &account.public_key(),
+            &user.public_key(),
+            &[">".to_string()],
+            &["capability.request.*".to_string()],
+            chrono::Duration::days(365),
+        )
+        .unwrap();
+
+        let claims_segment = jwt.split('.').nth(1).unwrap();
+        let claims_json = URL_SAFE_NO_PAD.decode(claims_segment).unwrap();
+        let claims: serde_json::Value = serde_json::from_slice(&claims_json).unwrap();
+
+        let pub_allow = claims["nats"]["pub"]["allow"].as_array().expect("pub.allow must be an array");
+        let sub_allow = claims["nats"]["sub"]["allow"].as_array().expect("sub.allow must be an array");
+        assert_eq!(pub_allow, &vec![serde_json::Value::String(">".to_string())]);
+        assert_eq!(
+            sub_allow,
+            &vec![serde_json::Value::String("capability.request.*".to_string())]
+        );
+    }
+
+    #[test]
+    fn mint_service_jwt_rejects_both_lists_empty() {
+        let account = KeyPair::new_account();
+        let user = KeyPair::new_user();
+        let err = mint_service_jwt(
+            &account,
+            &account.public_key(),
+            &user.public_key(),
+            &[],
+            &[],
+            chrono::Duration::days(365),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("pub_allow"));
+    }
+
+    #[test]
+    fn mint_service_jwt_allows_pub_only_or_sub_only() {
+        let account = KeyPair::new_account();
+        let user = KeyPair::new_user();
+        // sub-only (the "requester" identity has no publish-only subjects of its own past
+        // capability.request.*, but this proves one-sided allow-lists are accepted).
+        mint_service_jwt(
+            &account,
+            &account.public_key(),
+            &user.public_key(),
+            &[],
+            &["_INBOX.>".to_string()],
+            chrono::Duration::days(365),
+        )
+        .unwrap();
     }
 }

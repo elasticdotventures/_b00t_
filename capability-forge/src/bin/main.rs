@@ -16,13 +16,25 @@ async fn main() -> Result<()> {
     let account_seed = env::var("CAPFORGE_ACCOUNT_SEED").context("CAPFORGE_ACCOUNT_SEED not set")?;
     let account_pubkey = env::var("CAPFORGE_ACCOUNT_PUBKEY").context("CAPFORGE_ACCOUNT_PUBKEY not set")?;
     let judge_model = env::var("CAPFORGE_JUDGE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    // The live NATS server runs in operator mode (auth_required: true) — an anonymous
+    // connect gets rejected outright. This must be the service's own long-lived user creds
+    // file, minted once via `bin/mint_service_creds.rs` (the "capforge-service" identity),
+    // not the account signing key above (that key mints/revokes; it isn't itself a user).
+    let service_creds_path =
+        env::var("CAPFORGE_SERVICE_CREDS_FILE").context("CAPFORGE_SERVICE_CREDS_FILE not set")?;
 
     let mut store = RedbScopeStore::open(&db_path, ScopeId::Global, None)
         .with_context(|| format!("opening redb at {db_path}"))?;
     let account_signing_key = KeyPair::from_seed(&account_seed).context("invalid account seed")?;
     let judge = OpenAiJudge::new(judge_model);
 
-    let client = async_nats::connect(&nats_url).await.context("connecting to NATS")?;
+    let client = async_nats::ConnectOptions::new()
+        .credentials_file(&service_creds_path)
+        .await
+        .with_context(|| format!("loading NATS creds from {service_creds_path}"))?
+        .connect(&nats_url)
+        .await
+        .context("connecting to NATS")?;
     let mut sub = client.subscribe("capability.request.*").await.context("subscribing")?;
 
     tracing::info!("capability-forge listening on capability.request.*");
