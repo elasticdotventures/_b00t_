@@ -1,55 +1,14 @@
+use b00t_c0re_role::KnownRole;
 use serde::{Deserialize, Serialize};
-
-/// Canonical crew roles matching the CREW-ROLES.tomllmd schema.
-///
-/// | Variant    | Authority | Description |
-/// |------------|-----------|-------------|
-/// | Captain    | Full command | Commands the crew, sets mission, delegates tasks |
-/// | Executor   | Task execution | Runs autonomous task loops, executes backlog items |
-/// | Operator   | Recruitment + training | Scouts/finds agents, enlists, executes training plans |
-/// | Specialist | Domain expertise | Domain-specific work (coding, research, analysis) |
-/// | Bouncer    | Quality gates | Validates inputs/outputs, enforces contracts, security |
-///
-/// ## Historical aliases
-/// - **Mate** — any non-captain agent; conceptually maps to Executor or Specialist.
-/// - **Player** — human/user; tracked via `Agent::is_player` / `Team::player_ids`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Role {
-    /// Captain — leader of a team, holds command authority
-    Captain,
-    /// Executor — runs autonomous task loops, executes backlog items
-    Executor,
-    /// Legacy alias kept for backward wire/storage compatibility.
-    /// Prefer `Executor` or `Specialist` for new writes.
-    Mate,
-    /// Legacy human/user marker kept for backward wire/storage compatibility.
-    /// Prefer `Agent::is_player` / `Team::player_ids` for new writes.
-    Player,
-    /// Operator — system operator with administrative privileges.
-    ///
-    /// ⚠️ NOT the same role as `b00t_cli::agentic_role::Operator`
-    /// ("crew dispatch and specialist routing — spins typed crews via
-    /// k0mmand3r"). Both use the bare string `"operator"` with no
-    /// disambiguating prefix — a known, tracked, currently-unresolved
-    /// naming collision. See
-    /// `_b00t_/linkml/schema/hive_role_vocabulary.yaml`'s top-level
-    /// description for the full context (Phase 2 of the ScopeStore+LinkML
-    /// epic, #905/#909 "no parallel vocabularies").
-    Operator,
-    /// Specialist — domain-specific work (coding, research, analysis)
-    Specialist,
-    /// Bouncer — quality gates, security validation
-    Bouncer,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agent {
     pub id: String,
-    pub role: Role,
+    pub role: KnownRole,
     pub skills: Vec<String>,
     pub cake_balance: f64,
     pub is_alive: bool,
-    pub manager_id: Option<String>, // Captain or Operator who recruited them
+    pub manager_id: Option<String>, // Executive or Operator who recruited them
     pub is_player: bool,            // true if this Agent represents a human user
 }
 
@@ -68,38 +27,36 @@ impl b00t_council::Player for Agent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
-    pub captain_id: String,
-    pub executor_ids: Vec<String>,
+    pub executive_id: String,
+    pub worker_ids: Vec<String>,
     pub operator_ids: Vec<String>,
     pub specialist_ids: Vec<String>,
-    pub bouncer_ids: Vec<String>,
     #[serde(default)]
     pub player_ids: Vec<String>, // human users (not agent software roles)
 }
 
 impl Team {
-    /// Create a new Team with the given captain.
-    pub fn new(captain_id: &str) -> Self {
+    /// Create a new Team with the given executive.
+    pub fn new(executive_id: &str) -> Self {
         Self {
-            captain_id: captain_id.to_string(),
-            executor_ids: Vec::new(),
+            executive_id: executive_id.to_string(),
+            worker_ids: Vec::new(),
             operator_ids: Vec::new(),
             specialist_ids: Vec::new(),
-            bouncer_ids: Vec::new(),
             player_ids: Vec::new(),
         }
     }
 
-    /// Add an agent ID to the executor roster.
-    pub fn add_executor(&mut self, id: &str) {
-        if !self.executor_ids.iter().any(|m| m == id) {
-            self.executor_ids.push(id.to_string());
+    /// Add an agent ID to the worker roster.
+    pub fn add_worker(&mut self, id: &str) {
+        if !self.worker_ids.iter().any(|m| m == id) {
+            self.worker_ids.push(id.to_string());
         }
     }
 
-    /// Remove an agent ID from the executor roster.
-    pub fn remove_executor(&mut self, id: &str) {
-        self.executor_ids.retain(|m| m != id);
+    /// Remove an agent ID from the worker roster.
+    pub fn remove_worker(&mut self, id: &str) {
+        self.worker_ids.retain(|m| m != id);
     }
 
     /// Add an agent ID to the specialist roster.
@@ -124,18 +81,6 @@ impl Team {
     /// Remove an agent ID from the operator roster.
     pub fn remove_operator(&mut self, id: &str) {
         self.operator_ids.retain(|o| o != id);
-    }
-
-    /// Add an agent ID to the bouncer roster.
-    pub fn add_bouncer(&mut self, id: &str) {
-        if !self.bouncer_ids.iter().any(|b| b == id) {
-            self.bouncer_ids.push(id.to_string());
-        }
-    }
-
-    /// Remove an agent ID from the bouncer roster.
-    pub fn remove_bouncer(&mut self, id: &str) {
-        self.bouncer_ids.retain(|b| b != id);
     }
 
     /// Add a player ID to the player roster (human user).
