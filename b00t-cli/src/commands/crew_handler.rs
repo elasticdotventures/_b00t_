@@ -326,6 +326,8 @@ fn handle_recruit(store: &AgentStore, skills: &str, limit: usize) {
 
 fn handle_hire(store: &AgentStore, agent_id: &str, role: Option<&str>) {
     let target_role = match role {
+        // "executor" is a deliberate CLI-input backward-compat alias for the old
+        // b00t-c0re-hierarchy::Role::Executor, now KnownRole::worker() -- keep it.
         Some("worker") | Some("executor") => KnownRole::worker(),
         Some("specialist") => KnownRole::specialist(),
         _ => KnownRole::worker(),
@@ -337,7 +339,7 @@ fn handle_hire(store: &AgentStore, agent_id: &str, role: Option<&str>) {
         meta.manager_id = Some("captain".to_string());
     });
 
-    println!("Hired {} as {:?}", agent_id, target_role);
+    println!("Hired {} as {}", agent_id, target_role);
 }
 
 fn handle_roster(store: &AgentStore) {

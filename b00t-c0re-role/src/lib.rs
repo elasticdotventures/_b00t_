@@ -295,8 +295,38 @@ impl KnownRole {
 
     /// A specialist role with a specific stereotype name (e.g.
     /// "appprovider", "rust-specialist"), preserved verbatim.
+    ///
+    /// Canonical names are routed through [`KnownRole::from_str`] first, so the
+    /// variant is a pure function of the name string -- consistent with
+    /// `resolve` and `Deserialize`. Without this, `specialist_named("operator")`
+    /// yields `Specialist("operator")`, which compares equal to `"operator"` but
+    /// *not* to `KnownRole::operator()`, and does not survive a serde round trip.
     pub fn specialist_named(name: &str) -> Self {
-        KnownRole::Specialist(RoleRef::new_owned(name.to_string()))
+        KnownRole::from_str(name)
+            .unwrap_or_else(|| KnownRole::Specialist(RoleRef::new_owned(name.to_string())))
+    }
+}
+
+/// Legacy `b00t-c0re-hierarchy::Role` variant names (PascalCase, as persisted by
+/// pre-unification `CrewMeta` JSON under `~/.local/share/b00t/agents/`) mapped to
+/// their unified [`KnownRole`] equivalents.
+///
+/// Consulted only by [`KnownRole`]'s `Deserialize` impl -- i.e. when reading
+/// persisted data -- and only after the canonical lowercase names fail to match,
+/// so canonical input always wins. The `_B00T_ROLE` env var / `--role=` CLI path
+/// ([`KnownRole::resolve`]) deliberately does *not* consult this: it has never
+/// accepted PascalCase input.
+///
+/// `Bouncer` / `Mate` / `Player` were retired without a 1:1 replacement and are
+/// intentionally absent -- they keep falling through to the generic `Specialist`
+/// bucket with their name preserved.
+fn legacy_hierarchy_role_alias(name: &str) -> Option<KnownRole> {
+    match name {
+        "Captain" => Some(KnownRole::executive()),
+        "Executor" => Some(KnownRole::worker()),
+        "Operator" => Some(KnownRole::operator()),
+        "Specialist" => Some(KnownRole::specialist()),
+        _ => None,
     }
 }
 
@@ -322,6 +352,7 @@ impl<'de> Deserialize<'de> for KnownRole {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let name = String::deserialize(deserializer)?;
         Ok(KnownRole::from_str(&name)
+            .or_else(|| legacy_hierarchy_role_alias(&name))
             .unwrap_or_else(|| KnownRole::Specialist(RoleRef::new_owned(name))))
     }
 }
@@ -516,11 +547,82 @@ mod tests {
             KnownRole::operator(),
             KnownRole::specialist(),
             KnownRole::specialist_named("rust-specialist"),
+            // A canonical name handed to specialist_named must produce the
+            // sealed variant, not Specialist-wrapping-"operator" -- otherwise
+            // serialize/deserialize is not identity (Deserialize routes exact
+            // canonical names through from_str).
+            KnownRole::specialist_named("operator"),
         ] {
             let json = serde_json::to_string(&role).unwrap();
             let back: KnownRole = serde_json::from_str(&json).unwrap();
             assert_eq!(role, back);
         }
+
+        // The variant is a pure function of the name string: no two ways of
+        // naming the same role may produce values that are unequal to each other.
+        assert_eq!(
+            KnownRole::specialist_named("operator"),
+            KnownRole::operator()
+        );
+        assert!(matches!(
+            KnownRole::specialist_named("operator"),
+            KnownRole::Operator(_)
+        ));
+        assert_eq!(KnownRole::specialist_named("worker"), KnownRole::worker());
+    }
+
+    /// Pre-unification `CrewMeta` JSON persisted the old
+    /// `b00t-c0re-hierarchy::Role` enum's PascalCase names. Deserialize must map
+    /// the ones with real equivalents rather than silently bucketing them as
+    /// specialist stereotypes named e.g. "executor".
+    #[test]
+    fn test_legacy_hierarchy_role_names_deserialize_to_new_equivalents() {
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Executor\"").unwrap(),
+            KnownRole::worker(),
+            "old Executor was the general task-runner, now `worker`"
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Captain\"").unwrap(),
+            KnownRole::executive()
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Operator\"").unwrap(),
+            KnownRole::operator()
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Specialist\"").unwrap(),
+            KnownRole::specialist()
+        );
+    }
+
+    /// Bouncer/Mate/Player were retired with no 1:1 replacement -- they must keep
+    /// falling through to the generic Specialist bucket, name preserved
+    /// (lowercased by `RoleRef::new_owned`), not get an invented mapping.
+    #[test]
+    fn test_retired_legacy_role_names_still_fall_through_to_specialist() {
+        for (json, expected_name) in [
+            ("\"Bouncer\"", "bouncer"),
+            ("\"Mate\"", "mate"),
+            ("\"Player\"", "player"),
+        ] {
+            let role: KnownRole = serde_json::from_str(json).unwrap();
+            assert!(
+                matches!(role, KnownRole::Specialist(_)),
+                "{json} should fall through to the Specialist bucket"
+            );
+            assert_eq!(role.name(), expected_name);
+        }
+    }
+
+    /// The legacy alias table is Deserialize-only: `resolve` (the `_B00T_ROLE` /
+    /// `--role=` path) has never seen PascalCase and must keep lowercasing into
+    /// the Specialist bucket.
+    #[test]
+    fn test_resolve_does_not_use_legacy_aliases() {
+        let role = resolve_role(Some("Executor".to_string()));
+        assert!(matches!(role, KnownRole::Specialist(_)));
+        assert_eq!(role.name(), "executor");
     }
 
     /// Phase 2 (ScopeStore+LinkML epic, #905/#909 "no parallel vocabularies")
