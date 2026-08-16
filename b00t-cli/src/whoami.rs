@@ -1,4 +1,4 @@
-use crate::agentic_role::resolve_role;
+use b00t_c0re_role::resolve_role;
 use crate::entanglement::parse_entanglement_ref;
 use crate::skill_resolver::SkillResolver;
 use crate::{get_config, get_expanded_path, DatumType, UnifiedConfig};
