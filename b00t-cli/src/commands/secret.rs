@@ -5,9 +5,10 @@
 //    deliberately excluded here: Keyring is a broken placeholder (feature
 //    flag exists, no keyring crate dependency), Prompt defeats the purpose
 //    of a script-invoked, non-interactive call.
-use crate::pipeline_secrets::{SecretRef, SecretSource, load_secret};
+use crate::pipeline_secrets::{SecretRef, SecretSource, list_azure_secret_names, load_secret};
 use anyhow::{Result, bail};
 use clap::Subcommand;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Subcommand)]
 pub enum SecretCommands {
@@ -22,6 +23,37 @@ pub enum SecretCommands {
         #[clap(long, help = "Secret name within --azure-vault", requires = "azure_vault")]
         azure_secret: Option<String>,
     },
+    #[clap(about = "Bulk-export all secrets for a base/zone/org from a cloud secret store, for consumption by Terraform's `data external` (see infrastructure repo's secretEnvy module)")]
+    ExportZone {
+        #[clap(long, help = "Secret store provider — only 'azure' is currently supported")]
+        provider: String,
+        #[clap(long, help = "Azure Key Vault name")]
+        vault: String,
+        #[clap(long, default_value = "config", help = "Base path segment for the name prefix")]
+        base: String,
+        #[clap(long, help = "Zone path segment for the name prefix (e.g. 'global', 'test', 'live')")]
+        zone: String,
+        #[clap(long, help = "Optional org path segment for the name prefix")]
+        org: Option<String>,
+        #[clap(long, help = "Output as a flat JSON object of ENV_VAR: value, for Terraform's `data external` contract")]
+        tf: bool,
+    },
+}
+
+/// Build the Azure Key Vault secret-name prefix for a base/zone/org triple.
+/// Key Vault secret names only allow alphanumerics and hyphens, so unlike
+/// AWS (`/`-joined) or GCP (`-`-joined) this is always hyphen-joined.
+fn azure_export_prefix(base: &str, zone: &str, org: Option<&str>) -> String {
+    match org {
+        Some(org) => format!("{base}-{zone}-{org}-"),
+        None => format!("{base}-{zone}-"),
+    }
+}
+
+/// Derive an env-var name from an Azure Key Vault secret name, e.g.
+/// `vultr-api-key` -> `VULTR_API_KEY`.
+fn azure_secret_name_to_env_var(name: &str) -> String {
+    name.to_uppercase().replace('-', "_")
 }
 
 pub fn handle_secret_command(cmd: &SecretCommands) -> Result<()> {
@@ -54,5 +86,61 @@ pub fn handle_secret_command(cmd: &SecretCommands) -> Result<()> {
             println!("{value}");
             Ok(())
         }
+        SecretCommands::ExportZone {
+            provider,
+            vault,
+            base,
+            zone,
+            org,
+            tf,
+        } => {
+            if provider != "azure" {
+                bail!("unsupported provider '{provider}' — only 'azure' is currently supported");
+            }
+            if !tf {
+                bail!("--tf is the only supported output mode currently");
+            }
+            let prefix = azure_export_prefix(base, zone, org.as_deref());
+            let names = list_azure_secret_names(vault, &prefix)?;
+            let mut out = BTreeMap::new();
+            for name in names {
+                let value = load_secret(&SecretRef {
+                    key: name.clone(),
+                    env_var: String::new(),
+                    source: SecretSource::AzureKeyVault {
+                        vault: vault.clone(),
+                        name: name.clone(),
+                    },
+                })?;
+                out.insert(azure_secret_name_to_env_var(&name), value);
+            }
+            println!("{}", serde_json::to_string(&out)?);
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod export_zone_tests {
+    use super::*;
+
+    #[test]
+    fn prefix_without_org() {
+        assert_eq!(azure_export_prefix("config", "global", None), "config-global-");
+    }
+
+    #[test]
+    fn prefix_with_org() {
+        assert_eq!(
+            azure_export_prefix("config", "global", Some("app4dog")),
+            "config-global-app4dog-"
+        );
+    }
+
+    #[test]
+    fn env_var_derivation() {
+        assert_eq!(azure_secret_name_to_env_var("vultr-api-key"), "VULTR_API_KEY");
+        assert_eq!(azure_secret_name_to_env_var("cloudflare-api-token"), "CLOUDFLARE_API_TOKEN");
+        assert_eq!(azure_secret_name_to_env_var("already-upper-ISH"), "ALREADY_UPPER_ISH");
     }
 }

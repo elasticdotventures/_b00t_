@@ -222,6 +222,44 @@ pub fn load_secret(ref_: &SecretRef) -> Result<String> {
     }
 }
 
+/// List Azure Key Vault secret names starting with `prefix`, via the active
+/// `az login` session — same identity/mechanism as the `AzureKeyVault` arm
+/// of [`load_secret`]. Used by `b00t secret export-zone` to discover which
+/// secrets belong to a given base/zone/org before fetching each one.
+pub fn list_azure_secret_names(vault: &str, prefix: &str) -> Result<Vec<String>> {
+    let query = format!("[?starts_with(name, '{prefix}')].name");
+    let output = std::process::Command::new("az")
+        .args([
+            "keyvault",
+            "secret",
+            "list",
+            "--vault-name",
+            vault,
+            "--query",
+            &query,
+            "-o",
+            "tsv",
+        ])
+        .output()
+        .with_context(|| {
+            format!(
+                "failed to run `az keyvault secret list` for vault '{}' — is the az CLI installed and on PATH?",
+                vault
+            )
+        })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "az keyvault secret list failed for vault '{}': {}",
+            vault,
+            stderr.trim()
+        );
+    }
+    let text = String::from_utf8(output.stdout)
+        .with_context(|| format!("az output for vault '{}' was not valid UTF-8", vault))?;
+    Ok(text.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
+}
+
 // ── SecureStageEnv ────────────────────────────────────────────────────────
 
 /// A pipeline stage with its associated secret refs and an optional resolved
