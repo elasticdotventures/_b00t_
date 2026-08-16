@@ -1550,6 +1550,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-c0re-role"
+version = "0.10.4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "b00t-cad"
 version = "0.1.0"
 dependencies = [
