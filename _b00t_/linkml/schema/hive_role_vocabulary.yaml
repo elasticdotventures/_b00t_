@@ -4,10 +4,18 @@ description: >-
   Canonical HiveCrew role identifiers — source of truth for
   b00t-c0re-role's Worker/Executive/Operator/Specialist ZST role system
   (moved here from b00t-cli/src/agentic_role.rs). Phase 2 ("harmonization")
-  of the ScopeStore+LinkML epic — _b00t_ issues #905/#909's "no parallel
-  vocabularies" goal is now resolved: b00t-c0re-hierarchy::Role and
-  agentic_role.rs's ZST system have been merged into this one taxonomy,
-  consumed by both b00t-cli and b00t-c0re-hierarchy.
+  of the ScopeStore+LinkML epic.
+
+  SCOPE — what this does and does not claim. It resolves _b00t_ issues
+  #905/#909's "no parallel vocabularies" goal for one specific collision:
+  agentic_role.rs's ZST role system vs b00t-c0re-hierarchy::Role, which
+  each defined an incompatible "operator". Those two are now merged into
+  this one taxonomy, consumed by both b00t-cli and b00t-c0re-hierarchy.
+  It does NOT unify every role-like vocabulary in the codebase — two
+  others remain untouched and out of scope: b00t-cli's RoleDetails /
+  *.role.toml datum system (an explicit non-goal of the unification), and
+  b00t-ipc's separate AgentRole { Specialist, Captain, Observer } enum,
+  which is wire-format-sensitive and belongs to a different subsystem.
 
   RESOLVED COLLISION: the "operator" value below previously named two
   different things — agentic_role.rs's "crew dispatch and specialist
