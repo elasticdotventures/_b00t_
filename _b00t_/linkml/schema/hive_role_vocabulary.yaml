@@ -2,29 +2,23 @@ id: https://promptexecution.com/b00t/linkml/hive-role-vocabulary
 name: hive-role-vocabulary
 description: >-
   Canonical HiveCrew role identifiers — source of truth for
-  b00t-cli/src/agentic_role.rs's Worker/Executive/Operator/AppProvider
-  ZST role system. Phase 2 ("harmonization") of the ScopeStore+LinkML
-  epic — _b00t_ issues #905/#909's "no parallel vocabularies" goal,
-  pursued incrementally rather than as a single big-bang merge of the
-  three existing role systems (agentic_role.rs, b00t-c0re-hierarchy::Role,
-  the TOML RoleDetails/blessing-datum system).
+  b00t-c0re-role's Worker/Executive/Operator/Specialist ZST role system
+  (moved here from b00t-cli/src/agentic_role.rs). Phase 2 ("harmonization")
+  of the ScopeStore+LinkML epic — _b00t_ issues #905/#909's "no parallel
+  vocabularies" goal is now resolved: b00t-c0re-hierarchy::Role and
+  agentic_role.rs's ZST system have been merged into this one taxonomy,
+  consumed by both b00t-cli and b00t-c0re-hierarchy.
 
-  This schema covers ONLY agentic_role.rs's vocabulary for now — the
-  most rigorous of the three (a compile-time ZST/trait system, not a
-  plain data enum), and the one most amenable to a coherence check
-  against generated code without requiring a runtime data migration.
+  RESOLVED COLLISION: the "operator" value below previously named two
+  different things — agentic_role.rs's "crew dispatch and specialist
+  routing" and b00t-c0re-hierarchy::Role::Operator's "recruitment +
+  training". Both are now the same role, one meaning: administrative
+  authority that recruits, trains, and dispatches other agents.
 
-  KNOWN UNRESOLVED COLLISION (documented, not silently merged): the
-  "operator" value below (agentic_role.rs: "crew dispatch and
-  specialist routing — spins typed crews via k0mmand3r") is a
-  DIFFERENT role from b00t-c0re-hierarchy::Role::Operator
-  ("recruitment + training — scouts/finds agents, enlists, executes
-  training plans", b00t-c0re-hierarchy/src/roles.rs). Both currently
-  use the bare string "operator" with no disambiguating prefix. This
-  schema does not rename either — that's a larger, riskier follow-up
-  (renaming touches call sites in both crates) — it exists so the
-  collision is a documented, checkable fact rather than tribal
-  knowledge that erodes over time.
+  "provider"/"appprovider" is no longer a sealed role name. It survives
+  only as a common stereotype string within "specialist" (see that
+  value's description) — Specialist is an open-ended stereotype family,
+  Worker stays a single generalized name with no sub-stereotyping.
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -39,26 +33,35 @@ imports:
 enums:
   HiveRole:
     description: >-
-      Canonical role identifiers within HiveCrew (b00t-cli's primary
-      agent-coordination crew, agentic_role.rs). This schema is the
-      source of truth going forward — agentic_role.rs's AgenticRole::NAME
-      constants must match these permissible value names exactly, checked
-      by a coherence test in b00t-cli (agentic_role.rs's own test module).
+      Canonical role identifiers within HiveCrew (b00t-c0re-role, the
+      single unified role taxonomy for both b00t-cli and
+      b00t-c0re-hierarchy). This schema is the source of truth going
+      forward — AgenticRole::NAME constants must match these permissible
+      value names exactly, checked by a coherence test in
+      b00t-c0re-role's own test module.
     permissible_values:
       worker:
         description: >-
           Default hive worker — general-purpose executor with
-          governance safety gates.
+          governance safety gates. A single generalized name, no
+          sub-stereotyping (contrast with specialist, below).
       executive:
         description: >-
           Hive-level decision authority — release gate, tier routing,
           resource management.
       operator:
         description: >-
-          Crew dispatch and specialist routing — spins typed crews via
-          k0mmand3r. NOT the same role as b00t-c0re-hierarchy::Role::Operator
-          — see this schema's top-level description for the tracked
-          naming collision.
-      provider:
+          Crew dispatch, recruitment, and specialist routing — spins
+          typed crews via k0mmand3r; administrative privileges (recruits,
+          trains, enlists agents). Previously two separate roles across
+          two parallel role systems; unified as one (#905/#909).
+      specialist:
         description: >-
-          Provider — MCP surface, desktop control-plane, service hosting.
+          Domain-specific work — an open-ended stereotype family, not a
+          single fixed meaning. The bare "specialist" name covers
+          unspecified domain work; specific stereotypes (e.g.
+          "appprovider" for MCP surface/desktop control-plane/service
+          hosting, "rust-specialist", "security-auditor") resolve into
+          this same role type with their specific name preserved for
+          role-datum lookup, rather than each needing its own sealed
+          enum variant.
