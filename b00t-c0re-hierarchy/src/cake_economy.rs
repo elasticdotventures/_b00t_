@@ -13,11 +13,12 @@
 //!
 //! ```
 //! use b00t_c0re_hierarchy::cake_economy::{CakeLedger, CakeTransaction};
-//! use b00t_c0re_hierarchy::roles::{Agent, Role};
+//! use b00t_c0re_hierarchy::roles::Agent;
+//! use b00t_c0re_role::KnownRole;
 //!
 //! let mut ledger = CakeLedger::new();
 //! let mut alice = Agent {
-//!     id: "alice".into(), role: Role::Captain, skills: vec![],
+//!     id: "alice".into(), role: KnownRole::executive(), skills: vec![],
 //!     cake_balance: 0.0, is_alive: true, manager_id: None, is_player: false,
 //! };
 //!
@@ -311,12 +312,12 @@ impl Default for CakeLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::roles::Role;
+    use b00t_c0re_role::KnownRole;
 
     fn make_agent(id: &str, balance: f64, alive: bool) -> Agent {
         Agent {
             id: id.to_string(),
-            role: Role::Executor,
+            role: KnownRole::worker(),
             skills: vec![],
             cake_balance: balance,
             is_alive: alive,
