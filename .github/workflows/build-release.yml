@@ -117,6 +117,17 @@ jobs:
             cargo build --release --target "${{ matrix.target }}" -p b00t-cli -p b00t-mcp
           fi
 
+      # capability-forge only, and only for the Vultr node's actual target
+      # (x86_64-unknown-linux-gnu, native build). Not added to the shared
+      # matrix build above: it pulls in async-openai/reqwest, which is a
+      # real risk under `cross`'s Docker-based cross-compilation for the
+      # aarch64/armv7/macOS targets (native TLS linking) -- no reason to put
+      # those unrelated targets at risk for a binary they'll never run.
+      - name: Build capability-forge (x86_64-unknown-linux-gnu only)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: cargo build --release --target x86_64-unknown-linux-gnu -p capability-forge
+
       - name: Package release bundle
         shell: bash
         run: |
@@ -124,6 +135,9 @@ jobs:
           mkdir -p "dist/b00t"
           cp "target/${{ matrix.target }}/release/b00t-cli" "dist/b00t/"
           cp "target/${{ matrix.target }}/release/b00t-mcp" "dist/b00t/"
+          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+            cp "target/${{ matrix.target }}/release/capability-forge" "dist/b00t/"
+          fi
           cp -r "_b00t_" "dist/b00t/_b00t_"
           ln -sf b00t-cli "dist/b00t/b00t"
 
@@ -181,3 +195,6 @@ jobs:
           tar -xzf b00t-x86_64-unknown-linux-gnu.tar.gz
           ./b00t/b00t-cli --version
           ./b00t/b00t-mcp --help >/dev/null
+          # capability-forge is a long-running NATS service (blocks on connect), not a
+          # CLI with --version/--help -- presence + executable bit is the real check.
+          test -x ./b00t/capability-forge

@@ -137,6 +137,7 @@ crossterm = { version = "0.28", optional = true }
 nucleo = { version = "0.5", optional = true }
 atty = { version = "0.2", optional = true }
 base64 = { version = "0.22", optional = true }
+capability-forge = { version = "0.10.3", path = "../capability-forge" }
 
 [features]
 default = []

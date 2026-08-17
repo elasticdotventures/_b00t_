@@ -99,6 +99,7 @@ use b00t_cli::commands::{
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
     PipelineCommands,
+    CapabilityForgeCommands,
     SecretCommands,
     StageCommands,
     StoreCommands,
@@ -622,6 +623,8 @@ The system will:
     Pipeline(PipelineCommands),
     #[clap(subcommand)]
     Secret(SecretCommands),
+    #[clap(subcommand)]
+    CapabilityForge(CapabilityForgeCommands),
     #[clap(subcommand)]
     Stage(StageCommands),
     #[clap(subcommand)]
@@ -3068,6 +3071,14 @@ async fn main() {
         }
         Some(Commands::Secret(cmd)) => {
             if let Err(e) = b00t_cli::commands::secret::handle_secret_command(&cmd) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::CapabilityForge(cmd)) => {
+            if let Err(e) =
+                b00t_cli::commands::capability_forge::handle_capability_forge_command(&cmd)
+            {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
