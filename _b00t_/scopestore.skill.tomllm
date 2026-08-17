@@ -76,11 +76,11 @@ read = "Resolve repo -> discrete parent repo boundaries -> node -> global; log e
 write = "Require an explicit ScopeId target; reject unknown targets and credential-shaped keys before backend I/O."
 manifest = "Read provider documents with JSONPath $.b00t.manifest.providers and expand lazily with a cycle guard."
 backend = "RedbScopeStore is v1 local embedded storage. RedisScopeStore is a v2 stub; concurrency semantics differ and are tracked in docs/architecture/SCOPESTORE_CONCURRENCY_ADR.md."
-test = "cargo test -p b00t-c0re-gov bdd_discovery_chain_across_two_providers_in_synthetic_submodule_tree"
+test = "cargo test -p b00t-c0re-gov scenario_two_or_more_discovered_providers_assemble_into_a_working_chain"
 
 # b00t:map v1
 # summary: ScopeStore CONOPS - scoped KV cache, JSONPath query layer, lazy manifest discovery, explicit writes
 # tags: scopestore, scope, kv, jsonpath, redb, redis, conops, bdd
 # tier: frontier
-# cmds: cargo test -p b00t-c0re-gov bdd_discovery_chain_across_two_providers_in_synthetic_submodule_tree
+# cmds: cargo test -p b00t-c0re-gov scenario_two_or_more_discovered_providers_assemble_into_a_working_chain
 # complexity: 6
