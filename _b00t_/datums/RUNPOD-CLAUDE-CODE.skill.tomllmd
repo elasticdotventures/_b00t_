@@ -1,0 +1,54 @@
+# RunPod agent plugin for Claude Code — install + activate
+#
+# Vendor doc: https://docs.runpod.io/agent-setup.md
+# Companion API/SDK datum: PROVIDER-RUNPOD.provider.tomllmd (Rust client, endpoint deploy)
+#
+# Installs a marketplace-hosted Claude Code plugin (not a project-local skill dir):
+# a router plus six skills (runpod, runpod-mcp, runpodctl, flash, runpod-usage,
+# companion-clis) plus the RunPod MCP server for platform control tools.
+# runpodctl CLI and the Flash SDK install lazily on first use — no manual step.
+#
+# Auth is OAuth via `/mcp` inside a live session — no API key is created or
+# stored by this flow (separate from RUNPOD_API_KEY used by the Rust/API path
+# in PROVIDER-RUNPOD.provider.tomllmd, which is unaffected by this plugin).
+#
+# 🤓 verified 2026-08-15: `claude plugin marketplace add` + `claude plugin
+#    install` both ran clean, `claude plugin list` shows runpod@runpod v1.1.2
+#    (scope: user). The two remaining steps (/reload-plugins, /mcp OAuth
+#    sign-in) are interactive session actions — cannot be scripted/verified
+#    headlessly, must be done by a human in-session.
+
+[b00t.schema]
+version   = "1"
+type      = "skill"
+type_tags = ["claude-code", "plugin", "agent", "runpod", "mcp", "gpu", "cloud"]
+
+[resource]
+name        = "runpod-claude-code-plugin"
+description = "RunPod's official Claude Code plugin — marketplace-hosted agent skills + MCP server for GPU pod/endpoint control from within a session"
+docs        = "https://docs.runpod.io/get-started/agent-skills"
+docs_mcp    = "https://docs.runpod.io/get-started/mcp-servers"
+
+[resource.commands]
+add_marketplace = "claude plugin marketplace add runpod/runpod-plugins-official"
+install         = "claude plugin install runpod@runpod"
+verify          = "claude plugin list | grep -A2 'runpod@runpod'"
+
+[resource.session_actions]
+# 🤓 not scriptable — both require an interactive Claude Code session
+reload_plugins = "/reload-plugins"
+oauth_signin   = "/mcp -> runpod -> Sign in with Runpod"
+post_auth_check = "list Pods via the runpod MCP tools; empty list = connected"
+
+[resource.rules]
+# see feedback_runpod_antipattern_and_local_build_toil memory: this plugin is
+# agent/session tooling for controlling RunPod, not a license to build heavy
+# CUDA images locally or leave Pods running without a TTL/reaper plan
+no_api_key_stored = true
+
+# b00t:map v1
+# summary: RunPod Claude Code plugin — marketplace add + install verified working, OAuth/reload are manual in-session steps
+# tags: claude-code, plugin, runpod, mcp, agent-skill
+# tier: sm0l
+# cmds: claude plugin marketplace add runpod/runpod-plugins-official, claude plugin install runpod@runpod
+# complexity: 1

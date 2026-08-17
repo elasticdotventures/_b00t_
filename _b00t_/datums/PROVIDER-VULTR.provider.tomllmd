@@ -14,9 +14,11 @@
 #      v2 Instances API (VPS create/get/delete/list); Vultr has no
 #      serverless-inference or managed-job-queue primitive, so the
 #      training/batch job methods bail with a pointer to provider=runpod/hf.
-#      Instance region/plan/os_id default to the same placeholders as
-#      infrastructure repo's vultr_app4dog.tf ("syd" / vc2-1c-1gb / Debian
-#      12), overridable via VULTR_REGION/VULTR_PLAN/VULTR_OS_ID.
+#      Instance region/plan/os_id default to "syd" / vc2-1c-1gb / Debian 12,
+#      overridable via VULTR_REGION/VULTR_PLAN/VULTR_OS_ID. (No
+#      vultr_app4dog.tf exists in the infrastructure repo — that file was
+#      never created; provisioning so far has gone through b00t-cli directly,
+#      not Terraform.)
 #   3. DNS-01 ACME challenge provider — a concrete, currently-live need found
 #      independently while researching this: app4dog's SSL cert automation
 #      for app4.dog/play.app4.dog/api.app4.dog is disabled
@@ -26,9 +28,24 @@
 #      `_acme-challenge.*` via CNAME to a stable zone on a different DNS
 #      provider — Vultr DNS is the natural target (native DNS-01 support in
 #      both lego and terraform-provider-acme, env var VULTR_API_KEY).
-#   4. General VPS hosting — concretely, a Vultr VPS will run NATS as a
-#      pub/sub component within a larger DAPR service mesh (see
-#      dapr.cli.tomllm). Not yet provisioned.
+#   4. General VPS hosting — concretely, a Vultr VPS runs NATS as a pub/sub
+#      component within a larger DAPR service mesh (see dapr.cli.tomllm).
+#      PROVISIONED 2026-08-15/16: node "vultr1" (207.148.87.195, Debian 12,
+#      via `b00t provider endpoint deploy --provider vultr`), joined as a
+#      leaf-accept peer to the LAN hub on fung1 alongside sm3lly
+#      (192.168.1.137). Per the pre-existing "b00t-node" firewall-group
+#      convention (only 22/80/443 public), the leaf listener binds to
+#      127.0.0.1:443 only — fung1 reaches it over an SSH tunnel
+#      (192.168.1.149:17443 -> vultr1's 127.0.0.1:443), not direct public
+#      exposure. SSH access: `ssh vultr1` (key-based, see ~/.ssh/config).
+#      Setup script: ~/.dotfiles/nats/vultr-node-setup.sh (note: its baked-in
+#      template still generates a TLS leaf-accept config; the live vultr1
+#      config was hand-edited afterward to drop TLS in favor of the SSH
+#      tunnel, so the script is stale if re-run — reconcile before reuse).
+#      app4dog justfile recipes: `just vultr-node-ssh`, `just
+#      vultr-node-status`, `just vultr-tunnel-install` (persistent systemd
+#      unit for the SSH tunnel), `just vultr-task-demo` (verified end-to-end
+#      cross-leaf task dispatch fung1 -> vultr1).
 #
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike

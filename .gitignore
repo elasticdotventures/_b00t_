@@ -172,6 +172,11 @@
 # location is ~/.b00t/secrets/ (see b00t-cli/scripts/sync-*-secrets.sh), but a
 # stray duplicate has appeared at repo-root before; never let either in.
 /secrets/
+
+# vultr1 NATS leaf credential — nats.conf's `include` directive pulls this
+# in at the actual path below, not the root-level /secrets/ above; must be
+# ignored explicitly or the leaf password reaches a public host in git.
+nats/leaf-remotes.conf
 .eslintcache
 .fusebox/
 .grunt
