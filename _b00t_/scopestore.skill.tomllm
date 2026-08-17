@@ -1,0 +1,86 @@
+[b00t]
+name = "scopestore"
+type = "skill"
+version = "0.1.0"
+hint = "ScopeStore CONOPS - scoped KV cache with JSONPath query layer and repo/node/global fallback"
+
+[b00t.skill]
+description = """
+Operational guide for ScopeStore: a backend-transparent scoped KV abstraction
+with explicit writes, JSONPath reads, lazy manifest discovery, and redb v1 /
+redis v2 backend boundaries.
+"""
+tier = "frontier"
+complexity = 6
+context_cost = "~650 tokens"
+
+[[b00t.skill.capability]]
+id = "resolve"
+label = "Resolve scoped data"
+how = "Build ScopeChainView in most-specific-first order: repo -> parent repo boundaries -> node -> global."
+rule = "GET returns the first scope with the key. Boundary crossings are audit events, not merged state."
+
+[[b00t.skill.capability]]
+id = "query"
+label = "Query nested JSON"
+how = "Store raw serde_json::Value documents; query resolved values through JSONPath."
+rule = "One query language above all backends. Do not add backend-specific query syntax."
+
+[[b00t.skill.capability]]
+id = "write"
+label = "Write explicitly"
+how = "Call ScopeChainView::set_raw(target_scope, key, value)."
+rule = "No implicit closest-scope writes. Silent shadowing is a bug."
+
+[[b00t.skill.capability]]
+id = "discover"
+label = "Discover providers"
+how = "Each provider publishes $.b00t.manifest.providers; walk it lazily with cycle and depth guards."
+rule = "Each discovery unlocks the next. Do not pre-flatten provider graphs."
+
+[b00t.skill.stereotypes]
+repo = ".git/submodule root; redb at .b00t/store.redb; redis namespace repo:{sha256(remote_url)}"
+node = "$XDG_CONFIG_HOME/b00t; redb local; redis namespace node:{hostname}"
+global = "_b00t_ canonical; redb replicated later; redis cluster shared namespace"
+
+[[b00t.skill.datum_scope]]
+datum = "skills"
+repo = true
+node = true
+global = true
+rule = "repo override, node/global fallback"
+
+[[b00t.skill.datum_scope]]
+datum = "souls"
+repo = true
+node = true
+global = true
+rule = "repo override, node/global fallback"
+
+[[b00t.skill.datum_scope]]
+datum = "feature-flags"
+repo = true
+node = true
+global = true
+rule = "repo override, node/global fallback"
+
+[[b00t.skill.datum_scope]]
+datum = "credentials"
+repo = false
+node = false
+global = false
+rule = "ScopeStore rejects credential-shaped keys at every scope; use the existing secret reference/delivery path instead."
+
+[b00t.skill.conops]
+read = "Resolve repo -> discrete parent repo boundaries -> node -> global; log each checked-and-missed boundary."
+write = "Require an explicit ScopeId target; reject unknown targets and credential-shaped keys before backend I/O."
+manifest = "Read provider documents with JSONPath $.b00t.manifest.providers and expand lazily with a cycle guard."
+backend = "RedbScopeStore is v1 local embedded storage. RedisScopeStore is a v2 stub; concurrency semantics differ and are tracked in docs/architecture/SCOPESTORE_CONCURRENCY_ADR.md."
+test = "cargo test -p b00t-c0re-gov scenario_two_or_more_discovered_providers_assemble_into_a_working_chain"
+
+# b00t:map v1
+# summary: ScopeStore CONOPS - scoped KV cache, JSONPath query layer, lazy manifest discovery, explicit writes
+# tags: scopestore, scope, kv, jsonpath, redb, redis, conops, bdd
+# tier: frontier
+# cmds: cargo test -p b00t-c0re-gov scenario_two_or_more_discovered_providers_assemble_into_a_working_chain
+# complexity: 6
