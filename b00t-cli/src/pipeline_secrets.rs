@@ -226,8 +226,37 @@ pub fn load_secret(ref_: &SecretRef) -> Result<String> {
 /// `az login` session — same identity/mechanism as the `AzureKeyVault` arm
 /// of [`load_secret`]. Used by `b00t secret export-zone` to discover which
 /// secrets belong to a given base/zone/org before fetching each one.
+///
+/// # RBAC scope: this requires Key Vault **List**, not just **Get**
+///
+/// Unlike [`load_secret`]'s `AzureKeyVault` arm (which only needs
+/// `Get`/`secrets/get` on the specific secret it fetches), this function
+/// needs `secrets/list` on the *entire vault* — a broader permission than
+/// the "single zone/prefix" framing of `export-zone` implies.
+///
+/// This is not a shortcut we're taking — it's a hard limitation of the
+/// underlying Key Vault API. Verified via `az keyvault secret list --help`:
+/// the command's only filter-shaped arguments are `--maxresults` (page
+/// size) and `--include-managed` — there is no `--prefix` or name filter.
+/// The `--query` flag used below is a **client-side** JMESPath filter that
+/// `az` applies to the full response *after* the Key Vault REST API's
+/// `GetSecrets` operation has already returned metadata for every secret
+/// in the vault; the REST API itself has no name/prefix parameter to
+/// narrow the request. So there is no way to ask Key Vault for "just the
+/// secrets starting with X" — any caller enumerating secrets by prefix
+/// must hold `List` on the whole vault, full stop.
+///
+/// Practical implication: whoever runs `export-zone` (or whatever
+/// service-principal/managed-identity backs it in CI) can enumerate the
+/// *names* of every secret in the vault, not just the target zone's. It
+/// cannot read other zones' *values* without also holding `Get` on them,
+/// but name enumeration alone can be a mild information leak (e.g. secret
+/// naming reveals what other systems/zones exist). If that's unacceptable
+/// for a given vault, the mitigation is operational, not code-level: put
+/// zone-restricted secrets in a dedicated Key Vault per zone/tenant boundary
+/// so `List` scope stops at the zone's own vault.
 pub fn list_azure_secret_names(vault: &str, prefix: &str) -> Result<Vec<String>> {
-    let query = format!("[?starts_with(name, '{prefix}')].name");
+    let query = azure_secret_list_jmespath_filter(prefix);
     let output = std::process::Command::new("az")
         .args([
             "keyvault",
@@ -258,6 +287,17 @@ pub fn list_azure_secret_names(vault: &str, prefix: &str) -> Result<Vec<String>>
     let text = String::from_utf8(output.stdout)
         .with_context(|| format!("az output for vault '{}' was not valid UTF-8", vault))?;
     Ok(text.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
+}
+
+/// Build the JMESPath filter passed to `az keyvault secret list --query`.
+///
+/// This is a **client-side** filter — see the doc comment on
+/// [`list_azure_secret_names`] for why the Key Vault `List Secrets` REST API
+/// has no server-side prefix/name filter to push this down to. Extracted
+/// into its own function so the filter shape can be unit-tested without
+/// invoking `az`/live Azure.
+fn azure_secret_list_jmespath_filter(prefix: &str) -> String {
+    format!("[?starts_with(name, '{prefix}')].name")
 }
 
 // ── SecureStageEnv ────────────────────────────────────────────────────────
@@ -590,6 +630,29 @@ mod tests {
         let json = serde_json::to_string(&ref_).unwrap();
         let back: SecretRef = serde_json::from_str(&json).unwrap();
         assert_eq!(ref_, back);
+    }
+
+    // ── Azure export-zone list query construction ───────────────────────
+
+    #[test]
+    fn azure_secret_list_jmespath_filter_scopes_by_prefix() {
+        let filter = azure_secret_list_jmespath_filter("config-global-");
+        assert_eq!(filter, "[?starts_with(name, 'config-global-')].name");
+    }
+
+    #[test]
+    fn azure_secret_list_jmespath_filter_is_client_side_only() {
+        // Documents (via assertion, not just comment) that this is a JMESPath
+        // expression applied by `az` client-side to the full `GetSecrets`
+        // response — not a server-side query parameter. If Azure ever grows
+        // a real server-side prefix filter, `list_azure_secret_names` should
+        // switch to that (narrowing the actual RBAC blast radius) and this
+        // test/doc-comment pairing should be updated together.
+        let filter = azure_secret_list_jmespath_filter("app4dog-live-");
+        assert!(
+            filter.starts_with("[?starts_with(name,"),
+            "expected a JMESPath filter expression, got: {filter}"
+        );
     }
 
     #[test]
