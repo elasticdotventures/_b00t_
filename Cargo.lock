@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "capability-forge"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -4506,7 +4506,7 @@ dependencies = [
 
 [[package]]
 name = "embed_anything"
-version = "0.7.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4516,10 +4516,10 @@ dependencies = [
  "candle-transformers 0.11.0",
  "chrono",
  "half",
- "hf-hub 1.0.0",
+ "hf-hub 0.4.3",
  "image",
  "indicatif 0.18.6",
- "itertools 0.15.0",
+ "itertools 0.14.0",
  "log",
  "model2vec-rs",
  "ndarray 0.16.1",
@@ -7041,15 +7041,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8090,9 +8081,9 @@ dependencies = [
 
 [[package]]
 name = "model2vec-rs"
-version = "0.2.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cbb465c6997e85d6bcb0e9fabedb51cc8a0919d2a3de083157abe83dccbde54"
+checksum = "23693c16304bc11674c991f47aa33794e641204e67547e0cef31c794c38ea00f"
 dependencies = [
  "anyhow",
  "clap",
@@ -8100,10 +8091,8 @@ dependencies = [
  "hf-hub 0.4.3",
  "ndarray 0.15.6",
  "safetensors 0.5.3",
- "serde",
  "serde_json",
  "tokenizers 0.21.4",
- "ureq 2.12.1",
 ]
 
 [[package]]
@@ -9810,7 +9799,7 @@ dependencies = [
 
 [[package]]
 name = "processors-rs"
-version = "0.7.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "docx-parser",
@@ -13056,6 +13045,7 @@ dependencies = [
  "derive_builder",
  "esaxx-rs",
  "getrandom 0.3.4",
+ "hf-hub 0.4.3",
  "indicatif 0.17.11",
  "itertools 0.14.0",
  "log",

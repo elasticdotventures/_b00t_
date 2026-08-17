@@ -438,7 +438,7 @@ The system will:
         #[clap(subcommand)]
         skill_command: SkillCommands,
     },
-    #[clap(about = "Query system information", alias = "inspect")]
+    #[clap(about = "Query system information", aliases = ["inspect", "is"])]
     Whatismy {
         #[clap(subcommand)]
         whatismy_command: WhatismyCommands,
