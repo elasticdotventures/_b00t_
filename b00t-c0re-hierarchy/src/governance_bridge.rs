@@ -42,12 +42,13 @@ pub fn complete_mission_with_scoring(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::roles::{Agent, MissionTopic, Role, TopicStatus};
+    use crate::roles::{Agent, MissionTopic, TopicStatus};
+    use b00t_c0re_role::KnownRole;
 
     fn make_agent(id: &str) -> Agent {
         Agent {
             id: id.to_string(),
-            role: Role::Specialist,
+            role: KnownRole::specialist(),
             skills: vec!["rust".to_string(), "governance".to_string()],
             cake_balance: 50.0,
             is_alive: true,

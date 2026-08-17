@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::roles::*;
+use b00t_c0re_role::KnownRole;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecruitRequest {
@@ -25,10 +26,10 @@ pub struct HireAction {
     pub agent_id: String,
     /// Expected hireable role for the recruited agent.
     /// Recruitment normally assigns operational roles such as
-    /// `Role::Executor` or `Role::Specialist`; callers should avoid
-    /// passing unrelated roles unless the processing path explicitly
+    /// `KnownRole::worker()` or `KnownRole::specialist()`; callers should
+    /// avoid passing unrelated roles unless the processing path explicitly
     /// supports them.
-    pub role: Role,
+    pub role: KnownRole,
 }
 
 /// Score an agent's skill match against required skills.
@@ -93,7 +94,7 @@ pub fn is_dead(agent: &Agent) -> bool {
 mod tests {
     use super::*;
 
-    fn make_agent(id: &str, role: Role, skills: &[&str], alive: bool) -> Agent {
+    fn make_agent(id: &str, role: KnownRole, skills: &[&str], alive: bool) -> Agent {
         Agent {
             id: id.to_string(),
             role,
@@ -107,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_skill_match_score() {
-        let agent = make_agent("a1", Role::Executor, &["rust", "python", "docker"], true);
+        let agent = make_agent("a1", KnownRole::worker(), &["rust", "python", "docker"], true);
         let required = vec!["rust".to_string(), "kubernetes".to_string()];
         assert_eq!(skill_match_score(&agent, &required), 1);
     }
@@ -126,9 +127,9 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Executor, &["rust"], true),
-            make_agent("a2", Role::Executor, &["rust", "python", "docker"], true),
-            make_agent("a3", Role::Executor, &["python", "docker"], true),
+            make_agent("a1", KnownRole::worker(), &["rust"], true),
+            make_agent("a2", KnownRole::worker(), &["rust", "python", "docker"], true),
+            make_agent("a3", KnownRole::worker(), &["python", "docker"], true),
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");
@@ -148,8 +149,8 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Executor, &["rust"], true),
-            make_agent("a2", Role::Executor, &["python"], true),
+            make_agent("a1", KnownRole::worker(), &["rust"], true),
+            make_agent("a2", KnownRole::worker(), &["python"], true),
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");
@@ -158,15 +159,15 @@ mod tests {
 
     #[test]
     fn test_hire_updates_role_and_manager() {
-        let mut agent = make_agent("a1", Role::Executor, &["rust"], true);
+        let mut agent = make_agent("a1", KnownRole::worker(), &["rust"], true);
         let action = HireAction {
             captain_id: "cap1".to_string(),
             agent_id: "a1".to_string(),
-            role: Role::Specialist,
+            role: KnownRole::specialist(),
         };
 
         hire_agent(&mut agent, &action);
-        assert_eq!(agent.role, Role::Specialist);
+        assert_eq!(agent.role, KnownRole::specialist());
         assert_eq!(agent.manager_id, Some("cap1".to_string()));
     }
 
@@ -180,8 +181,8 @@ mod tests {
         };
 
         let agents = vec![
-            make_agent("a1", Role::Executor, &["rust"], false), // dead
-            make_agent("a2", Role::Executor, &["rust"], true),  // alive
+            make_agent("a1", KnownRole::worker(), &["rust"], false), // dead
+            make_agent("a2", KnownRole::worker(), &["rust"], true),  // alive
         ];
 
         let response = process_recruit_request(&request, &agents, "op1");
@@ -198,7 +199,7 @@ mod tests {
             bounty_share: 10.0,
         };
 
-        let agents = vec![make_agent("a1", Role::Specialist, &["rust"], true)];
+        let agents = vec![make_agent("a1", KnownRole::specialist(), &["rust"], true)];
 
         let response = process_recruit_request(&request, &agents, "operator-42");
         assert_eq!(response.operator_id, "operator-42");

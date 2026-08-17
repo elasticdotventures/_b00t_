@@ -57,8 +57,8 @@ pub enum HiveRole {
     Executive,
 #[cfg_attr(feature = "serde", serde(rename = "operator"))]
     Operator,
-#[cfg_attr(feature = "serde", serde(rename = "provider"))]
-    Provider,
+#[cfg_attr(feature = "serde", serde(rename = "specialist"))]
+    Specialist,
 }
 
 impl core::fmt::Display for HiveRole {
@@ -67,7 +67,7 @@ impl core::fmt::Display for HiveRole {
             HiveRole::Worker => f.write_str("worker"),
             HiveRole::Executive => f.write_str("executive"),
             HiveRole::Operator => f.write_str("operator"),
-            HiveRole::Provider => f.write_str("provider"),
+            HiveRole::Specialist => f.write_str("specialist"),
         }
     }
 }
@@ -82,7 +82,7 @@ impl<'py> IntoPyObject<'py> for HiveRole {
             HiveRole::Worker => "worker",
             HiveRole::Executive => "executive",
             HiveRole::Operator => "operator",
-            HiveRole::Provider => "provider",
+            HiveRole::Specialist => "specialist",
         };
         Ok(pyo3::types::PyString::new(py, s).into_any())
     }
@@ -96,7 +96,7 @@ impl<'py> FromPyObject<'py> for HiveRole {
                 "worker" | "Worker" => Ok(HiveRole::Worker),
                 "executive" | "Executive" => Ok(HiveRole::Executive),
                 "operator" | "Operator" => Ok(HiveRole::Operator),
-                "provider" | "Provider" => Ok(HiveRole::Provider),
+                "specialist" | "Specialist" => Ok(HiveRole::Specialist),
                 _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                     format!("invalid value for HiveRole: {}", s),
                 )),
@@ -113,7 +113,7 @@ impl<'py> FromPyObject<'py> for HiveRole {
 impl ::pyo3_stub_gen::PyStubType for HiveRole {
     fn type_output() -> ::pyo3_stub_gen::TypeInfo {
         ::pyo3_stub_gen::TypeInfo::with_module(
-            "typing.Literal['worker', 'executive', 'operator', 'provider']",
+            "typing.Literal['worker', 'executive', 'operator', 'specialist']",
             "typing".into(),
         )
     }

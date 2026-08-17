@@ -18,6 +18,7 @@ members = [
     "b00t-ast",
     "b00t-bouncer",
     "b00t-c0re-hierarchy",
+    "b00t-c0re-role",
     "b00t-c0re-a2a",
     "b00t-embed",
     "b00t-candle-serve",

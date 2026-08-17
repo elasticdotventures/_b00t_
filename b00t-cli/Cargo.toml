@@ -87,6 +87,7 @@ b00t-ipc = { path = "../b00t-ipc" }
 b00t-embed = { workspace = true }
 b00t-c0re-gov = { path = "../b00t-c0re-gov" }
 b00t-c0re-hierarchy = { path = "../b00t-c0re-hierarchy" }
+b00t-c0re-role = { path = "../b00t-c0re-role" }
 b00t-c0re-a2a = { path = "../b00t-c0re-a2a" }
 zbus = { workspace = true, optional = true }
 url = "2.5"

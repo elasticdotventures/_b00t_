@@ -60,6 +60,7 @@ COPY b00t-c0re-a2a/ ./b00t-c0re-a2a/
 COPY b00t-c0re-gov/ ./b00t-c0re-gov/
 COPY b00t-c0re-hierarchy/ ./b00t-c0re-hierarchy/
 COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-c0re-role/ ./b00t-c0re-role/
 COPY b00t-datum-core/ ./b00t-datum-core/
 COPY b00t-embed/ ./b00t-embed/
 COPY b00t-grok/ ./b00t-grok/
@@ -127,6 +128,7 @@ COPY b00t-c0re-a2a/ ./b00t-c0re-a2a/
 COPY b00t-c0re-gov/ ./b00t-c0re-gov/
 COPY b00t-c0re-hierarchy/ ./b00t-c0re-hierarchy/
 COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-c0re-role/ ./b00t-c0re-role/
 COPY b00t-datum-core/ ./b00t-datum-core/
 COPY b00t-embed/ ./b00t-embed/
 COPY b00t-grok/ ./b00t-grok/

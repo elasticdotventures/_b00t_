@@ -7,7 +7,13 @@
 //!
 //! Crew relationships are encoded as associated types: each role knows
 //! its parent, peers, and delegated sub-roles through the crew graph.
+//!
+//! Unifies what were previously two parallel role systems (this one, and
+//! `b00t-c0re-hierarchy::Role`) per #905/#909 "no parallel vocabularies" —
+//! see `_b00t_/linkml/schema/hive_role_vocabulary.yaml` for the canonical
+//! name list this crate is checked against.
 
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
@@ -127,26 +133,26 @@ impl<T: AgenticRole> From<RoleRef<T>> for String {
 // ── Default role ─────────────────────────────────────────────────────────────
 
 /// The default role when nothing is overridden.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Worker;
 /// Executive decision authority.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Executive;
-/// Crew dispatch and specialist routing — spins typed crews via k0mmand3r.
-///
-/// ⚠️ NOT the same role as `b00t_c0re_hierarchy::roles::Role::Operator`
-/// ("recruitment + training — scouts/finds agents, enlists, executes
-/// training plans"). Both use the bare string `"operator"` with no
-/// disambiguating prefix — a known, tracked, currently-unresolved naming
-/// collision. See `_b00t_/linkml/schema/hive_role_vocabulary.yaml`'s
-/// top-level description for the full context (Phase 2 of the
-/// ScopeStore+LinkML epic, #905/#909 "no parallel vocabularies").
-#[derive(Debug, Clone)]
+/// Crew dispatch, recruitment, and specialist routing — spins typed crews
+/// via k0mmand3r; also administrative privileges (scouts/finds agents,
+/// enlists, executes training plans). Previously two separate role systems'
+/// idea of "operator" — unified here as one meaning (#905/#909).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operator;
-// 🦨 Orchestrator renamed to AppProvider
-/// App provider — service hosting, MCP surface, desktop control-plane.
-#[derive(Debug, Clone)]
-pub struct AppProvider;
+/// Specialist — an open-ended stereotype family for domain-specific work.
+/// `Specialist::NAME` ("specialist") is the one sealed/bare name; any other
+/// role name (e.g. "appprovider", "rust-specialist", "security-auditor")
+/// also resolves into this variant via `KnownRole::resolve`'s fallback,
+/// with the specific name preserved for role-datum lookup. `Worker` stays
+/// a single generalized name with no sub-stereotyping — this asymmetry is
+/// deliberate, not an oversight.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Specialist;
 
 // ── Crew definitions ─────────────────────────────────────────────────────────
 
@@ -157,7 +163,7 @@ impl sealed::Sealed for HiveCrew {}
 impl AgenticCrew for HiveCrew {
     const NAME: &'static str = "hive";
     fn known_roles() -> Vec<&'static str> {
-        vec!["worker", "executive", "operator", "provider"]
+        vec!["worker", "executive", "operator", "specialist"]
     }
 }
 
@@ -171,7 +177,7 @@ impl AgenticRole for Worker {
     }
     type Crew = HiveCrew;
     fn peers() -> Vec<&'static str> {
-        vec!["executive", "operator", "provider"]
+        vec!["executive", "operator", "specialist"]
     }
 }
 
@@ -183,7 +189,7 @@ impl AgenticRole for Executive {
     }
     type Crew = HiveCrew;
     fn peers() -> Vec<&'static str> {
-        vec!["operator", "provider", "worker"]
+        vec!["operator", "specialist", "worker"]
     }
 }
 
@@ -191,19 +197,19 @@ impl sealed::Sealed for Operator {}
 impl AgenticRole for Operator {
     const NAME: &'static str = "operator";
     fn hint() -> &'static str {
-        "Crew dispatch and specialist routing — spins typed crews via k0mmand3r"
+        "Crew dispatch, recruitment, and specialist routing — spins typed crews via k0mmand3r"
     }
     type Crew = HiveCrew;
     fn peers() -> Vec<&'static str> {
-        vec!["executive", "provider", "worker"]
+        vec!["executive", "specialist", "worker"]
     }
 }
 
-impl sealed::Sealed for AppProvider {}
-impl AgenticRole for AppProvider {
-    const NAME: &'static str = "provider";
+impl sealed::Sealed for Specialist {}
+impl AgenticRole for Specialist {
+    const NAME: &'static str = "specialist";
     fn hint() -> &'static str {
-        "Provider — MCP surface, desktop control-plane, service hosting"
+        "Specialist — domain-specific work; open-ended stereotype family (e.g. appprovider, rust-specialist)"
     }
     type Crew = HiveCrew;
     fn peers() -> Vec<&'static str> {
@@ -218,12 +224,12 @@ impl AgenticRole for AppProvider {
 /// Each variant wraps a `RoleRef<T>` so the concrete role type is
 /// preserved within the enum.  The type-level invariant is maintained:
 /// a `KnownRole::Executive` guarantees the inner string is `"executive"`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum KnownRole {
     Worker(RoleRef<Worker>),
     Executive(RoleRef<Executive>),
     Operator(RoleRef<Operator>),
-    AppProvider(RoleRef<AppProvider>),
+    Specialist(RoleRef<Specialist>),
 }
 
 impl KnownRole {
@@ -232,7 +238,7 @@ impl KnownRole {
             KnownRole::Worker(r) => r.as_ref(),
             KnownRole::Executive(r) => r.as_ref(),
             KnownRole::Operator(r) => r.as_ref(),
-            KnownRole::AppProvider(r) => r.as_ref(),
+            KnownRole::Specialist(r) => r.as_ref(),
         }
     }
 
@@ -245,8 +251,8 @@ impl KnownRole {
             n if n == Operator::NAME => {
                 Some(KnownRole::Operator(RoleRef::new(Operator::NAME).unwrap()))
             }
-            n if n == AppProvider::NAME => Some(KnownRole::AppProvider(
-                RoleRef::new(AppProvider::NAME).unwrap(),
+            n if n == Specialist::NAME => Some(KnownRole::Specialist(
+                RoleRef::new(Specialist::NAME).unwrap(),
             )),
             _ => None,
         }
@@ -260,10 +266,67 @@ impl KnownRole {
             .unwrap_or_else(|| Worker::NAME.to_string());
 
         KnownRole::from_str(&name).unwrap_or_else(|| {
-            // Unknown/overridden name defaults to Worker type — the name
-            // is preserved for datum lookup, the type is Worker (safe fallback).
-            KnownRole::Worker(RoleRef::new_owned(name))
+            // Unknown/overridden name -> Specialist. Worker is reserved for
+            // the exact literal "worker"; anything else is a specialist
+            // stereotype, name preserved for datum lookup.
+            KnownRole::Specialist(RoleRef::new_owned(name))
         })
+    }
+
+    /// Bare `worker` role.
+    pub fn worker() -> Self {
+        KnownRole::Worker(RoleRef::new(Worker::NAME).unwrap())
+    }
+
+    /// Bare `executive` role.
+    pub fn executive() -> Self {
+        KnownRole::Executive(RoleRef::new(Executive::NAME).unwrap())
+    }
+
+    /// Bare `operator` role.
+    pub fn operator() -> Self {
+        KnownRole::Operator(RoleRef::new(Operator::NAME).unwrap())
+    }
+
+    /// Bare `specialist` role (no specific stereotype).
+    pub fn specialist() -> Self {
+        KnownRole::Specialist(RoleRef::new(Specialist::NAME).unwrap())
+    }
+
+    /// A specialist role with a specific stereotype name (e.g.
+    /// "appprovider", "rust-specialist"), preserved verbatim.
+    ///
+    /// Canonical names are routed through [`KnownRole::from_str`] first, so the
+    /// variant is a pure function of the name string -- consistent with
+    /// `resolve` and `Deserialize`. Without this, `specialist_named("operator")`
+    /// yields `Specialist("operator")`, which compares equal to `"operator"` but
+    /// *not* to `KnownRole::operator()`, and does not survive a serde round trip.
+    pub fn specialist_named(name: &str) -> Self {
+        KnownRole::from_str(name)
+            .unwrap_or_else(|| KnownRole::Specialist(RoleRef::new_owned(name.to_string())))
+    }
+}
+
+/// Legacy `b00t-c0re-hierarchy::Role` variant names (PascalCase, as persisted by
+/// pre-unification `CrewMeta` JSON under `~/.local/share/b00t/agents/`) mapped to
+/// their unified [`KnownRole`] equivalents.
+///
+/// Consulted only by [`KnownRole`]'s `Deserialize` impl -- i.e. when reading
+/// persisted data -- and only after the canonical lowercase names fail to match,
+/// so canonical input always wins. The `_B00T_ROLE` env var / `--role=` CLI path
+/// ([`KnownRole::resolve`]) deliberately does *not* consult this: it has never
+/// accepted PascalCase input.
+///
+/// `Bouncer` / `Mate` / `Player` were retired without a 1:1 replacement and are
+/// intentionally absent -- they keep falling through to the generic `Specialist`
+/// bucket with their name preserved.
+fn legacy_hierarchy_role_alias(name: &str) -> Option<KnownRole> {
+    match name {
+        "Captain" => Some(KnownRole::executive()),
+        "Executor" => Some(KnownRole::worker()),
+        "Operator" => Some(KnownRole::operator()),
+        "Specialist" => Some(KnownRole::specialist()),
+        _ => None,
     }
 }
 
@@ -276,6 +339,21 @@ impl PartialEq<&str> for KnownRole {
 impl std::fmt::Display for KnownRole {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
+    }
+}
+
+impl Serialize for KnownRole {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.name())
+    }
+}
+
+impl<'de> Deserialize<'de> for KnownRole {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        Ok(KnownRole::from_str(&name)
+            .or_else(|| legacy_hierarchy_role_alias(&name))
+            .unwrap_or_else(|| KnownRole::Specialist(RoleRef::new_owned(name))))
     }
 }
 
@@ -345,14 +423,14 @@ mod tests {
         assert!(roles.contains(&"worker"));
         assert!(roles.contains(&"executive"));
         assert!(roles.contains(&"operator"));
-        assert!(roles.contains(&"provider"));
+        assert!(roles.contains(&"specialist"));
         assert_eq!(HiveCrew::NAME, "hive");
     }
 
     #[test]
     fn test_role_hints_differ() {
         assert_ne!(Worker::hint(), Executive::hint());
-        assert_ne!(Operator::hint(), AppProvider::hint());
+        assert_ne!(Operator::hint(), Specialist::hint());
     }
 
     #[test]
@@ -402,11 +480,15 @@ mod tests {
         assert_eq!(r.as_ref(), "worker");
     }
 
+    /// "provider" is no longer a sealed/known name (Specialist::NAME is
+    /// "specialist") — it now falls into the Specialist fallback bucket
+    /// like any other stereotype, name preserved.
     #[test]
-    fn test_known_role_resolve_provider() {
+    fn test_provider_is_a_specialist_stereotype_not_a_sealed_role() {
         let r = resolve_role(Some("provider".to_string()));
         assert_eq!(r.name(), "provider");
         assert_eq!(r, "provider");
+        assert!(matches!(r, KnownRole::Specialist(_)));
     }
 
     #[test]
@@ -414,14 +496,15 @@ mod tests {
         assert!(KnownRole::from_str("worker").is_some());
         assert!(KnownRole::from_str("executive").is_some());
         assert!(KnownRole::from_str("operator").is_some());
-        assert!(KnownRole::from_str("provider").is_some());
+        assert!(KnownRole::from_str("specialist").is_some());
+        assert!(KnownRole::from_str("provider").is_none());
         assert!(KnownRole::from_str("captain").is_none());
     }
 
     #[test]
-    fn test_provider_role_definition() {
-        assert_eq!(AppProvider::NAME, "provider");
-        assert!(AppProvider::peers().contains(&"executive"));
+    fn test_specialist_role_definition() {
+        assert_eq!(Specialist::NAME, "specialist");
+        assert!(Specialist::peers().contains(&"executive"));
     }
 
     #[test]
@@ -435,19 +518,111 @@ mod tests {
 
     /// Regression for whoami --role=<custom> loading the wrong AGENTS/--role=*.md
     /// file: any role name outside the 4 sealed HiveCrew variants (worker,
-    /// executive, operator, provider) — e.g. "reviewer", "podman",
+    /// executive, operator, specialist) — e.g. "reviewer", "podman",
     /// "ux-designer" — falls into KnownRole::resolve's fallback branch,
-    /// which wraps it as KnownRole::Worker(RoleRef::new_owned(name)). The
-    /// actual name IS preserved inside that RoleRef, but .name() used to
-    /// match on the enum variant and return the hardcoded Worker::NAME
-    /// constant instead of reading it — silently collapsing every custom
-    /// role's .name() to "worker".
+    /// which wraps it as KnownRole::Specialist(RoleRef::new_owned(name)). The
+    /// actual name IS preserved inside that RoleRef; .name() must read it,
+    /// not return a hardcoded constant.
     #[test]
-    fn test_custom_role_name_is_preserved_not_collapsed_to_worker() {
+    fn test_custom_role_name_is_preserved_in_specialist_bucket() {
         let role = resolve_role(Some("reviewer".to_string()));
         assert_eq!(role.name(), "reviewer");
         assert_eq!(role, "reviewer");
         assert_eq!(format!("{}", role), "reviewer");
+        assert!(matches!(role, KnownRole::Specialist(_)));
+    }
+
+    #[test]
+    fn test_unknown_role_name_resolves_to_specialist_bucket() {
+        let role = resolve_role(Some("rust-specialist".to_string()));
+        assert!(matches!(role, KnownRole::Specialist(_)));
+        assert_eq!(role.name(), "rust-specialist");
+    }
+
+    #[test]
+    fn test_known_role_serde_round_trip() {
+        for role in [
+            KnownRole::worker(),
+            KnownRole::executive(),
+            KnownRole::operator(),
+            KnownRole::specialist(),
+            KnownRole::specialist_named("rust-specialist"),
+            // A canonical name handed to specialist_named must produce the
+            // sealed variant, not Specialist-wrapping-"operator" -- otherwise
+            // serialize/deserialize is not identity (Deserialize routes exact
+            // canonical names through from_str).
+            KnownRole::specialist_named("operator"),
+        ] {
+            let json = serde_json::to_string(&role).unwrap();
+            let back: KnownRole = serde_json::from_str(&json).unwrap();
+            assert_eq!(role, back);
+        }
+
+        // The variant is a pure function of the name string: no two ways of
+        // naming the same role may produce values that are unequal to each other.
+        assert_eq!(
+            KnownRole::specialist_named("operator"),
+            KnownRole::operator()
+        );
+        assert!(matches!(
+            KnownRole::specialist_named("operator"),
+            KnownRole::Operator(_)
+        ));
+        assert_eq!(KnownRole::specialist_named("worker"), KnownRole::worker());
+    }
+
+    /// Pre-unification `CrewMeta` JSON persisted the old
+    /// `b00t-c0re-hierarchy::Role` enum's PascalCase names. Deserialize must map
+    /// the ones with real equivalents rather than silently bucketing them as
+    /// specialist stereotypes named e.g. "executor".
+    #[test]
+    fn test_legacy_hierarchy_role_names_deserialize_to_new_equivalents() {
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Executor\"").unwrap(),
+            KnownRole::worker(),
+            "old Executor was the general task-runner, now `worker`"
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Captain\"").unwrap(),
+            KnownRole::executive()
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Operator\"").unwrap(),
+            KnownRole::operator()
+        );
+        assert_eq!(
+            serde_json::from_str::<KnownRole>("\"Specialist\"").unwrap(),
+            KnownRole::specialist()
+        );
+    }
+
+    /// Bouncer/Mate/Player were retired with no 1:1 replacement -- they must keep
+    /// falling through to the generic Specialist bucket, name preserved
+    /// (lowercased by `RoleRef::new_owned`), not get an invented mapping.
+    #[test]
+    fn test_retired_legacy_role_names_still_fall_through_to_specialist() {
+        for (json, expected_name) in [
+            ("\"Bouncer\"", "bouncer"),
+            ("\"Mate\"", "mate"),
+            ("\"Player\"", "player"),
+        ] {
+            let role: KnownRole = serde_json::from_str(json).unwrap();
+            assert!(
+                matches!(role, KnownRole::Specialist(_)),
+                "{json} should fall through to the Specialist bucket"
+            );
+            assert_eq!(role.name(), expected_name);
+        }
+    }
+
+    /// The legacy alias table is Deserialize-only: `resolve` (the `_B00T_ROLE` /
+    /// `--role=` path) has never seen PascalCase and must keep lowercasing into
+    /// the Specialist bucket.
+    #[test]
+    fn test_resolve_does_not_use_legacy_aliases() {
+        let role = resolve_role(Some("Executor".to_string()));
+        assert!(matches!(role, KnownRole::Specialist(_)));
+        assert_eq!(role.name(), "executor");
     }
 
     /// Phase 2 (ScopeStore+LinkML epic, #905/#909 "no parallel vocabularies")
@@ -504,7 +679,7 @@ mod tests {
             .and_then(|pv| pv.as_mapping())
             .expect("schema must have enums.HiveRole.permissible_values as a mapping");
 
-        for name in [Worker::NAME, Executive::NAME, Operator::NAME, AppProvider::NAME] {
+        for name in [Worker::NAME, Executive::NAME, Operator::NAME, Specialist::NAME] {
             assert!(
                 permissible_values.contains_key(name),
                 "{name:?} is a real AgenticRole::NAME but missing from \

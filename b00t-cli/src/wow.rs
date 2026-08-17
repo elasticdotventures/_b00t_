@@ -190,9 +190,9 @@ impl TypeInvariantCheck for KnownRoleCheck {
         let path = if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
             std::path::Path::new(&manifest)
                 .join("..")
-                .join("b00t-cli/src/agentic_role.rs")
+                .join("b00t-c0re-role/src/lib.rs")
         } else {
-            std::path::PathBuf::from("b00t-cli/src/agentic_role.rs")
+            std::path::PathBuf::from("b00t-c0re-role/src/lib.rs")
         };
         let src = match std::fs::read_to_string(&path) {
             Ok(s) => s,
@@ -201,15 +201,15 @@ impl TypeInvariantCheck for KnownRoleCheck {
                     name: self.name().into(),
                     category: CheckCategory::TypeInvariant,
                     passed: false,
-                    detail: format!("read agentic_role.rs: {e}"),
+                    detail: format!("read b00t-c0re-role/src/lib.rs: {e}"),
                 };
             }
         };
         let has_worker = src.contains("Worker(RoleRef<Worker>)");
         let has_exec = src.contains("Executive(RoleRef<Executive>)");
         let has_op = src.contains("Operator(RoleRef<Operator>)");
-        let has_provider = src.contains("AppProvider(RoleRef<AppProvider>)");
-        let all = has_worker && has_exec && has_op && has_provider;
+        let has_specialist = src.contains("Specialist(RoleRef<Specialist>)");
+        let all = has_worker && has_exec && has_op && has_specialist;
         CheckResult {
             name: self.name().into(),
             category: CheckCategory::TypeInvariant,
@@ -217,7 +217,9 @@ impl TypeInvariantCheck for KnownRoleCheck {
             detail: if all {
                 "4 variants present".into()
             } else {
-                format!("worker={has_worker} exec={has_exec} op={has_op} provider={has_provider}")
+                format!(
+                    "worker={has_worker} exec={has_exec} op={has_op} specialist={has_specialist}"
+                )
             },
         }
     }
