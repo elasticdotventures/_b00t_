@@ -118,3 +118,6 @@
 [submodule "vendor/linkml-b00t"]
 	path = vendor/linkml-b00t
 	url = https://github.com/linkml/linkml.git
+[submodule "vendor/sysml-v2-docs"]
+	path = vendor/sysml-v2-docs
+	url = https://github.com/voidaliot/sysml-v2-docs.git
