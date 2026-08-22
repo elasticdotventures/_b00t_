@@ -12,16 +12,28 @@
   is genuinely live — `helix query dev -e '...'` (the CLI's own TypeScript query runtime) returns
   real results against it.
 
-  However, `irontology_bridge.rs`'s actual Rust client path (`helix-db = "2.0.6"` crate,
-  `Client::query().dynamic(...)`) is **still blocked**: both its read and write dynamic-query paths
-  get a bare TCP connection reset from this exact server build, reproduced with a minimal standalone
-  probe outside b00t entirely (isolating it as a genuine upstream SDK/server version-skew bug, not a
-  b00t or local-config issue). Filed upstream:
-  https://github.com/HelixDB/helix-db/issues/1019 — until that's fixed (or a workaround using
-  "stored" queries instead of "dynamic" ones is implemented), `irontology_bridge.rs`'s HelixDBStore
-  backend cannot actually be exercised even with a live server, so `grok ask`/`lfmf`'s vector-store
-  persistence remain non-functional. The connectivity problem (server not running at all) is fixed;
-  the protocol problem (SDK vs. server incompatibility) is not, and is not fixable from b00t's side.
+  `irontology_bridge.rs`'s Rust client path (`helix-db = "2.0.6"` crate, `Client::query().dynamic(...)`)
+  was then also found broken -- both read and write dynamic-query paths got an empty-body error
+  response from the live server, reproduced with a minimal standalone probe outside b00t. Filed
+  upstream as https://github.com/HelixDB/helix-db/issues/1019.
+
+  **RESOLVED 2026-08-22 (same day):** root cause was NOT a server bug -- `helix-db = "2.0"` in
+  `b00t-c0re-lib/Cargo.toml` is a stale major-version pin. crates.io's actual current release is
+  `3.0.0` (published 2026-08-04), a breaking rewrite: route moved `/v1/query` -> `/v2/query`,
+  `DynamicQueryRequest` -> `QueryRequest`, `client.query().dynamic(request).send()` ->
+  `client.query(request).send()`, wire format restructured. Bumped the dependency to `"3.0"` and
+  ported the three call sites in `irontology_bridge.rs`'s `HelixDBStore` impl; both previously-failing
+  `#[ignore]`d integration tests now pass individually against a live local `helix start dev` instance
+  (real write + read-back roundtrip verified). Issue #1019 updated with the corrected root cause and
+  closed. `grok ask`/`lfmf`'s HelixDB persistence path is now genuinely functional, contingent on a
+  live server being available (still requires `helix start dev` locally, or a real deployed instance
+  in any other environment -- that operational requirement was never in question, only the SDK
+  version was broken).
+
+  Also found while re-testing: the two `#[ignore]`d tests share a magic content string
+  ("ORCHID-BOOT-75913") and `HelixDBStore` does not actually scope by `StoreConfig.namespace` -- they
+  fail if run together against the same server (both match each other's facts) but pass individually.
+  Pre-existing, unrelated to the SDK fix, not addressed here.
 
   ---
   Phase 0 — Fix rmcp imports (sm0l, ~30min)
