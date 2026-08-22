@@ -21,8 +21,16 @@ auto_digest = true
 # depends_on flexo-mms-layer1-mcp: SYSMLV2_URL is the SysML v2-conformant
 # facade Flexo exposes on TOP OF the same layer1-service backend --
 # there's one Flexo deployment underneath both MCP servers, not two.
+#
+# Deployed and verified end-to-end 2026-08-22, same live backend as
+# flexo-mms-layer1-mcp. A real MCP `initialize` handshake against this
+# server (built from open-mbee/flexo-mms-sysmlv2-mcp's own Dockerfile)
+# returned serverInfo "SysMLv2 API". Port 8001 (this datum's original
+# default) was already bound by an unrelated local powermcp container on
+# this host, so this deployment used 8011 instead -- same
+# already-bound-by-something-else pattern as flexo-mms-layer1-mcp's 8000.
 [[b00t.mcp.httpstream]]
-url = "http://127.0.0.1:8001/mcp"
+url = "http://127.0.0.1:8011/mcp"
 transport = "httpstream"
 priority = 0
 requires = ["docker"]
