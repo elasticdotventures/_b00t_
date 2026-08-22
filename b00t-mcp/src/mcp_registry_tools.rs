@@ -92,6 +92,7 @@ pub async fn registry_register(params: RegistryRegisterParams) -> Result<String>
             env: params.env,
             cwd: None,
             transport: ServerTransport::Stdio,
+            url: None,
         },
         metadata: RegistrationMetadata {
             registered_at: chrono::Utc::now(),
