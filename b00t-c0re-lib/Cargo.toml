@@ -84,8 +84,10 @@ crepe = "0.2.0"
 ascent = "0.8.0"
 syn = { version = "2.0.118", features = ["full"] }
 quote = "1.0.45"
+# used at runtime (not just tests) for shallow-cloning external MCP registry sources
+# (e.g. vinkius-mcp-database) into a scratch dir that's cleaned up on drop
+tempfile = "3.10"
 
 [dev-dependencies]
-tempfile = "3.10"
 tokio-test = "0.4"
 tracing-subscriber = "0.3"
