@@ -1,0 +1,69 @@
+[b00t]
+name = "flexo-mms-sysmlv2-mcp"
+type = "mcp"
+hint = "Open-MBEE SysML v2 API (OMG spec surface: projects/branches/commits/elements/queries/tags) over MCP -- 35 explicit tools, generated from the SysML v2 OpenAPI spec"
+lfmf_category = "flexo-mms"
+depends_on = ["flexo-mms-layer1-mcp"]
+
+[b00t.learn]
+topic = "flexo-mms"
+auto_digest = true
+
+# 🤓: open-mbee/flexo-mms-sysmlv2-mcp (Python, FastMCP). Verified against
+# the repo's own README 2026-08-22. Same shape as flexo-mms-layer1-mcp
+# (streamable-HTTP, Authorization-forwarding, READ_ONLY gate) but targets
+# the SysML v2 API surface directly (Projects/Branches/Commits/Elements/
+# Queries/Tags -- the OMG "SysML v2 API and Services" REST spec) rather
+# than MMS's internal org/repo/lock model. 35 explicit tools, one per
+# OpenAPI operation (getProjects, postCommitByProject, getElementsBy...,
+# merge, etc).
+#
+# depends_on flexo-mms-layer1-mcp: SYSMLV2_URL is the SysML v2-conformant
+# facade Flexo exposes on TOP OF the same layer1-service backend --
+# there's one Flexo deployment underneath both MCP servers, not two.
+[[b00t.mcp.httpstream]]
+url = "http://127.0.0.1:8001/mcp"
+transport = "httpstream"
+priority = 0
+requires = ["docker"]
+requires_auth = false
+
+[b00t.mcp.httpstream.env]
+SYSMLV2_URL = "http://127.0.0.1:8080"
+READ_ONLY = "true"
+MCPPATH = "/mcp"
+
+[[b00t.gate]]
+rhai = "command_exists(\"docker\")"
+hint = "docker required to build/run flexo-mms-sysmlv2-mcp"
+
+[[b00t.gate]]
+env = "SYSMLV2_URL"
+hint = "SYSMLV2_URL must point at a running Flexo SysML v2 API endpoint (default http://127.0.0.1:8080) -- same backend flexo-mms-layer1-mcp targets"
+
+[[b00t.usage]]
+description = "Clone and build the MCP server image"
+command = "gh repo clone open-mbee/flexo-mms-sysmlv2-mcp && cd flexo-mms-sysmlv2-mcp && docker build -t flexo-mms-sysmlv2-mcp ."
+
+[[b00t.usage]]
+description = "Run read-only, port 8001 to avoid colliding with flexo-mms-layer1-mcp on 8000"
+command = "docker run -d -p 8001:8000 -e SYSMLV2_URL=http://127.0.0.1:8080 -e READ_ONLY=true flexo-mms-sysmlv2-mcp"
+
+[[b00t.references]]
+name = "flexo-mms-sysmlv2-mcp (Open-MBEE)"
+url = "https://github.com/open-mbee/flexo-mms-sysmlv2-mcp"
+
+[[b00t.references]]
+name = "flexo-mms-sysmlv2 -- the API surface this MCP server wraps"
+url = "https://github.com/open-mbee/flexo-mms-sysmlv2"
+
+[[b00t.references]]
+name = "OMG SysML v2 API and Services spec"
+url = "https://www.omg.org/spec/SystemsModelingAPI/"
+
+# b00t:map v1
+# summary: SysML v2 OpenAPI surface (Open-MBEE Flexo) over MCP -- 35 tools, Projects/Branches/Commits/Elements/Queries/Tags
+# tags: mcp, sysml, mbse, open-mbee, flexo, sysmlv2, python, fastmcp
+# tier: ch0nky
+# cmds: docker build/run flexo-mms-sysmlv2-mcp
+# complexity: 5
