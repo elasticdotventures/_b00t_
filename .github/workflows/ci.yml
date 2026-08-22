@@ -117,6 +117,22 @@ jobs:
       - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
         uses: extractions/setup-just@v2
 
+      # 🤓 capability-forge/tests/e2e_local_nats.rs spawns a real nats-server
+      #    subprocess (resolved via PATH, override with NATS_SERVER_BIN) --
+      #    not present on a bare ubuntu-latest/container runner, so all 3
+      #    tests in that file fail with "No such file or directory" (os
+      #    error 2), not a real code defect. Pinned tarball, not the
+      #    upstream `curl | sh` installer, so the CI step is auditable and
+      #    reproducible without depending on binaries.nats.dev's uptime.
+      - name: Install nats-server (required by capability-forge::e2e_local_nats tests)
+        run: |
+          set -euo pipefail
+          curl -sSLo /tmp/nats-server.tar.gz \
+            https://github.com/nats-io/nats-server/releases/download/v2.14.5/nats-server-v2.14.5-linux-amd64.tar.gz
+          tar -xzf /tmp/nats-server.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/nats-server-v2.14.5-linux-amd64/nats-server /usr/local/bin/nats-server
+          nats-server --version
+
       # 🤓 b00t-c0re-lib/src/b00t_config.rs hardcodes #[ts(export_to = "/home/brianh/...")]
       #    (an absolute path to the maintainer's local sibling dashboard checkout).
       #    ts-rs auto-generates an `export_bindings_*` #[test] per type that writes
