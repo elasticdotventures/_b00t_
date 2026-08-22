@@ -85,6 +85,7 @@ use b00t_cli::datum_docker::DockerDatum;
 use b00t_cli::datum_k8s::K8sDatum;
 use b00t_cli::datum_podman::PodmanDatum;
 use b00t_cli::datum_mcp::McpDatum;
+use b00t_cli::datum_sysml_v2_lsp::SysmlV2LspDatum;
 use b00t_cli::datum_vscode::VscodeDatum;
 use b00t_cli::traits::*;
 use b00t_cli::utils::get_workspace_root;
@@ -1139,6 +1140,9 @@ fn show_status(
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         PodmanDatum,
     >(path, ".podman.toml")?));
+    all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
+        SysmlV2LspDatum,
+    >(path, ".sysml_v2_lsp.toml")?));
     all_tools.extend(datum_providers_to_tool_status(load_datum_providers::<
         K8sDatum,
     >(path, ".k8s.toml")?));

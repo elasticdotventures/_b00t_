@@ -28,6 +28,11 @@ pub enum DatumType {
     /// Raw Kubernetes Pod manifest deployed via `podman kube play` — no Helm,
     /// no docker-compose, no cluster. See datum_podman.rs.
     Podman,
+    /// SysML v2 LSP + bundled MCP server wrapper (daltskin/sysml-v2-lsp, npm).
+    /// See datum_sysml_v2_lsp.rs — spike, not yet wired into commands/mcp.rs's
+    /// install/sync flow (use a generic `.mcp.toml`/DatumType::Mcp datum for
+    /// that today, same as `_b00t_/ssh-mcp.mcp.toml`).
+    SysmlV2Lsp,
     Apt,
     Nix,
     Mcp,
@@ -199,7 +204,9 @@ impl DatumType {
             | Self::Runtime
             | Self::Nix => SemanticClass::Infra,
             Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
-            Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
+            Self::Mcp | Self::McpServer | Self::Api | Self::Schema | Self::SysmlV2Lsp => {
+                SemanticClass::Protocol
+            }
             Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => {
                 SemanticClass::Skill
             }
@@ -391,6 +398,7 @@ impl DatumType {
         Vscode      => ["vscode"]                    => ".vscode",
         K8s         => ["k8s"]                       => ".k8s",
         Podman      => ["podman", "podman_kube", "kube"] => ".podman",
+        SysmlV2Lsp  => ["sysml_v2_lsp", "sysml-v2-lsp", "sysml2lsp"] => ".sysml_v2_lsp",
         Apt         => ["apt"]                       => ".apt",
         Nix         => ["nix"]                       => ".nix",
         Mcp         => ["mcp"]                       => ".mcp",
