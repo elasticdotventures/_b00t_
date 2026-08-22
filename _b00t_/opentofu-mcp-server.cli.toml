@@ -1,0 +1,18 @@
+# opentofu-mcp-server.cli — cli datum
+# Assimilated from: github:opentofu/opentofu-mcp-server
+
+[b00t]
+name        = "opentofu-mcp-server"
+type        = "cli"
+hint        = "opentofu-mcp-server — opentofu/opentofu-mcp-server — opentofu/opentofu-mcp-server"
+
+install = "npm install -g opentofu-mcp-server"
+version = "opentofu-mcp-server --version"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: datum for github:opentofu/opentofu-mcp-server — scaffolded by grok assimilate
+# tags: opentofu-mcp-server, opentofu, opentofu-mcp-server
+# tier: ch0nky
+# cmds: b00t install opentofu-mcp-server
+# complexity: 1
