@@ -1,0 +1,84 @@
+[b00t]
+name = "flexo-mms-layer1-mcp"
+type = "mcp"
+hint = "Open-MBEE Flexo MMS Layer 1 (NASA JPL SysML v2 model-management backbone) over MCP -- orgs/repos/branches/models/SPARQL/locks/ACL as MCP tool calls"
+lfmf_category = "flexo-mms"
+hook_detect = "gates"
+
+[b00t.learn]
+topic = "flexo-mms"
+auto_digest = true
+
+# 🤓: open-mbee/flexo-mms-layer1-mcp (Python, FastMCP, Apache-2.0). Verified
+# against the repo's own README 2026-08-22, not assumed. This is a real,
+# published MCP server maintained by the Open-MBEE org itself -- b00t doesn't
+# need to write an adapter, only register it.
+#
+# Wraps the MMS5 Layer1 REST API (orgs/repos/branches/models/SPARQL/
+# locks/diffs/ACL). READ_ONLY=true by default -- only read/query tools
+# register; set false to enable create/update/delete tools.
+# Auth is passthrough: forwards the caller's Authorization header straight
+# to MMS_URL, no credentials baked into this datum.
+# Transport: FastMCP streamable-HTTP, server listens on 0.0.0.0:8000.
+#
+# REQUIRES A RUNNING FLEXO MMS BACKEND -- this MCP server is a thin proxy,
+# not the model store itself. No Flexo instance is deployed in this
+# environment yet. Real reference stack (open-mbee/flexo-mms-deployment,
+# docker-compose/docker-compose.yml, verified 2026-08-22): openldap ->
+# quad-store (Apache Jena Fuseki, port 3030) -> minio (9000) -> auth-service
+# (8082) -> store-service (8081) -> layer1-service (8080, this is MMS_URL).
+# Standing that stack up is a real infra decision (5 containers, ports,
+# credentials) -- do it deliberately, not as a side effect of this datum.
+[[b00t.mcp.httpstream]]
+url = "http://127.0.0.1:8000/mcp"
+transport = "httpstream"
+priority = 0
+requires = ["docker"]
+requires_auth = false
+
+[b00t.mcp.httpstream.env]
+MMS_URL = "http://127.0.0.1:8080"
+READ_ONLY = "true"
+
+[[b00t.gate]]
+rhai = "command_exists(\"docker\")"
+hint = "docker required to build/run flexo-mms-layer1-mcp"
+
+[[b00t.gate]]
+env = "MMS_URL"
+hint = "MMS_URL must point at a running Flexo MMS Layer1 service (default http://127.0.0.1:8080) -- see references for the docker-compose stack that provides one"
+
+[[b00t.usage]]
+description = "Clone and build the MCP server image"
+command = "gh repo clone open-mbee/flexo-mms-layer1-mcp && cd flexo-mms-layer1-mcp && docker build -t flexo-mms-layer1-mcp ."
+
+[[b00t.usage]]
+description = "Run read-only against an existing Flexo MMS backend"
+command = "docker run -d -p 8000:8000 -e MMS_URL=http://127.0.0.1:8080 -e READ_ONLY=true flexo-mms-layer1-mcp"
+
+[[b00t.usage]]
+description = "Bring up the full 5-container reference Flexo MMS backend (ldap/quad-store/minio/auth/store/layer1) for local dev"
+command = "gh repo clone open-mbee/flexo-mms-deployment && cd flexo-mms-deployment/docker-compose && docker compose up"
+
+[[b00t.references]]
+name = "flexo-mms-layer1-mcp (Open-MBEE)"
+url = "https://github.com/open-mbee/flexo-mms-layer1-mcp"
+
+[[b00t.references]]
+name = "flexo-mms-deployment -- reference docker-compose/k8s stack"
+url = "https://github.com/open-mbee/flexo-mms-deployment"
+
+[[b00t.references]]
+name = "Flexo MMS documentation"
+url = "https://flexo-mms-deployment-guide.readthedocs.io/en/latest/index.html"
+
+[[b00t.references]]
+name = "Open-MBEE (NASA JPL-originated MBSE platform, Mars rover heritage)"
+url = "https://github.com/open-mbee"
+
+# b00t:map v1
+# summary: Flexo MMS Layer1 (Open-MBEE) over MCP -- SysML v2 model store as tool calls, proxy only, needs a running backend
+# tags: mcp, sysml, mbse, open-mbee, flexo, rdf, sparql, python, fastmcp
+# tier: ch0nky
+# cmds: docker build/run flexo-mms-layer1-mcp, docker compose up (flexo-mms-deployment)
+# complexity: 6

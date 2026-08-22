@@ -55,6 +55,9 @@ pub struct McpServerConfig {
     /// Server transport type
     #[serde(default = "default_transport")]
     pub transport: ServerTransport,
+    /// Server URL, for http-stream/websocket transports (stdio servers leave this None)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 fn default_transport() -> ServerTransport {
@@ -263,8 +266,11 @@ impl McpRegistry {
         if from_file {
             registry.load()?;
         } else {
-            // Load from datum files instead of file
-            if let Err(e) = registry.sync_from_datums("~/.b00t") {
+            // Load from datum files instead of file. Datum TOMLs live one
+            // level under the dotfiles root (~/.b00t/_b00t_/*.mcp.toml, per
+            // the `sync-datums --path ~/.dotfiles/_b00t_` example in this
+            // command's own --help) -- not directly in ~/.b00t/.
+            if let Err(e) = registry.sync_from_datums("~/.b00t/_b00t_") {
                 warn!("Failed to sync from datums: {}", e);
             }
         }
@@ -531,6 +537,7 @@ impl McpRegistry {
                 env: None,
                 cwd: None,
                 transport: ServerTransport::Stdio,
+                url: None,
             };
 
             servers.push(McpServerRegistration {
@@ -669,41 +676,54 @@ impl McpRegistry {
 
         let datum = config.b00t;
 
-        // Extract command and args (prioritize mcp.stdio[0] if available)
-        let (command, args) = if let Some(mcp_val) = &datum.mcp {
-            if let Some(stdio) = mcp_val.get("stdio").and_then(|v| v.as_array()) {
-                if let Some(method) = stdio.first() {
-                    let cmd = method
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("npx")
-                        .to_string();
-                    let method_args = method
-                        .get("args")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    (cmd, method_args)
-                } else {
-                    (
-                        datum.command.unwrap_or_else(|| "npx".to_string()),
-                        datum.args.unwrap_or_default(),
-                    )
-                }
-            } else {
-                (
-                    datum.command.unwrap_or_else(|| "npx".to_string()),
-                    datum.args.unwrap_or_default(),
-                )
-            }
+        // Extract command/args/transport/url. Prioritize mcp.stdio[0]; fall
+        // back to mcp.httpstream[0] (streamable-HTTP / SSE-style servers,
+        // e.g. flexo-mms-*-mcp) before falling back to a bare stdio guess.
+        // Without the httpstream branch, any non-stdio datum silently
+        // registered as command="npx" with no url -- a real bug found
+        // 2026-08-22 while assimilating Open-MBEE's Flexo MCP servers.
+        let stdio_entry = datum
+            .mcp
+            .as_ref()
+            .and_then(|mcp_val| mcp_val.get("stdio"))
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first());
+
+        let httpstream_entry = datum
+            .mcp
+            .as_ref()
+            .and_then(|mcp_val| mcp_val.get("httpstream"))
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first());
+
+        let (command, args, transport, url) = if let Some(method) = stdio_entry {
+            let cmd = method
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("npx")
+                .to_string();
+            let method_args = method
+                .get("args")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (cmd, method_args, ServerTransport::Stdio, None)
+        } else if let Some(method) = httpstream_entry {
+            let url = method
+                .get("url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            (String::new(), Vec::new(), ServerTransport::HttpStream, url)
         } else {
             (
                 datum.command.unwrap_or_else(|| "npx".to_string()),
                 datum.args.unwrap_or_default(),
+                ServerTransport::Stdio,
+                None,
             )
         };
 
@@ -732,7 +752,8 @@ impl McpRegistry {
                 args,
                 env: datum.env,
                 cwd: None,
-                transport: ServerTransport::Stdio,
+                transport,
+                url,
             },
             metadata: RegistrationMetadata {
                 registered_at: self
@@ -1058,6 +1079,7 @@ pub fn create_registration_from_datum(
             env: None,
             cwd: None,
             transport: ServerTransport::Stdio,
+            url: None,
         },
         metadata: RegistrationMetadata {
             registered_at: Utc::now(),
