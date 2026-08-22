@@ -1,0 +1,18 @@
+# awslabs-mcp.cli — cli datum
+# Assimilated from: github:awslabs/mcp
+
+[b00t]
+name        = "awslabs-mcp"
+type        = "cli"
+hint        = "mcp — awslabs/mcp — awslabs/mcp"
+
+install = "uv pip install mcp"
+version = "mcp --version"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# b00t:map v1
+# summary: datum for github:awslabs/mcp — scaffolded by grok assimilate
+# tags: awslabs-mcp, awslabs, mcp
+# tier: ch0nky
+# cmds: b00t install awslabs-mcp
+# complexity: 1
