@@ -12,6 +12,11 @@ pub enum DatumCommands {
     Show {
         #[clap(help = "Datum name to show (e.g., just, rust, docker)")]
         name: String,
+        #[clap(
+            long,
+            help = "Authorize via a scoped agent token (k8s TokenReview + role-shard-datum RoleBinding check) instead of ambient trust"
+        )]
+        as_agent_token: Option<String>,
     },
 
     #[clap(about = "Generate JSTree-compatible JSON from datums")]
@@ -216,9 +221,11 @@ pub enum DatumCommands {
     },
 }
 
-pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
+pub async fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
     match datum_command {
-        DatumCommands::Show { name } => handle_show(path, name),
+        DatumCommands::Show { name, as_agent_token } => {
+            handle_show(path, name, as_agent_token.as_deref()).await
+        }
         DatumCommands::Tree {
             output,
             group_by_type,
@@ -327,7 +334,17 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
     }
 }
 
-fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
+async fn handle_show(b00t_path: &str, datum_name: &str, as_agent_token: Option<&str>) -> Result<()> {
+    // Component 4 (agent-scoped token pilot): when --as-agent-token is
+    // given, gate the read path on a k8s TokenReview + role-shard-datum
+    // RoleBinding check rather than ambient trust. See
+    // docs/superpowers/specs/2026-08-22-agent-scoped-token-issuance.md.
+    if let Some(token) = as_agent_token {
+        crate::agent_token::authorize_datum_shard_token(token)
+            .await
+            .context("datum show --as-agent-token")?;
+    }
+
     // Find the datum
     let datum = datum_utils::find_datum_by_pattern(b00t_path, datum_name)?
         .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found", datum_name))?;

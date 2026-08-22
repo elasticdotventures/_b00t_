@@ -67,6 +67,7 @@ opentelemetry.workspace = true
 uuid = { version = "1.0", features = ["v4"] }
 mti.workspace = true
 b00t-reflect-types.workspace = true
+ledger-core.workspace = true
 fs2 = "0.4"
 confy = "2.0"
 libc = "0.2"

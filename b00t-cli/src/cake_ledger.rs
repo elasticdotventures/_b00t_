@@ -324,6 +324,37 @@ impl CakeLedger {
         }
     }
 
+    /// Debit an agent's cake balance by `amount` (must be >= 0).
+    ///
+    /// Callers (e.g. `agent_token::request_agent_token`) are expected to
+    /// have already checked `balance()` before doing anything privileged —
+    /// this is a second, belt-and-suspenders guard against races, not the
+    /// primary fail-before-privilege check. Returns the resulting balance.
+    pub fn debit(&self, agent: &str, amount: i64) -> Result<i64> {
+        anyhow::ensure!(amount >= 0, "debit amount must be non-negative, got {amount}");
+
+        let conn = self.connect()?;
+        let now = chrono_now_utc();
+
+        let current = self.balance(agent)?;
+        anyhow::ensure!(
+            current >= amount,
+            "insufficient cake balance for '{agent}': have {current}, need {amount}"
+        );
+
+        conn.execute(
+            "INSERT INTO cake_balance (agent, balance, updated_at)
+             VALUES (?1, -?2, ?3)
+             ON CONFLICT(agent) DO UPDATE SET
+                 balance    = balance - ?2,
+                 updated_at = ?3",
+            params![agent, amount, now],
+        )
+        .context("debit cake balance")?;
+
+        Ok(current - amount)
+    }
+
     /// Recent ticket history for an agent, newest first.
     pub fn history(&self, agent: &str, limit: usize) -> Result<Vec<CakeTicket>> {
         let conn = self.connect()?;
@@ -411,6 +442,21 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CakeTicket> {
 
 fn chrono_now_utc() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+/// Test-only: directly seed a balance, bypassing the probabilistic lottery.
+/// Exposed crate-wide (`pub`, `#[cfg(test)]`) rather than kept private to
+/// this module's own `tests`, so other modules' tests (e.g.
+/// `agent_token`'s live-cluster integration tests) can set up deterministic
+/// starting balances without needing the lottery flow.
+#[cfg(test)]
+pub fn seed_balance_for_test(ledger: &CakeLedger, agent: &str, balance: i64) {
+    let conn = ledger.connect().expect("connect");
+    conn.execute(
+        "INSERT INTO cake_balance (agent, balance, updated_at) VALUES (?1, ?2, ?3)",
+        params![agent, balance, "2026-01-01 00:00:00"],
+    )
+    .expect("seed balance");
 }
 
 // ---------------------------------------------------------------------------
@@ -538,5 +584,58 @@ mod tests {
             "p_cake={}",
             outcome.p_cake
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // debit() — used by agent_token::request_agent_token
+    // -----------------------------------------------------------------------
+
+    /// Seed a deterministic balance directly (bypassing the probabilistic
+    /// lottery) so debit tests aren't flaky.
+    fn seed_balance(ledger: &CakeLedger, agent: &str, balance: i64) {
+        super::seed_balance_for_test(ledger, agent, balance);
+    }
+
+    #[test]
+    fn test_debit_reduces_balance() {
+        let (ledger, _dir) = temp_ledger();
+        seed_balance(&ledger, "debit-agent", 10);
+
+        let remaining = ledger.debit("debit-agent", 3).expect("debit");
+        assert_eq!(remaining, 7);
+        assert_eq!(ledger.balance("debit-agent").expect("balance"), 7);
+    }
+
+    #[test]
+    fn test_debit_insufficient_balance_rejected() {
+        let (ledger, _dir) = temp_ledger();
+        seed_balance(&ledger, "poor-agent", 2);
+
+        let result = ledger.debit("poor-agent", 5);
+        assert!(result.is_err());
+        // Balance must be unchanged after a rejected debit.
+        assert_eq!(ledger.balance("poor-agent").expect("balance"), 2);
+    }
+
+    #[test]
+    fn test_debit_unknown_agent_zero_balance_rejected() {
+        let (ledger, _dir) = temp_ledger();
+        let result = ledger.debit("never-seen-agent", 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_debit_negative_amount_rejected() {
+        let (ledger, _dir) = temp_ledger();
+        let result = ledger.debit("any-agent", -1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_debit_zero_amount_is_noop_ok() {
+        let (ledger, _dir) = temp_ledger();
+        seed_balance(&ledger, "zero-agent", 5);
+        let remaining = ledger.debit("zero-agent", 0).expect("debit zero");
+        assert_eq!(remaining, 5);
     }
 }

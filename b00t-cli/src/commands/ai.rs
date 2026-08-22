@@ -41,10 +41,40 @@ pub enum AiCommands {
         #[clap(help = "Comma-separated list of AI provider names to output")]
         providers: String,
     },
+    #[clap(about = "Agent identity & scoped token operations")]
+    Agent {
+        #[clap(subcommand)]
+        cmd: AgentSubcommand,
+    },
+}
+
+#[derive(Parser)]
+pub enum AgentSubcommand {
+    #[clap(about = "Agent-scoped token operations")]
+    Token {
+        #[clap(subcommand)]
+        cmd: AgentTokenSubcommand,
+    },
+}
+
+#[derive(Parser)]
+pub enum AgentTokenSubcommand {
+    #[clap(
+        about = "Request a scoped, budget-checked agent token (datum shard-type pilot)",
+        long_about = "Check cake budget, ensure a k8s ServiceAccount+RoleBinding exist, mint a short-lived (15m) scoped token via k8s TokenRequest, and record the issuance as a ledger-core double-entry transaction.\n\nOnly the 'datum' shard-type is supported by this pilot (e.g. --shard datum:some-datum-id).\n\nExample:\n  b00t-cli ai agent token request --agent claude-worker-7 --shard datum:my-datum --cost 3"
+    )]
+    Request {
+        #[clap(long, help = "Requesting agent's identity")]
+        agent: String,
+        #[clap(long, help = "Shard reference, e.g. datum:<datum-id>")]
+        shard: String,
+        #[clap(long, help = "Cake cost to debit for this issuance")]
+        cost: i64,
+    },
 }
 
 impl AiCommands {
-    pub fn execute(&self, _path: &str) -> Result<()> {
+    pub async fn execute(&self, _path: &str) -> Result<()> {
         match self {
             AiCommands::Add { .. } => {
                 println!("🤖 AI add functionality coming soon...");
@@ -87,6 +117,27 @@ impl AiCommands {
                 println!("📤 AI output functionality coming soon...");
                 Ok(())
             }
+            AiCommands::Agent { cmd } => match cmd {
+                AgentSubcommand::Token { cmd } => match cmd {
+                    AgentTokenSubcommand::Request { agent, shard, cost } => {
+                        use crate::agent_token::{AgentTokenRequest, request_agent_token};
+
+                        let issuance = request_agent_token(AgentTokenRequest {
+                            agent_id: agent.clone(),
+                            shard_ref: shard.clone(),
+                            cost: *cost,
+                        })
+                        .await?;
+
+                        println!("🔑 Agent token issued for '{agent}' (shard: {shard})");
+                        println!("   token:      {}", issuance.token);
+                        println!("   tx_id:      {}", issuance.tx_id);
+                        println!("   expires_in: {}s", issuance.expires_in_seconds);
+                        println!("   balance:    {}", issuance.remaining_balance);
+                        Ok(())
+                    }
+                },
+            },
         }
     }
 }
@@ -95,12 +146,12 @@ impl AiCommands {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_ai_commands_exist() {
+    #[tokio::test]
+    async fn test_ai_commands_exist() {
         let add_cmd = AiCommands::Add {
             file: "test.toml".to_string(),
         };
 
-        assert!(add_cmd.execute("test").is_ok());
+        assert!(add_cmd.execute("test").await.is_ok());
     }
 }

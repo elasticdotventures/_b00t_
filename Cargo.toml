@@ -85,6 +85,23 @@ b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
 b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
+# ledger-core — used by b00t-cli's agent_token module to record agent-scoped
+# token issuance as a real double-entry accounting transaction (see
+# docs/superpowers/specs/2026-08-22-agent-scoped-token-issuance.md).
+ledger-core = { path = "vendor/ledgrrr/crates/ledger-core" }
+# Transitive `workspace = true` deps pulled in by ledger-core (and its own
+# path-dependency arc-kit-au) that b00t's workspace didn't previously
+# define — versions mirror vendor/ledgrrr/Cargo.toml's own
+# [workspace.dependencies] so ledger-core's code compiles against the same
+# API surface it was written/tested against.
+rust_xlsxwriter = "0.94.0"
+rust_decimal = { version = "1.41.0", features = ["serde"] }
+blake3 = "1.8.3"
+tempfile = "3"
+z3 = "0.8"
+kasuari = "0.4"
+statig = "0.4"
+ordered-float = { version = "4", features = ["serde"] }
 mti = "1.1.1"
 
 

@@ -37,6 +37,7 @@ pub mod exit_code {
     pub const NETWORK: i32 = 30;
 }
 
+pub mod agent_token;
 pub mod agentic_role;
 pub mod ansible;
 pub mod blessing;
