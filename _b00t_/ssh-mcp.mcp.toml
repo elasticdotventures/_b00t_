@@ -1,0 +1,79 @@
+[b00t]
+name = "ssh-mcp"
+type = "mcp"
+hint = "SSH-over-MCP: connect/execute/forward/disconnect on remote hosts via MCP tool calls instead of a raw shell"
+lfmf_category = "ssh-mcp"
+hook_detect = "gates"
+
+[b00t.learn]
+topic = "ssh-mcp"
+auto_digest = true
+
+# 🤓: mingyang91/ssh-mcp (Rust, MIT). Real API surface (verified against the
+# repo's README + Cargo.toml 2026-08-22, not assumed):
+#   ssh_connect        -- address, username, + one of {password, key_path, (ssh-agent if neither)}
+#                          -> {session_id, message, authenticated}
+#   ssh_execute        -- session_id, command -> {stdout, stderr, exit_code}
+#   ssh_forward        -- session_id, local_port, remote_address, remote_port (port_forward feature, default-on)
+#   ssh_disconnect     -- session_id
+#   ssh_list_sessions  -- no args -> [session_id, ...]
+# Credentials are per-call ssh_connect params, not baked into server config --
+# no secret env var required just to run the server itself.
+# `cargo install ssh-mcp` installs BOTH bins from one crate: `ssh-mcp` (poem
+# HTTP/streamable-http server, MCP_PORT env, default 8000) and `ssh-mcp-stdio`
+# (the one b00t/Claude Code want -- plain stdio transport, no port).
+[[b00t.mcp.stdio]]
+priority = 0
+command = "ssh-mcp-stdio"
+args = []
+transport = "stdio"
+requires = ["cargo"]
+
+[b00t.install]
+command = "cargo install ssh-mcp --locked"
+
+[[b00t.mcp.stdio]]
+priority = 10
+command = "docker"
+args = ["run", "--entrypoint", "ssh-mcp-stdio", "-i", "--rm", "mingyang91/ssh-mcp"]
+transport = "stdio"
+requires = ["docker"]
+
+[[b00t.gate]]
+rhai = "command_exists(\"ssh-mcp-stdio\") || command_exists(\"docker\")"
+hint = "install via `cargo install ssh-mcp --locked` (adds ssh-mcp-stdio to PATH) or have docker available for the mingyang91/ssh-mcp image"
+
+[[b00t.usage]]
+description = "Install both bins (ssh-mcp HTTP server + ssh-mcp-stdio) from crates.io"
+command = "cargo install ssh-mcp --locked"
+
+[[b00t.usage]]
+description = "Run stdio transport directly (what an MCP client spawns)"
+command = "ssh-mcp-stdio"
+
+[[b00t.usage]]
+description = "Run HTTP/streamable-http transport (poem, MCP_PORT default 8000)"
+command = "ssh-mcp"
+
+[[b00t.usage]]
+description = "Docker: stdio transport via mingyang91/ssh-mcp image"
+command = "docker run --entrypoint ssh-mcp-stdio -i --rm mingyang91/ssh-mcp"
+
+[[b00t.references]]
+name = "ssh-mcp (mingyang91)"
+url = "https://github.com/mingyang91/ssh-mcp"
+
+[[b00t.references]]
+name = "ssh-mcp on crates.io"
+url = "https://crates.io/crates/ssh-mcp"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"
+
+# b00t:map v1
+# summary: SSH-over-MCP -- ssh_connect/ssh_execute/ssh_forward/ssh_disconnect/ssh_list_sessions as MCP tools, stdio or docker
+# tags: ssh, mcp, remote, rust, poem-mcpserver, port-forward
+# tier: ch0nky
+# cmds: cargo install ssh-mcp, ssh-mcp-stdio, ssh-mcp
+# complexity: 4

@@ -1,0 +1,2 @@
+---
+httpstream datums need url extraction too: sync_datum_file only ever read mcp.stdio[0], so any [[b00t.mcp.httpstream]] datum (url-based, e.g. ory-hydra, flexo-mms-*-mcp) silently registered with command='npx' and no url -- looked registered but was unusable. Fixed by adding a url field to McpServerConfig and an httpstream extraction branch alongside stdio. Check 'mcp registry get <id>' actually shows a populated url/http-stream transport, not just that it returns without error.

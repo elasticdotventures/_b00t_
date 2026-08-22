@@ -1,0 +1,69 @@
+[b00t]
+name = "sysml-v2-lsp"
+type = "mcp"
+hint = "SysML v2 language server + MCP tools: parse/validate/getDiagnostics/getSymbols/getDefinition/getReferences/getHierarchy/getModelSummary/getComplexity/preview over .sysml files"
+lfmf_category = "sysml-v2-lsp"
+
+[b00t.learn]
+topic = "sysml-v2-lsp"
+auto_digest = true
+
+# 🤓: daltskin/sysml-v2-lsp, published to npm as sysml-v2-lsp@0.25.0 (bin:
+# sysml-mcp -> dist/server/mcpServer.js). Verified live 2026-08-22: the
+# installed bin is a bare bundled JS file with NO shebang line, so exec'ing
+# it directly (as a plain stdio command) fails with "Exec format error" --
+# confirmed via `printf '...' | sysml-mcp` -> os error 8. Must be invoked as
+# `node <resolved-path>`, hence the `sh -c 'exec node "$(command -v
+# sysml-mcp)"'` wrapper below, which resolves the real npm-global bin path
+# from PATH at spawn time rather than hardcoding a version-specific nvm
+# path. Confirmed a real `initialize` handshake this way: responds with
+# serverInfo {name: "sysml-v2", version: "0.1.4"} and 20 real tools (parse,
+# validate, getDiagnostics, getSymbols, getDefinition, getReferences,
+# getHierarchy, getModelSummary, getComplexity, preview, plus
+# visualise/visualize spelling variants + renderMermaidDiagram).
+#
+# This is the golden path for exposing an external MCP server through b00t
+# -- a plain .mcp.toml datum, not a compiled DatumType. A DatumType::
+# SysmlV2Lsp spike was built first (ledgrrr epic follow-on) and confirmed
+# working, but exposing tools to an MCP client needs zero new Rust code:
+# this file is the whole thing.
+[[b00t.mcp.stdio]]
+priority = 0
+command = "sh"
+args = ["-c", "exec node \"$(command -v sysml-mcp)\""]
+transport = "stdio"
+requires = ["node", "npm"]
+
+[b00t.install]
+command = "npm install -g sysml-v2-lsp@0.25.0"
+
+[[b00t.gate]]
+rhai = "command_exists(\"sysml-mcp\")"
+hint = "install via `npm install -g sysml-v2-lsp@0.25.0` (adds the sysml-mcp bin to PATH)"
+
+[[b00t.usage]]
+description = "Install the npm package (adds sysml-mcp to PATH)"
+command = "npm install -g sysml-v2-lsp@0.25.0"
+
+[[b00t.usage]]
+description = "Run stdio transport directly (what an MCP client spawns)"
+command = "sh -c 'exec node \"$(command -v sysml-mcp)\"'"
+
+[[b00t.references]]
+name = "sysml-v2-lsp (daltskin)"
+url = "https://github.com/daltskin/sysml-v2-lsp"
+
+[[b00t.references]]
+name = "sysml-v2-lsp on npm"
+url = "https://www.npmjs.com/package/sysml-v2-lsp"
+
+[[b00t.references]]
+name = "Model Context Protocol"
+url = "https://modelcontextprotocol.io"
+
+# b00t:map v1
+# summary: SysML v2 LSP + MCP tools (parse/validate/diagnostics/symbols/definition/references/hierarchy/modelSummary/complexity/preview) over stdio, npm/node
+# tags: mcp, sysml, mbse, lsp, npm, node, stdio
+# tier: ch0nky
+# cmds: npm install -g sysml-v2-lsp@0.25.0, sysml-mcp
+# complexity: 3
