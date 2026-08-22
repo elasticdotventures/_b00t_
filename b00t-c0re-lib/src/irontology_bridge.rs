@@ -934,7 +934,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // requires live HelixDB server at localhost:6969, not available in CI
+    #[ignore] // blocked on HelixDB/helix-db#1019 -- SDK 2.0.6 dynamic query resets connection against server latest/v0.0.4, verified 2026-08-22
     async fn test_active_store_persists_facts_for_later_queries() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let config = StoreConfig {
@@ -969,7 +969,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // requires live HelixDB server at localhost:6969, not available in CI
+    #[ignore] // blocked on HelixDB/helix-db#1019 -- SDK 2.0.6 dynamic query resets connection against server latest/v0.0.4, verified 2026-08-22
     async fn test_bridge_ingest_then_query_returns_content() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(StoreConfig {

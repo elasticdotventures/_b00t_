@@ -3,6 +3,26 @@
 
   Desired state: b00t grok ask/digest/learn/status routes to irontology NeumannStore + semantic fusion search instead of the dead Qdrant cluster.
 
+  **STATUS UPDATE 2026-08-22:** This plan predates the current architecture. `b00t-c0re-lib`'s
+  `irontology_bridge.rs` now defaults to `store-helixdb` (Neumann is archived/legacy per its own
+  Cargo.toml feature comment), targeting a real HelixDB server at `http://localhost:6969`. That
+  server was fully down on this machine; fixed by installing the official `helix` CLI (from
+  HelixDB/helix-db's GitHub releases, not the crates.io SDK) and running `helix init && helix start
+  dev`, which pulls `ghcr.io/helixdb/helixdb:latest` and starts a real local instance. The instance
+  is genuinely live — `helix query dev -e '...'` (the CLI's own TypeScript query runtime) returns
+  real results against it.
+
+  However, `irontology_bridge.rs`'s actual Rust client path (`helix-db = "2.0.6"` crate,
+  `Client::query().dynamic(...)`) is **still blocked**: both its read and write dynamic-query paths
+  get a bare TCP connection reset from this exact server build, reproduced with a minimal standalone
+  probe outside b00t entirely (isolating it as a genuine upstream SDK/server version-skew bug, not a
+  b00t or local-config issue). Filed upstream:
+  https://github.com/HelixDB/helix-db/issues/1019 — until that's fixed (or a workaround using
+  "stored" queries instead of "dynamic" ones is implemented), `irontology_bridge.rs`'s HelixDBStore
+  backend cannot actually be exercised even with a live server, so `grok ask`/`lfmf`'s vector-store
+  persistence remain non-functional. The connectivity problem (server not running at all) is fixed;
+  the protocol problem (SDK vs. server incompatibility) is not, and is not fixable from b00t's side.
+
   ---
   Phase 0 — Fix rmcp imports (sm0l, ~30min)
 
