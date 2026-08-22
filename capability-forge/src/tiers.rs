@@ -6,8 +6,11 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum SkillTier {
     Base,
-    #[default]
     Escalatable,
+    /// Deny-by-default: an unregistered/unknown skill must never be reachable via the LLM
+    /// judge just because nobody explicitly tiered it. Forgetting to tier a new skill should
+    /// fail closed (admin-only, never escalatable), not fail open into `Escalatable`.
+    #[default]
     Restricted,
 }
 
@@ -110,9 +113,14 @@ mod tests {
     }
 
     #[test]
-    fn unknown_skill_defaults_to_escalatable() {
+    fn unknown_skill_defaults_to_restricted() {
         let s = store();
-        assert_eq!(get_skill_tier(&s, "skill.nonexistent").unwrap(), SkillTier::Escalatable);
+        assert_eq!(get_skill_tier(&s, "skill.nonexistent").unwrap(), SkillTier::Restricted);
+    }
+
+    #[test]
+    fn skill_tier_default_is_restricted() {
+        assert_eq!(SkillTier::default(), SkillTier::Restricted);
     }
 
     #[test]

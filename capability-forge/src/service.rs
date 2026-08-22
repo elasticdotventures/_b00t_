@@ -16,14 +16,13 @@ pub struct CapabilityForge<'a> {
     pub grant_ttl: Duration,
 }
 
-/// Cap on `requested_skills` per request. Every unregistered skill defaults to
-/// `SkillTier::Escalatable` and costs one serially-awaited judge call (`judge.rs`'s
-/// `OpenAiJudge` gives each up to a 15s timeout), and `bin/main.rs`'s subscribe loop awaits
-/// `handle_request` inline with no per-message concurrency -- so an unbounded skill list in a
-/// single request can occupy the whole service, blocking every other agent's request behind
-/// it. 20 comfortably covers any legitimate agent's real skill list for one grant request
-/// while bounding the worst case (all escalatable, all timing out) to a few minutes instead
-/// of unbounded.
+/// Cap on `requested_skills` per request. Any skill explicitly tiered `SkillTier::Escalatable`
+/// costs one serially-awaited judge call (`judge.rs`'s `OpenAiJudge` gives each up to a 15s
+/// timeout), and `bin/main.rs`'s subscribe loop awaits `handle_request` inline with no
+/// per-message concurrency -- so an unbounded skill list in a single request can occupy the
+/// whole service, blocking every other agent's request behind it. 20 comfortably covers any
+/// legitimate agent's real skill list for one grant request while bounding the worst case (all
+/// escalatable, all timing out) to a few minutes instead of unbounded.
 const MAX_REQUESTED_SKILLS: usize = 20;
 
 /// Skill names become a raw NATS subject token via `jwt_mint::skill_subject`
@@ -89,8 +88,9 @@ impl<'a> CapabilityForge<'a> {
         // which `get_agent_allowlist` already resolves to an empty Vec on its own) must not
         // silently collapse into an empty allowlist via `.unwrap_or_default()`. An empty
         // allowlist doesn't deny anything by itself -- every requested skill just falls
-        // through to tier lookup, where an unregistered skill still reaches the LLM judge
-        // (SkillTier::default() is Escalatable). A store failure must produce a hard deny.
+        // through to tier lookup, so a genuine read failure here would otherwise masquerade as
+        // an ordinary "skill not on this agent's allowlist" denial instead of surfacing as the
+        // store failure it actually is. A store failure must produce a hard deny.
         let allowlist = match get_agent_allowlist(self.store, agent_id) {
             Ok(list) => list,
             Err(_) => return deny_all("failed to read agent allowlist", &signed.body.requested_skills),
@@ -112,13 +112,13 @@ impl<'a> CapabilityForge<'a> {
                 continue;
             }
 
-            // Match on the Result explicitly rather than `.unwrap_or_default()`:
-            // `SkillTier::default()` is `Escalatable`, so collapsing a genuine
-            // store read error (I/O failure, corrupted envelope -- not the
-            // normal "key absent" case, which get_skill_tier already resolves
-            // to Escalatable on its own) into that default would route a
-            // possibly-Restricted skill to the LLM judge. Restricted must stay
-            // un-escalatable under every circumstance, including read failures.
+            // Match on the Result explicitly rather than `.unwrap_or_default()`: even though
+            // `SkillTier::default()` is `Restricted` (the safe direction to fail toward),
+            // collapsing a genuine store read error (I/O failure, corrupted envelope -- not
+            // the normal "key absent" case, which get_skill_tier already resolves to
+            // Restricted on its own) into that default would silently masquerade as an
+            // ordinary restricted-tier denial instead of surfacing as the read failure it
+            // actually is, hiding a real store problem from anyone investigating denials.
             let tier = match get_skill_tier(self.store, skill) {
                 Ok(tier) => tier,
                 Err(_) => {
@@ -144,10 +144,19 @@ impl<'a> CapabilityForge<'a> {
                         .await
                     {
                         JudgeOutcome::Granted => {
+                            // Audit trail for escalation decisions: if the judge is ever
+                            // fooled (prompt injection or otherwise), this is the
+                            // server-side record that lets it be detected/investigated
+                            // after the fact. Decision metadata only -- never the minted
+                            // JWT or any key material.
+                            tracing::info!(agent_id = %agent_id, skill = %skill, "escalation judge granted");
                             granted.push(skill.clone());
                             tier_source.insert(skill.clone(), SkillTier::Escalatable);
                         }
-                        JudgeOutcome::Denied { reason } => denied.push((skill.clone(), reason)),
+                        JudgeOutcome::Denied { reason } => {
+                            tracing::warn!(agent_id = %agent_id, skill = %skill, reason = %reason, "escalation judge denied");
+                            denied.push((skill.clone(), reason));
+                        }
                     }
                 }
             }
@@ -285,6 +294,10 @@ mod tests {
     async fn escalatable_skill_denied_by_judge_yields_no_grant() {
         let mut s = store();
         let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
+        // Unregistered skills now default to Restricted (never reaches the judge), so this
+        // must be explicitly tiered Escalatable to exercise the judge-denial path this test
+        // is named for.
+        set_skill_tier(&mut s, "skill.write", SkillTier::Escalatable).unwrap();
         let judge = FakeJudge::always_deny("insufficient justification");
         let account = KeyPair::new_account();
         let mut forge = CapabilityForge {
@@ -382,8 +395,10 @@ mod tests {
         let mut s = store();
         let kp = enroll_agent(&mut s, "agent-1", &["skill.read".into()]).unwrap();
         set_skill_tier(&mut s, "skill.delete-infra", SkillTier::Restricted).unwrap();
-        // "skill.write" is unregistered, so it defaults to Escalatable and
-        // goes through the (always-granting) judge.
+        // "skill.write" is explicitly tiered Escalatable here -- unregistered skills now
+        // default to Restricted (see tiers.rs), so without this it would be denied before
+        // ever reaching the (always-granting) judge.
+        set_skill_tier(&mut s, "skill.write", SkillTier::Escalatable).unwrap();
         let judge = FakeJudge::always_grant();
         let account = KeyPair::new_account();
         let mut forge = CapabilityForge {
@@ -441,7 +456,7 @@ mod tests {
     /// Wraps a real `RedbScopeStore` and returns a simulated backend error for reads of one
     /// specific key, standing in for a genuine store I/O failure -- as opposed to the normal
     /// "key never written" case, which `get_skill_tier`/`get_agent_allowlist` already resolve
-    /// on their own (to `Escalatable` and `vec![]` respectively) without any help from this
+    /// on their own (to `Restricted` and `vec![]` respectively) without any help from this
     /// wrapper. Shared by the tier-read and allowlist-read fail-closed tests below.
     struct FailingKeyRead {
         inner: RedbScopeStore,
@@ -484,10 +499,11 @@ mod tests {
         let mut s = FailingKeyRead { inner, failing_key: "capforge:skill:skill.mystery:tier".to_string() };
 
         let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
-        // Judge would grant anything asked of it -- if the fail-open bug
-        // regressed (tier read error falling through to Escalatable via
-        // `.unwrap_or_default()`), this judge would grant the skill and
-        // this test would catch it.
+        // Judge would grant anything asked of it -- proves this denial comes from the tier
+        // read error itself, not from the judge. If the read error were swallowed via
+        // `.unwrap_or_default()` instead of matched explicitly, the resulting denial would be
+        // indistinguishable from an ordinary restricted-tier denial, masking the underlying
+        // store failure -- the denial reason assertion below guards against that regression.
         let judge = FakeJudge::always_grant();
         let account = KeyPair::new_account();
         let mut forge = CapabilityForge {
@@ -506,6 +522,11 @@ mod tests {
         assert!(reply.granted.is_empty());
         assert!(reply.jwt.is_none());
         assert_eq!(reply.denied[0].0, "skill.mystery");
+        assert!(
+            reply.denied[0].1.contains("failed to read skill tier"),
+            "expected a denial reason naming the tier read failure, got: {}",
+            reply.denied[0].1
+        );
     }
 
     #[tokio::test]
@@ -618,9 +639,9 @@ mod tests {
     async fn too_many_requested_skills_is_denied_before_any_judge_call() {
         let mut s = store();
         let kp = enroll_agent(&mut s, "agent-1", &[]).unwrap();
-        // Judge would grant anything asked of it -- if the request weren't rejected up front
-        // by the MAX_REQUESTED_SKILLS cap, every one of these unregistered (thus
-        // Escalatable-by-default) skills would reach this judge and all would be granted.
+        // Judge would grant anything asked of it -- proves this denial comes from the
+        // MAX_REQUESTED_SKILLS cap firing before any tier lookup, not from these unregistered
+        // skills merely being denied by their (now Restricted) default tier.
         let judge = FakeJudge::always_grant();
         let account = KeyPair::new_account();
         let mut forge = CapabilityForge {
