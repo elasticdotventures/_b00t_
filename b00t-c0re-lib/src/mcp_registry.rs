@@ -263,8 +263,11 @@ impl McpRegistry {
         if from_file {
             registry.load()?;
         } else {
-            // Load from datum files instead of file
-            if let Err(e) = registry.sync_from_datums("~/.b00t") {
+            // Load from datum files instead of file. Datum TOMLs live one
+            // level under the dotfiles root (~/.b00t/_b00t_/*.mcp.toml, per
+            // the `sync-datums --path ~/.dotfiles/_b00t_` example in this
+            // command's own --help) -- not directly in ~/.b00t/.
+            if let Err(e) = registry.sync_from_datums("~/.b00t/_b00t_") {
                 warn!("Failed to sync from datums: {}", e);
             }
         }
