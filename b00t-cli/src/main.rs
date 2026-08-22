@@ -497,7 +497,7 @@ The system will:
         #[clap(subcommand)]
         chat_command: ChatCommands,
     },
-    #[clap(about = "Crew management — Operator-Player-Captain hierarchy")]
+    #[clap(about = "Crew management — Executive-Operator-Worker-Specialist hierarchy")]
     Crew {
         #[clap(subcommand)]
         crew_command: CrewCommand,
