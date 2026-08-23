@@ -37,7 +37,7 @@ export async function lookupTenant(db: D1Database, tenantId: string): Promise<Te
 export async function createTenant(
   db: D1Database,
   doNamespace: DurableObjectNamespace<TenantNode>,
-  input: { kind: "personal" | "organizational"; displayName: string }
+  input: { kind: "personal" | "organizational"; displayName: string; ownerAgentId: string }
 ): Promise<Tenant> {
   const id = crypto.randomUUID();
   const doId = doNamespace.newUniqueId();
@@ -50,6 +50,10 @@ export async function createTenant(
     )
     .bind(id, input.kind, input.displayName, rootDoId, createdAt)
     .run();
+
+  const stub = doNamespace.get(doNamespace.idFromString(rootDoId));
+  const rootNode = await stub.createNode({ parentId: null, kind: "business_unit", name: "root" });
+  await stub.addMember(input.ownerAgentId, rootNode.id, "owner");
 
   return { id, kind: input.kind, displayName: input.displayName, rootDoId, createdAt };
 }

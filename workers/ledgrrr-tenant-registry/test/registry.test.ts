@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { lookupTenant } from "../src/registry";
 
 describe("lookupTenant", () => {
@@ -21,6 +21,7 @@ describe("lookupTenant", () => {
     const created = await createTenant(env.DB, env.TENANT_DO, {
       kind: "organizational",
       displayName: "Acme Corp",
+      ownerAgentId: "agent-acme-owner",
     });
     expect(created.kind).toBe("organizational");
     expect(created.displayName).toBe("Acme Corp");
@@ -28,5 +29,27 @@ describe("lookupTenant", () => {
 
     const found = await lookupTenant(env.DB, created.id);
     expect(found).toEqual(created);
+  });
+
+  it("seeds a root node and adds the owner as a member on tenant creation", async () => {
+    const { createTenant } = await import("../src/registry");
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "Root Seed Co",
+      ownerAgentId: "agent-owner",
+    });
+
+    const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+
+    const rootNodeId = await runInDurableObject(stub, async (_instance, state) => {
+      const rows = state.storage.sql
+        .exec("SELECT id FROM nodes WHERE parent_id IS NULL")
+        .toArray() as { id: string }[];
+      expect(rows).toHaveLength(1);
+      return rows[0].id;
+    });
+
+    const hasMembership = await stub.hasMembershipPath("agent-owner", rootNodeId);
+    expect(hasMembership).toBe(true);
   });
 });

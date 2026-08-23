@@ -30,7 +30,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "POST" && url.pathname === "/tenants") {
-      const body = await request.json<{ kind?: string; displayName?: string }>();
+      const body = await request.json<{ kind?: string; displayName?: string; ownerAgentId?: string }>();
       if (body.kind !== "personal" && body.kind !== "organizational") {
         return new Response(JSON.stringify({ error: "kind must be 'personal' or 'organizational'" }), {
           status: 400,
@@ -43,9 +43,16 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       }
+      if (typeof body.ownerAgentId !== "string" || !body.ownerAgentId) {
+        return new Response(JSON.stringify({ error: "ownerAgentId is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       const tenant = await createTenant(env.DB, env.TENANT_DO, {
         kind: body.kind,
         displayName: body.displayName,
+        ownerAgentId: body.ownerAgentId,
       });
       return new Response(JSON.stringify(tenant), {
         status: 201,

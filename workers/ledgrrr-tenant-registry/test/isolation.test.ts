@@ -13,8 +13,16 @@ describe("cross-tenant isolation", () => {
   });
 
   it("a token scoped to tenant A's node cannot be satisfied against tenant B's membership", async () => {
-    const tenantA = await createTenant(env.DB, env.TENANT_DO, { kind: "organizational", displayName: "A" });
-    const tenantB = await createTenant(env.DB, env.TENANT_DO, { kind: "organizational", displayName: "B" });
+    const tenantA = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "A",
+      ownerAgentId: "agent-owner-a",
+    });
+    const tenantB = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "B",
+      ownerAgentId: "agent-owner-b",
+    });
 
     const stubA = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenantA.rootDoId));
     const nodeA = await stubA.createNode({

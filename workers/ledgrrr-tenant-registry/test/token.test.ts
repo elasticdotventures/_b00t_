@@ -13,7 +13,11 @@ describe("issueToken", () => {
   });
 
   it("issues a token when the agent has membership and the node grants the requested shards", async () => {
-    const tenant = await createTenant(env.DB, env.TENANT_DO, { kind: "organizational", displayName: "Acme" });
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "Acme",
+      ownerAgentId: "agent-owner",
+    });
     const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
     const node = await stub.createNode({
       parentId: null,
@@ -38,7 +42,11 @@ describe("issueToken", () => {
   });
 
   it("rejects when the agent has no membership path", async () => {
-    const tenant = await createTenant(env.DB, env.TENANT_DO, { kind: "organizational", displayName: "Acme2" });
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "Acme2",
+      ownerAgentId: "agent-owner",
+    });
     const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
     const node = await stub.createNode({
       parentId: null,
@@ -58,7 +66,11 @@ describe("issueToken", () => {
   });
 
   it("rejects when the node does not grant a requested shard, even with valid membership", async () => {
-    const tenant = await createTenant(env.DB, env.TENANT_DO, { kind: "organizational", displayName: "Acme3" });
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "Acme3",
+      ownerAgentId: "agent-owner",
+    });
     const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
     const node = await stub.createNode({
       parentId: null,
