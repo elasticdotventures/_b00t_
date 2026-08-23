@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "b00t-mcp-vault",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "b00t-agents",
+      "database_id": "86bb3c9d-309a-4d27-8856-38934dd316b1"
+    }
+  ]
+}
