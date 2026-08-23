@@ -336,6 +336,15 @@ impl RealNatsTransport {
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS publish failed: {}", e)))?;
+        // publish() only enqueues the frame on the client's internal write
+        // buffer; a short-lived CLI process can exit (dropping the runtime)
+        // before that buffer is ever flushed to the socket, so the message
+        // never actually reaches the server despite Ok(()) being returned.
+        // Flush explicitly so send() only succeeds once the server has it.
+        client
+            .flush()
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
         debug!("NATS published to {}", subject);
         Ok(())
     }
@@ -348,6 +357,10 @@ impl RealNatsTransport {
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS task publish failed: {}", e)))?;
+        client
+            .flush()
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
         info!(
             "Task {} dispatched to {} via NATS",
             task.task_id, task.to_agent
@@ -392,6 +405,10 @@ impl RealNatsTransport {
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS notify publish failed: {}", e)))?;
+        client
+            .flush()
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
         debug!("NATS notification published to {}", subject);
         Ok(())
     }
@@ -430,6 +447,10 @@ impl RealNatsTransport {
             .publish(subject.to_string(), payload.to_vec().into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS raw publish failed: {}", e)))?;
+        client
+            .flush()
+            .await
+            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
         debug!("NATS raw published to {}", subject);
         Ok(())
     }
