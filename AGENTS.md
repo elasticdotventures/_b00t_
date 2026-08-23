@@ -274,3 +274,33 @@ identical error resurfaces. Verify by recreating a genuinely fresh DB and runnin
 tests (including a single isolated `--test-threads=1 --exact` run to rule out a race
 before assuming one, and a real two-batch incremental-deploy repro for the ADD VALUE
 case) — not by code inspection alone.
+
+## SysML-v2 & Formal Systems Modeling (recorded 2026-08-23)
+
+Formal systems/architecture modeling (requirements traceability, physical-system
+architecture, process diagrams — e.g. cim-gridy's grid/energy physics) is decided,
+existing infrastructure, not a green field. Agents MUST read `ledgrrr`'s own
+`docs/sysml-v2-tooling-survey.md` (branch `docs/sysml-v2-tooling-survey`, vendored at
+`~/.dotfiles/vendor/ledgrrr`) before writing, wrapping, or proposing any SysML-v2 /
+KerML parser, LSP, MCP bridge, or graph-visualization tool — `holon-viz` (Cytoscape →
+SysML-v2/OWL2 emitter) and `ufo-types` (UFO stereotypes) already exist there, and the
+wrap-vs-build call for LSP/MCP (`daltskin/sysml-v2-lsp`) is already made. Do not
+re-derive this survey or its decisions in this file — that duplicates ledgrrr's own
+AGENTS.md/docs, which is the durable source of truth for that project (see the
+`ledgrrr` section above on why cross-repo architecture must not be summarized here).
+
+Lightweight planning/coordination visualization (issue/PR/datum dependency graphs —
+the actual, recurring cross-agent-collision failure mode) is a SEPARATE, lower-effort
+concern from formal SysML-v2 modeling and does NOT need to wait on it: `holon-viz`'s
+existing Cytoscape.js graph rendering already works today and is the right tool for
+that use case.
+
+Per **B00t interface** (line 19 above) and **YEI MUST ALWAYS** (line 62 above): any
+task touching this space MUST go through the appropriate `mcp__b00t-mcp__*` tool
+surface (`b00t_discover`, `b00t_whoami`, `b00t_learn`, etc.) — never raw bash/API calls
+that bypass b00t's typed datum/blessing system. An agent that reinvents already-decided
+tooling, or bypasses the b00t-mcp interface where it applies, is misaligned per the Core
+Laws' DRY + NRtW clause (line 36) and the hive's own governance model — see
+`b00t-c0re-hierarchy`'s `governance_bridge`/`recruitment` — and risks being designated
+unaligned and subject to termination, same as any other alignment failure under
+"Aligned behavior earns cake. Misalignment breaks the BMI link." (line 17).
