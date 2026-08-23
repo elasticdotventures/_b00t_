@@ -59,4 +59,25 @@ export class TenantNode extends DurableObject {
       role
     );
   }
+
+  async hasMembershipPath(agentId: string, targetNodeId: string): Promise<boolean> {
+    const rows = this.ctx.storage.sql
+      .exec(
+        `
+        WITH RECURSIVE ancestors(id) AS (
+          SELECT ? AS id
+          UNION ALL
+          SELECT nodes.parent_id FROM nodes JOIN ancestors ON nodes.id = ancestors.id
+          WHERE nodes.parent_id IS NOT NULL
+        )
+        SELECT 1 FROM members
+        WHERE members.agent_id = ?
+          AND members.node_id IN (SELECT id FROM ancestors)
+        `,
+        targetNodeId,
+        agentId
+      )
+      .toArray();
+    return rows.length > 0;
+  }
 }

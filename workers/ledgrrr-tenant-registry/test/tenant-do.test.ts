@@ -32,4 +32,38 @@ describe("TenantNode schema", () => {
       expect(members[0]).toMatchObject({ agent_id: "agent-1", node_id: node.id, role: "member" });
     });
   });
+
+  it("hasMembershipPath: true for direct membership", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const node = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      await instance.addMember("agent-1", node.id, "member");
+      const result = await instance.hasMembershipPath("agent-1", node.id);
+      expect(result).toBe(true);
+    });
+  });
+
+  it("hasMembershipPath: true via membership in an ancestor node", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const parent = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      const child = await instance.createNode({ parentId: parent.id, kind: "business_unit", name: "Backend" });
+      await instance.addMember("agent-1", parent.id, "member");
+
+      const result = await instance.hasMembershipPath("agent-1", child.id);
+      expect(result).toBe(true);
+    });
+  });
+
+  it("hasMembershipPath: false for an agent with no path to the node", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const node = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      const result = await instance.hasMembershipPath("agent-nobody", node.id);
+      expect(result).toBe(false);
+    });
+  });
 });
