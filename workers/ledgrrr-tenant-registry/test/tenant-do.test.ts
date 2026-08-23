@@ -80,4 +80,43 @@ describe("TenantNode schema", () => {
       expect(result).toBe(false);
     });
   });
+
+  it("nodeGrantsShards: true when all requested shards are declared in settings_json", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const node = await instance.createNode({
+        parentId: null,
+        kind: "business_unit",
+        name: "Eng",
+        settingsJson: JSON.stringify({ grantedShards: ["project", "datum"] }),
+      });
+      expect(await instance.nodeGrantsShards(node.id, ["project"])).toBe(true);
+      expect(await instance.nodeGrantsShards(node.id, ["project", "datum"])).toBe(true);
+      expect(await instance.nodeGrantsShards(node.id, ["agent"])).toBe(false);
+    });
+  });
+
+  it("deleteNode refuses to delete a node that still has children", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const parent = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      await instance.createNode({ parentId: parent.id, kind: "business_unit", name: "Backend" });
+
+      const result = await instance.deleteNode(parent.id);
+      expect(result.deleted).toBe(false);
+      expect(result.reason).toMatch(/children/);
+    });
+  });
+
+  it("deleteNode succeeds for a childless node", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const node = await instance.createNode({ parentId: null, kind: "business_unit", name: "Solo" });
+      const result = await instance.deleteNode(node.id);
+      expect(result.deleted).toBe(true);
+    });
+  });
 });

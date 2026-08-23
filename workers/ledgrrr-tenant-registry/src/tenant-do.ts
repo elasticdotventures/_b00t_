@@ -80,4 +80,26 @@ export class TenantNode extends DurableObject {
       .toArray();
     return rows.length > 0;
   }
+
+  async nodeGrantsShards(nodeId: string, requestedShards: string[]): Promise<boolean> {
+    const row = this.ctx.storage.sql
+      .exec("SELECT settings_json FROM nodes WHERE id = ?", nodeId)
+      .toArray()[0] as { settings_json: string } | undefined;
+    if (!row) return false;
+    const settings = JSON.parse(row.settings_json) as { grantedShards?: string[] };
+    const granted = new Set(settings.grantedShards ?? []);
+    return requestedShards.every((shard) => granted.has(shard));
+  }
+
+  async deleteNode(nodeId: string): Promise<{ deleted: boolean; reason?: string }> {
+    const children = this.ctx.storage.sql
+      .exec("SELECT id FROM nodes WHERE parent_id = ?", nodeId)
+      .toArray();
+    if (children.length > 0) {
+      return { deleted: false, reason: "node has children; delete or reparent them first" };
+    }
+    this.ctx.storage.sql.exec("DELETE FROM members WHERE node_id = ?", nodeId);
+    this.ctx.storage.sql.exec("DELETE FROM nodes WHERE id = ?", nodeId);
+    return { deleted: true };
+  }
 }
