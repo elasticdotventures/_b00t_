@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
 import { createTenant } from "../src/registry";
-import { issueToken } from "../src/token";
+import { issueToken, verifyToken } from "../src/token";
 
 describe("issueToken", () => {
   beforeAll(async () => {
@@ -36,8 +36,11 @@ describe("issueToken", () => {
 
     expect("token" in result).toBe(true);
     if ("token" in result) {
-      const payload = JSON.parse(atob(result.token));
-      expect(payload.agentId).toBe("agent-1");
+      const verified = await verifyToken(env, result.token);
+      expect(verified.valid).toBe(true);
+      if (verified.valid) {
+        expect(verified.payload.agentId).toBe("agent-1");
+      }
     }
   });
 

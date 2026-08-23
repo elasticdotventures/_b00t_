@@ -18,5 +18,8 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["TenantNode"] }
-  ]
+  ],
+  "vars": {
+    "TOKEN_SIGNING_KEY": "test-signing-key-not-for-production"
+  }
 }
