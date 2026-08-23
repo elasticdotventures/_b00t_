@@ -619,9 +619,60 @@ async fn fallback_not_found(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    // ── Sandbox tests from the real $HOME (#1113 hygiene fix) ───────────────
+    //
+    // `LlmState::from_config` resolves `keys_file`/`spotlight_log` against
+    // `dirs_next()`, which reads the process-wide `HOME` env var. Without
+    // sandboxing, every test in this module reads/writes the developer's
+    // real `~/.b00t/server-keys.json` and `~/.b00t/spotlight.jsonl`. This
+    // mirrors the `TempHome` pattern already used independently in
+    // `b00t-c0re-lib/src/events.rs` and `b00t-cli/src/lib.rs`.
+
+    static HOME_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TempHome {
+        _guard: MutexGuard<'static, ()>,
+        old_home: Option<String>,
+        _temp_dir: tempfile::TempDir,
+    }
+
+    impl TempHome {
+        fn new() -> Self {
+            let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let temp_dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(temp_dir.path().join(".b00t")).unwrap();
+            let old_home = std::env::var("HOME").ok();
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path().to_str().unwrap());
+            }
+
+            Self {
+                _guard: guard,
+                old_home,
+                _temp_dir: temp_dir,
+            }
+        }
+    }
+
+    impl Drop for TempHome {
+        fn drop(&mut self) {
+            if let Some(old) = &self.old_home {
+                unsafe {
+                    std::env::set_var("HOME", old);
+                }
+            } else {
+                unsafe {
+                    std::env::remove_var("HOME");
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_key_create_and_validate() {
+        let _temp_home = TempHome::new();
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let key = state.create_key("test-consumer", &[]).await;
         assert!(key.starts_with("b00t-sk-"));
@@ -632,6 +683,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_key_is_none() {
+        let _temp_home = TempHome::new();
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         let entry = state.validate_key("bogus-key").await;
         assert!(entry.is_none());
@@ -639,12 +691,40 @@ mod tests {
 
     #[tokio::test]
     async fn test_spotlight_emit() {
+        let _temp_home = TempHome::new();
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
         state.emit_spotlight("test-consumer", "chat_completions", "test-model", 42).await;
         let content = std::fs::read_to_string(&state.spotlight_log).unwrap_or_default();
         assert!(content.contains("spotlight.llm.chat_completions"));
         assert!(content.contains("test-consumer"));
         assert!(content.contains("test-model"));
+    }
+
+    /// Proves the sandboxing actually isolates instances from each other via
+    /// the filesystem, not just that tests pass. Two sequential `TempHome`
+    /// scopes: a key created under the first is invisible to a fresh
+    /// `LlmState` constructed under the second, because `validate_key` is a
+    /// pure in-memory read of the `keys` map populated at construction time
+    /// (it never re-reads `keys_file`), and the second `TempHome` points
+    /// `HOME` at an entirely different, empty temp directory.
+    #[tokio::test]
+    async fn test_temp_home_isolates_state_across_instances() {
+        let key = {
+            let _first_home = TempHome::new();
+            let state = LlmState::from_config("http://localhost:8181/v1", "");
+            let key = state.create_key("consumer-in-first-home", &[]).await;
+            assert!(state.validate_key(&key).await.is_some(), "key must be visible within its own instance");
+            key
+            // _first_home dropped here: HOME restored, temp dir removed
+        };
+
+        let _second_home = TempHome::new();
+        let fresh_state = LlmState::from_config("http://localhost:8181/v1", "");
+        assert!(
+            fresh_state.validate_key(&key).await.is_none(),
+            "a key created under one TempHome must not leak into a fresh LlmState \
+             constructed under a different TempHome"
+        );
     }
 
     // ── proxy_chat #596/#597 wiring — end-to-end against a fake upstream ─────
@@ -697,6 +777,7 @@ mod tests {
 
     #[tokio::test]
     async fn proxy_chat_drives_verify_tool_loop_end_to_end() {
+        let _temp_home = TempHome::new();
         let upstream_url = spawn_fake_upstream(vec![
             tool_call_upstream_response("(assert true)(check-sat)"),
             stop_upstream_response("verified via loop"),
@@ -732,6 +813,7 @@ mod tests {
             eprintln!("skipping proxy_chat_audits_hallucinated_grammar_shaped_result: z3 not in PATH");
             return;
         }
+        let _temp_home = TempHome::new();
         // Model emits grammar-shaped content claiming "sat" for an assertion
         // that is actually unsat — proxy_chat must correct it before
         // returning to the client (#596 grammar-shape audit bridge).
