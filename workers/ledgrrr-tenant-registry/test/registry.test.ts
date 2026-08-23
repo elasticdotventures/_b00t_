@@ -26,9 +26,11 @@ describe("lookupTenant", () => {
     expect(created.kind).toBe("organizational");
     expect(created.displayName).toBe("Acme Corp");
     expect(created.rootDoId).toBeTruthy();
+    expect(created.rootNodeId).toBeTruthy();
 
     const found = await lookupTenant(env.DB, created.id);
-    expect(found).toEqual(created);
+    const { rootNodeId: _rootNodeId, ...createdTenantFields } = created;
+    expect(found).toEqual(createdTenantFields);
   });
 
   it("seeds a root node and adds the owner as a member on tenant creation", async () => {
@@ -39,6 +41,9 @@ describe("lookupTenant", () => {
       ownerAgentId: "agent-owner",
     });
 
+    expect(tenant.rootNodeId).toEqual(expect.any(String));
+    expect(tenant.rootNodeId.length).toBeGreaterThan(0);
+
     const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
 
     const rootNodeId = await runInDurableObject(stub, async (_instance, state) => {
@@ -48,6 +53,10 @@ describe("lookupTenant", () => {
       expect(rows).toHaveLength(1);
       return rows[0].id;
     });
+
+    // Cross-check: the id returned from createTenant must match the DO's
+    // actual root node id, not just be "present".
+    expect(tenant.rootNodeId).toBe(rootNodeId);
 
     const hasMembership = await stub.hasMembershipPath("agent-owner", rootNodeId);
     expect(hasMembership).toBe(true);

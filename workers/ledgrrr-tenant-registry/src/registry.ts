@@ -8,6 +8,10 @@ export interface Tenant {
   createdAt: string;
 }
 
+export interface CreatedTenant extends Tenant {
+  rootNodeId: string;
+}
+
 interface TenantRow {
   id: string;
   kind: string;
@@ -38,7 +42,7 @@ export async function createTenant(
   db: D1Database,
   doNamespace: DurableObjectNamespace<TenantNode>,
   input: { kind: "personal" | "organizational"; displayName: string; ownerAgentId: string }
-): Promise<Tenant> {
+): Promise<CreatedTenant> {
   const id = crypto.randomUUID();
   const doId = doNamespace.newUniqueId();
   const rootDoId = doId.toString();
@@ -55,5 +59,12 @@ export async function createTenant(
   const rootNode = await stub.createNode({ parentId: null, kind: "business_unit", name: "root" });
   await stub.addMember(input.ownerAgentId, rootNode.id, "owner");
 
-  return { id, kind: input.kind, displayName: input.displayName, rootDoId, createdAt };
+  return {
+    id,
+    kind: input.kind,
+    displayName: input.displayName,
+    rootDoId,
+    createdAt,
+    rootNodeId: rootNode.id,
+  };
 }
