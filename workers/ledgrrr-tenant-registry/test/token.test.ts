@@ -31,6 +31,10 @@ describe("issueToken", () => {
     });
 
     expect("token" in result).toBe(true);
+    if ("token" in result) {
+      const payload = JSON.parse(atob(result.token));
+      expect(payload.agentId).toBe("agent-1");
+    }
   });
 
   it("rejects when the agent has no membership path", async () => {

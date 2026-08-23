@@ -35,6 +35,7 @@ export async function issueToken(env: Env, input: IssueTokenInput): Promise<Issu
 
   const payload = {
     tenantId: input.tenantId,
+    agentId: input.agentId,
     rootDoId: tenant.rootDoId,
     nodeId: input.nodeId,
     shards: input.requestedShards,
