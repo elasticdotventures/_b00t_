@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "b00t-docling-serve"
+version = "0.1.0"
+description = "b00t's own Docling-backed document extraction — a one-shot CLI and an on-demand NATS Micro Service, both non-perpetual"
+authors = [
+    {name = "PromptExecution", email = "hello@promptexecution.com"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "returns>=0.22.0",
+]
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+# The actual Docling extraction backend (torch + docling models). Split out
+# so the plain `extract` CLI's --help / argument parsing doesn't force a
+# multi-GB install; real extraction needs this installed.
+docling = [
+    "docling>=2.0.0",
+    # Pinned to match reqif-opa-mcp's own constraint: pypdf's extract_text()
+    # word-spacing heuristics differ across versions, so the two backends
+    # only produce byte-identical output when both resolve the same pypdf.
+    "pypdf==6.8.0",
+]
+# NATS on-demand service mode (see b00t_docling_serve/nats_service.py).
+nats-service = [
+    "nats-py>=2.15.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["b00t_docling_serve"]

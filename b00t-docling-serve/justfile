@@ -1,0 +1,33 @@
+set dotenv-load
+set export
+set shell := ["bash", "-c"]
+
+default:
+    @just --list
+
+install:
+    uv sync --extra docling
+
+extract path profile="auto":
+    uv run python -m b00t_docling_serve extract "{{path}}" --profile {{profile}} --pretty
+
+# Requires: uv sync --extra nats-service --extra docling
+nats-service:
+    uv run python -m b00t_docling_serve.nats_service
+
+test:
+    uv run pytest -v
+
+docker-build tag="docling-nats-service" target="docling-nats-service":
+    docker build --target {{target}} -t ghcr.io/promptexecution/b00t-docling-serve:{{tag}} .
+
+# On-demand smoke test: run the built image directly under podman (not
+# via the Quadlet unit) with a short idle timeout, and confirm it exits
+# on its own.
+smoke tag="docling-nats-service" idle="20":
+    podman run --rm --network host \
+        -e NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}" \
+        -e NATS_USER="${NATS_USER:-}" \
+        -e NATS_PASSWORD="${NATS_PASSWORD:-}" \
+        -e IDLE_TIMEOUT_SECONDS={{idle}} \
+        ghcr.io/promptexecution/b00t-docling-serve:{{tag}}
