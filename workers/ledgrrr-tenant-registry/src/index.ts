@@ -1,9 +1,10 @@
 import { createTenant, lookupTenant } from "./registry";
+import { TenantNode } from "./tenant-do";
 export { TenantNode } from "./tenant-do";
 
 export interface Env {
   DB: D1Database;
-  TENANT_DO: DurableObjectNamespace;
+  TENANT_DO: DurableObjectNamespace<TenantNode>;
 }
 
 export default {

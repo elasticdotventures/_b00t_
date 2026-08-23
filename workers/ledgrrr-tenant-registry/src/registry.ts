@@ -1,3 +1,5 @@
+import type { TenantNode } from "./tenant-do";
+
 export interface Tenant {
   id: string;
   kind: "personal" | "organizational";
@@ -34,7 +36,7 @@ export async function lookupTenant(db: D1Database, tenantId: string): Promise<Te
 
 export async function createTenant(
   db: D1Database,
-  doNamespace: DurableObjectNamespace,
+  doNamespace: DurableObjectNamespace<TenantNode>,
   input: { kind: "personal" | "organizational"; displayName: string }
 ): Promise<Tenant> {
   const id = crypto.randomUUID();
