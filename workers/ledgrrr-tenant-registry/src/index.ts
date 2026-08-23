@@ -6,10 +6,27 @@ export { TenantNode } from "./tenant-do";
 export interface Env {
   DB: D1Database;
   TENANT_DO: DurableObjectNamespace<TenantNode>;
+  REGISTRY_ADMIN_KEY: string;
+}
+
+function isAuthorized(request: Request, env: Env): boolean {
+  const auth = request.headers.get("Authorization");
+  if (!auth || !auth.startsWith("Bearer ")) return false;
+  const token = auth.slice("Bearer ".length);
+  return token === env.REGISTRY_ADMIN_KEY;
+}
+
+function unauthorized(): Response {
+  return new Response(JSON.stringify({ error: "unauthorized" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (!isAuthorized(request, env)) return unauthorized();
+
     const url = new URL(request.url);
 
     if (request.method === "POST" && url.pathname === "/tenants") {

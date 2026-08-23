@@ -72,7 +72,7 @@ export class TenantNode extends DurableObject {
         `
         WITH RECURSIVE ancestors(id) AS (
           SELECT ? AS id
-          UNION ALL
+          UNION
           SELECT nodes.parent_id FROM nodes JOIN ancestors ON nodes.id = ancestors.id
           WHERE nodes.parent_id IS NOT NULL
         )
@@ -115,7 +115,7 @@ export class TenantNode extends DurableObject {
         `
         WITH RECURSIVE descendants(id) AS (
           SELECT ? AS id
-          UNION ALL
+          UNION
           SELECT nodes.id FROM nodes JOIN descendants ON nodes.parent_id = descendants.id
         )
         SELECT COALESCE(SUM(balance), 0) AS total
