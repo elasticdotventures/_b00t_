@@ -119,4 +119,21 @@ describe("TenantNode schema", () => {
       expect(result.deleted).toBe(true);
     });
   });
+
+  it("cakeRollup sums placeholder leaf balances across a node and its descendants", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance, state) => {
+      const parent = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      const child = await instance.createNode({ parentId: parent.id, kind: "business_unit", name: "Backend" });
+
+      state.storage.sql.exec(
+        "INSERT INTO _placeholder_leaf_balances (node_id, balance) VALUES (?, ?), (?, ?)",
+        parent.id, 10, child.id, 25
+      );
+
+      const total = await instance.cakeRollup(parent.id);
+      expect(total).toBe(35);
+    });
+  });
 });

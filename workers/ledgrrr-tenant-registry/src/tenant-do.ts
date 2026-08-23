@@ -30,6 +30,12 @@ export class TenantNode extends DurableObject {
     `);
     this.ctx.storage.sql.exec(`CREATE INDEX IF NOT EXISTS idx_nodes_parent ON nodes(parent_id)`);
     this.ctx.storage.sql.exec(`CREATE INDEX IF NOT EXISTS idx_members_agent ON members(agent_id)`);
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS _placeholder_leaf_balances (
+        node_id TEXT PRIMARY KEY REFERENCES nodes(id),
+        balance INTEGER NOT NULL
+      )
+    `);
   }
 
   async createNode(input: {
@@ -101,5 +107,24 @@ export class TenantNode extends DurableObject {
     this.ctx.storage.sql.exec("DELETE FROM members WHERE node_id = ?", nodeId);
     this.ctx.storage.sql.exec("DELETE FROM nodes WHERE id = ?", nodeId);
     return { deleted: true };
+  }
+
+  async cakeRollup(nodeId: string): Promise<number> {
+    const rows = this.ctx.storage.sql
+      .exec(
+        `
+        WITH RECURSIVE descendants(id) AS (
+          SELECT ? AS id
+          UNION ALL
+          SELECT nodes.id FROM nodes JOIN descendants ON nodes.parent_id = descendants.id
+        )
+        SELECT COALESCE(SUM(balance), 0) AS total
+        FROM _placeholder_leaf_balances
+        WHERE node_id IN (SELECT id FROM descendants)
+        `,
+        nodeId
+      )
+      .toArray()[0] as { total: number };
+    return rows.total;
   }
 }

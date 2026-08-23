@@ -1,5 +1,6 @@
 import { createTenant, lookupTenant } from "./registry";
 import { TenantNode } from "./tenant-do";
+import { issueToken } from "./token";
 export { TenantNode } from "./tenant-do";
 
 export interface Env {
@@ -45,6 +46,37 @@ export default {
         });
       }
       return new Response(JSON.stringify(tenant), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (request.method === "POST" && url.pathname === "/tokens") {
+      const body = await request.json<{
+        tenantId?: string;
+        agentId?: string;
+        nodeId?: string;
+        requestedShards?: string[];
+      }>();
+      if (!body.tenantId || !body.agentId || !body.nodeId || !Array.isArray(body.requestedShards)) {
+        return new Response(
+          JSON.stringify({ error: "tenantId, agentId, nodeId, and requestedShards[] are required" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      const result = await issueToken(env, {
+        tenantId: body.tenantId,
+        agentId: body.agentId,
+        nodeId: body.nodeId,
+        requestedShards: body.requestedShards,
+      });
+      if ("error" in result) {
+        return new Response(JSON.stringify(result), {
+          status: result.error === "tenant not found" ? 404 : 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
