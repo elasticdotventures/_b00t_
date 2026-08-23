@@ -309,6 +309,19 @@ asked for ("cross-tenant queries must be handled separately for security
 reasons") and it is enforced by Cloudflare's DO addressing model itself, not
 by convention or a `WHERE tenant_id = ?` clause that could be forgotten.
 
+**Precise scope of this guarantee** (amended after implementation review):
+the DO-addressing property above holds unconditionally *given* the
+`tenants` registry row is correct — `root_do_id` is read from a shared,
+multi-writer D1 (`b00t-agents`, also bound by the `b00t-mcp-vault` Worker),
+so the actual guarantee is "DO addressing is structurally isolated,
+conditioned on registry-row integrity," not an isolation property with no
+external dependency at all. A `UNIQUE` constraint on `tenants.root_do_id`
+closes the accidental-collision case (two rows aliasing one DO) at the
+schema level; it does not defend against a writer with direct D1 access
+deliberately repointing a `root_do_id`. Guarding *that* is an access-control
+problem for whatever holds write access to `b00t-agents` itself, out of
+this sub-project's scope.
+
 ## Error handling
 
 - **Tenant not found** (bad `tenant_id` in a token request): D1 registry
