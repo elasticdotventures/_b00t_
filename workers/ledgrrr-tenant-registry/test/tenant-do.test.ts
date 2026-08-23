@@ -66,4 +66,18 @@ describe("TenantNode schema", () => {
       expect(result).toBe(false);
     });
   });
+
+  it("hasMembershipPath: false for membership on a different sibling branch", async () => {
+    const id = env.TENANT_DO.newUniqueId();
+    const stub = env.TENANT_DO.get(id);
+    await runInDurableObject(stub, async (instance) => {
+      const parent = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      const branchA = await instance.createNode({ parentId: parent.id, kind: "business_unit", name: "Backend" });
+      const branchB = await instance.createNode({ parentId: parent.id, kind: "business_unit", name: "Frontend" });
+      await instance.addMember("agent-1", branchA.id, "member");
+
+      const result = await instance.hasMembershipPath("agent-1", branchB.id);
+      expect(result).toBe(false);
+    });
+  });
 });
