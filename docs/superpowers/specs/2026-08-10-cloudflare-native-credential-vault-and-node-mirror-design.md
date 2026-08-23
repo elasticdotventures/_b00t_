@@ -100,6 +100,76 @@ secret put`/API call from the trusted source machine. Credproxy (task
 alternatives**: credproxy solves local extraction, this solves cloud-side
 storage/access-control once a secret is en route to Cloudflare.
 
+## Superseding update (2026-08-11): use the real, existing b00t-agents schema
+
+Everything above this point was designed by mirroring `cloudflare-os` — an
+**unrelated Cloudflare product** — because at the time of writing, this
+mission had no visibility into the operator's own Cloudflare account.
+That changed: a live Cloudflare Developer Platform MCP connector became
+available mid-mission, and read-only inspection of the operator's actual
+account surfaced infrastructure this whole design was previously unaware
+of:
+
+- **D1 database `b00t-agents`** (`version: "production"`, uuid
+  `86bb3c9d-309a-4d27-8856-38934dd316b1`) already has real, deployed
+  schema — two tables, `roles` and `agents` — built specifically for hive
+  agent identity and credentials:
+  ```sql
+  CREATE TABLE roles (
+    id TEXT PRIMARY KEY,              -- 8-digit alphanumeric (e.g., AIASST01)
+    description TEXT NOT NULL,
+    created_dt TEXT NOT NULL
+  )
+  CREATE TABLE agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    role_id TEXT NOT NULL,            -- FK to roles
+    pid TEXT NOT NULL,                -- process/session identifier
+    hive TEXT NOT NULL,               -- GitHub username (namespace)
+    jwt TEXT NOT NULL,                -- NATS JWT for authentication
+    account TEXT NOT NULL,            -- NATS account name
+    subjects TEXT,                    -- JSON array of allowed NATS subjects
+    nats_url TEXT,
+    created TEXT NOT NULL,
+    last_refreshed TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    FOREIGN KEY (role_id) REFERENCES roles (id)
+  )
+  ```
+  `roles` is seeded with 5 real rows (`AIASST01`, `CICD0001`, `MONITOR1`,
+  `ADMIN001`, `DEVOPS01`). `agents` has **zero rows** — the schema is
+  provisioned and live, but nothing has ever actually registered through
+  it. This is a real, already-decided b00t architecture for exactly this
+  class of problem (identity + credential + status for a hive actor),
+  designed and deployed, just never wired up to anything yet.
+- **KV namespaces `b00t-users`, `b00t-sessions`, `b00t-tenant-configs`**
+  also already exist in the same account — plausibly a human-user-facing
+  counterpart to `b00t-agents`' NATS-agent focus, though their actual key
+  contents weren't inspected (no key-listing tool was available; only
+  namespace metadata was checked).
+- **Worker `telnyx-sms-forwarder`** is live, deployed, and working — real
+  prior art for exactly the "Worker receives a Telnyx webhook, calls the
+  Telnyx API" pattern the fax MVP (spec 2) needs, proving `TELNYX_API_KEY`
+  is already configured as a real Worker secret somewhere in this account.
+
+**Revised direction**: the per-user/per-agent MCP-key vault should extend
+`b00t-agents`' existing `agents` table (a new column, e.g. `mcp_key`, or a
+sibling table keyed by the same `id`/`hive` convention) rather than
+building a new Durable-Object-based `McpKeyAccount` mirroring an unrelated
+product's internal pattern. This is simpler, reuses a schema the operator
+already designed and deployed, and the earlier DO-based section above
+should be read as **background research on how a comparable problem is
+solved elsewhere**, not as this project's actual implementation target.
+
+This also reopens spec 2 (fax MVP) and spec 3/4 (cloudflare-os
+deployment): if `telnyx-sms-forwarder` proves real Worker deployment
+already works in this account, the fax webhook receiver may not need
+local `wrangler dev` + a dev tunnel at all — it could be a real sibling
+Worker deployed directly to this same account. That redesign is out of
+scope for this document (which is the credential-vault/node-mirror spec)
+and belongs in a follow-up update to the fax MVP spec.
+
 ## Durable node-data mirror: R2 + R2 SQL, Spacedrive as partial inspiration
 
 Spacedrive's actually-transferable ideas are **content-addressing**
