@@ -48,6 +48,21 @@ pub enum DatumType {
     Polyseme,
     Runtime,
     Training,
+    /// **Reserved — not yet implemented.** No `McpServerDatum` struct exists, and this
+    /// variant is not wired into `main.rs` dispatch. It is declared as a UFO `SubKind`
+    /// of `Mcp` (see `ufo_stereotype()` below) to hold a structural distinction between
+    /// a local MCP config (`Mcp`) and a deployed remote MCP server (`McpServer`) — a
+    /// distinction the codebase doesn't build out yet.
+    ///
+    /// The intended path to actually implement this is *not* a standalone
+    /// `McpServerDatum` struct: per the 2026-08-16 app4dog-workspace decision, `McpDatum`
+    /// (see `datum_mcp.rs`) is expected to gain a `deploy_targets` field instead, folding
+    /// "deployed remote server" into the existing `Mcp` datum rather than forking a
+    /// parallel type. Do not build a separate `McpServerDatum` without revisiting that
+    /// decision first.
+    ///
+    /// Kept (not removed) per the resolution of issue #1094 — see that issue for the
+    /// full investigation and the removal-vs-keep discussion.
     McpServer,
     Schema,
     Hook,
