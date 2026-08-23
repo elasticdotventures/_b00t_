@@ -147,6 +147,21 @@ Sharp corner or bug found? REPORT IT — silence hides systemic issues.
 - `b00t task add "bug: <description>"` — creates tracked issue for operator review
 - Flag in output: 🚩 security concern · ⚠️ caveat/limitation · 🤓 tribal knowledge
 - Fork-fix-forward: if a library has a bug, fix and PR upstream — do NOT work around silently.
+- **Filing issues outside our own repos**: never file against an external project on the strength
+  of an in-process failure alone. First reduce it to a minimal, standalone reproduction — no b00t
+  code, no b00t types, just the third-party library/tool's own public API — and confirm the failure
+  still reproduces in that isolated form before writing it up. That reproduction becomes the issue's
+  repro steps; if a claimed bug can't be reduced to one, its cause is very likely on our side
+  (stale dependency pin, misconfiguration, a wrapper doing something unexpected) rather than
+  theirs — reproduce first, save the filing for what survives isolation.
+  🤓 (2026-08-22) case in point: filed HelixDB/helix-db#1019 as "server resets connection on a
+  well-formed request," backed only by a b00t-c0re-lib test failure. A minimal standalone probe
+  (bypassing b00t entirely) reproduced the same failure — but then, while writing that probe up
+  further, surfaced that `helix-db = "2.0"` was pinned to a stale major version (2.0.6) against a
+  server that had moved to 3.0.0's breaking rewrite. Bumping the probe's own dependency to `"3.0"`
+  fixed it outright. Correction posted, issue closed as resolved on our side — an honest but
+  avoidable false report. The isolated repro is what made the real cause findable at all; do that
+  step before filing, not after a maintainer asks for it.
 - 🚩 known-broken (2026-08-04): `b00t lfmf`'s vector-DB backend silently fails to persist
   ("✅ Lesson recorded" prints even when the write errors) — verify with `b00t lfmf advice
   <tool>` after recording, don't trust the success message alone. Direct file edits are
