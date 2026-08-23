@@ -1,12 +1,13 @@
 import { createTenant, lookupTenant } from "./registry";
 import { TenantNode } from "./tenant-do";
-import { issueToken } from "./token";
+import { issueToken, verifyToken } from "./token";
 export { TenantNode } from "./tenant-do";
 
 export interface Env {
   DB: D1Database;
   TENANT_DO: DurableObjectNamespace<TenantNode>;
   REGISTRY_ADMIN_KEY: string;
+  TOKEN_SIGNING_KEY: string;
 }
 
 function isAuthorized(request: Request, env: Env): boolean {
@@ -101,6 +102,27 @@ export default {
         });
       }
       return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (request.method === "POST" && url.pathname === "/verify") {
+      const body = await request.json<{ token?: string }>();
+      if (typeof body.token !== "string") {
+        return new Response(JSON.stringify({ error: "token is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const result = await verifyToken(env, body.token);
+      if (!result.valid) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(result.payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
