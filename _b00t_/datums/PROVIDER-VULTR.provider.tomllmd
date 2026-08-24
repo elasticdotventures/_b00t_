@@ -58,15 +58,26 @@
 #      NOT the SSH-tunnel-only model vultr1 uses) and `b00t-pingap.service`;
 #      provisioning history/owner not yet reconciled here.
 #      DEPLOYED 2026-08-24: b00t-forge-kv (RESP2 KV server, see b00t-forge-kv/
-#      crate, PR #1145) installed on the b00t-node instance (149.28.189.45)
-#      as systemd unit b00t-forge-kv.service, bound 127.0.0.1:6379,
-#      confirmed not externally reachable, PING-verified. No redis-server/
-#      valkey-server was ever installed there, so this is a from-scratch
-#      install, not a migration. vultr1 (207.148.87.195) itself was NOT
-#      touched — no SSH access to it from this session (only fung1 has the
-#      documented `ssh vultr1` key per this datum; that access was not
-#      available here). If vultr1 also needs b00t-forge-kv, repeat the same
-#      systemd-unit deploy there once reachable — see nats/vultr-forge-kv-deploy.sh.
+#      crate, PR #1145) installed on BOTH Vultr instances as systemd unit
+#      b00t-forge-kv.service, bound 127.0.0.1:6379, confirmed not externally
+#      reachable, PING-verified over the real RESP2 wire protocol on each:
+#        - b00t-node (149.28.189.45) — reached directly from the deploying
+#          host (same operator network); built in a standalone /tmp copy of
+#          the crate (no monorepo checkout needed) via a fresh minimal
+#          rustup install, since the deploying host's newer glibc (2.43)
+#          wouldn't run on this node's Debian 13 (glibc 2.41).
+#        - vultr1 (207.148.87.195) — this session initially had NO direct
+#          access (only fung1's documented `ssh vultr1` key). Resolved by
+#          hopping through fung1 itself (`ssh brianh@<fung1-lan-ip>`, then
+#          `ssh vultr1` from there) rather than needing vultr1 reachable
+#          directly — same standalone-crate build approach, glibc 2.36 here.
+#      Neither instance had redis-server/valkey-server installed before
+#      this, so both are from-scratch installs, not migrations.
+#      nats/vultr-forge-kv-deploy.sh (automated version of the same steps,
+#      assumes a working `ssh <host-alias>`) was written but not what
+#      actually ran here — both deploys were done via manual SSH-hop
+#      commands instead, since neither instance had a local SSH alias
+#      configured on the deploying host.
 #
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
