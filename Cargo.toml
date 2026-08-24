@@ -42,6 +42,7 @@ members = [
     # Cargo's "package believes it's in a workspace" error. Restoring
     # membership; it's a leaf wasm-bindgen crate (no path deps), safe to add.
     "b00t-c0re-npm",
+    "b00t-forge-kv",
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",
