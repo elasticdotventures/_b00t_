@@ -53,6 +53,28 @@ pub enum CakeCommands {
         #[command(subcommand)]
         cmd: TicketCommands,
     },
+    /// Mint cake for an agent directly (no ticket/lottery involved)
+    Mint {
+        to: String,
+        amount: i64,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Spend (destroy) cake from an agent's balance
+    Spend {
+        from: String,
+        amount: i64,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Transfer cake between two agents
+    Transfer {
+        from: String,
+        to: String,
+        amount: i64,
+        #[arg(long)]
+        reason: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -208,6 +230,34 @@ pub fn handle_cake_command(args: &CakeArgs) -> Result<()> {
                 }
             }
         },
+
+        CakeCommands::Mint { to, amount, reason } => {
+            let bal = ledger.mint(to, *amount, reason)?;
+            println!("🍰 Minted <|🍰:{amount}|> for {to} — new balance: <|🍰:{bal}|>");
+        }
+
+        CakeCommands::Spend {
+            from,
+            amount,
+            reason,
+        } => {
+            let bal = ledger.spend(from, *amount, reason)?;
+            println!("🍰 {from} spent <|🍰:{amount}|> ({reason}) — new balance: <|🍰:{bal}|>");
+        }
+
+        CakeCommands::Transfer {
+            from,
+            to,
+            amount,
+            reason,
+        } => {
+            ledger.transfer(from, to, *amount, reason)?;
+            let from_bal = ledger.balance(from)?;
+            let to_bal = ledger.balance(to)?;
+            println!(
+                "🍰 {from} → {to}: <|🍰:{amount}|> ({reason}) — {from}: <|🍰:{from_bal}|>, {to}: <|🍰:{to_bal}|>"
+            );
+        }
     }
     Ok(())
 }

@@ -4,7 +4,7 @@
 //! Lottery math keeps agents honest about time estimates while rewarding useful work.
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,64 @@ pub struct CakeOutcome {
     pub won: bool,
 }
 
+/// A row from the `cake_transactions` table — direct mint/spend/transfer
+/// events, distinct from ticket-based lottery payouts.
+#[derive(Debug)]
+pub struct CakeTransactionRecord {
+    pub id: String,
+    /// `None` = mint (created from nothing).
+    pub from_agent: Option<String>,
+    /// `None` = spend (destroyed, not credited to anyone).
+    pub to_agent: Option<String>,
+    pub amount: i64,
+    pub reason: String,
+    pub created_at: String,
+}
+
+/// Errors from direct ledger operations (`mint`/`spend`/`transfer`).
+/// Kept separate from the `anyhow::Result` used elsewhere in this file so
+/// callers can match on the specific failure reason, mirroring the typed
+/// errors the now-removed `b00t-c0re-hierarchy::cake_economy` ledger had.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CakeLedgerError {
+    InsufficientBalance {
+        agent: String,
+        balance: i64,
+        requested: i64,
+    },
+    InvalidAmount(i64),
+    SelfTransfer(String),
+    Db(String),
+}
+
+impl std::fmt::Display for CakeLedgerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CakeLedgerError::InsufficientBalance {
+                agent,
+                balance,
+                requested,
+            } => write!(
+                f,
+                "{agent} has insufficient balance: {balance} < {requested}"
+            ),
+            CakeLedgerError::InvalidAmount(amount) => {
+                write!(f, "invalid amount: {amount} (must be > 0)")
+            }
+            CakeLedgerError::SelfTransfer(agent) => {
+                write!(f, "{agent} cannot transfer cake to itself")
+            }
+            CakeLedgerError::Db(msg) => write!(f, "cake ledger db error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for CakeLedgerError {}
+
+fn db_err(e: rusqlite::Error) -> CakeLedgerError {
+    CakeLedgerError::Db(e.to_string())
+}
+
 // ---------------------------------------------------------------------------
 // DDL
 // ---------------------------------------------------------------------------
@@ -92,6 +150,16 @@ CREATE TABLE IF NOT EXISTS cake_balance (
     balance    INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS cake_transactions (
+    id         TEXT PRIMARY KEY,
+    from_agent TEXT,
+    to_agent   TEXT,
+    amount     INTEGER NOT NULL,
+    reason     TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cake_tx_agent ON cake_transactions(from_agent, to_agent, created_at DESC);
 ";
 
 // ---------------------------------------------------------------------------
@@ -377,6 +445,189 @@ impl CakeLedger {
 
         rows.map(|r| r.context("map cake ticket row")).collect()
     }
+
+    // -----------------------------------------------------------------------
+    // Direct ledger operations — mint / spend / transfer
+    // -----------------------------------------------------------------------
+
+    /// Create `amount` cake for `to` from nothing. Returns the new balance.
+    pub fn mint(&self, to: &str, amount: i64, reason: &str) -> Result<i64, CakeLedgerError> {
+        if amount <= 0 {
+            return Err(CakeLedgerError::InvalidAmount(amount));
+        }
+        let mut conn = self.connect().map_err(|e| CakeLedgerError::Db(e.to_string()))?;
+        let tx = conn.transaction().map_err(db_err)?;
+        let now = chrono_now_utc();
+        let id = new_tx_id();
+
+        tx.execute(
+            "INSERT INTO cake_transactions (id, from_agent, to_agent, amount, reason, created_at)
+             VALUES (?1, NULL, ?2, ?3, ?4, ?5)",
+            params![id, to, amount, reason, now],
+        )
+        .map_err(db_err)?;
+        tx.execute(
+            "INSERT INTO cake_balance (agent, balance, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(agent) DO UPDATE SET
+                 balance    = balance + excluded.balance,
+                 updated_at = excluded.updated_at",
+            params![to, amount, now],
+        )
+        .map_err(db_err)?;
+        let new_balance: i64 = tx
+            .query_row(
+                "SELECT balance FROM cake_balance WHERE agent = ?1",
+                params![to],
+                |row| row.get(0),
+            )
+            .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+        Ok(new_balance)
+    }
+
+    /// Destroy `amount` cake from `from`'s balance. Returns the new balance.
+    pub fn spend(&self, from: &str, amount: i64, reason: &str) -> Result<i64, CakeLedgerError> {
+        if amount <= 0 {
+            return Err(CakeLedgerError::InvalidAmount(amount));
+        }
+        let mut conn = self.connect().map_err(|e| CakeLedgerError::Db(e.to_string()))?;
+        let tx = conn.transaction().map_err(db_err)?;
+        let current = current_balance(&tx, from).map_err(db_err)?;
+        if current < amount {
+            return Err(CakeLedgerError::InsufficientBalance {
+                agent: from.to_string(),
+                balance: current,
+                requested: amount,
+            });
+        }
+        let now = chrono_now_utc();
+        let id = new_tx_id();
+
+        tx.execute(
+            "INSERT INTO cake_transactions (id, from_agent, to_agent, amount, reason, created_at)
+             VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
+            params![id, from, amount, reason, now],
+        )
+        .map_err(db_err)?;
+        tx.execute(
+            "UPDATE cake_balance SET balance = balance - ?1, updated_at = ?2 WHERE agent = ?3",
+            params![amount, now, from],
+        )
+        .map_err(db_err)?;
+        let new_balance: i64 = tx
+            .query_row(
+                "SELECT balance FROM cake_balance WHERE agent = ?1",
+                params![from],
+                |row| row.get(0),
+            )
+            .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+        Ok(new_balance)
+    }
+
+    /// Move `amount` cake from `from` to `to`.
+    pub fn transfer(&self, from: &str, to: &str, amount: i64, reason: &str) -> Result<(), CakeLedgerError> {
+        if amount <= 0 {
+            return Err(CakeLedgerError::InvalidAmount(amount));
+        }
+        if from == to {
+            return Err(CakeLedgerError::SelfTransfer(from.to_string()));
+        }
+        let mut conn = self.connect().map_err(|e| CakeLedgerError::Db(e.to_string()))?;
+        let tx = conn.transaction().map_err(db_err)?;
+        let current = current_balance(&tx, from).map_err(db_err)?;
+        if current < amount {
+            return Err(CakeLedgerError::InsufficientBalance {
+                agent: from.to_string(),
+                balance: current,
+                requested: amount,
+            });
+        }
+        let now = chrono_now_utc();
+        let id = new_tx_id();
+
+        tx.execute(
+            "INSERT INTO cake_transactions (id, from_agent, to_agent, amount, reason, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, from, to, amount, reason, now],
+        )
+        .map_err(db_err)?;
+        tx.execute(
+            "UPDATE cake_balance SET balance = balance - ?1, updated_at = ?2 WHERE agent = ?3",
+            params![amount, now, from],
+        )
+        .map_err(db_err)?;
+        tx.execute(
+            "INSERT INTO cake_balance (agent, balance, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(agent) DO UPDATE SET
+                 balance    = balance + excluded.balance,
+                 updated_at = excluded.updated_at",
+            params![to, amount, now],
+        )
+        .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+        Ok(())
+    }
+
+    /// Total cake in circulation: sum of all mints minus all spends.
+    /// Transfers net to zero (they move cake, not create/destroy it).
+    pub fn total_supply(&self) -> Result<i64> {
+        let conn = self.connect()?;
+        let total: i64 = conn
+            .query_row(
+                "SELECT
+                    COALESCE(SUM(CASE WHEN from_agent IS NULL THEN amount ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN to_agent IS NULL THEN amount ELSE 0 END), 0)
+                 FROM cake_transactions",
+                [],
+                |row| row.get(0),
+            )
+            .context("compute cake total supply")?;
+        Ok(total)
+    }
+
+    /// Recent mint/spend/transfer history involving an agent, newest first.
+    pub fn transaction_history(&self, agent: &str, limit: usize) -> Result<Vec<CakeTransactionRecord>> {
+        let conn = self.connect()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, from_agent, to_agent, amount, reason, created_at
+                 FROM cake_transactions
+                 WHERE from_agent = ?1 OR to_agent = ?1
+                 ORDER BY created_at DESC
+                 LIMIT ?2",
+            )
+            .context("prepare transaction history query")?;
+        let rows = stmt
+            .query_map(params![agent, limit as i64], |row| {
+                Ok(CakeTransactionRecord {
+                    id: row.get(0)?,
+                    from_agent: row.get(1)?,
+                    to_agent: row.get(2)?,
+                    amount: row.get(3)?,
+                    reason: row.get(4)?,
+                    created_at: row.get(5)?,
+                })
+            })
+            .context("execute transaction history query")?;
+        rows.map(|r| r.context("map cake transaction row")).collect()
+    }
+}
+
+fn current_balance(conn: &Connection, agent: &str) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT balance FROM cake_balance WHERE agent = ?1",
+        params![agent],
+        |row| row.get(0),
+    )
+    .optional()
+    .map(|opt| opt.unwrap_or(0))
+}
+
+fn new_tx_id() -> String {
+    format!("caketx_{}", uuid::Uuid::new_v4().to_string().replace('-', ""))
 }
 
 // ---------------------------------------------------------------------------
@@ -538,5 +789,123 @@ mod tests {
             "p_cake={}",
             outcome.p_cake
         );
+    }
+
+    // -------------------------------------------------------------------
+    // mint / spend / transfer — ported from the removed
+    // b00t-c0re-hierarchy::cake_economy::CakeLedger's test assertions.
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_mint_increases_balance_and_total_supply() {
+        let (ledger, _dir) = temp_ledger();
+        let balance = ledger.mint("alice", 50, "bootstrap").expect("mint");
+        assert_eq!(balance, 50);
+        assert_eq!(ledger.balance("alice").expect("balance"), 50);
+        assert_eq!(ledger.total_supply().expect("total_supply"), 50);
+    }
+
+    #[test]
+    fn test_spend_decreases_balance_and_total_supply() {
+        let (ledger, _dir) = temp_ledger();
+        ledger.mint("alice", 50, "bootstrap").expect("mint");
+        let balance = ledger.spend("alice", 20, "unlock feature").expect("spend");
+        assert_eq!(balance, 30);
+        assert_eq!(ledger.total_supply().expect("total_supply"), 30);
+    }
+
+    #[test]
+    fn test_transfer_moves_cake_between_agents() {
+        let (ledger, _dir) = temp_ledger();
+        ledger.mint("alice", 50, "bootstrap").expect("mint");
+        ledger
+            .transfer("alice", "bob", 20, "payout share")
+            .expect("transfer");
+        assert_eq!(ledger.balance("alice").expect("balance"), 30);
+        assert_eq!(ledger.balance("bob").expect("balance"), 20);
+        // Transfers don't mint or burn — total supply unchanged.
+        assert_eq!(ledger.total_supply().expect("total_supply"), 50);
+    }
+
+    #[test]
+    fn test_spend_insufficient_balance_returns_error() {
+        let (ledger, _dir) = temp_ledger();
+        ledger.mint("alice", 10, "bootstrap").expect("mint");
+        let err = ledger.spend("alice", 20, "too much").unwrap_err();
+        assert_eq!(
+            err,
+            CakeLedgerError::InsufficientBalance {
+                agent: "alice".to_string(),
+                balance: 10,
+                requested: 20,
+            }
+        );
+    }
+
+    #[test]
+    fn test_transfer_insufficient_balance_returns_error() {
+        let (ledger, _dir) = temp_ledger();
+        let err = ledger.transfer("alice", "bob", 5, "no funds").unwrap_err();
+        assert_eq!(
+            err,
+            CakeLedgerError::InsufficientBalance {
+                agent: "alice".to_string(),
+                balance: 0,
+                requested: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn test_invalid_amount_rejected() {
+        let (ledger, _dir) = temp_ledger();
+        assert_eq!(
+            ledger.mint("alice", 0, "zero").unwrap_err(),
+            CakeLedgerError::InvalidAmount(0)
+        );
+        assert_eq!(
+            ledger.mint("alice", -5, "negative").unwrap_err(),
+            CakeLedgerError::InvalidAmount(-5)
+        );
+        ledger.mint("alice", 10, "bootstrap").expect("mint");
+        assert_eq!(
+            ledger.spend("alice", -1, "negative").unwrap_err(),
+            CakeLedgerError::InvalidAmount(-1)
+        );
+        assert_eq!(
+            ledger.transfer("alice", "bob", 0, "zero").unwrap_err(),
+            CakeLedgerError::InvalidAmount(0)
+        );
+    }
+
+    #[test]
+    fn test_self_transfer_rejected() {
+        let (ledger, _dir) = temp_ledger();
+        ledger.mint("alice", 10, "bootstrap").expect("mint");
+        assert_eq!(
+            ledger.transfer("alice", "alice", 5, "oops").unwrap_err(),
+            CakeLedgerError::SelfTransfer("alice".to_string())
+        );
+    }
+
+    #[test]
+    fn test_transaction_history_records_mint_spend_transfer() {
+        let (ledger, _dir) = temp_ledger();
+        ledger.mint("alice", 50, "bootstrap").expect("mint");
+        ledger.spend("alice", 10, "unlock").expect("spend");
+        ledger.transfer("alice", "bob", 15, "share").expect("transfer");
+
+        let alice_history = ledger
+            .transaction_history("alice", 10)
+            .expect("transaction_history");
+        assert_eq!(alice_history.len(), 3, "mint + spend + transfer-out");
+
+        let bob_history = ledger
+            .transaction_history("bob", 10)
+            .expect("transaction_history");
+        assert_eq!(bob_history.len(), 1, "transfer-in only");
+        assert_eq!(bob_history[0].from_agent.as_deref(), Some("alice"));
+        assert_eq!(bob_history[0].to_agent.as_deref(), Some("bob"));
+        assert_eq!(bob_history[0].amount, 15);
     }
 }
