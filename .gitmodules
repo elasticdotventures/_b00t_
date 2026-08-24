@@ -14,10 +14,6 @@
 	path = b00t-vscode/just-lsp
 	url = https://github.com/terror/just-lsp
 
-[submodule "email/himalaya"]
-	path = email/himalaya
-	url = https://github.com/pimalaya/himalaya.git
-
 [submodule "foundry-samples"]
 	path = foundry-samples
 	url = https://github.com/azure-ai-foundry/foundry-samples
@@ -25,10 +21,6 @@
 [submodule "integrations/nasdanika-mcp"]
 	path = integrations/nasdanika-mcp
 	url = https://github.com/elasticdotventures/mcp-server.git
-
-[submodule "just-mcp"]
-	path = just-mcp
-	url = https://github.com/PromptExecution/just-mcp
 
 [submodule "plantuml-server"]
 	path = plantuml-server
@@ -45,10 +37,6 @@
 [submodule "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"]
 	path = vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr
 	url = https://github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr.git
-
-[submodule "vendor/embed-anything"]
-	path = vendor/embed-anything
-	url = https://github.com/StarlightSearch/EmbedAnything.git
 
 [submodule "vendor/embed-anything-b00t"]
 	path = vendor/embed-anything-b00t
@@ -86,9 +74,6 @@
 [submodule "vendor/rust-docs-mcp-b00t"]
 	path = vendor/rust-docs-mcp-b00t
 	url = https://github.com/PromptExecution/rust-docs-mcp-b00t.git
-[submodule "vendor/gemm-common"]
-	path = vendor/gemm-common
-	url = https://github.com/PromptExecution/gemm-common.git
 
 [submodule "vendor/tomllm"]
 	path = vendor/tomllm
@@ -115,6 +100,3 @@
 [submodule "vendor/serena"]
 	path = vendor/serena
 	url = https://github.com/oraios/serena
-[submodule "vendor/linkml-b00t"]
-	path = vendor/linkml-b00t
-	url = https://github.com/linkml/linkml.git
