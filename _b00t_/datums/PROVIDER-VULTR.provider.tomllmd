@@ -47,6 +47,27 @@
 #      unit for the SSH tunnel), `just vultr-task-demo` (verified end-to-end
 #      cross-leaf task dispatch fung1 -> vultr1).
 #
+#      🚩 NAMING COLLISION (found 2026-08-24, not yet resolved): the Vultr
+#      account now has a SECOND real, separate instance whose own Vultr
+#      console label is literally "b00t-node" (2048MB, 149.28.189.45,
+#      Debian 13/trixie, root-key SSH from at least sm3llsl1k3s0ld3r) —
+#      distinct from this section's prior use of "b00t-node" as the name of
+#      the *firewall-group convention* (only 22/80/443 public) applied to
+#      vultr1 itself. Do not conflate the two. This second instance runs
+#      `b00t-nats.service` (podman-managed NATS, bound 0.0.0.0:4222 —
+#      NOT the SSH-tunnel-only model vultr1 uses) and `b00t-pingap.service`;
+#      provisioning history/owner not yet reconciled here.
+#      DEPLOYED 2026-08-24: b00t-forge-kv (RESP2 KV server, see b00t-forge-kv/
+#      crate, PR #1145) installed on the b00t-node instance (149.28.189.45)
+#      as systemd unit b00t-forge-kv.service, bound 127.0.0.1:6379,
+#      confirmed not externally reachable, PING-verified. No redis-server/
+#      valkey-server was ever installed there, so this is a from-scratch
+#      install, not a migration. vultr1 (207.148.87.195) itself was NOT
+#      touched — no SSH access to it from this session (only fung1 has the
+#      documented `ssh vultr1` key per this datum; that access was not
+#      available here). If vultr1 also needs b00t-forge-kv, repeat the same
+#      systemd-unit deploy there once reachable — see nats/vultr-forge-kv-deploy.sh.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
