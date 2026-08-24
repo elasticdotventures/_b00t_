@@ -328,6 +328,17 @@ impl RealNatsTransport {
         format!("b00t.chat.{}.{}", msg.channel, msg.sender)
     }
 
+    /// `client.flush()`, bounded the same way every other flush in this file
+    /// already is (`ensure_connected`'s liveness probe: 1s; the reconnect
+    /// heartbeat: 2s) so a degraded connection fails fast instead of hanging
+    /// a foreground CLI command indefinitely.
+    async fn flush_with_timeout(client: &async_nats::Client) -> ChatResult<()> {
+        tokio::time::timeout(std::time::Duration::from_secs(1), client.flush())
+            .await
+            .map_err(|_| ChatError::Other("NATS flush timed out after 1s".to_string()))?
+            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))
+    }
+
     async fn send(&self, message: &ChatMessage) -> ChatResult<()> {
         let client = self.ensure_connected().await?;
         let subject = Self::chat_subject(message);
@@ -341,10 +352,7 @@ impl RealNatsTransport {
         // before that buffer is ever flushed to the socket, so the message
         // never actually reaches the server despite Ok(()) being returned.
         // Flush explicitly so send() only succeeds once the server has it.
-        client
-            .flush()
-            .await
-            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
+        Self::flush_with_timeout(&client).await?;
         debug!("NATS published to {}", subject);
         Ok(())
     }
@@ -357,10 +365,7 @@ impl RealNatsTransport {
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS task publish failed: {}", e)))?;
-        client
-            .flush()
-            .await
-            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
+        Self::flush_with_timeout(&client).await?;
         info!(
             "Task {} dispatched to {} via NATS",
             task.task_id, task.to_agent
@@ -397,6 +402,15 @@ impl RealNatsTransport {
         Ok(rx)
     }
 
+    // Note: also used by long-lived callers (e.g. bridge.rs's notification_loop
+    // forwarding a child process's stdout line-by-line) where the old buffered
+    // publish() was a throughput advantage (many messages coalesced into fewer
+    // socket flushes). The added flush is a local TCP-buffer flush, not a
+    // server-ACK round-trip, so the per-message cost is expected to be small —
+    // but if a hot loop's notification volume ever grows enough for this to
+    // matter, split into a fire-and-forget variant for that caller rather than
+    // removing the flush here (this method's correctness for one-shot callers
+    // like `chat send` depends on it).
     async fn publish_notification(&self, notification: &NotificationMessage) -> ChatResult<()> {
         let client = self.ensure_connected().await?;
         let subject = notification.subject();
@@ -405,10 +419,7 @@ impl RealNatsTransport {
             .publish(subject.clone(), payload.into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS notify publish failed: {}", e)))?;
-        client
-            .flush()
-            .await
-            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
+        Self::flush_with_timeout(&client).await?;
         debug!("NATS notification published to {}", subject);
         Ok(())
     }
@@ -447,10 +458,7 @@ impl RealNatsTransport {
             .publish(subject.to_string(), payload.to_vec().into())
             .await
             .map_err(|e| ChatError::Other(format!("NATS raw publish failed: {}", e)))?;
-        client
-            .flush()
-            .await
-            .map_err(|e| ChatError::Other(format!("NATS flush failed: {}", e)))?;
+        Self::flush_with_timeout(&client).await?;
         debug!("NATS raw published to {}", subject);
         Ok(())
     }
