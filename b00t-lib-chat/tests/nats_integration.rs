@@ -86,4 +86,51 @@ mod nats_integration {
             Err(_) => panic!("Task receive timed out — is NATS running?"),
         }
     }
+
+    /// Regression test for the flush-after-publish fix (client.publish() alone
+    /// enqueues a frame on the client's write buffer without waiting for it to
+    /// reach the socket, so a short-lived process's runtime can drop before the
+    /// buffered frame is ever written -- send() would return Ok(()) while the
+    /// message silently never landed). Asserts the server's own in_msgs counter
+    /// actually increments after send() returns, via the monitoring HTTP API
+    /// (`http_port` on nats-server, typically :8222) -- the same signal used to
+    /// manually verify this fix originally.
+    #[tokio::test]
+    #[ignore] // requires running NATS server with monitoring enabled (-m 8222)
+    async fn test_nats_send_actually_reaches_server() {
+        let monitor_url =
+            std::env::var("B00T_NATS_MONITOR_URL").unwrap_or_else(|_| "http://localhost:8222".into());
+
+        async fn in_msgs(monitor_url: &str) -> u64 {
+            let varz: serde_json::Value = reqwest::get(format!("{monitor_url}/varz"))
+                .await
+                .expect("GET /varz — is NATS monitoring enabled? (-m 8222)")
+                .json()
+                .await
+                .expect("parse /varz JSON");
+            varz["in_msgs"].as_u64().expect("in_msgs field present")
+        }
+
+        let client = ChatClient::nats(
+            Some("nats://localhost:4222".into()),
+            std::env::var("B00T_HIVE_NATS_USER").ok(),
+            std::env::var("B00T_HIVE_NATS_PASSWORD").ok(),
+        )
+        .expect("create NATS client");
+
+        let before = in_msgs(&monitor_url).await;
+
+        let msg = ChatMessage::new("test.channel", "fung1", "flush regression probe");
+        client.send(&msg).await.expect("send should succeed");
+
+        // Give the server a moment to account the message server-side.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let after = in_msgs(&monitor_url).await;
+
+        assert!(
+            after > before,
+            "in_msgs did not increase after send() returned (before={before}, after={after}) \
+             -- the published message never reached the server, exactly the bug this fix closes"
+        );
+    }
 }
