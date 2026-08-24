@@ -110,8 +110,48 @@
 #      `{"error":"Unauthorized IP address: 121.200.6.69"}`. Console
 #      deletion sidestepped that entirely; no allowlist change was made.
 #      b00t-node (149.28.189.45) is now the sole surviving Vultr VPS; its
-#      own k0s/Dapr scaffolding remains untouched pending a separate
-#      decision on whether to keep or discard it.
+#      own k0s/Dapr scaffolding was kept (operator decision: build the
+#      "souls" cross-host agent coordination feature — see
+#      b00t-historian PR #1147 — on plain NATS+JetStream rather than
+#      Dapr's pubsub component, since Dapr needs a sidecar on every
+#      participating host, but Dapr itself stays available for future
+#      b00t-node-local service-mesh work).
+#
+#      FIXED 2026-08-24: coredns + metrics-server were CrashLoopBackOff
+#      (859/728+ restarts since provisioning, 2026-08-22) on b00t-node's
+#      k0s cluster. Root cause: a CNI config collision, not a Dapr/NATS
+#      issue — /etc/cni/net.d/ was shared between k0s's own CNI config
+#      (10-kuberouter.conflist, bridge "kube-bridge", pod subnet
+#      10.244.0.0/24, matching kube-controller-manager's --cluster-cidr)
+#      and Podman's own (87-podman-bridge.conflist, bridge
+#      "cni-podman0", subnet 10.88.0.0/16) — both installed to the same
+#      directory, since neither k0s's containerd config
+#      (/etc/k0s/containerd.toml) nor Podman's own config declared an
+#      exclusive conf_dir. New pod sandboxes were landing on Podman's
+#      10.88.0.0/16 network instead of k0s's 10.244.0.0/24 (confirmed:
+#      kube-bridge itself was `state DOWN, NO-CARRIER`, never actually
+#      used) — coredns then couldn't reach the apiserver ClusterIP
+#      (10.96.0.1:443, "no route to host") since that route only exists
+#      via k0s's own bridge/kube-router setup, not Podman's, and its own
+#      DNS queries then timed out for the same reason.
+#      🤓 fix (verify via `ip addr show kube-bridge` for NO-CARRIER/DOWN,
+#      and compare a crash-looping pod's actual `-o wide` IP against
+#      `ip route` on the host — a pod IP in a range with no
+#      corresponding host route is the tell): give k0s's containerd its
+#      own CNI conf_dir instead of sharing the system-wide
+#      /etc/cni/net.d — added
+#      /etc/k0s/containerd.d/10-cni.toml (picked up automatically via
+#      containerd.toml's `imports = ["/etc/k0s/containerd.d/*.toml"]`)
+#      setting `[plugins."io.containerd.cri.v1.runtime".cni]` `conf_dir
+#      = "/etc/k0s/cni/net.d"`, copied 10-kuberouter.conflist there, then
+#      removed it from the shared /etc/cni/net.d (leaving that directory
+#      to Podman exclusively). `systemctl restart k0scontroller` (which
+#      embeds containerd) + deleting the two stuck pods to force fresh
+#      sandboxes. Verified: new pods land on 10.244.0.x, both reached
+#      1/1 Ready, held stable with 0 further restarts over ~4 minutes of
+#      observation, and `kubectl top nodes`/`top pods` return real
+#      metrics — confirming the fix is complete, not just superficially
+#      Ready.
 #
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
