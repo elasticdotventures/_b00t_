@@ -29,7 +29,7 @@ use crate::datum_proof::{
     AsJobDatum, AsJustfileDatum, AsK8sDatum, AsMcpDatum, AsNixDatum, AsRepoDatum,
     AsRoleDatum, AsSkillDatum, AsStackDatum, AsUnknownDatum, AsVscodeDatum, Provable,
 };
-use crate::datum_utils::get_all_datums_with_paths;
+use crate::datum_utils::{ScanDiagnostics, get_all_datums_with_diagnostics};
 use crate::{BootDatum, DatumType};
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
@@ -399,6 +399,28 @@ pub fn nearest_key<'a>(keys: impl IntoIterator<Item = &'a str>, missing: &str) -
     best.map(|(_, k)| k.to_string())
 }
 
+/// Classification of a dangling reference (#163, Postel):
+/// warnings by default — hard-fail only under `--strict`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DanglingClass {
+    /// A close key exists in the store — likely a typo (suggestion available).
+    NearMiss,
+    /// No close match — the target datum was likely never authored.
+    Aspirational,
+    /// Reference text looks like prose / a logical capability name, not a key.
+    Prose,
+}
+
+impl fmt::Display for DanglingClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NearMiss => write!(f, "near-miss"),
+            Self::Aspirational => write!(f, "aspirational"),
+            Self::Prose => write!(f, "prose"),
+        }
+    }
+}
+
 /// A `ReferenceError` enriched with actionable context (#163):
 /// source file of the referencing datum, patterns probed, nearest-key suggestion.
 #[derive(Debug, Clone, PartialEq)]
@@ -410,6 +432,20 @@ pub struct ReferenceDiagnostic {
     pub probed: Vec<String>,
     /// Nearest existing key, when a close match exists in the store.
     pub suggestion: Option<String>,
+}
+
+impl ReferenceDiagnostic {
+    /// Classify a dangling (missing) reference; None for non-missing variants.
+    pub fn dangling_class(&self) -> Option<DanglingClass> {
+        let missing = self.error.missing_key()?;
+        Some(if missing.contains(char::is_whitespace) {
+            DanglingClass::Prose
+        } else if self.suggestion.is_some() {
+            DanglingClass::NearMiss
+        } else {
+            DanglingClass::Aspirational
+        })
+    }
 }
 
 impl fmt::Display for ReferenceDiagnostic {
@@ -435,18 +471,26 @@ pub struct HashMapStore {
     inner: HashMap<String, InternedDatum>,
     /// Source file each datum was loaded from (key -> path). Diagnostics only (#163).
     source_paths: HashMap<String, String>,
+    /// Loader-level diagnostics from `from_path` (skipped/shadowed files) (#163).
+    scan: ScanDiagnostics,
 }
 
 impl HashMapStore {
     /// Load all datums from a `_b00t_` directory path (standard TOML scan).
     /// Same scan as `get_all_datums`, but source file paths are retained for diagnostics.
     pub fn from_path(b00t_path: &str) -> Result<Self> {
-        let raw = get_all_datums_with_paths(b00t_path, None)?;
+        let (raw, scan) = get_all_datums_with_diagnostics(b00t_path, None)?;
         let mut store = Self::default();
         for (key, (datum, path)) in raw {
             store.intern_with_path(&key, datum, &path);
         }
+        store.scan = scan;
         Ok(store)
+    }
+
+    /// Loader diagnostics from the `from_path` scan (skipped/shadowed files).
+    pub fn scan_diagnostics(&self) -> &ScanDiagnostics {
+        &self.scan
     }
 
     /// Intern a datum and record the source file it was loaded from.
@@ -1010,6 +1054,32 @@ mod tests {
         for e in &errors {
             assert!(wrapped.contains(&e), "error preserved in diagnostics: {e}");
         }
+    }
+
+    #[test]
+    fn dangling_class_partitions_warnings() {
+        let mut store = store_for_diagnostics();
+        store.intern_with_path("classify.role", BootDatum {
+            name: "classify".to_string(), hint: "role".to_string(),
+            skills: Some(vec!["role-scoped capability loading".to_string()]),
+            depends_on: Some(vec!["totally-novel-unwritten-datum".to_string()]),
+            ..Default::default()
+        }, "_b00t_/classify.role.toml");
+        let diags = store.diagnose_references();
+        let class_of = |missing: &str| {
+            diags.iter()
+                .find(|d| d.error.missing_key() == Some(missing))
+                .and_then(|d| d.dangling_class())
+        };
+        assert_eq!(class_of("hive-cmd"), Some(DanglingClass::NearMiss));
+        assert_eq!(
+            class_of("role-scoped capability loading"),
+            Some(DanglingClass::Prose)
+        );
+        assert_eq!(
+            class_of("totally-novel-unwritten-datum"),
+            Some(DanglingClass::Aspirational)
+        );
     }
 
     #[test]
