@@ -211,6 +211,12 @@ nats/leaf-remotes.conf
 .spyproject
 .taskmaster/
 .taskmaster/*
+/tasks.json
+/.env.backup
+/kv-store.json
+/act-event.json
+/bootstrap-report.toon
+/memory.toml
 .tern-port
 .tox/
 .understand-anything/
@@ -359,3 +365,4 @@ vscode.🆚/vscode-docs/
 # submodules live under _b00t_/test/ — this anchored pattern only matches
 # the repo-root-level dir, not _b00t_/test/ or other nested test/ dirs.
 /test/
+.dagu/
