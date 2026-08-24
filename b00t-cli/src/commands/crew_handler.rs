@@ -23,9 +23,12 @@ use crate::commands::crew::CrewCommand;
 /// (e.g. no writable `$HOME` in a constrained environment) or has no
 /// record for this agent yet.
 fn live_cake_balance(ledger: Option<&CakeLedger>, agent: &Agent) -> i64 {
-    match ledger.and_then(|l| l.balance(&agent.id).ok()) {
-        Some(balance) => balance,
-        None => agent.cake_balance as i64,
+    let Some(ledger) = ledger else {
+        return agent.cake_balance as i64;
+    };
+    match ledger.has_record(&agent.id) {
+        Ok(true) => ledger.balance(&agent.id).unwrap_or(agent.cake_balance as i64),
+        _ => agent.cake_balance as i64,
     }
 }
 

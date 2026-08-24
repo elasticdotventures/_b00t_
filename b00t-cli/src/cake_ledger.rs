@@ -392,6 +392,19 @@ impl CakeLedger {
         }
     }
 
+    /// Whether `agent` has ever appeared in the ledger (minted, spent, or
+    /// received a transfer) — distinct from `balance()`, which returns `0`
+    /// both for "no record" and for "record present, balance is 0".
+    pub fn has_record(&self, agent: &str) -> Result<bool> {
+        let conn = self.connect()?;
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM cake_balance WHERE agent = ?1)",
+            params![agent],
+            |row| row.get(0),
+        )?;
+        Ok(exists)
+    }
+
     /// Recent ticket history for an agent, newest first.
     pub fn history(&self, agent: &str, limit: usize) -> Result<Vec<CakeTicket>> {
         let conn = self.connect()?;
@@ -825,6 +838,16 @@ mod tests {
         assert_eq!(ledger.balance("bob").expect("balance"), 20);
         // Transfers don't mint or burn — total supply unchanged.
         assert_eq!(ledger.total_supply().expect("total_supply"), 50);
+    }
+
+    #[test]
+    fn test_has_record_distinguishes_no_row_from_zero_balance() {
+        let (ledger, _dir) = temp_ledger();
+        assert!(!ledger.has_record("nobody").expect("has_record"));
+        ledger.mint("alice", 10, "bootstrap").expect("mint");
+        ledger.spend("alice", 10, "spend it all").expect("spend");
+        assert_eq!(ledger.balance("alice").expect("balance"), 0);
+        assert!(ledger.has_record("alice").expect("has_record"));
     }
 
     #[test]
