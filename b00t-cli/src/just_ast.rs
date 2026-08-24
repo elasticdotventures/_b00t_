@@ -63,7 +63,12 @@ pub struct JustRecipe {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct JustParameter {
     pub name: String,
-    pub default: Option<String>,
+    /// A literal default is a plain JSON string, but just's dump format
+    /// represents a non-literal default (e.g. `image=SAM1_IMAGE`, referencing
+    /// another variable) as a nested AST array like `["variable", "NAME"]` —
+    /// same tagged-array shape `JustRecipe::body` and `JustAssignment::value`
+    /// already use. `Option<String>` rejects that shape outright.
+    pub default: Option<serde_json::Value>,
     #[serde(default)]
     pub export: bool,
     /// "singular" | "plus" (one-or-more) | "star" (zero-or-more)

@@ -2230,6 +2230,7 @@ mod tests {
             env: None,
             rhai: None,
             knowledge_backend: None,
+            justfile: None,
             hint: Some("install definitely-not-a-real-command-xyz first".to_string()),
         }]);
 
@@ -2269,6 +2270,7 @@ mod tests {
             env: None,
             rhai: None,
             knowledge_backend: None,
+            justfile: None,
             hint: None,
         }]);
 

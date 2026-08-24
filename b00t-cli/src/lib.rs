@@ -149,6 +149,7 @@ pub mod config_types;
 pub mod compose;
 pub mod polyseme;
 pub mod gates;
+pub mod checklist;
 pub mod hooks;
 pub mod dispatch;
 pub mod lifecycle;

@@ -438,10 +438,22 @@ The system will:
         #[clap(subcommand)]
         skill_command: SkillCommands,
     },
-    #[clap(about = "Query system information", aliases = ["inspect", "is"])]
+    #[clap(about = "Query system information", aliases = ["inspect"])]
     Whatismy {
         #[clap(subcommand)]
         whatismy_command: WhatismyCommands,
+    },
+    #[clap(
+        about = "Stateful system-normal checklist gate — one boolean answer from named checks",
+        long_about = "Evaluate a <name>.checklist.toml under --path and print pass/fail per check\nplus one aggregate disposition (Satisfied/Violated/Unknown — 3-valued, not\na bare bool: see CONOPS-system-normal.md). Exit code 0/1/2 respectively.\n\nExamples:\n  b00t is                       → list available checklists\n  b00t is system-normal         → run the system-normal checklist\n  b00t is system-normal --json  → full per-check disposition as JSON\n  b00t is system-normal --explain → show failure/undetermined reasons"
+    )]
+    Is {
+        #[clap(help = "Checklist name (without .checklist.toml). Omit to list available checklists.")]
+        name: Option<String>,
+        #[clap(long, help = "Output full per-check disposition as JSON")]
+        json: bool,
+        #[clap(long, help = "Show reasons for failing/undetermined checks")]
+        explain: bool,
     },
     #[clap(about = "Show status dashboard of all available tools and services")]
     // 🤓 ENTANGLED: b00t-mcp/src/mcp_tools.rs StatusCommand
@@ -2507,6 +2519,14 @@ async fn main() {
         Some(Commands::Whatismy { whatismy_command }) => {
             if let Err(e) = whatismy_command.execute(&cli.path) {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Is { name, json, explain }) => {
+            if let Err(e) =
+                b00t_cli::commands::is_cmd::execute(&cli.path, name.as_deref(), *json, *explain)
+            {
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }

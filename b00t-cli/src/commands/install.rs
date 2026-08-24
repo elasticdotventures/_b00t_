@@ -889,6 +889,7 @@ hint = "Test stack"
             env: None,
             rhai: None,
             knowledge_backend: None,
+            justfile: None,
             hint: Some("test command gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -909,6 +910,7 @@ hint = "Test stack"
             env: None,
             rhai: None,
             knowledge_backend: None,
+            justfile: None,
             hint: Some("test file gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -924,6 +926,7 @@ hint = "Test stack"
             env: Some("THIS_ENV_VAR_DOES_NOT_EXIST_12345".to_string()),
             rhai: None,
             knowledge_backend: None,
+            justfile: None,
             hint: Some("test env gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -939,6 +942,7 @@ hint = "Test stack"
             env: None,
             rhai: None,
             knowledge_backend: Some(b00t_c0re_lib::compiled_knowledge_backend().to_string()),
+            justfile: None,
             hint: Some("knowledge backend gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -960,6 +964,7 @@ hint = "Test stack"
             env: None,
             rhai: None,
             knowledge_backend: Some(mismatched.to_string()),
+            justfile: None,
             hint: Some("knowledge backend gate".to_string()),
         }];
         let results = evaluate_gates(&gates, "/tmp");
@@ -982,6 +987,7 @@ hint = "Test stack"
                 env: None,
                 rhai: None,
                 knowledge_backend: None,
+            justfile: None,
                 hint: Some("file gate".to_string()),
             },
             GateSpec {
@@ -990,6 +996,7 @@ hint = "Test stack"
                 env: Some("PATH".to_string()),
                 rhai: None,
                 knowledge_backend: None,
+            justfile: None,
                 hint: Some("env gate".to_string()),
             },
         ];
