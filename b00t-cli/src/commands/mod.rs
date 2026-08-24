@@ -32,6 +32,7 @@ pub mod guard_manager;
 pub mod hive;
 pub mod init;
 pub mod install;
+pub mod is_cmd;
 pub mod job;
 pub mod justfile;
 pub mod k8s;

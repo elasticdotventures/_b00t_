@@ -17,6 +17,9 @@ pub struct GateSpec {
     pub rhai: Option<String>,
     /// Knowledge backend that must match the compiled b00t-c0re-lib backend
     pub knowledge_backend: Option<String>,
+    /// Justfile path (supports ~) that must parse cleanly (`just --list`
+    /// via `JustfileAst::validate()` — reused as-is, no new validation logic)
+    pub justfile: Option<String>,
     /// Freeform description shown when gate fails
     pub hint: Option<String>,
 }
@@ -232,6 +235,58 @@ impl GateSpec {
                     backend,
                     b00t_c0re_lib::compiled_knowledge_backend()
                 )));
+            }
+        }
+
+        // Justfile gate: reuses JustfileAst::validate() (runs `just --list`
+        // against the file) rather than reimplementing parse-checking here.
+        if let Some(ref justfile_path) = self.justfile {
+            let expanded = expand_tilde_path(justfile_path);
+            let candidate = if expanded.is_absolute() {
+                expanded.clone()
+            } else {
+                let base = {
+                    let p = std::path::Path::new(path);
+                    if p.is_dir() {
+                        p.to_path_buf()
+                    } else {
+                        p.parent()
+                            .map(|q| q.to_path_buf())
+                            .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    }
+                };
+                base.join(&expanded)
+            };
+            // Mirror the `file` gate's dual resolution: try datum-dir-relative
+            // first, fall back to cwd-relative (a checklist commonly points at
+            // the repo-root justfile, not one inside the datum dir itself).
+            let resolved = if candidate.exists() {
+                candidate
+            } else if expanded.exists() {
+                expanded.clone()
+            } else {
+                candidate
+            };
+            // Absolutize: JustfileAst::load's run_dump sets current_dir to the
+            // resolved path's parent *and* re-passes that same relative path to
+            // `just --justfile`, so a relative path with a parent component gets
+            // joined twice (e.g. "_b00t_/justfile" -> ".../_b00t_/_b00t_/justfile").
+            let resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
+            match crate::just_ast::JustfileAst::load(&resolved) {
+                Ok(ast) => {
+                    let errors = ast.validate();
+                    if !errors.is_empty() {
+                        outcomes.push(FieldOutcome::Violated(format!(
+                            "justfile '{}' failed validation: {}",
+                            justfile_path,
+                            errors.join("; ")
+                        )));
+                    }
+                }
+                Err(e) => outcomes.push(FieldOutcome::Violated(format!(
+                    "justfile '{}' could not be loaded: {}",
+                    justfile_path, e
+                ))),
             }
         }
 

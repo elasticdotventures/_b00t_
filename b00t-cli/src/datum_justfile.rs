@@ -302,7 +302,14 @@ impl CliExecutor for JustfileDatum {
                         .iter()
                         .map(|p| ParameterSignature {
                             name: p.name.clone(),
-                            default_value: p.default.clone(),
+                            // A literal default renders as its plain string;
+                            // a non-literal default (e.g. `image=SOME_VAR`)
+                            // comes back as a nested AST Value, not a bare
+                            // string — fall back to its JSON text rather
+                            // than losing the value.
+                            default_value: p.default.as_ref().map(|v| {
+                                v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())
+                            }),
                             required: p.default.is_none() && p.kind == "singular",
                             kind: p.kind.clone(),
                         })

@@ -426,6 +426,7 @@ fn create_mcp_datum_from_json(
                             env: env.map(|s| s.to_string()),
                             rhai: rhai.map(|s| s.to_string()),
                             knowledge_backend: knowledge_backend.map(|s| s.to_string()),
+                            justfile: None,
                             hint,
                         })
                     })
