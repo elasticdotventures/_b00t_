@@ -79,6 +79,31 @@
 #      commands instead, since neither instance had a local SSH alias
 #      configured on the deploying host.
 #
+#      DECOMMISSIONED 2026-08-24: consolidating to one Vultr host for
+#      billing. Investigated both instances' actual live state first:
+#      b00t-node's k0s/Dapr/JetStream-NATS stack turned out to be unused
+#      scaffolding (coredns/metrics-server crash-looping, zero user
+#      workloads, zero Dapr components ever deployed) and its 954MB-RAM
+#      sibling vultr1 couldn't have hosted a k0s control plane anyway —
+#      so migrating b00t-node's extra infra was moot. Operator then chose
+#      the reverse consolidation: keep b00t-node (2GB, more headroom),
+#      decommission vultr1 instead. vultr1's NATS leafnode was live but
+#      idle (2h40m uptime, 5 subscriptions, 0 messages in/out) when pulled
+#      — not carrying production traffic. Actions taken from this session:
+#      killed fung1's manual SSH tunnel process (`ssh -N -L
+#      192.168.1.149:17443:127.0.0.1:443 vultr1`, PID 2257246, was never a
+#      systemd unit despite `just vultr-tunnel-install` documenting one —
+#      no such unit was ever actually installed on fung1), then
+#      `systemctl stop/disable` on vultr1's nats-server.service and
+#      b00t-forge-kv.service. Confirmed clean leafnode disconnect on
+#      fung1's hub (`leafz` -> `leafnodes: 0`) — no orphaned state. The
+#      VM itself (207.148.87.195) is NOT yet deleted — no VULTR_API_KEY
+#      is available in-session, so the final "delete instance" step is
+#      the operator's own action via my.vultr.com. b00t-node
+#      (149.28.189.45) is now the sole surviving Vultr VPS; its own
+#      k0s/Dapr scaffolding remains untouched pending a separate decision
+#      on whether to keep or discard it.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
