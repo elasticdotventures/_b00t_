@@ -11,9 +11,11 @@
 
 fn shell(cmd) {
     try {
-        run_cmd(cmd).trim()
+        let output = run_cmd(cmd);
+        output.trim(); // Rhai's trim() mutates in place and returns (), not a value
+        return output;
     } catch(e) {
-        ""
+        return "";
     }
 }
 
@@ -41,7 +43,7 @@ let c1 = check_exact(
 );
 
 // Check 2: no merge/rebase conflict markers (error — blocks on fail)
-let c2_cmd = "git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD' || echo 0";
+let c2_cmd = "git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD'; true";
 let c2_output = shell(c2_cmd);
 let c2 = #{
     id: "git-no-merge-conflict",
@@ -76,7 +78,7 @@ let c4 = #{
 let c5 = check_exact(
     "submodules-in-sync",
     "all submodules in sync",
-    "git submodule status 2>/dev/null | grep -c '^[+M]' || echo 0",
+    "git submodule status 2>/dev/null | grep -c '^[+M]'; true",
     "0",
     "warn",
     "submodule(s) have unpushed commits or dirty trees — sync before task operations"
@@ -88,8 +90,8 @@ let checks = [c1, c2, c3, c4, c5];
 
 let has_error = false;
 let has_warn = false;
-let mut pass_count = 0;
-let mut fail_count = 0;
+let pass_count = 0;
+let fail_count = 0;
 
 for c in checks {
     if c.passed {
