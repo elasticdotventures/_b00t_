@@ -1,0 +1,11 @@
+[b00t]
+name = "cf-workers"
+type = "skill"
+hint = "Cloudflare Workers secret provisioning + deploy — shared just recipes for workers/*/"
+
+# b00t:map v1
+# summary: just cf-workers::provision-secret/deploy/migrate-remote — shared recipes for every Worker under workers/*/
+# tags: cloudflare, workers, wrangler, secrets, just, justfile
+# tier: sm0l
+# cmds: just cf-workers::provision-secret <worker> <VAR>, just cf-workers::deploy <worker>, b00t learn cf-workers
+# complexity: 3
