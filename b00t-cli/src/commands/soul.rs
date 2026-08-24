@@ -1021,7 +1021,7 @@ async fn serve_soul_kv(host: &str, port: u16) -> Result<()> {
 // ── DataFramerr registry I/O ──────────────────────────────────────────────────
 
 /// Load the full TOML document from the active soul file.
-pub(crate) fn load_soul_doc() -> Result<toml::Table> {
+pub fn load_soul_doc() -> Result<toml::Table> {
     let path = active_soul_path();
     if !path.exists() {
         return Ok(toml::Table::new());
@@ -1033,7 +1033,7 @@ pub(crate) fn load_soul_doc() -> Result<toml::Table> {
 }
 
 /// Extract [soul] → SoulDataFramerrRegistry from the doc.
-pub(crate) fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry> {
+pub fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry> {
     match doc.get("soul") {
         None => Ok(SoulDataFramerrRegistry::default()),
         Some(v) => {
@@ -1044,7 +1044,7 @@ pub(crate) fn load_registry(doc: &toml::Table) -> Result<SoulDataFramerrRegistry
 }
 
 /// Serialize registry back into doc["soul"] and write the file.
-fn save_registry(mut doc: toml::Table, reg: &SoulDataFramerrRegistry) -> Result<()> {
+pub fn save_registry(mut doc: toml::Table, reg: &SoulDataFramerrRegistry) -> Result<()> {
     let path = active_soul_path();
     // Create parent dir if missing
     if let Some(parent) = path.parent() {
@@ -1058,7 +1058,7 @@ fn save_registry(mut doc: toml::Table, reg: &SoulDataFramerrRegistry) -> Result<
 }
 
 /// Read-modify-write helper.
-fn with_registry<F>(f: F) -> Result<()>
+pub fn with_registry<F>(f: F) -> Result<()>
 where
     F: FnOnce(&mut SoulDataFramerrRegistry) -> Result<()>,
 {
