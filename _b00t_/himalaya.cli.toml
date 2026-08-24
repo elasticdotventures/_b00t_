@@ -1,0 +1,29 @@
+[b00t]
+name = "himalaya"
+type = "cli"
+hint = "CLI email client (pimalaya/himalaya) — read/send mail from the terminal via IMAP/SMTP/Maildir/Notmuch backends."
+desires = "2.0.0-alpha.1"
+auto_install = false
+
+install = '''
+curl -sSL https://raw.githubusercontent.com/pimalaya/himalaya/master/install.sh | PREFIX=~/.local sh
+'''
+
+version = "himalaya --version"
+version_regex = 'himalaya (\d+\.\d+\.\d+(?:-\S+)?)'
+
+[[b00t.usage]]
+description = "List messages in the default envelope"
+command = "himalaya envelope list"
+
+[[b00t.usage]]
+description = "Read a message by id"
+command = "himalaya message read <ID>"
+
+[[b00t.usage]]
+description = "Send a message"
+command = "himalaya message send"
+
+[[b00t.references]]
+description = "Upstream project"
+url = "https://github.com/pimalaya/himalaya"

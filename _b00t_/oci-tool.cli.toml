@@ -1,0 +1,26 @@
+[b00t]
+name = "oci-tool"
+type = "cli"
+hint = "KiCad EDA toolchain, containerized (kicaddydaddy) — run/build/publish PCB projects without a local KiCad install."
+desires = "nightly-full"
+auto_install = false
+depends_on = ["docker.cli"]
+
+install = '''
+docker pull ghcr.io/kicad/kicad:nightly-full
+'''
+
+version = "docker image inspect ghcr.io/kicad/kicad:nightly-full --format '{{.Config.Labels.version}}' 2>/dev/null || echo nightly-full"
+version_regex = '(nightly\S*)'
+
+[[b00t.usage]]
+description = "Launch the KiCad GUI in the container"
+command = "just --justfile oci-tool/kicaddydaddy/justfile run-kicad"
+
+[[b00t.usage]]
+description = "Export a schematic build from a project directory"
+command = "just --justfile oci-tool/kicaddydaddy/justfile build <PROJECT_DIR>"
+
+[[b00t.usage]]
+description = "Publish a build to a repository or storage target"
+command = "just --justfile oci-tool/kicaddydaddy/justfile publish <PROJECT_DIR> <OUTPUT_DIR>"

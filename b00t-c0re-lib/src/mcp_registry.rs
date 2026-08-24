@@ -1125,6 +1125,7 @@ impl McpRegistry {
                     env,
                     cwd: None,
                     transport: ServerTransport::Stdio,
+                    url: None,
                 },
                 metadata: RegistrationMetadata {
                     registered_at: Utc::now(),
