@@ -37,10 +37,19 @@ members = [
     "b00t-embed-serve",
     "b00t-stt-serve",
     "b00t-council",
+    # 🤓 uses version.workspace=true / edition.workspace=true — was absent from
+    # both members and exclude, so `cargo check -p b00t-c0re` failed with
+    # Cargo's "package believes it's in a workspace" error. Restoring
+    # membership; it's a leaf wasm-bindgen crate (no path deps), safe to add.
+    "b00t-c0re-npm",
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",
     "vendor/runpod-sdk"]
+# 🤓 "vendor/gemm-common" removed from this list (2026-08-24) — the
+# .gitmodules entry it corresponded to was a stale declaration with no
+# actual gitlink or directory on disk; removed in the same housekeeping
+# pass, so excluding a nonexistent path is no longer needed.
 resolver = "2"
 
 [workspace.package]
