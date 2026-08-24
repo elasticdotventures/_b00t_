@@ -1,0 +1,43 @@
+# Podman Quadlet unit for the Docling NATS Micro Service (ledgrrr-docling).
+#
+# On-demand only: this unit deliberately has no [Install] section, so it
+# is never enabled and never auto-started at boot — `systemctl start
+# docling-nats-service.service` (or a caller's own start-then-request
+# wrapper) is the only way it runs. The process itself exits cleanly
+# (code 0) once IDLE_TIMEOUT_SECONDS elapses with no requests handled
+# (see b00t_docling_serve/nats_service.py); Restart=no below means
+# systemd leaves it stopped afterward instead of reviving it into another
+# idle loop.
+#
+# This is intentionally distinct from vultr1's NATS server itself, which
+# is the one thing in the b00t hive meant to run perpetually as the
+# small standing coordination layer — Docling's heavy extraction compute
+# must not share that always-on lifecycle.
+#
+# Install (system-wide): copy to /etc/containers/systemd/, then
+#   systemctl daemon-reload && systemctl start docling-nats-service.service
+# Install (rootless): copy to ~/.config/containers/systemd/, then
+#   systemctl --user daemon-reload && systemctl --user start docling-nats-service.service
+#
+# Requires an EnvironmentFile (see path below) providing NATS_URL,
+# NATS_USER, NATS_PASSWORD — see vultr1_provision_nats_service_user.sh /
+# VULTR1_NATS_SVC_USER / VULTR1_NATS_SVC_PASSWORD in ~/.env for how the
+# b00t-docling-svc NATS credentials were provisioned.
+
+[Unit]
+Description=Docling NATS Micro Service (on-demand, ledgrrr-docling)
+After=network-online.target
+
+[Container]
+Image=ghcr.io/promptexecution/b00t-docling-serve:docling-nats-service
+ContainerName=docling-nats-service
+EnvironmentFile=/etc/b00t/docling-nats-service.env
+Environment=IDLE_TIMEOUT_SECONDS=300
+# NATS itself is only ever bound to localhost (b00t firewall convention:
+# never publicly exposed), so this needs host networking to reach it —
+# there is no inbound port to publish, only an outbound NATS connection.
+Network=host
+
+[Service]
+Restart=no
+TimeoutStartSec=30

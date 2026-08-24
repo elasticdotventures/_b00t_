@@ -29,7 +29,7 @@ pubsub = true
 protocol = "msgpack"
 
 [b00t.agent.crew]
-role = "captain"
+role = "executive"
 captain = true
 # 🤓 Executive is the only captain-role agent; it dispatches to specialist agents
 

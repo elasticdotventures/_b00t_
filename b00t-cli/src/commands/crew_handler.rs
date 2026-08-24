@@ -15,7 +15,22 @@ use b00t_c0re_role::KnownRole;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use crate::cake_ledger::CakeLedger;
 use crate::commands::crew::CrewCommand;
+
+/// Real, ledger-backed cake balance for `agent`, falling back to the
+/// static `CrewMeta` placeholder value only if the ledger can't be opened
+/// (e.g. no writable `$HOME` in a constrained environment) or has no
+/// record for this agent yet.
+fn live_cake_balance(ledger: Option<&CakeLedger>, agent: &Agent) -> i64 {
+    let Some(ledger) = ledger else {
+        return agent.cake_balance as i64;
+    };
+    match ledger.has_record(&agent.id) {
+        Ok(true) => ledger.balance(&agent.id).unwrap_or(agent.cake_balance as i64),
+        _ => agent.cake_balance as i64,
+    }
+}
 
 /// Metadata for crew-specific fields not present in AgentCard.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -313,13 +328,14 @@ fn handle_recruit(store: &AgentStore, skills: &str, limit: usize) {
         "Top candidates (operator fee: {}%):",
         (response.operator_fee_pct * 100.0) as u32
     );
+    let ledger = CakeLedger::open().ok();
     for (i, agent) in response.candidates.iter().enumerate() {
         println!(
-            "  {}. {} — skills: {:?}, cake: {:.1}",
+            "  {}. {} — skills: {:?}, cake: {}",
             i + 1,
             agent.id,
             agent.skills,
-            agent.cake_balance
+            live_cake_balance(ledger.as_ref(), agent)
         );
     }
 }
@@ -345,6 +361,7 @@ fn handle_hire(store: &AgentStore, agent_id: &str, role: Option<&str>) {
 fn handle_roster(store: &AgentStore) {
     let agents = all_agents(store);
     println!("Current roster ({} agents):", agents.len());
+    let ledger = CakeLedger::open().ok();
 
     // Separate by role
     let mut executives = Vec::new();
@@ -366,7 +383,7 @@ fn handle_roster(store: &AgentStore) {
         println!("    you");
     } else {
         for a in &executives {
-            println!("    {} (cake: {:.1})", a.id, a.cake_balance);
+            println!("    {} (cake: {})", a.id, live_cake_balance(ledger.as_ref(), a));
         }
     }
 
@@ -377,8 +394,8 @@ fn handle_roster(store: &AgentStore) {
         for a in &workers {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
-                "    {} (manager: {}, cake: {:.1})",
-                a.id, mgr, a.cake_balance
+                "    {} (manager: {}, cake: {})",
+                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
             );
         }
     }
@@ -390,8 +407,8 @@ fn handle_roster(store: &AgentStore) {
         for a in &operators {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
-                "    {} (manager: {}, cake: {:.1})",
-                a.id, mgr, a.cake_balance
+                "    {} (manager: {}, cake: {})",
+                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
             );
         }
     }
@@ -403,8 +420,8 @@ fn handle_roster(store: &AgentStore) {
         for a in &specialists {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
-                "    {} (manager: {}, cake: {:.1})",
-                a.id, mgr, a.cake_balance
+                "    {} (manager: {}, cake: {})",
+                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
             );
         }
     }

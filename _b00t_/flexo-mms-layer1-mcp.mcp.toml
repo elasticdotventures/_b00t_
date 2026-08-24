@@ -22,15 +22,23 @@ auto_digest = true
 # Transport: FastMCP streamable-HTTP, server listens on 0.0.0.0:8000.
 #
 # REQUIRES A RUNNING FLEXO MMS BACKEND -- this MCP server is a thin proxy,
-# not the model store itself. No Flexo instance is deployed in this
-# environment yet. Real reference stack (open-mbee/flexo-mms-deployment,
-# docker-compose/docker-compose.yml, verified 2026-08-22): openldap ->
-# quad-store (Apache Jena Fuseki, port 3030) -> minio (9000) -> auth-service
-# (8082) -> store-service (8081) -> layer1-service (8080, this is MMS_URL).
-# Standing that stack up is a real infra decision (5 containers, ports,
-# credentials) -- do it deliberately, not as a side effect of this datum.
+# not the model store itself. Deployed and verified end-to-end 2026-08-22:
+# openldap -> quad-store (Apache Jena Fuseki, host port 3030) -> minio (host
+# 9010, remapped from 9000 due to a local port conflict) -> auth-service
+# (host 8092, remapped from 8082, same reason) -> store-service (8081) ->
+# layer1-service (8080, this is MMS_URL, unmapped/default). Real SPARQL
+# COUNT query against quad-server's /ds/sparql returned real results; a real
+# MCP `initialize` handshake against this server (built from
+# open-mbee/flexo-mms-layer1-mcp's own Dockerfile) succeeded end-to-end
+# through layer1-service into the live quadstore. Two of the six containers
+# (quad-server, and this MCP server itself) needed to run outside
+# podman-compose on this host: quad-server hit a JDK cgroup-metrics NullPointerException
+# under rootless podman (Fuseki's Prometheus metrics init calls
+# jdk.internal.platform.Container.metrics(), which NPEs without --cgroupns=host --
+# a flag podman-compose 1.5.0 has no compose-key for), and this MCP server's
+# default host port 8000 was already bound by an unrelated local process.
 [[b00t.mcp.httpstream]]
-url = "http://127.0.0.1:8000/mcp"
+url = "http://127.0.0.1:8010/mcp"
 transport = "httpstream"
 priority = 0
 requires = ["docker"]

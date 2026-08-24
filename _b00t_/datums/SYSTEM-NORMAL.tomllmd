@@ -39,7 +39,7 @@ rationale = "Non-empty stash = interrupted work; may contain unreleased features
 [[system_normal.checks]]
 id        = "git-no-merge-conflict"
 label     = "no active merge/rebase conflict markers"
-command   = "git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD' || echo 0"
+command   = "git status --porcelain 2>/dev/null | grep -c '^UU\\|^AA\\|^DD'; true"
 expected  = "0"
 severity  = "error"
 message   = "unresolved merge/rebase conflicts present — resolve before continuing"
@@ -65,7 +65,7 @@ fix       = "git checkout -b task/<id>-<slug>"
 [[system_normal.checks]]
 id        = "submodules-in-sync"
 label     = "all vendor subrepos are in sync — no dirty trees, no unpushed commits"
-command   = "git submodule status 2>/dev/null | grep -c '^[+M]' || echo 0"
+command   = "git submodule status 2>/dev/null | grep -c '^[+M]'; true"
 expected  = "0"
 severity  = "warn"
 message   = "submodule(s) have unpushed commits or dirty working trees — sync before task operations"

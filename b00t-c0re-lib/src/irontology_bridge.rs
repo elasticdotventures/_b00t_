@@ -355,11 +355,10 @@ impl KnowledgeStoreBackend for HelixDBStore {
             .var_as("facts", traversal)
             .returning(["facts"]);
 
-        let request = DynamicQueryRequest::read(batch);
+        let request = QueryRequest::read(batch);
         let response: serde_json::Value = self
             .client
-            .query()
-            .dynamic(request)
+            .query(request)
             .send()
             .await
             .map_err(|e| anyhow::anyhow!("HelixDB query error: {e}"))?;
@@ -418,10 +417,9 @@ impl KnowledgeStoreBackend for HelixDBStore {
         }
         let batch = batch.returning(var_names);
 
-        let request = DynamicQueryRequest::write(batch);
+        let request = QueryRequest::write(batch);
         self.client
-            .query::<serde_json::Value>()
-            .dynamic(request)
+            .query::<serde_json::Value>(request)
             .send()
             .await
             .map_err(|e| anyhow::anyhow!("HelixDB upsert error: {e}"))?;
@@ -456,10 +454,9 @@ impl KnowledgeStoreBackend for HelixDBStore {
         }
         let batch = batch.returning(var_names);
 
-        let request = DynamicQueryRequest::write(batch);
+        let request = QueryRequest::write(batch);
         self.client
-            .query::<serde_json::Value>()
-            .dynamic(request)
+            .query::<serde_json::Value>(request)
             .send()
             .await
             .map_err(|e| anyhow::anyhow!("HelixDB upsert edges error: {e}"))?;
@@ -934,7 +931,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // requires live HelixDB server at localhost:6969, not available in CI
+    #[ignore] // requires a live HelixDB server at localhost:6969, not available in CI
     async fn test_active_store_persists_facts_for_later_queries() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let config = StoreConfig {
@@ -969,7 +966,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // requires live HelixDB server at localhost:6969, not available in CI
+    #[ignore] // requires a live HelixDB server at localhost:6969, not available in CI
     async fn test_bridge_ingest_then_query_returns_content() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let store = <ActiveKnowledgeStore as KnowledgeStoreBackend>::try_new(StoreConfig {

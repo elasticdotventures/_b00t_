@@ -1,0 +1,56 @@
+[b00t]
+name = "sysml-v2-docs"
+type = "skill"
+type_tags = ["reference"]
+hint = "SysML v2.0 / KerML 1.0 / API-Services 1.0 knowledge base, vendored verbatim for agent-authored .sysml/.kerml modeling"
+keywords = ["sysml", "sysml2", "kerml", "systems-modeling", "omg-spec", "requirements", "verification", "modeling-language"]
+
+[b00t.learn]
+content = """
+`vendor/sysml-v2-docs` is a full-text markdown knowledge base derived from the
+formally adopted OMG SysML v2.0 (July 2025) / KerML 1.0 / Systems Modeling API
+& Services 1.0 specifications, plus the Pilot Implementation reference. It was
+purpose-built for AI-agent consumption (voidaliot/sysml-v2-docs upstream) and
+vendored here as a git submodule so any b00t agent can load it without a
+network fetch. Small corpus: ~512K, 21 files, mostly markdown.
+
+Layout:
+  vendor/sysml-v2-docs/language/    — the language itself, 01-overview.md through
+                                       11-graphical-notation.md + GLOSSARY.md.
+                                       04-definition-vs-usage.md is the core
+                                       paradigm; read it before anything else.
+  vendor/sysml-v2-docs/ai-agents/   — guidance written specifically for coding
+                                       agents: 01-modeling-guide.md (intent →
+                                       SysML), 02-prompting-rules.md (hard
+                                       invariants), 03-common-patterns.md
+                                       (reusable templates), 04-validation-
+                                       checklist.md (run BEFORE returning code).
+  vendor/sysml-v2-docs/examples/    — flashlight.sysml (minimal end-to-end),
+                                       vehicle-skeleton.sysml (larger model).
+
+When asked to author or review `.sysml`/`.kerml` files, or to evaluate SysML v2
+tooling (parsers, LSPs, validators): read `ai-agents/01-modeling-guide.md` and
+`ai-agents/04-validation-checklist.md` first, then `language/04-definition-vs-
+usage.md` for the Definition-vs-Usage split that trips up most naive output.
+Prefer this vendored copy over re-deriving SysML v2 syntax from model memory —
+the spec changed substantially from SysML v1 and stale pretraining knowledge
+is a known failure mode here.
+
+If the OMG publishes a spec revision that contradicts this corpus, the OMG
+spec PDF (https://www.omg.org/spec/SysML/2.0/) is authoritative — this vendor
+copy is a convenience cache, not the source of truth. Update via:
+  cd vendor/sysml-v2-docs && git fetch && git checkout <ref>
+then commit the updated submodule pointer in the parent repo, matching the
+`vendor/agentsea-skillpacks` precedent already used in this repo.
+
+Originally surfaced by the ledgrrr SysML v2 tooling survey (PromptExecution/
+ledgrrr#180) as zero-risk/high-value regardless of which SysML tooling
+direction ledgrrr ultimately picks.
+"""
+
+# b00t:map v1
+# summary: vendored SysML v2/KerML/API-Services markdown spec corpus for agent-authored .sysml modeling
+# tags: reference, sysml, kerml, modeling, omg-spec
+# tier: sm0l
+# cmds: b00t learn sysml-v2-docs
+# complexity: 2

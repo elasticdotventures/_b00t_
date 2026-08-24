@@ -15,7 +15,7 @@ model = "claude-sonnet-4-5"
 skills = ["todo-backlog", "autonomous-loop", "prd-parsing", "workflow-execution"]
 personality = "persistent"
 humor = "low"
-role = "executor"
+role = "worker"
 
 [b00t.agent.ipc]
 socket = "/tmp/b00t/agents/ralph.sock"
@@ -24,7 +24,7 @@ protocol = "msgpack"
 
 [b00t.agent.crew]
 # Ralph acts as autonomous executor for backlog and job workflows
-role = "executor"
+role = "worker"
 captain = false
 
 

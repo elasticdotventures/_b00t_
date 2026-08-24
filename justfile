@@ -51,6 +51,8 @@ mod hf-cloud '_b00t_/justfile-hf-cloud.just'
 mod gemma '_b00t_/justfile-gemma.just'
 mod phi-candle '_b00t_/phi-candle.just'
 mod worker '_b00t_/justfile-worker.just'
+# ☁️ Cloudflare Workers — secret provisioning + deploy (b00t-mcp-vault, telnyx-fax-handler, ledgrrr-tenant-registry, ...)
+mod cf-workers 'workers/cf-workers.just'
 mod review '_b00t_/justfile-review.just'
 mod ufo '_b00t_/justfile-ufo.just'
 mod chore '_b00t_/justfile-chore.just'

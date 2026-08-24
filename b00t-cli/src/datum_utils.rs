@@ -119,18 +119,41 @@ pub fn get_all_datums_with_paths(
     b00t_path: &str,
     max_depth: Option<usize>,
 ) -> Result<HashMap<String, (BootDatum, String)>> {
+    let (datums, _diag) = get_all_datums_with_diagnostics(b00t_path, max_depth)?;
+    Ok(datums)
+}
+
+/// Scan-level diagnostics (#163): degraded (lenient-fallback) files + key shadowing.
+/// Postel's Law: the loader is tolerant — nothing vanishes silently.
+#[derive(Debug, Default, Clone)]
+pub struct ScanDiagnostics {
+    /// Files that failed strict `UnifiedConfig` parse (or were unreadable) and
+    /// loaded via the lenient fallback path instead: (file path, one-line reason).
+    pub degraded: Vec<(String, String)>,
+    /// Same datum key claimed by multiple files: (key, shadowed path, winning path).
+    /// Precedence: .tomllmd > .tomllm > .toml; equal rank — later scan wins.
+    /// A good parse always beats a degraded fallback, regardless of rank.
+    pub shadowed: Vec<(String, String, String)>,
+}
+
+/// Like `get_all_datums_with_paths` but also returns scan diagnostics (#163).
+pub fn get_all_datums_with_diagnostics(
+    b00t_path: &str,
+    max_depth: Option<usize>,
+) -> Result<(HashMap<String, (BootDatum, String)>, ScanDiagnostics)> {
     let expanded_path = shellexpand::tilde(b00t_path);
     let path = Path::new(expanded_path.as_ref());
     let mut datums = HashMap::new();
+    let mut diag = ScanDiagnostics::default();
 
     if !path.exists() {
-        return Ok(datums);
+        return Ok((datums, diag));
     }
 
     let depth = max_depth.unwrap_or(DEFAULT_MAX_DEPTH);
-    scan_datums_recursive(path, &mut datums, 0, depth)?;
+    scan_datums_recursive(path, &mut datums, &mut diag, 0, depth)?;
 
-    Ok(datums)
+    Ok((datums, diag))
 }
 
 /// Merge `b00t.*` Git attributes into a parsed datum without mutating the datum file.
@@ -262,6 +285,7 @@ fn find_git_worktree_root(path: &Path) -> Option<std::path::PathBuf> {
 fn scan_datums_recursive(
     dir: &Path,
     datums: &mut HashMap<String, (BootDatum, String)>,
+    diag: &mut ScanDiagnostics,
     current_depth: usize,
     max_depth: usize,
 ) -> Result<()> {
@@ -283,7 +307,7 @@ fn scan_datums_recursive(
 
         if entry_path.is_dir() {
             // Recurse into subdirectories
-            scan_datums_recursive(&entry_path, datums, current_depth + 1, max_depth)?;
+            scan_datums_recursive(&entry_path, datums, diag, current_depth + 1, max_depth)?;
         } else if matches!(
             entry_path.extension().and_then(|s| s.to_str()),
             Some("toml") | Some("tomllm") | Some("tomllmd") // 🤓 .tomllmd currently downgrades to the generic .tomllm parser path
@@ -297,42 +321,88 @@ fn scan_datums_recursive(
                     continue;
                 }
 
-                // Try to parse as unified config
-                if let Ok(content) = fs::read_to_string(&entry_path) {
-                    if let Ok(mut config) = toml::from_str::<UnifiedConfig>(&content) {
-                        apply_git_attributes_to_config(&mut config, &entry_path);
-                        // Strip outer extension (.tomllmd / .tomllm / .toml) for datum key.
-                        // 🤓 precedence: .tomllmd > .tomllm > .toml.
-                        let ext = if filename.ends_with(".tomllmd") {
-                            ".tomllmd"
-                        } else if filename.ends_with(".tomllm") {
-                            ".tomllm"
-                        } else {
-                            ".toml"
-                        };
-                        let datum_key = filename.trim_end_matches(ext).to_string();
-                        let path_str = entry_path.to_string_lossy().to_string();
-                        let new_rank = match ext {
-                            ".tomllmd" => 3,
-                            ".tomllm" => 2,
-                            _ => 1,
-                        };
-                        let current_rank = datums
-                            .get(&datum_key)
-                            .map(|(_, existing_path)| {
-                                if existing_path.ends_with(".tomllmd") {
-                                    3
-                                } else if existing_path.ends_with(".tomllm") {
-                                    2
-                                } else {
-                                    1
-                                }
-                            })
-                            .unwrap_or(0);
-                        if new_rank >= current_rank {
-                            datums.insert(datum_key, (config.b00t, path_str));
+                // Tolerant parse (Postel #163): strict parse first; on failure the
+                // datum still loads via lenient fallback — key from filename, raw
+                // TOML parked, marked degraded. Nothing vanishes silently.
+                let path_str = entry_path.to_string_lossy().to_string();
+                let ext = if filename.ends_with(".tomllmd") {
+                    ".tomllmd"
+                } else if filename.ends_with(".tomllm") {
+                    ".tomllm"
+                } else {
+                    ".toml"
+                };
+                let datum_key = filename.trim_end_matches(ext).to_string();
+                // 🤓 precedence: .tomllmd > .tomllm > .toml.
+                let new_rank = match ext {
+                    ".tomllmd" => 3,
+                    ".tomllm" => 2,
+                    _ => 1,
+                };
+
+                let parsed: Result<BootDatum, String> = match fs::read_to_string(&entry_path) {
+                    Err(e) => Err(format!("unreadable: {e}")),
+                    Ok(content) => match toml::from_str::<UnifiedConfig>(&content) {
+                        Ok(mut config) => {
+                            apply_git_attributes_to_config(&mut config, &entry_path);
+                            Ok(config.b00t)
                         }
+                        Err(e) => {
+                            let one_line = e
+                                .to_string()
+                                .lines()
+                                .map(str::trim)
+                                .filter(|l| !l.is_empty())
+                                .collect::<Vec<_>>()
+                                .join("; ");
+                            let mut fallback = BootDatum::default();
+                            fallback.name = datum_key
+                                .split('.')
+                                .next()
+                                .unwrap_or(&datum_key)
+                                .to_string();
+                            fallback.hint = format!("degraded: {filename} failed strict parse");
+                            fallback.status = Some("degraded".to_string());
+                            fallback.status_msg = Some(one_line.clone());
+                            fallback.type_tags = Some(vec!["degraded".to_string()]);
+                            fallback.raw_source = Some(content);
+                            diag.degraded.push((path_str.clone(), one_line));
+                            datums.entry(datum_key.clone()).or_insert((fallback, path_str.clone()));
+                            continue; // degraded never displaces an existing entry
+                        }
+                    },
+                };
+                let datum = match parsed {
+                    Ok(d) => d,
+                    Err(reason) => {
+                        diag.degraded.push((path_str, reason));
+                        continue;
                     }
+                };
+
+                let existing = datums.get(&datum_key).map(|(d, existing_path)| {
+                    let rank = if existing_path.ends_with(".tomllmd") {
+                        3
+                    } else if existing_path.ends_with(".tomllm") {
+                        2
+                    } else {
+                        1
+                    };
+                    (rank, existing_path.clone(), d.status.as_deref() == Some("degraded"))
+                });
+                let current_rank = match &existing {
+                    // a good parse always beats a degraded fallback
+                    Some((_, _, true)) => 0,
+                    Some((rank, _, false)) => *rank,
+                    None => 0,
+                };
+                if new_rank >= current_rank {
+                    if let Some((_, old_path, _)) = existing {
+                        diag.shadowed.push((datum_key.clone(), old_path, path_str.clone()));
+                    }
+                    datums.insert(datum_key, (datum, path_str));
+                } else if let Some((_, winning_path, _)) = existing {
+                    diag.shadowed.push((datum_key, path_str, winning_path));
                 }
             }
         }
@@ -773,6 +843,83 @@ mod tests {
 
     fn create_test_datum_file(dir: &std::path::Path, name: &str, content: &str) {
         fs::write(dir.join(name), content).unwrap();
+    }
+
+    // ── #163: scan diagnostics — skipped (unparseable) + shadowed files ──────
+
+    #[test]
+    fn scan_degrades_unparseable_file_instead_of_dropping_it() {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "good.cli.toml",
+            "[b00t]\nname = \"good\"\ntype = \"cli\"\nhint = \"ok\"\n",
+        );
+        let raw = "[b00t]\nname = \"broken\"\nthis is not = valid toml [[[\n";
+        create_test_datum_file(temp_dir.path(), "broken.cli.toml", raw);
+        let (datums, diag) =
+            get_all_datums_with_diagnostics(temp_dir.path().to_str().unwrap(), Some(0)).unwrap();
+        // Postel: the broken file MUST NOT vanish — it loads as a degraded datum.
+        assert_eq!(datums.len(), 2, "degraded datum still loads");
+        let (degraded, path) = &datums["broken.cli"];
+        assert!(path.ends_with("broken.cli.toml"));
+        assert_eq!(degraded.name, "broken", "name captured from filename");
+        assert_eq!(degraded.status.as_deref(), Some("degraded"));
+        assert_eq!(degraded.raw_source.as_deref(), Some(raw), "raw TOML parked");
+        assert!(degraded.status_msg.as_deref().unwrap_or("").contains("TOML parse error"));
+        // and the parse problem is surfaced in scan diagnostics
+        assert_eq!(diag.degraded.len(), 1, "degraded file reported");
+        let (dpath, reason) = &diag.degraded[0];
+        assert!(dpath.ends_with("broken.cli.toml"), "degraded path: {dpath}");
+        assert!(!reason.is_empty() && !reason.contains('\n'), "one-line reason: {reason:?}");
+    }
+
+    #[test]
+    fn good_parse_always_beats_degraded_fallback() {
+        // broken .tomllm (higher rank) must NOT shadow a good .toml parse
+        let temp_dir = TempDir::new().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "solo.role.toml",
+            "[b00t]\nname = \"solo\"\ntype = \"role\"\nhint = \"good toml\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "solo.role.tomllm",
+            "not even = toml [[[\n",
+        );
+        let (datums, diag) =
+            get_all_datums_with_diagnostics(temp_dir.path().to_str().unwrap(), Some(0)).unwrap();
+        assert_eq!(datums.len(), 1);
+        let (winner, winner_path) = &datums["solo.role"];
+        assert!(winner_path.ends_with("solo.role.toml"), "good parse wins: {winner_path}");
+        assert!(winner.status.is_none(), "winner is not degraded");
+        assert_eq!(diag.degraded.len(), 1, "broken variant still surfaced");
+    }
+
+    #[test]
+    fn scan_diagnostics_reports_shadowed_key() {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_datum_file(
+            temp_dir.path(),
+            "solo.role.toml",
+            "[b00t]\nname = \"solo\"\ntype = \"role\"\nhint = \"toml variant\"\n",
+        );
+        create_test_datum_file(
+            temp_dir.path(),
+            "solo.role.tomllm",
+            "[b00t]\nname = \"solo\"\ntype = \"role\"\nhint = \"tomllm variant\"\n",
+        );
+        let (datums, diag) =
+            get_all_datums_with_diagnostics(temp_dir.path().to_str().unwrap(), Some(0)).unwrap();
+        assert_eq!(datums.len(), 1, "one key survives");
+        let (_, winner_path) = &datums["solo.role"];
+        assert!(winner_path.ends_with("solo.role.tomllm"), ".tomllm outranks .toml");
+        assert_eq!(diag.shadowed.len(), 1, "shadowing reported");
+        let (key, loser, winner) = &diag.shadowed[0];
+        assert_eq!(key, "solo.role");
+        assert!(loser.ends_with("solo.role.toml"), "loser: {loser}");
+        assert!(winner.ends_with("solo.role.tomllm"), "winner: {winner}");
     }
 
     #[test]

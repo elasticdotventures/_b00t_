@@ -142,7 +142,7 @@ pub enum McpCommands {
     },
     #[clap(
         about = "MCP Registry operations (list, search, install dependencies)",
-        long_about = "Interact with b00t MCP registry for server management and dependency installation.\n\nExamples:\n  b00t-cli mcp registry list\n  b00t-cli mcp registry search --tag docker\n  b00t-cli mcp registry get io.b00t/server-name\n  b00t-cli mcp registry install-deps io.b00t/server-name\n  b00t-cli mcp registry sync-official\n  b00t-cli mcp registry sync-datums --path ~/.dotfiles/_b00t_"
+        long_about = "Interact with b00t MCP registry for server management and dependency installation.\n\nExamples:\n  b00t-cli mcp registry list\n  b00t-cli mcp registry search --tag docker\n  b00t-cli mcp registry get io.b00t/server-name\n  b00t-cli mcp registry install-deps io.b00t/server-name\n  b00t-cli mcp registry sync-official\n  b00t-cli mcp registry sync-vinkius-database\n  b00t-cli mcp registry sync-datums --path ~/.dotfiles/_b00t_"
     )]
     Registry {
         #[clap(subcommand)]
@@ -256,6 +256,15 @@ pub enum RegistryAction {
     },
     #[clap(about = "Sync with official MCP registry")]
     SyncOfficial,
+    #[clap(
+        about = "Sync with the Vinkius Open Data Initiative (open mcp-database dataset)",
+        long_about = "Sync from the open, no-auth github.com/vinkius-labs/mcp-database dataset \
+(one markdown file per MCP server under mcps/). Distinct from — and does NOT touch — Vinkius's \
+other, paid discover-mcp/api.vinkius.com catalog, which is unblessed and out of scope.\n\n\
+Entries whose write-up mentions an access token / API key / client secret etc. are tagged \
+'requires-token' so they can be filtered out of zero-auth searches."
+    )]
+    SyncVinkiusDatabase,
     #[clap(about = "Auto-discover MCP servers from system")]
     Discover,
     #[clap(about = "Export registry in MCP format")]
@@ -1029,6 +1038,12 @@ impl RegistryAction {
                 println!("🔄 Syncing with official MCP registry...");
                 let count = registry.sync_official_registry().await?;
                 println!("✅ Synced {} servers from official registry", count);
+                Ok(())
+            }
+            RegistryAction::SyncVinkiusDatabase => {
+                println!("🔄 Syncing with Vinkius Open Data Initiative (mcp-database)...");
+                let count = registry.sync_vinkius_mcp_database().await?;
+                println!("✅ Synced {} servers from vinkius-mcp-database", count);
                 Ok(())
             }
             RegistryAction::Discover => {

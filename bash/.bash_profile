@@ -125,8 +125,16 @@ if [ -f ~/.env ]; then
         [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
 
         # Validate KEY=VALUE format
-        if [[ "$line" =~ ^[^=]+=[^=]+$ ]]; then
-            export "$line"
+        if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            # Strip one matching pair of surrounding quotes, if present
+            if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+                value="${BASH_REMATCH[1]}"
+            elif [[ "$value" =~ ^\'(.*)\'$ ]]; then
+                value="${BASH_REMATCH[1]}"
+            fi
+            export "$key=$value"
         else
             echo "Invalid line in .env: $line"
         fi
