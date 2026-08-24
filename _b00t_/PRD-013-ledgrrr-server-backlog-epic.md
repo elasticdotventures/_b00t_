@@ -28,7 +28,7 @@ matching PRD-012's convention.
 | `common-core#48` (deep-link validator) | app4dog | Closed as duplicate — byte-identical to already-merged `#46` modulo `rustfmt`. Confirmed via direct diff, not recalled. |
 | `puppyplay-godot-droid#92` (Custom Tabs handoff) | app4dog | Closed — merging would have **regressed** `main`, which already had a more complete version (`FamilyLinkBridge` GDExtension, full consent flow) via `#90`/`#91`. Confirmed via two-dot diff against the actual merge base, not the misleading three-dot diff. |
 | Runner-label collision | app4dog/workspace CI | Two self-hosted runners (`app4dog-fung1`, containerized; `sm3llsl1k3s0ld3r`, bare-metal, different physical host) both carried the generic `app4dog` label, so GitHub interleaved jobs between hosts with different `postgresql`/`postgis` package state. Root-caused jointly with a second agent operating on `sm3llsl1k3s0ld3r` (real-time NATS coordination, `nats://192.168.1.137:4222`); fixed via an additive per-host label + a workflow fix that resolves the PostGIS package from whichever cluster is actually bound to `:5432`, not the highest version `apt-cache` can see. `workspace#142` merged, both hosts green. |
-| SysML-v2 epic | ledgrrr | **16 open PRs**, almost all opened 2026-08-21/22 (`#179`–`#197`), covering: tooling survey (`#180`), re-scope (`#181`), `sysml-derive` spike (`#183`), `ZLayer::SystemsModel` (`#185`), `ArtifactKind` widening (`#184`), `reqif-opa-mcp` spike (`#186`), parser round-trip spike (`#187`), README re-framing (`#188`), pilot conformance oracle spike (`#189`), viz wiring (`#190`), DVC defer (`#191`), `JournalTransaction` (`#192`), `SysmlBlock` retrofit (`#193`), two `holon-viz`/`sysml-derive` output-validity fixes (`#196`, `#197`), plus an unrelated `ledgerr-cloud` GPU-budget PR (`#179`). None merged yet. |
+| SysML-v2 epic | ledgrrr | ~~16 open PRs... None merged yet~~ — **UPDATE (2026-08-24, verified via `gh pr list`):** 14 of the 16 (`#179`–`#197` minus `#187`/`#196`) merged, `#196` closed without merging. Only **`#187`** (parser round-trip spike) remains open — that's now the actual Gate B blocker, not `#196`/`#197` (see corrected diagram below). Two new PRs (`#199`–`#201`-ish) have opened since this doc was written; re-run `gh pr list --repo PromptExecution/ledgrrr --state open` fresh rather than trusting this table before executing sub-task #2. |
 | Datum-assimilation queue | `_b00t_` | **8 open PRs**, several stacked/overlapping: MCP-database sync (`#1109`), two datum-assimilation PRs (`#1105`, `#1108`), a vendored skill (`#1115`), a superseded spike explicitly flagged in its own title (`#1114`, "see #1110, `.mcp.toml` is the actual path"), two live Cloudflare Worker features (`#1119`, `#1120`), and this session's own `#1121`. |
 | app4dog org | 7 repos | **4 open PRs total**, all green/mergeable — the one org that got fully cleared this session. |
 
@@ -44,9 +44,9 @@ to reconcile before anything works end-to-end.
 
 ```mermaid
 flowchart TD
-    A["ledgrrr: 16 open PRs\n(SysML-v2 stack, unmerged)"] --> B{{"Gate: is holon-viz's\nemitter output valid &\nround-trip-tested?"}}
-    C["_b00t_: 8 open PRs\n(datum-assimilation queue)"] --> D{{"Gate: is .mcp.toml\nthe settled golden path\n(supersedes DatumType spikes)?"}}
-    B -- no, #196/#197 unmerged --> STOP1["Do not build server MCP\nbridge on unverified emitter"]
+    A["ledgrrr: #187 open\n(round-trip spike, 14/16 others merged)"] --> B{{"Gate: is holon-viz's\nemitter output valid &\nround-trip-tested?"}}
+    C["_b00t_: open PRs\n(datum-assimilation queue, count shifts daily)"] --> D{{"Gate: is .mcp.toml\nthe settled golden path\n(supersedes DatumType spikes)?"}}
+    B -- no, #187 unmerged --> STOP1["Do not build server MCP\nbridge on unverified emitter"]
     B -- yes --> E["Phase 0: ledgerr-model-server\nspike (stub already exists)"]
     D -- no, #1114 still open --> STOP2["Close #1114 first —\nalready self-flagged superseded"]
     D -- yes --> E
@@ -57,8 +57,9 @@ flowchart TD
 ```
 
 The two gates on the left (`B`, `D`) are backlog items, not new work — they already
-have open PRs against them. `#196`/`#197` fix exactly the emitter-validity question
-Phase 0 needs answered; `#1114` is a spike explicitly superseded by the decision
+have open PRs against them. `#187` (the parser round-trip spike — `#196`/`#197`,
+originally cited here, have since merged/closed) is what Phase 0 needs answered;
+`#1114` is a spike explicitly superseded by the decision
 already recorded in `feedback_mcp_toml_golden_path.md`-equivalent tribal knowledge
 and should be closed, not left open to confuse the next agent that greps for "sysml
 lsp datum" and finds two conflicting proposals. Neither gate requires new design —
@@ -112,9 +113,9 @@ Phase 0 of any EPIC that extends it.
 | # | Task | Repo | DoD | Depends on | Suggested owner |
 |---|---|---|---|---|---|
 | 1 | Close `_b00t_#1114` with a comment linking `#1110`/`.mcp.toml` decision | `_b00t_` | PR closed, comment posted, no orphaned branch | none — actionable now | sm0l agent |
-| 2 | Triage `ledgrrr` PRs `#183`–`#197`: merge, request-changes, or close each with a stated reason | `ledgrrr` | 0 open PRs left with no comment in >24h; `#196`/`#197` conflict-checked against each other first | none — actionable now | ch0nky agent, one PR at a time (per this session's explicit "fix one at a time" precedent) |
+| 2 | ~~Triage `ledgrrr` PRs `#183`–`#197`~~ — **UPDATE (2026-08-24): 14/16 already merged, `#196` closed.** Remaining scope: decide `#187` (round-trip spike, the actual Gate B blocker), plus whatever's opened since (`gh pr list --repo PromptExecution/ledgrrr --state open` — don't trust this row's PR numbers, they're stale) | `ledgrrr` | 0 open PRs left with no comment in >24h | none — actionable now | ch0nky agent, one PR at a time (per this session's explicit "fix one at a time" precedent) |
 | 3 | Verify `docs/sysml-v2-tooling-survey.md` reflects what actually merged from #2 | `ledgrrr` | Doc diff reviewed, stale claims corrected | #2 complete | frontier agent (judgment call on doc accuracy) |
-| 4 | Triage `_b00t_` datum-assimilation PRs `#1105`, `#1108`, `#1109`, `#1115` for overlap (do any two assimilate the same upstream source?) | `_b00t_` | Each PR merged or closed with reason; no duplicate datum names | #1 complete (frees reviewer attention) | sm0l agent (mechanical dedup check), escalate overlaps to frontier |
+| 4 | ~~Triage `_b00t_` datum-assimilation PRs `#1105`, `#1108`, `#1109`, `#1115`~~ — **DONE (2026-08-24): all four merged** (code-reviewed individually, no duplicate datum names found) | `_b00t_` | Each PR merged or closed with reason; no duplicate datum names | #1 complete (frees reviewer attention) | sm0l agent (mechanical dedup check), escalate overlaps to frontier |
 | 5 | Clone remaining PromptExecution-owned vendor modules into `~/promptexecution/` (see §7 list) alongside `just-mcp`/`ledgrrr`'s existing precedent | n/a (filesystem) | Each module has a top-level clone on `main`, dotfiles' `vendor/*` submodule pins untouched | none — actionable now, low risk (additive clones) | sm0l agent |
 | 6 | Write `blessed.toml`-pattern entries (per session's earlier "blessed in ~/.b00t" decision) for the modules cloned in #5 | `_b00t_` | One `.repo.toml` per module with `status = "blessed"`, discoverable via `b00t datum search blessed --types repo` | #5 complete | sm0l agent |
 
