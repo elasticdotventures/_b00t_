@@ -286,7 +286,7 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
         }
         DatumCommands::Validate { target, strict, graph } => {
             if *graph {
-                handle_validate_graph(path)
+                handle_validate_graph(path, *strict)
             } else {
                 let Some(target) = target else {
                     anyhow::bail!("specify datum key, file path, or --graph");
@@ -1217,19 +1217,105 @@ impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
     }
 }
 
-fn handle_validate_graph(datum_path: &str) -> Result<()> {
+fn handle_validate_graph(datum_path: &str, strict: bool) -> Result<()> {
     let store = HashMapStore::from_path(datum_path)?;
-    let errors = store.validate_references();
+    let diagnostics = store.diagnose_references();
 
-    if errors.is_empty() {
-        println!("datum graph: valid ({} datums)", store.len());
+    if diagnostics.is_empty() {
+        println!("datum graph: valid ({} datums loaded from {datum_path})", store.len());
+        let scan = store.scan_diagnostics();
+        if !scan.degraded.is_empty() {
+            eprintln!(
+                "note: {} file(s) loaded via lenient fallback (degraded)",
+                scan.degraded.len()
+            );
+        }
         return Ok(());
     }
 
-    for error in &errors {
-        eprintln!("  ERROR: {error}");
+    // Postel (#163): dangling references are warnings by default;
+    // --strict restores hard-fail for audits/CI opt-in.
+    let label = if strict { "ERROR" } else { "WARN" };
+    for diagnostic in &diagnostics {
+        let class = diagnostic
+            .dangling_class()
+            .map(|c| format!(" [{c}]"))
+            .unwrap_or_default();
+        eprintln!("  {label}{class}: {diagnostic}");
     }
-    anyhow::bail!("datum graph validation failed: {} reference error(s)", errors.len());
+    eprintln!("{}", render_graph_summary(&store, &diagnostics, datum_path));
+    if strict {
+        anyhow::bail!(
+            "datum graph validation failed: {} reference error(s)",
+            diagnostics.len()
+        );
+    }
+    println!(
+        "datum graph: {} dangling reference warning(s) — non-fatal (use --strict to enforce)",
+        diagnostics.len()
+    );
+    Ok(())
+}
+
+/// #163: summary block — total datums loaded, errors grouped per source datum,
+/// count per field type. Deterministic (BTreeMap) ordering.
+fn render_graph_summary(
+    store: &HashMapStore,
+    diagnostics: &[crate::datum_store::ReferenceDiagnostic],
+    datum_path: &str,
+) -> String {
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+
+    let mut per_datum: BTreeMap<&str, (Option<&str>, usize)> = BTreeMap::new();
+    let mut per_field: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut per_class: BTreeMap<String, usize> = BTreeMap::new();
+    for d in diagnostics {
+        let entry = per_datum
+            .entry(d.error.datum_key())
+            .or_insert((d.source_path.as_deref(), 0));
+        entry.1 += 1;
+        *per_field.entry(d.error.field_name()).or_insert(0) += 1;
+        if let Some(class) = d.dangling_class() {
+            *per_class.entry(class.to_string()).or_insert(0) += 1;
+        }
+    }
+
+    let mut out = String::new();
+    let _ = writeln!(out, "\n── datum graph summary ──────────────────────────");
+    let _ = writeln!(out, "datums loaded: {} from {datum_path}", store.len());
+    let scan = store.scan_diagnostics();
+    let _ = writeln!(
+        out,
+        "files degraded (lenient fallback): {} | keys shadowed by higher-precedence files: {}",
+        scan.degraded.len(),
+        scan.shadowed.len()
+    );
+    for (path, reason) in &scan.degraded {
+        let _ = writeln!(out, "  degraded {path}: {reason}");
+    }
+    for (key, loser, winner) in &scan.shadowed {
+        let _ = writeln!(out, "  shadowed {key}: {loser} superseded by {winner}");
+    }
+    let _ = writeln!(
+        out,
+        "reference errors: {} across {} source datum(s)",
+        diagnostics.len(),
+        per_datum.len()
+    );
+    let _ = writeln!(out, "errors per source datum:");
+    for (key, (path, count)) in &per_datum {
+        let _ = writeln!(out, "  {key} ({}): {count}", path.unwrap_or("<in-memory>"));
+    }
+    let _ = writeln!(out, "errors per field:");
+    for (field, count) in &per_field {
+        let _ = writeln!(out, "  {field}: {count}");
+    }
+    let _ = writeln!(out, "dangling references by class:");
+    for (class, count) in &per_class {
+        let _ = writeln!(out, "  {class}: {count}");
+    }
+    out.trim_end().to_string()
 }
 
 fn print_validation_result(errors: &[String], warnings: &[String]) -> Result<()> {

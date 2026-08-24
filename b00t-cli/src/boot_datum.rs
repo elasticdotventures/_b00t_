@@ -281,6 +281,11 @@ pub struct BootDatum {
     //     Remove after all datums have been audited.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_for_core: Option<bool>,
+
+    // #163 Postel loader tolerance: raw TOML source parked when strict parse
+    // fails and the datum loads via the lenient fallback path. In-memory only.
+    #[serde(skip)]
+    pub raw_source: Option<String>,
 }
 
 // Re-export ApiProvides from config_types (needed by BootDatum)
