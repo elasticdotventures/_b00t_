@@ -1791,6 +1791,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-forge-kv"
+version = "0.10.5"
+dependencies = [
+ "anyhow",
+ "clap",
+ "futures",
+ "redis",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "b00t-grok"
 version = "0.10.5"
 dependencies = [

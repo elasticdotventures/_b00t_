@@ -1,0 +1,28 @@
+[package]
+name = "b00t-forge-kv"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "b00t-native RESP2 key-value server — a Redis-protocol-compatible drop-in for the internal KvBackend::ForgeKV detection path, so hive nodes don't need to install/maintain actual Redis or Valkey"
+
+[lib]
+name = "b00t_forge_kv"
+path = "src/lib.rs"
+
+[[bin]]
+name = "b00t-forge-kv"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "2.0.17"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1.0"
+
+[dev-dependencies]
+redis = { version = "0.32.4", features = ["aio", "tokio-comp", "connection-manager"] }
+futures = "0.3"
