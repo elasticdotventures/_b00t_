@@ -102,7 +102,15 @@ pub trait DatumStore: Send + Sync {
     /// Reports: missing graph references, self-deps, empty ref strings, missing members.
     /// Override in bulk-query backends (e.g. SQL JOIN) for efficiency.
     fn validate_references(&self) -> Vec<ReferenceError> {
-        let key_set: HashSet<String> = self.iter().map(|d| d.key.as_ref().to_owned()).collect();
+        // Degraded (unparseable) datums are excluded from the resolvable key set:
+        // a reference to a datum whose own file failed to parse must still be
+        // reported as dangling (Postel's Law tolerates the degraded file loading
+        // as a stub; it does not silently declare it a valid reference target).
+        let key_set: HashSet<String> = self
+            .iter()
+            .filter(|d| d.datum.status.as_deref() != Some("degraded"))
+            .map(|d| d.key.as_ref().to_owned())
+            .collect();
         let mut errors = Vec::new();
         for d in self.iter() {
             let key = d.key.as_ref();
@@ -863,6 +871,31 @@ mod tests {
         assert!(errs.iter().any(|e| matches!(e, ReferenceError::MissingDependency {
             datum, missing_key
         } if datum == "broken.role" && missing_key == "nonexistent.cli")));
+    }
+
+    #[test]
+    fn validate_references_flags_dependency_on_degraded_datum() {
+        // Postel tolerance (#163, #1140): a datum that failed strict parse still
+        // loads as a degraded stub so it isn't silently dropped -- but a
+        // *reference* to that stub must still be reported as dangling, the same
+        // way it was before the degraded-fallback loader existed. If this
+        // regresses, --strict silently stops catching broken referenced files.
+        let mut store = store_with_refs();
+        store.intern("vendor-foo.role", BootDatum {
+            name: "vendor-foo".to_string(),
+            status: Some("degraded".to_string()),
+            ..Default::default()
+        });
+        store.intern("depends-on-broken.role", BootDatum {
+            name: "depends-on-broken".to_string(), hint: "x".to_string(),
+            depends_on: Some(vec!["vendor-foo.role".to_string()]),
+            ..Default::default()
+        });
+        let errs = store.validate_references();
+        assert!(errs.iter().any(|e| matches!(e, ReferenceError::MissingDependency {
+            datum, missing_key
+        } if datum == "depends-on-broken.role" && missing_key == "vendor-foo.role")),
+            "reference to a degraded datum must still be dangling: {errs:?}");
     }
 
     #[test]
