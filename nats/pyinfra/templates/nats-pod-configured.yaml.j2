@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nats-server
+  labels:
+    app: b00t-nats
+    role: messaging
+spec:
+  volumes:
+    - name: nats-config
+      configMap:
+        name: nats-config
+    - name: nats-data
+      emptyDir: {}
+    - name: nats-accounts
+      emptyDir: {}
+
+  containers:
+    - name: nats-server
+      image: docker.io/library/nats:2.10-alpine
+      ports:
+        - containerPort: 4222
+          hostPort: 4222
+          name: client
+        - containerPort: 8222
+          hostPort: 8222
+          name: monitor
+        - containerPort: 6222
+          hostPort: 6222
+          name: cluster
+      volumeMounts:
+        - name: nats-config
+          mountPath: /etc/nats
+        - name: nats-data
+          mountPath: /tmp/nats
+        - name: nats-accounts
+          mountPath: /tmp/nats/accounts
+      command: ["nats-server"]
+      args: ["-c", "/etc/nats/nats-server.conf"]
+      # tcpSocket, not httpGet: nats:2.10-alpine has no curl, so podman play
+      # kube's httpGet-via-exec probe fails immediately and (with
+      # Type=forking + RemainAfterExit=yes) systemd never notices the
+      # container died. tcpSocket connects from the podman host directly —
+      # same real health signal, no dependency on what's inside the image.
+      livenessProbe:
+        tcpSocket:
+          port: 8222
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        tcpSocket:
+          port: 8222
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+data:
+  nats-server.conf: |
+    # Simple username/password auth (not operator/JWT) — same pattern as
+    # vultr1 (nats/vultr-node-setup.sh). See
+    # _b00t_/datums/PROVIDER-VULTR.provider.tomllmd for why: JWT's
+    # resolver_preload never had a real app account, and the NSC signing
+    # key that would be needed to add one isn't recoverable.
+    port: 4222
+
+    authorization {
+      users = [
+        { user: "b00t-historian", password: "{{ nats_password }}" }
+      ]
+    }
+
+    jetstream: {
+      store_dir: "/tmp/nats/jetstream"
+    }
+
+    # Required for pingap's foundation health check (proxies to :8222) and
+    # the pod's own liveness/readinessProbe (also :8222) — the container
+    # exposes 8222 but nothing listens there without this line.
+    http_port: 8222

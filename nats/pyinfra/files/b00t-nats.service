@@ -1,0 +1,15 @@
+[Unit]
+Description=b00t NATS server (podman play kube)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+RemainAfterExit=yes
+ExecStart=/usr/bin/podman play kube /opt/b00t/nats-pod-configured.yaml --network podman
+ExecStop=/usr/bin/podman pod stop nats-server
+ExecStopPost=-/usr/bin/podman pod rm nats-server
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
