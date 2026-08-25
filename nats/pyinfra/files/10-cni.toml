@@ -1,0 +1,5 @@
+version = 3
+
+[plugins."io.containerd.cri.v1.runtime".cni]
+  conf_dir = "/etc/k0s/cni/net.d"
+  bin_dir = "/opt/cni/bin"

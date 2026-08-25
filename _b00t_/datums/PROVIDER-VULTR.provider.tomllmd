@@ -47,6 +47,247 @@
 #      unit for the SSH tunnel), `just vultr-task-demo` (verified end-to-end
 #      cross-leaf task dispatch fung1 -> vultr1).
 #
+#      🚩 NAMING COLLISION (found 2026-08-24, not yet resolved): the Vultr
+#      account now has a SECOND real, separate instance whose own Vultr
+#      console label is literally "b00t-node" (2048MB, 149.28.189.45,
+#      Debian 13/trixie, root-key SSH from at least sm3llsl1k3s0ld3r) —
+#      distinct from this section's prior use of "b00t-node" as the name of
+#      the *firewall-group convention* (only 22/80/443 public) applied to
+#      vultr1 itself. Do not conflate the two. This second instance runs
+#      `b00t-nats.service` (podman-managed NATS, bound 0.0.0.0:4222 —
+#      NOT the SSH-tunnel-only model vultr1 uses) and `b00t-pingap.service`;
+#      provisioning history/owner not yet reconciled here.
+#      DEPLOYED 2026-08-24: b00t-forge-kv (RESP2 KV server, see b00t-forge-kv/
+#      crate, PR #1145) installed on BOTH Vultr instances as systemd unit
+#      b00t-forge-kv.service, bound 127.0.0.1:6379, confirmed not externally
+#      reachable, PING-verified over the real RESP2 wire protocol on each:
+#        - b00t-node (149.28.189.45) — reached directly from the deploying
+#          host (same operator network); built in a standalone /tmp copy of
+#          the crate (no monorepo checkout needed) via a fresh minimal
+#          rustup install, since the deploying host's newer glibc (2.43)
+#          wouldn't run on this node's Debian 13 (glibc 2.41).
+#        - vultr1 (207.148.87.195) — this session initially had NO direct
+#          access (only fung1's documented `ssh vultr1` key). Resolved by
+#          hopping through fung1 itself (`ssh brianh@<fung1-lan-ip>`, then
+#          `ssh vultr1` from there) rather than needing vultr1 reachable
+#          directly — same standalone-crate build approach, glibc 2.36 here.
+#      Neither instance had redis-server/valkey-server installed before
+#      this, so both are from-scratch installs, not migrations.
+#      nats/vultr-forge-kv-deploy.sh (automated version of the same steps,
+#      assumes a working `ssh <host-alias>`) was written but not what
+#      actually ran here — both deploys were done via manual SSH-hop
+#      commands instead, since neither instance had a local SSH alias
+#      configured on the deploying host.
+#
+#      DECOMMISSIONED 2026-08-24: consolidating to one Vultr host for
+#      billing. Investigated both instances' actual live state first:
+#      b00t-node's k0s/Dapr/JetStream-NATS stack turned out to be unused
+#      scaffolding (coredns/metrics-server crash-looping, zero user
+#      workloads, zero Dapr components ever deployed) and its 954MB-RAM
+#      sibling vultr1 couldn't have hosted a k0s control plane anyway —
+#      so migrating b00t-node's extra infra was moot. Operator then chose
+#      the reverse consolidation: keep b00t-node (2GB, more headroom),
+#      decommission vultr1 instead. vultr1's NATS leafnode was live but
+#      idle (2h40m uptime, 5 subscriptions, 0 messages in/out) when pulled
+#      — not carrying production traffic. Actions taken from this session:
+#      killed fung1's manual SSH tunnel process (`ssh -N -L
+#      192.168.1.149:17443:127.0.0.1:443 vultr1`, PID 2257246, was never a
+#      systemd unit despite `just vultr-tunnel-install` documenting one —
+#      no such unit was ever actually installed on fung1), then
+#      `systemctl stop/disable` on vultr1's nats-server.service and
+#      b00t-forge-kv.service. Confirmed clean leafnode disconnect on
+#      fung1's hub (`leafz` -> `leafnodes: 0`) — no orphaned state. The
+#      VM itself (207.148.87.195) is NOT yet deleted — no VULTR_API_KEY
+#      is available in-session, so the final "delete instance" step was
+#      the operator's own action via my.vultr.com — confirmed done
+#      2026-08-24 (operator deleted vultr1 directly in the console).
+#      Session-side attempts to delete via the v2 API instead (after
+#      copying VULTR_API_KEY from fung1's ~/.env to sm3lly's ~/.env, then
+#      trying the call relayed through fung1) all hit the same wall:
+#      Vultr's account has an API IP allowlist configured, and fung1's
+#      NAT egress IP (121.200.6.69, shared by every LAN host behind it
+#      including sm3lly) was never on it — every attempt returned
+#      `{"error":"Unauthorized IP address: 121.200.6.69"}`. Console
+#      deletion sidestepped that entirely; no allowlist change was made.
+#      b00t-node (149.28.189.45) is now the sole surviving Vultr VPS; its
+#      own k0s/Dapr scaffolding was kept (operator decision: build the
+#      "souls" cross-host agent coordination feature — see
+#      b00t-historian PR #1147 — on plain NATS+JetStream rather than
+#      Dapr's pubsub component, since Dapr needs a sidecar on every
+#      participating host, but Dapr itself stays available for future
+#      b00t-node-local service-mesh work).
+#
+#      FIXED 2026-08-24: coredns + metrics-server were CrashLoopBackOff
+#      (859/728+ restarts since provisioning, 2026-08-22) on b00t-node's
+#      k0s cluster. Root cause: a CNI config collision, not a Dapr/NATS
+#      issue — /etc/cni/net.d/ was shared between k0s's own CNI config
+#      (10-kuberouter.conflist, bridge "kube-bridge", pod subnet
+#      10.244.0.0/24, matching kube-controller-manager's --cluster-cidr)
+#      and Podman's own (87-podman-bridge.conflist, bridge
+#      "cni-podman0", subnet 10.88.0.0/16) — both installed to the same
+#      directory, since neither k0s's containerd config
+#      (/etc/k0s/containerd.toml) nor Podman's own config declared an
+#      exclusive conf_dir. New pod sandboxes were landing on Podman's
+#      10.88.0.0/16 network instead of k0s's 10.244.0.0/24 (confirmed:
+#      kube-bridge itself was `state DOWN, NO-CARRIER`, never actually
+#      used) — coredns then couldn't reach the apiserver ClusterIP
+#      (10.96.0.1:443, "no route to host") since that route only exists
+#      via k0s's own bridge/kube-router setup, not Podman's, and its own
+#      DNS queries then timed out for the same reason.
+#      🤓 fix (verify via `ip addr show kube-bridge` for NO-CARRIER/DOWN,
+#      and compare a crash-looping pod's actual `-o wide` IP against
+#      `ip route` on the host — a pod IP in a range with no
+#      corresponding host route is the tell): give k0s's containerd its
+#      own CNI conf_dir instead of sharing the system-wide
+#      /etc/cni/net.d — added
+#      /etc/k0s/containerd.d/10-cni.toml (picked up automatically via
+#      containerd.toml's `imports = ["/etc/k0s/containerd.d/*.toml"]`)
+#      setting `[plugins."io.containerd.cri.v1.runtime".cni]` `conf_dir
+#      = "/etc/k0s/cni/net.d"`, copied 10-kuberouter.conflist there, then
+#      removed it from the shared /etc/cni/net.d (leaving that directory
+#      to Podman exclusively). `systemctl restart k0scontroller` (which
+#      embeds containerd) + deleting the two stuck pods to force fresh
+#      sandboxes. Verified: new pods land on 10.244.0.x, both reached
+#      1/1 Ready, held stable with 0 further restarts over ~4 minutes of
+#      observation, and `kubectl top nodes`/`top pods` return real
+#      metrics — confirming the fix is complete, not just superficially
+#      Ready.
+#
+# DEPLOYED 2026-08-25: b00t-historian (souls activity coordination, see
+#      b00t-historian PR #1147) running durably on b00t-node
+#      (systemd b00t-historian.service, 0 restarts). Getting there
+#      surfaced two more real infra bugs, both fixed:
+#
+#      1. b00t-node's NATS had NO usable auth: the operator/JWT
+#      resolver_preload only ever defined a SYS (monitoring) account;
+#      the account it was actually provisioned for (Dapr's
+#      pubsub.jetstream component, never deployed) was never created,
+#      and the operator's own NSC signing key isn't recoverable from
+#      anywhere still accessible (checked this node, the deploying
+#      session's own machine, and fung1). Reverted
+#      /opt/b00t/nats-pod-configured.yaml's ConfigMap to simple
+#      username/password auth (same pattern as vultr1's
+#      nats-server.service) — a `b00t-historian` user, password in
+#      /etc/b00t-historian.env (0600, EnvironmentFile'd into the
+#      systemd unit, not embedded in the unit file itself). JetStream
+#      itself was unaffected. Old operator-mode YAML backed up at
+#      nats-pod-configured.yaml.bak-operator-mode.
+#
+#      2. 🚩 (2026-08-25, found chasing an unrelated "no route to
+#      host" on the NATS client port) b00t-node had TWO interfaces
+#      claiming the identical 10.88.0.0/16 subnet: `podman0` (the real
+#      one, netavark-managed, what podman's actual "podman" network
+#      uses) and a vestigial `cni-podman0` (state DOWN/NO-CARRIER,
+#      sourced from a stale /etc/cni/net.d/87-podman-bridge.conflist —
+#      leftover from some older CNI-plugin-based podman config,
+#      confirmed NOT referenced by podman's current netavark network
+#      via `podman network inspect podman`). `ip route get <container
+#      ip>` resolved via the DEAD interface, so every podman
+#      host-published port (NATS's 4222/6222/8222 included) failed
+#      with "No route to host" even though the container itself was
+#      healthy — this wasn't NATS-specific, it would have broken ANY
+#      podman port-publish on this host. Confirmed via tcpdump that
+#      external SYNs to a podman-published port never even reached the
+#      physical interface (ruling out a firewall explanation for that
+#      part). Fixed by `ip link delete cni-podman0` and removing the
+#      stale conflist so it can't be recreated. Separately, k0s's
+#      kube-router rebuilds the FORWARD chain (default-DROP policy) on
+#      every k0scontroller start/boot with no rule for podman0 at
+#      all — added explicit ACCEPT rules for it, made idempotent +
+#      durable via a small script
+#      (/usr/local/bin/b00t-podman-forward-rules.sh) run by a oneshot
+#      systemd unit (b00t-podman-forward-rules.service,
+#      After=k0scontroller.service) rather than a one-off manual
+#      iptables call that a future restart would silently wipe.
+#      🤓 if a podman container's host-published port ever again fails
+#      with "No route to host" (not "connection refused" — that's just
+#      nothing listening) on a k0s+podman host, check `ip route get
+#      <container-ip>` for a route via an unexpected/dead interface
+#      before assuming it's a firewall problem.
+#
+#      Cross-host access: souls' whole point is agents on OTHER hosts
+#      (sm3lly, fung1) reaching b00t-node's historian. Direct exposure
+#      (opening 4222 in b00t-node's ufw) was tried first but the real
+#      blocker turned out to be Vultr's own cloud firewall group for
+#      this instance (the "only 22/80/443 public" convention is
+#      enforced there, not just in ufw — confirmed via tcpdump showing
+#      zero packets arriving at the host's physical interface for an
+#      external connection attempt on 4222, vs. a real "connection
+#      refused" on 443). Reverted that ufw opening and used the same
+#      SSH-tunnel pattern already proven for vultr1 instead: fung1's
+#      key added to b00t-node's root authorized_keys, a `b00t-node`
+#      ~/.ssh/config alias on fung1, and a tunnel (`ssh -N -L
+#      192.168.1.149:17422:127.0.0.1:4222 b00t-node`) — a manually
+#      backgrounded process today, same as vultr1's actual tunnel
+#      (despite `just vultr-tunnel-install` documenting a systemd unit
+#      for that one, no root/sudo access was available on fung1 in
+#      this session to actually install one for either tunnel — real
+#      systemd-unit installation for both remains a follow-up).
+#      Verified end-to-end: a real publish from fung1, through the
+#      tunnel, landed in b00t-node's souls_activity soul table.
+#
+# MEMOIZED 2026-08-25: b00t-node is now reproducible from a fresh Debian 13
+#      Vultr VPS without an LLM in the loop — nats/pyinfra/deploy_b00t_node.py
+#      (+ inventory.py), run via plain pyinfra (vendored fork,
+#      _b00t_/pyinfra.cli.toml — `uv tool install pyinfra`), NOT the proposed
+#      DatumType::Pyinfra/Ouroboros machinery in PRD-ARCH-014/015 (both still
+#      `status = "proposed"`, unimplemented — this deploy intentionally does
+#      not depend on them):
+#        pyinfra nats/pyinfra/inventory.py nats/pyinfra/deploy_b00t_node.py \
+#          --data nats_password=$(openssl rand -hex 24)
+#      Idempotent; covers apt packages, the CNI-isolation fix (applied
+#      *before* k0s first starts this time, so it never has a chance to
+#      collide with Podman's config), k0s single-node install, the
+#      FORWARD-chain oneshot unit, the NATS pod (podman play kube, simple
+#      user/pass auth), and b00t-historian + b00t-forge-kv (static musl
+#      binaries — these nodes stay Rust-toolchain free). Only controller
+#      prereq is podman: b00t-historian links b00t-cli's full lib, which
+#      unconditionally pulls in tokenizers -> esaxx-rs (a C++ dep) via
+#      b00t-c0re-lib — a host `musl-tools` package (musl-gcc only, no C++
+#      stdlib) gets partway then dies on missing `<cstdint>`, so the binaries
+#      build inside a `rust:1-alpine` podman container instead (real musl
+#      g++ + libstdc++, `apk add build-base perl linux-headers pkgconfig
+#      openssl-dev`) — no cross-toolchain wrangling needed. Verified via two
+#      real full builds end-to-end producing actual static-pie musl
+#      executables, then a clean `pyinfra --dry` against the live node with
+#      zero errors.
+#      Deliberately does NOT reproduce b00t-capability-forge.service or
+#      b00t-daprd.service — both were already crash-looping/unused on the
+#      real node (Dapr's pubsub account was never provisioned; souls runs on
+#      plain NATS+JetStream instead) and reproducing known-broken cruft
+#      isn't the goal. See the script's own module docstring for the full
+#      exclusion list and rationale.
+#      🤓 nats/vultr-node-setup.sh (bare nats-server binary, no podman/k0s)
+#      and nats/vultr-forge-kv-deploy.sh are now superseded for b00t-node by
+#      this pyinfra deploy — they still describe vultr1's now-destroyed,
+#      differently-architected setup; don't reconcile them into this one,
+#      they document a different (retired) shape.
+#      🤓 Root cause of the musl/C++ build wall, for whoever hits it next:
+#      b00t-historian only needs a few soul.rs helpers, but linking b00t-cli's
+#      full lib drags in the entire tokenizers/embedding chain unconditionally
+#      — b00t-c0re-lib has no feature gate on it. The clean long-term fix is
+#      making that dependency optional so `--no-default-features` sidesteps
+#      esaxx-rs entirely; not attempted here (real surgery to a shared lib),
+#      the podman/alpine build is the pragmatic fix for now.
+#
+# FOLLOW-UP:
+#      - RESOLVED 2026-08-25: fung1's SSH tunnel to b00t-node is now a real
+#        systemd unit (b00t-node-nats-tunnel.service), installed by the
+#        operator directly and confirmed active/running, manual process
+#        killed. No longer a follow-up.
+#      - Vultr API access is blocked by an IP allowlist for every egress IP
+#        tried from this hive (fung1, sm3lly) and no VULTR_API_KEY is
+#        reachable in-session (checked local env, b00t-node, Azure Key
+#        Vault) — so "only one node is billing" can only be confirmed via
+#        the my.vultr.com console directly (same channel vultr1's deletion
+#        itself went through), not programmatically, until one of those is
+#        fixed.
+#      - Operator wants b00t-server (MCP proxy + full b00t capability
+#        surface) dogfooded onto this node too, once the base souls stack
+#        above is stable — b00t-server is still alpha; not attempted here,
+#        scoped as its own future deploy_*.py rather than folded into this
+#        one.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified

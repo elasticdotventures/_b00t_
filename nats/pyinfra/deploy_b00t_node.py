@@ -1,0 +1,224 @@
+"""
+Full from-scratch bootstrap for b00t-node (Vultr VPS, Debian 13/trixie),
+reconstructing the souls/NATS stack exactly as it exists in production as of
+2026-08-25. Idempotent — safe to re-run against an already-configured host.
+This is the memoized answer to "how do we rebuild this node without an LLM."
+
+Deliberately NOT reproduced here (known-broken cruft — see the "DEPLOYED
+2026-08-25" and earlier entries in _b00t_/datums/PROVIDER-VULTR.provider.tomllmd
+for the full incident history):
+  - b00t-capability-forge.service — crash-looping (activating/auto-restart)
+  - b00t-daprd.service            — crash-looping; Dapr's pubsub.jetstream
+    account was never actually provisioned, souls uses plain NATS+JetStream
+    instead (see the NATS auth section below)
+  - b00t-pingap.service, b00t-maintenance.service — unrelated to souls; add a
+    separate deploy_*.py for those if/when they need to be reproducible too
+
+Usage:
+    pyinfra nats/pyinfra/inventory.py nats/pyinfra/deploy_b00t_node.py \\
+        --data nats_password=$(openssl rand -hex 24)
+
+    # Dry run first (reports planned changes, does not apply them — NOTE:
+    # the local cargo build step below still runs during a dry run, since
+    # it happens on the controller machine, not the target host):
+    pyinfra --dry nats/pyinfra/inventory.py nats/pyinfra/deploy_b00t_node.py \\
+        --data nats_password=placeholder
+
+Never pass the LIVE production nats_password on the CLI in a way that lands
+in shell history / process listings you don't control — generate a fresh one
+per rebuild (openssl rand -hex 24), same as vultr-node-setup.sh's own
+LEAF_PASSWORD pattern. This script does not read or write the live secret;
+it is not embedded anywhere in this repo.
+"""
+
+from pyinfra import host, local
+from pyinfra.facts.files import File
+from pyinfra.operations import apt, files, server, systemd
+
+nats_password = host.data.get("nats_password")
+if not nats_password:
+    raise ValueError(
+        "pass --data nats_password=<secret> (e.g. $(openssl rand -hex 24)) — "
+        "never hardcode the live credential in this repo"
+    )
+
+# ─── 1. Base packages ──────────────────────────────────────────────────────
+apt.packages(
+    name="Install podman + iptables + curl",
+    packages=["podman", "iptables", "curl"],
+    update=True,
+)
+
+# ─── 2. k0s CNI isolation — MUST land before k0s ever starts ───────────────
+# Root cause of the CrashLoopBackOff incident (2026-08-22 through
+# 2026-08-24): k0s's CNI config and Podman's both dropped into the shared
+# /etc/cni/net.d, and new pod sandboxes landed on Podman's 10.88.0.0/16
+# instead of k0s's 10.244.0.0/24, so coredns couldn't reach the apiserver
+# ClusterIP. On a *fresh* host this file lands first, so k0s's containerd
+# writes its own conflist straight into the exclusive dir from the start —
+# no post-hoc "copy the file out, delete the old one" surgery required.
+files.directory(name="Create /etc/k0s/containerd.d", path="/etc/k0s/containerd.d")
+files.put(
+    name="Give k0s containerd its own exclusive CNI conf_dir",
+    src="files/10-cni.toml",
+    dest="/etc/k0s/containerd.d/10-cni.toml",
+)
+
+# ─── 3. k0s (single-node control plane) ────────────────────────────────────
+if not host.get_fact(File, path="/usr/local/bin/k0s"):
+    server.shell(
+        name="Install k0s",
+        commands=["curl -sSLf https://get.k0s.sh | sh"],
+    )
+
+if not host.get_fact(File, path="/etc/systemd/system/k0scontroller.service"):
+    server.shell(
+        name="Register k0s as a single-node controller",
+        commands=["k0s install controller --single"],
+    )
+
+systemd.service(
+    name="Enable + start k0scontroller",
+    service="k0scontroller.service",
+    running=True,
+    enabled=True,
+)
+
+# ─── 4. FORWARD-chain ACCEPT rules for podman0 ─────────────────────────────
+# k0s's kube-router rewrites the FORWARD chain (default-DROP) on every
+# k0scontroller start, with no rule for podman0 — without this, ANY podman
+# host-published port fails "No route to host", not just NATS's. A oneshot
+# unit (not a one-off manual iptables call) survives every future restart.
+files.put(
+    name="Upload FORWARD-chain rules script",
+    src="files/b00t-podman-forward-rules.sh",
+    dest="/usr/local/bin/b00t-podman-forward-rules.sh",
+    mode="755",
+)
+files.put(
+    name="Install b00t-podman-forward-rules.service",
+    src="files/b00t-podman-forward-rules.service",
+    dest="/etc/systemd/system/b00t-podman-forward-rules.service",
+)
+systemd.service(
+    name="Enable + run b00t-podman-forward-rules",
+    service="b00t-podman-forward-rules.service",
+    running=True,
+    enabled=True,
+    daemon_reload=True,
+)
+
+# 🤓 also worth checking on ANY podman host in this hive with a k0s/kube-router
+# neighbor, not just this one: `ip link show` for a second interface claiming
+# podman0's subnet (e.g. a vestigial cni-podman0 from an old CNI-plugin-based
+# podman config sourced from a stale /etc/cni/net.d/*.conflist) — that also
+# produces "No route to host" and is NOT a firewall problem. Confirm via
+# `podman network inspect podman` that nothing but podman0/netavark is live;
+# `ip link delete <dead-iface>` + remove the stale conflist if one exists.
+# Not codified as an operation here because it's a diagnostic check, not a
+# deterministic provisioning step — a fresh host with no CNI-plugin podman
+# history shouldn't hit it, per this deploy's own ordering (CNI isolation
+# lands before k0s ever starts).
+
+# ─── 5. NATS (podman play kube) ────────────────────────────────────────────
+files.directory(name="Create /opt/b00t", path="/opt/b00t")
+files.template(
+    name="Render NATS pod + ConfigMap (simple user/pass auth)",
+    src="templates/nats-pod-configured.yaml.j2",
+    dest="/opt/b00t/nats-pod-configured.yaml",
+    nats_password=nats_password,
+)
+files.put(
+    name="Install b00t-nats.service",
+    src="files/b00t-nats.service",
+    dest="/etc/systemd/system/b00t-nats.service",
+)
+systemd.service(
+    name="Enable + start b00t-nats",
+    service="b00t-nats.service",
+    running=True,
+    enabled=True,
+    daemon_reload=True,
+)
+
+# ─── 6. b00t-historian + b00t-forge-kv ─────────────────────────────────────
+# Built locally as static musl binaries (not on the target — these nodes are
+# provisioned lean, no Rust toolchain) and uploaded, matching the pattern
+# already proven for b00t-forge-kv (nats/vultr-forge-kv-deploy.sh).
+#
+# Built inside a rust:alpine container (podman), NOT via `rustup target add
+# x86_64-unknown-linux-musl` + a host musl-gcc — confirmed via a real build
+# attempt on this exact script: `musl-tools` only provides musl-gcc, no C++
+# support, and b00t-c0re-lib unconditionally pulls in tokenizers -> esaxx-rs
+# (a C++ dep, gated behind nothing — b00t-cli's own `candle` feature is NOT
+# what pulls this in, `default-features = []` doesn't help). A `g++` ->
+# musl-gcc symlink gets further but still fails (`fatal error: cstdint: No
+# such file or directory` — musl-gcc has no libstdc++ headers at all).
+# Alpine's native toolchain has a real musl-target g++ with full libstdc++,
+# so building *inside* alpine sidesteps the whole cross-toolchain problem —
+# no `--target` flag needed, alpine's "release" profile IS a musl binary.
+# Controller-machine prerequisite: podman (already required broadly in this
+# hive) able to pull docker.io/library/rust:1-alpine.
+# 🤓 Don't expect a bind-mounted --rm container to give cargo a fast
+# incremental re-run: confirmed via two real back-to-back builds on this
+# exact script (target/ bind-mounted both times, nothing in the source
+# changed) — the second run still fully recompiled b00t-cli's lib.rs from
+# near-scratch (10+ min of rustc CPU time, same as the first run). Budget
+# full compile time on every invocation, not just the first.
+REPO_ROOT = local.shell("git rev-parse --show-toplevel").strip()
+CONTAINER_IMAGE = "docker.io/library/rust:1-alpine"
+
+local.shell(
+    f"podman run --rm --memory=8g --memory-swap=8g -v {REPO_ROOT}:/src:Z -w /src {CONTAINER_IMAGE} sh -c "
+    # build-base (gcc/g++/make/musl-dev), perl + linux-headers (openssl-sys
+    # builds OpenSSL from source on musl — no prebuilt lib to link against),
+    # pkgconfig + openssl-dev as a fallback if a crate ever prefers system
+    # OpenSSL. --memory matches this hive's shared-node protocol (sm3lly,
+    # 2026-07-18): the podman OCI hook rejects any container with no memory
+    # cap outright.
+    "'apk add --no-cache build-base perl linux-headers pkgconfig openssl-dev "
+    "&& cargo build --release --jobs 4 --bin b00t-historian -p b00t-cli "
+    "&& cargo build --release --jobs 4 -p b00t-forge-kv'"
+)
+
+for binary_name in ("b00t-historian", "b00t-forge-kv"):
+    files.put(
+        name=f"Upload {binary_name}",
+        src=f"{REPO_ROOT}/target/release/{binary_name}",
+        dest=f"/usr/local/bin/{binary_name}",
+        mode="755",
+        add_deploy_dir=False,
+    )
+
+files.template(
+    name="Write /etc/b00t-historian.env (0600)",
+    src="templates/b00t-historian.env.j2",
+    dest="/etc/b00t-historian.env",
+    mode="600",
+    nats_password=nats_password,
+)
+files.put(
+    name="Install b00t-historian.service",
+    src="files/b00t-historian.service",
+    dest="/etc/systemd/system/b00t-historian.service",
+)
+files.put(
+    name="Install b00t-forge-kv.service",
+    src="files/b00t-forge-kv.service",
+    dest="/etc/systemd/system/b00t-forge-kv.service",
+)
+systemd.service(
+    name="Enable + start b00t-historian",
+    service="b00t-historian.service",
+    running=True,
+    enabled=True,
+    restarted=True,  # pick up a rebuilt binary / rotated password on re-run
+    daemon_reload=True,
+)
+systemd.service(
+    name="Enable + start b00t-forge-kv",
+    service="b00t-forge-kv.service",
+    running=True,
+    enabled=True,
+    daemon_reload=True,
+)

@@ -1,0 +1,12 @@
+[Unit]
+Description=Ensure podman0 FORWARD-chain ACCEPT rules (kube-router rebuilds FORWARD on every start)
+After=k0scontroller.service
+Requires=k0scontroller.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/b00t-podman-forward-rules.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

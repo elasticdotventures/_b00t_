@@ -1,0 +1,18 @@
+[Unit]
+Description=b00t-historian — durable NATS scribe + souls activity coordination
+After=network-online.target b00t-nats.service
+Wants=network-online.target
+Requires=b00t-nats.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/b00t-historian run
+Restart=always
+RestartSec=5
+Environment=NATS_URL=nats://127.0.0.1:4222
+Environment=NATS_USER=b00t-historian
+EnvironmentFile=/etc/b00t-historian.env
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target

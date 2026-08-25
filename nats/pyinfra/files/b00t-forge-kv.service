@@ -1,0 +1,13 @@
+[Unit]
+Description=b00t-forge-kv — RESP2 KV server (Redis/Valkey replacement)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/b00t-forge-kv --host 127.0.0.1 --port 6379
+Restart=always
+RestartSec=5
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
