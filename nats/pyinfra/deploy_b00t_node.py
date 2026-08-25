@@ -146,45 +146,57 @@ systemd.service(
 # provisioned lean, no Rust toolchain) and uploaded, matching the pattern
 # already proven for b00t-forge-kv (nats/vultr-forge-kv-deploy.sh).
 #
-# Built inside a rust:alpine container (podman), NOT via `rustup target add
-# x86_64-unknown-linux-musl` + a host musl-gcc — confirmed via a real build
-# attempt on this exact script: `musl-tools` only provides musl-gcc, no C++
-# support, and b00t-c0re-lib unconditionally pulls in tokenizers -> esaxx-rs
-# (a C++ dep, gated behind nothing — b00t-cli's own `candle` feature is NOT
-# what pulls this in, `default-features = []` doesn't help). A `g++` ->
-# musl-gcc symlink gets further but still fails (`fatal error: cstdint: No
-# such file or directory` — musl-gcc has no libstdc++ headers at all).
-# Alpine's native toolchain has a real musl-target g++ with full libstdc++,
-# so building *inside* alpine sidesteps the whole cross-toolchain problem —
-# no `--target` flag needed, alpine's "release" profile IS a musl binary.
-# Controller-machine prerequisite: podman (already required broadly in this
-# hive) able to pull docker.io/library/rust:1-alpine.
-# 🤓 Don't expect a bind-mounted --rm container to give cargo a fast
-# incremental re-run: confirmed via two real back-to-back builds on this
-# exact script (target/ bind-mounted both times, nothing in the source
-# changed) — the second run still fully recompiled b00t-cli's lib.rs from
-# near-scratch (10+ min of rustc CPU time, same as the first run). Budget
-# full compile time on every invocation, not just the first.
-REPO_ROOT = local.shell("git rev-parse --show-toplevel").strip()
-CONTAINER_IMAGE = "docker.io/library/rust:1-alpine"
+# 🤓 SUPERSEDED 2026-08-25 (_b00t_#1149): this used to require building
+# inside a rust:alpine container (podman) — plain musl-tools has no C++
+# support, and esaxx-rs (a transitive dep via tokenizers, pulled in by
+# model2vec-rs's own default features) needed one to compile. Root-caused
+# and fixed at the source (model2vec-rs default-features=false — see
+# vendor/embed-anything-b00t/rust/Cargo.toml), so a plain
+# `rustup target add x86_64-unknown-linux-musl` + host musl-gcc now builds
+# cleanly, no container needed. The old container approach is left below,
+# commented out, in case a *future* dependency reintroduces a C++
+# requirement — flip back to it rather than rediscovering the Alpine fix.
+#
+# REPO_ROOT = local.shell("git rev-parse --show-toplevel").strip()
+# CONTAINER_IMAGE = "docker.io/library/rust:1-alpine"
+#
+# local.shell(
+#     f"podman run --rm --memory=8g --memory-swap=8g -v {REPO_ROOT}:/src:Z -w /src {CONTAINER_IMAGE} sh -c "
+#     "'apk add --no-cache build-base perl linux-headers pkgconfig openssl-dev "
+#     "&& cargo build --release --jobs 4 --bin b00t-historian -p b00t-cli "
+#     "&& cargo build --release --jobs 4 -p b00t-forge-kv'"
+# )
+#
+# for binary_name in ("b00t-historian", "b00t-forge-kv"):
+#     files.put(
+#         name=f"Upload {binary_name}",
+#         src=f"{REPO_ROOT}/target/release/{binary_name}",
+#         dest=f"/usr/local/bin/{binary_name}",
+#         mode="755",
+#         add_deploy_dir=False,
+#     )
+
+MUSL_TARGET = "x86_64-unknown-linux-musl"
+
+local.shell(f"rustup target add {MUSL_TARGET}")
+
+# Resolve the real cargo target dir via `cargo metadata` rather than
+# assuming `<repo>/target` — the controller machine may set CARGO_TARGET_DIR
+# (e.g. a shared build-cache dir) via .cargo/config.toml or its shell env.
+TARGET_DIR = local.shell(
+    "cargo metadata --no-deps --format-version=1 "
+    "| python3 -c \"import json,sys; print(json.load(sys.stdin)['target_directory'])\""
+).strip()
 
 local.shell(
-    f"podman run --rm --memory=8g --memory-swap=8g -v {REPO_ROOT}:/src:Z -w /src {CONTAINER_IMAGE} sh -c "
-    # build-base (gcc/g++/make/musl-dev), perl + linux-headers (openssl-sys
-    # builds OpenSSL from source on musl — no prebuilt lib to link against),
-    # pkgconfig + openssl-dev as a fallback if a crate ever prefers system
-    # OpenSSL. --memory matches this hive's shared-node protocol (sm3lly,
-    # 2026-07-18): the podman OCI hook rejects any container with no memory
-    # cap outright.
-    "'apk add --no-cache build-base perl linux-headers pkgconfig openssl-dev "
-    "&& cargo build --release --jobs 4 --bin b00t-historian -p b00t-cli "
-    "&& cargo build --release --jobs 4 -p b00t-forge-kv'"
+    f"cargo build --release --target {MUSL_TARGET} --jobs 4 --bin b00t-historian -p b00t-cli "
+    f"&& cargo build --release --target {MUSL_TARGET} --jobs 4 -p b00t-forge-kv"
 )
 
 for binary_name in ("b00t-historian", "b00t-forge-kv"):
     files.put(
         name=f"Upload {binary_name}",
-        src=f"{REPO_ROOT}/target/release/{binary_name}",
+        src=f"{TARGET_DIR}/{MUSL_TARGET}/release/{binary_name}",
         dest=f"/usr/local/bin/{binary_name}",
         mode="755",
         add_deploy_dir=False,
