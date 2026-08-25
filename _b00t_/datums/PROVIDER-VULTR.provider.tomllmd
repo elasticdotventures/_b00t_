@@ -153,6 +153,79 @@
 #      metrics — confirming the fix is complete, not just superficially
 #      Ready.
 #
+# DEPLOYED 2026-08-25: b00t-historian (souls activity coordination, see
+#      b00t-historian PR #1147) running durably on b00t-node
+#      (systemd b00t-historian.service, 0 restarts). Getting there
+#      surfaced two more real infra bugs, both fixed:
+#
+#      1. b00t-node's NATS had NO usable auth: the operator/JWT
+#      resolver_preload only ever defined a SYS (monitoring) account;
+#      the account it was actually provisioned for (Dapr's
+#      pubsub.jetstream component, never deployed) was never created,
+#      and the operator's own NSC signing key isn't recoverable from
+#      anywhere still accessible (checked this node, the deploying
+#      session's own machine, and fung1). Reverted
+#      /opt/b00t/nats-pod-configured.yaml's ConfigMap to simple
+#      username/password auth (same pattern as vultr1's
+#      nats-server.service) — a `b00t-historian` user, password in
+#      /etc/b00t-historian.env (0600, EnvironmentFile'd into the
+#      systemd unit, not embedded in the unit file itself). JetStream
+#      itself was unaffected. Old operator-mode YAML backed up at
+#      nats-pod-configured.yaml.bak-operator-mode.
+#
+#      2. 🚩 (2026-08-25, found chasing an unrelated "no route to
+#      host" on the NATS client port) b00t-node had TWO interfaces
+#      claiming the identical 10.88.0.0/16 subnet: `podman0` (the real
+#      one, netavark-managed, what podman's actual "podman" network
+#      uses) and a vestigial `cni-podman0` (state DOWN/NO-CARRIER,
+#      sourced from a stale /etc/cni/net.d/87-podman-bridge.conflist —
+#      leftover from some older CNI-plugin-based podman config,
+#      confirmed NOT referenced by podman's current netavark network
+#      via `podman network inspect podman`). `ip route get <container
+#      ip>` resolved via the DEAD interface, so every podman
+#      host-published port (NATS's 4222/6222/8222 included) failed
+#      with "No route to host" even though the container itself was
+#      healthy — this wasn't NATS-specific, it would have broken ANY
+#      podman port-publish on this host. Confirmed via tcpdump that
+#      external SYNs to a podman-published port never even reached the
+#      physical interface (ruling out a firewall explanation for that
+#      part). Fixed by `ip link delete cni-podman0` and removing the
+#      stale conflist so it can't be recreated. Separately, k0s's
+#      kube-router rebuilds the FORWARD chain (default-DROP policy) on
+#      every k0scontroller start/boot with no rule for podman0 at
+#      all — added explicit ACCEPT rules for it, made idempotent +
+#      durable via a small script
+#      (/usr/local/bin/b00t-podman-forward-rules.sh) run by a oneshot
+#      systemd unit (b00t-podman-forward-rules.service,
+#      After=k0scontroller.service) rather than a one-off manual
+#      iptables call that a future restart would silently wipe.
+#      🤓 if a podman container's host-published port ever again fails
+#      with "No route to host" (not "connection refused" — that's just
+#      nothing listening) on a k0s+podman host, check `ip route get
+#      <container-ip>` for a route via an unexpected/dead interface
+#      before assuming it's a firewall problem.
+#
+#      Cross-host access: souls' whole point is agents on OTHER hosts
+#      (sm3lly, fung1) reaching b00t-node's historian. Direct exposure
+#      (opening 4222 in b00t-node's ufw) was tried first but the real
+#      blocker turned out to be Vultr's own cloud firewall group for
+#      this instance (the "only 22/80/443 public" convention is
+#      enforced there, not just in ufw — confirmed via tcpdump showing
+#      zero packets arriving at the host's physical interface for an
+#      external connection attempt on 4222, vs. a real "connection
+#      refused" on 443). Reverted that ufw opening and used the same
+#      SSH-tunnel pattern already proven for vultr1 instead: fung1's
+#      key added to b00t-node's root authorized_keys, a `b00t-node`
+#      ~/.ssh/config alias on fung1, and a tunnel (`ssh -N -L
+#      192.168.1.149:17422:127.0.0.1:4222 b00t-node`) — a manually
+#      backgrounded process today, same as vultr1's actual tunnel
+#      (despite `just vultr-tunnel-install` documenting a systemd unit
+#      for that one, no root/sudo access was available on fung1 in
+#      this session to actually install one for either tunnel — real
+#      systemd-unit installation for both remains a follow-up).
+#      Verified end-to-end: a real publish from fung1, through the
+#      tunnel, landed in b00t-node's souls_activity soul table.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
