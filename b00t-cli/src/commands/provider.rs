@@ -1264,10 +1264,30 @@ impl VultrProvider {
 /// Pure builder, unit-testable without VULTR_API_KEY or the network —
 /// mirrors `hf_batch_args`/`local_batch_args`. Vultr's Instance Create body.
 fn vultr_create_instance_body(cfg: &EndpointConfig) -> serde_json::Value {
-    let region = std::env::var("VULTR_REGION").unwrap_or_else(|_| VULTR_DEFAULT_REGION.into());
-    let plan = std::env::var("VULTR_PLAN").unwrap_or_else(|_| VULTR_DEFAULT_PLAN.into());
-    let os_id: u32 = std::env::var("VULTR_OS_ID")
-        .ok()
+    // 🤓 b00t: `cfg.env` (a generic per-call override bag on the provider-
+    //    agnostic EndpointConfig) takes priority over the process-wide
+    //    VULTR_REGION/VULTR_PLAN/VULTR_OS_ID env vars, which in turn fall
+    //    back to the hardcoded defaults. This lets a single long-running
+    //    caller (e.g. b00t-historian's NATS delegate — see
+    //    vultr_delegate.rs) honor a per-request plan/region without mutating
+    //    process-global env vars, which would race under concurrent calls.
+    let region = cfg
+        .env
+        .get("VULTR_REGION")
+        .cloned()
+        .or_else(|| std::env::var("VULTR_REGION").ok())
+        .unwrap_or_else(|| VULTR_DEFAULT_REGION.into());
+    let plan = cfg
+        .env
+        .get("VULTR_PLAN")
+        .cloned()
+        .or_else(|| std::env::var("VULTR_PLAN").ok())
+        .unwrap_or_else(|| VULTR_DEFAULT_PLAN.into());
+    let os_id: u32 = cfg
+        .env
+        .get("VULTR_OS_ID")
+        .cloned()
+        .or_else(|| std::env::var("VULTR_OS_ID").ok())
         .and_then(|s| s.parse().ok())
         .unwrap_or(VULTR_DEFAULT_OS_ID);
     serde_json::json!({
@@ -2086,6 +2106,22 @@ mod vultr_tests {
             name: name.to_string(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn create_instance_body_respects_per_call_env_override() {
+        // Per-call cfg.env wins regardless of process env vars — this is
+        // what lets a single long-running caller (b00t-historian's NATS
+        // delegate) serve concurrent requests with different plans/regions
+        // without racing on process-global env mutation.
+        let mut cfg = sample_cfg("b00t-delegate-fung1");
+        cfg.env.insert("VULTR_PLAN".to_string(), "vc2-4c-8gb".to_string());
+        cfg.env.insert("VULTR_REGION".to_string(), "lax".to_string());
+        cfg.env.insert("VULTR_OS_ID".to_string(), "999".to_string());
+        let body = vultr_create_instance_body(&cfg);
+        assert_eq!(body["plan"], "vc2-4c-8gb");
+        assert_eq!(body["region"], "lax");
+        assert_eq!(body["os_id"], 999);
     }
 
     #[test]

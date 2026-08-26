@@ -51,7 +51,11 @@
 
 use anyhow::{Context, Result};
 use b00t_c0re_lib::soul_dataframerr::{SoulColumn, SoulValue};
+use b00t_cli::commands::provider::{get_provider, ComputeProvider};
 use b00t_cli::commands::soul::{load_registry, load_soul_doc, with_registry};
+use b00t_cli::vultr_delegate::{
+    self, AllowedRequesters, DeprovisionRequest, ProvisionRequest, StatusRequest,
+};
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use futures::StreamExt;
@@ -60,11 +64,24 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const SOULS_TABLE: &str = "souls_activity";
 const SOULS_QUERY_SUBJECT: &str = "souls.query";
 const SOULS_WILDCARD: &str = "souls.>";
 const DEFAULT_QUERY_LIMIT: usize = 50;
+
+// 🤓 vultr delegation (see _b00t_/datums/PROVIDER-VULTR.provider.tomllmd,
+//    "MEMOIZED" sections) — b00t-historian is the sole node whose
+//    VULTR_API_KEY / allowlisted egress IP is expected to work, so it acts
+//    as the single call site for the whole hive rather than every agent
+//    needing its own key + allowlist entry. Pure orchestration logic lives
+//    in b00t_cli::vultr_delegate; this file is just the NATS wiring, same
+//    shape as the existing souls.query request-reply handling below.
+const VULTR_PROVISION_SUBJECT: &str = "vultr.provision";
+const VULTR_DEPROVISION_SUBJECT: &str = "vultr.deprovision";
+const VULTR_STATUS_SUBJECT: &str = "vultr.status";
+const VULTR_WILDCARD: &str = "vultr.>";
 
 #[derive(Parser)]
 #[clap(version, about = "b00t historian: durable NATS subject scribe")]
@@ -147,6 +164,45 @@ enum Command {
         /// Max events to return (default: 50).
         #[clap(long)]
         limit: Option<usize>,
+    },
+    /// One-shot: ask the historian running `run` to provision a Vultr VPS
+    /// on your behalf (NATS request-reply on `vultr.provision`). Requires
+    /// `requested_by` to be on that historian's VULTR_DELEGATE_ALLOWLIST.
+    Provision {
+        /// Identifier checked against the historian's allowlist (e.g. your
+        /// hostname — `fung1`, `sm3lly`).
+        #[clap(long)]
+        requested_by: String,
+        /// Why — recorded on the instance's labels and in the durable log.
+        #[clap(long)]
+        purpose: String,
+        /// Required: how long until auto-deprovision. Bounded by
+        /// vultr_delegate::MAX_TTL_HOURS (one week).
+        #[clap(long)]
+        ttl_hours: u32,
+        /// Vultr plan id (e.g. `vc2-4c-8gb`); defaults to the historian's
+        /// process default (VULTR_PLAN env / vc2-1c-1gb) if omitted.
+        #[clap(long)]
+        plan: Option<String>,
+        /// Vultr region code (e.g. `syd`); same default-fallback as `plan`.
+        #[clap(long)]
+        region: Option<String>,
+    },
+    /// One-shot: ask the historian to tear down a Vultr instance it
+    /// provisioned (NATS request-reply on `vultr.deprovision`).
+    Deprovision {
+        #[clap(long)]
+        requested_by: String,
+        #[clap(long)]
+        instance_id: String,
+    },
+    /// One-shot: ask the historian for the status of b00t-managed Vultr
+    /// instance(s) (NATS request-reply on `vultr.status`). Not
+    /// allowlist-gated — read-only.
+    InstanceStatus {
+        /// Omit to list all b00t-managed instances.
+        #[clap(long)]
+        instance_id: Option<String>,
     },
 }
 
@@ -324,7 +380,101 @@ async fn main() -> Result<()> {
             since,
             limit,
         } => query_cmd(&args, repo, hostname.clone(), *since, *limit).await,
+        Command::Provision {
+            requested_by,
+            purpose,
+            ttl_hours,
+            plan,
+            region,
+        } => {
+            provision_cmd(
+                &args,
+                requested_by.clone(),
+                purpose.clone(),
+                *ttl_hours,
+                plan.clone(),
+                region.clone(),
+            )
+            .await
+        }
+        Command::Deprovision {
+            requested_by,
+            instance_id,
+        } => deprovision_cmd(&args, requested_by.clone(), instance_id.clone()).await,
+        Command::InstanceStatus { instance_id } => {
+            instance_status_cmd(&args, instance_id.clone()).await
+        }
     }
+}
+
+/// Shared request-reply helper for the three vultr.* one-shot commands —
+/// same connect/timeout/pretty-print shape as `query_cmd`.
+async fn vultr_request_reply<Req: Serialize, Resp: for<'de> Deserialize<'de>>(
+    args: &Args,
+    subject: &str,
+    request: &Req,
+) -> Result<Resp> {
+    let client = async_nats::ConnectOptions::new()
+        .name(args.id.clone())
+        .connect(&args.nats_url)
+        .await
+        .with_context(|| format!("connecting to NATS at {}", args.nats_url))?;
+
+    let payload = serde_json::to_vec(request)?;
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        client.request(subject.to_string(), payload.into()),
+    )
+    .await
+    .with_context(|| {
+        format!("{subject} timed out after 30s (is `b00t-historian run` active on this NATS server?)")
+    })?
+    .with_context(|| format!("requesting {subject}"))?;
+
+    let body: serde_json::Value = serde_json::from_slice(&response.payload)
+        .with_context(|| format!("parsing {subject} reply"))?;
+    if let Some(err) = body.get("error").and_then(|e| e.as_str()) {
+        anyhow::bail!("{subject} failed: {err}");
+    }
+    println!("{}", serde_json::to_string_pretty(&body)?);
+    serde_json::from_value(body).with_context(|| format!("deserializing {subject} reply"))
+}
+
+async fn provision_cmd(
+    args: &Args,
+    requested_by: String,
+    purpose: String,
+    ttl_hours: u32,
+    plan: Option<String>,
+    region: Option<String>,
+) -> Result<()> {
+    let req = ProvisionRequest {
+        requested_by,
+        purpose,
+        ttl_hours,
+        plan,
+        region,
+    };
+    let _: vultr_delegate::ProvisionResponse =
+        vultr_request_reply(args, VULTR_PROVISION_SUBJECT, &req).await?;
+    Ok(())
+}
+
+async fn deprovision_cmd(args: &Args, requested_by: String, instance_id: String) -> Result<()> {
+    let req = DeprovisionRequest {
+        requested_by,
+        instance_id,
+    };
+    let _: vultr_delegate::DeprovisionResponse =
+        vultr_request_reply(args, VULTR_DEPROVISION_SUBJECT, &req).await?;
+    Ok(())
+}
+
+async fn instance_status_cmd(args: &Args, instance_id: Option<String>) -> Result<()> {
+    let req = StatusRequest { instance_id };
+    let _: vultr_delegate::StatusResponse =
+        vultr_request_reply(args, VULTR_STATUS_SUBJECT, &req).await?;
+    Ok(())
 }
 
 async fn query_cmd(
@@ -407,6 +557,39 @@ async fn publish(
     Ok(())
 }
 
+/// Sends a NATS request-reply response for one of the vultr.* subjects —
+/// success serializes `T` directly; failure sends `{"error": "..."}"` so
+/// `vultr_request_reply` (the CLI-side one-shot helper) can tell the two
+/// apart without a separate envelope type.
+async fn vultr_reply<T: Serialize>(
+    client: &async_nats::Client,
+    reply_to: Option<async_nats::Subject>,
+    label: &str,
+    result: Result<T>,
+) {
+    let Some(reply_subject) = reply_to else {
+        eprintln!("{label} received with no reply-to inbox, ignoring");
+        return;
+    };
+    let body = match result {
+        Ok(v) => serde_json::to_value(v)
+            .unwrap_or_else(|e| json!({"error": format!("serializing {label} reply: {e}")})),
+        Err(e) => json!({"error": e.to_string()}),
+    };
+    let payload = match serde_json::to_vec(&body) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("failed to encode {label} reply: {e}");
+            return;
+        }
+    };
+    if let Err(e) = client.publish(reply_subject.clone(), payload.into()).await {
+        eprintln!("failed to reply to {label} on {reply_subject}: {e}");
+    } else {
+        eprintln!("[{}] answered {label} -> {reply_subject}", Utc::now().to_rfc3339());
+    }
+}
+
 async fn run(args: &Args, log_dir: &Path) -> Result<()> {
     eprintln!(
         "🥾 b00t-historian[{}]: connecting to {}",
@@ -432,11 +615,34 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
         .subscribe(SOULS_WILDCARD)
         .await
         .with_context(|| format!("subscribing to {SOULS_WILDCARD}"))?;
+    let mut vultr_sub = client
+        .subscribe(VULTR_WILDCARD)
+        .await
+        .with_context(|| format!("subscribing to {VULTR_WILDCARD}"))?;
+
+    // 🤓 VULTR_API_KEY is expected to be UNSET on most hosts running this
+    // binary (only b00t-node itself is meant to hold it — see
+    // vultr_delegate.rs's module doc). Missing it must not crash the whole
+    // souls/archive scribe, which has nothing to do with vultr delegation —
+    // log once and reply with a clear error to every vultr.* request instead.
+    let vultr_provider: Option<Arc<dyn ComputeProvider>> = match get_provider("vultr") {
+        Ok(p) => Some(Arc::from(p)),
+        Err(e) => {
+            eprintln!(
+                "vultr delegation disabled on this historian: {e} (vultr.* requests will get an error reply)"
+            );
+            None
+        }
+    };
+    let vultr_allowlist = AllowedRequesters::from_env();
+    let vultr_max_instances = vultr_delegate::max_instances_from_env();
 
     eprintln!(
-        "camping on '{}' (archive) + '{}' (souls) — logging to {}/<YYYY>/<MM>/{}.ndjson, souls table '{}' (Ctrl-C to stop)",
+        "camping on '{}' (archive) + '{}' (souls) + '{}' (vultr, {}) — logging to {}/<YYYY>/<MM>/{}.ndjson, souls table '{}' (Ctrl-C to stop)",
         args.subject,
         SOULS_WILDCARD,
+        VULTR_WILDCARD,
+        if vultr_provider.is_some() { "enabled" } else { "disabled: no VULTR_API_KEY" },
         log_dir.display(),
         args.basename,
         SOULS_TABLE,
@@ -505,6 +711,64 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
                     }
                 } else {
                     eprintln!("unrecognized souls.* subject: {subject}");
+                }
+            }
+            maybe_msg = vultr_sub.next() => {
+                let Some(msg) = maybe_msg else { continue; };
+                let subject = msg.subject.to_string();
+                let reply_to = msg.reply.clone();
+                match subject.as_str() {
+                    VULTR_PROVISION_SUBJECT => {
+                        let result: Result<vultr_delegate::ProvisionResponse> = async {
+                            let req: ProvisionRequest = serde_json::from_slice(&msg.payload)
+                                .context("parsing vultr.provision request")?;
+                            let provider = vultr_provider
+                                .as_deref()
+                                .context("vultr provider not configured on this historian (VULTR_API_KEY unset)")?;
+                            let resp = vultr_delegate::handle_provision(
+                                &req,
+                                provider,
+                                &vultr_allowlist,
+                                vultr_max_instances,
+                            )
+                            .await?;
+                            if let Some(p) = vultr_provider.clone() {
+                                vultr_delegate::spawn_ttl_teardown(
+                                    resp.instance_id.clone(),
+                                    std::time::Duration::from_secs(u64::from(req.ttl_hours) * 3600),
+                                    p,
+                                );
+                            }
+                            Ok(resp)
+                        }
+                        .await;
+                        vultr_reply(&client, reply_to, VULTR_PROVISION_SUBJECT, result).await;
+                    }
+                    VULTR_DEPROVISION_SUBJECT => {
+                        let result: Result<vultr_delegate::DeprovisionResponse> = async {
+                            let req: DeprovisionRequest = serde_json::from_slice(&msg.payload)
+                                .context("parsing vultr.deprovision request")?;
+                            let provider = vultr_provider
+                                .as_deref()
+                                .context("vultr provider not configured on this historian (VULTR_API_KEY unset)")?;
+                            vultr_delegate::handle_deprovision(&req, provider, &vultr_allowlist).await
+                        }
+                        .await;
+                        vultr_reply(&client, reply_to, VULTR_DEPROVISION_SUBJECT, result).await;
+                    }
+                    VULTR_STATUS_SUBJECT => {
+                        let result: Result<vultr_delegate::StatusResponse> = async {
+                            let req: StatusRequest = serde_json::from_slice(&msg.payload)
+                                .context("parsing vultr.status request")?;
+                            let provider = vultr_provider
+                                .as_deref()
+                                .context("vultr provider not configured on this historian (VULTR_API_KEY unset)")?;
+                            vultr_delegate::handle_status(&req, provider).await
+                        }
+                        .await;
+                        vultr_reply(&client, reply_to, VULTR_STATUS_SUBJECT, result).await;
+                    }
+                    other => eprintln!("unrecognized vultr.* subject: {other}"),
                 }
             }
             else => break,

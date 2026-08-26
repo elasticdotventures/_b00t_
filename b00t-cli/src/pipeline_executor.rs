@@ -857,8 +857,14 @@ impl PipelineExecutor {
     /// or invoke a Wasm capsule.  In this implementation it runs a simple
     /// closure based on the stage name, simulating work.
     ///
-    /// NOTE: This is intentionally simplistic for the MVP.  Real execution is
-    /// delegated to `JobExecutor` / `ComputeProvider` in a later milestone.
+    /// NOTE: This is intentionally simplistic for the MVP. Real remote
+    /// execution (actually shelling out on a provisioned host) is still a
+    /// later milestone. What IS wired up as of `pipeline_provision.rs`:
+    /// getting a *host* for a stage that doesn't fit any known one, via
+    /// `schedule_with_dynamic_provisioning` (calls b00t-historian's
+    /// `vultr.provision` NATS subject, see `vultr_delegate.rs`) — that's
+    /// the scheduling half of `ComputeProvider` delegation. Running a stage
+    /// once it has a host is the remaining half.
     async fn run_stage_fn(
         &self,
         stage: &StageSpec,
