@@ -63,6 +63,30 @@ impl OpenAiJudge {
     pub fn new(model: impl Into<String>) -> Self {
         Self { client: Client::new(), model: model.into(), timeout: Duration::from_secs(15) }
     }
+
+    /// Any provider that speaks the OpenAI Chat Completions wire protocol at
+    /// `POST {base_url}/chat/completions` — Telnyx Inference, OpenRouter, and a
+    /// self-hosted OpenAI-compatible server (e.g. b00t-candle-serve) all qualify;
+    /// this one struct covers all of them, no per-provider type needed. Cloudflare
+    /// Workers AI does NOT qualify — different request/response shape
+    /// (`/ai/run/{model}`), would need its own `EscalationJudge` impl if ever wired
+    /// up (not attempted: the only Cloudflare credential found this session lacks
+    /// the Workers AI permission scope anyway — see
+    /// `_b00t_/datums/PROVIDER-VULTR.provider.tomllmd`'s sibling notes on this).
+    pub fn with_base_url(
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        let config = async_openai::config::OpenAIConfig::new()
+            .with_api_base(base_url)
+            .with_api_key(api_key);
+        Self {
+            client: Client::with_config(config),
+            model: model.into(),
+            timeout: Duration::from_secs(15),
+        }
+    }
 }
 
 #[async_trait]
@@ -169,5 +193,57 @@ mod tests {
     async fn fake_judge_always_deny_denies_with_reason() {
         let j = FakeJudge::always_deny("no");
         assert_eq!(j.judge("a", "s", "d", "j").await, JudgeOutcome::Denied { reason: "no".into() });
+    }
+
+    // 🤓 Real (unmocked) live call against Telnyx Inference — proves
+    // OpenAiJudge::with_base_url actually round-trips through a real
+    // OpenAI-compatible provider, not just that it compiles. Skips
+    // gracefully when TELNYX_API_KEY isn't set (most environments), same
+    // pattern as pipeline_remote_exec.rs's ssh-not-on-PATH skip.
+    #[tokio::test]
+    async fn openai_judge_with_base_url_reaches_a_real_openai_compatible_provider() {
+        let Ok(api_key) = std::env::var("TELNYX_API_KEY") else {
+            eprintln!("skipping: TELNYX_API_KEY not set in this environment");
+            return;
+        };
+
+        let judge = OpenAiJudge::with_base_url(
+            "https://api.telnyx.com/v2/ai",
+            api_key,
+            "meta-llama/Meta-Llama-3.1-8B-Instruct",
+        );
+
+        // A justification with no legitimate reasoning should be denied by a
+        // real model — this isn't asserting exact wording, just that a real
+        // completion came back and got parsed into a real JudgeOutcome
+        // rather than an error path (malformed response / timeout / call
+        // failure all show up as Denied too, so this alone doesn't prove
+        // the call succeeded — the not-a-generic-error-message check below
+        // does).
+        let outcome = judge
+            .judge(
+                "test-agent",
+                "vultr-provision",
+                "provision a Vultr VPS",
+                "just felt like it, no real reason",
+            )
+            .await;
+
+        match outcome {
+            JudgeOutcome::Granted => {
+                // A real model might grant a weak justification — that's a
+                // prompt-quality question, not a wiring bug. Either
+                // outcome proves the round trip worked.
+            }
+            JudgeOutcome::Denied { reason } => {
+                assert!(
+                    !reason.starts_with("llm call failed")
+                        && !reason.starts_with("llm call timed out")
+                        && !reason.starts_with("llm call panicked")
+                        && !reason.starts_with("request build failed"),
+                    "got an error-path denial, not a real judged one: {reason}"
+                );
+            }
+        }
     }
 }

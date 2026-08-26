@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use b00t_c0re_gov::redb_scope_store::RedbScopeStore;
 use b00t_c0re_gov::scope_store::ScopeId;
-use capability_forge::judge::OpenAiJudge;
+use capability_forge::judge::{EscalationJudge, FakeJudge, OpenAiJudge};
 use capability_forge::service::{handle_wire_request, CapabilityForge};
 use futures::StreamExt;
 use nkeys::KeyPair;
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let mut store = RedbScopeStore::open(&db_path, ScopeId::Global, None)
         .with_context(|| format!("opening redb at {db_path}"))?;
     let account_signing_key = KeyPair::from_seed(&account_seed).context("invalid account seed")?;
-    let judge = OpenAiJudge::new(judge_model);
+    let judge = build_judge(select_judge_provider(), &judge_model);
 
     let client = connect_nats(&nats_url).await?;
     let mut sub = client.subscribe("capability.request.*").await.context("subscribing")?;
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
         // `wire_request_round_trips_through_publish_subscribe_reply` test.
         let mut forge = CapabilityForge {
             store: &mut store,
-            judge: &judge,
+            judge: judge.as_ref(),
             account_signing_key: &account_signing_key,
             account_pubkey: &account_pubkey,
             grant_ttl: chrono::Duration::minutes(30),
@@ -96,6 +96,89 @@ async fn connect_nats(nats_url: &str) -> Result<async_nats::Client> {
                 .await
                 .context("connecting to NATS (JWT/creds-file auth)")
         }
+    }
+}
+
+/// Which LLM backend `build_judge` should use, chosen purely from which
+/// credential env vars are set — a pure function so the selection logic is
+/// testable without any network access. See `build_judge` for how each
+/// variant maps to an actual `EscalationJudge`.
+#[derive(Debug, Clone, PartialEq)]
+enum JudgeProvider {
+    /// Telnyx Inference — an OpenAI-Chat-Completions-compatible endpoint
+    /// (https://api.telnyx.com/v2/ai/chat/completions). Tried first: it's
+    /// the one provider confirmed to actually work with a real credential
+    /// found on this hive (see PROVIDER-VULTR.provider.tomllmd's sibling
+    /// notes) — Cloudflare Workers AI was tried too and rejected the only
+    /// available token (valid token, missing the Workers AI permission
+    /// scope), and no OpenAI/OpenRouter key exists anywhere in the hive
+    /// yet.
+    Telnyx { api_key: String },
+    /// OpenRouter — also OpenAI-Chat-Completions-compatible
+    /// (https://openrouter.ai/api/v1), a broad model marketplace. No
+    /// credential for this exists in the hive as of this writing; wired up
+    /// for whenever one does.
+    OpenRouter { api_key: String },
+    /// Any self-hosted OpenAI-compatible server — e.g. b00t-candle-serve or
+    /// b00t-mcp's own `--llm` gateway (see docs/superpowers on b00t-server
+    /// dogfooding), or vLLM/llama.cpp directly. Same wire protocol as the
+    /// two above, just pointed at a local URL with no real API key needed.
+    LocalOpenAiCompatible { base_url: String },
+    /// Real OpenAI — the original, unconditional default before this
+    /// provider-selection existed. Lowest priority now only because no
+    /// OPENAI_API_KEY has actually been found anywhere in this hive this
+    /// session, not because it's a worse provider than the others.
+    OpenAi,
+    /// Nothing configured — `build_judge` returns a `FakeJudge` that
+    /// always denies, matching the existing "the judge fails closed by
+    /// design" behavior this file already documented before any of this
+    /// provider selection existed.
+    None,
+}
+
+fn select_judge_provider() -> JudgeProvider {
+    if let Ok(api_key) = env::var("TELNYX_API_KEY") {
+        return JudgeProvider::Telnyx { api_key };
+    }
+    if let Ok(api_key) = env::var("OPENROUTER_API_KEY") {
+        return JudgeProvider::OpenRouter { api_key };
+    }
+    if let Ok(base_url) = env::var("CAPFORGE_JUDGE_LOCAL_URL") {
+        return JudgeProvider::LocalOpenAiCompatible { base_url };
+    }
+    if env::var("OPENAI_API_KEY").is_ok() {
+        return JudgeProvider::OpenAi;
+    }
+    JudgeProvider::None
+}
+
+fn build_judge(provider: JudgeProvider, judge_model: &str) -> Box<dyn EscalationJudge> {
+    match provider {
+        JudgeProvider::Telnyx { api_key } => Box::new(OpenAiJudge::with_base_url(
+            "https://api.telnyx.com/v2/ai",
+            api_key,
+            env::var("CAPFORGE_JUDGE_MODEL_TELNYX")
+                .unwrap_or_else(|_| "meta-llama/Meta-Llama-3.1-8B-Instruct".to_string()),
+        )),
+        JudgeProvider::OpenRouter { api_key } => Box::new(OpenAiJudge::with_base_url(
+            "https://openrouter.ai/api/v1",
+            api_key,
+            judge_model.to_string(),
+        )),
+        JudgeProvider::LocalOpenAiCompatible { base_url } => Box::new(OpenAiJudge::with_base_url(
+            base_url,
+            // A local server behind CAPFORGE_JUDGE_LOCAL_URL is assumed to
+            // need no real bearer token; async-openai still requires
+            // *some* string here, so a placeholder is sent rather than
+            // making the field optional throughout OpenAiJudge for a
+            // one-provider edge case.
+            "unused",
+            judge_model.to_string(),
+        )),
+        JudgeProvider::OpenAi => Box::new(OpenAiJudge::new(judge_model.to_string())),
+        JudgeProvider::None => Box::new(FakeJudge::always_deny(
+            "no LLM judge provider configured (set TELNYX_API_KEY, OPENROUTER_API_KEY,              CAPFORGE_JUDGE_LOCAL_URL, or OPENAI_API_KEY) — escalatable-tier requests fail              closed until one is",
+        )),
     }
 }
 
@@ -172,5 +255,116 @@ mod connect_nats_tests {
     fn env_mutex() -> &'static std::sync::Mutex<()> {
         static M: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
         M.get_or_init(|| std::sync::Mutex::new(()))
+    }
+}
+
+#[cfg(test)]
+mod judge_provider_tests {
+    use super::*;
+
+    fn env_mutex() -> &'static std::sync::Mutex<()> {
+        static M: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        M.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
+    fn clear_all() {
+        unsafe {
+            env::remove_var("TELNYX_API_KEY");
+            env::remove_var("OPENROUTER_API_KEY");
+            env::remove_var("CAPFORGE_JUDGE_LOCAL_URL");
+            env::remove_var("OPENAI_API_KEY");
+        }
+    }
+
+    #[test]
+    fn prefers_telnyx_over_everything_else() {
+        let _guard = env_mutex().lock().unwrap();
+        clear_all();
+        unsafe {
+            env::set_var("TELNYX_API_KEY", "telnyx-key");
+            env::set_var("OPENROUTER_API_KEY", "openrouter-key");
+            env::set_var("CAPFORGE_JUDGE_LOCAL_URL", "http://127.0.0.1:8181");
+            env::set_var("OPENAI_API_KEY", "openai-key");
+        }
+        assert_eq!(
+            select_judge_provider(),
+            JudgeProvider::Telnyx { api_key: "telnyx-key".to_string() }
+        );
+        clear_all();
+    }
+
+    #[test]
+    fn falls_back_to_openrouter_when_telnyx_unset() {
+        let _guard = env_mutex().lock().unwrap();
+        clear_all();
+        unsafe {
+            env::set_var("OPENROUTER_API_KEY", "openrouter-key");
+            env::set_var("OPENAI_API_KEY", "openai-key");
+        }
+        assert_eq!(
+            select_judge_provider(),
+            JudgeProvider::OpenRouter { api_key: "openrouter-key".to_string() }
+        );
+        clear_all();
+    }
+
+    #[test]
+    fn falls_back_to_local_when_telnyx_and_openrouter_unset() {
+        let _guard = env_mutex().lock().unwrap();
+        clear_all();
+        unsafe {
+            env::set_var("CAPFORGE_JUDGE_LOCAL_URL", "http://127.0.0.1:8181");
+            env::set_var("OPENAI_API_KEY", "openai-key");
+        }
+        assert_eq!(
+            select_judge_provider(),
+            JudgeProvider::LocalOpenAiCompatible {
+                base_url: "http://127.0.0.1:8181".to_string()
+            }
+        );
+        clear_all();
+    }
+
+    #[test]
+    fn falls_back_to_openai_when_only_openai_key_set() {
+        let _guard = env_mutex().lock().unwrap();
+        clear_all();
+        unsafe {
+            env::set_var("OPENAI_API_KEY", "openai-key");
+        }
+        assert_eq!(select_judge_provider(), JudgeProvider::OpenAi);
+        clear_all();
+    }
+
+    #[test]
+    fn none_when_nothing_configured() {
+        let _guard = env_mutex().lock().unwrap();
+        clear_all();
+        assert_eq!(select_judge_provider(), JudgeProvider::None);
+    }
+
+    // build_judge itself just constructs a trait object per provider — no
+    // network call happens at construction time for any variant (confirmed
+    // by reading OpenAiJudge::new/with_base_url and FakeJudge::always_deny,
+    // none of which touch the network), so these just confirm it doesn't
+    // panic for each provider shape.
+    #[test]
+    fn build_judge_constructs_without_panicking_for_every_provider() {
+        let _ = build_judge(JudgeProvider::None, "unused-model");
+        let _ = build_judge(JudgeProvider::OpenAi, "unused-model");
+        let _ = build_judge(
+            JudgeProvider::Telnyx { api_key: "k".to_string() },
+            "unused-model",
+        );
+        let _ = build_judge(
+            JudgeProvider::OpenRouter { api_key: "k".to_string() },
+            "unused-model",
+        );
+        let _ = build_judge(
+            JudgeProvider::LocalOpenAiCompatible {
+                base_url: "http://127.0.0.1:8181".to_string(),
+            },
+            "unused-model",
+        );
     }
 }
