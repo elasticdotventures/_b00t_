@@ -72,6 +72,12 @@ pub struct EndpointHandle {
     pub provider: String,
     pub name: Option<String>,
     pub status: Option<String>,
+    /// Reachable IP, when the provider's underlying resource is a real host
+    /// (Vultr VPS) rather than a managed serverless endpoint (RunPod/HF —
+    /// always None for those). Populated for `pipeline_remote_exec`'s SSH
+    /// path via `pipeline_scheduler::HostInfo`'s "ip" label.
+    #[serde(default)]
+    pub main_ip: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,6 +259,7 @@ impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
             provider: "runpod".into(),
             name: endpoint.name,
             status: None,
+            main_ip: None,
         })
     }
 
@@ -267,6 +274,7 @@ impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
             provider: "runpod".into(),
             name: endpoint.name,
             status: None,
+            main_ip: None,
         })
     }
 
@@ -290,6 +298,7 @@ impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
                 provider: "runpod".into(),
                 name: e.name,
                 status: None,
+                main_ip: None,
             })
             .collect())
     }
@@ -1290,13 +1299,29 @@ fn vultr_create_instance_body(cfg: &EndpointConfig) -> serde_json::Value {
         .or_else(|| std::env::var("VULTR_OS_ID").ok())
         .and_then(|s| s.parse().ok())
         .unwrap_or(VULTR_DEFAULT_OS_ID);
-    serde_json::json!({
+    // 🤓 b00t: without an sshkey_id, a created instance has NO way in except
+    //    Vultr's web console (a mailed/console-only root password) — dead
+    //    for pipeline_remote_exec's SSH-based execution. Same cfg.env-first
+    //    override pattern as region/plan/os_id above. Vultr's create API
+    //    accepts a list; we only ever inject a single key.
+    let sshkey_ids: Vec<String> = cfg
+        .env
+        .get("VULTR_SSHKEY_ID")
+        .cloned()
+        .or_else(|| std::env::var("VULTR_SSHKEY_ID").ok())
+        .map(|id| vec![id])
+        .unwrap_or_default();
+    let mut body = serde_json::json!({
         "region": region,
         "plan": plan,
         "os_id": os_id,
         "label": cfg.name,
         "tags": ["b00t"],
-    })
+    });
+    if !sshkey_ids.is_empty() {
+        body["sshkey_id"] = serde_json::json!(sshkey_ids);
+    }
+    body
 }
 
 fn vultr_instance_to_handle(v: &serde_json::Value) -> EndpointHandle {
@@ -1305,6 +1330,13 @@ fn vultr_instance_to_handle(v: &serde_json::Value) -> EndpointHandle {
         provider: "vultr".into(),
         name: v["label"].as_str().map(str::to_string),
         status: v["status"].as_str().map(str::to_string),
+        // Vultr returns "0.0.0.0" while an instance is still provisioning
+        // (main_ip not assigned yet) — normalize that to None rather than
+        // handing callers a bogus unroutable address.
+        main_ip: v["main_ip"]
+            .as_str()
+            .filter(|ip| *ip != "0.0.0.0" && !ip.is_empty())
+            .map(str::to_string),
     }
 }
 

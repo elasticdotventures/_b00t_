@@ -244,6 +244,15 @@ pub async fn handle_provision(
     if let Some(status) = &created.status {
         labels.insert("status".to_string(), status.clone());
     }
+    // pipeline_remote_exec resolves the SSH target from this label — a
+    // fresh Vultr instance reports main_ip == "0.0.0.0" until networking
+    // finishes provisioning (already filtered to None upstream in
+    // vultr_instance_to_handle), so its absence here is expected right
+    // after creation, not a bug. handle_status polling picks it up once
+    // the instance is actually ready.
+    if let Some(ip) = &created.main_ip {
+        labels.insert("ip".to_string(), ip.clone());
+    }
 
     Ok(ProvisionResponse {
         instance_id: created.id.clone(),
@@ -362,6 +371,7 @@ mod tests {
                     provider: "vultr".into(),
                     name: Some(format!("existing-{i}")),
                     status: Some("active".into()),
+                    main_ip: Some(format!("10.0.0.{}", i + 1)),
                 });
             }
             m
@@ -385,6 +395,7 @@ mod tests {
                 provider: "vultr".into(),
                 name: Some(cfg.name.clone()),
                 status: Some("active".into()),
+                main_ip: Some("10.0.0.99".to_string()),
             };
             self.instances.lock().unwrap().push(handle.clone());
             Ok(handle)
