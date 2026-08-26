@@ -456,6 +456,56 @@
 #      grant" — capability-forge's actual SkillTier::Restricted default,
 #      not a stubbed response.
 #
+# MEMOIZED 2026-08-26 (cont'd): b00t-server dogfooded onto this node —
+#      the "operator wants b00t-server (MCP proxy + full b00t capability
+#      surface) dogfooded onto this node too" follow-up, open since the
+#      earliest MEMOIZED entries in this datum. Scoped first (a fork
+#      investigation, ~200 words, before any code): b00t-server is not a
+#      separate crate — it's b00t-mcp run with --http --llm (same binary
+#      as the MCP proxy), backed by real, actively-maintained code
+#      (server_llm.rs) that already builds clean and already supports
+#      remote backends via OPENAI_API_KEY/OPENROUTER_API_KEY. No local
+#      GPU required: local backend discovery (mistralrs/llama-cpp/vllm/
+#      qwen3-embed) TCP-probes and silently skips whatever isn't
+#      listening, falling through to the remote list — a legitimate,
+#      already-supported mode, not a hack.
+#      Added a third remote backend, TELNYX_API_KEY, alongside the two
+#      pre-existing entries (appended last, preserving their relative
+#      priority) — same OpenAI-Chat-Completions-compatible endpoint as
+#      capability-forge's judge (see the multi-provider judge entry
+#      above), the one provider with a real working credential anywhere
+#      in this hive.
+#      Builds as a plain native musl cross-compile, unlike capability-forge:
+#      b00t-mcp depends on b00t-cli, which carries this workspace's
+#      `openssl-sys = { features = ["vendored"] }` pin (root Cargo.toml) —
+#      that vendored build compiles OpenSSL from pure C source using plain
+#      musl-gcc, no C++ needed. capability-forge doesn't depend on b00t-cli
+#      so that pin never reaches it, which is the precise, traced reason
+#      it still needs the Alpine-container fallback (section 7 of
+#      deploy_b00t_node.py) while b00t-server (section 8) doesn't.
+#      🤓 openssl-sys itself is never actually used anywhere in b00t-cli's
+#      own source (confirmed via grep) — it's pulled in purely
+#      transitively, via reqwest's default native-tls backend, requested
+#      by several crates (oauth2, opentelemetry-otlp, hyper-tls) that
+#      don't opt into rustls-tls. The vendored pin is a working fix, not
+#      the best possible one — switching the whole workspace to
+#      rustls-tls (pure Rust, zero C dependency, faster builds, no
+#      per-build OpenSSL compile) would be a real, separate, valuable
+#      follow-up; not attempted here since the vendored pin already
+#      unblocks this task.
+#      Verified live (debug build, before the release build used for
+#      actual deploy): started a real b00t-mcp --http --llm instance in
+#      an isolated $HOME with a real TELNYX_API_KEY and no
+#      OPENAI/OPENROUTER key set, minted a real b00t-sk-* key via `b00t
+#      server key create`, and got a genuine 200 chat completion back
+#      through the full proxy chain (auth -> backend discovery -> Telnyx
+#      -> response), with a matching Spotlight usage-telemetry line
+#      written. Confirmed the server correctly logs "upstream (soul/remote
+#      telnyx)" when it selects this new backend.
+#      Not yet deployed live to b00t-node itself, pending the same
+#      operator sign-off already given for capability-forge's live
+#      deploy — see FOLLOW-UP below once that happens.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified

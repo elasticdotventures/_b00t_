@@ -1,0 +1,29 @@
+# b00t-server — OpenAI-compatible gateway + API-key authority + Spotlight
+# usage telemetry. Runs b00t-mcp (the same binary as the MCP proxy) in
+# --http --llm mode. See b00t-mcp/src/server_llm.rs for the backend
+# discovery logic (local ports probed first, falling back to whichever
+# remote entry in ~/.b00t/server-soul.tomllm has its key_env set — that
+# file self-generates on first run with sane defaults, no template needed
+# here).
+#
+# 🤓 On a no-GPU node like this one, every local backend probe
+# (mistralrs:8181, llama-cpp:8080, vllm:8000, qwen3-embed:8003) fails its
+# TCP connect and falls through to the remote list — a legitimate,
+# already-supported mode, not a degraded fallback. See
+# _b00t_/datums/PROVIDER-VULTR.provider.tomllmd's b00t-server section for
+# which remote credential actually has a working key in this hive.
+[Unit]
+Description=b00t-server (OpenAI-compat gateway + API-key authority)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=/root
+EnvironmentFile=/opt/b00t/b00t-server.env
+ExecStart=/usr/local/bin/b00t-mcp --http --llm --port 5273 --host 127.0.0.1
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -17,6 +17,10 @@ b00t-capability-forge.service WAS in this exclusion list (crash-looping,
 26000+ restarts) — fixed and reproduced here as of 2026-08-26, see section
 7 below / _b00t_#1154.
 
+The "operator wants b00t-server dogfooded onto this node" follow-up (also
+present since the earliest entries in this datum) is likewise resolved and
+reproduced here — see section 8 below.
+
 Usage:
     pyinfra nats/pyinfra/inventory.py nats/pyinfra/deploy_b00t_node.py \\
         --data nats_password=$(openssl rand -hex 24)
@@ -325,4 +329,64 @@ systemd.service(
     restarted=True,  # pick up a rebuilt binary / rotated password on re-run
     daemon_reload=True,
 )
+
+# ─── 8. b00t-server (OpenAI-compat gateway) ─────────────────────────────────
+# 🤓 MEMOIZED 2026-08-26: reproduces the "dogfood b00t-server on this node"
+# follow-up that's been open since the earliest MEMOIZED entries in
+# PROVIDER-VULTR.provider.tomllmd. b00t-server is just b00t-mcp run with
+# --http --llm — the same binary, no separate crate. Builds as a plain
+# native musl cross-compile (unlike capability-forge in section 7): b00t-mcp
+# depends on b00t-cli, which carries this workspace's `openssl-sys =
+# { features = ["vendored"] }` pin — that vendored build compiles OpenSSL
+# from C source using plain musl-gcc (pure C, no C++ needed, same reason
+# the section-6 fix in _b00t_#1149 worked once esaxx-rs's C++ requirement
+# was removed). capability-forge doesn't depend on b00t-cli, so that pin
+# never reaches it, which is why it still needs the Alpine container.
+#
+# Backend discovery is entirely runtime-config-driven (see
+# b00t-mcp/src/server_llm.rs's SoulConfig) — local backends (mistralrs,
+# llama-cpp, vllm, qwen3-embed) are TCP-probed and silently skipped when
+# nothing's listening (this node has no GPU; that's expected, not a
+# degraded mode), falling through to the remote backend list. TELNYX_API_KEY
+# is templated below because it's the one provider confirmed to have a
+# real working credential anywhere in this hive as of 2026-08-26 — see
+# this file's own section for how that was verified.
+#
+# Required --data: telnyx_api_key.
+telnyx_api_key = host.data.get("telnyx_api_key")
+if not telnyx_api_key:
+    raise ValueError("pass --data telnyx_api_key=<secret> — no other remote LLM backend has a working credential in this hive yet")
+
+local.shell(
+    f"cargo build --release --target {MUSL_TARGET} --jobs 4 --bin b00t-mcp -p b00t-mcp"
+)
+
+files.put(
+    name="Upload b00t-mcp",
+    src=f"{TARGET_DIR}/{MUSL_TARGET}/release/b00t-mcp",
+    dest="/usr/local/bin/b00t-mcp",
+    mode="755",
+    add_deploy_dir=False,
+)
+files.template(
+    name="Write /opt/b00t/b00t-server.env (0600)",
+    src="templates/b00t-server.env.j2",
+    dest="/opt/b00t/b00t-server.env",
+    mode="600",
+    telnyx_api_key=telnyx_api_key,
+)
+files.put(
+    name="Install b00t-server.service",
+    src="files/b00t-server.service",
+    dest="/etc/systemd/system/b00t-server.service",
+)
+systemd.service(
+    name="Enable + start b00t-server",
+    service="b00t-server.service",
+    running=True,
+    enabled=True,
+    restarted=True,  # pick up a rebuilt binary / rotated key on re-run
+    daemon_reload=True,
+)
+
 
