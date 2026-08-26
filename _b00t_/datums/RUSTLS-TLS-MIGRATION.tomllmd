@@ -1,0 +1,140 @@
+# RUSTLS-TLS MIGRATION (2026-08-26) — openssl/openssl-sys/native-tls fully
+# removed from the workspace's resolved dependency graph.
+#
+# Discovered while deploying b00t-server (see PROVIDER-VULTR.provider.tomllmd)
+# — capability-forge's native musl cross-compile failed on openssl-sys
+# ("Could not find directory of OpenSSL installation... pkg-config has not
+# been configured to support cross-compilation"), forcing an Alpine-container
+# build detour (same class of problem _b00t_#1149 already fixed once for
+# esaxx-rs/tokenizers — this was a SEPARATE, unrelated openssl-sys source).
+#
+# Root cause: `openssl_sys`/`openssl::` were never actually used anywhere in
+# b00t-cli's own source (confirmed via grep — zero hits). openssl-sys got
+# pulled in purely transitively, via `reqwest`'s default `native-tls` TLS
+# backend, requested by numerous crates (oauth2, opentelemetry-otlp,
+# hyper-tls, azure_core's `enable_reqwest` feature, rig-core's
+# `reqwest-tls` default feature) that never opted into `rustls-tls`. The
+# workspace root had a partial fix in place already — `openssl-sys =
+# { features = ["vendored"] }` (compiles OpenSSL from C source at build
+# time, works with plain musl-gcc since it's pure C) — but that pin only
+# reached crates depending on b00t-cli (b00t-mcp did; capability-forge
+# didn't), which is exactly why the failure was inconsistent across
+# binaries. `rustls-tls` (pure Rust, zero C dependency at all) is strictly
+# better: no vendored-OpenSSL compile tax on every fresh build, no
+# C-toolchain requirement anywhere, works identically across every build
+# environment this hive has hit trouble with.
+#
+# Traced via `cargo tree -e features -i native-tls` across the whole
+# workspace, then fixed per-crate (`default-features = false` + the
+# crate's own rustls-opt-in feature name — every single crate found
+# already ships one; none needed forking):
+#   - reqwest (every direct b00t-owned edge): `features = [..., "rustls-tls"]`
+#     — b00t-cli, b00t-mcp, b00t-admin, b00t-azure-cp, b00t-stt-serve,
+#     b00t-lib-chat, b00t-ui-wasm, b00t-grok, b00t-c0re-lib
+#   - oauth2 (b00t-mcp): `features = ["reqwest", "rustls-tls"]`
+#   - opentelemetry-otlp (b00t-lib-chat): `features = [..., "http-proto",
+#     "reqwest-rustls"]`
+#   - rig-core (b00t-c0re-lib): `features = ["reqwest-rustls"]` (its
+#     default is `["reqwest-tls"]` = `["reqwest/default"]` — an unusually
+#     easy-to-miss trap: the DEFAULT feature name reads as TLS-agnostic
+#     but silently pulls native-tls; the real rustls opt-in is a
+#     differently-named feature, `reqwest-rustls`)
+#   - azure_core (b00t-azure-cp): `enable_reqwest` → `enable_reqwest_rustls`
+#   - azure_identity: `default-features = false, features = ["development",
+#     "old_azure_cli", "enable_reqwest_rustls"]` (re-listing the two
+#     non-TLS default features lost by disabling defaults)
+#   - azure_data_tables: `features = ["hmac_rust", "enable_reqwest_rustls"]`
+#     (hmac_rust was already the default — azure_data_tables' own HMAC
+#     crypto has a pure-Rust option too, `hmac_openssl` is the alternative
+#     — confirmed not pulled in)
+#   - azure_mgmt_containerinstance: `features = ["default_tag",
+#     "enable_reqwest_rustls"]` — 🤓 sharp edge: this crate's `default_tag`
+#     feature is NOT a pure alias for the underlying
+#     `package-preview-2024-05` feature it activates; the crate's own
+#     generated code has a `#[cfg(feature = "default_tag")]`-gated
+#     top-level re-export (`ClientBuilder`, `models`, etc.) that only
+#     exists when the literal `default_tag` feature name itself is
+#     requested — requesting `package-preview-2024-05` directly (without
+#     `default_tag`) compiles the version module but never re-exports it,
+#     producing `E0432`/`E0433` "could not find `models`"/`ClientBuilder`
+#     errors that look like a missing dependency, not a feature-naming
+#     trap. Caught by a real `cargo check -p b00t-azure-cp` failure, not
+#     reasoned about in advance — verify any similarly-shaped
+#     "default_tag"/"default_*"-style feature on other Azure SDK
+#     "legacy"-branch crates the same way before assuming it's a plain
+#     alias.
+#   - qdrant-client (b00t-grok): no change needed — its own internal
+#     `[dependencies.reqwest]` spec already hardcodes
+#     `default-features = false, features = ["stream", "rustls-tls",
+#     "http2"]` regardless of what the consumer requests. Confirmed by
+#     reading its actual Cargo.toml, not assumed from the feature list
+#     `cargo info` surfaces (which only shows the crate's OWN exposed
+#     features, not what it locks in on a dependency it doesn't expose a
+#     toggle for).
+#   - async-openai (capability-forge, b00t-grok): no change needed —
+#     already defaults to `["rustls"]` (`reqwest/rustls-tls-native-roots`).
+#     It showed up in the pre-fix `cargo tree -i native-tls` trace anyway
+#     — not because it requested native-tls itself, but because Cargo's
+#     feature unification is a union: as long as ANY other crate sharing
+#     the same reqwest instance requested plain "default" (which several
+#     did, pre-fix), native-tls stayed active for that shared instance
+#     regardless of async-openai's own preference. `cargo tree -i` lists
+#     every crate touching an active feature, not just the one that
+#     caused it — don't assume a name in that output is the culprit
+#     without checking its own Cargo.toml.
+#   - embed_anything (vendor/embed-anything-b00t, our own fork): no change
+#     needed — already `default-features = false, features = ["json",
+#     "blocking"]` with no TLS backend forced either way; correctly
+#     inherits whatever the rest of the unified build settles on.
+#   - Root Cargo.toml: removed the now-fully-unused `openssl = "0.10"` /
+#     `openssl-sys = { features = ["vendored"] }` workspace-dependency
+#     entries entirely, and the (also fully unused, confirmed via grep)
+#     direct `openssl-sys = { workspace = true }` edge in b00t-cli's own
+#     Cargo.toml.
+#
+# vendor/moltis-b00t, vendor/ledgrrr, vendor/embed-anything-b00t's own
+# internals, vendor/irontology-mcp, vendor/rust-docs-mcp-b00t — all
+# separate git submodules with their own Cargo workspace boundaries (none
+# are `[workspace.members]` of this repo's root Cargo.toml) — deliberately
+# NOT touched. Each is a separate project; migrating their TLS backend
+# choice is their own maintainers' call, not something to silently change
+# from here.
+#
+# Verification (not just "cargo check passes" — the actual empirical
+# proof this migration achieved its stated goal): `cargo tree -e features
+# -i native-tls`, `-i openssl-sys`, and `-i openssl` each returned "did
+# not match any packages" — i.e. genuinely absent from the resolved
+# dependency graph, not just unused-but-present. `cargo check --workspace`
+# (every member, including wasm targets, LSP, azure-cp, everything) — 0
+# errors, only pre-existing unrelated warnings. Full test suites for every
+# directly-touched crate (b00t-cli: 1575 passed; b00t-mcp: 67 passed;
+# capability-forge lib+bin+e2e: 51 passed) — 0 failed, 0 regressions.
+#
+# [b00t.schema]
+version   = "1"
+type      = "pattern"
+type_tags = ["pattern", "rust", "tls", "rustls", "openssl", "cross-compile",
+             "musl", "cargo-features", "workspace-hygiene"]
+
+[pattern]
+name    = "rustls-tls-migration"
+summary = "Full removal of openssl/openssl-sys/native-tls from the workspace dependency graph in favor of rustls-tls"
+
+[[pattern.lesson]]
+text = "A crate's DEFAULT feature name isn't a reliable signal of what it does — rig-core's default `reqwest-tls` reads as TLS-agnostic but is literally `[\"reqwest/default\"]` (native-tls); the real rustls opt-in is a differently-named feature, `reqwest-rustls`. Read the crate's actual Cargo.toml features block, never infer behavior from a feature's name alone."
+
+[[pattern.lesson]]
+text = "`cargo tree -i <feature-crate>` lists every crate touching that active feature in the unified build, not necessarily the crate that caused it to activate — Cargo's feature resolution is a union across all dependents sharing one instance of a crate. Verify each listed crate's OWN Cargo.toml before assuming it's the source, not just the tree output."
+
+[[pattern.lesson]]
+text = "A `default-features = false` override loses ALL of a crate's default features, not just the TLS-related one you're targeting — check the full default feature list before disabling it, and re-list whatever non-TLS defaults were actually load-bearing (azure_identity needed \"development\"+\"old_azure_cli\" re-added; azure_mgmt_containerinstance needed its own \"default_tag\" feature literally re-requested, not just the version-tag feature it happens to activate, since some crates gate top-level re-exports on the literal default-feature name itself, not merely on what it enables)."
+
+[[pattern.lesson]]
+text = "Verify a migration goal empirically, not just by absence of compile errors: `cargo tree -e features -i <thing>` returning \"did not match any packages\" is the definitive signal a dependency is genuinely gone from the resolved graph, not just unused-but-present."
+
+# b00t:map v1
+# summary: openssl/native-tls fully removed workspace-wide in favor of rustls-tls — root cause, per-crate fixes, sharp edges, verification
+# tags: rust, tls, rustls, openssl, cross-compile, musl, cargo-features
+# tier: ch0nky
+# cmds: cargo tree -e features -i native-tls, cargo tree -e features -i openssl-sys
+# complexity: 5
