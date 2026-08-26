@@ -59,7 +59,7 @@ tower-http = { version = "0.6", features = ["cors"] }
 notify = "7"
 
 # OAuth 2.1 authorization server dependencies
-oauth2 = "5.0"
+oauth2 = { version = "5.0", default-features = false, features = ["reqwest", "rustls-tls"] }
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 uuid = { version = "1.0", features = ["v4"] }
 base64 = "0.22"
@@ -70,7 +70,7 @@ whoami = "1.5"
 # RAGLight integration (dirs already exists above)
 
 # GitHub OAuth authentication
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 axum-extra = { version = "0.12.1", features = ["cookie"] }
 urlencoding = "2.1"
 
