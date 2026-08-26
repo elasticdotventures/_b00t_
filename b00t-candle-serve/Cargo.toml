@@ -21,6 +21,14 @@ hf-hub = { version = "1.0", default-features = false, features = ["blocking"] }
 tokenizers = { version = "0.22", default-features = false, features = ["onig"] }
 anyhow = { workspace = true }
 clap = { workspace = true }
+# 🤓 --serve mode: OpenAI-compatible /v1/chat/completions HTTP layer, same shape
+#    as b00t-embed-serve's /v1/embeddings server. The runtime is built explicitly
+#    in main.rs (not #[tokio::main]) since the one-shot CLI path stays fully
+#    synchronous and must not pay tokio's startup cost.
+axum = { version = "0.8.4" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = []

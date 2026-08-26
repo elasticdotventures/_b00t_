@@ -32,8 +32,13 @@ capabilities = ["chat", "reasoning", "code"]
 input_modalities  = ["text"]
 input_formats     = ["text/plain", "text/markdown"]
 output_modalities = ["text"]
-# 🤓 not OpenAI-compatible yet — stdout/stdin CLI generation only (see service_contract
-#    below and _b00t_/phi-candle.just). No HTTP endpoint / litellm_model wired up.
+# 🤓 (2026-08-26) now OpenAI-compatible: `b00t-candle-serve --serve` loads the model
+#    once and exposes POST /v1/chat/completions + GET /v1/models (axum, same shape
+#    as b00t-embed-serve's /v1/embeddings layer). One-shot CLI generation (see
+#    service_contract below and _b00t_/phi-candle.just) is still the default mode
+#    when --serve isn't passed. b00t-server discovers it as the "candle-phi" local
+#    backend on port 8082 (b00t-mcp/src/server_llm.rs::default_soul()) — last in
+#    priority among local openai-compat backends since CPU throughput is slow.
 context_window = 16384
 enabled = true
 access_groups = ["default", "local", "cpu-fallback", "cuda-optional"]
@@ -97,6 +102,13 @@ verifiable  = true
 #    run (same length as the CPU baseline above) measured the real steady-state number:
 #    49.20 tok/s, ~93x the CPU baseline. Always discount the first few tokens of any
 #    CUDA-path benchmark on this binary, or use sample_len >= ~30 to amortize warmup.
+
+[[service_contract]]
+capability  = "openai-compatible-serve"
+handler     = "cargo build --release -p b00t-candle-serve && ./target/release/b00t-candle-serve --serve --port 8082 &  sleep 1 && curl -s http://127.0.0.1:8082/v1/models"
+evidence    = "PASS: GET /v1/models returns {\"data\":[{\"id\":\"candle-phi\",...}]}; POST /v1/chat/completions with an OpenAI-shaped {model,messages} body returns a choices[0].message.content completion"
+tier        = "sm0l"
+verifiable  = true
 
 [[service_contract]]
 capability  = "b00t-datum-authoring"
