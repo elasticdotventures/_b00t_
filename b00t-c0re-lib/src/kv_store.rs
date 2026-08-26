@@ -530,9 +530,14 @@ mod tests {
 
     #[test]
     fn test_gate_cache_writes_keys() {
-        // Use a temp file path to avoid clobbering real state
+        // 🤓 #998: a hardcoded "/tmp/..." literal here ignored TMPDIR and used a
+        // fixed filename shared across concurrent test runs — false-negatived the
+        // pre-push gate under real /tmp disk pressure. `tempfile::tempdir()`
+        // respects TMPDIR and gives each test run its own unique directory.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cache_path = temp_dir.path().join("b00t-test-gate-cache.json");
         let mut config = KvConfig::default();
-        config.file_path = Some("/tmp/b00t-test-gate-cache.json".to_string());
+        config.file_path = Some(cache_path.to_str().unwrap().to_string());
         let store = KvStore::new(config);
 
         let result = GateResult::Allow;
@@ -558,7 +563,6 @@ mod tests {
             .unwrap();
         assert_eq!(agent, "test-agent");
 
-        // Clean up
-        let _ = std::fs::remove_file("/tmp/b00t-test-gate-cache.json");
+        // temp_dir cleans itself up on drop — no manual removal needed.
     }
 }

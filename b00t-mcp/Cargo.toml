@@ -62,6 +62,10 @@ notify = "7"
 oauth2 = { version = "5.0", default-features = false, features = ["reqwest", "rustls-tls"] }
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 uuid = { version = "1.0", features = ["v4"] }
+# 🤓 same crate/version b00t-cli/src/erp.rs already uses for advisory file
+#    locking (BashLineQueue) — reused here for server_llm.rs's keys-file
+#    lock, not a new dependency choice.
+fs2 = "0.4"
 base64 = "0.22"
 axum-macros = "0.5"
 lazy_static = "1.5"

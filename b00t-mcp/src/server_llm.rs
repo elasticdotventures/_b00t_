@@ -343,6 +343,58 @@ fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry>
     keys
 }
 
+/// Locked, read-merge-write, atomic-rename persist of the keys file — the fix
+/// for #1128 (`LlmState::save_keys_to_file` non-atomic cross-process write
+/// race). Two live processes writing around the same time — two server
+/// instances, or this server plus a separate `b00t server key create`
+/// invocation — no longer silently lose one side's key: the exclusive lock
+/// serializes writers, and re-reading the current on-disk map (via the same
+/// `load_keys_from_file` used at startup/hot-reload) before merging in
+/// `new_keys` means whatever the other writer already persisted survives.
+/// The write itself goes to a temp file then `rename`s over `keys_file`, so
+/// any reader that doesn't take the lock (`reload_if_changed`, the CLI's own
+/// `KeyAction::List`) never observes a partial write.
+fn write_keys_file_locked(
+    keys_file: &std::path::Path,
+    new_keys: &HashMap<String, KeyEntry>,
+) -> std::io::Result<()> {
+    use fs2::FileExt;
+
+    if let Some(parent) = keys_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    // Opened purely as a lock target — the actual write goes to a temp file,
+    // this handle is never itself written to or truncated.
+    let lock_file = std::fs::OpenOptions::new().create(true).write(true).open(keys_file)?;
+    lock_file.lock_exclusive()?;
+
+    let mut merged = load_keys_from_file(keys_file);
+    for (k, v) in new_keys {
+        merged.insert(k.clone(), v.clone());
+    }
+
+    let mut map = serde_json::Map::new();
+    for (k, v) in &merged {
+        let access_json: Vec<Value> = v.access.iter().map(|p| json!({
+            "class": p.class,
+            "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
+        })).collect();
+        map.insert(k.clone(), json!({
+            "consumer": v.consumer,
+            "created_at": v.created_at.to_rfc3339(),
+            "access": access_json,
+        }));
+    }
+    let data = json!({"keys": map});
+
+    let tmp_path = keys_file.with_extension("json.tmp");
+    std::fs::write(&tmp_path, data.to_string())?;
+    std::fs::rename(&tmp_path, keys_file)?;
+
+    // Lock releases when lock_file drops at function end.
+    Ok(())
+}
+
 impl LlmState {
     pub fn new() -> Self {
         let soul = SoulConfig::load();
@@ -421,25 +473,22 @@ impl LlmState {
         key
     }
 
+    /// Persists this instance's in-memory keys to disk. Delegates to
+    /// `write_keys_file_locked` (locked read-merge-write + atomic rename) so a
+    /// concurrently-running second process (another `b00t-mcp --http --llm`, or
+    /// a `b00t server key create` CLI invocation) never has its own key silently
+    /// dropped by this process overwriting the file from its own stale view.
+    /// See #1128. Locking is blocking I/O, so it runs off the async runtime via
+    /// `spawn_blocking`.
     async fn save_keys_to_file(&self) {
-        let keys = self.keys.read().await;
-        let mut map = serde_json::Map::new();
-        for (k, v) in keys.iter() {
-            let access_json: Vec<Value> = v.access.iter().map(|p| json!({
-                "class": p.class,
-                "action": serde_json::to_value(&p.action).unwrap_or(json!("execute")),
-            })).collect();
-            map.insert(k.clone(), json!({
-                "consumer": v.consumer,
-                "created_at": v.created_at.to_rfc3339(),
-                "access": access_json,
-            }));
+        let keys_file = self.keys_file.clone();
+        let in_memory = self.keys.read().await.clone();
+        let result = tokio::task::spawn_blocking(move || write_keys_file_locked(&keys_file, &in_memory)).await;
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("⚠️ save_keys_to_file: {e}"),
+            Err(e) => eprintln!("⚠️ save_keys_to_file: blocking task panicked: {e}"),
         }
-        let data = json!({"keys": map});
-        if let Some(parent) = self.keys_file.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(&self.keys_file, data.to_string());
     }
 
     async fn emit_spotlight(&self, consumer: &str, endpoint: &str, model: &str, latency_ms: u64) {
@@ -837,6 +886,17 @@ mod tests {
         // running — this is the exact scenario the reload-on-mtime-change fix
         // targets (Phase A.2). Writes the same {"keys": {...}} shape
         // commands/server.rs produces, bypassing state.create_key() entirely.
+        //
+        // 🤓 #1113 follow-up: this test was missing the `TempHome` guard every
+        // other test in this module has, so it ran against the REAL `$HOME`.
+        // When it happened to overlap with another thread's TempHome-guarded
+        // test (which temporarily repoints the process-wide `HOME` env var at
+        // a temp dir, then deletes it on Drop), this test could construct its
+        // `LlmState` mid-repoint and then fail its own `keys_file` write with
+        // ENOENT once the other test's temp dir was gone — a real, reproduced
+        // instance of exactly the order/concurrency-dependent flake class
+        // #1113 investigated (the write below failed once, confirming this).
+        let _temp_home = TempHome::new();
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
 
         // Confirm the key genuinely doesn't exist yet (no accidental collision).
@@ -862,6 +922,38 @@ mod tests {
         let entry = state.validate_key(&external_key).await;
         assert!(entry.is_some(), "key written externally must be picked up without restart");
         assert_eq!(entry.unwrap().consumer, "external-process-consumer");
+    }
+
+    /// Regression test for #1128: two `LlmState` instances sharing the same
+    /// `keys_file` (simulating two live processes — e.g. two server instances,
+    /// or this server plus a `b00t server key create` CLI invocation), each
+    /// unaware of the other's key, both call `create_key`. Before the fix,
+    /// the second instance's `save_keys_to_file` blindly overwrote the file
+    /// with only its own in-memory map, silently dropping the first
+    /// instance's key from disk. After the fix (locked read-merge-write),
+    /// both keys must survive on disk.
+    #[tokio::test]
+    async fn test_concurrent_instances_do_not_lose_each_others_keys() {
+        let _temp_home = TempHome::new();
+
+        // Two instances constructed against the same (empty) keys_file — each
+        // has its own independent in-memory `keys` map, exactly as two live
+        // processes would.
+        let instance_a = LlmState::from_config("http://localhost:8181/v1", "");
+        let instance_b = LlmState::from_config("http://localhost:8181/v1", "");
+
+        let key_a = instance_a.create_key("consumer-a", &[]).await;
+        let key_b = instance_b.create_key("consumer-b", &[]).await;
+
+        // Neither instance's own in-memory validate_key was affected by the
+        // other — that was never the bug. The bug is what's actually on disk.
+        let on_disk = load_keys_from_file(&instance_a.keys_file);
+        assert!(
+            on_disk.contains_key(&key_a),
+            "instance A's key must survive on disk after instance B's later write"
+        );
+        assert!(on_disk.contains_key(&key_b), "instance B's key must be on disk");
+        assert_eq!(on_disk.len(), 2, "both keys must coexist, neither overwritten");
     }
 
     #[tokio::test]
