@@ -15,6 +15,8 @@ use crate::pipeline_checkpoint::{CheckpointStore, PipelineCheckpoint, compute_da
 use crate::pipeline_flowctl::{FlowControl, FlowGate, StageFlowConfig};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
+use crate::pipeline_remote_exec::RemoteExecutor;
+use crate::pipeline_scheduler::HostInfo;
 use crate::pipeline_statemachine::{PipelineEvent, StateMachine};
 use crate::pipeline_transitions::TransitionSink;
 use crate::pipeline_types::{PipelineDag, PipelineError, StagePort, StageSpec};
@@ -139,6 +141,12 @@ pub struct PipelineExecutor {
     flow_gates: HashMap<String, FlowGate>,
     timeout_predictor: Option<Arc<Mutex<TimeoutPredictor>>>,
     transition_sink: Option<Arc<dyn TransitionSink>>,
+    /// Set together (`with_remote_execution`) — a stage only runs remotely
+    /// if it BOTH has a host assignment here AND an executor is configured.
+    /// See `pipeline_remote_exec.rs` (built by `pipeline_provision.rs`'s
+    /// `schedule_with_dynamic_provisioning`, or supplied directly).
+    remote_executor: Option<Arc<dyn RemoteExecutor>>,
+    host_assignments: HashMap<String, HostInfo>,
 }
 
 impl PipelineExecutor {
@@ -153,6 +161,8 @@ impl PipelineExecutor {
             checkpoint_store: None,
             timeout_predictor: None,
             transition_sink: None,
+            remote_executor: None,
+            host_assignments: HashMap::new(),
         }
     }
 
@@ -226,6 +236,21 @@ impl PipelineExecutor {
     /// stage timing after completion.
     pub fn with_timeout_predictor(mut self, predictor: Arc<Mutex<TimeoutPredictor>>) -> Self {
         self.timeout_predictor = Some(predictor);
+        self
+    }
+
+    /// Enable real remote execution: stages with a matching entry in
+    /// `host_assignments` run via `executor` (SSH + podman, see
+    /// `pipeline_remote_exec.rs`) instead of `run_stage_fn`'s local
+    /// simulation. Stages with no assignment are unaffected — this is
+    /// additive, not a global mode switch.
+    pub fn with_remote_execution(
+        mut self,
+        executor: Arc<dyn RemoteExecutor>,
+        host_assignments: HashMap<String, HostInfo>,
+    ) -> Self {
+        self.remote_executor = Some(executor);
+        self.host_assignments = host_assignments;
         self
     }
 
@@ -857,14 +882,12 @@ impl PipelineExecutor {
     /// or invoke a Wasm capsule.  In this implementation it runs a simple
     /// closure based on the stage name, simulating work.
     ///
-    /// NOTE: This is intentionally simplistic for the MVP. Real remote
-    /// execution (actually shelling out on a provisioned host) is still a
-    /// later milestone. What IS wired up as of `pipeline_provision.rs`:
-    /// getting a *host* for a stage that doesn't fit any known one, via
-    /// `schedule_with_dynamic_provisioning` (calls b00t-historian's
-    /// `vultr.provision` NATS subject, see `vultr_delegate.rs`) — that's
-    /// the scheduling half of `ComputeProvider` delegation. Running a stage
-    /// once it has a host is the remaining half.
+    /// NOTE: This is the fallback path for any stage with no host
+    /// assignment / no remote executor configured. When both are set (via
+    /// `with_remote_execution` — a host from `schedule_with_dynamic_provisioning`,
+    /// see `pipeline_provision.rs`, or supplied directly), the stage
+    /// actually runs remotely instead — see the real-execution branch at
+    /// the top of this function and `pipeline_remote_exec.rs`.
     async fn run_stage_fn(
         &self,
         stage: &StageSpec,
@@ -878,6 +901,25 @@ impl PipelineExecutor {
                     stage: stage.name.clone(),
                     elapsed_ms: timeout_secs * 1000,
                 });
+            }
+        }
+
+        // Real remote execution, when this stage has both a host
+        // assignment and an executor configured (see
+        // `with_remote_execution` / `pipeline_remote_exec.rs`). Falls
+        // through to the local simulation below otherwise — this is
+        // additive, not a global mode switch, so every existing caller
+        // that never opted in behaves exactly as before.
+        if let Some(executor) = &self.remote_executor {
+            if let Some(host) = self.host_assignments.get(&stage.name) {
+                return crate::pipeline_remote_exec::execute_stage_remotely(
+                    executor.as_ref(),
+                    host,
+                    &stage.profile,
+                    input,
+                )
+                .await
+                .map_err(|e| PipelineError::StageCrashed(e.to_string()));
             }
         }
 
