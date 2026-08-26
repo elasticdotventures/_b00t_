@@ -275,13 +275,24 @@
 #        systemd unit (b00t-node-nats-tunnel.service), installed by the
 #        operator directly and confirmed active/running, manual process
 #        killed. No longer a follow-up.
-#      - Vultr API access is blocked by an IP allowlist for every egress IP
-#        tried from this hive (fung1, sm3lly) and no VULTR_API_KEY is
-#        reachable in-session (checked local env, b00t-node, Azure Key
-#        Vault) — so "only one node is billing" can only be confirmed via
-#        the my.vultr.com console directly (same channel vultr1's deletion
-#        itself went through), not programmatically, until one of those is
-#        fixed.
+#      - UPDATED 2026-08-26: the "no VULTR_API_KEY reachable" half of this
+#        is resolved — a real, valid key is sitting in sm3lly's own
+#        ~/.env (VULTR_API_KEY, 36 chars, not previously checked there).
+#        Confirmed valid via a live GET /v2/account call: Vultr's own
+#        response is `{"error":"Unauthorized IP address: 121.200.6.69",
+#        "status":401}` — that's an IP-allowlist rejection, not a bad-key
+#        rejection (a bad/revoked key gets a different, generic 401 body).
+#        So the remaining blocker is now precise and actionable: add
+#        121.200.6.69 (sm3lly's current egress IP — re-check if this
+#        changes, e.g. after an ISP re-lease) to the allowlist at
+#        my.vultr.com -> Account -> API -> Access Control. fung1 was NOT
+#        re-checked — it's LAN-only (no public IP; every reference to it
+#        in this datum is `<fung1-lan-ip>`), unreachable from a sandboxed
+#        agent session regardless of SSH config, so its ~/.env couldn't be
+#        checked this pass either. Until the IP is allowlisted,
+#        "programmatic instance-count verification" and any real
+#        vultr_delegate provision/deprovision call both still only work
+#        from the my.vultr.com console.
 #      - Operator wants b00t-server (MCP proxy + full b00t capability
 #        surface) dogfooded onto this node too, once the base souls stack
 #        above is stable — b00t-server is still alpha; not attempted here,
@@ -327,6 +338,48 @@
 #      key, failing only at Vultr's own auth boundary — that boundary is
 #      the actual remaining gate on calling this "verified end to end",
 #      not anything in this code.
+#
+# MEMOIZED 2026-08-26 (cont'd): four follow-up items closed out same-day —
+#      1. VULTR_API_KEY located + the exact blocking IP identified (see
+#         updated FOLLOW-UP entry above).
+#      2. embed-anything-b00t#4 (the model2vec-rs/esaxx-rs fix) merged
+#         upstream; the vendor/embed-anything-b00t submodule pointer here
+#         moved from the PR-branch commit to embed-anything-b00t's merged
+#         main tip (f7b9fad) — see _b00t_#1152.
+#      3. Phase 2's remaining half — actually running a stage on a
+#         provisioned host, not just scheduling one — is done. New
+#         pipeline_remote_exec.rs: SshExecutor shells out to the system
+#         `ssh` (BatchMode=yes, matches every other remote-exec path in
+#         this hive's ssh.cli.toml, not a new Rust SSH library),
+#         build_podman_command runs a stage's CapsuleProfile.image via
+#         `podman run --rm -i`. PipelineExecutor::with_remote_execution(..)
+#         wires it in additively — no host assignment + no executor
+#         configured means every existing caller is unaffected.
+#         Provisioning-side prerequisite this needed: Vultr instances
+#         previously had no SSH key injected at creation (console-only
+#         root password, a dead end) and no IP captured anywhere —
+#         EndpointHandle now carries main_ip, vultr_create_instance_body
+#         honors an optional VULTR_SSHKEY_ID, and handle_provision threads
+#         the IP into HostInfo.labels["ip"]. See _b00t_#1153.
+#      4. capability-forge's crash-loop (flagged known-broken in the
+#         pyinfra deploy script's exclusion list) is root-caused and
+#         fixed: it only knew how to connect via NATS JWT/creds-file auth,
+#         but b00t-node's NATS server runs plain username/password
+#         auth (deliberately — see this file's earlier note on the lost
+#         NSC signing key). No creds file could ever have authenticated
+#         against a server with no JWT resolver at all. main.rs's new
+#         connect_nats() tries CAPFORGE_NATS_USER/CAPFORGE_NATS_PASSWORD
+#         first, falls back to CAPFORGE_SERVICE_CREDS_FILE. Verified live:
+#         a real capability-forge binary connected and stayed listening
+#         against a local nats-server configured with the exact same
+#         authorization{} block as b00t-node's production config — the
+#         actual crash-loop, reproduced and confirmed fixed, not just
+#         reasoned about. See _b00t_#1154. Still NOT deployed to b00t-node
+#         itself (needs its own NATS user added to
+#         nats-pod-configured.yaml.j2, plus real
+#         CAPFORGE_ACCOUNT_SEED/PUBKEY) or wired into vultr_delegate's
+#         allowlist gate as capability-forge's original intended role —
+#         both remain separate follow-ups, not attempted here.
 #
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
