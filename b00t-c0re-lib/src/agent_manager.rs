@@ -15,8 +15,19 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
 use tokio::net::UnixListener;
 use tracing::{error, info, warn};
+
+// 🤓 `tokio::net::UnixListener` is #[cfg(unix)]-gated upstream — this crate
+// previously imported it unconditionally, which never actually compiled on
+// Windows (only surfaced once a separate CI fix let the Windows npm-release
+// build's `cargo check` step actually run far enough to hit it). Agent Unix-
+// socket IPC has no meaningful Windows equivalent yet, so on non-unix this
+// is a unit-type placeholder: `AgentHandle::_listener` stays `Option<T>`
+// shaped either way, always `None` on this platform.
+#[cfg(not(unix))]
+type UnixListener = ();
 
 /// Agent configuration loaded from TOML files.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -470,6 +481,7 @@ impl AgentManager {
             }
 
             // Create Unix socket listener
+            #[cfg(unix)]
             let listener = UnixListener::bind(socket_path).with_context(|| {
                 let mut message = format!("Failed to bind agent socket: {}", socket_path.display());
                 if let Some(hint) = sandbox_root_cause_hint("Unix socket bind") {
@@ -478,7 +490,18 @@ impl AgentManager {
                 }
                 message
             })?;
+            #[cfg(not(unix))]
+            let listener: UnixListener = {
+                warn!(
+                    "Agent {} configured a local socket bind ({}), but Unix-socket agent IPC \
+                     is not supported on this platform — running without a local socket",
+                    config.b00t.name,
+                    socket_path.display()
+                );
+                ()
+            };
 
+            #[cfg(unix)]
             info!("🔌 Agent socket bound: {}", socket_path.display());
             Some(listener)
         } else {
