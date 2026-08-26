@@ -16,25 +16,13 @@ async fn main() -> Result<()> {
     let account_seed = env::var("CAPFORGE_ACCOUNT_SEED").context("CAPFORGE_ACCOUNT_SEED not set")?;
     let account_pubkey = env::var("CAPFORGE_ACCOUNT_PUBKEY").context("CAPFORGE_ACCOUNT_PUBKEY not set")?;
     let judge_model = env::var("CAPFORGE_JUDGE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
-    // The live NATS server runs in operator mode (auth_required: true) — an anonymous
-    // connect gets rejected outright. This must be the service's own long-lived user creds
-    // file, minted once via `bin/mint_service_creds.rs` (the "capforge-service" identity),
-    // not the account signing key above (that key mints/revokes; it isn't itself a user).
-    let service_creds_path =
-        env::var("CAPFORGE_SERVICE_CREDS_FILE").context("CAPFORGE_SERVICE_CREDS_FILE not set")?;
 
     let mut store = RedbScopeStore::open(&db_path, ScopeId::Global, None)
         .with_context(|| format!("opening redb at {db_path}"))?;
     let account_signing_key = KeyPair::from_seed(&account_seed).context("invalid account seed")?;
     let judge = OpenAiJudge::new(judge_model);
 
-    let client = async_nats::ConnectOptions::new()
-        .credentials_file(&service_creds_path)
-        .await
-        .with_context(|| format!("loading NATS creds from {service_creds_path}"))?
-        .connect(&nats_url)
-        .await
-        .context("connecting to NATS")?;
+    let client = connect_nats(&nats_url).await?;
     let mut sub = client.subscribe("capability.request.*").await.context("subscribing")?;
 
     tracing::info!("capability-forge listening on capability.request.*");
@@ -63,6 +51,126 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Two supported NATS auth modes, tried in this order:
+///
+/// 1. Plain username/password (`CAPFORGE_NATS_USER`/`CAPFORGE_NATS_PASSWORD`)
+///    — what every real deployment of this service actually needs today.
+///    b00t-node's NATS server (see
+///    `nats/pyinfra/templates/nats-pod-configured.yaml.j2`) runs simple
+///    username/password auth, not operator/JWT — deliberately, per
+///    `_b00t_/datums/PROVIDER-VULTR.provider.tomllmd`: "JWT's
+///    resolver_preload never had a real app account, and the NSC signing
+///    key that would be needed to add one isn't recoverable." No
+///    `CAPFORGE_SERVICE_CREDS_FILE` can ever authenticate against a server
+///    with no JWT resolver configured at all, regardless of how correct
+///    the creds file itself is.
+/// 2. JWT/creds-file (`CAPFORGE_SERVICE_CREDS_FILE`) — for a real
+///    operator-mode NATS deployment, if this service is ever pointed at
+///    one instead (this is what `tests/e2e_local_nats.rs`'s own private,
+///    fully JWT-configured `nats-server` process exercises; the core
+///    enroll/grant/judge/jwt_mint logic is unaffected either way — only
+///    the transport connection differs).
+///
+/// Neither set: a clear error rather than the network-level connect
+/// failure `.credentials_file()` used to produce when the file genuinely
+/// couldn't be read (env var simply unset, not a real path problem).
+async fn connect_nats(nats_url: &str) -> Result<async_nats::Client> {
+    match (
+        env::var("CAPFORGE_NATS_USER").ok(),
+        env::var("CAPFORGE_NATS_PASSWORD").ok(),
+    ) {
+        (Some(user), Some(password)) => async_nats::ConnectOptions::new()
+            .user_and_password(user, password)
+            .connect(nats_url)
+            .await
+            .context("connecting to NATS (user/password auth)"),
+        _ => {
+            let service_creds_path = env::var("CAPFORGE_SERVICE_CREDS_FILE").context(
+                "no NATS auth configured — set either CAPFORGE_NATS_USER +                  CAPFORGE_NATS_PASSWORD (plain auth, what b00t-node's NATS                  server actually runs) or CAPFORGE_SERVICE_CREDS_FILE                  (JWT/operator-mode auth)",
+            )?;
+            async_nats::ConnectOptions::new()
+                .credentials_file(&service_creds_path)
+                .await
+                .with_context(|| format!("loading NATS creds from {service_creds_path}"))?
+                .connect(nats_url)
+                .await
+                .context("connecting to NATS (JWT/creds-file auth)")
+        }
+    }
+}
+
 fn tracing_subscriber_init() {
     let _ = tracing_subscriber::fmt::try_init();
+}
+
+#[cfg(test)]
+mod connect_nats_tests {
+    use super::*;
+
+    // 🤓 These exercise connect_nats's MODE SELECTION (which branch runs,
+    // and that a missing-both-modes error is clear) without needing a
+    // real reachable NATS server — every branch here is expected to fail
+    // to connect (no server listening on the bogus port), so what's under
+    // test is which failure we get and why, proven via the error message.
+    // A real connection round-trip through the plain-auth path is covered
+    // live by b00t-historian's own smoke test pattern (see
+    // vultr_delegate.rs / PR #1151) — this binary's connection code is now
+    // the same async-nats API shape, just against a different port/user.
+
+    #[tokio::test]
+    async fn prefers_user_password_when_both_set() {
+        // SAFETY: capability-forge's test binaries run single-threaded
+        // enough in practice that these three tests don't interleave in a
+        // way that matters (each fully unsets what it doesn't need before
+        // asserting), but to be rigorous under any test-runner threading
+        // model, serialize env mutation via a process-wide mutex.
+        let _guard = env_mutex().lock().unwrap();
+        unsafe {
+            env::set_var("CAPFORGE_NATS_USER", "test-user");
+            env::set_var("CAPFORGE_NATS_PASSWORD", "test-pass");
+            env::remove_var("CAPFORGE_SERVICE_CREDS_FILE");
+        }
+        // Port 1 is reserved/unroutable — guaranteed connection failure,
+        // fast, without needing a real server.
+        let err = connect_nats("nats://127.0.0.1:1").await.unwrap_err();
+        assert!(
+            err.to_string().contains("user/password"),
+            "expected the user/password branch's error context, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_creds_file_when_user_password_unset() {
+        let _guard = env_mutex().lock().unwrap();
+        unsafe {
+            env::remove_var("CAPFORGE_NATS_USER");
+            env::remove_var("CAPFORGE_NATS_PASSWORD");
+            env::set_var("CAPFORGE_SERVICE_CREDS_FILE", "/nonexistent/path.creds");
+        }
+        let err = connect_nats("nats://127.0.0.1:1").await.unwrap_err();
+        assert!(
+            err.to_string().contains("loading NATS creds"),
+            "expected the creds-file branch's error context, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn errors_clearly_when_neither_auth_mode_configured() {
+        let _guard = env_mutex().lock().unwrap();
+        unsafe {
+            env::remove_var("CAPFORGE_NATS_USER");
+            env::remove_var("CAPFORGE_NATS_PASSWORD");
+            env::remove_var("CAPFORGE_SERVICE_CREDS_FILE");
+        }
+        let err = connect_nats("nats://127.0.0.1:1").await.unwrap_err();
+        assert!(
+            err.to_string().contains("no NATS auth configured"),
+            "expected the neither-mode error, got: {err}"
+        );
+    }
+
+    fn env_mutex() -> &'static std::sync::Mutex<()> {
+        static M: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        M.get_or_init(|| std::sync::Mutex::new(()))
+    }
 }
