@@ -288,6 +288,46 @@
 #        scoped as its own future deploy_*.py rather than folded into this
 #        one.
 #
+# MEMOIZED 2026-08-26: b00t-node delegates Vultr provisioning to the hive
+#      over NATS, instead of every agent needing its own VULTR_API_KEY +
+#      allowlisted egress IP (still blocked hive-wide — see FOLLOW-UP
+#      above). b00t-historian is the sole call site: it holds the key (once
+#      an operator places one in /etc/b00t-historian.env — NOT done yet,
+#      still blocked on the same allowlist/key problem) and answers three
+#      NATS request-reply subjects while `run`ning:
+#        - vultr.provision   -> vultr_delegate::handle_provision
+#        - vultr.deprovision -> vultr_delegate::handle_deprovision
+#        - vultr.status      -> vultr_delegate::handle_status (read-only,
+#          not allowlist-gated)
+#      One-shot CLI equivalents: `b00t-historian provision|deprovision|
+#      instance-status`.
+#      Safety rails (vultr_delegate.rs): fail-closed allowlist
+#      (VULTR_DELEGATE_ALLOWLIST env, comma-separated requester ids — empty/
+#      unset denies everyone), a max-concurrent-instance cap
+#      (VULTR_DELEGATE_MAX_INSTANCES, default 3), and a mandatory bounded
+#      TTL on every provision request (1-168 hours) auto-enforced by a
+#      background teardown task — a provisioned instance goes away on its
+#      own even if nobody ever asks to deprovision it.
+#      Response shape is designed for phase 2, not just phase 1:
+#      ProvisionResponse wraps pipeline_scheduler::HostInfo directly, so
+#      `pipeline_provision.rs`'s schedule_with_dynamic_provisioning (called
+#      from pipeline_executor.rs when a stage's ResourceRequirements don't
+#      fit any known host) consumes it with zero conversion glue. Disabled
+#      by default (DynamicProvisionOptions::enabled = false) — this creates
+#      real billed infrastructure, so a pipeline run must opt in rather than
+#      silently spending money the first time its static host pool runs
+#      out.
+#      🤓 Fully unit/mock tested (25 new tests across vultr_delegate.rs +
+#      pipeline_provision.rs, plus a live local-NATS smoke test exercising
+#      the real request-reply wiring end to end) — but NOT tested against
+#      the real Vultr API, since no working VULTR_API_KEY + allowlisted
+#      egress IP exists anywhere in this hive yet (see FOLLOW-UP above).
+#      The smoke test confirmed the whole chain (allowlist -> ttl validation
+#      -> capacity check -> real HTTP call to api.vultr.com) using a dummy
+#      key, failing only at Vultr's own auth boundary — that boundary is
+#      the actual remaining gate on calling this "verified end to end",
+#      not anything in this code.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
@@ -312,3 +352,7 @@ command = "dns_challenge { provider = \"vultr\" }  # see terraform-provider-acme
 [[resource.usages]]
 description = "b00t CLI compute provider dispatch — VPS lifecycle only, no jobs/training"
 command = "b00t provider endpoint deploy|status|teardown|list --provider vultr"
+
+[[resource.usages]]
+description = "hive-delegated provisioning via b00t-historian (NATS request-reply) — see MEMOIZED 2026-08-26 above"
+command = "b00t-historian provision --requested-by <id> --purpose <text> --ttl-hours <1-168> [--plan ..] [--region ..] | deprovision --requested-by <id> --instance-id <id> | instance-status [--instance-id <id>]"

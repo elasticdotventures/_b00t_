@@ -40,6 +40,7 @@ pub mod exit_code {
 pub mod ansible;
 pub mod blessing;
 pub mod virtfs;
+pub mod vultr_delegate;
 pub mod datum_schema;
 pub mod bootstrap;
 pub mod budget_controller;
@@ -130,6 +131,7 @@ pub mod pipeline_k8s;
 pub mod pipeline_statemachine;
 pub mod pipeline_store_nats;
 pub mod pipeline_transitions;
+pub mod pipeline_provision;
 pub mod stage_registry;
 pub mod transmogrifier;
 #[cfg(feature = "rpa")]
