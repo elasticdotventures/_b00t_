@@ -1583,12 +1583,16 @@ name = "b00t-candle-serve"
 version = "0.10.5"
 dependencies = [
  "anyhow",
+ "axum 0.8.9",
  "candle-core 0.11.0",
  "candle-nn 0.11.0",
  "candle-transformers 0.11.0",
  "clap",
  "hf-hub 1.0.0",
+ "serde",
+ "serde_json",
  "tokenizers 0.22.2",
+ "tokio",
 ]
 
 [[package]]

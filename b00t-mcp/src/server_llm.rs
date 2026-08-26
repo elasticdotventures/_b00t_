@@ -83,6 +83,12 @@ fn default_soul(hostname: &str) -> SoulConfig {
                 LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
                 LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+                // 🤓 b00t-candle-serve --serve — real local candle chat inference
+                // (Phi-4 14B Q4_K GGUF), no external API key, no container. CPU-only
+                // is slow (~0.53 tok/s, see _b00t_/phi-4-candle-local.model.ai.tomllmd)
+                // so this is listed last among the openai-compat entries: only used
+                // when none of mistralrs/llama-cpp/vllm are actually listening.
+                LocalBackend { name: "candle-phi".into(), port: 8082, kind: "openai-compat".into(), enabled: true },
                 // 🤓 b00t-embed-serve — real local candle embeddings (Qwen3-Embedding-0.6B),
                 // no external API key. kind="embeddings" (not "openai-compat") because it
                 // only implements /v1/embeddings, not /v1/chat/completions — discover_local()
@@ -906,6 +912,20 @@ mod tests {
             std::env::remove_var("OPENROUTER_API_KEY");
             std::env::remove_var("TELNYX_API_KEY");
         }
+    }
+
+    #[test]
+    fn default_soul_includes_candle_phi_as_a_local_chat_backend() {
+        let soul = default_soul("test-host");
+        let candle = soul
+            .backends
+            .local
+            .iter()
+            .find(|b| b.name == "candle-phi")
+            .expect("candle-phi must be a default local backend");
+        assert_eq!(candle.port, 8082);
+        assert_eq!(candle.kind, "openai-compat");
+        assert!(candle.enabled);
     }
 
     #[test]
