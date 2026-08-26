@@ -54,14 +54,17 @@ use b00t_c0re_lib::soul_dataframerr::{SoulColumn, SoulValue};
 use b00t_cli::commands::provider::{get_provider, ComputeProvider};
 use b00t_cli::commands::soul::{load_registry, load_soul_doc, with_registry};
 use b00t_cli::vultr_delegate::{
-    self, AllowedRequesters, DeprovisionRequest, ProvisionRequest, StatusRequest,
+    self, AllowedRequesters, CapabilityForgeAuthorizer, DeprovisionRequest, ProvisionRequest,
+    RequesterAuthorizer, StaticAllowlistAuthorizer, StatusRequest,
 };
+use capability_forge::identity::AgentKeyPair;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -634,7 +637,33 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
             None
         }
     };
-    let vultr_allowlist = AllowedRequesters::from_env();
+    // 🤓 Authorization backend selection: capability-forge (if
+    // VULTR_DELEGATE_CAPFORGE_AGENT_SEED is set — see
+    // vultr_delegate::CapabilityForgeAuthorizer's doc comment for exactly
+    // what this does and doesn't verify) upgrades from the original static
+    // env-var allowlist to a live, tiered, judged policy. Falls back to the
+    // static allowlist if the seed is missing OR malformed — a bad seed
+    // must not silently disable authorization entirely.
+    let vultr_authorizer: Box<dyn RequesterAuthorizer> = match env::var("VULTR_DELEGATE_CAPFORGE_AGENT_SEED")
+    {
+        Ok(seed) => {
+            let agent_id = env::var("VULTR_DELEGATE_CAPFORGE_AGENT_ID")
+                .unwrap_or_else(|_| "b00t-historian".to_string());
+            match AgentKeyPair::from_seed(&seed) {
+                Ok(keypair) => {
+                    eprintln!("vultr delegate authorization: capability-forge (agent_id={agent_id})");
+                    Box::new(CapabilityForgeAuthorizer::new(client.clone(), agent_id, keypair))
+                }
+                Err(e) => {
+                    eprintln!(
+                        "VULTR_DELEGATE_CAPFORGE_AGENT_SEED is set but invalid ({e}) —                          falling back to the static allowlist"
+                    );
+                    Box::new(StaticAllowlistAuthorizer(AllowedRequesters::from_env()))
+                }
+            }
+        }
+        Err(_) => Box::new(StaticAllowlistAuthorizer(AllowedRequesters::from_env())),
+    };
     let vultr_max_instances = vultr_delegate::max_instances_from_env();
 
     eprintln!(
@@ -728,7 +757,7 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
                             let resp = vultr_delegate::handle_provision(
                                 &req,
                                 provider,
-                                &vultr_allowlist,
+                                vultr_authorizer.as_ref(),
                                 vultr_max_instances,
                             )
                             .await?;
@@ -751,7 +780,7 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
                             let provider = vultr_provider
                                 .as_deref()
                                 .context("vultr provider not configured on this historian (VULTR_API_KEY unset)")?;
-                            vultr_delegate::handle_deprovision(&req, provider, &vultr_allowlist).await
+                            vultr_delegate::handle_deprovision(&req, provider, vultr_authorizer.as_ref()).await
                         }
                         .await;
                         vultr_reply(&client, reply_to, VULTR_DEPROVISION_SUBJECT, result).await;
