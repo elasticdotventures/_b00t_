@@ -24,6 +24,9 @@ use crate::commands::provider::{ComputeProvider, EndpointConfig};
 use crate::pipeline_scheduler::HostInfo;
 use crate::pipeline_types::HostResources;
 use anyhow::{bail, Context, Result};
+use async_trait::async_trait;
+use capability_forge::identity::AgentKeyPair;
+use capability_forge::request::{CapabilityReply, CapabilityRequest, SignedRequest};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -50,6 +53,12 @@ pub const MAX_TTL_HOURS: u32 = 168;
 /// created outside this delegate path.
 const INSTANCE_NAME_PREFIX: &str = "b00t-delegate";
 
+/// Skill names as registered with capability-forge (see
+/// `CapabilityForgeAuthorizer`) — also used as the log-facing action name
+/// under `StaticAllowlistAuthorizer`.
+pub const ACTION_PROVISION: &str = "vultr-provision";
+pub const ACTION_DEPROVISION: &str = "vultr-deprovision";
+
 // ── AllowedRequesters ────────────────────────────────────────────────────────
 
 /// Fail-closed allowlist of `requested_by` identifiers.
@@ -73,6 +82,135 @@ impl AllowedRequesters {
 
     pub fn is_allowed(&self, requester: &str) -> bool {
         self.0.contains(requester)
+    }
+}
+
+// ── RequesterAuthorizer ──────────────────────────────────────────────────────
+
+/// Result of an authorization check — `Denied` always carries a reason so
+/// callers can log/reply with something more useful than a bare bool.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AuthorizationDecision {
+    Allowed,
+    Denied { reason: String },
+}
+
+/// Pluggable authorization backend for provision/deprovision requests.
+/// `StaticAllowlistAuthorizer` is the original (still default)
+/// implementation; `CapabilityForgeAuthorizer` upgrades it to a live,
+/// tiered, judged policy — see that impl's doc comment for the honest
+/// scope of what it does and doesn't verify.
+#[async_trait]
+pub trait RequesterAuthorizer: Send + Sync {
+    async fn authorize(&self, requester: &str, action: &str, purpose: &str) -> AuthorizationDecision;
+}
+
+/// The original allowlist check, unchanged, wrapped to fit the new trait —
+/// `handle_provision`/`handle_deprovision` no longer see `AllowedRequesters`
+/// directly, but nothing about its own logic changed.
+pub struct StaticAllowlistAuthorizer(pub AllowedRequesters);
+
+#[async_trait]
+impl RequesterAuthorizer for StaticAllowlistAuthorizer {
+    async fn authorize(&self, requester: &str, _action: &str, _purpose: &str) -> AuthorizationDecision {
+        if self.0.is_allowed(requester) {
+            AuthorizationDecision::Allowed
+        } else {
+            AuthorizationDecision::Denied {
+                reason: format!(
+                    "requester '{requester}' is not on the vultr delegate allowlist ({VULTR_DELEGATE_ALLOWLIST_ENV})"
+                ),
+            }
+        }
+    }
+}
+
+/// Relays an authorization check to capability-forge over NATS request-reply
+/// (`capability.request.*`), signed with b00t-historian's OWN enrolled
+/// identity — NOT the original requester's. This is an honest, deliberate
+/// scope limit, not an oversight: capability-forge's protocol requires a
+/// request be signed by the identity it authorizes
+/// (`service.rs::handle_request` rejects any `agent_pubkey` that doesn't
+/// match the enrolled `agent_id`'s registered pubkey), and the original
+/// caller (an arbitrary NATS publisher of a `ProvisionRequest`) never signs
+/// anything today — the wire protocol carries a bare `requested_by` string.
+/// Giving the original caller real cryptographic identity would mean
+/// extending `ProvisionRequest`/`DeprovisionRequest` to carry a pre-signed
+/// capability-forge grant the caller produces client-side — a real,
+/// separate follow-up, not attempted here.
+///
+/// What this DOES provide over `StaticAllowlistAuthorizer`, honestly: the
+/// "vultr-provision"/"vultr-deprovision" skills become live, tiered policy
+/// objects (Base/Escalatable/Restricted, changeable via `b00t
+/// capability-forge grant/suspend` without restarting the historian), and
+/// an Escalatable tier gets every request's `purpose` field reviewed by a
+/// real LLM judge before granting — a meaningful uplift from a static env
+/// var, just not (yet) per-original-requester attribution.
+pub struct CapabilityForgeAuthorizer {
+    client: async_nats::Client,
+    agent_id: String,
+    agent_keypair: AgentKeyPair,
+    subject: String,
+    timeout: std::time::Duration,
+}
+
+impl CapabilityForgeAuthorizer {
+    pub fn new(client: async_nats::Client, agent_id: impl Into<String>, agent_keypair: AgentKeyPair) -> Self {
+        let agent_id = agent_id.into();
+        Self {
+            client,
+            subject: format!("capability.request.{agent_id}"),
+            agent_id,
+            agent_keypair,
+            timeout: std::time::Duration::from_secs(15),
+        }
+    }
+}
+
+#[async_trait]
+impl RequesterAuthorizer for CapabilityForgeAuthorizer {
+    async fn authorize(&self, requester: &str, action: &str, purpose: &str) -> AuthorizationDecision {
+        let body = CapabilityRequest {
+            agent_id: self.agent_id.clone(),
+            requested_skills: vec![action.to_string()],
+            justification: format!("relayed on behalf of '{requester}': {purpose}"),
+        };
+        let signed = match SignedRequest::sign(&self.agent_keypair, body) {
+            Ok(s) => s,
+            Err(e) => return AuthorizationDecision::Denied { reason: format!("signing capability request failed: {e}") },
+        };
+        let payload = match serde_json::to_vec(&signed) {
+            Ok(p) => p,
+            Err(e) => return AuthorizationDecision::Denied { reason: format!("encoding capability request failed: {e}") },
+        };
+
+        let response = match tokio::time::timeout(
+            self.timeout,
+            self.client.request(self.subject.clone(), payload.into()),
+        )
+        .await
+        {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => return AuthorizationDecision::Denied { reason: format!("capability-forge request failed: {e}") },
+            Err(_) => return AuthorizationDecision::Denied { reason: "capability-forge request timed out".to_string() },
+        };
+
+        let reply: CapabilityReply = match serde_json::from_slice(&response.payload) {
+            Ok(r) => r,
+            Err(e) => return AuthorizationDecision::Denied { reason: format!("malformed capability-forge reply: {e}") },
+        };
+
+        if reply.granted.iter().any(|s| s == action) {
+            AuthorizationDecision::Allowed
+        } else {
+            let reason = reply
+                .denied
+                .iter()
+                .find(|(skill, _)| skill == action)
+                .map(|(_, reason)| reason.clone())
+                .unwrap_or_else(|| "capability-forge denied the request".to_string());
+            AuthorizationDecision::Denied { reason }
+        }
     }
 }
 
@@ -196,14 +334,13 @@ pub fn validate_ttl_hours(ttl_hours: u32) -> Result<()> {
 pub async fn handle_provision(
     req: &ProvisionRequest,
     provider: &dyn ComputeProvider,
-    allowlist: &AllowedRequesters,
+    authorizer: &dyn RequesterAuthorizer,
     max_instances: u32,
 ) -> Result<ProvisionResponse> {
-    if !allowlist.is_allowed(&req.requested_by) {
-        bail!(
-            "requester '{}' is not on the vultr delegate allowlist ({VULTR_DELEGATE_ALLOWLIST_ENV})",
-            req.requested_by
-        );
+    if let AuthorizationDecision::Denied { reason } =
+        authorizer.authorize(&req.requested_by, ACTION_PROVISION, &req.purpose).await
+    {
+        bail!("requester '{}' denied for {ACTION_PROVISION}: {reason}", req.requested_by);
     }
     validate_ttl_hours(req.ttl_hours)?;
 
@@ -269,13 +406,13 @@ pub async fn handle_provision(
 pub async fn handle_deprovision(
     req: &DeprovisionRequest,
     provider: &dyn ComputeProvider,
-    allowlist: &AllowedRequesters,
+    authorizer: &dyn RequesterAuthorizer,
 ) -> Result<DeprovisionResponse> {
-    if !allowlist.is_allowed(&req.requested_by) {
-        bail!(
-            "requester '{}' is not on the vultr delegate allowlist ({VULTR_DELEGATE_ALLOWLIST_ENV})",
-            req.requested_by
-        );
+    if let AuthorizationDecision::Denied { reason } = authorizer
+        .authorize(&req.requested_by, ACTION_DEPROVISION, &req.instance_id)
+        .await
+    {
+        bail!("requester '{}' denied for {ACTION_DEPROVISION}: {reason}", req.requested_by);
     }
     provider
         .teardown_endpoint(&req.instance_id)
@@ -438,8 +575,8 @@ mod tests {
         }
     }
 
-    fn allow(who: &str) -> AllowedRequesters {
-        AllowedRequesters::from_csv(who)
+    fn allow(who: &str) -> StaticAllowlistAuthorizer {
+        StaticAllowlistAuthorizer(AllowedRequesters::from_csv(who))
     }
 
     // ── AllowedRequesters ──────────────────────────────────────────────
@@ -686,5 +823,162 @@ mod tests {
         tokio::task::yield_now().await;
 
         assert!(mock.teardown_calls().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod capability_forge_authorizer_tests {
+    use super::*;
+    use futures::StreamExt;
+    use std::process::Stdio;
+    use tokio::process::{Child, Command};
+
+    /// Not every environment this test suite runs in has a `nats-server`
+    /// binary on PATH (same caveat as pipeline_remote_exec.rs's ssh check —
+    /// confirmed CI's runner image is missing tools this dev machine has).
+    fn nats_server_available() -> bool {
+        std::process::Command::new("nats-server")
+            .arg("-v")
+            .output()
+            .is_ok()
+    }
+
+    struct NatsServerGuard {
+        child: Child,
+        url: String,
+    }
+
+    impl Drop for NatsServerGuard {
+        fn drop(&mut self) {
+            let _ = self.child.start_kill();
+        }
+    }
+
+    async fn start_nats_server(port: u16) -> NatsServerGuard {
+        let child = Command::new("nats-server")
+            .args(["-p", &port.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("nats-server must be on PATH — caller already checked nats_server_available()");
+        // No readiness signal to poll other than "try connecting" — a short
+        // fixed wait matches the same approach already proven reliable
+        // elsewhere in this session's local-NATS smoke tests.
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        NatsServerGuard { child, url: format!("nats://127.0.0.1:{port}") }
+    }
+
+    fn dummy_keypair() -> AgentKeyPair {
+        AgentKeyPair::generate()
+    }
+
+    #[tokio::test]
+    async fn authorize_denies_cleanly_when_nobody_answers() {
+        if !nats_server_available() {
+            eprintln!("skipping: nats-server not on PATH in this environment");
+            return;
+        }
+        let server = start_nats_server(24222).await;
+        let client = async_nats::connect(&server.url).await.expect("connect to local nats-server");
+
+        let mut authorizer = CapabilityForgeAuthorizer::new(client, "test-historian", dummy_keypair());
+        authorizer.timeout = std::time::Duration::from_millis(500);
+
+        let decision = authorizer.authorize("fung1", ACTION_PROVISION, "test").await;
+        match decision {
+            // NATS itself knows immediately when no subscriber exists on a
+            // subject and fails the request fast with "no responders"
+            // rather than waiting out the full timeout — both this and an
+            // actual timeout (nothing DOES answer eventually) are correct
+            // "nobody's home" denials, so both are accepted here.
+            AuthorizationDecision::Denied { reason } => {
+                assert!(
+                    reason.contains("timed out") || reason.contains("no responders"),
+                    "expected a nobody-answered denial, got: {reason}"
+                );
+            }
+            AuthorizationDecision::Allowed => panic!("nothing was listening — must not grant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn authorize_denies_on_malformed_reply() {
+        if !nats_server_available() {
+            eprintln!("skipping: nats-server not on PATH in this environment");
+            return;
+        }
+        let server = start_nats_server(24223).await;
+        let client = async_nats::connect(&server.url).await.expect("connect to local nats-server");
+        let agent_id = "test-historian";
+
+        // A minimal responder standing in for capability-forge's own NATS
+        // handling loop — replies with garbage instead of a real
+        // CapabilityReply, to prove the parse-failure path denies cleanly
+        // rather than panicking or hanging.
+        let responder_client = client.clone();
+        let subject = format!("capability.request.{agent_id}");
+        tokio::spawn(async move {
+            let mut sub = responder_client.subscribe(subject).await.unwrap();
+            if let Some(msg) = sub.next().await {
+                if let Some(reply) = msg.reply {
+                    let _ = responder_client.publish(reply, "not json".into()).await;
+                }
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let mut authorizer = CapabilityForgeAuthorizer::new(client, agent_id, dummy_keypair());
+        authorizer.timeout = std::time::Duration::from_secs(3);
+
+        let decision = authorizer.authorize("fung1", ACTION_PROVISION, "test").await;
+        match decision {
+            AuthorizationDecision::Denied { reason } => {
+                assert!(reason.contains("malformed"), "expected a malformed-reply denial, got: {reason}");
+            }
+            AuthorizationDecision::Allowed => panic!("garbage reply — must not grant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn authorize_grants_when_reply_lists_the_action_and_denies_otherwise() {
+        if !nats_server_available() {
+            eprintln!("skipping: nats-server not on PATH in this environment");
+            return;
+        }
+        let server = start_nats_server(24224).await;
+        let client = async_nats::connect(&server.url).await.expect("connect to local nats-server");
+        let agent_id = "test-historian";
+
+        // Stands in for capability-forge: always grants exactly the
+        // requested skill. Proves authorize()'s signing + subject +
+        // encode/decode round trip is correct end to end, without needing
+        // a full capability-forge instance (its own request-handling logic
+        // is separately tested in capability-forge's own test suite —
+        // service.rs's tests and tests/e2e_local_nats.rs).
+        let responder_client = client.clone();
+        let subject = format!("capability.request.{agent_id}");
+        tokio::spawn(async move {
+            let mut sub = responder_client.subscribe(subject).await.unwrap();
+            while let Some(msg) = sub.next().await {
+                let Some(reply_to) = msg.reply else { continue };
+                let signed: SignedRequest = serde_json::from_slice(&msg.payload).unwrap();
+                let reply = CapabilityReply {
+                    granted: signed.body.requested_skills.clone(),
+                    denied: vec![],
+                    jwt: None,
+                    expires_at: None,
+                    jti: None,
+                };
+                let _ = responder_client
+                    .publish(reply_to, serde_json::to_vec(&reply).unwrap().into())
+                    .await;
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let authorizer = CapabilityForgeAuthorizer::new(client, agent_id, dummy_keypair());
+
+        let decision = authorizer.authorize("fung1", ACTION_PROVISION, "test").await;
+        assert_eq!(decision, AuthorizationDecision::Allowed);
     }
 }

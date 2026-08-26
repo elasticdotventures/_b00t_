@@ -421,6 +421,41 @@
 #      capability-forge being deployable doesn't by itself make that
 #      swap, it's a separate integration task).
 #
+# MEMOIZED 2026-08-26 (cont'd): vultr_delegate's authorization backend is
+#      now pluggable — RequesterAuthorizer trait, two implementations.
+#      StaticAllowlistAuthorizer wraps the original VULTR_DELEGATE_ALLOWLIST
+#      env var, unchanged, still the default. CapabilityForgeAuthorizer
+#      relays the check to capability-forge over NATS instead — enabled by
+#      setting VULTR_DELEGATE_CAPFORGE_AGENT_SEED (b00t-historian's OWN
+#      enrolled capability-forge identity, generated once via `b00t
+#      capability-forge enroll --agent-id b00t-historian --skill
+#      vultr-provision --skill vultr-deprovision --db-path
+#      /var/lib/b00t/capability-forge.redb`, persisted like any other
+#      secret).
+#      Honest scope limit, documented inline on CapabilityForgeAuthorizer:
+#      it signs with HISTORIAN's identity, not the original requester's —
+#      capability-forge's protocol requires a request be signed by the
+#      identity it authorizes, and the original NATS caller
+#      (`b00t-historian provision ...`) never signs anything today, just
+#      sends a bare `requested_by` string. So this upgrades "is
+#      vultr-provisioning allowed at all, with live tiered/judged policy
+#      instead of a static list" — a real uplift (skills become
+#      Base/Escalatable/Restricted, changeable via `b00t capability-forge
+#      grant/suspend` with zero historian restart, and Escalatable
+#      requests get their `purpose` field reviewed by a real LLM judge) —
+#      but NOT per-original-requester cryptographic attribution. That
+#      would need ProvisionRequest/DeprovisionRequest to carry a
+#      pre-signed capability-forge grant the ORIGINAL caller produces
+#      client-side; a real, separate follow-up, not attempted here.
+#      Verified live end to end, twice, against a real capability-forge
+#      instance (not mocked): an agent enrolled with the vultr-provision/
+#      deprovision skills got real HTTP-call-to-api.vultr.com behavior
+#      (same dummy-key boundary as always); a second agent enrolled with
+#      NO granted skills got a real denial straight from capability-forge's
+#      own policy engine: "restricted tier — requires admin allowlist
+#      grant" — capability-forge's actual SkillTier::Restricted default,
+#      not a stubbed response.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
