@@ -92,6 +92,15 @@ fn default_soul(hostname: &str) -> SoulConfig {
             remote: vec![
                 RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
                 RemoteBackend { name: "openrouter".into(), key_env: "OPENROUTER_API_KEY".into(), base_url: Some("https://openrouter.ai/api/v1".into()) },
+                // 🤓 Telnyx Inference — OpenAI-Chat-Completions-compatible
+                // (confirmed live: capability-forge/src/judge.rs's
+                // OpenAiJudge::with_base_url uses the identical endpoint
+                // shape). Appended last, after the two pre-existing entries,
+                // to preserve their relative priority on any host that
+                // happens to have multiple keys set — it's the one that
+                // actually has a working credential anywhere in this hive
+                // today, not necessarily the "best" provider in general.
+                RemoteBackend { name: "telnyx".into(), key_env: "TELNYX_API_KEY".into(), base_url: Some("https://api.telnyx.com/v2/ai".into()) },
             ],
         },
     }
@@ -885,6 +894,78 @@ mod tests {
             "a key created under one TempHome must not leak into a fresh LlmState \
              constructed under a different TempHome"
         );
+    }
+
+    // ── remote backend discovery — Telnyx addition ──────────────────────────
+
+    static REMOTE_BACKEND_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn clear_remote_backend_env() {
+        unsafe {
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("OPENROUTER_API_KEY");
+            std::env::remove_var("TELNYX_API_KEY");
+        }
+    }
+
+    #[test]
+    fn default_soul_includes_telnyx_as_a_remote_backend() {
+        let soul = default_soul("test-host");
+        let telnyx = soul
+            .backends
+            .remote
+            .iter()
+            .find(|b| b.name == "telnyx")
+            .expect("telnyx must be a default remote backend");
+        assert_eq!(telnyx.key_env, "TELNYX_API_KEY");
+        assert_eq!(telnyx.base_url.as_deref(), Some("https://api.telnyx.com/v2/ai"));
+    }
+
+    #[test]
+    fn discover_remote_picks_telnyx_when_it_is_the_only_key_set() {
+        let _guard = REMOTE_BACKEND_ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_remote_backend_env();
+        unsafe {
+            std::env::set_var("TELNYX_API_KEY", "test-telnyx-key");
+        }
+
+        let soul = default_soul("test-host");
+        let found = discover_remote(&soul);
+        clear_remote_backend_env();
+
+        let (name, key, url) = found.expect("a remote backend must be found");
+        assert_eq!(name, "telnyx");
+        assert_eq!(key, "test-telnyx-key");
+        assert_eq!(url, "https://api.telnyx.com/v2/ai");
+    }
+
+    #[test]
+    fn discover_remote_prefers_openai_over_telnyx_when_both_are_set() {
+        // Telnyx was appended AFTER the pre-existing entries specifically to
+        // preserve their relative priority on any host that happens to have
+        // multiple keys configured — this proves that ordering held.
+        let _guard = REMOTE_BACKEND_ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_remote_backend_env();
+        unsafe {
+            std::env::set_var("OPENAI_API_KEY", "test-openai-key");
+            std::env::set_var("TELNYX_API_KEY", "test-telnyx-key");
+        }
+
+        let soul = default_soul("test-host");
+        let found = discover_remote(&soul);
+        clear_remote_backend_env();
+
+        let (name, ..) = found.expect("a remote backend must be found");
+        assert_eq!(name, "openai");
+    }
+
+    #[test]
+    fn discover_remote_finds_nothing_when_no_keys_are_set() {
+        let _guard = REMOTE_BACKEND_ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_remote_backend_env();
+
+        let soul = default_soul("test-host");
+        assert!(discover_remote(&soul).is_none());
     }
 
     // ── proxy_chat #596/#597 wiring — end-to-end against a fake upstream ─────
