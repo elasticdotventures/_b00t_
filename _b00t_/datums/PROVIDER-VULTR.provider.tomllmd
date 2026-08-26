@@ -381,6 +381,46 @@
 #         allowlist gate as capability-forge's original intended role —
 #         both remain separate follow-ups, not attempted here.
 #
+# MEMOIZED 2026-08-26 (cont'd, live deploy): item 4 above went beyond "code
+#      fixed, verified locally" — actually deployed to b00t-node, with the
+#      operator's explicit go-ahead first (this touches live production:
+#      NATS auth config, a running service, real secrets). Sequence run
+#      for real against 149.28.189.45:
+#        1. Appended a "capability-forge" user to the live
+#           nats-server.conf (backed up first), validated with
+#           `nats-server -t`, applied via SIGHUP live reload — confirmed
+#           "Reloaded: authorization users" in the NATS log with ZERO
+#           downtime; b00t-historian's existing connection was untouched
+#           (same PID, no reconnect needed).
+#        2. Added CAPFORGE_NATS_USER/CAPFORGE_NATS_PASSWORD to the
+#           existing /opt/b00t/capforge.env (appended only — the
+#           CAPFORGE_ACCOUNT_SEED/PUBKEY already there from an earlier,
+#           never-completed deploy attempt were left untouched and turned
+#           out to already be valid nkeys material).
+#        3. Rebuilt capability-forge with the #1154 fix — same
+#           rust:alpine container approach the historian build used
+#           before #1149 (native musl cross-compile hits a separate
+#           openssl-sys/pkg-config wall for this binary specifically, not
+#           the esaxx-rs issue #1149 fixed — see the pyinfra deploy
+#           script's section 7 comment).
+#        4. Uploaded + atomically swapped the binary, restarted the
+#           service.
+#      Result, confirmed live: `NRestarts=0`, "capability-forge listening
+#      on capability.request.*" in the log, same PID stable 20+ seconds
+#      later. The crash-loop (26099 restarts at the moment of the fix) is
+#      resolved, not just locally reproduced-and-fixed. `deploy_b00t_node.py`
+#      section 7 now reproduces this whole sequence from scratch (minus
+#      the account seed/pubkey, which must be generated once and reused,
+#      never regenerated — regenerating invalidates every grant already
+#      issued).
+#      Still open: b00t-server dogfooding (separate, alpha, its own
+#      future deploy_*.py — unchanged from the FOLLOW-UP note above), and
+#      wiring capability-forge into vultr_delegate's allowlist as the
+#      real authorization backend (currently a hardcoded env-var
+#      allowlist per the "minimal allowlist for now" design decision —
+#      capability-forge being deployable doesn't by itself make that
+#      swap, it's a separate integration task).
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified

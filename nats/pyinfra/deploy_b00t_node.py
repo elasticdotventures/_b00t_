@@ -7,12 +7,15 @@ This is the memoized answer to "how do we rebuild this node without an LLM."
 Deliberately NOT reproduced here (known-broken cruft — see the "DEPLOYED
 2026-08-25" and earlier entries in _b00t_/datums/PROVIDER-VULTR.provider.tomllmd
 for the full incident history):
-  - b00t-capability-forge.service — crash-looping (activating/auto-restart)
   - b00t-daprd.service            — crash-looping; Dapr's pubsub.jetstream
     account was never actually provisioned, souls uses plain NATS+JetStream
     instead (see the NATS auth section below)
   - b00t-pingap.service, b00t-maintenance.service — unrelated to souls; add a
     separate deploy_*.py for those if/when they need to be reproducible too
+
+b00t-capability-forge.service WAS in this exclusion list (crash-looping,
+26000+ restarts) — fixed and reproduced here as of 2026-08-26, see section
+7 below / _b00t_#1154.
 
 Usage:
     pyinfra nats/pyinfra/inventory.py nats/pyinfra/deploy_b00t_node.py \\
@@ -40,6 +43,26 @@ if not nats_password:
     raise ValueError(
         "pass --data nats_password=<secret> (e.g. $(openssl rand -hex 24)) — "
         "never hardcode the live credential in this repo"
+    )
+
+# capability-forge's NATS user (section 7) — its password is needed as
+# early as section 5's NATS pod config render, so it's fetched up here
+# alongside nats_password rather than next to the rest of section 7.
+# Required --data: capforge_nats_password, capforge_account_seed,
+# capforge_account_pubkey (generate the account seed/pubkey ONCE with a
+# throwaway `nkeys::KeyPair::new_account()` — e.g. via `cargo run` on a
+# one-off scratch binary — and pass the SAME pair on every re-run; a fresh
+# pair on each run would invalidate every capability grant this service
+# has already issued). Optional: openai_api_key (escalation judge; fails
+# closed without it — base-tier skills work fine either way).
+capforge_nats_password = host.data.get("capforge_nats_password")
+capforge_account_seed = host.data.get("capforge_account_seed")
+capforge_account_pubkey = host.data.get("capforge_account_pubkey")
+if not (capforge_nats_password and capforge_account_seed and capforge_account_pubkey):
+    raise ValueError(
+        "pass --data capforge_nats_password=<secret> --data capforge_account_seed=<nkeys seed> "
+        "--data capforge_account_pubkey=<nkeys pubkey> — generate the seed/pubkey ONCE and reuse "
+        "them on every re-run, never regenerate"
     )
 
 # ─── 1. Base packages ──────────────────────────────────────────────────────
@@ -127,6 +150,7 @@ files.template(
     src="templates/nats-pod-configured.yaml.j2",
     dest="/opt/b00t/nats-pod-configured.yaml",
     nats_password=nats_password,
+    capforge_nats_password=capforge_nats_password,
 )
 files.put(
     name="Install b00t-nats.service",
@@ -234,3 +258,71 @@ systemd.service(
     enabled=True,
     daemon_reload=True,
 )
+
+# ─── 7. capability-forge ────────────────────────────────────────────────────
+# 🤓 MEMOIZED 2026-08-26: was crash-looping in production (26000+ restarts,
+# journalctl showing "cannot parse user JWT from the credentials file") —
+# it only knew how to authenticate to NATS via a JWT/operator-mode creds
+# file, but this node's NATS server runs plain username/password auth (see
+# section 5 above / this file's nats_password). Fixed at the source in
+# capability-forge's main.rs (_b00t_#1154): it now tries
+# CAPFORGE_NATS_USER/CAPFORGE_NATS_PASSWORD first. Confirmed live: after
+# this exact sequence (new NATS user via config reload, env file, rebuilt
+# binary, service restart) it stayed up with 0 restarts.
+#
+# Unlike b00t-historian/b00t-forge-kv above, this does NOT build with a
+# plain native musl cross-compile — openssl-sys (pulled in transitively,
+# likely via the OpenAI judge client) needs pkg-config cross-compilation
+# support that isn't set up on the controller, and fails outright:
+# "Could not find directory of OpenSSL installation" /
+# "pkg-config has not been configured to support cross-compilation."
+# Falls back to the same rust:alpine container approach the historian
+# build used before _b00t_#1149's esaxx-rs fix (see the commented-out
+# block in section 6) — alpine's musl toolchain + openssl-dev sidesteps
+# the cross-compile pkg-config problem entirely.
+#
+REPO_ROOT = local.shell("git rev-parse --show-toplevel").strip()
+CONTAINER_IMAGE = "docker.io/library/rust:1-alpine"
+
+local.shell(
+    f"podman run --rm --memory=8g --memory-swap=8g -v {REPO_ROOT}:/src:Z -w /src {CONTAINER_IMAGE} sh -c "
+    "'apk add --no-cache build-base perl linux-headers pkgconfig openssl-dev openssl-libs-static "
+    "&& cargo build --release --jobs 4 --bin capability-forge -p capability-forge'"
+)
+
+files.put(
+    name="Upload capability-forge",
+    src=f"{REPO_ROOT}/target/release/capability-forge",
+    dest="/usr/local/b00t/capability-forge",
+    mode="755",
+    add_deploy_dir=False,
+)
+files.link(
+    name="Symlink /usr/local/bin/capability-forge -> /usr/local/b00t/capability-forge",
+    path="/usr/local/bin/capability-forge",
+    target="/usr/local/b00t/capability-forge",
+)
+files.template(
+    name="Write /opt/b00t/capforge.env (0600)",
+    src="templates/capforge.env.j2",
+    dest="/opt/b00t/capforge.env",
+    mode="600",
+    capforge_nats_password=capforge_nats_password,
+    capforge_account_seed=capforge_account_seed,
+    capforge_account_pubkey=capforge_account_pubkey,
+    openai_api_key=host.data.get("openai_api_key", ""),
+)
+files.put(
+    name="Install b00t-capability-forge.service",
+    src="files/b00t-capability-forge.service",
+    dest="/etc/systemd/system/b00t-capability-forge.service",
+)
+systemd.service(
+    name="Enable + start b00t-capability-forge",
+    service="b00t-capability-forge.service",
+    running=True,
+    enabled=True,
+    restarted=True,  # pick up a rebuilt binary / rotated password on re-run
+    daemon_reload=True,
+)
+

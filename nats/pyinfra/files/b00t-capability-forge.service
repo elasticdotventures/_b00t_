@@ -1,0 +1,50 @@
+# Skill-scoped NATS JWT authorization service — see docs/superpowers/
+# specs/2026-08-13-capability-forge-design.md.
+#
+# 🤓 MEMOIZED 2026-08-26: this originally connected via
+# CAPFORGE_SERVICE_CREDS_FILE (NATS JWT/operator-mode auth, a
+# "capforge-service" user minted via `mint_service_creds`) — crash-looped
+# forever (26000+ restarts) because b00t-node's NATS server runs plain
+# username/password auth, not JWT (see nats-pod-configured.yaml.j2 — the
+# NSC signing key needed for real JWT support was lost). Fixed at the
+# source: capability-forge's main.rs now tries
+# CAPFORGE_NATS_USER/CAPFORGE_NATS_PASSWORD (in /opt/b00t/capforge.env)
+# first, only falling back to the creds file if those are unset — see
+# _b00t_#1154. The Environment=CAPFORGE_SERVICE_CREDS_FILE line below is
+# now inert (present for the JWT fallback path, unused as long as
+# CAPFORGE_NATS_USER/PASSWORD are set) — harmless to leave.
+#
+# 🤓 CAPFORGE_ACCOUNT_SEED and OPENAI_API_KEY are secrets (the seed is
+# the operator account's signing key — equivalent to root authority
+# over every NATS user JWT this service mints). They live in
+# /opt/b00t/capforge.env (0600, written above) via EnvironmentFile=,
+# not inline Environment= here, because this unit file itself is 0644
+# (systemd unit files are conventionally world-readable) and an inline
+# Environment= line would have put the seed in a world-readable file.
+#
+# 🤓 KNOWN GAP: CAPFORGE_JUDGE_MODEL's OpenAI-backed escalation judge
+# needs OPENAI_API_KEY, which does not exist in the global secret
+# store yet (only an Azure OpenAI key does, under a different API
+# shape — see cvat_hitl.tf's OPENAI_API_KEY output, not reusable
+# here). Left empty on purpose rather than blocking on it: the judge
+# fails closed by design (an API error denies the escalation, it
+# never grants), so base-tier skills still work end-to-end without
+# this — only escalatable-tier requests are affected until it's added.
+[Unit]
+Description=capability-forge (skill-scoped NATS JWT authorization service)
+After=b00t-nats.service
+Requires=b00t-nats.service
+
+[Service]
+Type=simple
+Environment=NATS_URL=nats://127.0.0.1:4222
+Environment=CAPFORGE_DB_PATH=/var/lib/b00t/capability-forge.redb
+Environment=CAPFORGE_SERVICE_CREDS_FILE=/opt/b00t/capforge-service.creds
+Environment=CAPFORGE_JUDGE_MODEL=gpt-4o-mini
+EnvironmentFile=/opt/b00t/capforge.env
+ExecStart=/usr/local/bin/capability-forge
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
