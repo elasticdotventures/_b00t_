@@ -37,11 +37,26 @@ pub struct ParsedLesson {
 }
 
 /// Longest word-prefix of `text` that fits within `topic_max` tokens (≥1 word).
+///
+/// 🤓 #934: every caller of `auto_topic` also stores `body` as `text` itself
+/// (or a superset of it, e.g. the full raw lesson). If `text` already fits
+/// entirely within `topic_max` — the loop below never shrinks `end` — this
+/// used to return `text` verbatim as the "topic," so the emitted
+/// `"{topic}: {body} <!-- salvaged:... -->"` line duplicated the whole
+/// lesson word-for-word. When that happens, force a genuinely shorter
+/// summary (a short word-prefix with an ellipsis) instead — unless `text`
+/// is already a single word, where there's nothing shorter to derive and
+/// `topic == body` is the only honest answer.
 fn auto_topic(text: &str, count_tokens: &dyn Fn(&str) -> usize, topic_max: usize) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut end = words.len();
     while end > 1 && count_tokens(&words[..end].join(" ")) > topic_max {
         end -= 1;
+    }
+    if end == words.len() && words.len() > 1 {
+        const SUMMARY_WORDS: usize = 5;
+        let summary_end = SUMMARY_WORDS.min(words.len() - 1);
+        return format!("{}…", words[..summary_end].join(" ").trim_end_matches(':'));
     }
     words[..end].join(" ").trim_end_matches(':').to_string()
 }

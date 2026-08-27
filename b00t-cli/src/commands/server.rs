@@ -57,6 +57,36 @@ pub enum KeyAction {
 
 const KEYS_FILE: &str = "server-keys.json";
 
+/// Locked, read-merge-write, atomic-rename insert into the shared keys file —
+/// mirrors `b00t-mcp/src/server_llm.rs`'s `write_keys_file_locked` (#1128).
+/// Re-reads the file's CURRENT on-disk state after acquiring the lock, so a
+/// key a concurrently-running `b00t-mcp --http --llm` server just persisted
+/// via `LlmState::save_keys_to_file` isn't lost to this process's own write.
+fn create_key_locked(keys_path: &std::path::Path, key: &str, entry: Value) -> anyhow::Result<()> {
+    use fs2::FileExt;
+
+    if let Some(parent) = keys_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let lock_file = std::fs::OpenOptions::new().create(true).write(true).open(keys_path)?;
+    lock_file.lock_exclusive()?;
+
+    let mut data: Value =
+        serde_json::from_str(&std::fs::read_to_string(keys_path).unwrap_or_default())
+            .unwrap_or_else(|_| serde_json::from_str(r###"{"keys":{}}"###).unwrap());
+    data["keys"]
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("invalid keys file"))?
+        .insert(key.to_string(), entry);
+
+    let tmp_path = keys_path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, serde_json::to_string_pretty(&data)?)?;
+    std::fs::rename(&tmp_path, keys_path)?;
+
+    // Lock releases when lock_file drops at function end.
+    Ok(())
+}
+
 pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
     match cmd {
         ServerCommands::Start {
@@ -89,12 +119,6 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                     .unwrap_or_else(|| std::path::PathBuf::from("."))
                     .join(".b00t")
                     .join(KEYS_FILE);
-                let mut data: Value =
-                    serde_json::from_str(&std::fs::read_to_string(&keys_path).unwrap_or_default())
-                        .unwrap_or_else(|_| serde_json::from_str(r###"{"keys":{}}"###).unwrap());
-                let keys = data["keys"]
-                    .as_object_mut()
-                    .ok_or_else(|| anyhow::anyhow!("invalid keys file"))?;
                 let access_json: Vec<Value> = access
                     .iter()
                     .map(|a| {
@@ -102,18 +126,17 @@ pub fn handle_server_command(cmd: &ServerCommands) -> anyhow::Result<()> {
                         serde_json::json!({"class": class, "action": action})
                     })
                     .collect();
-                keys.insert(
-                    key.clone(),
-                    serde_json::json!({
-                        "consumer": consumer,
-                        "created_at": chrono::Utc::now().to_rfc3339(),
-                        "access": access_json,
-                    }),
-                );
-                if let Some(parent) = keys_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(&keys_path, serde_json::to_string_pretty(&data)?)?;
+                let new_entry = serde_json::json!({
+                    "consumer": consumer,
+                    "created_at": chrono::Utc::now().to_rfc3339(),
+                    "access": access_json,
+                });
+                // Locked read-merge-write + atomic rename — a `b00t-mcp
+                // --http --llm` server process may be writing this same file
+                // (LlmState::save_keys_to_file) around the same time; without
+                // the lock, whichever of the two writes last would silently
+                // drop the other's key. See #1128.
+                create_key_locked(&keys_path, &key, new_entry)?;
                 eprintln!("✅ Key created for consumer '{}'", consumer);
                 if !access.is_empty() {
                     eprintln!("   Access: {}", access.join(", "));

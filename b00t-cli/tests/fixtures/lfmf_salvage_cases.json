@@ -48,9 +48,23 @@
     {
       "name": "empty_topic_salvaged",
       "raw": ": just a body here",
-      "topic": "just a body here",
+      "topic": "just a body…",
       "body": "just a body here",
       "salvage": "empty_part"
+    },
+    {
+      "name": "no_colon_fits_entirely_under_topic_max_934",
+      "raw": "keep secrets out of logs",
+      "topic": "keep secrets out of…",
+      "body": "keep secrets out of logs",
+      "salvage": "no_colon"
+    },
+    {
+      "name": "no_colon_single_word_topic_equals_body_934",
+      "raw": "atomicity",
+      "topic": "atomicity",
+      "body": "atomicity",
+      "salvage": "no_colon"
     },
     {
       "name": "colon_in_body_not_defeated",

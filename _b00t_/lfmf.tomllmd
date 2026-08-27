@@ -5,14 +5,28 @@
 #   input) fronting b00t-c0re-lib/src/lfmf.rs (LfmfSystem::record_lesson — the
 #   storage layer). Issue #934 found two example lessons on disk
 #   (_b00t_/learn/cargo-workspace-install.md, guard-session-fixtures.md) that
-#   looked corrupted — one really was (a pre-refactor hyphen-slugified,
-#   `MSRV`→`MSRS`-mangled duplicate, from before commit 969e6e09's
-#   salvage-first rewrite); the other turned out to be the CURRENT writer's
-#   correct, if verbose, no-colon salvage output (topic is a legitimately
-#   token-budgeted prefix of body, not corruption) — re-verified by literally
-#   re-running both through the current binary; see git history for this file
-#   for the byte-for-byte comparison. Both files were re-emitted with the
-#   current writer as part of closing out #934.
+#   looked corrupted. `guard-session-fixtures.md` was (and still is) correct:
+#   its topic is a legitimately token-budgeted prefix of a much longer body,
+#   not a duplicate — that's the salvage writer working as designed.
+#   `cargo-workspace-install.md` genuinely was corrupted, in TWO separate,
+#   sequential bugs, not one:
+#     1. A pre-refactor hyphen-slugifier + `MSRV`→`MSRS` mangling (predates
+#        commit 969e6e09's salvage-first rewrite) — fixed by PR #970, which
+#        re-emitted the file with correct spelling/spacing.
+#     2. `auto_topic()` in `b00t-cli/src/commands/lfmf.rs` returned the ENTIRE
+#        input verbatim as "topic" whenever the whole no-colon lesson already
+#        fit within `topic_max` tokens (this lesson's real content, ~16
+#        words, cleared the 25-token production budget without ever
+#        triggering the truncation loop) — so `"{topic}: {body}"` wrote the
+#        same sentence twice. PR #970 fixed bug 1 but never touched
+#        `auto_topic`, so this file was STILL duplicated after that "fix" —
+#        a prior version of this very comment incorrectly claimed both files
+#        were already correctly re-emitted; that was wrong for this file.
+#        Bug 2 is now fixed (`auto_topic` caps at a short word-prefix +
+#        ellipsis when the full text would otherwise be returned verbatim),
+#        regression-locked via two new fixture cases in
+#        `lfmf_salvage_cases.json`, and `cargo-workspace-install.md` has been
+#        re-emitted again with the corrected writer.
 #
 # @tribal: don't validate stricter in the CLI layer than the storage layer
 #   accepts — see the meta-pattern doc comment on ParsedLesson in
