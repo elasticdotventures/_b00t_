@@ -549,6 +549,71 @@ Send an unsigned transaction to the Core Space network
         assert_eq!(slug_to_title(""), "");
     }
 
+    /// Regression test for #1112: sync results must survive a *fresh*
+    /// `McpRegistry` construction, not just be visible within the same
+    /// in-process instance that ran the sync. Simulates what
+    /// `sync_official_registry`/`sync_vinkius_mcp_database` do (insert an
+    /// entry, then persist) without needing network access, then constructs
+    /// a brand-new registry against the same `storage_path` — mirroring two
+    /// separate CLI invocations (`sync-vinkius-database` then `search`).
+    #[test]
+    fn test_synced_entries_persist_and_reload_across_construction() {
+        let storage_path = std::env::temp_dir()
+            .join(format!("b00t-test-mcp-registry-persist-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&storage_path);
+
+        let mut registry = McpRegistry {
+            servers: HashMap::new(),
+            storage_path: storage_path.clone(),
+            enable_official_sync: true,
+        };
+        registry.servers.insert(
+            "test.persist/1112-fixture".to_string(),
+            McpServerRegistration {
+                id: "test.persist/1112-fixture".to_string(),
+                name: "Persist Regression Fixture".to_string(),
+                description: "regression fixture for issue #1112".to_string(),
+                version: "0.0.0".to_string(),
+                homepage: None,
+                documentation: None,
+                license: None,
+                tags: vec!["test-1112".to_string()],
+                config: McpServerConfig {
+                    command: "echo".to_string(),
+                    args: vec![],
+                    env: None,
+                    cwd: None,
+                    transport: ServerTransport::Stdio,
+                    url: None,
+                },
+                metadata: RegistrationMetadata {
+                    registered_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    source: RegistrationSource::VinkiusMcpDatabase,
+                    health_status: HealthStatus::Unknown,
+                    last_health_check: None,
+                    dependencies: Vec::new(),
+                    installation_status: InstallationStatus::NotInstalled,
+                },
+            },
+        );
+        registry.save().expect("save should succeed");
+
+        // Before the #1112 fix, McpRegistry::new(..., false) never read
+        // storage_path at all — this entry would be invisible here, matching
+        // the reported "search returns 0 results after a separate sync
+        // invocation" symptom.
+        let reloaded =
+            McpRegistry::new(storage_path.clone(), false).expect("fresh construction should succeed");
+        let hits = reloaded.search("Persist Regression Fixture");
+        assert!(
+            hits.iter().any(|s| s.id == "test.persist/1112-fixture"),
+            "synced entry must survive across a fresh McpRegistry construction"
+        );
+
+        let _ = std::fs::remove_file(&storage_path);
+    }
+
     // Real end-to-end check: shallow-clone the actual vinkius-mcp-database
     // repo, sync it into a registry, and confirm the dvc.md entry (used as
     // the worked example in the task spec) round-trips through search().
@@ -622,6 +687,18 @@ impl McpRegistry {
         if from_file {
             registry.load()?;
         } else {
+            // #1112: seed with whatever a prior `sync-official`/
+            // `sync-vinkius-database` invocation persisted (best-effort —
+            // missing/corrupt cache is not fatal, just starts empty) before
+            // layering datum files on top. Datum-backed servers still win on
+            // id collision (sync_from_datums inserts after this), keeping
+            // datum TOMLs authoritative for anything they define; this only
+            // fills in the entries that have no datum at all — the synced
+            // ones search couldn't find across invocations before.
+            if let Err(e) = registry.load() {
+                debug!("No prior synced registry cache to load: {}", e);
+            }
+
             // Load from datum files instead of file. Datum TOMLs live one
             // level under the dotfiles root (~/.b00t/_b00t_/*.mcp.toml, per
             // the `sync-datums --path ~/.dotfiles/_b00t_` example in this
@@ -650,12 +727,25 @@ impl McpRegistry {
         Ok(())
     }
 
-    /// Save registry to storage - NO-OP in the new design since registry is runtime-only
-    #[allow(dead_code)]
+    /// Persists `self.servers` as JSON to `storage_path`. #1112: this used to
+    /// be a no-op ("registry is runtime-only") — that's still the right
+    /// default for datum-backed and locally-registered entries (the datum
+    /// TOML files remain their source of truth, re-derived fresh by
+    /// `sync_from_datums` on every construction), but it left sync-derived
+    /// entries (`sync_official_registry`, `sync_vinkius_mcp_database`) with
+    /// nowhere durable to live: those servers have no corresponding on-disk
+    /// datum, so `search` in a later CLI invocation always saw zero results
+    /// from a prior `sync-*` invocation. Only the two sync methods call this
+    /// now — register/unregister/health-status/etc. remain deliberately
+    /// ephemeral, unchanged from before.
     fn save(&self) -> Result<()> {
-        // In the new design, we don't persist the registry to file
-        // The source of truth is the datum TOML files in ~/.b00t/
-        debug!("Registry persistence disabled - using datum files as source of truth");
+        if let Some(parent) = self.storage_path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create registry storage dir")?;
+        }
+        let data =
+            serde_json::to_string_pretty(&self.servers).context("Failed to serialize registry")?;
+        std::fs::write(&self.storage_path, data).context("Failed to write registry storage")?;
+        debug!("💾 Saved {} servers to {}", self.servers.len(), self.storage_path.display());
         Ok(())
     }
 
@@ -812,7 +902,12 @@ impl McpRegistry {
         }
 
         if synced_count > 0 {
-            // Don't save to file - registry is runtime-only, sync is ephemeral
+            // #1112: persist so a later `search` invocation sees what this
+            // sync fetched — non-fatal on write failure (still usable this
+            // run; just won't survive to the next invocation).
+            if let Err(e) = self.save() {
+                warn!("Failed to persist synced registry: {}", e);
+            }
         }
 
         info!("✅ Synced {} servers from official registry", synced_count);
@@ -946,7 +1041,12 @@ impl McpRegistry {
         }
 
         if synced_count > 0 {
-            // Don't save to file - registry is runtime-only, sync is ephemeral
+            // #1112: persist so a later `search` invocation sees what this
+            // sync fetched — non-fatal on write failure (still usable this
+            // run; just won't survive to the next invocation).
+            if let Err(e) = self.save() {
+                warn!("Failed to persist synced registry: {}", e);
+            }
         }
 
         info!(
