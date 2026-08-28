@@ -582,8 +582,14 @@ fn up_repo(path: &str, dry_run: bool) -> Result<()> {
             }
         }
 
+        #[cfg(unix)]
         std::os::unix::fs::symlink(src, &link_path)
             .with_context(|| format!("Cannot create symlink: {}", link_path.display()))?;
+        #[cfg(not(unix))]
+        anyhow::bail!(
+            "Cannot register datum {}: symlink-based registration is not supported on this platform yet",
+            link_path.display()
+        );
         println!("   → {}", link_name);
         registered += 1;
     }
