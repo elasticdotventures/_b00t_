@@ -99,6 +99,7 @@ primary_stack = "{primary_stack}"
 
         // Symlink into _b00t_/ for visibility
         let b00t_boot = b00t_dir.join("🥾.tomllmd");
+        #[cfg(unix)]
         std::os::unix::fs::symlink(&git_boot, &b00t_boot).ok();
         println!("  🔗 linked {}", b00t_boot.display());
     }

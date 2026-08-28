@@ -553,7 +553,7 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
 fn handle_cyber_command(cmd: &HiveCyberCommands) -> Result<()> {
     match cmd {
         HiveCyberCommands::RingFence { json } => {
-            let is_root = unsafe { libc::geteuid() == 0 };
+            let is_root = crate::commands::ringfence_cmd::is_root();
             let mode = if is_root { "OS_ROOT" } else { "OS_GUEST" };
 
             if *json {

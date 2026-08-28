@@ -25,9 +25,19 @@ pub fn handle_ringfence_command(cmd: &RingFenceCommands) -> Result<()> {
 }
 
 /// Check if we are running as root (UID 0).
-fn is_root() -> bool {
+#[cfg(unix)]
+pub(crate) fn is_root() -> bool {
     // SAFETY: geteuid(2) is a trivial syscall with no side effects.
     unsafe { libc::geteuid() == 0 }
+}
+
+/// Non-unix: no UID 0 concept, and `has_cap_sys_admin` below already reads
+/// Linux's /proc/self/status — this whole ring-fence trust-boundary model
+/// is inherently Linux-specific, so non-unix just reports "not root"
+/// rather than failing to compile.
+#[cfg(not(unix))]
+pub(crate) fn is_root() -> bool {
+    false
 }
 
 /// Check if the process has CAP_SYS_ADMIN by reading /proc/self/status.
