@@ -244,6 +244,25 @@ edges (submodule init, shared target-dir, tmpfs contention), and fixes all live 
 datum — MUST `b00t learn worktree` before the first `git`/`cargo` command against any
 bare/worktree-layout repo rather than rediscovering them the hard way.
 
+**CARGO_TARGET_DIR is not optional (amended 2026-08-28):** every worktree defaults to
+its own `target/`, and this workspace's cold-build cost is ~10-20GB per worktree (gemm,
+embed-anything, and friends are huge). Two agents building in two worktrees without
+this shares nothing and burns disk twice for identical dependency artifacts — caught
+live: two concurrent fix worktrees for elasticdotventures/_b00t_#1164 each cold-built
+their own `target/` (21GB + 18GB) because neither set the var before its first `cargo`
+call. Before any `cargo check`/`build`/`test` in a worktree:
+```
+export CARGO_TARGET_DIR="$HOME/.cache/b00t-cargo-target"
+```
+(or source `scripts/lib/worktree-env.sh` and call `b00t_shared_cargo_target_dir` — same
+default, already wired for hive tooling). Every worktree of this repo then reuses one
+shared, already-compiled dependency cache instead of paying the cold-build cost again.
+Coordinating agents (parallel sub-agents, hive peers) MUST use this same shared path,
+not a per-worktree or per-agent one — that's the whole point: one cache, not N. Stays a
+per-shell env var, never a checked-in `.cargo/config.toml` — CI runs as a different user
+with no writable `$HOME/.cache`, and a committed absolute `target-dir` breaks its build
+(hit in elasticdotventures/_b00t_#964).
+
 ## SeaORM Migration Sharp Edges (recorded 2026-08-07)
 
 TLDR: before writing a SeaORM Postgres migration that does `CREATE EXTENSION`/
