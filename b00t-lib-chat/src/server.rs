@@ -6,15 +6,29 @@ use std::{
     sync::Arc,
 };
 
-use chrono::Utc;
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    net::{UnixListener, UnixStream},
-    sync::Mutex,
-};
-use tracing::{debug, error, info};
+use tokio::sync::Mutex;
 
-use crate::{error::ChatResult, message::ChatMessage, transport::default_socket_path};
+use crate::{error::ChatResult, message::ChatMessage};
+
+// 🤓 `tokio::net::UnixListener`/`UnixStream` are #[cfg(unix)]-gated upstream —
+// this crate previously imported them unconditionally, which never actually
+// compiled on Windows. Unlike agent_manager.rs's optional side-channel
+// listener, this local chat server is a real accept loop with real socket
+// I/O, so there's no meaningful unit-type placeholder to hand back on
+// non-unix; the accept loop, connection handler, and bind itself are all
+// gated `#[cfg(unix)]` and callers get a runtime error instead (see the
+// `#[cfg(not(unix))]` twin of `spawn_local_server` below).
+// `ChatTransportKind::Nats` remains fully functional on all platforms.
+#[cfg(unix)]
+use chrono::Utc;
+#[cfg(unix)]
+use tokio::io::{AsyncBufReadExt, BufReader};
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
+#[cfg(unix)]
+use tracing::{debug, error, info};
+#[cfg(unix)]
+use crate::transport::default_socket_path;
 
 /// Shared inbox that stores unread chat messages.
 #[derive(Debug, Clone)]
@@ -58,6 +72,7 @@ impl LocalChatServer {
 }
 
 /// Spawn the async listener for the default socket path.
+#[cfg(unix)]
 pub async fn spawn_local_server(inbox: ChatInbox) -> ChatResult<LocalChatServer> {
     let socket_path = default_socket_path()?;
     if socket_path.exists() {
@@ -78,6 +93,18 @@ pub async fn spawn_local_server(inbox: ChatInbox) -> ChatResult<LocalChatServer>
     Ok(LocalChatServer { socket_path })
 }
 
+/// Non-unix twin: local Unix-socket chat transport has no equivalent on this
+/// platform, so this returns a runtime error rather than binding anything.
+/// Callers that need cross-platform chat should use `ChatTransportKind::Nats`.
+#[cfg(not(unix))]
+pub async fn spawn_local_server(_inbox: ChatInbox) -> ChatResult<LocalChatServer> {
+    Err(crate::error::ChatError::Other(
+        "local Unix-socket chat transport is not supported on this platform; use NATS transport instead"
+            .to_string(),
+    ))
+}
+
+#[cfg(unix)]
 async fn run_accept_loop(listener: UnixListener, inbox: ChatInbox) {
     loop {
         match listener.accept().await {
@@ -97,6 +124,7 @@ async fn run_accept_loop(listener: UnixListener, inbox: ChatInbox) {
     }
 }
 
+#[cfg(unix)]
 async fn handle_connection(stream: UnixStream, inbox: ChatInbox) -> ChatResult<()> {
     let reader = BufReader::new(stream);
     let mut lines = reader.lines();
