@@ -153,7 +153,7 @@ pub fn proc_name(pid: u32) -> Result<String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn resolve_agent_pid() -> Result<u32> {
+pub fn resolve_agent_pid() -> Result<u32> {
     bail!("b00t quit: unsupported platform (Linux-only command)");
 }
 
@@ -168,7 +168,7 @@ pub fn libc_kill(pid: i32, sig: i32) -> i32 {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn libc_kill(_pid: i32, _sig: i32) -> i32 {
+pub fn libc_kill(_pid: i32, _sig: i32) -> i32 {
     eprintln!("b00t quit: unsupported platform (linux only)");
     -1
 }
