@@ -130,20 +130,35 @@ impl ChatCommands {
         println!("📡 Available transports: local, nats (stub)");
         // Check if socket exists and whether a listener is active
         if socket.exists() {
-            // Attempt a probe connect (0.2s timeout) to distinguish live vs stale
-            let probe = tokio::time::timeout(
-                std::time::Duration::from_millis(200),
-                tokio::net::UnixStream::connect(&socket),
-            )
-            .await;
-            match probe {
-                Ok(Ok(_)) => println!("✅ Socket active — listener is running"),
-                Ok(Err(_)) | Err(_) => {
-                    println!(
-                        "⚠️  Socket file exists but no listener responds. \
-                         Run `b00t-mcp` or `b00t hive activate` to start one."
-                    );
+            // 🤓 `tokio::net::UnixStream` is #[cfg(unix)]-gated upstream — this
+            // probe previously called it unconditionally, which never actually
+            // compiled on Windows. Local-socket chat has no equivalent there,
+            // so the non-unix branch skips the live-probe and just reports the
+            // stat result (NATS transport is unaffected on any platform).
+            #[cfg(unix)]
+            {
+                // Attempt a probe connect (0.2s timeout) to distinguish live vs stale
+                let probe = tokio::time::timeout(
+                    std::time::Duration::from_millis(200),
+                    tokio::net::UnixStream::connect(&socket),
+                )
+                .await;
+                match probe {
+                    Ok(Ok(_)) => println!("✅ Socket active — listener is running"),
+                    Ok(Err(_)) | Err(_) => {
+                        println!(
+                            "⚠️  Socket file exists but no listener responds. \
+                             Run `b00t-mcp` or `b00t hive activate` to start one."
+                        );
+                    }
                 }
+            }
+            #[cfg(not(unix))]
+            {
+                println!(
+                    "⚠️  Local-socket chat transport is not supported on this platform. \
+                     Use `--transport nats` instead."
+                );
             }
         } else {
             println!("ℹ️  Socket does not exist yet (no b00t-mcp process started)");

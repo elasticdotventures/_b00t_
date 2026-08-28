@@ -7,8 +7,17 @@ use std::{
 
 use async_nats::ConnectOptions;
 use futures::StreamExt;
-use tokio::{fs, io::AsyncWriteExt, net::UnixStream, time::timeout};
 use tracing::{debug, info, warn};
+
+// 🤓 `tokio::net::UnixStream` is #[cfg(unix)]-gated upstream — this crate
+// previously imported it unconditionally, which never actually compiled on
+// Windows. `LocalSocketTransport::send` does real socket I/O over it (no
+// meaningful placeholder value like agent_manager.rs's optional listener),
+// so it gets a `#[cfg(not(unix))]` twin that returns a runtime `ChatError`
+// instead. `ChatTransportKind::Nats` remains fully functional on all
+// platforms — only the `LocalSocket` path is affected.
+#[cfg(unix)]
+use tokio::{fs, io::AsyncWriteExt, net::UnixStream, time::timeout};
 
 use crate::{
     error::{ChatError, ChatResult},
@@ -191,6 +200,7 @@ impl LocalSocketTransport {
         Ok(Self { socket_path })
     }
 
+    #[cfg(unix)]
     async fn ensure_parent_dir(path: &Path) -> ChatResult<()> {
         if let Some(parent) = path.parent() {
             if !parent.exists() {
@@ -200,6 +210,7 @@ impl LocalSocketTransport {
         Ok(())
     }
 
+    #[cfg(unix)]
     pub async fn send(&self, message: &ChatMessage) -> ChatResult<()> {
         Self::ensure_parent_dir(&self.socket_path).await?;
         let payload = serde_json::to_vec(message)?;
@@ -220,6 +231,18 @@ impl LocalSocketTransport {
         stream.write_all(b"\n").await?;
         stream.flush().await?;
         Ok(())
+    }
+
+    /// Non-unix twin: no Unix-domain-socket equivalent exists on this
+    /// platform, so sending over the local socket transport fails at
+    /// runtime rather than at compile time. Use `ChatTransportKind::Nats`
+    /// for cross-platform chat delivery.
+    #[cfg(not(unix))]
+    pub async fn send(&self, _message: &ChatMessage) -> ChatResult<()> {
+        Err(ChatError::Other(
+            "local Unix-socket chat transport is not supported on this platform; use NATS transport instead"
+                .to_string(),
+        ))
     }
 
     pub fn socket_path(&self) -> &Path {
