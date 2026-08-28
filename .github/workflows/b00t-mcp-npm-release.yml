@@ -77,7 +77,26 @@ jobs:
       - name: 🔧 Install cross-compilation toolchain
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          # 🤓 Ubuntu splits arm64 packages onto ports.ubuntu.com — the
+          # runner's default sources (archive/security.ubuntu.com) only
+          # host amd64/i386. Once `dpkg --add-architecture arm64` enables
+          # the arch, an unrestricted `apt-get update` tries (and 404s)
+          # fetching arm64 Packages indices from those amd64-only mirrors,
+          # exiting 100 before ever reaching `apt-get install`. Restrict
+          # the existing sources to amd64 (handling both the deb822
+          # ubuntu.sources format Ubuntu 24.04 runners default to, and the
+          # classic one-line sources.list some images still use) and add a
+          # dedicated ports.ubuntu.com source for arm64.
           sudo dpkg --add-architecture arm64
+          CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          fi
+          if [ -s /etc/apt/sources.list ]; then
+            sudo sed -i -E 's/^deb(-src)? /deb\1 [arch=amd64] /' /etc/apt/sources.list
+          fi
+          printf 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s main universe restricted multiverse\ndeb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s-updates main universe restricted multiverse\ndeb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s-security main universe restricted multiverse\n' \
+            "$CODENAME" "$CODENAME" "$CODENAME" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
           sudo apt-get update
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
