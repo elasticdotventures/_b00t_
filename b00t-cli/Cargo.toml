@@ -52,7 +52,10 @@ b00t-bouncer = { path = "../b00t-bouncer" }
 blessed = { path = "../blessed" }
 b00t-grok = { workspace = true }
 k0mmand3r = { workspace = true }
-ufo-types = { workspace = true }
+# "sysml" feature unlocks ufo_types::sysml::validate_sysml_v2 (real SysML v2
+# grammar validation, via sysml-v2-parser) for the dispatch-chain round-trip
+# test — see src/dispatch_sysml.rs.
+ufo-types = { workspace = true, features = ["sysml"] }
 duct = "1.0"
 shellexpand = "3.1"
 shlex = "1.3"
