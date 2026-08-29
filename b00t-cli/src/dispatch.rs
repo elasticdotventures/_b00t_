@@ -42,20 +42,24 @@ pub trait DispatchMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch>;
 }
 
+/// Try `{candidate}.{stem}.toml`, `.tomllmd`, `.tomllm` in order under `expanded`
+/// and return the first that exists (#1184) — every `DispatchMode` (plus
+/// `load_cli_datum` below) looks for its datum file the same way, differing only
+/// in `stem`; this is the one place that suffix list is spelled out.
+fn find_datum_file(expanded: &std::path::Path, candidate: &str, stem: &str) -> Option<std::path::PathBuf> {
+    [".toml", ".tomllmd", ".tomllm"]
+        .iter()
+        .map(|ext| expanded.join(format!("{candidate}.{stem}{ext}")))
+        .find(|p| p.exists())
+}
+
 struct RuntimeMode;
 impl DispatchMode for RuntimeMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
         let expanded = get_expanded_path(path).ok()?;
-        let suffixes = [".runtime.toml", ".runtime.tomllmd", ".runtime.tomllm"];
-        for suffix in &suffixes {
-            let p = expanded.join(format!("{candidate}{suffix}"));
-            if p.exists() {
-                if let Ok(cfg) = load_runtime_datum(candidate, path) {
-                    return Some(DatumDispatch::Runtime(cfg));
-                }
-            }
-        }
-        None
+        find_datum_file(&expanded, candidate, "runtime")?;
+        let cfg = load_runtime_datum(candidate, path).ok()?;
+        Some(DatumDispatch::Runtime(cfg))
     }
 }
 
@@ -63,18 +67,11 @@ struct CliPassthroughMode;
 impl DispatchMode for CliPassthroughMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
         let expanded = get_expanded_path(path).ok()?;
-        let suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
-        for suffix in &suffixes {
-            let p = expanded.join(format!("{candidate}{suffix}"));
-            if p.exists() {
-                if let Ok(datum) = load_cli_datum(candidate, path) {
-                    let command = datum.command.unwrap_or_else(|| candidate.to_string());
-                    let args: Vec<String> = datum.args.unwrap_or_default();
-                    return Some(DatumDispatch::CliPassthrough { command, args });
-                }
-            }
-        }
-        None
+        find_datum_file(&expanded, candidate, "cli")?;
+        let datum = load_cli_datum(candidate, path).ok()?;
+        let command = datum.command.unwrap_or_else(|| candidate.to_string());
+        let args: Vec<String> = datum.args.unwrap_or_default();
+        Some(DatumDispatch::CliPassthrough { command, args })
     }
 }
 
@@ -82,19 +79,12 @@ struct PolysemeMode;
 impl DispatchMode for PolysemeMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
         let expanded = get_expanded_path(path).ok()?;
-        let suffixes = [".polyseme.toml", ".polyseme.tomllmd", ".polyseme.tomllm"];
-        for suffix in &suffixes {
-            let p = expanded.join(format!("{candidate}{suffix}"));
-            if p.exists() {
-                if let Ok(refs) = crate::load_polyseme_refs(candidate, path) {
-                    return Some(DatumDispatch::Polyseme {
-                        name: candidate.to_string(),
-                        refs,
-                    });
-                }
-            }
-        }
-        None
+        find_datum_file(&expanded, candidate, "polyseme")?;
+        let refs = crate::load_polyseme_refs(candidate, path).ok()?;
+        Some(DatumDispatch::Polyseme {
+            name: candidate.to_string(),
+            refs,
+        })
     }
 }
 
@@ -102,17 +92,11 @@ struct OodaMode;
 impl DispatchMode for OodaMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
         let expanded = get_expanded_path(path).ok()?;
-        let suffixes = [".ooda.toml", ".ooda.tomllmd", ".ooda.tomllm"];
-        for suffix in &suffixes {
-            let p = expanded.join(format!("{candidate}{suffix}"));
-            if p.exists() {
-                return Some(DatumDispatch::Info(format!(
-                    "ooda loop '{}' — run with: b00t ooda run {}",
-                    candidate, candidate
-                )));
-            }
-        }
-        None
+        find_datum_file(&expanded, candidate, "ooda")?;
+        Some(DatumDispatch::Info(format!(
+            "ooda loop '{}' — run with: b00t ooda run {}",
+            candidate, candidate
+        )))
     }
 }
 
@@ -120,17 +104,11 @@ struct McpInfoMode;
 impl DispatchMode for McpInfoMode {
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch> {
         let expanded = get_expanded_path(path).ok()?;
-        let suffixes = [".mcp.toml", ".mcp.tomllmd", ".mcp.tomllm"];
-        for suffix in &suffixes {
-            let p = expanded.join(format!("{candidate}{suffix}"));
-            if p.exists() {
-                return Some(DatumDispatch::Info(format!(
-                    "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
-                    candidate, candidate
-                )));
-            }
-        }
-        None
+        find_datum_file(&expanded, candidate, "mcp")?;
+        Some(DatumDispatch::Info(format!(
+            "mcp datum '{}' — use 'b00t mcp list' or 'b00t mcp execute {} <tool>'",
+            candidate, candidate
+        )))
     }
 }
 
@@ -231,16 +209,8 @@ pub fn prompt_polyseme_selection(name: &str, refs: &[PolysemeRef]) -> Option<Str
 /// Load a CLI datum and return its BootDatum.
 fn load_cli_datum(name: &str, path: &str) -> Result<BootDatum> {
     let expanded = get_expanded_path(path)?;
-    let suffixes = [".cli.toml", ".cli.tomllmd", ".cli.tomllm"];
-    let mut found = None;
-    for suffix in &suffixes {
-        let p = expanded.join(format!("{name}{suffix}"));
-        if p.exists() {
-            found = Some(p);
-            break;
-        }
-    }
-    let file_path = found.ok_or_else(|| anyhow::anyhow!("CLI datum '{name}' not found"))?;
+    let file_path = find_datum_file(&expanded, name, "cli")
+        .ok_or_else(|| anyhow::anyhow!("CLI datum '{name}' not found"))?;
     let content =
         std::fs::read_to_string(&file_path).context(format!("read {}", file_path.display()))?;
     let config: UnifiedConfig =
