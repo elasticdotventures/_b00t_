@@ -101,6 +101,63 @@ pub trait StateMachineIntrospection {
 
         out
     }
+
+    /// Render this state machine's shape as a W3C SCXML statechart
+    /// document (via the `scxml` crate — a document model, not a runtime;
+    /// this never replaces the implementor's own transition-enforcement
+    /// logic, e.g. `can_transition`/`event_for_target` above, it only
+    /// exports their shape). See `elasticdotventures/_b00t_#1177` (P5b).
+    ///
+    /// Note: `final_states()` here is a *softer* concept than SCXML's
+    /// `Final` state kind — it marks a diagram-level "this is one of the
+    /// ending states" annotation, not "this state has zero outgoing
+    /// transitions." SCXML's `Final` kind is stricter (a real final state
+    /// may have no outgoing transitions), so a `final_states()` entry that
+    /// still has outgoing transitions (e.g. `OodaPhase::Complete`, which
+    /// can still transition to `Failed`) is exported as `Atomic`, not
+    /// `Final` — only entries with genuinely zero outgoing transitions
+    /// (e.g. `OodaPhase::Failed`) become a real SCXML `Final` state.
+    #[cfg(feature = "statechart")]
+    fn render_scxml_statechart() -> scxml::model::Statechart {
+        use scxml::model::{State, Transition};
+
+        let finals = Self::final_states();
+        let all_transitions = Self::transition_descriptors();
+
+        let states: Vec<State> = Self::state_type_descriptors()
+            .into_iter()
+            .map(|descriptor| {
+                let outgoing: Vec<_> = all_transitions
+                    .iter()
+                    .filter(|t| t.source == descriptor.id)
+                    .collect();
+                let mut state = if finals.contains(&descriptor.id) && outgoing.is_empty() {
+                    State::final_state(descriptor.id)
+                } else {
+                    State::atomic(descriptor.id)
+                };
+                state.transitions = outgoing
+                    .into_iter()
+                    .map(|t| {
+                        let mut transition = Transition::new(t.event, t.target);
+                        if let Some(guard) = t.guard {
+                            transition = transition.with_guard(guard);
+                        }
+                        transition
+                    })
+                    .collect();
+                state
+            })
+            .collect();
+
+        scxml::model::Statechart::new(Self::initial_state(), states).with_name(Self::machine_id())
+    }
+
+    /// Render this state machine's shape as an SCXML XML document string.
+    #[cfg(feature = "statechart")]
+    fn render_scxml() -> String {
+        scxml::export::xml::to_xml(&Self::render_scxml_statechart())
+    }
 }
 
 #[macro_export]
@@ -163,4 +220,96 @@ macro_rules! impl_state_machine_introspection {
             }
         }
     };
+}
+
+#[cfg(all(test, feature = "statechart"))]
+mod tests {
+    use super::*;
+
+    /// Minimal, hand-written (not macro-derived) implementor, isolated from
+    /// any real domain's business rules, to test `render_scxml_statechart`'s
+    /// Final-vs-Atomic disambiguation directly: `final_states()` is a soft,
+    /// diagram-level annotation, not a promise of zero outgoing transitions.
+    struct ToyMachine;
+
+    impl StateMachineIntrospection for ToyMachine {
+        fn machine_id() -> &'static str {
+            "Toy"
+        }
+        fn initial_state() -> &'static str {
+            "Start"
+        }
+        fn final_states() -> &'static [&'static str] {
+            &["Start", "End", "Loop"]
+        }
+        fn state_type_descriptors() -> Vec<StateTypeDescriptor> {
+            vec![
+                StateTypeDescriptor {
+                    id: "Start",
+                    rust_type: "ToyMachine",
+                    classifier: "enum_variant",
+                },
+                StateTypeDescriptor {
+                    id: "End",
+                    rust_type: "ToyMachine",
+                    classifier: "enum_variant",
+                },
+                StateTypeDescriptor {
+                    id: "Loop",
+                    rust_type: "ToyMachine",
+                    classifier: "enum_variant",
+                },
+            ]
+        }
+        fn transition_descriptors() -> Vec<StateTransitionDescriptor> {
+            vec![
+                StateTransitionDescriptor {
+                    source: "Start",
+                    event: "Go",
+                    target: "End",
+                    guard: None,
+                },
+                StateTransitionDescriptor {
+                    source: "Start",
+                    event: "Spin",
+                    target: "Loop",
+                    guard: None,
+                },
+                StateTransitionDescriptor {
+                    source: "Loop",
+                    event: "Retry",
+                    target: "Loop",
+                    guard: None,
+                },
+            ]
+        }
+    }
+
+    #[test]
+    fn render_scxml_reserves_final_for_states_with_zero_outgoing_transitions() {
+        let chart = ToyMachine::render_scxml_statechart();
+
+        // Listed in final_states() but has an outgoing transition -> Atomic.
+        assert_eq!(
+            chart.find_state("Start").unwrap().kind,
+            scxml::model::StateKind::Atomic
+        );
+        // Listed in final_states() and has zero outgoing transitions -> real Final.
+        assert_eq!(
+            chart.find_state("End").unwrap().kind,
+            scxml::model::StateKind::Final
+        );
+        // Listed in final_states() but has a self-loop — still an outgoing
+        // transition as far as SCXML is concerned, so it stays Atomic too.
+        assert_eq!(
+            chart.find_state("Loop").unwrap().kind,
+            scxml::model::StateKind::Atomic
+        );
+
+        scxml::validate(&chart).expect("toy statechart should be structurally valid");
+
+        let xml = ToyMachine::render_scxml();
+        let parsed = scxml::parse_xml(&xml).expect("exported XML must parse back");
+        assert_eq!(parsed, chart);
+    }
 }
