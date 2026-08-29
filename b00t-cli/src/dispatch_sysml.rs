@@ -1,0 +1,144 @@
+//! Represents `dispatch::default_dispatch_chain()` — the real, live router
+//! `b00t <name>` resolution walks — as a version-controlled, round-trip-validated
+//! SysML v2 model. First prototype of the b00t SysML v2 spine consolidation epic's
+//! P1 milestone (`elasticdotventures/_b00t_#1177`): a Rust type (`dyn DispatchMode`)
+//! becomes a compiled SysML v2 output, validated against the real `sysml-v2-parser`
+//! grammar via `ufo_types::sysml::validate_sysml_v2` — the same round-trip discipline
+//! `ledgrrr`'s `holon-viz::sysml_v2_roundtrip` tests use.
+//!
+//! Node/edge shape follows `systhread-core::iso_ir::extract_pipeline`'s "sequence"
+//! pattern exactly (each mode a node, consecutive modes in priority order joined by
+//! a `sequence` edge) — the dispatch chain genuinely is an ordered phase sequence,
+//! not a general graph, so no richer shape is needed for this first prototype.
+//!
+//! `DispatchMode` isn't `Stereotyped` — each mode's classification is derived here,
+//! directly from its own `name()`, rather than requiring every implementor to carry
+//! a hand-written `impl Stereotyped` block just to be exportable. A blanket
+//! `impl<T: DispatchMode> Stereotyped for T` doesn't work here even though it looks
+//! tempting: `Stereotyped` would need to be a supertrait for `dispatch.rs`'s own
+//! `mode.ufo_stereotype()` calls to typecheck, and a supertrait bound must already be
+//! satisfied before a type can implement the subtrait — circular.
+
+use ufo_types::iso_ir::{Edge, Node};
+use ufo_types::stereotype::UfoStereotype;
+
+use crate::dispatch::default_dispatch_chain;
+
+/// Build the `Node`/`Edge` iso-IR for the dispatch chain's current, real order.
+pub fn dispatch_chain_iso_ir() -> (Vec<Node>, Vec<Edge>) {
+    let chain = default_dispatch_chain();
+    let names: Vec<&'static str> = chain.iter().map(|mode| mode.name()).collect();
+
+    let nodes: Vec<Node> = names
+        .iter()
+        .map(|name| Node {
+            id: (*name).to_string(),
+            label: (*name).to_string(),
+            part_type: "DispatchMode".to_string(),
+        })
+        .collect();
+
+    let edges: Vec<Edge> = names
+        .windows(2)
+        .map(|pair| Edge {
+            id: format!("{}_next", pair[0]),
+            from: pair[0].to_string(),
+            to: pair[1].to_string(),
+            edge_type: "sequence".to_string(),
+            kind: None,
+        })
+        .collect();
+
+    (nodes, edges)
+}
+
+/// Export the dispatch chain as SysML v2 text: one `part def` per mode, each
+/// specializing (`:>`) the previous mode in priority order — the chain genuinely
+/// is a linear priority sequence, so each step's real predecessor becomes its
+/// SysML v2 base type, with a `UfoStereotype::Process` classification (derived
+/// straight from the mode's own `name()`) and the sequence relationship both
+/// recorded as comments (matching `critter-keeper::mesh_safety_gate`'s comment
+/// convention).
+///
+/// `holon-viz::SysmlV2Emitter`'s edge-emission shape (`part def X : Y`, plain
+/// `:` rather than `:>`) was the original model for this function, but that
+/// path turned out to be dead code in `holon-viz`'s own test fixture — its
+/// `CytoscapeGraph` never actually carries containment edges from
+/// `Holon::child`'s parent link, so `:` was never exercised against the real
+/// `sysml-v2-parser` grammar. This function's own round-trip test below is
+/// what caught that: SysML v2's specialization operator is `:>`, not `:`, and
+/// a `part def` name also cannot be redeclared once already emitted as a plain
+/// definition — hence chaining `:>` directly off each mode's own declaration
+/// instead of the original two-pass (all-nodes, then separately-named edges)
+/// shape.
+pub fn dispatch_chain_to_sysml_v2() -> String {
+    let chain = default_dispatch_chain();
+
+    let mut out = String::from("package B00tDispatchChain {\n");
+
+    for (i, mode) in chain.iter().enumerate() {
+        let stereotype = UfoStereotype::Process(mode.name().to_string());
+        if i == 0 {
+            out.push_str(&format!(
+                "    part def {} {{\n        // {stereotype}\n    }}\n",
+                mode.name()
+            ));
+        } else {
+            let prev = chain[i - 1].name();
+            out.push_str(&format!(
+                "    part def {} :> {} {{\n        // {stereotype}\n        // sequence: {} -> {}\n    }}\n",
+                mode.name(),
+                prev,
+                prev,
+                mode.name()
+            ));
+        }
+    }
+
+    out.push_str("}\n");
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iso_ir_has_one_node_per_chain_entry_and_sequence_edges_between_consecutive_pairs() {
+        let (nodes, edges) = dispatch_chain_iso_ir();
+        let chain_len = default_dispatch_chain().len();
+
+        assert_eq!(nodes.len(), chain_len);
+        assert_eq!(edges.len(), chain_len - 1);
+        assert!(edges.iter().all(|e| e.edge_type == "sequence"));
+
+        assert_eq!(nodes[0].id, "RuntimeMode");
+        assert_eq!(nodes[1].id, "CliPassthroughMode");
+        assert_eq!(edges[0].from, "RuntimeMode");
+        assert_eq!(edges[0].to, "CliPassthroughMode");
+    }
+
+    #[test]
+    fn sysml_v2_export_contains_every_mode_and_every_sequence_edge() {
+        let sysml = dispatch_chain_to_sysml_v2();
+        for mode in &default_dispatch_chain() {
+            assert!(
+                sysml.contains(mode.name()),
+                "missing mode {} in:\n{sysml}",
+                mode.name()
+            );
+        }
+        assert!(sysml.contains("sequence: RuntimeMode -> CliPassthroughMode"));
+    }
+
+    #[test]
+    fn sysml_v2_export_round_trips_through_the_real_parser() {
+        let sysml = dispatch_chain_to_sysml_v2();
+        let result = ufo_types::sysml::validate_sysml_v2(&sysml);
+        assert!(
+            result.disposition.is_satisfied(),
+            "dispatch_chain_to_sysml_v2() output failed to parse as SysML v2: {:?}\n---\n{sysml}",
+            result.disposition
+        );
+    }
+}

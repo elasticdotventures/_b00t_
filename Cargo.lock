@@ -300,6 +300,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ar_archive_writer"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73cd58deff2140a0a8eae87e417bd01db68a33e148aa93d1e8cd837e55e312b6"
+dependencies = [
+ "object",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1386,7 +1395,7 @@ dependencies = [
  "futures",
  "handlebars",
  "reqwest 0.12.28",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tokio",
@@ -1427,7 +1436,7 @@ dependencies = [
  "futures",
  "reqwest 0.12.28",
  "rmcp",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "tokio",
@@ -1538,7 +1547,7 @@ dependencies = [
  "rhai",
  "rig-core",
  "rmcp",
- "schemars",
+ "schemars 1.2.1",
  "scraper",
  "serde",
  "serde_json",
@@ -1909,7 +1918,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "rmcp",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "shellexpand",
@@ -7476,7 +7485,7 @@ dependencies = [
  "jiff",
  "json-patch",
  "k8s-openapi",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde-value",
  "serde_json",
@@ -8802,6 +8811,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.39.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9946,6 +9964,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "psm"
+version = "0.1.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
+dependencies = [
+ "ar_archive_writer",
+ "cc",
+]
+
+[[package]]
 name = "ptr_meta"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10813,7 +10841,7 @@ dependencies = [
  "ordered-float 5.3.0",
  "pin-project-lite",
  "reqwest 0.12.28",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -10908,7 +10936,7 @@ dependencies = [
  "process-wrap",
  "rand 0.10.2",
  "rmcp-macros",
- "schemars",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sse-stream",
@@ -11313,6 +11341,18 @@ dependencies = [
 
 [[package]]
 name = "schemars"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
+dependencies = [
+ "dyn-clone",
+ "schemars_derive 0.8.22",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
@@ -11320,9 +11360,21 @@ dependencies = [
  "chrono",
  "dyn-clone",
  "ref-cast",
- "schemars_derive",
+ "schemars_derive 1.2.1",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32e265784ad618884abaea0600a9adf15393368d840e0222d101a072f3f7534d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -12507,6 +12559,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7386b49cb287f6fafbfd3bd604914bccb99fb8d53483f40e1ecfda5d45f3370"
 
 [[package]]
+name = "stacker"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967"
+dependencies = [
+ "cc",
+ "cfg-if 1.0.4",
+ "libc",
+ "psm",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12762,6 +12827,18 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-io-kit",
  "windows",
+]
+
+[[package]]
+name = "sysml-v2-parser"
+version = "0.54.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5db89688b6bab9dacbf8150e3f32f636decd36e34fcb8aaacbdb52fe281a9134"
+dependencies = [
+ "log",
+ "nom 8.0.0",
+ "nom_locate",
+ "stacker",
 ]
 
 [[package]]
@@ -13890,12 +13967,14 @@ dependencies = [
 
 [[package]]
 name = "ufo-types"
-version = "0.10.2"
-source = "git+https://github.com/PromptExecution/ufo-types.git?tag=v0.10.2#443482ce04966c2d0ff41af56941d06c2687eeb7"
+version = "0.11.0"
+source = "git+https://github.com/PromptExecution/ufo-types.git?rev=19422ac1988f916c83e15260b1f1a8969ef8d65a#19422ac1988f916c83e15260b1f1a8969ef8d65a"
 dependencies = [
  "chrono",
+ "schemars 0.8.22",
  "serde",
  "serde_json",
+ "sysml-v2-parser",
  "thiserror 2.0.18",
 ]
 

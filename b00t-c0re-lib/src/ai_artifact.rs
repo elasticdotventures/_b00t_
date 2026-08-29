@@ -555,14 +555,11 @@ pub struct ArtifactExtractionConstraint {
 impl Satisfies<ArtifactExtractionConstraint> for ArtifactExtractionManifest {
     fn satisfies(&self, constraint: &ArtifactExtractionConstraint) -> SatisfiesResult {
         if self.artifacts.len() < constraint.min_artifacts {
-            return SatisfiesResult::violated(
-                format!(
-                    "artifact count {} below required {}",
-                    self.artifacts.len(),
-                    constraint.min_artifacts
-                ),
-                1.0,
-            );
+            return SatisfiesResult::violated(format!(
+                "artifact count {} below required {}",
+                self.artifacts.len(),
+                constraint.min_artifacts
+            ));
         }
 
         let below_threshold = self
@@ -571,13 +568,12 @@ impl Satisfies<ArtifactExtractionConstraint> for ArtifactExtractionManifest {
             .filter(|artifact| f64::from(artifact.confidence()) < constraint.min_confidence)
             .count();
         if below_threshold > 0 {
-            return SatisfiesResult::violated(
-                format!("{below_threshold} artifacts below confidence threshold"),
-                1.0,
-            );
+            return SatisfiesResult::violated(format!(
+                "{below_threshold} artifacts below confidence threshold"
+            ));
         }
 
-        SatisfiesResult::satisfied(1.0)
+        SatisfiesResult::satisfied(1.0, Vec::new())
     }
 }
 

@@ -37,7 +37,22 @@ pub enum DatumDispatch {
 // `result_is_implied_by` stereotype filter, so modes stay independent.
 
 /// A single resolution strategy for `b00t <name>` dispatch.
+///
+/// `name()` (b00t SysML v2 spine consolidation, `elasticdotventures/_b00t_#1177`)
+/// lets `dispatch_sysml` classify each mode as a node without a second registry
+/// naming them again by hand — its default body derives the name straight from
+/// `std::any::type_name::<Self>()`, so a new implementor gets a correct `name()`
+/// for free just by being a distinctly-named unit struct; override it only if a
+/// mode ever needs a display name that isn't its own Rust type name.
 pub trait DispatchMode {
+    /// Stable identifier for this mode — used by `dispatch_sysml` to name it as a
+    /// node in the chain's SysML v2 / iso-IR representation, not by dispatch itself.
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+            .rsplit("::")
+            .next()
+            .unwrap()
+    }
     /// Attempt to resolve `candidate` (looked up under `path`) into a dispatch action.
     fn try_resolve(&self, candidate: &str, path: &str) -> Option<DatumDispatch>;
 }

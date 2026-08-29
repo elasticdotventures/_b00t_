@@ -1208,12 +1208,12 @@ impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
     fn satisfies(&self, c: &BootDatumSchemaConstraint) -> SatisfiesResult {
         let outcome = compute_datum_validation(self.raw, self.filename, c.strict);
         if !outcome.errors.is_empty() {
-            return SatisfiesResult::violated(outcome.errors.join("; "), 1.0);
+            return SatisfiesResult::violated(outcome.errors.join("; "));
         }
         if outcome.extension_check_undecidable {
-            return SatisfiesResult::unknown(0.5);
+            return SatisfiesResult::unknown();
         }
-        SatisfiesResult::satisfied(1.0)
+        SatisfiesResult::satisfied(1.0, Vec::new())
     }
 }
 

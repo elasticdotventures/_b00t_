@@ -155,6 +155,7 @@ pub mod gates;
 pub mod checklist;
 pub mod hooks;
 pub mod dispatch;
+pub mod dispatch_sysml;
 pub mod lifecycle;
 
 pub use datum_types::*;

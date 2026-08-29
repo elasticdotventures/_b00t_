@@ -414,7 +414,7 @@ impl IsoAuditable for GatePreconditions<'_> {
 impl Satisfies<GatePreconditions<'_>> for crate::BootDatum {
     fn satisfies(&self, c: &GatePreconditions<'_>) -> SatisfiesResult {
         if c.gates.is_empty() {
-            return SatisfiesResult::satisfied(1.0);
+            return SatisfiesResult::satisfied(1.0, Vec::new());
         }
 
         let dispositions: Vec<Disposition> = c
@@ -431,17 +431,17 @@ impl Satisfies<GatePreconditions<'_>> for crate::BootDatum {
             })
             .collect();
         if !violated.is_empty() {
-            return SatisfiesResult::violated(violated.join("; "), 1.0);
+            return SatisfiesResult::violated(violated.join("; "));
         }
 
         if dispositions
             .iter()
             .any(|d| matches!(d, Disposition::Unknown))
         {
-            return SatisfiesResult::unknown(0.5);
+            return SatisfiesResult::unknown();
         }
 
-        SatisfiesResult::satisfied(1.0)
+        SatisfiesResult::satisfied(1.0, Vec::new())
     }
 }
 

@@ -69,7 +69,10 @@ diffy = "0.5"
 # It has no _b00t_-specific deps; pulling it via a plain crate-scoped git dep
 # avoids consumers of ufo-types (e.g. external repos like app4dog) needing to
 # clone this entire 34-submodule monorepo just to get a ~3k-line types crate.
-ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v0.10.2" }
+# Pinned by rev, not the v0.10.2 tag: v0.10.2 predates the `sysml`/`mbse`/
+# `iso_ir` modules added right after it (b00t SysML v2 spine consolidation
+# epic, elasticdotventures/_b00t_#1177) — no tag covers them yet.
+ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", rev = "19422ac1988f916c83e15260b1f1a8969ef8d65a" }
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
