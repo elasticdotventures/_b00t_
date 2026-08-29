@@ -25,6 +25,11 @@ name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
+# Pinned to an exact version, matching b00t-c0re-lib's own scxml pin
+# (elasticdotventures/_b00t_#1177 P5b/P6): small bus factor (2 contributors,
+# 0.x semver). Needed directly (not just via b00t-c0re-lib) so tests here
+# can call scxml::validate/parse_xml/model types on the exported statechart.
+scxml = { version = "=0.2.2", optional = true }
 rpassword = "7"
 tiktoken-rs = "0.7.0"
 # 🤓 strsim already resolved workspace-wide (transitive via clap's suggestion
@@ -157,6 +162,10 @@ dbus = ["b00t-ipc/dbus", "dep:zbus"]
 candle = ["candle-core", "candle-nn", "candle-transformers", "hf-hub", "tokenizers"]
 # 🤓 llamacpp-fallback: Enable llama.cpp CPU inference for systems without GPU
 llamacpp-fallback = ["llama_cpp_sys"]
+# 🤓 statechart: W3C SCXML export for PipelineState via StateMachineIntrospection
+# (elasticdotventures/_b00t_#1177 P6) — forwards to b00t-c0re-lib's own
+# statechart feature; opt-in, matching that crate's own gating.
+statechart = ["b00t-c0re-lib/statechart", "dep:scxml"]
 # 🤓 keyring: Enable system keyring integration for secret storage (placeholder)
 keyring = []
 
