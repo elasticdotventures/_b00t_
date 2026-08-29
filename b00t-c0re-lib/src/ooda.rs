@@ -751,7 +751,7 @@ pub struct ObserveInput(pub u32);
 
 // ── Phase node wrappers ────────────────────────────────────────────────────
 
-use crate::pipeline_nodes::{NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachine};
+use crate::pipeline_nodes::{NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachineSpec};
 use crate::doc_pipeline::SerializableFOLFormula;
 
 /// Typed Observe phase node.  `ObserveInput → Observation`.
@@ -791,7 +791,7 @@ macro_rules! ooda_phase_node {
             fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
             fn invariants(&self)     -> Vec<SerializableFOLFormula> { vec![] }
             fn execute(&self, input: $input) -> $output { (self.0)(input) }
-            fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle($id) }
+            fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle($id) }
             fn input_ports(&self)  -> Vec<PortDef> {
                 vec![PortDef { name: "in".into(), port_type: stringify!($input).into(), direction: PortDirection::Input }]
             }
