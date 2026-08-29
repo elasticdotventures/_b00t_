@@ -65,7 +65,7 @@ async function installFromGitHubReleases(target) {
   
   const extension = platform === 'win32' ? '.exe' : '';
   const binaryName = `b00t-mcp${extension}`;
-  const archiveName = `b00t-${target}.tar.gz`;
+  const archiveName = `b00t-mcp-${target}.tar.gz`;
   
   // 🤓 GitHub releases pattern following b00t conventions
   const releaseUrl = `https://github.com/elasticdotventures/dotfiles/releases/download/v${version}/${archiveName}`;
@@ -98,7 +98,7 @@ async function installFromGitHubReleases(target) {
       const tar = require('tar');
       const extractStream = tar.extract({
         cwd: path.join(__dirname, '..', 'bin'),
-        strip: 1
+        strip: 0
       });
       
       response.pipe(extractStream);
@@ -122,7 +122,7 @@ function extractLocalArchive(archivePath, binaryName) {
     const tar = require('tar');
     const extractStream = tar.extract({
       cwd: path.join(__dirname, '..', 'bin'),
-      strip: 1
+      strip: 0
     });
 
     const readStream = fs.createReadStream(archivePath);
@@ -172,7 +172,7 @@ async function installFromCargo() {
 
   // Install with timeout and resource limits
   try {
-    execSync('cargo install --git https://github.com/elasticdotventures/dotfiles --bin b00t-mcp --root .', {
+    execSync('cargo install --git https://github.com/elasticdotventures/dotfiles b00t-mcp --bin b00t-mcp --root .', {
       cwd: path.join(__dirname, '..'),
       stdio: 'inherit',
       env: cargoEnv,
