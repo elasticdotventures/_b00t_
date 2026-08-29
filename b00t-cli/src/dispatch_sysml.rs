@@ -99,6 +99,55 @@ pub fn dispatch_chain_to_sysml_v2() -> String {
     out
 }
 
+/// Export the dispatch chain as a Mermaid flowchart — the P2 milestone's first
+/// prototype (`elasticdotventures/_b00t_#1177`), following `ledger-core`'s
+/// `WorkflowToml::to_mermaid()` precedent (one declarative source, multiple
+/// generated views) but with a shape that matches this router's actual
+/// semantics rather than reusing `dispatch_chain_to_sysml_v2`'s linear
+/// `:>`-chain shape verbatim.
+///
+/// `resolve_all_datum_dispatches` (`dispatch.rs`) is NOT a fail-fast sequential
+/// chain — every mode's `try_resolve` runs independently against the same
+/// candidate (fan-out), and cross-mode precedence is resolved afterward,
+/// uniformly, by the stereotype-implication filter (see that function's own
+/// doc comment). So this flowchart draws every mode as a parallel branch from
+/// the same input, all converging on one collection step, followed by the
+/// two real post-processing stages `dispatch.rs` actually performs: dropping
+/// less-specific implied matches, then (only for the single-result caller,
+/// `resolve_datum_dispatch`) preferring Runtime/CliPassthrough/Polyseme over
+/// any other remaining match.
+///
+/// Follows `to_mermaid()`'s own test convention: assert on string content,
+/// not a parsed Mermaid AST — there's no Mermaid grammar validator in this
+/// workspace the way `sysml-v2-parser` exists for SysML v2.
+pub fn dispatch_chain_to_mermaid() -> String {
+    let chain = default_dispatch_chain();
+
+    let mut out = String::from(
+        "%%{ init: { 'theme': 'neutral' } }%%\nflowchart TD\n\
+         %% Generated from dispatch::default_dispatch_chain()\n\
+         \x20   Start([\"candidate + path\"])\n",
+    );
+
+    for mode in &chain {
+        out.push_str(&format!(
+            "    Start --> {name}[\"{name}::try_resolve\"]\n",
+            name = mode.name()
+        ));
+        out.push_str(&format!("    {name} --> Collect\n", name = mode.name()));
+    }
+
+    out.push_str(
+        "    Collect{{\"collect all Some(_) hits\"}}\n\
+         \x20   Collect --> Filter[\"drop implied matches\\n(stereotype hierarchy)\"]\n\
+         \x20   Filter --> Prefer[\"prefer Runtime > CliPassthrough > Polyseme\\n(resolve_datum_dispatch only)\"]\n\
+         \x20   Prefer -->|match found| Resolved([\"DatumDispatch\"])\n\
+         \x20   Prefer -->|no matches| Unresolved([\"None\"])\n",
+    );
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +189,35 @@ mod tests {
             "dispatch_chain_to_sysml_v2() output failed to parse as SysML v2: {:?}\n---\n{sysml}",
             result.disposition
         );
+    }
+
+    #[test]
+    fn mermaid_export_is_a_flowchart_with_every_mode_as_a_parallel_branch() {
+        let mermaid = dispatch_chain_to_mermaid();
+        assert!(mermaid.contains("flowchart TD"));
+        for mode in &default_dispatch_chain() {
+            assert!(
+                mermaid.contains(mode.name()),
+                "missing mode {} in:\n{mermaid}",
+                mode.name()
+            );
+        }
+    }
+
+    #[test]
+    fn mermaid_export_models_fanout_not_a_linear_chain() {
+        // Every mode branches directly off Start (fan-out), not off the
+        // previous mode (which would model a fail-fast sequential chain —
+        // not what resolve_all_datum_dispatches actually does).
+        let mermaid = dispatch_chain_to_mermaid();
+        for mode in &default_dispatch_chain() {
+            assert!(
+                mermaid.contains(&format!("Start --> {}", mode.name())),
+                "expected {} to branch directly off Start in:\n{mermaid}",
+                mode.name()
+            );
+        }
+        assert!(mermaid.contains("Collect"));
+        assert!(mermaid.contains("prefer Runtime > CliPassthrough > Polyseme"));
     }
 }
