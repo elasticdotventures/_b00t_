@@ -1,5 +1,8 @@
 # b00t Installation Structure
 
+> See the README's `## ⚡ Install` / `## 🔄 Update` sections for the canonical, tested
+> install/upgrade commands. This doc is a deeper reference on the resulting file layout.
+
 ## Installation Layout
 
 ### Standard Installation (via install.sh or GitHub releases)
