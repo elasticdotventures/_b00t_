@@ -66,10 +66,6 @@
 	path = vendor/just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "vendor/ledgrrr"]
-	path = vendor/ledgrrr
-	url = https://github.com/PromptExecution/ledgrrr.git
-	branch = main
 
 [submodule "vendor/llama-patch"]
 	path = vendor/llama-patch
