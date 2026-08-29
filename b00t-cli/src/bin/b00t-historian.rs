@@ -97,6 +97,15 @@ struct Args {
     #[clap(long, env = "NATS_URL", default_value = "nats://127.0.0.1:4222")]
     nats_url: String,
 
+    /// NATS username. Falls back to B00T_HIVE_NATS_USER (the hive-wide
+    /// credential convention already used by b00t-lib-chat) if unset.
+    #[clap(long, env = "NATS_USER")]
+    nats_user: Option<String>,
+
+    /// NATS password. Falls back to B00T_HIVE_NATS_PASSWORD.
+    #[clap(long, env = "NATS_PASSWORD")]
+    nats_password: Option<String>,
+
     /// NATS subject to durably archive as raw NDJSON (wildcard `>`/`*` supported).
     /// `souls.>` is always additionally subscribed for the souls coordination
     /// feature, independent of this flag.
@@ -242,6 +251,22 @@ struct SoulQuery {
     since: Option<DateTime<Utc>>,
     #[serde(default)]
     limit: Option<usize>,
+}
+
+fn connect_options(args: &Args, name: &str) -> async_nats::ConnectOptions {
+    let user = args
+        .nats_user
+        .clone()
+        .or_else(|| std::env::var("B00T_HIVE_NATS_USER").ok());
+    let password = args
+        .nats_password
+        .clone()
+        .or_else(|| std::env::var("B00T_HIVE_NATS_PASSWORD").ok());
+    let opts = async_nats::ConnectOptions::new().name(name);
+    match (user, password) {
+        (Some(u), Some(p)) => opts.user_and_password(u, p),
+        _ => opts,
+    }
 }
 
 fn expand_tilde(p: &str) -> PathBuf {
@@ -487,8 +512,7 @@ async fn query_cmd(
     since: Option<DateTime<Utc>>,
     limit: Option<usize>,
 ) -> Result<()> {
-    let client = async_nats::ConnectOptions::new()
-        .name(args.id.clone())
+    let client = connect_options(args, &args.id)
         .connect(&args.nats_url)
         .await
         .with_context(|| format!("connecting to NATS at {}", args.nats_url))?;
@@ -539,8 +563,7 @@ async fn publish(
         detail,
     };
 
-    let client = async_nats::ConnectOptions::new()
-        .name(args.id.clone())
+    let client = connect_options(args, &args.id)
         .connect(&args.nats_url)
         .await
         .with_context(|| format!("connecting to NATS at {}", args.nats_url))?;
@@ -603,8 +626,7 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
     // reconnect on drop) — this is exactly the failure mode that killed the
     // hand-rolled `/dev/tcp` subscriber, and it's solved for free by using a
     // real client instead of re-deriving the protocol in bash.
-    let client = async_nats::ConnectOptions::new()
-        .name(args.id.clone())
+    let client = connect_options(args, &args.id)
         .connect(&args.nats_url)
         .await
         .with_context(|| format!("connecting to NATS at {}", args.nats_url))?;
