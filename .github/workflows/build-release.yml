@@ -70,6 +70,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve-release.outputs.tag }}
+          submodules: false
+
+      - name: Init required vendor submodule
+        # b00t-cli path-depends on vendor/runpod-sdk (see b00t-cli/Cargo.toml);
+        # without this the build only succeeds by accident of Cargo's local
+        # registry/target cache, and fails cold on a clean runner.
+        shell: bash
+        run: git submodule update --init --depth 1 vendor/runpod-sdk
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -98,10 +106,16 @@ jobs:
           cp "target/${{ matrix.target }}/release/b00t-cli" "dist/b00t/"
           cp "target/${{ matrix.target }}/release/b00t-mcp" "dist/b00t/"
           cp -r "_b00t_" "dist/b00t/_b00t_"
+          # _b00t_/AGENT.md and _b00t_/vscode.🆚 are repo-relative symlinks
+          # (`../AGENTS.md`, `../vscode.🆚`) that cross the packaging boundary —
+          # ship their targets as siblings so the tarball is self-contained and
+          # the symlinks actually resolve after install.sh extracts them.
+          cp "AGENTS.md" "dist/b00t/AGENTS.md"
+          cp -r "vscode.🆚" "dist/b00t/vscode.🆚"
           ln -sf b00t-cli "dist/b00t/b00t"
 
           tar -C dist -czf "dist/b00t-${{ matrix.target }}.tar.gz" "b00t"
-          shasum -a 256 "dist/b00t-${{ matrix.target }}.tar.gz" > "dist/b00t-${{ matrix.target }}.tar.gz.sha256"
+          (cd dist && shasum -a 256 "b00t-${{ matrix.target }}.tar.gz") > "dist/b00t-${{ matrix.target }}.tar.gz.sha256"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

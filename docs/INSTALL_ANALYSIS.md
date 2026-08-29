@@ -1,5 +1,11 @@
 # b00t Installation & Upgrade Mechanism Analysis
 
+> ⚠️ **Superseded (2026-08-29)**: written when no GitHub release binaries existed yet and
+> the repo was still called `dotfiles`. Both are stale — releases with real cross-platform
+> binaries now publish via `.github/workflows/build-release.yml`, and `install.sh` is the
+> canonical installer. See the README's `## ⚡ Install` / `## 🔄 Update` sections for the
+> current, tested state. Kept for historical context only.
+
 ## Current State
 
 ### What README.md Promises

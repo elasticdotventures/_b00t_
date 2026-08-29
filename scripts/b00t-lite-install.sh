@@ -3,7 +3,9 @@
 set -euo pipefail
 
 B00T_HOME="${B00T_HOME:-$HOME/.b00t}"
-B00T_REPO="${B00T_REPO:-git@github.com:elasticdotventures/_b00t_.git}"
+# HTTPS, not SSH: this script exists for a clean box that has no registered
+# SSH key yet — an SSH remote silently fails there and defeats the purpose.
+B00T_REPO="${B00T_REPO:-https://github.com/elasticdotventures/_b00t_.git}"
 B00T_BRANCH="${B00T_BRANCH:-main}"
 
 # ─── Step 1: Detect variant ───────────────────────────────────────────
