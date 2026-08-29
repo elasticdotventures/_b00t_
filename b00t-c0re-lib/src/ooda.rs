@@ -49,7 +49,15 @@ impl OodaPhase {
     /// - `Acting`      → `Reviewing`
     /// - `Reviewing`   → `Complete`  (successful finish)
     /// - `Reviewing`   → `Observing` (loop back for another cycle)
-    /// - Any phase     → `Failed(_)` (abort with reason)
+    /// - Any in-progress phase → `Failed(_)` (abort with reason)
+    /// - `Failed`      → `Failed`  (re-fail with an updated reason)
+    ///
+    /// `Complete` is unconditionally terminal — a completed loop cannot be
+    /// retroactively marked failed. (Prior to `elasticdotventures/_b00t_#1177`
+    /// P5b, `Complete` could transition to `Failed` here even though nothing
+    /// in the real dispatch/execution path ever exercised that edge, and
+    /// `next_forward()` already treated `Complete` as terminal — this
+    /// brought `can_transition_to` in line with that.)
     pub fn can_transition_to(&self, next: &OodaPhase) -> bool {
         matches!(
             (self, next),
@@ -60,7 +68,13 @@ impl OodaPhase {
                 | (OodaPhase::Acting, OodaPhase::Reviewing)
                 | (OodaPhase::Reviewing, OodaPhase::Complete)
                 | (OodaPhase::Reviewing, OodaPhase::Observing) // loop back
-                | (_, OodaPhase::Failed(_)) // any phase can fail
+                | (OodaPhase::Idle, OodaPhase::Failed(_))
+                | (OodaPhase::Observing, OodaPhase::Failed(_))
+                | (OodaPhase::Orienting, OodaPhase::Failed(_))
+                | (OodaPhase::Deciding, OodaPhase::Failed(_))
+                | (OodaPhase::Acting, OodaPhase::Failed(_))
+                | (OodaPhase::Reviewing, OodaPhase::Failed(_))
+                | (OodaPhase::Failed(_), OodaPhase::Failed(_)) // re-fail with a new reason
         )
     }
 
@@ -122,6 +136,11 @@ pub fn ooda_phase_mermaid_state_diagram() -> String {
 
 pub fn ooda_phase_s5() -> String {
     <OodaPhase as crate::state_introspection::StateMachineIntrospection>::render_s5()
+}
+
+#[cfg(feature = "statechart")]
+pub fn ooda_phase_scxml() -> String {
+    <OodaPhase as crate::state_introspection::StateMachineIntrospection>::render_scxml()
 }
 
 // ---------------------------------------------------------------------------
@@ -924,7 +943,7 @@ mod tests {
     }
 
     #[test]
-    fn any_phase_can_fail() {
+    fn any_in_progress_phase_can_fail() {
         let phases = [
             OodaPhase::Idle,
             OodaPhase::Observing,
@@ -932,7 +951,6 @@ mod tests {
             OodaPhase::Deciding,
             OodaPhase::Acting,
             OodaPhase::Reviewing,
-            OodaPhase::Complete,
         ];
         for phase in &phases {
             assert!(
@@ -941,6 +959,14 @@ mod tests {
                 phase
             );
         }
+    }
+
+    #[test]
+    fn complete_is_terminal_and_cannot_transition_to_failed() {
+        assert!(
+            !OodaPhase::Complete.can_transition_to(&OodaPhase::Failed("reason".into())),
+            "a completed loop cannot be retroactively marked failed"
+        );
     }
 
     #[test]
@@ -959,10 +985,17 @@ mod tests {
                 && transition.target == "Observing"
         }));
         assert!(transitions.iter().any(|transition| {
-            transition.source == "Complete"
+            transition.source == "Reviewing"
                 && transition.event == "GoToFailed"
                 && transition.target == "Failed"
         }));
+        // Complete is unconditionally terminal (elasticdotventures/_b00t_#1177 P5b) —
+        // it has no outgoing transitions at all, including to Failed.
+        assert!(
+            !transitions
+                .iter()
+                .any(|transition| transition.source == "Complete")
+        );
     }
 
     #[test]
@@ -993,6 +1026,56 @@ mod tests {
                 "missing S5 transition: {transition:?}",
             );
         }
+    }
+
+    #[test]
+    #[cfg(feature = "statechart")]
+    fn ooda_phase_scxml_round_trips_and_matches_introspection() {
+        use crate::state_introspection::StateMachineIntrospection;
+
+        let chart = <OodaPhase as StateMachineIntrospection>::render_scxml_statechart();
+        scxml::validate(&chart)
+            .expect("OodaPhase's exported statechart should be structurally valid SCXML");
+
+        let xml = ooda_phase_scxml();
+        let parsed = scxml::parse_xml(&xml).expect("exported XML must parse back as valid SCXML");
+        assert_eq!(parsed, chart);
+
+        // Cross-check against the same transition_descriptors() the Mermaid/S5
+        // renderers already assert against — same hand-rolled
+        // can_transition_to/next_forward guards, one more export format.
+        let transitions = <OodaPhase as StateMachineIntrospection>::transition_descriptors();
+        for transition in transitions {
+            let source = parsed
+                .find_state(transition.source)
+                .unwrap_or_else(|| panic!("missing state {} in exported SCXML", transition.source));
+            let found = source.transitions.iter().any(|t| {
+                t.event.as_ref().map(|e| e.as_str()) == Some(transition.event)
+                    && t.targets == vec![transition.target]
+            });
+            assert!(found, "missing SCXML transition: {transition:?}");
+        }
+
+        // `Complete` is unconditionally terminal (can_transition_to no
+        // longer allows Complete -> Failed) and exports as a real SCXML
+        // `Final` state. `Failed` has a self-loop back to `Failed`
+        // (re-failing with an updated reason) — SCXML still counts that as
+        // an outgoing transition, so it stays `Atomic` despite being one
+        // of `final_states()`'s soft, diagram-level entries.
+        assert_eq!(
+            parsed
+                .find_state("Complete")
+                .expect("Complete state must exist")
+                .kind,
+            scxml::model::StateKind::Final
+        );
+        assert_eq!(
+            parsed
+                .find_state("Failed")
+                .expect("Failed state must exist")
+                .kind,
+            scxml::model::StateKind::Atomic
+        );
     }
 
     #[test]
