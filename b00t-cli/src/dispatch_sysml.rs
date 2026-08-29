@@ -148,6 +148,54 @@ pub fn dispatch_chain_to_mermaid() -> String {
     out
 }
 
+/// Export `resolve_datum_dispatch`'s priority/collapse rule as an executable
+/// Rhai script — P2's second prototype (`elasticdotventures/_b00t_#1177`).
+///
+/// Rhai stays strictly in its existing, proven role across this ecosystem
+/// (diagram/state-machine/guard-expression codegen — `ledger-core::workflow.rs`,
+/// `mdbook-rhai-mermaid`, `nem-poweragent-lab`'s `mission-engine`) — never MCP
+/// transport/dispatch. The fan-out itself (running every mode's `try_resolve`,
+/// real file I/O and TOML parsing) stays real Rust; this script only takes
+/// the resulting hit list (mode names that returned `Some(_)`) and expresses
+/// `resolve_datum_dispatch`'s preference rule — Runtime > CliPassthrough >
+/// Polyseme, else the first remaining hit — the same hand-maintained
+/// precedence `dispatch.rs`'s own `matches!` block encodes (not
+/// auto-derived from the chain, since that precedence isn't derivable from
+/// mode order either — this mirrors dispatch.rs by hand exactly as it does).
+///
+/// Follows `to_rhai()`'s own shape (`// GENERATED from ...` header) but its
+/// test, unlike `to_mermaid()`'s string-containment convention, actually
+/// executes the generated script inside a real `rhai::Engine` — proving the
+/// priority rule, not just its presence as text.
+///
+/// An if/return chain, not a `switch`: Rhai's `switch` matches a value
+/// against literal patterns (`switch x { 1 => ..., _ => ... }`) — it can't
+/// take an arbitrary boolean expression as a case, so `switch true { expr
+/// => ..., .. }` doesn't parse. An if/return chain expresses the same
+/// first-match-wins precedence and is valid Rhai.
+pub fn dispatch_chain_to_rhai() -> String {
+    "// GENERATED from dispatch::default_dispatch_chain()\n\
+     // Fan-out (running every mode's try_resolve) and its file I/O stay\n\
+     // real Rust — this only expresses resolve_datum_dispatch's\n\
+     // Runtime > CliPassthrough > Polyseme preference rule.\n\
+     fn resolve_dispatch(hits) {\n\
+     \x20   if hits.len() == 0 {\n\
+     \x20       return ();\n\
+     \x20   }\n\
+     \x20   if hits.contains(\"RuntimeMode\") {\n\
+     \x20       return \"RuntimeMode\";\n\
+     \x20   }\n\
+     \x20   if hits.contains(\"CliPassthroughMode\") {\n\
+     \x20       return \"CliPassthroughMode\";\n\
+     \x20   }\n\
+     \x20   if hits.contains(\"PolysemeMode\") {\n\
+     \x20       return \"PolysemeMode\";\n\
+     \x20   }\n\
+     \x20   hits[0]\n\
+     }\n"
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +267,66 @@ mod tests {
         }
         assert!(mermaid.contains("Collect"));
         assert!(mermaid.contains("prefer Runtime > CliPassthrough > Polyseme"));
+    }
+
+    #[test]
+    fn rhai_script_prefers_runtime_over_other_hits() {
+        let script = dispatch_chain_to_rhai();
+        let engine = rhai::Engine::new();
+        let ast = engine
+            .compile(&script)
+            .expect("generated rhai script failed to compile");
+
+        let hits: rhai::Array = vec![
+            "PolysemeMode".to_string().into(),
+            "RuntimeMode".to_string().into(),
+            "CliPassthroughMode".to_string().into(),
+        ];
+        let result: String = engine
+            .call_fn(&mut rhai::Scope::new(), &ast, "resolve_dispatch", (hits,))
+            .expect("resolve_dispatch call failed");
+        assert_eq!(result, "RuntimeMode");
+    }
+
+    #[test]
+    fn rhai_script_prefers_cli_passthrough_over_polyseme_when_runtime_absent() {
+        let script = dispatch_chain_to_rhai();
+        let engine = rhai::Engine::new();
+        let ast = engine.compile(&script).unwrap();
+
+        let hits: rhai::Array = vec![
+            "PolysemeMode".to_string().into(),
+            "CliPassthroughMode".to_string().into(),
+        ];
+        let result: String = engine
+            .call_fn(&mut rhai::Scope::new(), &ast, "resolve_dispatch", (hits,))
+            .unwrap();
+        assert_eq!(result, "CliPassthroughMode");
+    }
+
+    #[test]
+    fn rhai_script_falls_back_to_first_hit_for_an_unlisted_mode() {
+        let script = dispatch_chain_to_rhai();
+        let engine = rhai::Engine::new();
+        let ast = engine.compile(&script).unwrap();
+
+        let hits: rhai::Array = vec!["OodaMode".to_string().into()];
+        let result: String = engine
+            .call_fn(&mut rhai::Scope::new(), &ast, "resolve_dispatch", (hits,))
+            .unwrap();
+        assert_eq!(result, "OodaMode");
+    }
+
+    #[test]
+    fn rhai_script_returns_unit_when_no_hits() {
+        let script = dispatch_chain_to_rhai();
+        let engine = rhai::Engine::new();
+        let ast = engine.compile(&script).unwrap();
+
+        let hits: rhai::Array = vec![];
+        let result: () = engine
+            .call_fn(&mut rhai::Scope::new(), &ast, "resolve_dispatch", (hits,))
+            .unwrap();
+        let _ = result;
     }
 }
