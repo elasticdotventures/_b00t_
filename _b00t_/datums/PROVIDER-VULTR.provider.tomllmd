@@ -506,6 +506,59 @@
 #      operator sign-off already given for capability-forge's live
 #      deploy — see FOLLOW-UP below once that happens.
 #
+# MEMOIZED 2026-08-26 (cont'd, live deploy): operator sign-off given
+#      ("Yes, deploy now") — b00t-server is now actually live on
+#      b00t-node, closing the FOLLOW-UP above. Ran section 8 of
+#      deploy_b00t_node.py, extracted into a scoped one-off script
+#      rather than re-running the whole file, deliberately: the full
+#      script's section 1 takes a fresh --data nats_password on every
+#      invocation, and this host's NATS auth was already live and
+#      working (the capability-forge deploy above proved live-reload
+#      idempotency for adding a user, not for rotating the shared
+#      password) — no reason to risk a rotation for a change scoped to
+#      one new service. The extracted script was deleted after the run;
+#      deploy_b00t_node.py section 8 remains the canonical, permanent
+#      copy of this same sequence for any future from-scratch rebuild.
+#      Two real pyinfra gotchas hit and fixed along the way, worth
+#      recording since deploy_b00t_node.py's own docstring usage example
+#      doesn't warn about either:
+#        - `files.put`/`files.template` `src="templates/..."` paths
+#          resolve relative to the CWD pyinfra is invoked FROM, not the
+#          deploy script's own directory. The docstring's usage example
+#          (`pyinfra nats/pyinfra/inventory.py
+#          nats/pyinfra/deploy_b00t_node.py ...`) reads as repo-root
+#          invocation but only actually works run from inside
+#          nats/pyinfra/ itself (`cd nats/pyinfra && pyinfra inventory.py
+#          deploy_b00t_node.py ...`) — confirmed by reproducing the
+#          exact FileNotFoundError from repo root, then confirming a
+#          clean dry-run once CWD was fixed.
+#        - A non-interactive run (no TTY — this was an agent-driven
+#          background process) EOFs at pyinfra's "Press enter to
+#          execute..." confirmation prompt and applies nothing, silently
+#          (exit code from an unhandled EOFError, not a clear "nothing
+#          was done" message) unless invoked with `-y`.
+#      Verified live, for real, against 149.28.189.45 (not a dry run):
+#      `systemctl status b00t-server` shows `Active: active (running)`,
+#      stable PID, and the expected startup log lines ("HTTP server
+#      listening on 127.0.0.1:5273", MCP/OAuth/GitHub-auth endpoint
+#      list). `curl http://127.0.0.1:5273/v1/models` (unauthenticated,
+#      over ssh) returned `{"error":"access denied:
+#      b00t:ChatModel:execute"}` — the correct, expected response from a
+#      correctly-gated server (real b00t-sk-* key required, same as the
+#      local debug-build verification above), not a connection failure —
+#      confirming the service is genuinely up and enforcing auth, not
+#      just "systemd says running."
+#      Same-day, separately: b00t-candle-serve (the local-model fallback
+#      noted as a FOLLOW-UP for this datum) gained an OpenAI-compatible
+#      `--serve` HTTP mode (POST /v1/chat/completions, GET /v1/models),
+#      wired into b00t-server's own local-backend discovery as
+#      "candle-phi" on port 8082 — see b00t-mcp/src/server_llm.rs and
+#      _b00t_/phi-4-candle-local.model.ai.tomllmd for the implementation
+#      record; not itself deployed to b00t-node (this host has no GPU
+#      and CPU-only Phi-4 inference is slow — ~0.53 tok/s — so it isn't
+#      a priority local-backend target here specifically), just noted
+#      for completeness since it closes out the same FOLLOW-UP thread.
+#
 # Auth: VULTR_API_KEY env var (Account -> API in the Vultr customer portal).
 # 🤓 GPU flavor/pricing tables deliberately omitted here — unlike
 #    PROVIDER-RUNPOD/PROVIDER-HF, these haven't been independently verified
