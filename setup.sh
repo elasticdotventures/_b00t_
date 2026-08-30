@@ -249,13 +249,29 @@ if command -v gh >/dev/null 2>&1; then
   fi
 
   check_github_auth() {
-    if gh auth status 2>&1 | grep -q '✓ Logged in to github.com'; then
+    local status_output status_rc
+    status_output="$(gh auth status -h github.com 2>&1)" # output: gh auth status text
+    status_rc=$?
+
+    if printf '%s' "$status_output" | grep -q '✓ Logged in to github.com'; then
       echo "✅ Auth OK"
       return 0
-    else
+    fi
+
+    if printf '%s' "$status_output" | grep -q 'Failed to log in'; then
+      printf '%s\n' "$status_output"
       echo "❌ Not authenticated"
       return 1
     fi
+
+    if [ "$status_rc" -eq 0 ] && printf '%s' "$status_output" | grep -q 'Logged in to github.com'; then
+      echo "✅ Auth OK"
+      return 0
+    fi
+
+    printf '%s\n' "$status_output"
+    echo "❌ Not authenticated"
+    return 1
   }
 
   if check_github_auth && prompt_yes_no "Install gh extensions (gh-act, gh-copilot)?" "n"; then
