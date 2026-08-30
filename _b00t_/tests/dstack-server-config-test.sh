@@ -15,6 +15,7 @@ run_test_scenario() {
     local gcp_project_id="$3"
     local check_gcp="$4"
     local check_aws="${5:-no}"
+    local check_azure="${6:-no}"
 
     # Create fresh temporary HOME for this test
     local test_home
@@ -29,6 +30,10 @@ run_test_scenario() {
     echo "RUNPOD_API_KEY=$runpod_api_key" > "$git_root/.env"
     if [ -n "$gcp_project_id" ]; then
         echo "GCP_PROJECT_ID=$gcp_project_id" >> "$git_root/.env"
+    fi
+    if [ "$check_azure" = "yes" ]; then
+        echo "AZURE_TENANT_ID=test-tenant-id" >> "$git_root/.env"
+        echo "AZURE_SUBSCRIPTION_ID=test-subscription-id" >> "$git_root/.env"
     fi
 
     # Run the recipe (from root directory where dstack-sdd module is available)
@@ -85,6 +90,24 @@ run_test_scenario() {
         echo "PASS: AWS block uses 'type: default' credentials"
     fi
 
+    # If this test should verify Azure block
+    if [ "$check_azure" = "yes" ]; then
+        if ! grep -q "type: azure" "$HOME/.dstack/server/config.yml"; then
+            echo "FAIL: Could not find 'type: azure' in config.yml"
+            cat "$HOME/.dstack/server/config.yml"
+            return 1
+        fi
+        echo "PASS: Found 'type: azure' in config.yml"
+
+        # Scoped check: verify Azure block uses 'type: default' credentials
+        if ! grep -A4 "type: azure" "$HOME/.dstack/server/config.yml" | grep -q "type: default"; then
+            echo "FAIL: Azure block does not use 'type: default' credentials"
+            cat "$HOME/.dstack/server/config.yml"
+            return 1
+        fi
+        echo "PASS: Azure block uses 'type: default' credentials"
+    fi
+
     # Cleanup
     rm -rf "$test_home"
 }
@@ -103,11 +126,20 @@ run_test_scenario \
     "test-gcp-project" \
     "yes"
 
-# Test 3: RunPod + GCP + AWS (all three backends)
+# Test 3: RunPod + GCP + AWS (three backends)
 run_test_scenario \
     "Test 3: dstack-server-config writes an aws backend block" \
     "test-runpod-key" \
     "test-gcp-project" \
+    "yes" \
+    "yes"
+
+# Test 4: RunPod + GCP + AWS + Azure (all four backends)
+run_test_scenario \
+    "Test 4: dstack-server-config writes an azure backend block" \
+    "test-runpod-key" \
+    "test-gcp-project" \
+    "yes" \
     "yes" \
     "yes"
 

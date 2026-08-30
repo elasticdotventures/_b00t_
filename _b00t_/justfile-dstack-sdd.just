@@ -103,6 +103,8 @@ dstack-server-config:
     set +a
     : "${RUNPOD_API_KEY:?RUNPOD_API_KEY not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
     GCP_PROJECT_ID="${GCP_PROJECT_ID:-app4dog}"
+    AZURE_TENANT_ID="${AZURE_TENANT_ID:-}"
+    AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
     mkdir -p ~/.dstack/server
     umask 077
     printf '%s\n' \
@@ -118,6 +120,11 @@ dstack-server-config:
         '        creds:' \
         '          type: default' \
         '      - type: aws' \
+        '        creds:' \
+        '          type: default' \
+        '      - type: azure' \
+        "        tenant_id: \"$AZURE_TENANT_ID\"" \
+        "        subscription_id: \"$AZURE_SUBSCRIPTION_ID\"" \
         '        creds:' \
         '          type: default' \
         > ~/.dstack/server/config.yml
