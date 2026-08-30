@@ -23,6 +23,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use ufo_types::ModelCapability;
 use uuid::Uuid;
 
 // ── Soul config (runtime backend registry) ─────────────────────────────────
@@ -57,6 +58,17 @@ pub struct LocalBackend {
     pub kind: String,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Which data format(s) this backend's model(s) claim to serve — a
+    /// registry seed, not yet consumed by any routing logic in this phase.
+    /// Empty by default; existing `default_soul()` entries don't populate
+    /// this (real per-model capability data is out of this task's scope).
+    #[serde(default)]
+    pub models: Vec<ModelCapability>,
+    /// Caps concurrent in-flight requests proxied to this backend. `None`
+    /// means unlimited (the pre-existing behavior for every backend before
+    /// this field existed). Enforced in Task 2, not this task.
+    #[serde(default)]
+    pub max_concurrent: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,20 +92,20 @@ fn default_soul(hostname: &str) -> SoulConfig {
         },
         backends: BackendsSection {
             local: vec![
-                LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
-                LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
-                LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
                 // 🤓 b00t-candle-serve --serve — real local candle chat inference
                 // (Phi-4 14B Q4_K GGUF), no external API key, no container. CPU-only
                 // is slow (~0.53 tok/s, see _b00t_/phi-4-candle-local.model.ai.tomllmd)
                 // so this is listed last among the openai-compat entries: only used
                 // when none of mistralrs/llama-cpp/vllm are actually listening.
-                LocalBackend { name: "candle-phi".into(), port: 8082, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "candle-phi".into(), port: 8082, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
                 // 🤓 b00t-embed-serve — real local candle embeddings (Qwen3-Embedding-0.6B),
                 // no external API key. kind="embeddings" (not "openai-compat") because it
                 // only implements /v1/embeddings, not /v1/chat/completions — discover_local()
                 // filters on this so chat requests never get routed here by accident.
-                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true },
+                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true, models: Vec::new(), max_concurrent: None },
             ],
             remote: vec![
                 RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
@@ -1031,6 +1043,43 @@ mod tests {
             .expect("telnyx must be a default remote backend");
         assert_eq!(telnyx.key_env, "TELNYX_API_KEY");
         assert_eq!(telnyx.base_url.as_deref(), Some("https://api.telnyx.com/v2/ai"));
+    }
+
+    #[test]
+    fn local_backend_models_field_defaults_to_empty_and_roundtrips() {
+        use ufo_types::{DataFormat, ModelCapability};
+
+        // Default-constructed (as every existing default_soul() entry is)
+        // gets an empty models list — this field is additive, not required.
+        let soul = default_soul("test-host");
+        let mistralrs = soul
+            .backends
+            .local
+            .iter()
+            .find(|b| b.name == "mistralrs")
+            .expect("mistralrs must be a default local backend");
+        assert!(mistralrs.models.is_empty());
+
+        // A backend WITH models set roundtrips through TOML (the real
+        // on-disk config format `SoulConfig::load` reads/writes).
+        let mut backend = LocalBackend {
+            name: "test-backend".into(),
+            port: 9999,
+            kind: "openai-compat".into(),
+            enabled: true,
+            models: Vec::new(),
+            max_concurrent: None,
+        };
+        backend.models.push(
+            ModelCapability::new("test-model", vec![DataFormat::Json, DataFormat::PlainText])
+                .with_metadata("quantization", "int4"),
+        );
+        let toml_str = toml::to_string_pretty(&backend).unwrap();
+        let back: LocalBackend = toml::from_str(&toml_str).unwrap();
+        assert_eq!(back.models.len(), 1);
+        assert_eq!(back.models[0].model_name, "test-model");
+        assert_eq!(back.models[0].formats, vec![DataFormat::Json, DataFormat::PlainText]);
+        assert_eq!(back.models[0].metadata.get("quantization"), Some(&"int4".to_string()));
     }
 
     #[test]
