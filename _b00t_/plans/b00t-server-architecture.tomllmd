@@ -176,7 +176,7 @@ natural query surface to extend.
     vendor/tomllm      — TOML annotation parser; use for b00t-server config datums (.tomllm/.tomllmd)
     vendor/moltis-b00t — reference credential store (SQLite for API keys); compare approach with KvStore
     vendor/rust-docs-mcp-server — primary first consumer (its stdin env needs OPENAI_API_KEY)
-    vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr — future consumer (semantic embeddings via /v1/embeddings)
+    vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr — future consumer (semantic embeddings via /v1/embeddings)
 
 ## Implementation Order (MVP)
 
