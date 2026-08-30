@@ -55,6 +55,8 @@ ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", rev = "7
 
 Do not change the comment block above that line — it still accurately explains why a rev-pin (not a tag) is used.
 
+**Retrospective note (added after both `ufo-types` PRs merged):** the pin now on `main` reads `rev = "06f3a9992fc40c9d90a35c2f404ffce23886bd37"` — `ufo-types`' PR #14 (Phase 3) merge commit, itself built on PR #12 (Phase 1)'s merge. This is expected, healthy drift (the pin was bumped forward past both merges after this task landed), not a discrepancy with what actually shipped here.
+
 - [ ] **Step 3: Add ufo-types as a b00t-mcp dependency**
 
 In `b00t-mcp/Cargo.toml`, in its `[dependencies]` section, add this line alongside the existing workspace-true dependency lines (e.g. near `b00t-c0re-lib = { workspace = true }`):
@@ -422,7 +424,7 @@ git commit -m "feat(server_llm): enforce per-backend max_concurrent via a reques
 
 **Interfaces:**
 - Consumes: nothing new from earlier tasks structurally, but populates Task 1's `models` field and Task 2's `max_concurrent` field on its new `LocalBackend` entry.
-- Produces: `fn discover_foundry_local_endpoint() -> Result<Option<String>, String>` (and its two private helpers `parse_foundry_endpoint`/`normalize_foundry_endpoint`), a `default_soul()` entry named `"foundry-local"`, and a special case inside `discover_local()`'s loop that calls this function instead of the generic fixed-port TCP probe when it encounters that entry.
+- Produces: `fn discover_foundry_local_endpoint() -> Result<Option<String>, String>` (and its three private helpers `parse_foundry_endpoint`/`discover_foundry_rest_endpoint`/`normalize_foundry_endpoint`), a `default_soul()` entry named `"foundry-local"`, and a special case inside `discover_local()`'s loop that calls this function instead of the generic fixed-port TCP probe when it encounters that entry.
 
 - [ ] **Step 1: Add the reqwest blocking feature**
 
