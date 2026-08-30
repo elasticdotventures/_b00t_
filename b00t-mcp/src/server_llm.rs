@@ -23,6 +23,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
 use ufo_types::ModelCapability;
 use uuid::Uuid;
 
@@ -187,7 +188,11 @@ fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
 /// backend can be embeddings-only (b00t-embed-serve, kind="embeddings") — a
 /// chat request must never land there, and an embeddings request should prefer
 /// it over a general chat backend that may not implement /v1/embeddings at all.
-fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String) {
+/// The third return element is the resolved local backend's `max_concurrent`
+/// (looked up by name in `soul.backends.local`); `None` for the explicit-URL
+/// override, remote-backend, and no-upstream-configured fallback paths, none
+/// of which have a concept of a per-backend concurrency cap in this file.
+fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String, Option<u32>) {
     let explicit_url_var = if for_embeddings { "B00T_SERVER_EMBEDDINGS_UPSTREAM_URL" } else { "B00T_SERVER_UPSTREAM_URL" };
     if let Ok(url) = std::env::var(explicit_url_var) {
         if !url.is_empty() {
@@ -195,7 +200,7 @@ fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String)
                 .or_else(|_| std::env::var("OPENAI_API_KEY"))
                 .unwrap_or_default();
             eprintln!("🌐 upstream (explicit): {}", url);
-            return (url, key);
+            return (url, key, None);
         }
     }
     if for_embeddings {
@@ -203,22 +208,25 @@ fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String)
         // openai-compat local backend in case it also serves /v1/embeddings.
         if let Some((name, url)) = discover_local(soul, Some("embeddings")) {
             eprintln!("📍 upstream (soul/local {}, embeddings): {}", name, url);
-            return (url, String::new());
+            let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+            return (url, String::new(), max_concurrent);
         }
         if let Some((name, url)) = discover_local(soul, None) {
             eprintln!("📍 upstream (soul/local {}, chat backend used for embeddings): {}", name, url);
-            return (url, String::new());
+            let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+            return (url, String::new(), max_concurrent);
         }
     } else if let Some((name, url)) = discover_local(soul, None) {
         eprintln!("📍 upstream (soul/local {}): {}", name, url);
-        return (url, String::new());
+        let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+        return (url, String::new(), max_concurrent);
     }
     if let Some((name, key, url)) = discover_remote(soul) {
         eprintln!("🌐 upstream (soul/remote {}): {}", name, url);
-        return (url, key);
+        return (url, key, None);
     }
     eprintln!("⚠️  No upstream configured — populate ~/.b00t/{}", SOUL_PATH);
-    ("http://localhost:8181/v1".to_string(), String::new())
+    ("http://localhost:8181/v1".to_string(), String::new(), None)
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -306,6 +314,11 @@ pub struct LlmState {
     // share the chat upstream. See resolve_upstream's for_embeddings param.
     pub embeddings_upstream_url: String,
     pub embeddings_upstream_key: String,
+    /// `None` = unlimited (the behavior for every backend before this field
+    /// existed, and always the case for `from_config`/`from_config_full` —
+    /// only `LlmState::new()`'s real construction path can produce `Some`).
+    pub chat_semaphore: Option<Arc<Semaphore>>,
+    pub embeddings_semaphore: Option<Arc<Semaphore>>,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
@@ -410,13 +423,16 @@ fn write_keys_file_locked(
 impl LlmState {
     pub fn new() -> Self {
         let soul = SoulConfig::load();
-        let (url, key) = resolve_upstream(&soul, false);
-        let (embed_url, embed_key) = resolve_upstream(&soul, true);
-        Self::from_config_full(&url, &key, &embed_url, &embed_key)
+        let (url, key, chat_max_concurrent) = resolve_upstream(&soul, false);
+        let (embed_url, embed_key, embeddings_max_concurrent) = resolve_upstream(&soul, true);
+        Self::from_config_full_with_concurrency(&url, &key, &embed_url, &embed_key, chat_max_concurrent, embeddings_max_concurrent)
     }
 
     /// Convenience for tests / callers that don't care about a distinct
-    /// embeddings backend — uses the same upstream for both.
+    /// embeddings backend — uses the same upstream for both. Always
+    /// unlimited concurrency (`None, None`) — use
+    /// `from_config_full_with_concurrency` directly if a test needs to
+    /// exercise concurrency limiting.
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
         Self::from_config_full(upstream_url, upstream_key, upstream_url, upstream_key)
     }
@@ -427,6 +443,17 @@ impl LlmState {
         embeddings_upstream_url: &str,
         embeddings_upstream_key: &str,
     ) -> Self {
+        Self::from_config_full_with_concurrency(upstream_url, upstream_key, embeddings_upstream_url, embeddings_upstream_key, None, None)
+    }
+
+    pub fn from_config_full_with_concurrency(
+        upstream_url: &str,
+        upstream_key: &str,
+        embeddings_upstream_url: &str,
+        embeddings_upstream_key: &str,
+        chat_max_concurrent: Option<u32>,
+        embeddings_max_concurrent: Option<u32>,
+    ) -> Self {
         let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
         let keys_file = home.join("server-keys.json");
         let keys = load_keys_from_file(&keys_file);
@@ -436,6 +463,8 @@ impl LlmState {
             upstream_key: upstream_key.to_string(),
             embeddings_upstream_url: embeddings_upstream_url.trim_end_matches('/').to_string(),
             embeddings_upstream_key: embeddings_upstream_key.to_string(),
+            chat_semaphore: chat_max_concurrent.map(|n| Arc::new(Semaphore::new(n as usize))),
+            embeddings_semaphore: embeddings_max_concurrent.map(|n| Arc::new(Semaphore::new(n as usize))),
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
@@ -687,6 +716,11 @@ async fn proxy_chat(
         crate::verify_tool_loop::inject_verify_tool(&mut request);
     }
 
+    let _permit = match &state.chat_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     let first = match send_upstream_chat(&state.upstream_url, &state.upstream_key, request.clone()).await {
         Ok(v) => v,
@@ -753,6 +787,11 @@ async fn forward_chat_verbatim(
     if let Some(ct) = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
         req = req.header("Content-Type", ct);
     }
+    let _permit = match &state.chat_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
@@ -790,6 +829,11 @@ async fn proxy_embeddings(
     if !state.embeddings_upstream_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", state.embeddings_upstream_key));
     }
+    let _permit = match &state.embeddings_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
@@ -881,6 +925,71 @@ mod tests {
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().consumer, "test-consumer");
+    }
+
+    #[tokio::test]
+    async fn concurrency_limit_serializes_requests_to_a_backend() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _temp_home = TempHome::new();
+
+        // Fake upstream that tracks the max number of simultaneously
+        // in-flight requests it observed, via a slow handler that holds a
+        // counter up for long enough to overlap if the semaphore didn't
+        // actually serialize anything.
+        let concurrent = Arc::new(AtomicUsize::new(0));
+        let max_observed = Arc::new(AtomicUsize::new(0));
+        let concurrent_for_handler = concurrent.clone();
+        let max_observed_for_handler = max_observed.clone();
+        let app = Router::new().route(
+            "/chat/completions",
+            axum::routing::post(move |_body: Bytes| {
+                let concurrent = concurrent_for_handler.clone();
+                let max_observed = max_observed_for_handler.clone();
+                async move {
+                    let now = concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_observed.fetch_max(now, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    concurrent.fetch_sub(1, Ordering::SeqCst);
+                    Json(stop_upstream_response("ok"))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let upstream_url = format!("http://{addr}");
+
+        let state = Arc::new(LlmState::from_config_full_with_concurrency(
+            &upstream_url, "", &upstream_url, "", Some(1), None,
+        ));
+
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "hi"}]
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        // Fire 3 concurrent requests through proxy_chat.
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            let state = state.clone();
+            let body = body_bytes.clone();
+            handles.push(tokio::spawn(async move {
+                proxy_chat(State((state, true)), HeaderMap::new(), body).await.into_response()
+            }));
+        }
+        for h in handles {
+            let resp = h.await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        assert_eq!(
+            max_observed.load(Ordering::SeqCst),
+            1,
+            "max_concurrent=Some(1) must serialize requests to exactly 1 in flight at a time"
+        );
     }
 
     #[tokio::test]
