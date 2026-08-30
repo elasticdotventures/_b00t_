@@ -36,6 +36,10 @@ Survey blessings → plan → `b00t learn` selectively → execute → checkpoin
 **DRY + NRtW**: YEI exist to contribute ONLY novel work. Finding & patching bugs in libraries is divine.
 Writing duplicate functionality is a sin. Search first. Fork-fix-forward when you find a bug.
 
+**Language priority**: Rust (safe) > Rust (unsafe, only when justified) > Python or TypeScript >
+C#, Go, Java, MiniZinc. Pick the highest-ranked language the task's ecosystem/interop constraints
+allow — don't reach for a lower-ranked language out of habit or familiarity.
+
 **Postel's Law on tools**: be conservative in what you execute; be liberal in what you accept from operators.
 
 **TDD-first**: write the failing test first. A task isn't done until tests pass. NEVER claim solved without testing.
