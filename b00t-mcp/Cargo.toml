@@ -75,7 +75,7 @@ whoami = "1.5"
 # RAGLight integration (dirs already exists above)
 
 # GitHub OAuth authentication
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 axum-extra = { version = "0.12.1", features = ["cookie"] }
 urlencoding = "2.1"
 

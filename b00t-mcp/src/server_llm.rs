@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
-use ufo_types::ModelCapability;
+use ufo_types::{DataFormat, ModelCapability};
 use uuid::Uuid;
 
 // ── Soul config (runtime backend registry) ─────────────────────────────────
@@ -96,6 +96,20 @@ fn default_soul(hostname: &str) -> SoulConfig {
                 LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
                 LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
                 LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                // 🤓 Windows Foundry Local — real Microsoft local inference
+                // runtime, dynamic port (no fixed `port` value applies; the
+                // literal 0 below is an unused sentinel — see discover_local's
+                // foundry-local special case). Foundry Local's own docs state
+                // it is single-user, not built for concurrent multi-client
+                // serving, hence max_concurrent: Some(1).
+                LocalBackend {
+                    name: "foundry-local".into(),
+                    port: 0,
+                    kind: "openai-compat".into(),
+                    enabled: true,
+                    models: vec![ModelCapability::new(FOUNDRY_LOCAL_MODEL, vec![DataFormat::Json, DataFormat::PlainText])],
+                    max_concurrent: Some(1),
+                },
                 // 🤓 b00t-candle-serve --serve — real local candle chat inference
                 // (Phi-4 14B Q4_K GGUF), no external API key, no container. CPU-only
                 // is slow (~0.53 tok/s, see _b00t_/phi-4-candle-local.model.ai.tomllmd)
@@ -164,6 +178,22 @@ fn discover_local(soul: &SoulConfig, want_kind: Option<&str>) -> Option<(String,
     let target_kind = want_kind.unwrap_or("openai-compat");
     for be in &soul.backends.local {
         if !be.enabled || be.kind != target_kind { continue; }
+        // Foundry Local has no fixed port (its `port` field is an unused
+        // sentinel — see its default_soul() entry) — it needs a real
+        // shell-out discovery step instead of the generic TCP probe below.
+        if be.name == "foundry-local" {
+            match discover_foundry_local_endpoint() {
+                Ok(Some(endpoint)) => {
+                    eprintln!("🔍 local backend (soul): {} (foundry-local dynamic discovery)", be.name);
+                    return Some((be.name.clone(), format!("{}/v1", endpoint)));
+                }
+                Ok(None) => continue,
+                Err(e) => {
+                    eprintln!("⚠️  foundry-local discovery failed: {e}");
+                    continue;
+                }
+            }
+        }
         let addr: SocketAddr = format!("127.0.0.1:{}", be.port).parse().ok()?;
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
             eprintln!("🔍 local backend (soul): {} :{} (kind={})", be.name, be.port, be.kind);
@@ -227,6 +257,95 @@ fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String,
     }
     eprintln!("⚠️  No upstream configured — populate ~/.b00t/{}", SOUL_PATH);
     ("http://localhost:8181/v1".to_string(), String::new(), None)
+}
+
+/// Real Windows Foundry Local model name this ecosystem already names
+/// elsewhere (`ledgrrr`'s `ledgerr-host::internal_openai::FOUNDRY_LOCAL_MODEL`).
+const FOUNDRY_LOCAL_MODEL: &str = "phi-4-mini";
+
+/// Discovers Foundry Local's live REST endpoint. Unlike every other local
+/// backend in `default_soul()`, Foundry Local does not listen on a fixed,
+/// known port — it's assigned dynamically per-launch. Ported from
+/// `ledgrrr`'s `ledgerr-host::internal_openai::discover_foundry_local_endpoint`
+/// (same shell-out + parse approach, same env var override name kept for
+/// operator familiarity across both codebases).
+fn discover_foundry_local_endpoint() -> Result<Option<String>, String> {
+    if let Ok(endpoint) = std::env::var("LEDGERR_FOUNDRY_LOCAL_ENDPOINT") {
+        let trimmed = endpoint.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(normalize_foundry_endpoint(trimmed)));
+        }
+    }
+
+    let output = std::process::Command::new("foundry")
+        .args(["service", "status"])
+        .output()
+        .map_err(|error| format!("failed to run `foundry service status`: {error}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}");
+
+    if !output.status.success() {
+        return Err(format!(
+            "`foundry service status` exited with {}: {}",
+            output.status,
+            combined.trim()
+        ));
+    }
+
+    let Some(endpoint) = parse_foundry_endpoint(&combined) else {
+        return Ok(None);
+    };
+
+    Ok(Some(discover_foundry_rest_endpoint(&endpoint).unwrap_or(endpoint)))
+}
+
+fn parse_foundry_endpoint(raw: &str) -> Option<String> {
+    raw.split(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | ',' | '[' | ']'))
+        .find_map(|token| {
+            let endpoint = token
+                .trim_matches(|ch| matches!(ch, '.' | ';' | ')' | '('))
+                .trim_end_matches('/');
+            if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
+                Some(normalize_foundry_endpoint(endpoint))
+            } else {
+                None
+            }
+        })
+}
+
+fn discover_foundry_rest_endpoint(endpoint: &str) -> Option<String> {
+    use std::time::Duration;
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct FoundryStatus {
+        endpoints: Vec<String>,
+    }
+
+    let status_url = format!("{}/openai/status", normalize_foundry_endpoint(endpoint));
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .connect_timeout(Duration::from_secs(1))
+        .build()
+        .ok()?;
+    let status = client.get(&status_url).send().ok()?.json::<FoundryStatus>().ok()?;
+    status
+        .endpoints
+        .into_iter()
+        .find(|endpoint| endpoint.starts_with("http://") || endpoint.starts_with("https://"))
+        .map(|endpoint| normalize_foundry_endpoint(&endpoint))
+}
+
+fn normalize_foundry_endpoint(endpoint: &str) -> String {
+    endpoint
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches("/v1/chat/completions")
+        .trim_end_matches("/v1")
+        .trim_end_matches("/openai")
+        .to_string()
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -1152,6 +1271,62 @@ mod tests {
             .expect("telnyx must be a default remote backend");
         assert_eq!(telnyx.key_env, "TELNYX_API_KEY");
         assert_eq!(telnyx.base_url.as_deref(), Some("https://api.telnyx.com/v2/ai"));
+    }
+
+    #[test]
+    fn default_soul_includes_foundry_local_as_a_local_backend() {
+        let soul = default_soul("test-host");
+        let foundry = soul
+            .backends
+            .local
+            .iter()
+            .find(|b| b.name == "foundry-local")
+            .expect("foundry-local must be a default local backend");
+        assert_eq!(foundry.kind, "openai-compat");
+        assert!(foundry.enabled);
+        // Foundry Local is documented single-user, not built for concurrent
+        // multi-client serving — default to serializing requests to it.
+        assert_eq!(foundry.max_concurrent, Some(1));
+        assert!(!foundry.models.is_empty(), "foundry-local should declare its known default model");
+        assert_eq!(foundry.models[0].model_name, "phi-4-mini");
+    }
+
+    #[test]
+    fn foundry_local_is_positioned_after_vllm_and_before_candle_phi() {
+        // Preserves the existing fallback-priority ordering: real GPU/NPU
+        // runtimes first, Foundry Local next (also hardware-accelerated when
+        // present), candle-phi (CPU-only, ~0.53 tok/s) stays the absolute
+        // last resort.
+        let soul = default_soul("test-host");
+        let names: Vec<&str> = soul.backends.local.iter().map(|b| b.name.as_str()).collect();
+        let vllm_pos = names.iter().position(|n| *n == "vllm").unwrap();
+        let foundry_pos = names.iter().position(|n| *n == "foundry-local").unwrap();
+        let candle_pos = names.iter().position(|n| *n == "candle-phi").unwrap();
+        assert!(vllm_pos < foundry_pos, "foundry-local must come after vllm");
+        assert!(foundry_pos < candle_pos, "foundry-local must come before candle-phi");
+    }
+
+    #[test]
+    fn parse_foundry_endpoint_extracts_http_url_from_cli_output() {
+        // Real sample shape `foundry service status` produces (per the
+        // proven ledgrrr port of this parser) — a human-readable line
+        // containing a bare http:// URL among other text/punctuation.
+        let raw = "Model management service is running on http://127.0.0.1:5273/\nSome other line.";
+        let found = parse_foundry_endpoint(raw);
+        assert_eq!(found.as_deref(), Some("http://127.0.0.1:5273"));
+    }
+
+    #[test]
+    fn parse_foundry_endpoint_returns_none_when_no_url_present() {
+        assert!(parse_foundry_endpoint("service is not running").is_none());
+    }
+
+    #[test]
+    fn normalize_foundry_endpoint_strips_known_suffixes() {
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/v1/chat/completions"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/v1"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/openai"), "http://127.0.0.1:5273");
     }
 
     #[test]
