@@ -117,6 +117,9 @@ dstack-server-config:
         "        project_id: \"$GCP_PROJECT_ID\"" \
         '        creds:' \
         '          type: default' \
+        '      - type: aws' \
+        '        creds:' \
+        '          type: default' \
         > ~/.dstack/server/config.yml
     chmod 600 ~/.dstack/server/config.yml
     echo "Wrote ~/.dstack/server/config.yml (mode 600, not git-tracked, key sourced from .env)"

@@ -84,6 +84,66 @@ run_test_scenario \
     "test-gcp-project" \
     "yes"
 
+# Test 3: RunPod + GCP + AWS (all three backends)
+# Create a test for AWS backend using ambient credentials (type: default)
+run_test_scenario_aws() {
+    local test_name="Test 3: dstack-server-config writes an aws backend block"
+
+    # Create fresh temporary HOME for this test
+    local test_home
+    test_home="$(mktemp -d)"
+    export HOME="$test_home"
+
+    # Get the git root directory
+    git_root="$(git rev-parse --show-toplevel)"
+
+    echo ""
+    echo "=== $test_name ==="
+    echo "  HOME=$HOME (fresh)"
+
+    # Create .env with credentials for this test scenario
+    echo "RUNPOD_API_KEY=test-runpod-key" > "$git_root/.env"
+    echo "GCP_PROJECT_ID=test-gcp-project" >> "$git_root/.env"
+
+    # Run the recipe (from root directory where dstack-sdd module is available)
+    cd "$git_root"
+    just dstack-sdd dstack-server-config
+
+    # Verify all three backends exist in the config
+    if ! grep -q "type: runpod" "$HOME/.dstack/server/config.yml"; then
+        echo "FAIL: Could not find 'type: runpod' in config.yml"
+        cat "$HOME/.dstack/server/config.yml"
+        return 1
+    fi
+    echo "PASS: Found 'type: runpod' in config.yml"
+
+    if ! grep -q "type: gcp" "$HOME/.dstack/server/config.yml"; then
+        echo "FAIL: Could not find 'type: gcp' in config.yml"
+        cat "$HOME/.dstack/server/config.yml"
+        return 1
+    fi
+    echo "PASS: Found 'type: gcp' in config.yml"
+
+    if ! grep -q "type: aws" "$HOME/.dstack/server/config.yml"; then
+        echo "FAIL: Could not find 'type: aws' in config.yml"
+        cat "$HOME/.dstack/server/config.yml"
+        return 1
+    fi
+    echo "PASS: Found 'type: aws' in config.yml"
+
+    if ! grep -q "type: default" "$HOME/.dstack/server/config.yml"; then
+        echo "FAIL: Could not find 'type: default' (AWS creds type) in config.yml"
+        cat "$HOME/.dstack/server/config.yml"
+        return 1
+    fi
+    echo "PASS: Found 'type: default' (AWS creds type) in config.yml"
+
+    # Cleanup
+    rm -rf "$test_home"
+}
+
+run_test_scenario_aws
+
 echo ""
 echo "=== All tests passed ==="
 exit 0
