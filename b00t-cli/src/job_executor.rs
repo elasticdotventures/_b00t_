@@ -1070,6 +1070,10 @@ mod provider_bridge_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         }
     }
 
