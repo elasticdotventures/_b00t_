@@ -107,7 +107,10 @@ fn default_soul(hostname: &str) -> SoulConfig {
                     port: 0,
                     kind: "openai-compat".into(),
                     enabled: true,
-                    models: vec![ModelCapability::new(FOUNDRY_LOCAL_MODEL, vec![DataFormat::Json, DataFormat::PlainText])],
+                    models: vec![ModelCapability::new(
+                        FOUNDRY_LOCAL_MODEL,
+                        vec![DataFormat::Json, DataFormat::PlainText],
+                    )],
                     max_concurrent: Some(1),
                 },
                 // 🤓 b00t-candle-serve --serve — real local candle chat inference
