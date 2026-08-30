@@ -7,9 +7,12 @@ set export
 # LiteLLM AI proxy integration module
 mod litellm
 
+# dstack multi-cloud SDD execution recipes
+mod dstack-sdd
+
 # Future modules
 # mod? rust
-# mod? python  
+# mod? python
 # mod? docker
 
 # Default: Show available modules
