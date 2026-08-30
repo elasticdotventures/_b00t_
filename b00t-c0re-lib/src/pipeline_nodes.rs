@@ -30,7 +30,7 @@
 //!
 //! PipelineNode ≈ KerML PartDefinition
 //! Compose<A,B>  ≈ KerML Connection
-//! StateMachine  ≈ SysMLv2 StateMachine
+//! StateMachineSpec  ≈ SysMLv2 StateMachine
 //! FOLFormula    ≈ KerML Constraint (first-order verifiable)
 
 use serde::{Deserialize, Serialize};
@@ -108,7 +108,7 @@ pub trait PipelineNode: Debug + Send + Sync {
 
     // ── State Machine ─────────────────────────────────────────────────
 
-    fn state_machine(&self) -> StateMachine;
+    fn state_machine(&self) -> StateMachineSpec;
 
     // ── Visualization ─────────────────────────────────────────────────
 
@@ -233,7 +233,7 @@ where
         self.second.execute(intermediate)
     }
 
-    fn state_machine(&self) -> StateMachine {
+    fn state_machine(&self) -> StateMachineSpec {
         // Compose state machines sequentially
         let mut combined = self.first.state_machine();
         let second_sm = self.second.state_machine();
@@ -305,7 +305,7 @@ where
     fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
     fn invariants(&self)     -> Vec<SerializableFOLFormula> { self.node.invariants() }
     fn execute(&self, input: N::Input) -> O2 { (self.f)(self.node.execute(input)) }
-    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn state_machine(&self) -> StateMachineSpec { self.node.state_machine() }
     fn input_ports(&self)  -> Vec<PortDef> { self.node.input_ports() }
     fn output_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "mapped".into(), port_type: "O2".into(), direction: PortDirection::Output }]
@@ -346,7 +346,7 @@ where
     fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
     fn invariants(&self)     -> Vec<SerializableFOLFormula> { self.node.invariants() }
     fn execute(&self, input: N::Input) -> Option<O2> { (self.f)(self.node.execute(input)) }
-    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn state_machine(&self) -> StateMachineSpec { self.node.state_machine() }
     fn input_ports(&self)  -> Vec<PortDef> { self.node.input_ports() }
     fn output_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "filtered".into(), port_type: "Option<O2>".into(), direction: PortDirection::Output }]
@@ -381,7 +381,7 @@ where
     fn execute(&self, inputs: Vec<N::Input>) -> Vec<N::Output> {
         inputs.into_iter().map(|i| self.node.execute(i)).collect()
     }
-    fn state_machine(&self) -> StateMachine { self.node.state_machine() }
+    fn state_machine(&self) -> StateMachineSpec { self.node.state_machine() }
     fn input_ports(&self)  -> Vec<PortDef> {
         vec![PortDef { name: "batch_in".into(), port_type: "Vec<I>".into(), direction: PortDirection::Input }]
     }
@@ -429,7 +429,7 @@ where
         let r = self.right.execute(input);
         (l, r)
     }
-    fn state_machine(&self) -> StateMachine { self.left.state_machine() }
+    fn state_machine(&self) -> StateMachineSpec { self.left.state_machine() }
     fn input_ports(&self) -> Vec<PortDef> { self.left.input_ports() }
     fn output_ports(&self) -> Vec<PortDef> {
         let mut p = self.left.output_ports();
@@ -451,10 +451,13 @@ where
 /// to true for the transition to be taken.
 ///
 /// # SysMLv2 mapping
-/// `StateMachine` ≈ SysMLv2 `StateMachine`
+/// `StateMachineSpec` ≈ SysMLv2 `StateMachine` — renamed from `StateMachine`
+/// (this module only) to resolve a naming collision with b00t-cli's
+/// unrelated, real `StateMachine` executor (_b00t_#1177 P8 cleanup); this
+/// type is a declarative diagram descriptor, not an executing FSM.
 /// `StateTransition` ≈ SysMLv2 `Transition` with `guard` constraint
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct StateMachine {
+pub struct StateMachineSpec {
     pub id: String,
     pub name: String,
     pub states: Vec<StateDef>,
@@ -492,7 +495,7 @@ pub struct StateTransition {
     pub action: Option<String>,
 }
 
-impl StateMachine {
+impl StateMachineSpec {
     /// Create an empty state machine (for stateless nodes).
     pub fn empty(id: &str) -> Self {
         Self {
@@ -548,7 +551,7 @@ impl StateMachine {
             event: Some("processing_complete".into()),
             action: Some("emit_output".into()),
         };
-        StateMachine {
+        StateMachineSpec {
             id: id.into(),
             name: format!("{id} cycle"),
             states: vec![idle, running],
@@ -624,7 +627,7 @@ pub struct GraphNode {
     pub input_ports: Vec<PortDef>,
     pub output_ports: Vec<PortDef>,
     pub style: NodeStyle,
-    pub state_machine: Option<StateMachine>,
+    pub state_machine: Option<StateMachineSpec>,
     pub fol_contracts: FOLContracts,
 }
 
@@ -839,7 +842,7 @@ impl PipelineNode for FetchNode {
         DocumentSource::arxiv(&input, "Fetched Document", &[], "")
     }
 
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("fetch") }
+    fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle("fetch") }
 
     fn input_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "arxiv_id".into(), port_type: "String".into(), direction: PortDirection::Input }]
@@ -921,7 +924,7 @@ impl PipelineNode for ChunkNode {
         }).collect()
     }
 
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("chunk") }
+    fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle("chunk") }
 
     fn input_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "document".into(), port_type: "DocumentSource".into(), direction: PortDirection::Input }]
@@ -1062,7 +1065,7 @@ impl PipelineNode for LegislationChunker {
         NodeStyle { fill: "#052e16".to_string(), stroke: "#4ade80".to_string(), shape: NodeShape::RoundedBox }
     }
 
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("legislation-chunk") }
+    fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle("legislation-chunk") }
 
     fn input_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "document".into(), port_type: "DocumentSource".into(), direction: PortDirection::Input }]
@@ -1142,8 +1145,8 @@ impl PipelineNode for EvidenceNode {
             .collect()
     }
 
-    fn state_machine(&self) -> StateMachine {
-        StateMachine::idle_run_cycle("extract")
+    fn state_machine(&self) -> StateMachineSpec {
+        StateMachineSpec::idle_run_cycle("extract")
     }
 
     fn input_ports(&self) -> Vec<PortDef> {
@@ -1225,7 +1228,7 @@ impl PipelineNode for RequirementsNode {
         }).collect()
     }
 
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("derive") }
+    fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle("derive") }
 
     fn input_ports(&self) -> Vec<PortDef> {
         vec![PortDef { name: "evidence".into(), port_type: "Vec<Evidence>".into(), direction: PortDirection::Input }]
@@ -1290,7 +1293,7 @@ mod tests {
 
     #[test]
     fn test_state_machine_idle_run_cycle() {
-        let sm = StateMachine::idle_run_cycle("test");
+        let sm = StateMachineSpec::idle_run_cycle("test");
         assert_eq!(sm.states.len(), 2);
         assert_eq!(sm.transitions.len(), 2);
         assert_eq!(sm.initial_state, Some("test.idle".into()));

@@ -10,7 +10,7 @@ use crate::ai_capability::{
 };
 use crate::doc_pipeline::SerializableFOLFormula;
 use crate::pipeline_nodes::{
-    NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachine,
+    NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachineSpec,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -510,8 +510,8 @@ impl PipelineNode for Sam3ArtifactExtractionNode {
         self.normalize_output(&input, output)
     }
 
-    fn state_machine(&self) -> StateMachine {
-        StateMachine::idle_run_cycle("sam3-artifact-extraction")
+    fn state_machine(&self) -> StateMachineSpec {
+        StateMachineSpec::idle_run_cycle("sam3-artifact-extraction")
     }
 
     fn input_ports(&self) -> Vec<PortDef> {
