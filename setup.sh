@@ -250,11 +250,8 @@ if command -v gh >/dev/null 2>&1; then
 
   check_github_auth() {
     local status_output status_rc
-    status_rc=0
-
-    if ! status_output="$(gh auth status -h github.com 2>&1)"; then # output: gh auth status text
-      status_rc=$?
-    fi
+    status_output="$(gh auth status -h github.com 2>&1)" # output: gh auth status text
+    status_rc=$?
 
     if printf '%s' "$status_output" | grep -q '✓ Logged in to github.com'; then
       echo "✅ Auth OK"
