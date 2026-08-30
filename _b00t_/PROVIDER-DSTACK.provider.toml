@@ -2,8 +2,9 @@
 #
 # dstack provisions GPU workloads across RunPod, AWS, GCP, Azure, Lambda,
 # Kubernetes, and bare metal through one CLI/API. b00t uses it as the
-# provider-agnostic backend so RunPod (or any single cloud) is optional
-# infrastructure, not a hard dependency for running AI jobs.
+# provider-agnostic backend with configured backends for RunPod, AWS, GCP,
+# and Azure, so any single cloud is optional infrastructure, not a hard
+# dependency for running AI jobs.
 #
 # Auth: configured via `dstack server` backend config (see
 #   https://dstack.ai/docs/reference/server/config.yml); no single
@@ -68,6 +69,47 @@ required = true
 source_provider = "dotenv"
 source_path     = ".env"
 source_key      = "RUNPOD_API_KEY"
+delivery_type   = "file"
+delivery_path   = "~/.dstack/server/config.yml"
+delivery_via    = "just dstack-server-config"
+
+[resource.secrets.gcp_credentials]
+# 🤓 dstack's GCP backend (verified against installed source: core/backends/
+#    gcp/models.py's GCPDefaultCreds) uses Application Default Credentials
+#    (ambient auth via `gcloud auth application-default login` or GOOGLE_*
+#    env vars). No literal credentials file needed in ~/.dstack/server/config.yml.
+#    The recipe defaults GCP_PROJECT_ID to "app4dog" if unset; override via
+#    .env if needed. Source: _b00t_/learn/managing-secrets.md.
+required = false
+source_provider = "gcloud-adc"
+delivery_type   = "ambient"
+
+[resource.secrets.aws_credentials]
+# 🤓 dstack's AWS backend (verified against installed source: core/backends/
+#    aws/models.py's AWSDefaultCreds) uses ambient credentials via boto3's
+#    standard credential chain (IAM role, ~/.aws/credentials, AWS_* env vars).
+#    No literal credentials needed. The recipe picks this authentication over
+#    the alternative AWSAccessKeyCreds type (which requires explicit access/secret
+#    keys and is not used here). See _b00t_/learn/managing-secrets.md.
+required = false
+source_provider = "aws-ambient"
+delivery_type   = "ambient"
+
+[resource.secrets.azure_credentials]
+# 🤓 dstack's Azure backend (verified against installed source: core/backends/
+#    azure/models.py's AzureDefaultCreds + server/services/config.py) uses
+#    ambient credentials (type: "default") for the creds block itself. However,
+#    Azure's AzureBackendConfig REQUIRES two additional top-level fields outside
+#    creds: tenant_id and subscription_id (account-specific GUIDs). These are
+#    sourced from .env with hard-fail checks if missing (unlike GCP/AWS, purely
+#    ambient). Generate ~/.dstack/server/config.yml at runtime with
+#    `just dstack-server-config` (justfile-dstack-sdd.just), which sources
+#    AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID fresh each run, failing if unset.
+#    See _b00t_/learn/managing-secrets.md.
+required = true
+source_provider = "dotenv"
+source_path     = ".env"
+source_keys     = ["AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID"]
 delivery_type   = "file"
 delivery_path   = "~/.dstack/server/config.yml"
 delivery_via    = "just dstack-server-config"
