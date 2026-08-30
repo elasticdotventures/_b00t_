@@ -102,9 +102,9 @@ dstack-server-config:
     source "$root/.env"
     set +a
     : "${RUNPOD_API_KEY:?RUNPOD_API_KEY not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    : "${AZURE_TENANT_ID:?AZURE_TENANT_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
     GCP_PROJECT_ID="${GCP_PROJECT_ID:-app4dog}"
-    AZURE_TENANT_ID="${AZURE_TENANT_ID:-}"
-    AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-}"
     mkdir -p ~/.dstack/server
     umask 077
     printf '%s\n' \

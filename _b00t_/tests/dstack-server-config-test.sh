@@ -31,10 +31,9 @@ run_test_scenario() {
     if [ -n "$gcp_project_id" ]; then
         echo "GCP_PROJECT_ID=$gcp_project_id" >> "$git_root/.env"
     fi
-    if [ "$check_azure" = "yes" ]; then
-        echo "AZURE_TENANT_ID=test-tenant-id" >> "$git_root/.env"
-        echo "AZURE_SUBSCRIPTION_ID=test-subscription-id" >> "$git_root/.env"
-    fi
+    # Azure credentials are always required by the recipe's hard-fail checks
+    echo "AZURE_TENANT_ID=test-tenant-id" >> "$git_root/.env"
+    echo "AZURE_SUBSCRIPTION_ID=test-subscription-id" >> "$git_root/.env"
 
     # Run the recipe (from root directory where dstack-sdd module is available)
     cd "$git_root"
@@ -99,8 +98,24 @@ run_test_scenario() {
         fi
         echo "PASS: Found 'type: azure' in config.yml"
 
+        # Scoped check: verify Azure block contains expected tenant_id value
+        if ! grep -A5 "type: azure" "$HOME/.dstack/server/config.yml" | grep -q 'tenant_id: "test-tenant-id"'; then
+            echo "FAIL: Azure block missing expected tenant_id value"
+            cat "$HOME/.dstack/server/config.yml"
+            return 1
+        fi
+        echo "PASS: Azure tenant_id matches expected value"
+
+        # Scoped check: verify Azure block contains expected subscription_id value
+        if ! grep -A5 "type: azure" "$HOME/.dstack/server/config.yml" | grep -q 'subscription_id: "test-subscription-id"'; then
+            echo "FAIL: Azure block missing expected subscription_id value"
+            cat "$HOME/.dstack/server/config.yml"
+            return 1
+        fi
+        echo "PASS: Azure subscription_id matches expected value"
+
         # Scoped check: verify Azure block uses 'type: default' credentials
-        if ! grep -A4 "type: azure" "$HOME/.dstack/server/config.yml" | grep -q "type: default"; then
+        if ! grep -A5 "type: azure" "$HOME/.dstack/server/config.yml" | grep -q "type: default"; then
             echo "FAIL: Azure block does not use 'type: default' credentials"
             cat "$HOME/.dstack/server/config.yml"
             return 1
