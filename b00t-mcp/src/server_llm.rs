@@ -23,6 +23,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
+use ufo_types::{DataFormat, ModelCapability};
 use uuid::Uuid;
 
 // ── Soul config (runtime backend registry) ─────────────────────────────────
@@ -57,6 +59,17 @@ pub struct LocalBackend {
     pub kind: String,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    /// Which data format(s) this backend's model(s) claim to serve — a
+    /// registry seed, not yet consumed by any routing logic in this phase.
+    /// Empty by default; existing `default_soul()` entries don't populate
+    /// this (real per-model capability data is out of this task's scope).
+    #[serde(default)]
+    pub models: Vec<ModelCapability>,
+    /// Caps concurrent in-flight requests proxied to this backend. `None`
+    /// means unlimited (the pre-existing behavior for every backend before
+    /// this field existed). Enforced in Task 2, not this task.
+    #[serde(default)]
+    pub max_concurrent: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,20 +93,37 @@ fn default_soul(hostname: &str) -> SoulConfig {
         },
         backends: BackendsSection {
             local: vec![
-                LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true },
-                LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true },
-                LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "mistralrs".into(), port: 8181, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                LocalBackend { name: "llama-cpp".into(), port: 8080, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                LocalBackend { name: "vllm".into(), port: 8000, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
+                // 🤓 Windows Foundry Local — real Microsoft local inference
+                // runtime, dynamic port (no fixed `port` value applies; the
+                // literal 0 below is an unused sentinel — see discover_local's
+                // foundry-local special case). Foundry Local's own docs state
+                // it is single-user, not built for concurrent multi-client
+                // serving, hence max_concurrent: Some(1).
+                LocalBackend {
+                    name: "foundry-local".into(),
+                    port: 0,
+                    kind: "openai-compat".into(),
+                    enabled: true,
+                    models: vec![ModelCapability::new(
+                        FOUNDRY_LOCAL_MODEL,
+                        vec![DataFormat::Json, DataFormat::PlainText],
+                    )],
+                    max_concurrent: Some(1),
+                },
                 // 🤓 b00t-candle-serve --serve — real local candle chat inference
                 // (Phi-4 14B Q4_K GGUF), no external API key, no container. CPU-only
                 // is slow (~0.53 tok/s, see _b00t_/phi-4-candle-local.model.ai.tomllmd)
                 // so this is listed last among the openai-compat entries: only used
                 // when none of mistralrs/llama-cpp/vllm are actually listening.
-                LocalBackend { name: "candle-phi".into(), port: 8082, kind: "openai-compat".into(), enabled: true },
+                LocalBackend { name: "candle-phi".into(), port: 8082, kind: "openai-compat".into(), enabled: true, models: Vec::new(), max_concurrent: None },
                 // 🤓 b00t-embed-serve — real local candle embeddings (Qwen3-Embedding-0.6B),
                 // no external API key. kind="embeddings" (not "openai-compat") because it
                 // only implements /v1/embeddings, not /v1/chat/completions — discover_local()
                 // filters on this so chat requests never get routed here by accident.
-                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true },
+                LocalBackend { name: "qwen3-embed".into(), port: 8003, kind: "embeddings".into(), enabled: true, models: Vec::new(), max_concurrent: None },
             ],
             remote: vec![
                 RemoteBackend { name: "openai".into(), key_env: "OPENAI_API_KEY".into(), base_url: None },
@@ -151,6 +181,22 @@ fn discover_local(soul: &SoulConfig, want_kind: Option<&str>) -> Option<(String,
     let target_kind = want_kind.unwrap_or("openai-compat");
     for be in &soul.backends.local {
         if !be.enabled || be.kind != target_kind { continue; }
+        // Foundry Local has no fixed port (its `port` field is an unused
+        // sentinel — see its default_soul() entry) — it needs a real
+        // shell-out discovery step instead of the generic TCP probe below.
+        if be.name == "foundry-local" {
+            match discover_foundry_local_endpoint() {
+                Ok(Some(endpoint)) => {
+                    eprintln!("🔍 local backend (soul): {} (foundry-local dynamic discovery)", be.name);
+                    return Some((be.name.clone(), format!("{}/v1", endpoint)));
+                }
+                Ok(None) => continue,
+                Err(e) => {
+                    eprintln!("⚠️  foundry-local discovery failed: {e}");
+                    continue;
+                }
+            }
+        }
         let addr: SocketAddr = format!("127.0.0.1:{}", be.port).parse().ok()?;
         if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
             eprintln!("🔍 local backend (soul): {} :{} (kind={})", be.name, be.port, be.kind);
@@ -175,7 +221,11 @@ fn discover_remote(soul: &SoulConfig) -> Option<(String, String, String)> {
 /// backend can be embeddings-only (b00t-embed-serve, kind="embeddings") — a
 /// chat request must never land there, and an embeddings request should prefer
 /// it over a general chat backend that may not implement /v1/embeddings at all.
-fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String) {
+/// The third return element is the resolved local backend's `max_concurrent`
+/// (looked up by name in `soul.backends.local`); `None` for the explicit-URL
+/// override, remote-backend, and no-upstream-configured fallback paths, none
+/// of which have a concept of a per-backend concurrency cap in this file.
+fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String, Option<u32>) {
     let explicit_url_var = if for_embeddings { "B00T_SERVER_EMBEDDINGS_UPSTREAM_URL" } else { "B00T_SERVER_UPSTREAM_URL" };
     if let Ok(url) = std::env::var(explicit_url_var) {
         if !url.is_empty() {
@@ -183,7 +233,7 @@ fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String)
                 .or_else(|_| std::env::var("OPENAI_API_KEY"))
                 .unwrap_or_default();
             eprintln!("🌐 upstream (explicit): {}", url);
-            return (url, key);
+            return (url, key, None);
         }
     }
     if for_embeddings {
@@ -191,22 +241,114 @@ fn resolve_upstream(soul: &SoulConfig, for_embeddings: bool) -> (String, String)
         // openai-compat local backend in case it also serves /v1/embeddings.
         if let Some((name, url)) = discover_local(soul, Some("embeddings")) {
             eprintln!("📍 upstream (soul/local {}, embeddings): {}", name, url);
-            return (url, String::new());
+            let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+            return (url, String::new(), max_concurrent);
         }
         if let Some((name, url)) = discover_local(soul, None) {
             eprintln!("📍 upstream (soul/local {}, chat backend used for embeddings): {}", name, url);
-            return (url, String::new());
+            let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+            return (url, String::new(), max_concurrent);
         }
     } else if let Some((name, url)) = discover_local(soul, None) {
         eprintln!("📍 upstream (soul/local {}): {}", name, url);
-        return (url, String::new());
+        let max_concurrent = soul.backends.local.iter().find(|b| b.name == name).and_then(|b| b.max_concurrent);
+        return (url, String::new(), max_concurrent);
     }
     if let Some((name, key, url)) = discover_remote(soul) {
         eprintln!("🌐 upstream (soul/remote {}): {}", name, url);
-        return (url, key);
+        return (url, key, None);
     }
     eprintln!("⚠️  No upstream configured — populate ~/.b00t/{}", SOUL_PATH);
-    ("http://localhost:8181/v1".to_string(), String::new())
+    ("http://localhost:8181/v1".to_string(), String::new(), None)
+}
+
+/// Real Windows Foundry Local model name this ecosystem already names
+/// elsewhere (`ledgrrr`'s `ledgerr-host::internal_openai::FOUNDRY_LOCAL_MODEL`).
+const FOUNDRY_LOCAL_MODEL: &str = "phi-4-mini";
+
+/// Discovers Foundry Local's live REST endpoint. Unlike every other local
+/// backend in `default_soul()`, Foundry Local does not listen on a fixed,
+/// known port — it's assigned dynamically per-launch. Ported from
+/// `ledgrrr`'s `ledgerr-host::internal_openai::discover_foundry_local_endpoint`
+/// (same shell-out + parse approach, same env var override name kept for
+/// operator familiarity across both codebases).
+fn discover_foundry_local_endpoint() -> Result<Option<String>, String> {
+    if let Ok(endpoint) = std::env::var("LEDGERR_FOUNDRY_LOCAL_ENDPOINT") {
+        let trimmed = endpoint.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(normalize_foundry_endpoint(trimmed)));
+        }
+    }
+
+    let output = std::process::Command::new("foundry")
+        .args(["service", "status"])
+        .output()
+        .map_err(|error| format!("failed to run `foundry service status`: {error}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}");
+
+    if !output.status.success() {
+        return Err(format!(
+            "`foundry service status` exited with {}: {}",
+            output.status,
+            combined.trim()
+        ));
+    }
+
+    let Some(endpoint) = parse_foundry_endpoint(&combined) else {
+        return Ok(None);
+    };
+
+    Ok(Some(discover_foundry_rest_endpoint(&endpoint).unwrap_or(endpoint)))
+}
+
+fn parse_foundry_endpoint(raw: &str) -> Option<String> {
+    raw.split(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | ',' | '[' | ']'))
+        .find_map(|token| {
+            let endpoint = token
+                .trim_matches(|ch| matches!(ch, '.' | ';' | ')' | '('))
+                .trim_end_matches('/');
+            if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
+                Some(normalize_foundry_endpoint(endpoint))
+            } else {
+                None
+            }
+        })
+}
+
+fn discover_foundry_rest_endpoint(endpoint: &str) -> Option<String> {
+    use std::time::Duration;
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct FoundryStatus {
+        endpoints: Vec<String>,
+    }
+
+    let status_url = format!("{}/openai/status", normalize_foundry_endpoint(endpoint));
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .connect_timeout(Duration::from_secs(1))
+        .build()
+        .ok()?;
+    let status = client.get(&status_url).send().ok()?.json::<FoundryStatus>().ok()?;
+    status
+        .endpoints
+        .into_iter()
+        .find(|endpoint| endpoint.starts_with("http://") || endpoint.starts_with("https://"))
+        .map(|endpoint| normalize_foundry_endpoint(&endpoint))
+}
+
+fn normalize_foundry_endpoint(endpoint: &str) -> String {
+    endpoint
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches("/v1/chat/completions")
+        .trim_end_matches("/v1")
+        .trim_end_matches("/openai")
+        .to_string()
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -294,6 +436,11 @@ pub struct LlmState {
     // share the chat upstream. See resolve_upstream's for_embeddings param.
     pub embeddings_upstream_url: String,
     pub embeddings_upstream_key: String,
+    /// `None` = unlimited (the behavior for every backend before this field
+    /// existed, and always the case for `from_config`/`from_config_full` —
+    /// only `LlmState::new()`'s real construction path can produce `Some`).
+    pub chat_semaphore: Option<Arc<Semaphore>>,
+    pub embeddings_semaphore: Option<Arc<Semaphore>>,
     pub keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     pub keys_file: std::path::PathBuf,
     pub spotlight_log: std::path::PathBuf,
@@ -398,13 +545,16 @@ fn write_keys_file_locked(
 impl LlmState {
     pub fn new() -> Self {
         let soul = SoulConfig::load();
-        let (url, key) = resolve_upstream(&soul, false);
-        let (embed_url, embed_key) = resolve_upstream(&soul, true);
-        Self::from_config_full(&url, &key, &embed_url, &embed_key)
+        let (url, key, chat_max_concurrent) = resolve_upstream(&soul, false);
+        let (embed_url, embed_key, embeddings_max_concurrent) = resolve_upstream(&soul, true);
+        Self::from_config_full_with_concurrency(&url, &key, &embed_url, &embed_key, chat_max_concurrent, embeddings_max_concurrent)
     }
 
     /// Convenience for tests / callers that don't care about a distinct
-    /// embeddings backend — uses the same upstream for both.
+    /// embeddings backend — uses the same upstream for both. Always
+    /// unlimited concurrency (`None, None`) — use
+    /// `from_config_full_with_concurrency` directly if a test needs to
+    /// exercise concurrency limiting.
     pub fn from_config(upstream_url: &str, upstream_key: &str) -> Self {
         Self::from_config_full(upstream_url, upstream_key, upstream_url, upstream_key)
     }
@@ -415,6 +565,17 @@ impl LlmState {
         embeddings_upstream_url: &str,
         embeddings_upstream_key: &str,
     ) -> Self {
+        Self::from_config_full_with_concurrency(upstream_url, upstream_key, embeddings_upstream_url, embeddings_upstream_key, None, None)
+    }
+
+    pub fn from_config_full_with_concurrency(
+        upstream_url: &str,
+        upstream_key: &str,
+        embeddings_upstream_url: &str,
+        embeddings_upstream_key: &str,
+        chat_max_concurrent: Option<u32>,
+        embeddings_max_concurrent: Option<u32>,
+    ) -> Self {
         let home = dirs_next().unwrap_or_else(|| std::path::PathBuf::from("."));
         let keys_file = home.join("server-keys.json");
         let keys = load_keys_from_file(&keys_file);
@@ -424,6 +585,8 @@ impl LlmState {
             upstream_key: upstream_key.to_string(),
             embeddings_upstream_url: embeddings_upstream_url.trim_end_matches('/').to_string(),
             embeddings_upstream_key: embeddings_upstream_key.to_string(),
+            chat_semaphore: chat_max_concurrent.map(|n| Arc::new(Semaphore::new(n as usize))),
+            embeddings_semaphore: embeddings_max_concurrent.map(|n| Arc::new(Semaphore::new(n as usize))),
             keys: Arc::new(RwLock::new(keys)),
             keys_file,
             spotlight_log: home.join("spotlight.jsonl"),
@@ -675,6 +838,11 @@ async fn proxy_chat(
         crate::verify_tool_loop::inject_verify_tool(&mut request);
     }
 
+    let _permit = match &state.chat_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     let first = match send_upstream_chat(&state.upstream_url, &state.upstream_key, request.clone()).await {
         Ok(v) => v,
@@ -741,6 +909,11 @@ async fn forward_chat_verbatim(
     if let Some(ct) = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
         req = req.header("Content-Type", ct);
     }
+    let _permit = match &state.chat_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
@@ -778,6 +951,11 @@ async fn proxy_embeddings(
     if !state.embeddings_upstream_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", state.embeddings_upstream_key));
     }
+    let _permit = match &state.embeddings_semaphore {
+        Some(sem) => Some(sem.clone().acquire_owned().await.expect("semaphore not closed")),
+        None => None,
+    };
+
     let start = std::time::Instant::now();
     match req.send().await {
         Ok(resp) => {
@@ -869,6 +1047,71 @@ mod tests {
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().consumer, "test-consumer");
+    }
+
+    #[tokio::test]
+    async fn concurrency_limit_serializes_requests_to_a_backend() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _temp_home = TempHome::new();
+
+        // Fake upstream that tracks the max number of simultaneously
+        // in-flight requests it observed, via a slow handler that holds a
+        // counter up for long enough to overlap if the semaphore didn't
+        // actually serialize anything.
+        let concurrent = Arc::new(AtomicUsize::new(0));
+        let max_observed = Arc::new(AtomicUsize::new(0));
+        let concurrent_for_handler = concurrent.clone();
+        let max_observed_for_handler = max_observed.clone();
+        let app = Router::new().route(
+            "/chat/completions",
+            axum::routing::post(move |_body: Bytes| {
+                let concurrent = concurrent_for_handler.clone();
+                let max_observed = max_observed_for_handler.clone();
+                async move {
+                    let now = concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_observed.fetch_max(now, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    concurrent.fetch_sub(1, Ordering::SeqCst);
+                    Json(stop_upstream_response("ok"))
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let upstream_url = format!("http://{addr}");
+
+        let state = Arc::new(LlmState::from_config_full_with_concurrency(
+            &upstream_url, "", &upstream_url, "", Some(1), None,
+        ));
+
+        let request_body = json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "hi"}]
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        // Fire 3 concurrent requests through proxy_chat.
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            let state = state.clone();
+            let body = body_bytes.clone();
+            handles.push(tokio::spawn(async move {
+                proxy_chat(State((state, true)), HeaderMap::new(), body).await.into_response()
+            }));
+        }
+        for h in handles {
+            let resp = h.await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        assert_eq!(
+            max_observed.load(Ordering::SeqCst),
+            1,
+            "max_concurrent=Some(1) must serialize requests to exactly 1 in flight at a time"
+        );
     }
 
     #[tokio::test]
@@ -1031,6 +1274,99 @@ mod tests {
             .expect("telnyx must be a default remote backend");
         assert_eq!(telnyx.key_env, "TELNYX_API_KEY");
         assert_eq!(telnyx.base_url.as_deref(), Some("https://api.telnyx.com/v2/ai"));
+    }
+
+    #[test]
+    fn default_soul_includes_foundry_local_as_a_local_backend() {
+        let soul = default_soul("test-host");
+        let foundry = soul
+            .backends
+            .local
+            .iter()
+            .find(|b| b.name == "foundry-local")
+            .expect("foundry-local must be a default local backend");
+        assert_eq!(foundry.kind, "openai-compat");
+        assert!(foundry.enabled);
+        // Foundry Local is documented single-user, not built for concurrent
+        // multi-client serving — default to serializing requests to it.
+        assert_eq!(foundry.max_concurrent, Some(1));
+        assert!(!foundry.models.is_empty(), "foundry-local should declare its known default model");
+        assert_eq!(foundry.models[0].model_name, "phi-4-mini");
+    }
+
+    #[test]
+    fn foundry_local_is_positioned_after_vllm_and_before_candle_phi() {
+        // Preserves the existing fallback-priority ordering: real GPU/NPU
+        // runtimes first, Foundry Local next (also hardware-accelerated when
+        // present), candle-phi (CPU-only, ~0.53 tok/s) stays the absolute
+        // last resort.
+        let soul = default_soul("test-host");
+        let names: Vec<&str> = soul.backends.local.iter().map(|b| b.name.as_str()).collect();
+        let vllm_pos = names.iter().position(|n| *n == "vllm").unwrap();
+        let foundry_pos = names.iter().position(|n| *n == "foundry-local").unwrap();
+        let candle_pos = names.iter().position(|n| *n == "candle-phi").unwrap();
+        assert!(vllm_pos < foundry_pos, "foundry-local must come after vllm");
+        assert!(foundry_pos < candle_pos, "foundry-local must come before candle-phi");
+    }
+
+    #[test]
+    fn parse_foundry_endpoint_extracts_http_url_from_cli_output() {
+        // Real sample shape `foundry service status` produces (per the
+        // proven ledgrrr port of this parser) — a human-readable line
+        // containing a bare http:// URL among other text/punctuation.
+        let raw = "Model management service is running on http://127.0.0.1:5273/\nSome other line.";
+        let found = parse_foundry_endpoint(raw);
+        assert_eq!(found.as_deref(), Some("http://127.0.0.1:5273"));
+    }
+
+    #[test]
+    fn parse_foundry_endpoint_returns_none_when_no_url_present() {
+        assert!(parse_foundry_endpoint("service is not running").is_none());
+    }
+
+    #[test]
+    fn normalize_foundry_endpoint_strips_known_suffixes() {
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/v1/chat/completions"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/v1"), "http://127.0.0.1:5273");
+        assert_eq!(normalize_foundry_endpoint("http://127.0.0.1:5273/openai"), "http://127.0.0.1:5273");
+    }
+
+    #[test]
+    fn local_backend_models_field_defaults_to_empty_and_roundtrips() {
+        use ufo_types::{DataFormat, ModelCapability};
+
+        // Default-constructed (as every existing default_soul() entry is)
+        // gets an empty models list — this field is additive, not required.
+        let soul = default_soul("test-host");
+        let mistralrs = soul
+            .backends
+            .local
+            .iter()
+            .find(|b| b.name == "mistralrs")
+            .expect("mistralrs must be a default local backend");
+        assert!(mistralrs.models.is_empty());
+
+        // A backend WITH models set roundtrips through TOML (the real
+        // on-disk config format `SoulConfig::load` reads/writes).
+        let mut backend = LocalBackend {
+            name: "test-backend".into(),
+            port: 9999,
+            kind: "openai-compat".into(),
+            enabled: true,
+            models: Vec::new(),
+            max_concurrent: None,
+        };
+        backend.models.push(
+            ModelCapability::new("test-model", vec![DataFormat::Json, DataFormat::PlainText])
+                .with_metadata("quantization", "int4"),
+        );
+        let toml_str = toml::to_string_pretty(&backend).unwrap();
+        let back: LocalBackend = toml::from_str(&toml_str).unwrap();
+        assert_eq!(back.models.len(), 1);
+        assert_eq!(back.models[0].model_name, "test-model");
+        assert_eq!(back.models[0].formats, vec![DataFormat::Json, DataFormat::PlainText]);
+        assert_eq!(back.models[0].metadata.get("quantization"), Some(&"int4".to_string()));
     }
 
     #[test]

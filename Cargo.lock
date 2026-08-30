@@ -1933,6 +1933,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "ufo-types",
  "urlencoding",
  "uuid",
  "whoami 1.6.1",
@@ -14005,8 +14006,9 @@ dependencies = [
 [[package]]
 name = "ufo-types"
 version = "0.11.0"
-source = "git+https://github.com/PromptExecution/ufo-types.git?rev=19422ac1988f916c83e15260b1f1a8969ef8d65a#19422ac1988f916c83e15260b1f1a8969ef8d65a"
+source = "git+https://github.com/PromptExecution/ufo-types.git?rev=06f3a9992fc40c9d90a35c2f404ffce23886bd37#06f3a9992fc40c9d90a35c2f404ffce23886bd37"
 dependencies = [
+ "anyhow",
  "chrono",
  "schemars 0.8.22",
  "serde",

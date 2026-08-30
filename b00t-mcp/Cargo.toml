@@ -36,6 +36,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # b00t-mcp specific dependencies
 b00t-cli = { workspace = true }
 b00t-c0re-lib = { workspace = true }
+ufo-types = { workspace = true }
 b00t-reflect-types = { workspace = true }
 b00t-chat = { workspace = true }
 b00t-council = { path = "../b00t-council" }
@@ -74,7 +75,7 @@ whoami = "1.5"
 # RAGLight integration (dirs already exists above)
 
 # GitHub OAuth authentication
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 axum-extra = { version = "0.12.1", features = ["cookie"] }
 urlencoding = "2.1"
 
