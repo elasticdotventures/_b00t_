@@ -12,7 +12,7 @@ install = '''
 set -euo pipefail
 
 B00T_ROOT="${B00T_ROOT:-$HOME/.b00t}"
-CBM_DIR="$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+CBM_DIR="$B00T_ROOT/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr"
 CBM_BIN="$CBM_DIR/build/c/codebase-memory-mcp"
 
 if [ ! -d "$CBM_DIR/.git" ]; then
@@ -31,7 +31,7 @@ echo "✅ codebase-memory-mcp installed: $CBM_BIN"
 '''
 update = '''
 B00T_ROOT="${B00T_ROOT:-$HOME/.b00t}"
-CBM_DIR="$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+CBM_DIR="$B00T_ROOT/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr"
 if [ -d "$CBM_DIR/.git" ]; then
   cd "$CBM_DIR"
   git pull --ff-only

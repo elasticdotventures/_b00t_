@@ -112,7 +112,15 @@ production_cost_cake = 110
 retrieval_value_cake = 25
 
 [[b00t.map.entry]]
-name = "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+name = "vendor/b00tyverse"
+kind = "meta-vendor"
+contributes = ["submodule-aggregation-for-assimilated-forks"]
+anchors = ["https://github.com/PromptExecution/b00tyverse"]
+production_cost_cake = 20
+retrieval_value_cake = 10
+
+[[b00t.map.entry]]
+name = "vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr"
 kind = "vendor-fork"
 contributes = ["code-knowledge-graph", "structural-queries"]
 production_cost_cake = 140

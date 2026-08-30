@@ -26,7 +26,7 @@ fn hermes_b00t_mcp_args() -> Vec<String> {
 fn codebase_memory_mcp_path() -> String {
     let home = std::env::var("HOME").unwrap_or_default();
     format!(
-        "{}/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+        "{}/.b00t/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
         home
     )
 }

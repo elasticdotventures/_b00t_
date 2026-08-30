@@ -7,7 +7,7 @@
 // Or via:  b00t grok ask "show l3dg3rr docs for <project>"
 //
 // This is the Rust-native replacement for the Python prototype at
-// vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py
+// vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -18,7 +18,7 @@ pub struct DocgenArgs {
     /// Project name in the ledgrrr knowledge graph
     #[arg(
         long,
-        default_value = "home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr"
+        default_value = "home-brianh-.b00t-vendor-b00tyverse-codebase-memory-mcp-b00t-ir0n-ledg3rr"
     )]
     pub project: String,
 
@@ -109,10 +109,10 @@ fn find_cbm_binary() -> Result<String> {
         // location does not affect resolution
         concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+            "/../vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
         ),
         // Expanded home path
-        "~/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+        "~/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
         // In PATH
         "codebase-memory-mcp",
     ];

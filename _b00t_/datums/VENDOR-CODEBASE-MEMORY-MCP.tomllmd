@@ -2,7 +2,7 @@
 # 🤓 Pure C MCP server providing knowledge-graph-augmented code search
 #    Repo: github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr
 #    Language: C (with vendored tree-sitter)
-#    Path: vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr
+#    Path: vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr
 
 [b00t]
 name = "VENDOR-CODEBASE-MEMORY-MCP"
@@ -14,12 +14,12 @@ schema = 1
 content = "stable"
 
 [b00t.vendor]
-path = "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"
+path = "vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr"
 upstream = "git@github.com:PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr.git"
 branch = "main"
-build_command = "just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm"
-install_command = "cp vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
-health_check = "codebase-memory-mcp --version || test -x vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+build_command = "just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm"
+install_command = "cp vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
+health_check = "codebase-memory-mcp --version || test -x vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
 required_tools = ["make", "gcc", "just", "libgit2"]
 
 [b00t.maintenance]
@@ -57,17 +57,17 @@ augmented code search, dependency tracing, and architecture discovery.
 
 Build the production binary:
 ```
-just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm
+just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm
 ```
 
 With embedded graph UI:
 ```
-just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm-with-ui
+just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm-with-ui
 ```
 
 Test suite:
 ```
-just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile test
+just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile test
 ```
 
 ## Security Considerations

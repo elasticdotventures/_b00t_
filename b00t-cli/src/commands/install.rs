@@ -305,7 +305,7 @@ fn hermes_b00t_mcp_args() -> Vec<String> {
 
 fn codebase_memory_mcp_path() -> String {
     format!(
-        "{}/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+        "{}/.b00t/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
         home_dir_str()
     )
 }
