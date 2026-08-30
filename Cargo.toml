@@ -72,7 +72,7 @@ diffy = "0.5"
 # Pinned by rev, not the v0.10.2 tag: v0.10.2 predates the `sysml`/`mbse`/
 # `iso_ir` modules added right after it (b00t SysML v2 spine consolidation
 # epic, elasticdotventures/_b00t_#1177) — no tag covers them yet.
-ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", rev = "7874f5b4ac9aba808bd05aa0320d3c70d32e1b2d" }
+ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", rev = "06f3a9992fc40c9d90a35c2f404ffce23886bd37" }
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
