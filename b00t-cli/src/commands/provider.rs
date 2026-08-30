@@ -115,6 +115,22 @@ pub struct BatchJobSpec {
     /// is a path relative to CWD.
     #[serde(default)]
     pub inputs: Vec<String>,
+    /// Dataset/resource URIs this job needs — consumed by placement.rs to pick
+    /// a backend_hint/region_hint with matching data residency. Deliberately a
+    /// plain string list (see the design doc's forward-compatibility note —
+    /// not a generic typed Dependency<C: Constraint>; that belongs in the
+    /// deferred ufo-types DAG work).
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    /// Hint that this job tolerates spot/preemptible compute.
+    #[serde(default)]
+    pub interruptible: bool,
+    /// Resolved by placement.rs; None means "let dstack pick from whatever
+    /// backends the operator's config.yml has configured" (today's behavior).
+    #[serde(default)]
+    pub backend_hint: Option<String>,
+    #[serde(default)]
+    pub region_hint: Option<String>,
 }
 
 fn default_gpu_count() -> u32 { 1 }
@@ -811,6 +827,10 @@ impl ComputeProvider for DstackProvider {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
         submit_dstack_yaml(self, &name, &yaml, batch_spec.gpu_count, &batch_spec.inputs)
@@ -1663,6 +1683,10 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
                 gpu_count: 1,
                 volumes: vec![],
                 inputs: vec![],
+                dependencies: vec![],
+                interruptible: false,
+                backend_hint: None,
+                region_hint: None,
             };
             let handle = p.submit_batch_job(&spec).await?;
             println!("{}", serde_json::to_string_pretty(&handle)?);
@@ -1778,6 +1802,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         }
     }
 
@@ -1899,6 +1927,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
         assert!(yaml.contains("type: task"));
@@ -1992,6 +2024,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-abc", &spec);
         assert!(yaml.contains("volumes:"));
@@ -2010,6 +2046,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-def", &spec);
         assert!(!yaml.contains("volumes:"));
@@ -2126,6 +2166,28 @@ mod batch_job_tests {
         let copied = dest_dir.path().join("photo.png");
         assert!(copied.exists());
         assert_eq!(std::fs::read(&copied).unwrap(), b"fake-image-bytes");
+    }
+
+    #[test]
+    fn batch_job_spec_new_fields_default_to_empty_and_false() {
+        let spec = BatchJobSpec {
+            image: "test:latest".into(),
+            config_path: "/tmp/config.json".into(),
+            env: Default::default(),
+            flavor: "cpu".into(),
+            timeout_hours: 1.0,
+            gpu_count: 1,
+            volumes: vec![],
+            inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
+        };
+        assert!(spec.dependencies.is_empty());
+        assert!(!spec.interruptible);
+        assert_eq!(spec.backend_hint, None);
+        assert_eq!(spec.region_hint, None);
     }
 }
 
@@ -2383,6 +2445,10 @@ mod runpod_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         }
     }
 
