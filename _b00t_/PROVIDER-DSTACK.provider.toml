@@ -86,7 +86,7 @@ delivery_type   = "ambient"
 
 [resource.secrets.aws_credentials]
 # 🤓 dstack's AWS backend (verified against installed source: core/backends/
-#    ec2/models.py's AWSDefaultCreds) uses ambient credentials via boto3's
+#    aws/models.py's AWSDefaultCreds) uses ambient credentials via boto3's
 #    standard credential chain (IAM role, ~/.aws/credentials, AWS_* env vars).
 #    No literal credentials needed. The recipe picks this authentication over
 #    the alternative AWSAccessKeyCreds type (which requires explicit access/secret
