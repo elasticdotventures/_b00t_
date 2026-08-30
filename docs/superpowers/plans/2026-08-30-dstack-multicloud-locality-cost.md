@@ -226,7 +226,7 @@ git commit -m "docs(dstack): document gcp/aws/azure backend credentials in PROVI
 - Consumes: nothing new from Epoch 1 (config-only, no Rust interface).
 - Produces: `BatchJobSpec.dependencies: Vec<String>`, `.interruptible: bool`, `.backend_hint: Option<String>`, `.region_hint: Option<String>` — consumed by Epoch 3's `placement.rs` (which sets `backend_hint`/`region_hint` before submission) and by `dstack_fleet_yaml`/`dstack_task_yaml` (which read all four).
 
-### Task 1: Add the four new fields to `BatchJobSpec`, all defaulted
+### Task 5: Add the four new fields to `BatchJobSpec`, all defaulted
 
 - [ ] **Step 1: Write a failing test asserting the new fields exist and default correctly**
 
@@ -315,7 +315,7 @@ git add b00t-cli/src/commands/provider.rs
 git commit -m "feat(provider): add dependencies/interruptible/backend_hint/region_hint to BatchJobSpec"
 ```
 
-### Task 2: Emit `backends:`/`regions:`/`spot_policy`/`inactivity_duration` in the YAML builders
+### Task 6: Emit `backends:`/`regions:`/`spot_policy`/`inactivity_duration` in the YAML builders
 
 - [ ] **Step 1: Write failing tests for the new YAML output**
 
@@ -417,7 +417,7 @@ git commit -m "feat(provider): emit backend/region hints and spot policy in dsta
 - Consumes: `BatchJobSpec.dependencies` (Epoch 2), `[[resource.data_residency]]` table read from `PROVIDER-DSTACK.provider.toml` (new).
 - Produces: `pub fn resolve_placement(spec: &BatchJobSpec, residency: &[DataResidencyEntry]) -> Result<Placement>` — a pure function `dispatch_batch_job` calls to fill in `spec.backend_hint`/`spec.region_hint` before submission.
 
-### Task 1: Define the data-residency table shape (resolves spec Open Question 3)
+### Task 7: Define the data-residency table shape (resolves spec Open Question 3)
 
 - [ ] **Step 1: Add `[[resource.data_residency]]` entries to `PROVIDER-DSTACK.provider.toml`**
 
@@ -444,7 +444,7 @@ git add _b00t_/PROVIDER-DSTACK.provider.toml
 git commit -m "docs(dstack): add data_residency table shape to PROVIDER-DSTACK datum"
 ```
 
-### Task 2: Implement `resolve_placement`
+### Task 8: Implement `resolve_placement`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -578,7 +578,7 @@ git add b00t-cli/src/placement.rs b00t-cli/src/lib.rs
 git commit -m "feat(placement): add resolve_placement for data-locality-aware backend/region hints"
 ```
 
-### Task 3: Wire `resolve_placement` into `dispatch_batch_job`
+### Task 9: Wire `resolve_placement` into `dispatch_batch_job`
 
 - [ ] **Step 1: Write a failing test** using the existing fake-provider pattern in `job_executor.rs`'s test module (find it via `grep -n "impl ComputeProvider for FakeProvider" b00t-cli/src/job_executor.rs` and read the surrounding test setup before writing this, so the new test matches its existing construction pattern exactly rather than guessing).
 
@@ -624,7 +624,7 @@ git commit -m "feat(job-executor): resolve placement before dstack job submissio
 - Consumes: nothing new from Epoch 3 beyond `dispatch_batch_job`'s existing structure.
 - Produces: `JobUtilizationEvent { job_id, provider, cold_start_seconds, run_seconds, estimated_cost }`, appended as JSON lines to a local outbox file; `RecordCostOp`/`OperationKind::RecordCost` gain two new optional fields consumed by whatever ingests that outbox (a follow-up outside this plan's scope — see Task 2's note).
 
-### Task 1: Instrument `job_executor.rs` to record cold-start/run durations
+### Task 10: Instrument `job_executor.rs` to record cold-start/run durations
 
 - [ ] **Step 1: Write a failing test**
 
@@ -829,7 +829,7 @@ git add b00t-cli/src/job_executor.rs b00t-cli/src/job_utilization.rs b00t-cli/Ca
 git commit -m "feat(job-executor): emit JobUtilizationEvent with separate cold-start/run durations"
 ```
 
-### Task 2: Extend ledgrrr's `RecordCost` to carry the two duration fields
+### Task 11: Extend ledgrrr's `RecordCost` to carry the two duration fields
 
 **This task is in a separate repo/worktree (`ledgrrr`, not `_b00t_`).**
 
