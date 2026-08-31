@@ -144,16 +144,23 @@ b00t soul token decode <b64xor:...>             # decode ObfuscatedStr to plaint
 
 [mcp_tools]
 tools = """
-soul_dataframerr_create(name: str, columns: list[str])        → { table: str, ok: bool }
-soul_row_insert(table: str, fields: dict)             → { frame_id: int }
-soul_row_query(table: str, filter?: str)              → { frames: list[dict] }
-soul_cursor_create(name: str, table: str)               → { cursor: str, frame_id: int }
-soul_cursor_next(name: str)                             → { frame: dict | null, at_eof: bool }
-soul_cursor_reset(name: str)                            → { ok: bool }
-soul_alarm_set(name, table, col, cond, emit)            → { alarm: str }
-soul_alarm_check(table: str)                            → { fired: list[str] }
+soul_dataframerr_create(name: str, columns: list[str], scope?: str) → { table: str, ok: bool }
+soul_row_insert(table: str, fields: dict, scope?: str)  → { frame_id: int }
+soul_row_query(table: str, filter?: str, scope?: str)   → { frames: list[dict] }
+soul_cursor_create(name: str, table: str, scope?: str)  → { cursor: str, frame_id: int }
+soul_cursor_next(name: str, scope?: str)                → { frame: dict | null, at_eof: bool }
+soul_cursor_reset(name: str, scope?: str)               → { ok: bool }
+soul_alarm_set(name, table, col, cond, emit, scope?: str) → { alarm: str }
+soul_alarm_check(table: str, scope?: str)               → { fired: list[str] }
 soul_token_encode(plaintext: str)                       → { token: str }  # "b64xor:..."
 soul_token_decode(token: str)                           → { plaintext: str }
+
+# #1102: every tool above except token_encode/decode (which don't touch
+# storage) accepts an optional `scope` param, "<kind>:<id>" e.g. "agent:pi".
+# kinds: project | system | agent | skill | tool | datum. Omitted = the
+# legacy/default shard (pre-#1102 unscoped data, unchanged behavior).
+# New shard-management CLI surface (not yet MCP-exposed): `b00t soul
+# shard-list`, `shard-export <scope>`, `shard-delete <scope>`.
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
