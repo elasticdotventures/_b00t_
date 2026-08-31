@@ -105,8 +105,24 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # 🤓 sccache: proven 7-10x locally (merged PR #662, `_b00t_/sccache.cli.toml`
+      # datum) but never wired into CI until now — #1226 documents this job still
+      # taking 30-45+ min even with Swatinem/rust-cache below warm, because that
+      # action only caches the whole `target/`+registry as one artifact keyed on
+      # Cargo.lock; any changed crate (or its dependents) still recompiles from
+      # scratch. sccache caches per-compilation-unit instead, so it helps on
+      # exactly the runs rust-cache's coarser cache can't — a partial-change PR.
+      # The two are complementary, not redundant; keep both.
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+
+      - name: Enable sccache as the rustc wrapper
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
       # 🤓 Native/CLI deps some tests shell out to. Not present on a bare
       #    ubuntu-latest runner — without these the tests fail with "command
@@ -163,3 +179,9 @@ jobs:
       #    tested code. All non-doctest tests still run for real. See #919.
       - name: cargo test --workspace --locked --all-targets
         run: cargo test --workspace --locked --all-targets
+
+      # 🤓 Hit-rate evidence for #1226: printed even on failure (this run's own
+      # cache behavior is worth seeing whether or not the tests above passed).
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats
