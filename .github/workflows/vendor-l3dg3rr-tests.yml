@@ -32,10 +32,12 @@ jobs:
         with:
           submodules: false
 
-      - name: Initialize l3dg3rr submodule
+      - name: Initialize l3dg3rr checkout
         working-directory: ${{ github.workspace }}
         run: |
-          git submodule update --init --recursive vendor/ledgrrr vendor/runpod-sdk
+          git submodule update --init --recursive vendor/runpod-sdk
+          # vendor/ledgrrr is a shared worktree on developer machines, not a submodule.
+          git clone --recursive --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Install Linux native dependencies
         working-directory: ${{ github.workspace }}
