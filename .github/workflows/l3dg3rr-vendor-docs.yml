@@ -31,8 +31,11 @@ jobs:
         with:
           submodules: false
 
-      - name: Initialize l3dg3rr submodule
-        run: git submodule update --init --recursive vendor/ledgrrr vendor/runpod-sdk
+      - name: Initialize l3dg3rr checkout
+        run: |
+          git submodule update --init --recursive vendor/runpod-sdk
+          # vendor/ledgrrr is a shared worktree on developer machines, not a submodule.
+          git clone --recursive --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

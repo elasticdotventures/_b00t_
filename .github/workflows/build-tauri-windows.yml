@@ -28,7 +28,8 @@ jobs:
           submodules: false
 
       - name: Init required submodules
-        run: git submodule update --init --depth 1 vendor/ledgrrr
+        # vendor/ledgrrr is a shared worktree on developer machines, not a submodule.
+        run: git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Setup Rust
         run: |

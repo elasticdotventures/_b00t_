@@ -1,0 +1,31 @@
+# kubectl-plugin-socks5-proxy.cli — cli datum
+# File: kubectl-plugin-socks5-proxy.cli.toml
+# Recorded during the WSL 22.04 -> 26.04 migration backup inventory
+# (~/kubectl-plugin-socks5-proxy, upstream yokawasa/kubectl-plugin-socks5-proxy,
+# not a b00t/elasticdotventures fork -- clone kept for reference only).
+
+[b00t]
+name        = "kubectl-plugin-socks5-proxy"
+type        = "cli"
+desires     = "1.0.0"
+hint        = "kubectl plugin: tunnels a SOCKS5 proxy through a pod to reach in-cluster services from the local machine"
+
+# install     = "TODO: install command"
+# version     = "kubectl-plugin-socks5-proxy --version"
+# version_regex = '(\\d+\\.\\d+\\.\\d+)'
+
+# Optional fields:
+# depends_on  = ["prereq.cli"]
+# unlocks     = ["mcp__*"]
+# env         = { KEY = "VALUE" }
+
+# Relationship note (2026-08-12): pingap is a different tool in the same
+# neighborhood (Rust reverse proxy / load balancer, not a kubectl SOCKS5
+# tunnel) -- NOT a replacement for this one. Keep both visible, don't
+# collapse or retire either based on the other.
+
+# b00t:map v1
+# summary: kubectl plugin exposing a SOCKS5 proxy into a cluster pod's network, for reaching in-cluster-only services locally
+# tags: kubectl, kubernetes, socks5, proxy, networking, tunnel, reference-only
+# tier: reference
+# status: not-retired, existence-only, no digest yet

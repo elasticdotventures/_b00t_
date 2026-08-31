@@ -70,16 +70,24 @@ jobs:
       - name: Init workspace-required vendor submodules
         run: |
           set -euo pipefail
-          # 🤓 Exactly the three carrying *active* path deps in the workspace
-          #    manifests. tomllm and irontology-mcp are commented out in
+          # 🤓 Exactly the two carrying *active* path deps via a real git
+          #    submodule. tomllm and irontology-mcp are commented out in
           #    Cargo.toml and are NOT required — do not re-add them by reflex.
           #      vendor/embed-anything-b00t -> embed_anything (b00t-embed)
           #      vendor/runpod-sdk          -> runpod-sdk     (b00t-cli)
-          #      vendor/ledgrrr             -> b00t-reflect-types
           git submodule update --init --depth 1 \
             vendor/embed-anything-b00t \
-            vendor/runpod-sdk \
-            vendor/ledgrrr
+            vendor/runpod-sdk
+
+      - name: Clone vendor/ledgrrr
+        run: |
+          set -euo pipefail
+          # 🤓 ledgrrr's canonical checkout now lives at promptexecution/ledgrrr;
+          #    vendor/ledgrrr here is a linked git worktree of it on developer
+          #    machines, not a submodule. CI has no sibling checkout to link
+          #    against, so it gets a plain shallow clone instead.
+          #      vendor/ledgrrr -> b00t-reflect-types
+          git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Verify the init produced usable, in-sync checkouts
         run: |
@@ -90,7 +98,7 @@ jobs:
           #    What this catches is the init silently under-delivering: a
           #    submodule left uninitialized ('-') or landing off-commit ('+'),
           #    which otherwise surfaces later as a confusing cargo path error.
-          bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk vendor/ledgrrr | grep -E '^[-+]' || true)"
+          bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk | grep -E '^[-+]' || true)"
           if [ -n "$bad" ]; then
             echo "FAIL: submodule(s) uninitialized or off-commit:"
             echo "$bad"
@@ -100,7 +108,7 @@ jobs:
           for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/ledgrrr/crates/b00t-reflect-types; do
             test -f "$p/Cargo.toml" || { echo "FAIL: $p/Cargo.toml missing"; exit 1; }
           done
-          echo "PASS: 3 submodules initialized, in-sync, path deps resolve"
+          echo "PASS: 2 submodules + ledgrrr clone initialized, in-sync, path deps resolve"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

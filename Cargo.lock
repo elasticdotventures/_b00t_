@@ -8181,11 +8181,13 @@ dependencies = [
  "anyhow",
  "clap",
  "half",
+ "hf-hub 0.4.3",
  "ndarray 0.15.6",
  "safetensors 0.5.3",
  "serde",
  "serde_json",
  "tokenizers 0.21.4",
+ "ureq 2.12.1",
 ]
 
 [[package]]
@@ -13217,6 +13219,7 @@ dependencies = [
  "derive_builder",
  "esaxx-rs",
  "getrandom 0.3.4",
+ "indicatif 0.17.11",
  "itertools 0.14.0",
  "log",
  "macro_rules_attribute",
