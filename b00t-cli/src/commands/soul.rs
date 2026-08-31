@@ -1644,38 +1644,53 @@ mod shard_tests {
     use super::*;
     use std::sync::Mutex;
 
-    // `with_registry_scoped`/`load_soul_doc_scoped` resolve paths off the
-    // process-global `std::env::current_dir()`, so tests that touch a scoped
-    // shard must not run concurrently with each other or with anything else
-    // that changes cwd.
-    static CWD_LOCK: Mutex<()> = Mutex::new(());
+    // #1102 shard resolution prefers a LOCAL `._b00t_/` (cwd-based) over the
+    // global (HOME-based) root, and falls back to the latter only when cwd
+    // has no `._b00t_/`. Isolating via `std::env::set_current_dir` would
+    // collide with several OTHER, pre-existing test modules in this same
+    // binary that independently mutate cwd with only a module-local mutex
+    // each (see e.g. main.rs's `datum_dir_resolution_tests`, commands::init,
+    // commands::skill — none coordinate with each other, since cwd is
+    // process-global across the whole `cargo test` binary). Isolating via
+    // HOME instead has a much smaller collision surface (only one other
+    // module, b00t-cli's own top-level `tests::TempHome`, touches HOME), so
+    // that's what these tests do, matching that existing precedent.
+    static HOME_LOCK: Mutex<()> = Mutex::new(());
 
-    struct TempCwd {
+    struct TempHome {
         _guard: std::sync::MutexGuard<'static, ()>,
-        old_cwd: std::path::PathBuf,
+        old_home: Option<String>,
         _temp_dir: tempfile::TempDir,
     }
 
-    impl TempCwd {
+    impl TempHome {
         fn new() -> Self {
-            let guard = CWD_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let old_cwd = std::env::current_dir().unwrap();
+            let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let old_home = std::env::var("HOME").ok();
             let temp_dir = tempfile::tempdir().unwrap();
-            std::fs::create_dir_all(temp_dir.path().join("._b00t_")).unwrap();
-            std::env::set_current_dir(temp_dir.path()).unwrap();
-            Self { _guard: guard, old_cwd, _temp_dir: temp_dir }
+            // SAFETY: guarded by HOME_LOCK above.
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            Self { _guard: guard, old_home, _temp_dir: temp_dir }
         }
     }
 
-    impl Drop for TempCwd {
+    impl Drop for TempHome {
         fn drop(&mut self) {
-            let _ = std::env::set_current_dir(&self.old_cwd);
+            // SAFETY: guarded by HOME_LOCK, held until this guard drops.
+            unsafe {
+                match &self.old_home {
+                    Some(h) => std::env::set_var("HOME", h),
+                    None => std::env::remove_var("HOME"),
+                }
+            }
         }
     }
 
     #[test]
     fn scoped_write_is_isolated_from_legacy_and_other_shards() {
-        let _cwd = TempCwd::new();
+        let _home = TempHome::new();
         let agent_foo = SoulScope::new(ShardKind::Agent, "foo");
         let agent_bar = SoulScope::new(ShardKind::Agent, "bar");
 
@@ -1700,7 +1715,7 @@ mod shard_tests {
 
     #[test]
     fn shard_list_export_delete_round_trip() {
-        let _cwd = TempCwd::new();
+        let _home = TempHome::new();
         let scope = SoulScope::new(ShardKind::Tool, "grok");
         df_table_create("lessons", &["note:text".to_string()], Some(scope.clone())).unwrap();
 
