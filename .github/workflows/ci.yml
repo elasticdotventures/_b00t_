@@ -117,6 +117,26 @@ jobs:
       - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
         uses: extractions/setup-just@v2
 
+      # 🤓 CI-speed experiment (elasticdotventures/_b00t_#1226): swap the
+      #    default libtest runner for nextest's per-test-process model.
+      #    Two things make this an unusually clean fit for THIS workflow
+      #    specifically, not just "nextest is generally faster":
+      #    1. nextest doesn't run doctests -- and this workflow already
+      #       skips them deliberately (see the cargo test step's own
+      #       comment below, #919's cdylib+rlib E0460 bug), so nextest's
+      #       one real limitation costs this job nothing it wasn't
+      #       already paying.
+      #    2. Per-test process isolation eliminates an entire class of
+      #       flakiness this repo has hit more than once: tests in
+      #       different modules mutating process-global state (cwd, HOME)
+      #       with only a module-local Mutex, which only guards a test
+      #       against others IN THE SAME MODULE, not the whole binary
+      #       (see #1224's shard_tests fix). Under nextest each test gets
+      #       its own process, so this class of cross-module race can't
+      #       happen at all, by construction -- not just less likely.
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       # 🤓 capability-forge/tests/e2e_local_nats.rs spawns a real nats-server
       #    subprocess (resolved via PATH, override with NATS_SERVER_BIN) --
       #    not present on a bare ubuntu-latest/container runner, so all 3
@@ -161,5 +181,5 @@ jobs:
       #    failure is inherent to linking a doctest against a crate with a
       #    cdylib output alongside the rlib, not anything wrong with the
       #    tested code. All non-doctest tests still run for real. See #919.
-      - name: cargo test --workspace --locked --all-targets
-        run: cargo test --workspace --locked --all-targets
+      - name: cargo nextest run --workspace --locked --all-targets
+        run: cargo nextest run --workspace --locked --all-targets
