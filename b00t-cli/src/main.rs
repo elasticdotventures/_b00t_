@@ -2948,7 +2948,7 @@ async fn main() {
         Some(Commands::Bootstrap { bootstrap_command }) => {
             use b00t_cli::commands::bootstrap::handle_bootstrap_command;
 
-            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
+            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone(), &cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
