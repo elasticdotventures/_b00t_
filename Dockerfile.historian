@@ -1,0 +1,199 @@
+# syntax=docker/dockerfile:latest
+#
+# Minimal image for `b00t-historian` (b00t-cli/src/bin/b00t-historian.rs) —
+# the durable NATS-subject scribe / souls+vultr+hive-mesh coordinator this
+# builds for issue #1229 (deploy on vultr1's k0s as the hive-wide channel
+# coordinator). Mirrors Dockerfile.b00t-cli's cargo-chef structure (same
+# workspace COPY set — b00t-historian lives inside the b00t-cli crate, which
+# path-depends on most of the workspace, same as the b00t-cli/b00t-mcp
+# binaries that Dockerfile builds) but only installs the one binary this
+# workload needs and skips the _b00t_ datum/config resources layer — this
+# binary reads no datum files at runtime, unlike b00t-cli's own subcommands.
+
+# ================================
+# Stage 0: Just binary from fork
+# ================================
+FROM ghcr.io/elasticdotventures/just:latest AS just-binary
+
+# ================================
+# Stage 1: cargo-chef base (dependency cache layer)
+# ================================
+# See Dockerfile.b00t-cli for why each of these apt packages is required
+# (openssl-sys building from source, b00t-embed's native transitive deps).
+FROM rust:1.96-slim AS chef
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    python3 \
+    python3-dev \
+    perl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-chef --locked
+WORKDIR /build
+
+# ================================
+# Stage 2: planner — compute the dependency recipe
+# ================================
+FROM chef AS planner
+
+# Same workspace COPY set as Dockerfile.b00t-cli: this is a virtual
+# workspace, cargo-chef needs every listed member's Cargo.toml present, and
+# b00t-cli (which owns the b00t-historian binary) transitively depends on
+# most of these. Keep this list in sync with Dockerfile.b00t-cli's if the
+# workspace membership changes.
+COPY Cargo.toml Cargo.lock ./
+COPY _b00t_/ ./_b00t_/
+COPY b00t-admin/ ./b00t-admin/
+COPY b00t-ast/ ./b00t-ast/
+COPY b00t-azure-cp/ ./b00t-azure-cp/
+COPY b00t-bouncer/ ./b00t-bouncer/
+COPY b00t-cad/ ./b00t-cad/
+COPY b00t-candle-serve/ ./b00t-candle-serve/
+COPY b00t-cli/ ./b00t-cli/
+COPY b00t-council/ ./b00t-council/
+COPY b00t-crate/ ./b00t-crate/
+COPY b00t-c0re-a2a/ ./b00t-c0re-a2a/
+COPY b00t-c0re-gov/ ./b00t-c0re-gov/
+COPY b00t-c0re-hierarchy/ ./b00t-c0re-hierarchy/
+COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-c0re-npm/ ./b00t-c0re-npm/
+COPY b00t-c0re-role/ ./b00t-c0re-role/
+COPY b00t-datum-core/ ./b00t-datum-core/
+COPY b00t-embed/ ./b00t-embed/
+COPY b00t-embed-serve/ ./b00t-embed-serve/
+COPY b00t-forge-kv/ ./b00t-forge-kv/
+COPY b00t-grok/ ./b00t-grok/
+COPY b00t-ipc/ ./b00t-ipc/
+COPY b00t-isometric-wasm/ ./b00t-isometric-wasm/
+COPY b00t-l3dg3rr-viz/ ./b00t-l3dg3rr-viz/
+COPY b00t-lib-chat/ ./b00t-lib-chat/
+COPY b00t-lsp/ ./b00t-lsp/
+COPY b00t-mcp/ ./b00t-mcp/
+COPY b00t-mcp-npm/ ./b00t-mcp-npm/
+COPY b00t-mermaid-wasm/ ./b00t-mermaid-wasm/
+COPY b00t-pyverse/ ./b00t-pyverse/
+COPY b00t-stt-serve/ ./b00t-stt-serve/
+COPY b00t-ui-wasm/ ./b00t-ui-wasm/
+COPY b00t-zellij/ ./b00t-zellij/
+COPY blessed/ ./blessed/
+COPY capability-forge/ ./capability-forge/
+COPY k0mmand3r/ ./k0mmand3r/
+COPY pm2-tasker/ ./pm2-tasker/
+COPY vendor/embed-anything-b00t/rust/ ./vendor/embed-anything-b00t/rust/
+COPY vendor/embed-anything-b00t/processors/ ./vendor/embed-anything-b00t/processors/
+COPY vendor/irontology-mcp/ ./vendor/irontology-mcp/
+COPY vendor/ledgrrr/crates/b00t-reflect-types/ ./vendor/ledgrrr/crates/b00t-reflect-types/
+COPY vendor/runpod-sdk/ ./vendor/runpod-sdk/
+COPY vendor/tomllm/ ./vendor/tomllm/
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ================================
+# Stage 3: builder — cook deps (cacheable), then build the one binary
+# ================================
+FROM chef AS rust-builder
+
+COPY --from=just-binary /usr/local/bin/just /usr/local/bin/just
+
+COPY --from=planner /build/recipe.json recipe.json
+
+# See Dockerfile.b00t-cli for why these two vendored path-deps are copied in
+# before `cook` (excluded from [workspace] members, so chef drops them from
+# the reconstructed dummy tree otherwise).
+COPY vendor/embed-anything-b00t/rust/ ./vendor/embed-anything-b00t/rust/
+COPY vendor/embed-anything-b00t/processors/ ./vendor/embed-anything-b00t/processors/
+COPY vendor/runpod-sdk/ ./vendor/runpod-sdk/
+
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Real sources — same set as the planner stage.
+COPY Cargo.toml Cargo.lock ./
+COPY _b00t_/ ./_b00t_/
+COPY b00t-admin/ ./b00t-admin/
+COPY b00t-ast/ ./b00t-ast/
+COPY b00t-azure-cp/ ./b00t-azure-cp/
+COPY b00t-bouncer/ ./b00t-bouncer/
+COPY b00t-cad/ ./b00t-cad/
+COPY b00t-candle-serve/ ./b00t-candle-serve/
+COPY b00t-cli/ ./b00t-cli/
+COPY b00t-council/ ./b00t-council/
+COPY b00t-crate/ ./b00t-crate/
+COPY b00t-c0re-a2a/ ./b00t-c0re-a2a/
+COPY b00t-c0re-gov/ ./b00t-c0re-gov/
+COPY b00t-c0re-hierarchy/ ./b00t-c0re-hierarchy/
+COPY b00t-c0re-lib/ ./b00t-c0re-lib/
+COPY b00t-c0re-npm/ ./b00t-c0re-npm/
+COPY b00t-c0re-role/ ./b00t-c0re-role/
+COPY b00t-datum-core/ ./b00t-datum-core/
+COPY b00t-embed/ ./b00t-embed/
+COPY b00t-embed-serve/ ./b00t-embed-serve/
+COPY b00t-forge-kv/ ./b00t-forge-kv/
+COPY b00t-grok/ ./b00t-grok/
+COPY b00t-ipc/ ./b00t-ipc/
+COPY b00t-isometric-wasm/ ./b00t-isometric-wasm/
+COPY b00t-l3dg3rr-viz/ ./b00t-l3dg3rr-viz/
+COPY b00t-lib-chat/ ./b00t-lib-chat/
+COPY b00t-lsp/ ./b00t-lsp/
+COPY b00t-mcp/ ./b00t-mcp/
+COPY b00t-mcp-npm/ ./b00t-mcp-npm/
+COPY b00t-mermaid-wasm/ ./b00t-mermaid-wasm/
+COPY b00t-pyverse/ ./b00t-pyverse/
+COPY b00t-stt-serve/ ./b00t-stt-serve/
+COPY b00t-ui-wasm/ ./b00t-ui-wasm/
+COPY b00t-zellij/ ./b00t-zellij/
+COPY blessed/ ./blessed/
+COPY capability-forge/ ./capability-forge/
+COPY k0mmand3r/ ./k0mmand3r/
+COPY pm2-tasker/ ./pm2-tasker/
+COPY vendor/embed-anything-b00t/rust/ ./vendor/embed-anything-b00t/rust/
+COPY vendor/embed-anything-b00t/processors/ ./vendor/embed-anything-b00t/processors/
+COPY vendor/irontology-mcp/ ./vendor/irontology-mcp/
+COPY vendor/ledgrrr/crates/b00t-reflect-types/ ./vendor/ledgrrr/crates/b00t-reflect-types/
+COPY vendor/runpod-sdk/ ./vendor/runpod-sdk/
+COPY vendor/tomllm/ ./vendor/tomllm/
+
+# Only the one binary this image ships — not b00t-cli's full `cargo install
+# --path b00t-cli` (that would also build the `b00t` / `b00t-cli` multi-call
+# entrypoint binary this image has no use for).
+RUN cargo install --path b00t-cli --bin b00t-historian --locked --root /usr/local
+
+RUN /usr/local/bin/b00t-historian --version
+
+# ================================
+# Stage 4: runtime — small Debian base, just the binary + certs
+# ================================
+FROM debian:12-slim AS runtime
+
+ARG BUILD_VERSION=0.0.1
+ARG BUILD_COMMIT=unknown
+ARG BUILD_DATE
+
+LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/_b00t_
+LABEL org.opencontainers.image.description="b00t-historian: durable NATS-subject scribe / hive-wide souls+vultr+mesh coordinator (issue #1229)"
+LABEL org.opencontainers.image.licenses=MIT
+LABEL org.opencontainers.image.version=${BUILD_VERSION}
+LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
+LABEL org.opencontainers.image.created=${BUILD_DATE}
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --home-dir /home/historian --shell /usr/sbin/nologin historian
+
+COPY --from=rust-builder /usr/local/bin/b00t-historian /usr/local/bin/b00t-historian
+
+# `run` is a foreground loop by design (see the binary's own doc comment —
+# "run this under nohup/pm2/systemd for real persistence"); under k0s that
+# job is the Deployment's restartPolicy, not an init system in the image.
+# --log-dir (durable NDJSON archive) is expected to be a mounted volume —
+# see k8s/historian/deployment.yaml, not baked into this image.
+RUN mkdir -p /data/historian && chown historian:historian /data/historian
+USER historian
+WORKDIR /home/historian
+
+ENV NATS_URL=nats://127.0.0.1:4222
+
+ENTRYPOINT ["/usr/local/bin/b00t-historian"]
+CMD ["run", "--subject", "b00t.hive.mesh.>", "--log-dir", "/data/historian/sessions"]

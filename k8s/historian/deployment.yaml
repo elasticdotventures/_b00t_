@@ -1,0 +1,121 @@
+# b00t-historian — hive-wide channel coordinator (issue #1229).
+#
+# NOT YET APPLIED. This directory is meant to be copied to vultr1's
+# /var/lib/k0s/manifests/historian/ so k0s's own stack controller applies
+# AND continuously re-applies it — the same pattern already used for OIDC
+# discovery RBAC (terraform/b00t/cloud-init/b00t-node.yaml.tpl in the
+# infrastructure repo: a one-off `kubectl apply` does NOT survive a k0s
+# restart on that box, static manifests under /var/lib/k0s/manifests/<name>/
+# do). See README.md in this directory for the full copy/apply procedure —
+# it is a manual step for whoever has access to vultr1, not done by this PR.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: b00t-historian
+  namespace: default
+  labels:
+    app: b00t-historian
+spec:
+  # Single replica by design — this is a coordinator process with its own
+  # local NDJSON archive and in-memory souls table, not a horizontally
+  # scaled service. Two replicas would double-subscribe the same wildcard
+  # subjects and split the souls_activity table across two untied
+  # processes.
+  replicas: 1
+  strategy:
+    # Never run two at once even mid-rollout: on a single-node cluster a
+    # RollingUpdate briefly wants both the old and new pod scheduled, and
+    # both would bind the same hostNetwork port set / hostPath log dir.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: b00t-historian
+  template:
+    metadata:
+      labels:
+        app: b00t-historian
+    spec:
+      # Reaches the k0s-managed NATS pod's client port via
+      # nats://127.0.0.1:4222 exactly like every other same-host b00t
+      # service does (capability-forge, the dapr nats-pubsub component —
+      # see terraform/b00t/cloud-init/b00t-node.yaml.tpl in the
+      # infrastructure repo) rather than via a k8s Service: the NATS server
+      # itself runs as a plain podman pod (`podman play kube`), not inside
+      # this k0s cluster, so there is no in-cluster Service/DNS name for it
+      # to resolve — only the host's own loopback + hostPort binding.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: historian
+          # Placeholder tag — build and push per README.md before this is
+          # ever actually applied; nothing here has been built or pushed by
+          # this PR.
+          image: ghcr.io/elasticdotventures/b00t-historian:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "run"
+            - "--id"
+            - "historian-vultr1"
+            - "--subject"
+            - "$(HISTORIAN_SUBJECT)"
+            - "--log-dir"
+            - "/data/historian/sessions"
+            - "--basename"
+            - "hive-mesh-hub"
+          env:
+            - name: HISTORIAN_SUBJECT
+              valueFrom:
+                configMapKeyRef:
+                  name: historian-config
+                  key: HISTORIAN_SUBJECT
+            - name: NATS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: historian-config
+                  key: NATS_URL
+            # NATS_USER / NATS_PASSWORD come from historian-nats-credentials
+            # (see secret.example.yaml — NOT committed with real values).
+            # optional: true so this Deployment still starts (and the
+            # container's own retry/backoff makes the actual NATS
+            # connection failure visible in `kubectl logs`) even before
+            # that Secret exists or before the server-side auth gap
+            # documented in secret.example.yaml is closed.
+            - name: NATS_USER
+              valueFrom:
+                secretKeyRef:
+                  name: historian-nats-credentials
+                  key: NATS_USER
+                  optional: true
+            - name: NATS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: historian-nats-credentials
+                  key: NATS_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: historian-data
+              mountPath: /data/historian
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+      volumes:
+        # hostPath, not emptyDir: the whole point of this binary is a
+        # *durable* NDJSON archive (see its own doc comment) that survives
+        # pod restarts/rescheduling — matches the single-node cluster's
+        # existing pattern of local host-backed storage for the NATS pod's
+        # own data (pods/nats/nats-pod-configured.yaml's emptyDir mounts,
+        # which live under the podman-managed side of the same host).
+        # There is no dynamic PV provisioner on this single-node k0s
+        # cluster today, so hostPath is the pragmatic choice, not a
+        # long-term one.
+        - name: historian-data
+          hostPath:
+            path: /var/lib/b00t/historian
+            type: DirectoryOrCreate
