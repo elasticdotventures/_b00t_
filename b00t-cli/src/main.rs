@@ -245,6 +245,11 @@ Advice mode (consult prior lessons before fixing):
             help = "Record lesson globally (mutually exclusive with --repo)"
         )]
         global: bool,
+        #[clap(
+            long,
+            help = "#1101: override a global-scope disclosure-gate block (only affects --global)"
+        )]
+        force: bool,
     },
     #[clap(
         about = "Get advice for syntax errors and debugging",
@@ -2887,6 +2892,7 @@ async fn main() {
             lesson,
             repo: _,
             global,
+            force,
         }) => {
             // Validate required fields
             let tool = match tool.as_ref().or(positional_tool.as_ref()) {
@@ -2933,7 +2939,7 @@ async fn main() {
                     std::process::exit(1);
                 }
             } else if let Err(e) =
-                b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
+                b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope, *force).await
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

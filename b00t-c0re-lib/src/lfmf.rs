@@ -214,6 +214,28 @@ impl LfmfSystem {
 
     /// Record a lesson learned from failure
     pub async fn record_lesson(&mut self, tool: &str, lesson: &str) -> Result<()> {
+        self.record_lesson_scoped(tool, lesson, false, false).await
+    }
+
+    /// #1101: scope-aware variant. `global = true` routes the write through
+    /// a disclosure-safety gate before it lands on disk — a cheap wordlist
+    /// first-pass filter (`b00t-bouncer`), then the sm0l reviewer gate
+    /// (`b00t_c0re_lib::reviewer_gate`) if that first pass doesn't already
+    /// fail outright. A SENSITIVE/Fail verdict blocks the write unless
+    /// `force` is set; the attempt is logged to events.jsonl either way.
+    /// `global = false` (repo-scoped) skips the gate entirely — unchanged
+    /// from `record_lesson`'s prior behavior.
+    pub async fn record_lesson_scoped(
+        &mut self,
+        tool: &str,
+        lesson: &str,
+        global: bool,
+        force: bool,
+    ) -> Result<()> {
+        if global {
+            self.run_disclosure_gate(lesson, force)?;
+        }
+
         // Resolve category (might be a datum name)
         let category = self.resolve_category(tool);
         let lesson_obj = self.parse_lesson(&category, lesson)?;
@@ -285,6 +307,52 @@ impl LfmfSystem {
             .await
             .context("Failed to store lesson in vector database")?;
 
+        Ok(())
+    }
+
+    /// #1101: disclosure-safety gate for global-scope writes. Cheap
+    /// wordlist first-pass (`b00t-bouncer`) runs first; only if that
+    /// passes does the slower sm0l reviewer gate run. A `Fail`/`SENSITIVE`
+    /// verdict blocks the write (returns Err) unless `force` is set.
+    /// Logged to events.jsonl either way, per #1101's audit requirement.
+    fn run_disclosure_gate(&self, content: &str, force: bool) -> Result<()> {
+        let bouncer = b00t_bouncer::Bouncer::new();
+        if let b00t_bouncer::BouncerResult::Fail { gate, reason } = bouncer.validate_input(content) {
+            crate::events::write_event(
+                "lfmf_disclosure_gate",
+                &format!("blocked (bouncer/{gate}): {reason} — force={force}"),
+            );
+            if !force {
+                anyhow::bail!(
+                    "lfmf --global blocked by bouncer ({gate}): {reason}.                      Pass --force to override if this is a false positive."
+                );
+            }
+            return Ok(());
+        }
+
+        match crate::reviewer_gate::gate_verdict(content, &crate::reviewer_gate::GateMode::Disclosure) {
+            crate::reviewer_gate::GateVerdict::Block { reason } => {
+                crate::events::write_event(
+                    "lfmf_disclosure_gate",
+                    &format!("blocked (reviewer): {reason} — force={force}"),
+                );
+                if !force {
+                    anyhow::bail!(
+                        "lfmf --global blocked by disclosure gate: {reason}.                          Pass --force to override if this is a false positive."
+                    );
+                }
+            }
+            crate::reviewer_gate::GateVerdict::Pass => {
+                crate::events::write_event("lfmf_disclosure_gate", "safe");
+            }
+            crate::reviewer_gate::GateVerdict::Unavailable { warning } => {
+                eprintln!("⚠️  lfmf --global: {warning}");
+                crate::events::write_event(
+                    "lfmf_disclosure_gate",
+                    &format!("unavailable, failed open: {warning}"),
+                );
+            }
+        }
         Ok(())
     }
 

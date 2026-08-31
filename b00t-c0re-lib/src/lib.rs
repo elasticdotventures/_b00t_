@@ -71,6 +71,7 @@ pub mod rhai_engine;
 pub mod runtime_env;
 pub mod satisfies;
 pub mod secret_validation;
+pub mod reviewer_gate;
 pub mod sm0l_dispatch;
 pub mod state_introspection;
 pub mod sudo_operator;

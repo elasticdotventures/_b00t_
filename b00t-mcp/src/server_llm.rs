@@ -650,7 +650,12 @@ impl LlmState {
         false
     }
 
-    pub async fn create_key(&self, consumer: &str, access: &[String]) -> String {
+    /// See #1208: the write failure is now surfaced (`Err`) rather than only
+    /// logged, and a failed persist rolls the in-memory insert back — a key
+    /// that didn't durably make it to disk must not silently "exist" for
+    /// just this process. Callers can retry; a fresh `Uuid::new_v4()` key is
+    /// minted each call, so there's nothing stale left to clean up.
+    pub async fn create_key(&self, consumer: &str, access: &[String]) -> std::io::Result<String> {
         let key = format!("b00t-sk-{}", Uuid::new_v4().simple());
         let permissions: Vec<ClassPermission> = access.iter()
             .filter_map(|a| ClassPermission::parse(a))
@@ -660,8 +665,11 @@ impl LlmState {
             created_at: chrono::Utc::now(),
             access: permissions,
         });
-        self.save_keys_to_file().await;
-        key
+        if let Err(e) = self.save_keys_to_file().await {
+            self.keys.write().await.remove(&key);
+            return Err(e);
+        }
+        Ok(key)
     }
 
     /// Persists this instance's in-memory keys to disk. Delegates to
@@ -671,14 +679,27 @@ impl LlmState {
     /// dropped by this process overwriting the file from its own stale view.
     /// See #1128. Locking is blocking I/O, so it runs off the async runtime via
     /// `spawn_blocking`.
-    async fn save_keys_to_file(&self) {
+    ///
+    /// See #1208: previously swallowed the result entirely (`eprintln!` and
+    /// return `()`) — a transient I/O failure on the write path (e.g. a full
+    /// or unavailable filesystem) left the caller believing the key had been
+    /// persisted when it hadn't. Now returns the error so `create_key` can
+    /// surface and roll back on it, instead of that lost write staying
+    /// invisible until the next process restart.
+    async fn save_keys_to_file(&self) -> std::io::Result<()> {
         let keys_file = self.keys_file.clone();
         let in_memory = self.keys.read().await.clone();
         let result = tokio::task::spawn_blocking(move || write_keys_file_locked(&keys_file, &in_memory)).await;
         match result {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => eprintln!("⚠️ save_keys_to_file: {e}"),
-            Err(e) => eprintln!("⚠️ save_keys_to_file: blocking task panicked: {e}"),
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => {
+                eprintln!("⚠️ save_keys_to_file: {e}");
+                Err(e)
+            }
+            Err(e) => {
+                eprintln!("⚠️ save_keys_to_file: blocking task panicked: {e}");
+                Err(std::io::Error::other(format!("blocking task panicked: {e}")))
+            }
         }
     }
 
@@ -1034,10 +1055,27 @@ mod tests {
         _temp_dir: tempfile::TempDir,
     }
 
+    /// `tempfile::tempdir()` defaults to `std::env::temp_dir()`, which on some
+    /// dev boxes is a size-limited `tmpfs` RAM disk (not real disk) — a
+    /// plausible cause of #1208's one-off flaky failure (a transient write
+    /// error under disk pressure, silently swallowed before the fix above).
+    /// Root under this crate's own `target/` instead: real disk, and
+    /// `CARGO_MANIFEST_DIR` is available at compile time for unit tests too
+    /// (unlike `CARGO_TARGET_TMPDIR`, which Cargo only sets for integration
+    /// test/bench binaries).
+    fn temp_dir_base() -> std::path::PathBuf {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/tmp");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    }
+
     impl TempHome {
         fn new() -> Self {
             let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let temp_dir = tempfile::tempdir().unwrap();
+            let temp_dir = tempfile::Builder::new()
+                .prefix("b00t-mcp-test-")
+                .tempdir_in(temp_dir_base())
+                .unwrap();
             std::fs::create_dir_all(temp_dir.path().join(".b00t")).unwrap();
             let old_home = std::env::var("HOME").ok();
             unsafe {
@@ -1070,7 +1108,7 @@ mod tests {
     async fn test_key_create_and_validate() {
         let _temp_home = TempHome::new();
         let state = Arc::new(LlmState::from_config("http://localhost:8181/v1", ""));
-        let key = state.create_key("test-consumer", &[]).await;
+        let key = state.create_key("test-consumer", &[]).await.expect("key creation must succeed");
         assert!(key.starts_with("b00t-sk-"));
         let entry = state.validate_key(&key).await;
         assert!(entry.is_some());
@@ -1213,8 +1251,8 @@ mod tests {
         let instance_a = LlmState::from_config("http://localhost:8181/v1", "");
         let instance_b = LlmState::from_config("http://localhost:8181/v1", "");
 
-        let key_a = instance_a.create_key("consumer-a", &[]).await;
-        let key_b = instance_b.create_key("consumer-b", &[]).await;
+        let key_a = instance_a.create_key("consumer-a", &[]).await.expect("instance A's key creation must succeed");
+        let key_b = instance_b.create_key("consumer-b", &[]).await.expect("instance B's key creation must succeed");
 
         // Neither instance's own in-memory validate_key was affected by the
         // other — that was never the bug. The bug is what's actually on disk.
@@ -1250,7 +1288,7 @@ mod tests {
         let key = {
             let _first_home = TempHome::new();
             let state = LlmState::from_config("http://localhost:8181/v1", "");
-            let key = state.create_key("consumer-in-first-home", &[]).await;
+            let key = state.create_key("consumer-in-first-home", &[]).await.expect("key creation must succeed");
             assert!(state.validate_key(&key).await.is_some(), "key must be visible within its own instance");
             key
             // _first_home dropped here: HOME restored, temp dir removed
