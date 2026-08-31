@@ -1,9 +1,11 @@
 # node.cli.toml — minimal reference datum for the Node.js runtime.
 # @tribal: created to close dangling `depends_on = ["node.cli"]`/["node"]
 #   references (geminicli.cli, zellij-mcp-server.mcp, qwen-code.cli) found
-#   during a datum-graph audit. No install script is fabricated here — Node
-#   version management (nvm/fnm/pkgx/system package manager) is an
-#   environment choice, not something b00t should silently pick for you.
+#   during a datum-graph audit. Node version management (nvm/fnm/pkgx/system
+#   package manager) is an environment choice, not something b00t should
+#   silently pick for you — so the [install] recipe below (nvm) is strictly
+#   opt-in via `b00t install node`. No [roles].required_for is set here;
+#   bootstrap/`b00t up` MUST NOT auto-install a node runtime.
 
 [b00t]
 name = "node"
@@ -12,6 +14,12 @@ hint = "Node.js JavaScript runtime — required by several npx/npm-based MCP ser
 version = "node --version"
 version_regex = 'v(\d+\.\d+\.\d+)'
 docs = "https://nodejs.org/en/download"
+install = """
+command -v nvm >/dev/null 2>&1 || curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"
+nvm install --lts
+"""
 
 [validate]
 command = "node --version"
@@ -26,8 +34,8 @@ description = "Check npm version"
 command = "npm --version"
 
 # b00t:map v1
-# summary: node — minimal detect-only datum, no fabricated install script
-# tags: node, nodejs, npm, npx, runtime, cli
+# summary: node — detect-only by default; opt-in nvm install via `b00t install node`
+# tags: node, nodejs, npm, npx, runtime, cli, nvm
 # tier: sm0l
-# cmds: node --version
+# cmds: node --version, b00t install node
 # complexity: 1
