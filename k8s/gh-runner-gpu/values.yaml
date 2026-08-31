@@ -1,0 +1,108 @@
+# Helm values for the `gha-runner-scale-set` chart, targeting the
+# actions-runner-controller (ARC) install already running on sm3llsl1k3s0ld3r's
+# k0s cluster.
+#
+# ⚠️ NOT APPLIED. This is a reviewable artifact only — see ../../k8s/gh-runner-gpu/README.md
+# for the missing prerequisite (a GitHub token secret) and the exact install command.
+#
+# Chart:    oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+# Version:  0.14.2  (must match the already-installed arc-gha-rs-controller image tag —
+#                     confirmed via `helm list -n arc-systems`: chart gha-runner-scale-set-controller-0.14.2)
+# Release namespace: arc-runners  (deliberately NOT arc-systems, which is reserved for the
+#                     controller itself — each runner scale set gets its own namespace per
+#                     upstream convention: https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/deploy-runner-scale-sets)
+# Install command (DO NOT RUN without the secret from README.md in place first):
+#   helm install gh-runner-gpu \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+#     --version 0.14.2 \
+#     --namespace arc-runners --create-namespace \
+#     -f k8s/gh-runner-gpu/values.yaml
+
+# Repo-scoped (not org-wide) on purpose: this is a single-repo proof of concept,
+# smallest possible blast radius for a first GPU runner.
+githubConfigUrl: "https://github.com/elasticdotventures/_b00t_"
+
+# References a PRE-EXISTING k8s secret (Variation C in the chart's own values.yaml
+# comments) — never inline a token here. See README.md for how to create it.
+githubConfigSecret: gh-runner-gpu-creds
+
+# The exact string a workflow's `runs-on:` must match. ARC's new
+# gha-runner-scale-set architecture matches jobs to scale sets by this name,
+# not by a `[self-hosted, ...]` label array (that's the older/classic
+# actions-runner-controller RunnerDeployment model, and also how the stale
+# k8s.🚢/gh-runner/deployment.yaml manifest — a raw Deployment running
+# myoung34/github-runner, requiring manual hourly token refresh — does it;
+# do not copy that pattern, ARC exists specifically to avoid it).
+runnerScaleSetName: gpu-sm3lly
+
+# Single physical GPU box, time-sliced to 3 (see nvidia-device-plugin-config
+# in this cluster) — cap at 1 concurrent runner pod for this PoC so we don't
+# have multiple CI jobs fighting over the same warm build cache directories
+# below at once. Raise once real concurrency behavior has been observed.
+minRunners: 0
+maxRunners: 1
+
+# containerMode intentionally left unset (chart default): job steps run
+# directly inside the single `runner` container below, the same way a
+# GitHub-hosted runner works. Both alternate modes (`dind`, `kubernetes`)
+# run each job step in its own freshly-scheduled sub-pod/sub-container,
+# which would need separate `nvidia.com/gpu` resource requests and
+# `runtimeClassName` plumbed onto THOSE pod specs too — solvable, but
+# unnecessary complexity for a first proof of concept. Revisit only if a
+# workflow needs per-step container isolation.
+# containerMode:
+#   type: "kubernetes"
+
+template:
+  spec:
+    # Only one node in this cluster has a GPU (and only one node exists,
+    # period) — explicit nodeSelector documents the requirement rather than
+    # relying on that being incidentally true.
+    nodeSelector:
+      nvidia.com/gpu.present: "true"
+
+    # Matches the pre-existing `nvidia` RuntimeClass on this cluster
+    # (`k0s kubectl get runtimeclass nvidia` — handler: nvidia), the same
+    # mechanism nvidia-device-plugin-daemonset relies on elsewhere in this
+    # cluster to inject driver libraries/devices into a requesting pod.
+    runtimeClassName: nvidia
+
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        env:
+          # Warm build cache on local NVMe instead of a cold ubuntu-latest
+          # runner's empty $HOME every run — this is the other half of
+          # #1226's fix alongside sccache (see PR #1227): CI stops paying
+          # full dependency-download + full-recompile cost on every job.
+          - name: CARGO_HOME
+            value: /cache/cargo-home
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: 1
+        volumeMounts:
+          - name: cargo-cache
+            mountPath: /cache/cargo-home
+          - name: runner-work
+            mountPath: /home/runner/_work
+
+    volumes:
+      # hostPath, not emptyDir: the whole point is a cache that survives
+      # across ephemeral runner pods. Path lives on this box's NVMe-backed
+      # root volume (`df -h /` → /dev/mapper/ubuntu--vg-ubuntu--lv, 7.2T).
+      # DirectoryOrCreate so first apply doesn't fail on a missing dir.
+      - name: cargo-cache
+        hostPath:
+          path: /var/lib/gh-runner-gpu/cargo-home
+          type: DirectoryOrCreate
+      - name: runner-work
+        hostPath:
+          path: /var/lib/gh-runner-gpu/work
+          type: DirectoryOrCreate
