@@ -358,22 +358,14 @@ Test-Requirement -Name "cmake" -Required $false -TestScript { Test-CommandExists
         }
     }
 
+# Detect-only, deliberately no FixScript: this operator prefers not to
+# provision Strawberry Perl (its winget installer also needs an interactive
+# prompt this script can't answer non-interactively — it self-cancelled
+# with exit 1602 the one time this ran unattended). Where a *-sys crate's
+# build.rs offers a choice of scripting interpreter, prefer python — it's
+# already required elsewhere in this toolchain — over installing perl here.
 Test-Requirement -Name "perl" -Required $false -TestScript { Test-CommandExists perl } `
-    -FixDescription "$(if ($OnWindows) {'winget install StrawberryPerl.StrawberryPerl'} elseif ($OnMacOS) {'ships with macOS'} else {'sudo apt-get install -y perl (or dnf/pacman equivalent)'})" `
-    -FixScript {
-        if ($OnWindows) {
-            if (-not $wingetOk) { throw "winget unavailable — see above" }
-            winget install --id StrawberryPerl.StrawberryPerl -e --accept-package-agreements --accept-source-agreements
-        } elseif (Test-CommandExists apt-get) {
-            sudo apt-get update; sudo apt-get install -y perl
-        } elseif (Test-CommandExists dnf) {
-            sudo dnf install -y perl
-        } elseif (Test-CommandExists pacman) {
-            sudo pacman -S --noconfirm perl
-        } else {
-            throw "no supported package manager found"
-        }
-    }
+    -ManualHint "not auto-installed by this script — prefer python where a *-sys crate's build allows a choice; only a handful of crates hard-require perl specifically"
 
 Test-Requirement -Name "nasm" -Required $false -TestScript { Test-CommandExists nasm } `
     -FixDescription "$(if ($OnWindows) {'winget install NASM.NASM'} elseif ($OnMacOS) {'brew install nasm'} else {'sudo apt-get install -y nasm (or dnf/pacman equivalent)'})" `
