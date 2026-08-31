@@ -394,6 +394,11 @@ The system will:
         dashboard: bool,
         #[clap(long, help = "Show capabilities for the specified --agent/--role")]
         capabilities: bool,
+        #[clap(
+            long,
+            help = "Show full protocol dump (AGENT.md boilerplate + role supplement); default is a compact, connection-first summary"
+        )]
+        full: bool,
     },
     #[cfg(feature = "virtfs")]
     #[clap(
@@ -2432,6 +2437,7 @@ async fn main() {
             skills,
             dashboard,
             capabilities,
+            full,
         }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
@@ -2463,7 +2469,7 @@ async fn main() {
                     ),
                 }
             } else if let Err(e) =
-                whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone())
+                whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone(), *full)
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
