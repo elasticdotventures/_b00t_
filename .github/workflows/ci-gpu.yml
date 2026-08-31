@@ -44,6 +44,20 @@ jobs:
         run: nvidia-smi
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # See ci.yml's own comment: NOT `submodules: recursive` (34
+          # submodules, aborts on orphan/gutted gitlinks — #924). Init only
+          # what the two scoped crates below actually need.
+          submodules: false
+
+      - name: Init workspace-required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 \
+            vendor/embed-anything-b00t \
+            vendor/runpod-sdk \
+            vendor/ledgrrr
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
