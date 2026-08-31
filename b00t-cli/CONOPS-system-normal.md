@@ -1,15 +1,14 @@
 # CONOPS: `b00t is <checklist>` — stateful system-normal checks
 
-> **Status (2026-08-10): superseded for now.** After drafting this, direction
-> from the user was "make the alias, don't reimplement a new subsystem" — `is`
-> was added as a plain clap alias for the existing `whatismy` command
-> (`#[clap(aliases = ["inspect", "is"])]` on `Commands::Whatismy` in
-> `main.rs`), reusing `whatismy status` rather than building the new
-> checklist datum type / `Satisfies<ChecklistConstraint>` machinery described
-> below. This doc is kept as the design for the not-yet-built stateful
-> boolean-checklist feature, in case that's picked up later — but the
-> immediate `b00t is` UX today is just `whatismy`'s existing subcommands
-> (`b00t is status`, `b00t is role`, etc.), not `b00t is system-normal`.
+> **Status (2026-08-24): Phase 1 shipped in #1143.** `is` is now its own
+> top-level `Commands::Is` verb (`b00t is [name] [--json] [--explain]`),
+> backed by real `<name>.checklist.toml` datums (`checklist.rs`:
+> `ChecklistFile`/`ChecklistCheck`, flattening `GateSpec` verbatim) and a
+> 3-valued `ChecklistDisposition` (`Satisfied`/`Violated`/`Unknown`, exit
+> codes 0/1/2 — deliberately not collapsed to bool, per issue #927's
+> precedent). `whatismy`'s alias for this verb is now `inspect` only. Scope
+> shipped: implicit-AND only, no `compose_rhai`, no persistence — those
+> remain open follow-on phases below, not yet built.
 
 ## Origin
 
