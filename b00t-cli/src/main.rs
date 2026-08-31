@@ -2320,7 +2320,7 @@ async fn main() {
             }
         }
         Some(Commands::Ai { ai_command }) => {
-            if let Err(e) = ai_command.execute(&cli.path) {
+            if let Err(e) = ai_command.execute(&cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2604,7 +2604,7 @@ async fn main() {
         }
         Some(Commands::Datum { datum_command }) => {
             use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+            if let Err(e) = handle_datum_command(&cli.path, datum_command).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
