@@ -67,6 +67,27 @@ template:
     # cluster to inject driver libraries/devices into a requesting pod.
     runtimeClassName: nvidia
 
+    # `ghcr.io/actions/actions-runner` runs as non-root user `runner`
+    # (uid=1001, gid=1001 — confirmed via `podman image mount` + /etc/passwd,
+    # not documented in the chart's own values.yaml comments). The hostPath
+    # volumes below get created root:root by kubelet on first mount
+    # (`DirectoryOrCreate`), and Kubernetes' `fsGroup` mechanism does NOT
+    # chown hostPath volumes (a known k8s limitation, unlike emptyDir/PVC) —
+    # without this, every job fails immediately with "Access to the path
+    # '/home/runner/_work' is denied" (live-verified 2026-08-31, run
+    # 33409192802). A root-running init container is the standard fix.
+    initContainers:
+      - name: init-chown-volumes
+        image: busybox:1.36
+        command: ["sh", "-c", "chown -R 1001:1001 /cache/cargo-home /home/runner/_work"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+          - name: cargo-cache
+            mountPath: /cache/cargo-home
+          - name: runner-work
+            mountPath: /home/runner/_work
+
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest

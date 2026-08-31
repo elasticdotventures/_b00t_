@@ -18,15 +18,14 @@ create-secret:
     set -euo pipefail
     bash "{{source_directory()}}/create-secret-from-vault.sh"
 
-# Step 2: install the AutoscalingRunnerSet. Requires create-secret to have
-# run first (values.yaml references the secret it creates). NOT idempotent
-# in the naive sense — re-running against an existing release does a Helm
-# upgrade, which is fine, but this isn't a from-scratch-safe recipe the way
-# create-secret is.
+# Step 2: install (or upgrade, if already installed) the
+# AutoscalingRunnerSet. Requires create-secret to have run first
+# (values.yaml references the secret it creates). `upgrade --install` is
+# idempotent either way — safe to rerun after any values.yaml change.
 install:
     #!/usr/bin/env bash
     set -euo pipefail
-    helm install gh-runner-gpu \
+    helm upgrade --install gh-runner-gpu \
         oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
         --version 0.14.2 \
         --namespace arc-runners \
