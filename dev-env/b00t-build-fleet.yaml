@@ -1,0 +1,24 @@
+# b00t standby cloud build server — backing fleet.
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md.
+#
+# 🤓 Not in that design doc's original "Components" list — added here
+# because dstack requires a fleet to already exist before a dev-environment
+# can be provisioned against it ("Before running a dev environment, make
+# sure you've... created a fleet" — dstack's own dev-environments docs).
+# `idle_duration` also belongs here, not on the dev-environment: verified
+# against dstack's real fleet/dev-environment reference docs before writing
+# this (the design doc's own idle_duration placement, on the
+# dev-environment, doesn't match dstack's actual schema — this fleet is
+# where dstack actually enforces it, deprovisioning instances above `min`
+# once idle past this duration).
+type: fleet
+name: b00t-build-fleet
+# min 0 (costs nothing while nothing's running), max 1 — a single-box build
+# server, not a pool. Matches DstackProvider::ensure_fleet's own 0..1
+# philosophy for on-demand capacity.
+nodes: 0..1
+# No GPU — this is a CPU/disk/network build server, not an ML job. Matches
+# the design doc's explicit non-goal ("No GPU, no RunPod backend").
+resources:
+  gpu: 0
+idle_duration: 30m
