@@ -91,6 +91,7 @@ pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
 pub mod just_ast;
+pub mod agent_token;
 pub mod k0mmand3r;
 pub mod k8s;
 pub mod memory_provider;
