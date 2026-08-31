@@ -96,6 +96,8 @@ quote = "1.0.45"
 # used at runtime (not just tests) for shallow-cloning external MCP registry sources
 # (e.g. vinkius-mcp-database) into a scratch dir that's cleaned up on drop
 tempfile = "3.10"
+# #1101: cheap wordlist first-pass filter in front of the disclosure gate
+b00t-bouncer = { path = "../b00t-bouncer" }
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -1524,6 +1524,7 @@ dependencies = [
  "anyhow",
  "ascent",
  "async-trait",
+ "b00t-bouncer",
  "b00t-ipc",
  "base64 0.22.1",
  "cfg-if 1.0.4",

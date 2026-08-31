@@ -60,6 +60,11 @@ pub enum SkillCommands {
         name: String,
         #[clap(long, help = "Prefix with role context from named role datum")]
         role: Option<String>,
+        #[clap(
+            long,
+            help = "#1106: run the sm0l relevance-gate reviewer before emitting the skill body, judged against this goal. Opt-in; fails open (emits the skill anyway) with a warning if the reviewer backend is unreachable."
+        )]
+        gate: Option<String>,
     },
 
     #[clap(about = "Serve skills via HTTP for remote loading by opencode")]
@@ -213,8 +218,34 @@ pub fn handle_skill_command(cmd: &SkillCommands, path: &str) -> Result<()> {
             Ok(())
         }
 
-        SkillCommands::Activate { name, role } => {
+        SkillCommands::Activate { name, role, gate } => {
             let content = resolver.load(name)?;
+
+            // #1106: opt-in relevance gate — the karpathy/deepwiki 3-gate
+            // autolearn pattern's Research gate, applied here for the
+            // first time. Fails open (still emits the skill, loudly
+            // warns) rather than silently no-op'ing or blocking, per the
+            // issue's explicit requirement.
+            if let Some(goal) = gate {
+                use b00t_c0re_lib::reviewer_gate::{GateMode, GateVerdict, gate_verdict};
+                let review_input = format!(
+                    "Skill: {}\nDescription: {}\n\n{}",
+                    content.meta.name, content.meta.description, content.instructions
+                );
+                match gate_verdict(&review_input, &GateMode::Relevance { goal: goal.clone() }) {
+                    GateVerdict::Block { reason } => {
+                        println!(
+                            "🚫 Skill '{}' skipped by relevance gate for goal '{}': {}",
+                            name, goal, reason
+                        );
+                        return Ok(());
+                    }
+                    GateVerdict::Unavailable { warning } => {
+                        eprintln!("⚠️  skill activate --gate: {warning}");
+                    }
+                    GateVerdict::Pass => {}
+                }
+            }
 
             // Optional role context prefix
             if let Some(role_name) = role {
