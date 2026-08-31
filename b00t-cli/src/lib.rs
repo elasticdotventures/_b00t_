@@ -722,6 +722,30 @@ hint = "containers"
     }
 
     #[test]
+    fn node_cli_install_resolves_nvm_command() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+        #[derive(Deserialize)]
+        struct TestFile {
+            b00t: TestDatum,
+        }
+
+        let toml_text =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../_b00t_/node.cli.toml"))
+                .expect("node.cli.toml should exist");
+        let file: TestFile = toml::from_str(&toml_text).unwrap();
+        let command = file
+            .b00t
+            .install
+            .command_string()
+            .expect("node.cli.toml install must resolve to a runnable command, not InstallSpec::Metadata");
+
+        assert!(command.contains("nvm install --lts"));
+    }
+
+    #[test]
     fn resolve_prefers_runtime_over_cli() {
         let dir = tempfile::tempdir().unwrap();
         write_runtime_datum(dir.path(), "dual", "/bin/true");
