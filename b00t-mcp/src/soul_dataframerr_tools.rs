@@ -52,6 +52,8 @@ pub struct SoulTableCreateCommand {
     pub name: String,
     #[arg(help = "Column defs: 'name:type' or 'name:type?' (nullable)")]
     pub columns: Vec<String>,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulTableCreateCommand {
@@ -78,6 +80,12 @@ impl McpExecutor for SoulTableCreateCommand {
         let mut args: Vec<&str> = vec!["table-create", name];
         let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
         args.extend(col_refs.iter());
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
         run_soul(&args)
     }
 }
@@ -85,7 +93,10 @@ impl McpExecutor for SoulTableCreateCommand {
 // ── soul_table_list ───────────────────────────────────────────────────────────
 
 #[derive(Parser, Clone)]
-pub struct SoulTableListCommand;
+pub struct SoulTableListCommand {
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
+}
 
 impl McpReflection for SoulTableListCommand {
     fn mcp_tool_name() -> String {
@@ -97,8 +108,15 @@ impl McpReflection for SoulTableListCommand {
 }
 
 impl McpExecutor for SoulTableListCommand {
-    fn execute_mcp_call(_params: &HashMap<String, Value>) -> Result<String> {
-        run_soul(&["table-list"])
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let mut args: Vec<&str> = vec!["table-list"];
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
+        run_soul(&args)
     }
 }
 
@@ -112,6 +130,8 @@ pub struct SoulRowInsertCommand {
     pub table: String,
     #[arg(help = "Field key=value pairs")]
     pub fields: Vec<String>,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulRowInsertCommand {
@@ -146,6 +166,12 @@ impl McpExecutor for SoulRowInsertCommand {
         let mut args: Vec<&str> = vec!["frame-insert", table];
         let pair_refs: Vec<&str> = pairs.iter().map(|s| s.as_str()).collect();
         args.extend(pair_refs.iter());
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
         run_soul(&args)
     }
 }
@@ -159,6 +185,8 @@ pub struct SoulRowQueryCommand {
     pub table: String,
     #[arg(long, help = "Return only last N rows")]
     pub last: Option<usize>,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulRowQueryCommand {
@@ -179,6 +207,12 @@ impl McpExecutor for SoulRowQueryCommand {
             last_str = n.to_string();
             args.extend(["--last", &last_str]);
         }
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
         run_soul(&args)
     }
 }
@@ -189,6 +223,8 @@ impl McpExecutor for SoulRowQueryCommand {
 pub struct SoulCursorCreateCommand {
     pub name: String,
     pub table: String,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulCursorCreateCommand {
@@ -204,7 +240,14 @@ impl McpExecutor for SoulCursorCreateCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let name = str_param(params, "name")?;
         let table = str_param(params, "table")?;
-        run_soul(&["cursor-create", name, table])
+        let mut args: Vec<&str> = vec!["cursor-create", name, table];
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
+        run_soul(&args)
     }
 }
 
@@ -215,6 +258,8 @@ impl McpExecutor for SoulCursorCreateCommand {
 #[derive(Parser, Clone)]
 pub struct SoulCursorNextCommand {
     pub name: String,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulCursorNextCommand {
@@ -229,9 +274,13 @@ impl McpReflection for SoulCursorNextCommand {
 impl McpExecutor for SoulCursorNextCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let name = str_param(params, "name")?;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
         // cursor-next exits 1 at EOF — treat as non-error (return sentinel)
         let mut cmd = std::process::Command::new("b00t-cli");
         cmd.args(["soul", "cursor-next", name]);
+        if let Some(s) = scope {
+            cmd.args(["--scope", s]);
+        }
         let out = cmd.output().map_err(|e| anyhow::anyhow!("b00t-cli: {e}"))?;
         let stdout = String::from_utf8_lossy(&out.stdout).to_string();
         if out.status.code() == Some(1) {
@@ -249,6 +298,8 @@ impl McpExecutor for SoulCursorNextCommand {
 #[derive(Parser, Clone)]
 pub struct SoulCursorResetCommand {
     pub name: String,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulCursorResetCommand {
@@ -262,7 +313,15 @@ impl McpReflection for SoulCursorResetCommand {
 
 impl McpExecutor for SoulCursorResetCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        run_soul(&["cursor-reset", str_param(params, "name")?])
+        let name = str_param(params, "name")?;
+        let mut args: Vec<&str> = vec!["cursor-reset", name];
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
+        run_soul(&args)
     }
 }
 
@@ -278,6 +337,8 @@ pub struct SoulAlarmSetCommand {
     pub aggregate: String,
     #[arg(long)]
     pub emit: String,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulAlarmSetCommand {
@@ -300,7 +361,7 @@ impl McpExecutor for SoulAlarmSetCommand {
             .and_then(|v| v.as_str())
             .unwrap_or("sum");
         let emit = str_param(params, "emit")?;
-        run_soul(&[
+        let mut args: Vec<&str> = vec![
             "alarm-set",
             name,
             table,
@@ -310,7 +371,14 @@ impl McpExecutor for SoulAlarmSetCommand {
             aggregate,
             "--emit",
             emit,
-        ])
+        ];
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
+        run_soul(&args)
     }
 }
 
@@ -319,6 +387,8 @@ impl McpExecutor for SoulAlarmSetCommand {
 #[derive(Parser, Clone)]
 pub struct SoulAlarmCheckCommand {
     pub table: String,
+    #[arg(long, help = "#1102 shard scope 'kind:id', e.g. 'agent:pi'. Omit for the legacy/default shard.")]
+    pub scope: Option<String>,
 }
 
 impl McpReflection for SoulAlarmCheckCommand {
@@ -332,7 +402,15 @@ impl McpReflection for SoulAlarmCheckCommand {
 
 impl McpExecutor for SoulAlarmCheckCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        run_soul(&["alarm-check", str_param(params, "table")?])
+        let table = str_param(params, "table")?;
+        let mut args: Vec<&str> = vec!["alarm-check", table];
+        let scope_owned;
+        let scope: Option<&str> = params.get("scope").and_then(|v| v.as_str());
+        if let Some(s) = scope {
+            scope_owned = s.to_string();
+            args.extend(["--scope", &scope_owned]);
+        }
+        run_soul(&args)
     }
 }
 
