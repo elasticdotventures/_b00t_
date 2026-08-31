@@ -34,23 +34,38 @@ are for review first.
 
 ## What does NOT exist yet (the actual blocker)
 
-**A GitHub token secret.** `k0s kubectl get secrets -n arc-systems` shows
-only the Helm release secret itself — nothing containing a PAT or GitHub
-App installation token. `values.yaml` references a secret named
-`gh-runner-gpu-creds` in a new `arc-runners` namespace
-(`githubConfigSecret: gh-runner-gpu-creds`) that does not exist. Create it
-before installing anything:
+**A GitHub App credential secret.** `k0s kubectl get secrets -n arc-systems`
+shows only the Helm release secret itself — nothing containing GitHub App
+credentials. `values.yaml` references a secret named `gh-runner-gpu-creds`
+in a new `arc-runners` namespace (`githubConfigSecret: gh-runner-gpu-creds`)
+that does not exist yet.
+
+Per this org's standing GitHub-Apps-not-PATs policy (see
+PromptExecution/infrastructure's `docs/github-app-b00t-arc-runners.md`), a
+purpose-built App already exists and already covers this repo — the
+`b00t-arc-runners` App (app_id `4687493`, installation `155823757` on
+`elasticdotventures`, permissions `actions:write` / `administration:write`
+/ `packages:write`). Its private key lives in Azure Key Vault
+(`kv-pe-agent-secrets`), readable from this exact box via the already-live
+SPIRE workload identity chain (PromptExecution/infrastructure#151). Create
+the secret with:
 
 ```bash
-k0s kubectl create namespace arc-runners
-k0s kubectl create secret generic gh-runner-gpu-creds \
-  --namespace arc-runners \
-  --from-literal=github_token=<PAT-or-GitHub-App-installation-token>
+./create-secret-from-vault.sh
 ```
 
-See `secret.example.yaml` for the exact shape and token-scope notes. This
-step is intentionally NOT automated by this PR — minting a token is a human
-decision (which credential, whose account, PAT vs. GitHub App).
+which fetches a JWT-SVID locally, exchanges it for an Azure AD token, reads
+the three `b00t-arc-runners-*` secrets from Key Vault, and creates
+`arc-runners/gh-runner-gpu-creds` with the GitHub-App-auth field shape
+(`github_app_id` / `github_app_installation_id` / `github_app_private_key`)
+— no PAT, no human-typed token, nothing written to disk as a plain file.
+See `secret.example.yaml` for the exact declarative shape this produces,
+and that script's own header comment for the prerequisite chain.
+
+If the Key Vault secrets haven't been populated yet, see
+`PromptExecution/infrastructure`'s `msft-corp/agent-secrets.just` module
+(`just agent_secrets::write-b00t-arc-runners-secrets`) — that's a
+prerequisite of this script, not something this PR re-implements.
 
 Once the secret exists, the install itself would be:
 
