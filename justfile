@@ -27,6 +27,7 @@ mod zellij-gate '_b00t_/zellij-gate.just'
 mod b00t-admin 'vendor/b00t-admin/b00t-admin.just'
 # 📚 Rust documentation MCP server — required by skills/rust
 mod rust-doc 'vendor/rust-doc.just'
+mod gh-runner-gpu 'k8s/gh-runner-gpu/gh-runner-gpu.just'
 # 🥾 Compound engineering workflow — 8-phase agile state machine
 mod compound-engineering '_b00t_/compound-engineering.just'
 # 🛡️ Canonical reviewer skill — MECE+TRIZ+Eureka multi-framework review

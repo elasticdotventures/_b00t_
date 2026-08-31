@@ -44,9 +44,35 @@ jobs:
         run: nvidia-smi
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # See ci.yml's own comment: NOT `submodules: recursive` (34
+          # submodules, aborts on orphan/gutted gitlinks — #924). Init only
+          # what the two scoped crates below actually need.
+          submodules: false
+
+      - name: Init workspace-required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 \
+            vendor/embed-anything-b00t \
+            vendor/runpod-sdk \
+            vendor/ledgrrr
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build toolchain
+        # The bare ghcr.io/actions/actions-runner image (Ubuntu 24.04) has no
+        # C compiler — unlike GitHub-hosted ubuntu-latest, which ships
+        # build-essential. Several workspace crates' build scripts need `cc`
+        # (proc-macro2, quote, serde_core, wasm-bindgen-shared) — live-verified
+        # 2026-08-31 (run 33409934449: "linker `cc` not found"). Runner user
+        # has passwordless sudo (confirmed via `podman image mount` on the
+        # image itself), matching the official actions-runner convention.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
 
       - name: Show warm cache state (proves NVMe cache persistence across runs)
         run: |
