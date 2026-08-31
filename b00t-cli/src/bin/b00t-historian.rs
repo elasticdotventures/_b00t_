@@ -42,17 +42,45 @@
 //! term (local file vs. a real backend) is explicitly deferred — for now
 //! it's wherever this process's `SOUL.tomllm` resolves to.
 //!
+//! ## mesh mailbox — reliable delivery for `b00t.hive.mesh.node.*` (#1229)
+//!
+//! `NatsMeshNode::send()` (`b00t-lib-chat/src/mesh.rs`) publishes a
+//! `MeshFrame::Direct` straight to `b00t.hive.mesh.node.<agent_id>` — plain
+//! fire-and-forget NATS pub/sub, no ack, no persistence. A message to an
+//! agent that isn't subscribed at that exact instant is simply lost. This
+//! binary also camps on the whole `b00t.hive.mesh.>` tree (not only
+//! `.node.>` — `Presence`/`DiscoveryQuery` frames travel on the separate
+//! `discovery.presence`/`discovery.query` subjects under the same tree) and
+//! buffers every `Direct` frame it sees into a `mesh_mailbox` soul table
+//! (same DataFramerr/`SoulScope` primitive `souls_activity` uses, scoped
+//! `system:mesh-mailbox` since this is hive-wide infrastructure state, not
+//! tied to one repo/agent/project). Buffered mail for an agent is flushed —
+//! republished verbatim to that agent's own node subject — the moment that
+//! agent is next seen alive on the mesh (a presence heartbeat or a
+//! discovery query), using a per-agent `FrameCursor` (the same durable
+//! iterator pointer `b00t soul cursor` already exposes) rather than
+//! deleting rows from the intentionally append-only `SoulDataFramerr`.
+//! `b00t-historian mailbox-check --agent-id <id>` answers, over NATS
+//! request-reply on `mailbox.check` (same shape as `souls.query`), how much
+//! mail is currently buffered for an agent — read-only, does not flush.
+//!
 //! Usage:
 //!   b00t-historian run
 //!   b00t-historian run --subject 'hive.sm3ll-fung1.>' --nats-url nats://127.0.0.1:4222
 //!   b00t-historian replay
 //!   b00t-historian replay --month 2026-08 --tail 20
 //!   b00t-historian publish --repo _b00t_ --event task_start --detail "reviewing PR #1147"
+//!   b00t-historian mailbox-check --agent-id pi
 
 use anyhow::{Context, Result};
-use b00t_c0re_lib::soul_dataframerr::{SoulColumn, SoulValue};
+use b00t_c0re_lib::soul_dataframerr::{FrameCursor, SoulColumn, SoulDataFramerr, SoulValue};
+use b00t_chat::MeshFrame;
+use b00t_chat::mesh::node_subject;
 use b00t_cli::commands::provider::{get_provider, ComputeProvider};
-use b00t_cli::commands::soul::{load_registry, load_soul_doc, with_registry};
+use b00t_cli::commands::soul::{
+    load_registry, load_soul_doc, load_soul_doc_scoped, with_registry, with_registry_scoped,
+};
+use b00t_cli::soul_scope::{ShardKind, SoulScope};
 use b00t_cli::vultr_delegate::{
     self, AllowedRequesters, CapabilityForgeAuthorizer, DeprovisionRequest, ProvisionRequest,
     RequesterAuthorizer, StaticAllowlistAuthorizer, StatusRequest,
@@ -73,6 +101,34 @@ const SOULS_TABLE: &str = "souls_activity";
 const SOULS_QUERY_SUBJECT: &str = "souls.query";
 const SOULS_WILDCARD: &str = "souls.>";
 const DEFAULT_QUERY_LIMIT: usize = 50;
+
+// 🤓 mesh mailbox (#1229) — see the module doc comment above for the full
+// design. Camping on the whole `b00t.hive.mesh.>` tree (not only `.node.>`)
+// is what actually lets this handler ever see a `Presence`/`DiscoveryQuery`
+// frame — `b00t-lib-chat/src/mesh.rs` publishes those on the separate
+// `discovery.presence`/`discovery.query` subjects, not on any `.node.*`
+// subject.
+const MESH_WILDCARD: &str = "b00t.hive.mesh.>";
+// Mirrors `b00t_chat::mesh::NODE_PREFIX`, which is private to that crate —
+// duplicated here (rather than widening that crate's public API for one
+// caller) purely to strip an inbound subject back down to the agent id it
+// was addressed to. `b00t_chat::mesh::node_subject()` (public) covers the
+// reverse direction — building the subject to flush *to* — so the two only
+// need to agree on this one literal.
+const MESH_NODE_PREFIX: &str = "b00t.hive.mesh.node.";
+const MAILBOX_TABLE: &str = "mesh_mailbox";
+// `FrameCursor` (`b00t soul`'s own durable-iterator-pointer primitive) name
+// prefix, one cursor per recipient agent id — reused instead of adding a
+// delete/mutate path to the intentionally append-only `SoulDataFramerr`.
+const MAILBOX_CURSOR_PREFIX: &str = "mailbox:";
+// One-shot request-reply subject for `b00t-historian mailbox-check`. NATS
+// request-reply (`souls.query`'s own shape), not a direct soul-table file
+// read: the whole point (#1229 acceptance criteria) is letting a
+// *different* process/host ask "do I have mail?" without filesystem/SSH
+// access to wherever this historian's SOUL.tomllmd happens to live — the
+// same reasoning `souls.query` exists for instead of every caller reading
+// `souls_activity` off disk directly.
+const MAILBOX_CHECK_SUBJECT: &str = "mailbox.check";
 
 // 🤓 vultr delegation (see _b00t_/datums/PROVIDER-VULTR.provider.tomllmd,
 //    "MEMOIZED" sections) — b00t-historian is the sole node whose
@@ -216,6 +272,16 @@ enum Command {
         #[clap(long)]
         instance_id: Option<String>,
     },
+    /// One-shot: ask the historian how much mail (#1229 mesh mailbox) is
+    /// buffered for an agent id that hasn't been seen on the mesh recently
+    /// (NATS request-reply on `mailbox.check`). Read-only — does not
+    /// flush; flushing happens automatically once that agent is seen alive
+    /// again (a presence heartbeat or a discovery query).
+    MailboxCheck {
+        /// Agent id to check (same id `b00t.hive.mesh.node.<id>` addresses).
+        #[clap(long)]
+        agent_id: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -251,6 +317,29 @@ struct SoulQuery {
     since: Option<DateTime<Utc>>,
     #[serde(default)]
     limit: Option<usize>,
+}
+
+/// Wire shape for a `mailbox.check` request.
+#[derive(Debug, Serialize, Deserialize)]
+struct MailboxCheckRequest {
+    agent_id: String,
+}
+
+/// Wire shape for a `mailbox.check` reply.
+#[derive(Debug, Serialize, Deserialize)]
+struct MailboxCheckResponse {
+    agent_id: String,
+    pending: usize,
+}
+
+/// One buffered mailbox entry ready to redeliver to its recipient — the
+/// original sender, plus the exact original wire bytes (UTF-8 lossy
+/// decoded, same convention `LogRecord::payload` uses) so a flush
+/// republishes byte-for-byte what was sent rather than re-encoding it.
+#[derive(Debug, Clone, PartialEq)]
+struct MailboxEntry {
+    sender: String,
+    payload: String,
 }
 
 fn connect_options(args: &Args, name: &str) -> async_nats::ConnectOptions {
@@ -387,6 +476,160 @@ fn expand_souls_subject(subject: &str) -> Option<(&str, &str)> {
     }
 }
 
+/// #1229 mesh mailbox: hive-wide infrastructure state, not tied to any one
+/// repo/agent/project, so it lives in the `system` shard (#1102) rather
+/// than the legacy/default unscoped shard `souls_activity` still uses.
+fn mesh_scope() -> SoulScope {
+    SoulScope::new(ShardKind::System, "mesh-mailbox")
+}
+
+fn mailbox_columns() -> Vec<SoulColumn> {
+    vec![
+        SoulColumn::parse("recipient:text").unwrap(),
+        SoulColumn::parse("sender:text").unwrap(),
+        SoulColumn::parse("payload:text").unwrap(),
+    ]
+}
+
+fn mailbox_cursor_name(agent_id: &str) -> String {
+    format!("{MAILBOX_CURSOR_PREFIX}{agent_id}")
+}
+
+/// Extract the recipient agent id from a subject the `b00t.hive.mesh.>`
+/// wildcard delivered a message on, e.g. `b00t.hive.mesh.node.pi` ->
+/// `Some("pi")`. `None` for anything not on a per-node inbox subject
+/// (channel/discovery/gossip traffic under the same tree, which the
+/// mailbox does not buffer).
+fn agent_id_from_node_subject(subject: &str) -> Option<&str> {
+    subject
+        .strip_prefix(MESH_NODE_PREFIX)
+        .filter(|id| !id.is_empty())
+}
+
+/// Pure: scan `df` forward from `cursor`'s watermark, collecting every row
+/// addressed to `agent_id`, and advance `cursor` past everything scanned
+/// (matched or not) — the same durable-iterator-pointer primitive `b00t
+/// soul cursor` already exposes (`FrameCursor::next`), reused instead of
+/// adding a delete/mutate path to the intentionally append-only
+/// `SoulDataFramerr`. A no-op (empty result, cursor untouched) when there
+/// is nothing new past the watermark — safe to call opportunistically.
+fn flush_pending_for_agent(
+    df: &SoulDataFramerr,
+    cursor: &mut FrameCursor,
+    agent_id: &str,
+) -> Vec<MailboxEntry> {
+    let mut out = Vec::new();
+    while let Some(row) = cursor.next(df) {
+        if row.fields.get("recipient").and_then(SoulValue::as_str) == Some(agent_id) {
+            out.push(MailboxEntry {
+                sender: row
+                    .fields
+                    .get("sender")
+                    .and_then(SoulValue::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                payload: row
+                    .fields
+                    .get("payload")
+                    .and_then(SoulValue::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            });
+        }
+    }
+    out
+}
+
+/// Pure, read-only: how many rows are buffered for `agent_id` past
+/// `cursor`'s watermark, without consuming/advancing anything — what
+/// `mailbox-check` reports. Deliberately distinct from
+/// `flush_pending_for_agent`, which both reports AND consumes; a status
+/// check must never itself trigger a flush.
+fn pending_count_for_agent(df: &SoulDataFramerr, cursor: &FrameCursor, agent_id: &str) -> usize {
+    df.rows_after(cursor.frame_id)
+        .filter(|row| row.fields.get("recipient").and_then(SoulValue::as_str) == Some(agent_id))
+        .count()
+}
+
+/// Persist one `MeshFrame::Direct` frame into the mesh mailbox table, keyed
+/// by the recipient agent id extracted from the subject it arrived on.
+fn record_mailbox_message(recipient: &str, sender: &str, raw_payload: &str) -> Result<()> {
+    with_registry_scoped(Some(&mesh_scope()), |reg| {
+        let df = reg.get_or_create(MAILBOX_TABLE, mailbox_columns());
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "recipient".to_string(),
+            SoulValue::Text(recipient.to_string()),
+        );
+        fields.insert("sender".to_string(), SoulValue::Text(sender.to_string()));
+        fields.insert(
+            "payload".to_string(),
+            SoulValue::Text(raw_payload.to_string()),
+        );
+        df.insert(fields)?;
+        Ok(())
+    })
+}
+
+/// Flush (report-and-consume) every mailbox entry buffered for `agent_id`,
+/// advancing its durable cursor so nothing is redelivered on the next
+/// flush. Called whenever that agent makes any noise on the mesh (a
+/// presence heartbeat or a discovery query) — the concrete, simplest
+/// answer to "when does historian flush" that #1229 left open:
+/// opportunistically on next-seen-alive, not on a schedule.
+fn flush_mailbox_for_agent(agent_id: &str) -> Result<Vec<MailboxEntry>> {
+    let mut pending = Vec::new();
+    with_registry_scoped(Some(&mesh_scope()), |reg| {
+        // `SoulDataFramerrRegistry::get_or_create` takes `&mut self`, so its
+        // returned `&mut SoulDataFramerr` can't stay alive alongside a
+        // second `&mut reg.cursors` borrow (E0499) — do the two mutable
+        // touches sequentially instead: ensure the table exists, clone the
+        // cursor out (or default it) via an immutable borrow, run the pure
+        // scan against an immutable `&SoulDataFramerr`, then write the
+        // advanced cursor back.
+        reg.get_or_create(MAILBOX_TABLE, mailbox_columns());
+        let cursor_name = mailbox_cursor_name(agent_id);
+        let mut cursor = reg
+            .cursors
+            .get(&cursor_name)
+            .cloned()
+            .unwrap_or_else(|| FrameCursor::new(MAILBOX_TABLE));
+        {
+            let df = reg
+                .tables
+                .get(MAILBOX_TABLE)
+                .expect("mesh_mailbox table just created above");
+            pending = flush_pending_for_agent(df, &mut cursor, agent_id);
+        }
+        reg.cursors.insert(cursor_name, cursor);
+        Ok(())
+    })?;
+    Ok(pending)
+}
+
+/// Answer `mailbox.check` from the local mailbox table — read-only, does
+/// not go through `with_registry_scoped` (which always saves back), same
+/// reasoning as `query_soul_activity`.
+fn count_pending_mailbox(agent_id: &str) -> Result<usize> {
+    let doc = load_soul_doc_scoped(Some(&mesh_scope()))?;
+    let reg = load_registry(&doc)?;
+    let count = match reg.tables.get(MAILBOX_TABLE) {
+        None => 0,
+        Some(df) => {
+            let default_cursor;
+            let cursor = match reg.cursors.get(&mailbox_cursor_name(agent_id)) {
+                Some(c) => c,
+                None => {
+                    default_cursor = FrameCursor::new(MAILBOX_TABLE);
+                    &default_cursor
+                }
+            };
+            pending_count_for_agent(df, cursor, agent_id)
+        }
+    };
+    Ok(count)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -432,6 +675,7 @@ async fn main() -> Result<()> {
         Command::InstanceStatus { instance_id } => {
             instance_status_cmd(&args, instance_id.clone()).await
         }
+        Command::MailboxCheck { agent_id } => mailbox_check_cmd(&args, agent_id.clone()).await,
     }
 }
 
@@ -502,6 +746,16 @@ async fn instance_status_cmd(args: &Args, instance_id: Option<String>) -> Result
     let req = StatusRequest { instance_id };
     let _: vultr_delegate::StatusResponse =
         vultr_request_reply(args, VULTR_STATUS_SUBJECT, &req).await?;
+    Ok(())
+}
+
+/// One-shot: ask `mailbox.check` over NATS request-reply and print the
+/// answer — same zero-dependency shape as `query_cmd`/`souls.query`, and
+/// reuses the generic `vultr_request_reply` helper (nothing vultr-specific
+/// about it despite the name: connect+timeout(30s)+request+parse+error-check).
+async fn mailbox_check_cmd(args: &Args, agent_id: String) -> Result<()> {
+    let req = MailboxCheckRequest { agent_id };
+    let _: MailboxCheckResponse = vultr_request_reply(args, MAILBOX_CHECK_SUBJECT, &req).await?;
     Ok(())
 }
 
@@ -616,6 +870,39 @@ async fn vultr_reply<T: Serialize>(
     }
 }
 
+/// Flush an agent's buffered mailbox and republish each entry verbatim to
+/// its own node inbox — called the moment that agent is seen alive again
+/// (a presence heartbeat or a discovery query), per #1229's mailbox design.
+async fn flush_mailbox_and_publish(client: &async_nats::Client, agent_id: &str) {
+    let entries = match flush_mailbox_for_agent(agent_id) {
+        Ok(entries) => entries,
+        Err(e) => {
+            eprintln!("mailbox flush failed for {agent_id}: {e}");
+            return;
+        }
+    };
+    if entries.is_empty() {
+        return;
+    }
+    let subject = node_subject(agent_id);
+    for entry in entries {
+        match client
+            .publish(subject.clone(), entry.payload.clone().into_bytes().into())
+            .await
+        {
+            Ok(()) => eprintln!(
+                "[{}] flushed mailbox: {} -> {subject}",
+                Utc::now().to_rfc3339(),
+                entry.sender
+            ),
+            Err(e) => eprintln!(
+                "failed to flush mailbox message from {} to {subject}: {e}",
+                entry.sender
+            ),
+        }
+    }
+}
+
 async fn run(args: &Args, log_dir: &Path) -> Result<()> {
     eprintln!(
         "🥾 b00t-historian[{}]: connecting to {}",
@@ -644,6 +931,14 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
         .subscribe(VULTR_WILDCARD)
         .await
         .with_context(|| format!("subscribing to {VULTR_WILDCARD}"))?;
+    let mut mesh_sub = client
+        .subscribe(MESH_WILDCARD)
+        .await
+        .with_context(|| format!("subscribing to {MESH_WILDCARD}"))?;
+    let mut mailbox_check_sub = client
+        .subscribe(MAILBOX_CHECK_SUBJECT)
+        .await
+        .with_context(|| format!("subscribing to {MAILBOX_CHECK_SUBJECT}"))?;
 
     // 🤓 VULTR_API_KEY is expected to be UNSET on most hosts running this
     // binary (only b00t-node itself is meant to hold it — see
@@ -689,14 +984,17 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
     let vultr_max_instances = vultr_delegate::max_instances_from_env();
 
     eprintln!(
-        "camping on '{}' (archive) + '{}' (souls) + '{}' (vultr, {}) — logging to {}/<YYYY>/<MM>/{}.ndjson, souls table '{}' (Ctrl-C to stop)",
+        "camping on '{}' (archive) + '{}' (souls) + '{}' (vultr, {}) + '{}' (mesh mailbox) + '{}' (mailbox check) — logging to {}/<YYYY>/<MM>/{}.ndjson, souls table '{}', mailbox table '{}' (Ctrl-C to stop)",
         args.subject,
         SOULS_WILDCARD,
         VULTR_WILDCARD,
         if vultr_provider.is_some() { "enabled" } else { "disabled: no VULTR_API_KEY" },
+        MESH_WILDCARD,
+        MAILBOX_CHECK_SUBJECT,
         log_dir.display(),
         args.basename,
         SOULS_TABLE,
+        MAILBOX_TABLE,
     );
 
     let mut count: u64 = 0;
@@ -822,6 +1120,49 @@ async fn run(args: &Args, log_dir: &Path) -> Result<()> {
                     other => eprintln!("unrecognized vultr.* subject: {other}"),
                 }
             }
+            maybe_msg = mesh_sub.next() => {
+                let Some(msg) = maybe_msg else { continue; };
+                let subject = msg.subject.to_string();
+                let raw_payload = String::from_utf8_lossy(&msg.payload).into_owned();
+                match serde_json::from_slice::<MeshFrame>(&msg.payload) {
+                    Ok(MeshFrame::Direct(chat_msg)) => match agent_id_from_node_subject(&subject) {
+                        Some(agent_id) => match record_mailbox_message(agent_id, &chat_msg.sender, &raw_payload) {
+                            Ok(()) => eprintln!(
+                                "[{}] buffered mesh mail {} -> {agent_id} (offline, will flush on next presence/discovery)",
+                                Utc::now().to_rfc3339(),
+                                chat_msg.sender
+                            ),
+                            Err(e) => eprintln!("failed to buffer mesh mail on {subject}: {e}"),
+                        },
+                        None => eprintln!(
+                            "mesh Direct frame on non-node subject {subject}, ignoring for mailbox"
+                        ),
+                    },
+                    Ok(MeshFrame::Presence(presence)) => {
+                        flush_mailbox_and_publish(&client, &presence.agent_id).await;
+                    }
+                    Ok(MeshFrame::DiscoveryQuery { from, .. }) => {
+                        flush_mailbox_and_publish(&client, &from).await;
+                    }
+                    Ok(_) => { /* Broadcast/DiscoveryReply/Gossip: not mailbox-relevant */ }
+                    Err(e) => eprintln!("malformed mesh frame on {subject}: {e}"),
+                }
+            }
+            maybe_msg = mailbox_check_sub.next() => {
+                let Some(msg) = maybe_msg else { continue; };
+                let reply_to = msg.reply.clone();
+                let result: Result<MailboxCheckResponse> =
+                    serde_json::from_slice::<MailboxCheckRequest>(&msg.payload)
+                        .context("parsing mailbox.check request")
+                        .and_then(|req| {
+                            let pending = count_pending_mailbox(&req.agent_id)?;
+                            Ok(MailboxCheckResponse {
+                                agent_id: req.agent_id,
+                                pending,
+                            })
+                        });
+                vultr_reply(&client, reply_to, MAILBOX_CHECK_SUBJECT, result).await;
+            }
             else => break,
         }
     }
@@ -894,4 +1235,135 @@ fn replay(args: &Args, log_dir: &Path, month: Option<String>, tail: Option<usize
     }
 
     Ok(())
+}
+
+
+#[cfg(test)]
+mod mailbox_tests {
+    use super::*;
+
+    fn sample_row_fields(
+        recipient: &str,
+        sender: &str,
+        payload: &str,
+    ) -> BTreeMap<String, SoulValue> {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "recipient".to_string(),
+            SoulValue::Text(recipient.to_string()),
+        );
+        fields.insert("sender".to_string(), SoulValue::Text(sender.to_string()));
+        fields.insert("payload".to_string(), SoulValue::Text(payload.to_string()));
+        fields
+    }
+
+    #[test]
+    fn agent_id_from_node_subject_strips_prefix() {
+        assert_eq!(
+            agent_id_from_node_subject("b00t.hive.mesh.node.pi"),
+            Some("pi")
+        );
+        assert_eq!(agent_id_from_node_subject("b00t.hive.mesh.node."), None);
+        assert_eq!(
+            agent_id_from_node_subject("b00t.hive.mesh.channel.general"),
+            None
+        );
+        assert_eq!(
+            agent_id_from_node_subject("b00t.hive.mesh.discovery.query"),
+            None
+        );
+    }
+
+    #[test]
+    fn flush_pending_for_agent_only_matches_recipient_and_advances_cursor() {
+        let mut df = SoulDataFramerr::new(MAILBOX_TABLE, mailbox_columns());
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-1"))
+            .unwrap();
+        df.insert(sample_row_fields("fung1", "sm3lly", "frame-2"))
+            .unwrap();
+        df.insert(sample_row_fields("pi", "vultr1", "frame-3"))
+            .unwrap();
+
+        let mut cursor = FrameCursor::new(MAILBOX_TABLE);
+        let delivered = flush_pending_for_agent(&df, &mut cursor, "pi");
+
+        assert_eq!(delivered.len(), 2);
+        assert_eq!(delivered[0].sender, "sm3lly");
+        assert_eq!(delivered[0].payload, "frame-1");
+        assert_eq!(delivered[1].sender, "vultr1");
+        assert_eq!(delivered[1].payload, "frame-3");
+        // cursor advances past every row scanned, not just matches
+        assert_eq!(cursor.frame_id, 3);
+        assert!(cursor.at_eof(&df));
+    }
+
+    #[test]
+    fn flush_pending_for_agent_is_idempotent_with_nothing_new() {
+        let mut df = SoulDataFramerr::new(MAILBOX_TABLE, mailbox_columns());
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-1"))
+            .unwrap();
+        let mut cursor = FrameCursor::new(MAILBOX_TABLE);
+
+        let first = flush_pending_for_agent(&df, &mut cursor, "pi");
+        assert_eq!(first.len(), 1);
+
+        let second = flush_pending_for_agent(&df, &mut cursor, "pi");
+        assert!(
+            second.is_empty(),
+            "flushing again with nothing new must not re-deliver"
+        );
+    }
+
+    #[test]
+    fn flush_pending_for_agent_does_not_redeliver_after_unrelated_row() {
+        let mut df = SoulDataFramerr::new(MAILBOX_TABLE, mailbox_columns());
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-1"))
+            .unwrap();
+        let mut cursor = FrameCursor::new(MAILBOX_TABLE);
+        assert_eq!(flush_pending_for_agent(&df, &mut cursor, "pi").len(), 1);
+
+        // a message arrives for someone else while "pi" stays quiet
+        df.insert(sample_row_fields("fung1", "sm3lly", "frame-2"))
+            .unwrap();
+        assert!(flush_pending_for_agent(&df, &mut cursor, "pi").is_empty());
+
+        // a new message for "pi" arrives — only the new one comes back
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-3"))
+            .unwrap();
+        let third = flush_pending_for_agent(&df, &mut cursor, "pi");
+        assert_eq!(third.len(), 1);
+        assert_eq!(third[0].payload, "frame-3");
+    }
+
+    #[test]
+    fn pending_count_for_agent_does_not_consume() {
+        let mut df = SoulDataFramerr::new(MAILBOX_TABLE, mailbox_columns());
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-1"))
+            .unwrap();
+        df.insert(sample_row_fields("pi", "sm3lly", "frame-2"))
+            .unwrap();
+        df.insert(sample_row_fields("fung1", "sm3lly", "frame-3"))
+            .unwrap();
+        let cursor = FrameCursor::new(MAILBOX_TABLE);
+
+        assert_eq!(pending_count_for_agent(&df, &cursor, "pi"), 2);
+        assert_eq!(pending_count_for_agent(&df, &cursor, "fung1"), 1);
+        assert_eq!(pending_count_for_agent(&df, &cursor, "nobody"), 0);
+        // a second, independent look must see the exact same count — no
+        // hidden mutation through the shared &cursor
+        assert_eq!(pending_count_for_agent(&df, &cursor, "pi"), 2);
+    }
+
+    #[test]
+    fn pending_count_matches_what_flush_would_deliver() {
+        let mut df = SoulDataFramerr::new(MAILBOX_TABLE, mailbox_columns());
+        df.insert(sample_row_fields("pi", "a", "1")).unwrap();
+        df.insert(sample_row_fields("pi", "b", "2")).unwrap();
+        let cursor_for_count = FrameCursor::new(MAILBOX_TABLE);
+        let mut cursor_for_flush = FrameCursor::new(MAILBOX_TABLE);
+
+        let count = pending_count_for_agent(&df, &cursor_for_count, "pi");
+        let delivered = flush_pending_for_agent(&df, &mut cursor_for_flush, "pi");
+        assert_eq!(count, delivered.len());
+    }
 }
