@@ -452,36 +452,36 @@ pub struct LlmState {
 }
 
 /// Parses the same `{"keys": {...}}` shape `commands/server.rs`'s `KeyAction::Create`
-/// writes. Shared by `from_config` (initial load) and `reload_if_changed` (hot reload)
-/// so the two never drift apart.
-fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry> {
+/// writes, from an already-read string. Split out of `load_keys_from_file` so
+/// `write_keys_file_locked` can parse content it read itself through its own
+/// locked file handle (see that function's doc comment for why that matters
+/// on Windows) instead of re-opening the path via a second handle.
+fn parse_keys_json(data: &str) -> HashMap<String, KeyEntry> {
     let mut keys = HashMap::new();
-    if let Ok(data) = std::fs::read_to_string(keys_file) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(&data) {
-            if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
-                for (k, v) in obj {
-                    if let (Some(consumer), Some(created_at)) = (
-                        v.get("consumer").and_then(|c| c.as_str()),
-                        v.get("created_at").and_then(|c| c.as_str()),
-                    ) {
-                        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
-                            let access = v.get("access").and_then(|a| a.as_array())
-                                .map(|arr| arr.iter().filter_map(|p| {
-                                    let class = p.get("class").and_then(|c| c.as_str())?;
-                                    let action = match p.get("action").and_then(|a| a.as_str())? {
-                                        "read" => Action::Read,
-                                        "write" => Action::Write,
-                                        _ => Action::Execute,
-                                    };
-                                    Some(ClassPermission { class: class.to_string(), action })
-                                }).collect())
-                                .unwrap_or_default();
-                            keys.insert(k.clone(), KeyEntry {
-                                consumer: consumer.to_string(),
-                                created_at: ts.with_timezone(&chrono::Utc),
-                                access,
-                            });
-                        }
+    if let Ok(parsed) = serde_json::from_str::<Value>(data) {
+        if let Some(obj) = parsed.get("keys").and_then(|k| k.as_object()) {
+            for (k, v) in obj {
+                if let (Some(consumer), Some(created_at)) = (
+                    v.get("consumer").and_then(|c| c.as_str()),
+                    v.get("created_at").and_then(|c| c.as_str()),
+                ) {
+                    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(created_at) {
+                        let access = v.get("access").and_then(|a| a.as_array())
+                            .map(|arr| arr.iter().filter_map(|p| {
+                                let class = p.get("class").and_then(|c| c.as_str())?;
+                                let action = match p.get("action").and_then(|a| a.as_str())? {
+                                    "read" => Action::Read,
+                                    "write" => Action::Write,
+                                    _ => Action::Execute,
+                                };
+                                Some(ClassPermission { class: class.to_string(), action })
+                            }).collect())
+                            .unwrap_or_default();
+                        keys.insert(k.clone(), KeyEntry {
+                            consumer: consumer.to_string(),
+                            created_at: ts.with_timezone(&chrono::Utc),
+                            access,
+                        });
                     }
                 }
             }
@@ -490,32 +490,60 @@ fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry>
     keys
 }
 
+/// Parses the same `{"keys": {...}}` shape `commands/server.rs`'s `KeyAction::Create`
+/// writes. Shared by `from_config` (initial load) and `reload_if_changed` (hot reload)
+/// so the two never drift apart.
+fn load_keys_from_file(keys_file: &std::path::Path) -> HashMap<String, KeyEntry> {
+    match std::fs::read_to_string(keys_file) {
+        Ok(data) => parse_keys_json(&data),
+        Err(_) => HashMap::new(),
+    }
+}
+
 /// Locked, read-merge-write, atomic-rename persist of the keys file — the fix
 /// for #1128 (`LlmState::save_keys_to_file` non-atomic cross-process write
 /// race). Two live processes writing around the same time — two server
 /// instances, or this server plus a separate `b00t server key create`
 /// invocation — no longer silently lose one side's key: the exclusive lock
-/// serializes writers, and re-reading the current on-disk map (via the same
-/// `load_keys_from_file` used at startup/hot-reload) before merging in
-/// `new_keys` means whatever the other writer already persisted survives.
-/// The write itself goes to a temp file then `rename`s over `keys_file`, so
-/// any reader that doesn't take the lock (`reload_if_changed`, the CLI's own
-/// `KeyAction::List`) never observes a partial write.
+/// serializes writers, and re-reading the current on-disk content before
+/// merging in `new_keys` means whatever the other writer already persisted
+/// survives. The write itself goes to a temp file then `rename`s over
+/// `keys_file`, so any reader that doesn't take the lock
+/// (`reload_if_changed`, the CLI's own `KeyAction::List`) never observes a
+/// partial write.
+///
+/// 🤓 The read-side MUST go through the same handle that holds the lock
+/// (`lock_file`), not a fresh `load_keys_from_file(keys_file)` open. On
+/// Windows, `LockFileEx` locks are mandatory at the OS level and — per
+/// Microsoft's own docs — are enforced against every *other* handle to that
+/// file, including a second handle opened by the very same process. Opening
+/// a brand-new handle here (as an earlier version of this function did, via
+/// `load_keys_from_file`) hits that self-conflict: the read fails with a
+/// lock-violation I/O error that `load_keys_from_file` swallows silently,
+/// so `merged` comes back empty and `new_keys` clobbers whatever the other
+/// writer had already persisted — reproducing #1128 on Windows despite the
+/// lock. flock(2) on Unix is purely advisory and never had this problem,
+/// which is why this only ever showed up on the Windows build machine. See
+/// `test_concurrent_instances_do_not_lose_each_others_keys`.
 fn write_keys_file_locked(
     keys_file: &std::path::Path,
     new_keys: &HashMap<String, KeyEntry>,
 ) -> std::io::Result<()> {
     use fs2::FileExt;
+    use std::io::Read;
 
     if let Some(parent) = keys_file.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    // Opened purely as a lock target — the actual write goes to a temp file,
-    // this handle is never itself written to or truncated.
-    let lock_file = std::fs::OpenOptions::new().create(true).write(true).open(keys_file)?;
+    // Both the lock target AND the read side of read-merge-write below — see
+    // the doc comment above for why the read must go through this same
+    // handle rather than a fresh open of `keys_file`.
+    let mut lock_file = std::fs::OpenOptions::new().create(true).read(true).write(true).open(keys_file)?;
     lock_file.lock_exclusive()?;
 
-    let mut merged = load_keys_from_file(keys_file);
+    let mut existing = String::new();
+    lock_file.read_to_string(&mut existing).unwrap_or(0);
+    let mut merged = parse_keys_json(&existing);
     for (k, v) in new_keys {
         merged.insert(k.clone(), v.clone());
     }
