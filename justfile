@@ -1454,3 +1454,47 @@ frigate-status:
     systemctl --user status frigate.service --no-pager || true
     echo "🔍 detector log (looking for teflon_tfl, watching for 'No NPU was detected'):"
     journalctl --user -u frigate.service --no-pager -n 100 | grep -iE "teflon_tfl|No NPU was detected" || echo "  (no matching lines yet)"
+
+# 🥾 Standby cloud build server (GCP dstack dev-environment) — recipes only,
+# deliberately no new b00t-cli subcommand (YAGNI, ops tooling not a
+# feature). See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md
+# for the full design and dev-env/*.yaml for the actual dstack configs.
+# Requires the `dstack` CLI on PATH and a GCP backend already configured in
+# its config.yml (ambient Application Default Credentials — no secrets to
+# manage here).
+
+# Idempotent: applies the fleet then the volume then the dev-environment.
+# Run once before the first remote-push/remote-build/remote-test.
+remote-provision:
+    #!/bin/bash
+    set -euo pipefail
+    echo "🥾 provisioning b00t-build-fleet..."
+    dstack apply -f dev-env/b00t-build-fleet.yaml -y
+    echo "🥾 provisioning b00t-build-cache volume..."
+    dstack apply -f dev-env/b00t-build-cache.volume.yaml -y
+    echo "🥾 provisioning b00t-build dev-environment..."
+    dstack apply -f dev-env/b00t-build.dev-environment.yaml -y
+    echo "✅ b00t-build ready — ssh b00t-build, or: just remote-push <branch> && just remote-test <branch>"
+
+# Pushes local HEAD to a scratch branch on origin for the build box to fetch.
+# Git-native sync — no rsync, no reverse-SSH into a NAT'd local machine.
+remote-push branch:
+    git push origin HEAD:refs/heads/scratch/{{branch}}
+
+# SSHes into b00t-build, fetches + checks out the scratch branch, and runs
+# `cargo build`. Streams live over the SSH session — no polling, no
+# separate result-fetch step. First run after remote-provision is cold
+# (real full compile); every run after is warm because /data/b00t persists
+# on the volume independent of the dev-environment's own stop/resume.
+remote-build branch:
+    ssh b00t-build "cd /data/b00t && git fetch origin && git checkout scratch/{{branch}} && cargo build"
+
+# Same as remote-build, but `cargo test` instead.
+remote-test branch:
+    ssh b00t-build "cd /data/b00t && git fetch origin && git checkout scratch/{{branch}} && cargo test"
+
+# Manual stop — belt-and-suspenders alongside the fleet's own 30m
+# idle_duration auto-stop (explicit "I'm done for the day" vs. the idle
+# timer catching "forgot to").
+remote-stop:
+    dstack stop b00t-build -y

@@ -1,0 +1,14 @@
+# b00t standby cloud build server.
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md.
+#
+# SSH-only by design (no `ide:` property) — this is a build server accessed
+# via `just remote-build`/`remote-test` over SSH, not an interactive desktop
+# IDE target. `dstack apply` provisions it against b00t-build-fleet.yaml
+# (must be applied first — see justfile's `remote-provision` recipe) and
+# mounts b00t-build-cache.volume.yaml at /data/b00t.
+type: dev-environment
+name: b00t-build
+
+volumes:
+  - name: b00t-build-cache
+    path: /data/b00t
