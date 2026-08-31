@@ -660,7 +660,15 @@ impl LlmState {
             created_at: chrono::Utc::now(),
             access: permissions,
         });
-        self.save_keys_to_file().await;
+        // #1208: the key is live in-memory for this process regardless, but a
+        // failed persist here means it silently won't survive a restart or be
+        // visible to other instances -- surface that loudly, tied to the key
+        // and consumer, instead of a generic unattributed log line.
+        if let Err(e) = self.save_keys_to_file().await {
+            eprintln!(
+                "⚠️ create_key: key {key} for consumer '{consumer}' minted in-memory but FAILED to persist to disk: {e} -- it will not survive a restart or be visible to other instances until the next successful save"
+            );
+        }
         key
     }
 
@@ -670,15 +678,23 @@ impl LlmState {
     /// a `b00t server key create` CLI invocation) never has its own key silently
     /// dropped by this process overwriting the file from its own stale view.
     /// See #1128. Locking is blocking I/O, so it runs off the async runtime via
-    /// `spawn_blocking`.
-    async fn save_keys_to_file(&self) {
+    /// `spawn_blocking`. Returns the underlying error (see #1208) instead of
+    /// only logging it, so callers can decide whether a failed persist is
+    /// worth surfacing further or retrying.
+    async fn save_keys_to_file(&self) -> Result<(), String> {
         let keys_file = self.keys_file.clone();
         let in_memory = self.keys.read().await.clone();
         let result = tokio::task::spawn_blocking(move || write_keys_file_locked(&keys_file, &in_memory)).await;
         match result {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => eprintln!("⚠️ save_keys_to_file: {e}"),
-            Err(e) => eprintln!("⚠️ save_keys_to_file: blocking task panicked: {e}"),
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => {
+                eprintln!("⚠️ save_keys_to_file: {e}");
+                Err(e.to_string())
+            }
+            Err(e) => {
+                eprintln!("⚠️ save_keys_to_file: blocking task panicked: {e}");
+                Err(format!("blocking task panicked: {e}"))
+            }
         }
     }
 
@@ -1037,7 +1053,20 @@ mod tests {
     impl TempHome {
         fn new() -> Self {
             let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let temp_dir = tempfile::tempdir().unwrap();
+            // #1208: tempfile::tempdir() defaults to std::env::temp_dir(), which
+            // on some dev hosts is a small tmpfs RAM disk -- transient I/O
+            // failures there were the suspected root cause of this test's
+            // one-off flake. Prefer CARGO_TARGET_DIR (real disk, cargo already
+            // guarantees it exists during a test run) so these temp homes land
+            // on the same disk as the build output instead.
+            let scratch_root = std::env::var_os("CARGO_TARGET_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"));
+            let _ = std::fs::create_dir_all(&scratch_root);
+            let temp_dir = tempfile::Builder::new()
+                .prefix("b00t-mcp-test-home-")
+                .tempdir_in(&scratch_root)
+                .unwrap_or_else(|_| tempfile::tempdir().unwrap());
             std::fs::create_dir_all(temp_dir.path().join(".b00t")).unwrap();
             let old_home = std::env::var("HOME").ok();
             unsafe {
