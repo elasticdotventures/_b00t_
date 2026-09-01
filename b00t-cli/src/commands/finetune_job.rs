@@ -986,6 +986,48 @@ pub enum FinetuneCommands {
         )]
         live_push: bool,
     },
+    #[clap(
+        about = "Sub-project C: dispatch two competing job manifests (e.g. local vs cloud) concurrently — see `race-finalize` for comparing results once both finish"
+    )]
+    Race {
+        #[clap(help = "Path to competitor A's job manifest TOML")]
+        manifest_a: PathBuf,
+        #[clap(help = "Path to competitor B's job manifest TOML")]
+        manifest_b: PathBuf,
+        #[clap(long, help = "Human-readable label for competitor A (default: competitor-a)")]
+        label_a: Option<String>,
+        #[clap(long, help = "Human-readable label for competitor B (default: competitor-b)")]
+        label_b: Option<String>,
+        #[clap(long, help = "Print the commands that would run without executing them")]
+        dry_run: bool,
+        #[clap(long, help = "Actually push to S3 instead of mocking")]
+        live_push: bool,
+    },
+    #[clap(
+        about = "Sub-project C: compare two completed race competitors by final training loss, register the winner as the canonical AI datum"
+    )]
+    RaceFinalize {
+        #[clap(long, help = "Path to competitor A's job manifest TOML")]
+        manifest_a: PathBuf,
+        #[clap(long, help = "Human-readable label for competitor A (default: competitor-a)")]
+        label_a: Option<String>,
+        #[clap(long, help = "Path to competitor A's training log (stdout capture or trainer_state.json)")]
+        log_a: PathBuf,
+        #[clap(long, help = "Path to competitor A's trained LoRA adapter directory")]
+        adapter_dir_a: PathBuf,
+        #[clap(long, help = "Path to competitor B's job manifest TOML")]
+        manifest_b: PathBuf,
+        #[clap(long, help = "Human-readable label for competitor B (default: competitor-b)")]
+        label_b: Option<String>,
+        #[clap(long, help = "Path to competitor B's training log (stdout capture or trainer_state.json)")]
+        log_b: PathBuf,
+        #[clap(long, help = "Path to competitor B's trained LoRA adapter directory")]
+        adapter_dir_b: PathBuf,
+        #[clap(long, help = "Directory to write the OCI layer + race report into (default: .b00t-race)")]
+        race_out_dir: Option<PathBuf>,
+        #[clap(long, help = "Actually push the winner to S3 instead of mocking")]
+        live_push: bool,
+    },
 }
 
 pub async fn handle_finetune_command(cmd: &FinetuneCommands, path: &str) -> Result<()> {
@@ -1025,6 +1067,55 @@ pub async fn handle_finetune_command(cmd: &FinetuneCommands, path: &str) -> Resu
             dry_run,
             live_push,
         } => run_job(manifest, &datum_dir, &repo_root, *dry_run, *live_push).await,
+        FinetuneCommands::Race {
+            manifest_a,
+            manifest_b,
+            label_a,
+            label_b,
+            dry_run,
+            live_push,
+        } => {
+            crate::commands::finetune_race::handle_race_dispatch(
+                manifest_a,
+                manifest_b,
+                label_a.clone(),
+                label_b.clone(),
+                &datum_dir,
+                &repo_root,
+                *dry_run,
+                *live_push,
+            )
+            .await
+        }
+        FinetuneCommands::RaceFinalize {
+            manifest_a,
+            label_a,
+            log_a,
+            adapter_dir_a,
+            manifest_b,
+            label_b,
+            log_b,
+            adapter_dir_b,
+            race_out_dir,
+            live_push,
+        } => {
+            let race_out = race_out_dir
+                .clone()
+                .unwrap_or_else(|| repo_root.join(".b00t-race"));
+            crate::commands::finetune_race::handle_race_finalize(
+                manifest_a,
+                label_a.clone(),
+                log_a,
+                adapter_dir_a,
+                manifest_b,
+                label_b.clone(),
+                log_b,
+                adapter_dir_b,
+                &datum_dir,
+                &race_out,
+                *live_push,
+            )
+        }
     }
 }
 
