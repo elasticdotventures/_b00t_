@@ -9,6 +9,12 @@
 //! with no local block volume needed; DuckDB opens it like any other file
 //! path, nothing S3-specific in this code. Defaults to in-memory.
 //!
+//! PGDUCK_MEMORY_LIMIT (e.g. "192MB"), if set, caps DuckDB's own buffer
+//! pool via `SET memory_limit=...` - relevant when running under a
+//! container memory limit, since DuckDB isn't guaranteed to see the
+//! cgroup limit and may size its default off host RAM instead. Left unset
+//! by default (DuckDB's own default), not silently changed.
+//!
 //! Known gap, same honesty as the upstream example: only scalar types are
 //! mapped (see arrow_type_to_pg_type/encode_row_data) - DuckDB's List/
 //! Struct/Array/Map/Union/Enum types aren't handled (relevant for vector
@@ -325,6 +331,20 @@ impl DuckDbBackend {
                 .unwrap_or_else(|e| panic!("failed to open DuckDB at {path}: {e}")),
             Err(_) => Connection::open_in_memory().unwrap(),
         };
+        // Opt-in cap on DuckDB's buffer pool, e.g. "128MB" - matters when
+        // running under a container memory limit (Kubernetes `resources.
+        // limits.memory`, podman --memory): DuckDB isn't guaranteed to see
+        // the cgroup limit and size its default buffer pool off host RAM
+        // instead, which can exceed the container's actual limit and get
+        // OOM-killed under a large query. Left unset by default (DuckDB's
+        // own default) rather than silently changed, since other consumers
+        // (e.g. an unconstrained pods/postgres replacement) may not want
+        // this - callers running under a real memory limit should set it
+        // explicitly, at or below that limit.
+        if let Ok(limit) = env::var("PGDUCK_MEMORY_LIMIT") {
+            conn.execute_batch(&format!("SET memory_limit='{limit}';"))
+                .unwrap_or_else(|e| panic!("invalid PGDUCK_MEMORY_LIMIT {limit:?}: {e}"));
+        }
         DuckDbBackend {
             conn: Arc::new(Mutex::new(conn)),
             query_parser: Arc::new(NoopQueryParser::new()),
