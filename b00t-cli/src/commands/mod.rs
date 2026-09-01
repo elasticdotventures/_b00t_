@@ -25,6 +25,7 @@ pub mod doctor_cmd;
 pub mod exec;
 pub mod experiment;
 pub mod fabric_cmd;
+pub mod finetune_job;
 pub mod focus;
 pub mod gates;
 pub mod grok;
