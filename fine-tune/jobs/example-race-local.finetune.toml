@@ -1,0 +1,40 @@
+# Example fine-tuning job manifest — LOCAL competitor in sub-project C's
+# dual-agent training race (sm3lly RTX3090 vs. HF Jobs cloud).
+#
+# Paired with example-race-cloud.finetune.toml: both target the SAME base
+# model + dataset and differ ONLY in [target], so `b00t-cli finetune race`
+# compares like-for-like runs (fair race — the only variable is where/how
+# training runs, not what it trains on). Schema is B's — see
+# fine-tune/jobs/example-local.finetune.toml for the schema this reuses
+# verbatim; this file is not a new format, just a race-paired instance of it.
+#
+# Run with:
+#   b00t-cli finetune validate fine-tune/jobs/example-race-local.finetune.toml
+#   b00t-cli finetune race \
+#     fine-tune/jobs/example-race-local.finetune.toml \
+#     fine-tune/jobs/example-race-cloud.finetune.toml \
+#     --label-a sm3lly-local --label-b hf-jobs-cloud --dry-run
+#
+# See docs/superpowers/specs/2026-09-01-generic-finetune-job-oci-distribution-design.md
+# for the manifest schema, and the sub-project C PR description for the race
+# orchestrator + comparison design this manifest feeds into.
+
+[job]
+id = "qwen38-peer-race-local-2026-09-01"
+base_model = "unsloth/Qwen3.8-27B-unsloth-bnb-4bit"
+framework = "unsloth"  # only value implemented; axolotl reserved (see axolotl.ai.toml)
+
+[dataset]
+source = "hf://datasets/elasticdotventures/b00t-training"
+
+[target]
+kind = "local"
+hive_profile = "finetune"  # _b00t_/finetune.hive.toml — gpu_free_mb >= 15000 gate
+
+[output]
+# Both race manifests share this datum name: whichever run wins gets
+# registered here as the canonical version (see finetune_race::finalize_race).
+datum = "qwen38-peer-race"
+storage = "s3"
+s3_bucket = "b00t-finetune-artifacts"  # ap-southeast-4
+mirror_to_hf = true
