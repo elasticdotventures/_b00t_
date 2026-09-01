@@ -9,9 +9,10 @@ type = "cli"
 hint = "Rustc Cranelift codegen backend — 2x faster debug builds than LLVM"
 desires = "latest"
 depends_on = ["rustc.cli"]
-
-[install]
-command = "rustup component add rustc-codegen-cranelift-preview --toolchain nightly"
+# @tribal (b00t task #40): install MUST live here under [b00t], not in a
+# separate top-level [install] table — see sccache.cli.toml's note and
+# b00t-cli/src/config_types.rs for why the old shape silently no-op'd.
+install = "rustup component add rustc-codegen-cranelift-preview --toolchain nightly"
 
 [version]
 cmd = "rustc --print cfg 2>/dev/null | grep cranelift || echo 'not active'"

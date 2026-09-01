@@ -87,13 +87,41 @@ pub struct OrchestrationConfig {
 
 // ── InstallSpec types ───────────────────────────────────────────────────
 
+// 🤓 b00t task #40 (sibling of #38 / PR #1222): `InstallSpec` is untagged, so
+//    serde tries each variant in declaration order and silently falls through
+//    to the next on a mismatch rather than erroring. `PackageInstallSpec` and
+//    `ToolInstallSpec` both carry `#[serde(deny_unknown_fields)]`, but the old
+//    inline `Metadata { requires: Option<Vec<String>> } ` variant did not —
+//    and since `requires` is `Option`, an *empty* table already satisfies it.
+//    That meant a `[install]` table shaped `{ command = "..." }` or
+//    `{ cmd = "..." }` (used by sccache.cli.toml/cranelift.cli.toml via
+//    `command`, servo.cli.toml/xpra.cli.toml via `cmd`) failed `Command`
+//    (not a bare string), failed `Package`/`Tool` (deny_unknown_fields trips
+//    on the unrecognized key), and then silently matched `Metadata` anyway —
+//    dropping the unrecognized field instead of erroring — so
+//    `command_string()` returned `None` and `b00t install <name>` quietly
+//    did nothing. `CommandTable` below is a first-class variant for that
+//    table shape (accepting both the `command` and `cmd` keys actually used
+//    in the wild), and `Metadata` now denies unknown fields like its
+//    siblings, so a table that isn't recognized by any variant now errors
+//    loudly during deserialization instead of silently resolving to
+//    `Metadata`. See the `install_command_table_*` and
+//    `*_cli_install_resolves_end_to_end` tests in lib.rs.
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum InstallSpec {
     Command(String),
+    CommandTable(CommandInstallSpec),
     Package(PackageInstallSpec),
     Tool(ToolInstallSpec),
-    Metadata { requires: Option<Vec<String>> },
+    Metadata(MetadataInstallSpec),
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CommandInstallSpec {
+    #[serde(alias = "cmd")]
+    pub command: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -118,22 +146,30 @@ pub struct ToolInstallSpec {
     pub version: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataInstallSpec {
+    pub requires: Option<Vec<String>>,
+}
+
 impl InstallSpec {
     pub fn command(&self) -> Option<&str> {
         match self {
             InstallSpec::Command(command) => Some(command),
+            InstallSpec::CommandTable(spec) => Some(&spec.command),
             InstallSpec::Package(_) => None,
             InstallSpec::Tool(_) => None,
-            InstallSpec::Metadata { .. } => None,
+            InstallSpec::Metadata(_) => None,
         }
     }
 
     pub fn command_string(&self) -> Option<String> {
         match self {
             InstallSpec::Command(command) => Some(command.clone()),
+            InstallSpec::CommandTable(spec) => Some(spec.command.clone()),
             InstallSpec::Package(package) => Some(package.install_script()),
             InstallSpec::Tool(tool) => tool.install_script(),
-            InstallSpec::Metadata { .. } => None,
+            InstallSpec::Metadata(_) => None,
         }
     }
 }

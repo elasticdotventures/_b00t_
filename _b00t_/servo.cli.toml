@@ -68,14 +68,10 @@
 name    = "servo"
 hint    = "Rust browser engine — servoshell binary + libservo embedding API"
 type    = "cli"
-
-[version]
-desires = "0.3.0"
-cmd     = "servoshell --version 2>&1 || servo --version 2>&1"
-regex   = "(?:servo|servoshell)[/ ](\\d+\\.\\d+\\.\\d+)"
-
-[install]
-cmd = """
+# @tribal (b00t task #40): install MUST live here under [b00t], not in a
+# separate top-level [install] table — see sccache.cli.toml's note and
+# b00t-cli/src/config_types.rs for why the old shape silently no-op'd.
+install = """
 set -euo pipefail
 SERVO_VERSION="0.3.0"
 INSTALL_DIR="${HOME}/.local/share/servo"
@@ -86,6 +82,11 @@ ln -sf "$INSTALL_DIR/servoshell" ~/.local/bin/servo
 ln -sf "$INSTALL_DIR/servoshell" ~/.local/bin/servoshell
 echo "servo ${SERVO_VERSION} installed → ~/.local/share/servo/servoshell"
 """
+
+[version]
+desires = "0.3.0"
+cmd     = "servoshell --version 2>&1 || servo --version 2>&1"
+regex   = "(?:servo|servoshell)[/ ](\\d+\\.\\d+\\.\\d+)"
 
 [runtime_deps]
 # apt packages required on Linux (Ubuntu/Debian)

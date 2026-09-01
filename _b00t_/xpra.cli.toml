@@ -106,18 +106,14 @@ name = "xpra"
 type = "cli"
 hint = "Seamless X11 app forwarding + built-in HTML5 client — replaces raw X11Forwarding for watching headed RPA browser sessions"
 source = "https://github.com/Xpra-org/xpra"
-
-[version]
-desires = "6.5"
-cmd     = "xpra --version 2>&1"
-regex   = "xpra v?(\\d+\\.\\d+(?:\\.\\d+)?)"
-
-[install]
+# @tribal (b00t task #40): install MUST live here under [b00t], not in a
+# separate top-level [install] table — see sccache.cli.toml's note and
+# b00t-cli/src/config_types.rs for why the old shape silently no-op'd.
 # 🤓 run on BOTH the RPA server node (e.g. rock-5c) and the operator's client
 #    machine (WSL2/Linux) — this bootstraps the xpra.org repo; plain
 #    `apt-get install xpra` pulls the stale, buggy Ubuntu-universe 3.1.5.
 #    `<codename>` is the Ubuntu release codename (noble/jammy/etc, `. /etc/os-release`).
-cmd = """
+install = """
 set -euo pipefail
 DISTRO_CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-noble}")"
 sudo apt-get install -y ca-certificates wget
@@ -130,6 +126,11 @@ sudo apt-get update
 sudo apt-get install -y xpra-server xpra-x11 xpra-html5 xpra-codecs xpra
 xpra --version
 """
+
+[version]
+desires = "6.5"
+cmd     = "xpra --version 2>&1"
+regex   = "xpra v?(\\d+\\.\\d+(?:\\.\\d+)?)"
 
 [runtime_deps]
 apt = ["xpra", "xpra-server", "xpra-x11", "xpra-html5", "xpra-codecs"]
