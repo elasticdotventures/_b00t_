@@ -167,6 +167,7 @@
 .eggs/
 .env
 .env.test
+.env.*
 .envrc
 # 🤓 raw secret material (nats-user/nats-password/rustfs-*-key etc.) — canonical
 # location is ~/.b00t/secrets/ (see b00t-cli/scripts/sync-*-secrets.sh), but a
