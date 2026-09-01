@@ -22,7 +22,7 @@ protocol = "nats+acp"
 pubsub = true
 subject_prefix = "hive.sm3lly.acp"
 nats_url_env = "NATS_URL"
-default_nats_url = "nats://c010.promptexecution.com:4222"
+default_nats_url = "nats://vultr1-1.ts.promptexecution.com:4222"
 
 [b00t.agent.crew]
 role = "specialist"
