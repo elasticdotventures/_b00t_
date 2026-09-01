@@ -1,10 +1,17 @@
 # b00t Unsloth QLoRA Fine-Tuning Configuration
-# Base: unsloth/Qwen3.6-27B (bf16 repack — trainable with FastLanguageModel + BNB 4-bit)
+# Base: unsloth/Qwen3.8-27B-unsloth-bnb-4bit (base: Qwen/Qwen3.8-27B, Apache 2.0)
 # Train: b00t-cli runpod train --config fine-tune/config.yaml
 # Dry-run: b00t-cli runpod train --dry-run --config fine-tune/config.yaml
+#
+# 🤓 Retarget history: qwen2.5 base sunset 2026-07-07 → retarget to qwen3.6
+#    was flagged but never landed here → epic task #50 (B→C→retrofit-A)
+#    moved the target further to qwen38, which IS what landed. Same
+#    base_model as fine-tune/jobs/example-{local,cloud,race-*}.finetune.toml
+#    (the new TOML job-manifest system's default target) — this file and the
+#    manifest system now agree, see ai-finetune.skill.toml's RETARGET STATUS.
 
-base_model: "unsloth/Qwen3.6-35B-A3B"
-adapter_name: "b00t-aligned-qwen36-35b-a3b"
+base_model: "unsloth/Qwen3.8-27B-unsloth-bnb-4bit"
+adapter_name: "b00t-aligned-qwen38-27b"
 dataset: "fine-tune/train.jsonl"
 output_dir: "./fine-tune/output"
 
@@ -43,10 +50,10 @@ use_gradient_checkpointing: true
 # local: http://192.168.1.137:30803  (LAN only — not reachable from RunPod)
 # public: run `just ai-finetune::mlflow-tunnel` to get the https://xxx.trycloudflare.com URL
 report_to: "mlflow"
-mlflow_experiment: "b00t-qwen36-finetune"
+mlflow_experiment: "b00t-qwen38-finetune"
 
 # ─── HF Hub (checkpoints + final adapter push) ───────────────────────────────
 # Requires HF_TOKEN env var on the pod; set push_to_hub: false to skip
-hub_model_id: "elasticdotventures/b00t-qwen36-35b-a3b"
+hub_model_id: "elasticdotventures/b00t-qwen38-27b"
 push_to_hub: true
 private: true
