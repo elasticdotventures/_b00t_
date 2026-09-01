@@ -1,0 +1,34 @@
+[b00t]
+name = "nsc"
+type = "cli"
+desires = "latest"
+hint = "nsc — NATS account/operator credential management (nats-io/nsc)"
+depends_on = []
+
+install = "curl -L https://raw.githubusercontent.com/nats-io/nsc/master/install.sh | sh"
+update = "curl -L https://raw.githubusercontent.com/nats-io/nsc/master/install.sh | sh"
+version = "nsc --version"
+version_regex = '([0-9]+\\.[0-9]+\\.[0-9]+)'
+
+[[b00t.usage]]
+description = "Show current operator/account/user context"
+command = "nsc env"
+
+[[b00t.usage]]
+description = "List operators"
+command = "nsc list operators"
+
+[validate]
+command = "nsc --version"
+regex = "[0-9]+\\.[0-9]+\\.[0-9]+"
+
+[roles]
+required_for = []
+optional_for = ["developer"]
+
+# b00t:map v1
+# summary: nsc — NATS operator/account/user JWT + key management CLI
+# tags: nats, nsc, jwt, credentials, messaging
+# tier: ch0nky
+# cmds: nsc env, nsc list operators, nsc list accounts
+# complexity: 3
