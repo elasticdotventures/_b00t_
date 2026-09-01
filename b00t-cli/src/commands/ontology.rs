@@ -254,7 +254,7 @@ impl Satisfies<DatumValidateConstraint> for DatumMeta {
     ///     pass/fail, we did not determine it to be false)
     fn satisfies(&self, _c: &DatumValidateConstraint) -> SatisfiesResult {
         if self.validate.command.is_empty() {
-            return SatisfiesResult::unknown(0.0);
+            return SatisfiesResult::unknown();
         }
         // Expand ~ to the actual home directory so validate commands like
         // `git -C ~/.b00t cat-file -e <hash>` work without shell expansion.
@@ -264,7 +264,7 @@ impl Satisfies<DatumValidateConstraint> for DatumMeta {
         let expanded = self.validate.command.replace('~', &home);
         let parts: Vec<&str> = expanded.split_whitespace().collect();
         if parts.is_empty() {
-            return SatisfiesResult::unknown(0.0);
+            return SatisfiesResult::unknown();
         }
         match Command::new(parts[0]).args(&parts[1..]).output() {
             Ok(output) => {
@@ -275,25 +275,27 @@ impl Satisfies<DatumValidateConstraint> for DatumMeta {
                 );
                 if self.validate.regex.is_empty() {
                     if output.status.success() {
-                        SatisfiesResult::satisfied(1.0)
+                        SatisfiesResult::satisfied(1.0, Vec::new())
                     } else {
-                        SatisfiesResult::violated(
-                            format!("command exited {:?}", output.status.code()),
-                            1.0,
-                        )
+                        SatisfiesResult::violated(format!(
+                            "command exited {:?}",
+                            output.status.code()
+                        ))
                     }
                 } else {
                     match regex::Regex::new(&self.validate.regex) {
-                        Ok(re) if re.is_match(&combined) => SatisfiesResult::satisfied(1.0),
-                        Ok(_) => SatisfiesResult::violated(
-                            format!("output did not match /{}/", self.validate.regex),
-                            1.0,
-                        ),
-                        Err(_) => SatisfiesResult::unknown(0.0),
+                        Ok(re) if re.is_match(&combined) => {
+                            SatisfiesResult::satisfied(1.0, Vec::new())
+                        }
+                        Ok(_) => SatisfiesResult::violated(format!(
+                            "output did not match /{}/",
+                            self.validate.regex
+                        )),
+                        Err(_) => SatisfiesResult::unknown(),
                     }
                 }
             }
-            Err(_) => SatisfiesResult::unknown(0.0),
+            Err(_) => SatisfiesResult::unknown(),
         }
     }
 }

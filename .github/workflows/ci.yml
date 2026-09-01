@@ -70,16 +70,24 @@ jobs:
       - name: Init workspace-required vendor submodules
         run: |
           set -euo pipefail
-          # 🤓 Exactly the three carrying *active* path deps in the workspace
-          #    manifests. tomllm and irontology-mcp are commented out in
+          # 🤓 Exactly the two carrying *active* path deps via a real git
+          #    submodule. tomllm and irontology-mcp are commented out in
           #    Cargo.toml and are NOT required — do not re-add them by reflex.
           #      vendor/embed-anything-b00t -> embed_anything (b00t-embed)
           #      vendor/runpod-sdk          -> runpod-sdk     (b00t-cli)
-          #      vendor/ledgrrr             -> b00t-reflect-types
           git submodule update --init --depth 1 \
             vendor/embed-anything-b00t \
-            vendor/runpod-sdk \
-            vendor/ledgrrr
+            vendor/runpod-sdk
+
+      - name: Clone vendor/ledgrrr
+        run: |
+          set -euo pipefail
+          # 🤓 ledgrrr's canonical checkout now lives at promptexecution/ledgrrr;
+          #    vendor/ledgrrr here is a linked git worktree of it on developer
+          #    machines, not a submodule. CI has no sibling checkout to link
+          #    against, so it gets a plain shallow clone instead.
+          #      vendor/ledgrrr -> b00t-reflect-types
+          git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Verify the init produced usable, in-sync checkouts
         run: |
@@ -90,7 +98,7 @@ jobs:
           #    What this catches is the init silently under-delivering: a
           #    submodule left uninitialized ('-') or landing off-commit ('+'),
           #    which otherwise surfaces later as a confusing cargo path error.
-          bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk vendor/ledgrrr | grep -E '^[-+]' || true)"
+          bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk | grep -E '^[-+]' || true)"
           if [ -n "$bad" ]; then
             echo "FAIL: submodule(s) uninitialized or off-commit:"
             echo "$bad"
@@ -100,13 +108,29 @@ jobs:
           for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/ledgrrr/crates/b00t-reflect-types; do
             test -f "$p/Cargo.toml" || { echo "FAIL: $p/Cargo.toml missing"; exit 1; }
           done
-          echo "PASS: 3 submodules initialized, in-sync, path deps resolve"
+          echo "PASS: 2 submodules + ledgrrr clone initialized, in-sync, path deps resolve"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # 🤓 sccache: proven 7-10x locally (merged PR #662, `_b00t_/sccache.cli.toml`
+      # datum) but never wired into CI until now — #1226 documents this job still
+      # taking 30-45+ min even with Swatinem/rust-cache below warm, because that
+      # action only caches the whole `target/`+registry as one artifact keyed on
+      # Cargo.lock; any changed crate (or its dependents) still recompiles from
+      # scratch. sccache caches per-compilation-unit instead, so it helps on
+      # exactly the runs rust-cache's coarser cache can't — a partial-change PR.
+      # The two are complementary, not redundant; keep both.
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+
+      - name: Enable sccache as the rustc wrapper
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
       # 🤓 Native/CLI deps some tests shell out to. Not present on a bare
       #    ubuntu-latest runner — without these the tests fail with "command
@@ -116,6 +140,26 @@ jobs:
 
       - name: Install just (required by b00t-cli::datum_justfile tests, >= 1.13.0)
         uses: extractions/setup-just@v2
+
+      # 🤓 CI-speed experiment (elasticdotventures/_b00t_#1226): swap the
+      #    default libtest runner for nextest's per-test-process model.
+      #    Two things make this an unusually clean fit for THIS workflow
+      #    specifically, not just "nextest is generally faster":
+      #    1. nextest doesn't run doctests -- and this workflow already
+      #       skips them deliberately (see the cargo test step's own
+      #       comment below, #919's cdylib+rlib E0460 bug), so nextest's
+      #       one real limitation costs this job nothing it wasn't
+      #       already paying.
+      #    2. Per-test process isolation eliminates an entire class of
+      #       flakiness this repo has hit more than once: tests in
+      #       different modules mutating process-global state (cwd, HOME)
+      #       with only a module-local Mutex, which only guards a test
+      #       against others IN THE SAME MODULE, not the whole binary
+      #       (see #1224's shard_tests fix). Under nextest each test gets
+      #       its own process, so this class of cross-module race can't
+      #       happen at all, by construction -- not just less likely.
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
 
       # 🤓 capability-forge/tests/e2e_local_nats.rs spawns a real nats-server
       #    subprocess (resolved via PATH, override with NATS_SERVER_BIN) --
@@ -161,5 +205,11 @@ jobs:
       #    failure is inherent to linking a doctest against a crate with a
       #    cdylib output alongside the rlib, not anything wrong with the
       #    tested code. All non-doctest tests still run for real. See #919.
-      - name: cargo test --workspace --locked --all-targets
-        run: cargo test --workspace --locked --all-targets
+      - name: cargo nextest run --workspace --locked --all-targets
+        run: cargo nextest run --workspace --locked --all-targets
+
+      # 🤓 Hit-rate evidence for #1226: printed even on failure (this run's own
+      # cache behavior is worth seeing whether or not the tests above passed).
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats

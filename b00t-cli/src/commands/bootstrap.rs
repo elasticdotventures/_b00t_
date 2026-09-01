@@ -49,7 +49,7 @@ pub enum BootstrapCommands {
 }
 
 /// Handle bootstrap commands
-pub async fn handle_bootstrap_command(cmd: BootstrapCommands) -> Result<()> {
+pub async fn handle_bootstrap_command(cmd: BootstrapCommands, path: &str) -> Result<()> {
     match cmd {
         BootstrapCommands::Run {
             skip_dirs,
@@ -57,13 +57,14 @@ pub async fn handle_bootstrap_command(cmd: BootstrapCommands) -> Result<()> {
             skip_services,
             output,
             print,
-        } => run_bootstrap(skip_dirs, skip_install, skip_services, output, print).await,
-        BootstrapCommands::Check => check_only().await,
-        BootstrapCommands::Skeleton => skeleton_only().await,
+        } => run_bootstrap(path, skip_dirs, skip_install, skip_services, output, print).await,
+        BootstrapCommands::Check => check_only(path).await,
+        BootstrapCommands::Skeleton => skeleton_only(path).await,
     }
 }
 
 async fn run_bootstrap(
+    path: &str,
     skip_dirs: bool,
     skip_install: bool,
     skip_services: bool,
@@ -74,7 +75,7 @@ async fn run_bootstrap(
     println!();
 
     // Locate bootstrap.toml
-    let config_path = PathBuf::from("_b00t_/bootstrap.toml");
+    let config_path = PathBuf::from(shellexpand::tilde(path).to_string()).join("bootstrap.toml");
     if !config_path.exists() {
         anyhow::bail!(
             "Bootstrap config not found: {}\nRun from dotfiles root directory",
@@ -157,8 +158,8 @@ async fn run_bootstrap(
     Ok(())
 }
 
-async fn check_only() -> Result<()> {
-    let config_path = PathBuf::from("_b00t_/bootstrap.toml");
+async fn check_only(path: &str) -> Result<()> {
+    let config_path = PathBuf::from(shellexpand::tilde(path).to_string()).join("bootstrap.toml");
     if !config_path.exists() {
         anyhow::bail!("Bootstrap config not found: {}", config_path.display());
     }
@@ -181,8 +182,8 @@ async fn check_only() -> Result<()> {
     Ok(())
 }
 
-async fn skeleton_only() -> Result<()> {
-    let config_path = PathBuf::from("_b00t_/bootstrap.toml");
+async fn skeleton_only(path: &str) -> Result<()> {
+    let config_path = PathBuf::from(shellexpand::tilde(path).to_string()).join("bootstrap.toml");
     if !config_path.exists() {
         anyhow::bail!("Bootstrap config not found: {}", config_path.display());
     }

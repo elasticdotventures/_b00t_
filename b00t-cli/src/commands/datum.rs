@@ -12,6 +12,11 @@ pub enum DatumCommands {
     Show {
         #[clap(help = "Datum name to show (e.g., just, rust, docker)")]
         name: String,
+        #[clap(
+            long,
+            help = "Authorize via a scoped agent token (#1104: k8s TokenReview + role-shard-access RoleBinding check for scope 'datum:<name>') instead of ambient trust"
+        )]
+        as_agent_token: Option<String>,
     },
 
     #[clap(about = "Generate JSTree-compatible JSON from datums")]
@@ -216,9 +221,11 @@ pub enum DatumCommands {
     },
 }
 
-pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
+pub async fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
     match datum_command {
-        DatumCommands::Show { name } => handle_show(path, name),
+        DatumCommands::Show { name, as_agent_token } => {
+            handle_show(path, name, as_agent_token.as_deref()).await
+        }
         DatumCommands::Tree {
             output,
             group_by_type,
@@ -327,7 +334,17 @@ pub fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result
     }
 }
 
-fn handle_show(b00t_path: &str, datum_name: &str) -> Result<()> {
+async fn handle_show(b00t_path: &str, datum_name: &str, as_agent_token: Option<&str>) -> Result<()> {
+    // #1104: when --as-agent-token is given, gate the read path on a k8s
+    // TokenReview + role-shard-access RoleBinding check (scoped to
+    // datum:<datum_name>) rather than ambient trust.
+    if let Some(token) = as_agent_token {
+        let scope = crate::soul_scope::SoulScope::new(crate::soul_scope::ShardKind::Datum, datum_name);
+        crate::agent_token::authorize_shard_token(token, &scope)
+            .await
+            .context("datum show --as-agent-token")?;
+    }
+
     // Find the datum
     let datum = datum_utils::find_datum_by_pattern(b00t_path, datum_name)?
         .ok_or_else(|| anyhow::anyhow!("Datum '{}' not found", datum_name))?;
@@ -1208,12 +1225,12 @@ impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
     fn satisfies(&self, c: &BootDatumSchemaConstraint) -> SatisfiesResult {
         let outcome = compute_datum_validation(self.raw, self.filename, c.strict);
         if !outcome.errors.is_empty() {
-            return SatisfiesResult::violated(outcome.errors.join("; "), 1.0);
+            return SatisfiesResult::violated(outcome.errors.join("; "));
         }
         if outcome.extension_check_undecidable {
-            return SatisfiesResult::unknown(0.5);
+            return SatisfiesResult::unknown();
         }
-        SatisfiesResult::satisfied(1.0)
+        SatisfiesResult::satisfied(1.0, Vec::new())
     }
 }
 

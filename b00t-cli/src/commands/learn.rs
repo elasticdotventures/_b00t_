@@ -48,6 +48,12 @@ pub struct LearnArgs {
     #[arg(long, help = "Record globally (default: repo)")]
     pub global: bool,
 
+    #[arg(
+        long,
+        help = "#1101: override a global-scope disclosure-gate block (only affects --global)"
+    )]
+    pub force: bool,
+
     // Search lessons (replaces advice)
     #[arg(long, help = "Search lessons: '<query>' or 'list'")]
     pub search: Option<String>,
@@ -93,7 +99,7 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
 
     // Record lesson
     if let Some(ref lesson) = args.record {
-        return handle_record(path, topic_val.as_deref(), &lesson, args.global).await;
+        return handle_record(path, topic_val.as_deref(), &lesson, args.global, args.force).await;
     }
 
     // Search lessons
@@ -485,7 +491,7 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     Ok(())
 }
 
-async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool) -> Result<()> {
+async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool, force: bool) -> Result<()> {
     let topic = topic.ok_or_else(|| anyhow::anyhow!("Topic required for recording lesson"))?;
 
     // Parse "<topic>: <body>" format
@@ -545,7 +551,7 @@ async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bo
     println!("Scope: {}", scope);
 
     lfmf_system
-        .record_lesson(topic, lesson)
+        .record_lesson_scoped(topic, lesson, global, force)
         .await
         .context("Failed to record lesson")?;
 

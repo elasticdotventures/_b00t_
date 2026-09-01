@@ -91,6 +91,7 @@ pub mod job_executor;
 pub mod job_ipc;
 pub mod job_state;
 pub mod just_ast;
+pub mod agent_token;
 pub mod k0mmand3r;
 pub mod k8s;
 pub mod memory_provider;
@@ -102,6 +103,7 @@ pub mod scheduler;
 pub mod session_memory;
 pub mod skill_resolver;
 pub mod semantic_patch;
+pub mod soul_scope;
 pub mod soul_writer;
 pub mod step;
 pub mod traits;
@@ -155,6 +157,7 @@ pub mod gates;
 pub mod checklist;
 pub mod hooks;
 pub mod dispatch;
+pub mod dispatch_sysml;
 pub mod lifecycle;
 
 pub use datum_types::*;
@@ -718,6 +721,30 @@ hint = "containers"
 
         assert!(matches!(datum.install, InstallSpec::Metadata { .. }));
         assert!(datum.install.command_string().is_none());
+    }
+
+    #[test]
+    fn node_cli_install_resolves_nvm_command() {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+        #[derive(Deserialize)]
+        struct TestFile {
+            b00t: TestDatum,
+        }
+
+        let toml_text =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../_b00t_/node.cli.toml"))
+                .expect("node.cli.toml should exist");
+        let file: TestFile = toml::from_str(&toml_text).unwrap();
+        let command = file
+            .b00t
+            .install
+            .command_string()
+            .expect("node.cli.toml install must resolve to a runnable command, not InstallSpec::Metadata");
+
+        assert!(command.contains("nvm install --lts"));
     }
 
     #[test]

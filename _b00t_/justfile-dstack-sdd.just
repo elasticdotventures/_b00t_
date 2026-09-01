@@ -102,6 +102,9 @@ dstack-server-config:
     source "$root/.env"
     set +a
     : "${RUNPOD_API_KEY:?RUNPOD_API_KEY not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    : "${AZURE_TENANT_ID:?AZURE_TENANT_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
+    GCP_PROJECT_ID="${GCP_PROJECT_ID:-app4dog}"
     mkdir -p ~/.dstack/server
     umask 077
     printf '%s\n' \
@@ -112,6 +115,18 @@ dstack-server-config:
         '        creds:' \
         '          type: api_key' \
         "          api_key: \"$RUNPOD_API_KEY\"" \
+        '      - type: gcp' \
+        "        project_id: \"$GCP_PROJECT_ID\"" \
+        '        creds:' \
+        '          type: default' \
+        '      - type: aws' \
+        '        creds:' \
+        '          type: default' \
+        '      - type: azure' \
+        "        tenant_id: \"$AZURE_TENANT_ID\"" \
+        "        subscription_id: \"$AZURE_SUBSCRIPTION_ID\"" \
+        '        creds:' \
+        '          type: default' \
         > ~/.dstack/server/config.yml
     chmod 600 ~/.dstack/server/config.yml
     echo "Wrote ~/.dstack/server/config.yml (mode 600, not git-tracked, key sourced from .env)"

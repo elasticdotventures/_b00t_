@@ -1,0 +1,62 @@
+# CI: bare-metal / systemd GPU self-hosted runner proof of concept.
+#
+# ⚠️ Deliberately `workflow_dispatch` ONLY. Do NOT add `pull_request` or
+# `push` triggers here without reading the trigger-scope decision tracked in
+# issue #1233 first — this job runs directly on this host's OS (no
+# container/VM boundary) with real filesystem/GPU/network access, not a
+# disposable GH-hosted VM. This repo is public; widening the trigger scope
+# to fork PRs is a separate, explicit decision for a human to make (already
+# tracked in #1233, shared with the companion k8s/ARC runner in PR #1232),
+# not something to fall into by copy-pasting `ci.yml`'s triggers.
+#
+# This is the systemd/bare-metal alternative to PR #1232's k8s/ARC-based
+# runner (`.github/workflows/ci-gpu.yml`, `k8s/gh-runner-gpu/`). See
+# systemd/b00t-gpu-runner/README.md for when to prefer one over the other.
+#
+# Also note: this workflow cannot actually run anywhere yet. It targets
+# runner labels (`self-hosted, gpu, sm3lly`) that no registered runner
+# currently carries — see systemd/b00t-gpu-runner/README.md for the missing
+# prerequisite (a runner registration token) and the still-unrun
+# `setup-runner.sh` + `svc.sh install`/`start`.
+name: CI (GPU self-hosted systemd PoC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why run this manually (shows up in the run log)"
+        required: false
+        default: "manual bare-metal GPU runner smoke test"
+
+concurrency:
+  group: ci-gpu-systemd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gpu-smoke-test:
+    name: GPU smoke test (nvidia-smi + scoped cargo test)
+    # Must match the labels a runner registers with via
+    # systemd/b00t-gpu-runner/environment.example's GH_RUNNER_LABELS.
+    # Unlike ARC's gha-runner-scale-set (matched by scale-set name in
+    # ci-gpu.yml), a plain systemd-installed actions-runner is matched by
+    # this ordinary `[self-hosted, ...]` label array.
+    runs-on: [self-hosted, gpu, sm3lly]
+    timeout-minutes: 20
+    steps:
+      - name: Prove the GPU is actually visible to this job
+        run: nvidia-smi
+
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Scoped to two small, fast-building workspace crates on purpose — NOT
+      # `--workspace` (that's issue #1226's whole problem, and a much
+      # bigger, separate proof-of-concept step once this one is confirmed
+      # working end-to-end).
+      - name: cargo test (scoped crates)
+        run: cargo test --locked -p b00t-datum-core -p k0mmand3r --all-targets

@@ -245,6 +245,11 @@ Advice mode (consult prior lessons before fixing):
             help = "Record lesson globally (mutually exclusive with --repo)"
         )]
         global: bool,
+        #[clap(
+            long,
+            help = "#1101: override a global-scope disclosure-gate block (only affects --global)"
+        )]
+        force: bool,
     },
     #[clap(
         about = "Get advice for syntax errors and debugging",
@@ -389,6 +394,11 @@ The system will:
         dashboard: bool,
         #[clap(long, help = "Show capabilities for the specified --agent/--role")]
         capabilities: bool,
+        #[clap(
+            long,
+            help = "Show full protocol dump (AGENT.md boilerplate + role supplement); default is a compact, connection-first summary"
+        )]
+        full: bool,
     },
     #[cfg(feature = "virtfs")]
     #[clap(
@@ -2320,7 +2330,7 @@ async fn main() {
             }
         }
         Some(Commands::Ai { ai_command }) => {
-            if let Err(e) = ai_command.execute(&cli.path) {
+            if let Err(e) = ai_command.execute(&cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2427,6 +2437,7 @@ async fn main() {
             skills,
             dashboard,
             capabilities,
+            full,
         }) => {
             if *json {
                 use b00t_c0re_lib::B00tContext;
@@ -2458,7 +2469,7 @@ async fn main() {
                     ),
                 }
             } else if let Err(e) =
-                whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone())
+                whoami::whoami(&cli.path, role.clone(), *with_skills, skills.clone(), *full)
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -2604,7 +2615,7 @@ async fn main() {
         }
         Some(Commands::Datum { datum_command }) => {
             use b00t_cli::commands::datum::handle_datum_command;
-            if let Err(e) = handle_datum_command(&cli.path, datum_command) {
+            if let Err(e) = handle_datum_command(&cli.path, datum_command).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }
@@ -2887,6 +2898,7 @@ async fn main() {
             lesson,
             repo: _,
             global,
+            force,
         }) => {
             // Validate required fields
             let tool = match tool.as_ref().or(positional_tool.as_ref()) {
@@ -2933,7 +2945,7 @@ async fn main() {
                     std::process::exit(1);
                 }
             } else if let Err(e) =
-                b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope).await
+                b00t_cli::commands::lfmf::handle_lfmf(&cli.path, &tool, &lesson, scope, *force).await
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
@@ -2942,7 +2954,7 @@ async fn main() {
         Some(Commands::Bootstrap { bootstrap_command }) => {
             use b00t_cli::commands::bootstrap::handle_bootstrap_command;
 
-            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone()).await {
+            if let Err(e) = handle_bootstrap_command(bootstrap_command.clone(), &cli.path).await {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

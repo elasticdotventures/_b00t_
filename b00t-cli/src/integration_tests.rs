@@ -112,14 +112,14 @@ mod integration_tests {
         let lesson1 = "First: lesson learned.";
         let lesson2 = "Second: lesson learned.";
         // First call: should create file
-        let result1 = handle_lfmf(temp_path, tool, lesson1, "repo");
+        let result1 = handle_lfmf(temp_path, tool, lesson1, "repo", false);
         assert!(result1.await.is_ok());
         let file_path = temp_dir.path().join("learn").join(format!("{}.md", tool));
         assert!(file_path.exists());
         let content1 = std::fs::read_to_string(&file_path).unwrap();
         assert!(content1.contains(lesson1));
         // Second call: should append
-        let result2 = handle_lfmf(temp_path, tool, lesson2, "repo");
+        let result2 = handle_lfmf(temp_path, tool, lesson2, "repo", false);
         assert!(result2.await.is_ok());
         let content2 = std::fs::read_to_string(&file_path).unwrap();
         assert!(content2.contains(lesson1));

@@ -1,0 +1,29 @@
+# Non-secret configuration for b00t-historian on vultr1's k0s cluster.
+#
+# NOT YET APPLIED — see README.md in this directory. This is a REVIEWABLE
+# artifact for issue #1229; deploying it to vultr1 is a manual follow-up
+# for whoever has kubectl/SSH access to that box.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: historian-config
+  namespace: default
+  labels:
+    app: b00t-historian
+data:
+  # The k0s-managed nats-server pod (pods/nats/nats-pod-configured.yaml in
+  # the infrastructure repo) publishes its client port as hostPort 4222 —
+  # every other same-host service on vultr1 (capability-forge, the dapr
+  # nats-pubsub component) reaches it via nats://127.0.0.1:4222, and this
+  # Deployment does the same via hostNetwork: true (see deployment.yaml) so
+  # it needs no Service/DNS/node-IP lookup to reach it.
+  NATS_URL: "nats://127.0.0.1:4222"
+
+  # b00t-historian's `run` subcommand always additionally subscribes to
+  # souls.> (cross-host agent activity) and vultr.> (provisioning delegate
+  # request/reply) regardless of this flag — see b00t-cli/src/bin/
+  # b00t-historian.rs. This is the ONE extra wildcard --subject issue #1229
+  # asks for: the hive-mesh gossip channel (feat/1229-historian-mailbox
+  # lands the actual b00t.hive.mesh.* publishers/consumers this scribes;
+  # this deployment doesn't block on that landing first).
+  HISTORIAN_SUBJECT: "b00t.hive.mesh.>"

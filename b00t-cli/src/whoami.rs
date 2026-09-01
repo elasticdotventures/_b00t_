@@ -39,6 +39,7 @@ pub fn whoami(
     role_override: Option<String>,
     with_skills: bool,
     skills: Vec<String>,
+    full: bool,
 ) -> Result<()> {
     let expanded_path = get_expanded_path(path)?;
     let agent_md_path = expanded_path.join("AGENT.md");
@@ -50,20 +51,29 @@ pub fn whoami(
         );
     }
 
-    let template_content = fs::read_to_string(&agent_md_path).context(format!(
-        "Failed to read AGENT.md from {}",
-        agent_md_path.display()
-    ))?;
+    let role = resolve_role(role_override.clone());
+    let role_name = role.name();
 
-    // Use b00t-c0re-lib template renderer
-    let renderer =
-        TemplateRenderer::with_defaults().context("Failed to create template renderer")?;
+    // #1204: default output leads with the compact, connection-first summary
+    // (role, ACP channel, MCP surface via print_role_summary below) that a
+    // connecting agent actually needs. The full AGENT.md protocol boilerplate
+    // + AGENTS/--role=<role>.md supplement now live behind --full.
+    if full {
+        let template_content = fs::read_to_string(&agent_md_path).context(format!(
+            "Failed to read AGENT.md from {}",
+            agent_md_path.display()
+        ))?;
 
-    let rendered = renderer
-        .render(&template_content)
-        .context("Failed to render template")?;
+        // Use b00t-c0re-lib template renderer
+        let renderer =
+            TemplateRenderer::with_defaults().context("Failed to create template renderer")?;
 
-    println!("{}", rendered);
+        let rendered = renderer
+            .render(&template_content)
+            .context("Failed to render template")?;
+
+        println!("{}", rendered);
+    }
 
     // 🤓 P2: one-line node identity from soul — context-efficient preamble.
     //    Emits only highest-signal facts; agent runs `b00t soul get node.<key>`
@@ -72,20 +82,20 @@ pub fn whoami(
         println!("🥾 Node: {}  (detail: b00t soul get node.*)", node);
     }
 
-    // Append role supplement (AGENTS/--role=<role>.md) BEFORE role datum summary
-    let role = resolve_role(role_override.clone());
-    let role_name = role.name();
-    let supplement_candidates = [
-        std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role_name)),
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join(".b00t/AGENTS")
-            .join(format!("--role={}.md", role_name)),
-    ];
-    for p in &supplement_candidates {
-        if let Ok(content) = fs::read_to_string(p) {
-            println!("\n{}", content);
-            break;
+    if full {
+        // Append role supplement (AGENTS/--role=<role>.md) BEFORE role datum summary
+        let supplement_candidates = [
+            std::path::PathBuf::from("AGENTS").join(format!("--role={}.md", role_name)),
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".b00t/AGENTS")
+                .join(format!("--role={}.md", role_name)),
+        ];
+        for p in &supplement_candidates {
+            if let Ok(content) = fs::read_to_string(p) {
+                println!("\n{}", content);
+                break;
+            }
         }
     }
 
@@ -136,6 +146,11 @@ pub fn whoami(
                 println!("  b00t learn {}  {}", s, evidence);
             }
         }
+    }
+
+    if !full {
+        println!();
+        println!("ℹ️  Compact view — run `b00t whoami --full` for the complete AGENT.md protocol dump + role supplement.");
     }
 
     Ok(())
@@ -312,6 +327,12 @@ fn get_config_typed<'a>(
 fn print_role_summary(role: &RoleDetails, path: &str, with_skills: bool) {
     println!("🎭 Role: {}", role.name);
     println!("💡 {}", role.hint);
+    // #1204: ACP (Agent Coordination Protocol) address for this role, front-
+    // loaded since it's the concrete "how do I reach/address this agent"
+    // connection fact — previously computed but never printed anywhere.
+    if let Some(prefix) = &role.channel_prefix {
+        println!("📡 ACP channel: {}", prefix);
+    }
 
     if with_skills && !role.skills.is_empty() {
         // Resolve skill metadata for all declared skills (discovery tier)

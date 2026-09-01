@@ -9,7 +9,7 @@ mod litellm
 
 # Future modules
 # mod? rust
-# mod? python  
+# mod? python
 # mod? docker
 
 # Default: Show available modules

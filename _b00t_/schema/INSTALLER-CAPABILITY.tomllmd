@@ -164,8 +164,8 @@ vendor_datum = "VENDOR-IRONTOLOGY-MCP"
 
 [[b00t.check]]
 name = "codebase-memory-mcp"
-check_command = "codebase-memory-mcp --version || test -x vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
-remediation = "just -f vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm && cp vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
+check_command = "codebase-memory-mcp --version || test -x vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp"
+remediation = "just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm && cp vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp ~/.local/bin/"
 required = true
 vendor_datum = "VENDOR-CODEBASE-MEMORY-MCP"
 

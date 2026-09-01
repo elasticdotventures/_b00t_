@@ -39,6 +39,15 @@ pub enum SmolBehavior {
     Summarize,
     /// Binary pass/fail: did this command succeed? Returns "ok" or first failure line.
     CheckOutputOk,
+    /// #1106: the karpathy/deepwiki 3-gate autolearn pattern's Research
+    /// gate — a sm0l reviewer sitting between Orient and Act, judging
+    /// whether a candidate skill/datum is relevant to `goal` BEFORE its
+    /// full body is consumed. Verdict shape: `RELEVANT` | `SKIP:<reason>`.
+    RelevanceGate { goal: String },
+    /// #1101: same gate shape, judging disclosure safety instead of
+    /// relevance — used before a write to a shared/global/public scope.
+    /// Verdict shape: `SAFE` | `SENSITIVE:<reason>`.
+    DisclosureGate,
 }
 
 /// Configuration for sm0l behavior variants that need parameters.
@@ -130,6 +139,32 @@ impl SmolBehavior {
                 "If the input shows a successful outcome with no errors: respond with exactly: ok\n",
                 "Otherwise: respond with the first failure line verbatim. No other output."
             ).to_string(),
+            Self::RelevanceGate { goal } => format!(
+                "You are a relevance reviewer sitting between Orient and Act in an agent's \
+                 OODA loop. You will be shown a goal and a candidate skill/datum's content. \
+                 Decide whether the content is relevant to accomplishing the goal — never \
+                 skip this judgment just because the content was retrieved; retrieval success \
+                 does not imply relevance.\n\
+                 Goal: {goal}\n\n\
+                 Respond with exactly one of:\n\
+                 RELEVANT\n\
+                 SKIP:<short reason>\n\
+                 No other output, no commentary."
+            ),
+            Self::DisclosureGate => concat!(
+                "You are a disclosure-safety reviewer sitting between Orient and Act, judging \
+                 content about to be written to a shared, global, or public-facing scope. \
+                 Decide whether the content reveals specific project- or system-specific \
+                 operational context (credentials, internal hostnames, private infrastructure \
+                 details, account-specific configuration, or similar) that should not be \
+                 disclosed publicly. A generic lesson usable by any agent on any project is \
+                 SAFE; something that only makes sense given this specific operator's private \
+                 setup is SENSITIVE.\n\n\
+                 Respond with exactly one of:\n\
+                 SAFE\n\
+                 SENSITIVE:<short reason>\n\
+                 No other output, no commentary."
+            ).to_string(),
         }
     }
 
@@ -138,6 +173,8 @@ impl SmolBehavior {
             Self::FilterErrors(t) => format!("filter-{}", t.as_str()),
             Self::Summarize => "summarize".to_string(),
             Self::CheckOutputOk => "check-ok".to_string(),
+            Self::RelevanceGate { .. } => "relevance-gate".to_string(),
+            Self::DisclosureGate => "disclosure-gate".to_string(),
         }
     }
 }

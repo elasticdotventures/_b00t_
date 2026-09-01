@@ -6,7 +6,7 @@ Index, search, and analyze codebases using a knowledge graph powered by Model Co
 
 codebase-memory-mcp builds a semantic knowledge graph of your codebase — functions, classes, routes, HTTP calls, async channels — enabling multi-hop queries, impact analysis, and cross-service tracing that grep/glob cannot do.
 
-**Binary path:** `/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp`
+**Binary path:** `/home/brianh/.b00t/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp`
 
 ## MCP Server Configuration
 
@@ -16,7 +16,7 @@ codebase-memory-mcp builds a semantic knowledge graph of your codebase — funct
 {
   "mcpServers": {
     "codebase-memory": {
-      "command": "/home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
+      "command": "/home/brianh/.b00t/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp",
       "args": []
     }
   }
@@ -170,7 +170,7 @@ Test the MCP server handshake:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}' \
-  | /home/brianh/.b00t/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp
+  | /home/brianh/.b00t/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp
 ```
 
 Expected response:

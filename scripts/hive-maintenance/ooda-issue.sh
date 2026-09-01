@@ -89,7 +89,7 @@ Implement the proposed changes. You are on branch ${BRANCH} in ${WORKTREE}.
 
 Rules:
 - DRY, KISS, use existing OSS libs
-- Do NOT touch submodules (integrations/, plantuml-server)
+- Do NOT touch submodules (integrations/, vendor/b00tyverse)
 - Run tests after implementing: \`cargo test\` or \`just test\` as appropriate
 - If already implemented or needs fundamental human design: output SKIP: <reason>
 - Commit with: git add -A && git commit -m "feat(#${ISSUE_NUM}): <description>"

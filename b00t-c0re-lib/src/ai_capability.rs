@@ -206,7 +206,7 @@ pub struct SegmentationTiming {
 // ═══════════════════════════════════════════════════════════════════════════
 
 use crate::doc_pipeline::SerializableFOLFormula;
-use crate::pipeline_nodes::{NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachine};
+use crate::pipeline_nodes::{NodeCategory, NodeShape, NodeStyle, PipelineNode, PortDef, PortDirection, StateMachineSpec};
 
 /// SAM3 as a typed pipeline node.  Delegates execution to LocalProvider /
 /// RunpodProvider via BatchJobSpec — the node itself is compute-agnostic.
@@ -261,7 +261,7 @@ impl PipelineNode for Sam3Node {
     fn preconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
     fn postconditions(&self) -> Vec<SerializableFOLFormula> { vec![] }
     fn invariants(&self) -> Vec<SerializableFOLFormula> { vec![] }
-    fn state_machine(&self) -> StateMachine { StateMachine::idle_run_cycle("sam3") }
+    fn state_machine(&self) -> StateMachineSpec { StateMachineSpec::idle_run_cycle("sam3") }
 
     fn input_ports(&self) -> Vec<PortDef> {
         vec![

@@ -98,9 +98,9 @@ grok-e2e: grok-e2e-unit
 
 # l3dg3rr docgen proxy — query knowledge graph, emit .tomllm / rustdoc
 # 🌐 Docgen UI server: cd vendor/... && ./build/c/codebase-memory-mcp --ui=true --port=9749
-docgen project="home-brianh-.b00t-vendor-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20":
+docgen project="home-brianh-.b00t-vendor-b00tyverse-codebase-memory-mcp-b00t-ir0n-ledg3rr" format="tomllm" limit="20":
 	@echo "📚 Querying l3dg3rr knowledge graph (project={{project}}, format={{format}}, limit={{limit}})..."
-	@python3 ../vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py \
+	@python3 ../vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/_b00t_/scripts/l3dg3rr-doc-proxy.py \
 		--project={{project}} --format={{format}} --limit={{limit}}
 
 # l3dg3rr docgen: quick toml export (default)

@@ -275,39 +275,39 @@ impl Stereotyped for DatumType {
         match self {
             // ── container/orchestration engines — SubKind of abstract ContainerRuntime ──
             Self::Docker => UfoStereotype::SubKind {
-                name: "Docker".into(),
+                name: stringify!(Docker).into(),
                 parent: "ContainerRuntime".into(),
             },
             Self::Podman => UfoStereotype::SubKind {
-                name: "Podman".into(),
+                name: stringify!(Podman).into(),
                 parent: "ContainerRuntime".into(),
             },
             Self::K8s => UfoStereotype::SubKind {
-                name: "K8s".into(),
+                name: stringify!(K8s).into(),
                 parent: "ContainerRuntime".into(),
             },
 
             // ── executable surface — SubKind of abstract Executable ─────────────────────
             Self::Cli => UfoStereotype::SubKind {
-                name: "Cli".into(),
+                name: stringify!(Cli).into(),
                 parent: "Executable".into(),
             },
             Self::Bash => UfoStereotype::SubKind {
-                name: "Bash".into(),
+                name: stringify!(Bash).into(),
                 parent: "Executable".into(),
             },
             Self::Justfile => UfoStereotype::SubKind {
-                name: "Justfile".into(),
+                name: stringify!(Justfile).into(),
                 parent: "Executable".into(),
             },
 
             // ── package managers — SubKind of abstract PackageManager ───────────────────
             Self::Apt => UfoStereotype::SubKind {
-                name: "Apt".into(),
+                name: stringify!(Apt).into(),
                 parent: "PackageManager".into(),
             },
             Self::Nix => UfoStereotype::SubKind {
-                name: "Nix".into(),
+                name: stringify!(Nix).into(),
                 parent: "PackageManager".into(),
             },
 
@@ -317,7 +317,7 @@ impl Stereotyped for DatumType {
             // a third parallel label would duplicate it (see #905's warning against
             // parallel vocabularies).
             Self::McpServer => UfoStereotype::SubKind {
-                name: "McpServer".into(),
+                name: stringify!(McpServer).into(),
                 parent: "Mcp".into(),
             },
 

@@ -70,7 +70,11 @@ diffy = "0.5"
 # It has no _b00t_-specific deps; pulling it via a plain crate-scoped git dep
 # avoids consumers of ufo-types (e.g. external repos like app4dog) needing to
 # clone this entire 34-submodule monorepo just to get a ~3k-line types crate.
-ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v0.10.2" }
+# Pinned to the v0.11.0 tag, which covers the `sysml`/`mbse`/`iso_ir`/
+# `data_format`/`model_capability`/`coherence`/`multi_model` modules (b00t
+# SysML v2 spine consolidation epic, elasticdotventures/_b00t_#1177) —
+# previously pinned by rev since no tag covered them yet.
+ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v0.11.0" }
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
@@ -106,6 +110,15 @@ b00t-datum-core = { path = "b00t-datum-core" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
 b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
+# #1104: NOT taking a Cargo dependency on vendor/ledgrrr's `ledger-core` here
+# -- its optional arc-kit-au -> msft-agent-gov-ledgrrr -> agentmesh chain
+# hard-pins serde =1.0.228, which conflicts with the rest of this workspace's
+# serde 1.0.229 (a real cross-cutting version conflict inside vendor/ledgrrr
+# itself, not something to paper over by bumping serde workspace-wide, and
+# out of scope to fix in that submodule right now -- other sessions are
+# actively working in it). agent_token.rs instead reproduces just the small
+# double-entry beancount transaction shape it needs locally; see that
+# module's doc comment.
 mti = "1.1.1"
 
 

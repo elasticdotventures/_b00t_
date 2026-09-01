@@ -1,0 +1,26 @@
+# b00t standby cloud build server — persistent cache volume.
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md.
+#
+# Holds the git checkout + `target/` at /data/b00t, mounted by
+# b00t-build.dev-environment.yaml. Its lifecycle is independent of the
+# dev-environment's VM: `dstack stop`/idle-timeout on the fleet tears down
+# compute, not this volume, so the cargo cache is warm again the moment the
+# box resumes. Apply once via `just remote-provision` (idempotent, matches
+# how DstackProvider::ensure_volume treats a `type: volume` re-apply).
+#
+# Size: this session's own target/ reached ~2GB partway through a single
+# crate's build; the full workspace dependency tree (Qdrant, candle, kube,
+# OpenTelemetry, etc.) is plausibly 10-50GB. 100GB leaves headroom at GCP
+# persistent-disk pricing that's cheap relative to the time this saves.
+type: volume
+name: b00t-build-cache
+backend: gcp
+# 🤓 Only field in this design that hardcodes a region — dstack's `type:
+# volume` schema requires one (network volumes are region-bound), unlike
+# the fleet/dev-environment configs below, which deliberately omit a
+# `regions:` restriction per this repo's existing fleet-YAML convention
+# (see 2026-07-23-b00t-dstack-gcp-backend-design.md) of not hardcoding
+# scope beyond what's actually required. Adjust freely — no other config
+# here depends on this specific value.
+region: us-central1
+size: 100GB

@@ -1,0 +1,43 @@
+# b00t-gpu-runner environment file (example)
+#
+# Copy to `environment` (untracked, gitignored by whoever deploys this) and
+# fill in real values before sourcing it into setup-runner.sh:
+#
+#   cp environment.example environment
+#   $EDITOR environment
+#   set -a; source environment; set +a
+#   ./setup-runner.sh
+#
+# Do NOT commit a filled-in copy of this file — GH_RUNNER_TOKEN is a
+# credential (even though it's short-lived).
+
+# Repo (or org) URL this runner registers against.
+GH_RUNNER_URL="https://github.com/elasticdotventures/_b00t_"
+
+# Short-lived runner REGISTRATION token — NOT a personal access token (PAT).
+#
+# Registration tokens expire in about an hour and are single-purpose: they
+# only authorize the one-time config.sh handshake that registers a new
+# runner, after which the runner stores its own longer-lived credentials
+# locally and refreshes them itself. Generate one right before running
+# setup-runner.sh (it will be stale by the time you get around to using it
+# later):
+#
+#   gh api repos/elasticdotventures/_b00t_/actions/runners/registration-token \
+#     -X POST --jq .token
+#
+# ...or via the GitHub UI: Settings -> Actions -> Runners -> New self-hosted
+# runner (the config.sh command it shows you has the token pre-filled).
+GH_RUNNER_TOKEN="__REPLACE_WITH_SHORT_LIVED_REGISTRATION_TOKEN__"
+
+# Comma-separated labels used to target this runner from workflow `runs-on:`.
+# `gpu` and `sm3lly` (this host's name) let workflows select it specifically;
+# `self-hosted` is added implicitly by GitHub but listed here for clarity.
+GH_RUNNER_LABELS="self-hosted,gpu,sm3lly"
+
+# Name this runner registers as (shown in Settings -> Actions -> Runners).
+GH_RUNNER_NAME="sm3lly-gpu-systemd"
+
+# Optional: install/work directory (defaults to /opt/gh-runner-gpu in
+# setup-runner.sh if unset).
+# GH_RUNNER_HOME="/opt/gh-runner-gpu"

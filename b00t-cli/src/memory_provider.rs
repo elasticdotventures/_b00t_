@@ -239,6 +239,41 @@ pub fn active_soul_path() -> PathBuf {
         .unwrap_or_else(soul_path)
 }
 
+/// #1102: scope-aware SOUL.tomllm path. `scope = None` resolves to exactly
+/// today's behavior (`active_soul_path()`) — the legacy/default shard, so
+/// existing unscoped data and callers are completely unaffected. `scope =
+/// Some(s)` resolves under `<root>/shards/<kind>/<id>/SOUL.tomllm`, using the
+/// same local-workspace-if-present-else-global root selection as the legacy
+/// path.
+pub fn soul_path_for(scope: Option<&crate::soul_scope::SoulScope>) -> PathBuf {
+    match scope {
+        None => active_soul_path(),
+        Some(s) => s.shard_dir(&shard_root()).join("SOUL.tomllm"),
+    }
+}
+
+/// #1102: scope-aware soul.db path, mirroring `soul_path_for`.
+pub fn soul_db_path_for(scope: Option<&crate::soul_scope::SoulScope>) -> PathBuf {
+    match scope {
+        None => active_soul_db_path(),
+        Some(s) => s.shard_dir(&shard_root()).join("soul.db"),
+    }
+}
+
+/// Root directory shards nest under: local workspace's `._b00t_/` if present,
+/// else the global `~/._b00t_/`.
+fn shard_root() -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .map(|d| d.join("._b00t_"))
+        .filter(|p| p.is_dir())
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("/tmp"))
+                .join("._b00t_")
+        })
+}
+
 /// Fallback file provider — used when SQLite unavailable or for SOUL.tomllm compat
 pub fn file_provider() -> FileMemory {
     FileMemory::new(soul_path())

@@ -22,9 +22,9 @@
 	path = integrations/nasdanika-mcp
 	url = https://github.com/elasticdotventures/mcp-server.git
 
-[submodule "plantuml-server"]
-	path = plantuml-server
-	url = https://github.com/PromptExecution/plantuml-server--b00t--togaf--mcp.git
+[submodule "just-mcp"]
+	path = just-mcp
+	url = https://github.com/PromptExecution/just-mcp
 
 [submodule "python.🐍/DALLE2-pytorch"]
 	path = python.🐍/DALLE2-pytorch
@@ -34,9 +34,9 @@
 	path = vendor/agent-framework
 	url = https://github.com/microsoft/agent-framework
 
-[submodule "vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr"]
-	path = vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr
-	url = https://github.com/PromptExecution/codebase-memory-mcp-b00t-ir0n-ledg3rr.git
+[submodule "vendor/embed-anything"]
+	path = vendor/embed-anything
+	url = https://github.com/StarlightSearch/EmbedAnything.git
 
 [submodule "vendor/embed-anything-b00t"]
 	path = vendor/embed-anything-b00t
@@ -54,10 +54,6 @@
 	path = vendor/just-mcp
 	url = https://github.com/PromptExecution/just-mcp
 
-[submodule "vendor/ledgrrr"]
-	path = vendor/ledgrrr
-	url = https://github.com/PromptExecution/ledgrrr.git
-	branch = main
 
 [submodule "vendor/llama-patch"]
 	path = vendor/llama-patch
@@ -103,3 +99,6 @@
 [submodule "vendor/sysml-v2-docs"]
 	path = vendor/sysml-v2-docs
 	url = https://github.com/voidaliot/sysml-v2-docs.git
+[submodule "vendor/b00tyverse"]
+	path = vendor/b00tyverse
+	url = https://github.com/PromptExecution/b00tyverse.git

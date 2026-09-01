@@ -84,7 +84,7 @@ Guidelines:
 - Add tests if implementing new functionality (TDD)
 - Update justfile if adding new commands
 - Be laconic — minimal code, maximum impact
-- Do NOT modify submodules (integrations/, plantuml-server)
+- Do NOT modify submodules (integrations/, vendor/b00tyverse)
 - Commit message: "feat/fix/chore(#${ISSUE_NUM}): <short description>"
 
 After implementing:

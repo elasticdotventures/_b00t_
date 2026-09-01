@@ -33,10 +33,19 @@ store-zvec = ["dep:zvec"]
 data-fabric = ["store-grafeo", "store-zvec"]
 qdrant = []  # optional Qdrant REST gate; disabled on this node (see SOUL.tomllm)
 ipc-fanout = ["dep:b00t-ipc", "data-fabric"]  # route write fanout through b00t-ipc Transport bus
+# W3C SCXML export for StateMachineIntrospection (P5b, elasticdotventures/_b00t_#1177)
+# — the shared, standards-based statechart representation any
+# StateMachineIntrospection implementor can export to, alongside the
+# existing render_mermaid_state_diagram()/render_s5(). Independent of the
+# store-* backends above; this is a document-model export, not storage.
+statechart = ["dep:scxml"]
 
 [dependencies]
 keyring = "4"
 pyo3 = { version = "0.27", features = ["extension-module"], optional = true }
+# Pinned to an exact version: small bus factor (2 contributors, 0.x semver)
+# per elasticdotventures/_b00t_#1177's crate-evaluation research.
+scxml = { version = "=0.2.2", optional = true }
 base64 = "0.22"
 aes-gcm = "0.10"
 rand = "0.8"
@@ -87,6 +96,8 @@ quote = "1.0.45"
 # used at runtime (not just tests) for shallow-cloning external MCP registry sources
 # (e.g. vinkius-mcp-database) into a scratch dir that's cleaned up on drop
 tempfile = "3.10"
+# #1101: cheap wordlist first-pass filter in front of the disclosure gate
+b00t-bouncer = { path = "../b00t-bouncer" }
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -150,7 +150,7 @@ h3rmes action="status":
                 "$B00T_CLI" mcp install b00t-mcp hermes 2>/dev/null || echo "    (b00t-mcp already registered)"
 
                 # Install codebase-memory-mcp if built
-                if [ -f "$B00T_ROOT/vendor/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp" ]; then
+                if [ -f "$B00T_ROOT/vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/build/c/codebase-memory-mcp" ]; then
                     echo "🔌 Registering codebase-memory..."
                     "$B00T_CLI" mcp install codebase-memory hermes 2>/dev/null || true
                 fi

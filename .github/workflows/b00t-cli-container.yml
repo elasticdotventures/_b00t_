@@ -29,7 +29,10 @@ jobs:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
 
       - name: Initialize required submodules
-        run: git submodule update --init --depth 1 vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+        run: git submodule update --init --depth 1 vendor/runpod-sdk vendor/embed-anything-b00t
+
+      - name: Clone vendor/ledgrrr (shared worktree checkout, not a submodule)
+        run: git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
 
       - name: Set up Just command runner
         uses: extractions/setup-just@v1

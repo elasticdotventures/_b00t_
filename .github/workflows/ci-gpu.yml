@@ -1,0 +1,87 @@
+# CI: GPU self-hosted runner proof of concept.
+#
+# ⚠️ Deliberately `workflow_dispatch` ONLY. Do NOT add `pull_request` or
+# `push` triggers here without reading k8s/gh-runner-gpu/README.md's
+# "Security tradeoff" section first — this job runs on a self-hosted runner
+# with real filesystem/GPU/network access to this box's k0s cluster, not a
+# disposable GH-hosted VM. This repo is public; widening the trigger scope
+# to fork PRs is a separate, explicit decision for a human to make (see the
+# follow-on issue linked from the PR that introduced this file), not
+# something to fall into by copy-pasting `ci.yml`'s triggers.
+#
+# Also note: this workflow cannot actually run anywhere yet. It targets a
+# runner scale set (`gpu-sm3lly`, matched via `runs-on:` below) that has not
+# been installed — see k8s/gh-runner-gpu/README.md for the missing
+# prerequisite (a GitHub token secret) and the still-unrun `helm install`.
+name: CI (GPU self-hosted PoC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why run this manually (shows up in the run log)"
+        required: false
+        default: "manual GPU runner smoke test"
+
+concurrency:
+  group: ci-gpu-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gpu-smoke-test:
+    name: GPU smoke test (nvidia-smi + scoped cargo test)
+    # Must exactly match `runnerScaleSetName` in k8s/gh-runner-gpu/values.yaml.
+    # ARC's gha-runner-scale-set matches jobs to a scale set by this string,
+    # not by a `[self-hosted, ...]` label array (that's the older
+    # actions-runner-controller RunnerDeployment model).
+    runs-on: gpu-sm3lly
+    timeout-minutes: 20
+    steps:
+      - name: Prove the GPU is actually visible to this job
+        run: nvidia-smi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          # See ci.yml's own comment: NOT `submodules: recursive` (34
+          # submodules, aborts on orphan/gutted gitlinks — #924). Init only
+          # what the two scoped crates below actually need.
+          submodules: false
+
+      - name: Init workspace-required vendor submodules
+        run: |
+          set -euo pipefail
+          git submodule update --init --depth 1 \
+            vendor/embed-anything-b00t \
+            vendor/runpod-sdk \
+            vendor/ledgrrr
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build toolchain
+        # The bare ghcr.io/actions/actions-runner image (Ubuntu 24.04) has no
+        # C compiler — unlike GitHub-hosted ubuntu-latest, which ships
+        # build-essential. Several workspace crates' build scripts need `cc`
+        # (proc-macro2, quote, serde_core, wasm-bindgen-shared) — live-verified
+        # 2026-08-31 (run 33409934449: "linker `cc` not found"). Runner user
+        # has passwordless sudo (confirmed via `podman image mount` on the
+        # image itself), matching the official actions-runner convention.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Show warm cache state (proves NVMe cache persistence across runs)
+        run: |
+          echo "CARGO_HOME=$CARGO_HOME"
+          du -sh "$CARGO_HOME" 2>/dev/null || echo "(cache empty — first run on this node)"
+
+      # Scoped to two small, fast-building workspace crates on purpose — NOT
+      # `--workspace` (that's issue #1226's whole problem, and a much
+      # bigger, separate proof-of-concept step once this one is confirmed
+      # working end-to-end).
+      - name: cargo test (scoped crates)
+        run: cargo test --locked -p b00t-datum-core -p k0mmand3r --all-targets
