@@ -1,0 +1,28 @@
+# Example generic fine-tuning job manifest — CLOUD target (HF Jobs).
+#
+# Run with:
+#   b00t-cli finetune validate fine-tune/jobs/example-cloud.finetune.toml
+#   b00t-cli finetune run fine-tune/jobs/example-cloud.finetune.toml --dry-run
+#
+# See docs/superpowers/specs/2026-09-01-generic-finetune-job-oci-distribution-design.md
+# for the full design this manifest schema implements.
+
+[job]
+id = "qwen38-coder-2026-09-01"
+base_model = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+framework = "unsloth"
+
+[dataset]
+generate = true  # regenerate via fine-tune/generate_dataset.py before submission
+
+[target]
+kind = "cloud"
+image = "ghcr.io/elasticdotventures/b00t-training-image:latest"
+flavor = "a100-large"     # a100-large ($2.50/h, 80GB) | h200 ($5/h, 141GB) | a10g-large ($1.50/h, 24GB)
+timeout_hours = 10.0
+
+[output]
+datum = "qwen38-coder"
+storage = "s3"
+s3_bucket = "b00t-finetune-artifacts"
+mirror_to_hf = true
