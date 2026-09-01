@@ -15,6 +15,30 @@
       "priority": 3,
       "tags": [],
       "created_at": "2026-05-03T04:13:53Z"
+    },
+    {
+      "id": 3,
+      "title": "Design WSL-host <-> Entra <-> k0s-mesh participation & credential flow",
+      "description": "PR #1179 (Windows-keystore credential proxy) does NOT cover this — it's a narrow single-static-secret passthrough, and is itself backlogged/superseded per #1048 in favor of a Cloudflare-DO vault approach (#1069). Real gap: the WSL dev host is Entra-authenticated in-browser only (device not Entra-managed/enrolled), and it's unclear how it should obtain/proxy short-lived Azure/Entra tokens or certs to safely join the fung1/sm3lly/b00t-node k0s mesh over Tailscale, without landing long-lived secrets on an unmanaged device. Separately confirmed: fung1 (192.168.1.0/24) cannot route to the app4dog-k0s control plane at 192.168.2.13:6443 (different subnet, not reachable via any known Tailscale peer) - likely b00t-node isn't Tailscale-joined yet or needs a subnet route advertised. Blocked pending SSH/Tailscale auth key/Entra tenant details for that host.",
+      "status": "pending",
+      "priority": 2,
+      "tags": [
+        "infra",
+        "wsl",
+        "entra",
+        "k0s",
+        "tailscale",
+        "mesh",
+        "credentials",
+        "design"
+      ],
+      "acceptance_criteria": [
+        "Design doc covers: how WSL obtains/proxies Entra tokens without local long-lived secrets",
+        "Design doc covers: how WSL joins the Tailscale tailnet / reaches b00t-node's k0s API",
+        "Explicitly reconciles with (or supersedes) backlogged #1048 / #1069 credential-vault direction",
+        "Local WSL node stops being a build target once mesh participation works (per current goal: build on farm, not locally)"
+      ],
+      "created_at": "2026-08-31T22:16:06Z"
     }
   ],
   "version": "1"
