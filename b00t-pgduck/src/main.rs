@@ -92,13 +92,13 @@ impl SimpleQueryHandler for DuckDbBackend {
             let mut stmt = conn
                 .prepare(query)
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-            let header = Arc::new(row_desc_from_stmt(&stmt)?);
-            stmt.query(duckdb::params![])
-                .map(|rows| {
-                    let s = encode_row_data(rows, header.clone());
-                    vec![Response::Query(QueryResponse::new(header, s))]
-                })
-                .map_err(|e| PgWireError::ApiError(Box::new(e)))
+            // DuckDB (unlike SQLite) only exposes column metadata AFTER
+            // the statement has executed - query() first, then read the
+            // descriptor back via Rows::as_ref(), not before .query().
+            let rows = stmt.query(duckdb::params![]).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+            let header = Arc::new(row_desc_from_stmt(rows.as_ref().unwrap())?);
+            let s = encode_row_data(rows, header.clone());
+            Ok(vec![Response::Query(QueryResponse::new(header, s))])
         } else {
             conn.execute(query, duckdb::params![])
                 .map(|affected_rows| {
@@ -250,13 +250,10 @@ impl ExtendedQueryHandler for DuckDbBackend {
         let params_ref: Vec<&dyn ToSql> = params.iter().map(|f| f.as_ref()).collect();
 
         if query.to_uppercase().starts_with("SELECT") {
-            let header = Arc::new(row_desc_from_stmt(&stmt)?);
-            stmt.query(params_ref.as_slice())
-                .map(|rows| {
-                    let s = encode_row_data(rows, header.clone());
-                    Response::Query(QueryResponse::new(header, s))
-                })
-                .map_err(|e| PgWireError::ApiError(Box::new(e)))
+            let rows = stmt.query(params_ref.as_slice()).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+            let header = Arc::new(row_desc_from_stmt(rows.as_ref().unwrap())?);
+            let s = encode_row_data(rows, header.clone());
+            Ok(Response::Query(QueryResponse::new(header, s)))
         } else {
             stmt.execute(params_ref.as_slice())
                 .map(|affected_rows| Response::Execution(Tag::new("OK").with_rows(affected_rows)))
@@ -264,6 +261,24 @@ impl ExtendedQueryHandler for DuckDbBackend {
         }
     }
 
+    // KNOWN LIMITATION: unlike SQLite, DuckDB only exposes column
+    // metadata (column_type/column_name) AFTER a statement has executed
+    // - calling them on a freshly-prepared, unexecuted statement panics
+    // (confirmed empirically: duckdb-1.10505.0/src/raw_statement.rs:138,
+    // "The statement was not executed yet"). do_query works around this
+    // by reading the descriptor back via Rows::as_ref() post-execution
+    // (see row_desc_from_stmt call sites above), but Describe messages
+    // are protocol-level "tell me the result shape before I Execute"
+    // requests - there's no post-execution Rows to read from yet here.
+    // A client that issues Describe before Execute on a SELECT (some
+    // prepared-statement/ORM code paths do) will panic this connection's
+    // task. Not fixed: wrapping in catch_unwind risks poisoning the
+    // shared Mutex<Connection> for every other query on this connection
+    // if the panic happens mid-lock, which is worse than the current
+    // single-connection crash. Forgejo's own migration+startup e2e test
+    // (see infrastructure repo's pods/pgduck/test-forgejo-e2e.sh) passes
+    // clean, so this gap doesn't block that specific consumer - but it's
+    // a real, disclosed gap for others.
     async fn do_describe_statement<C>(
         &self,
         _client: &mut C,
