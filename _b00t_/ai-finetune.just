@@ -5,7 +5,27 @@
 # Local tier:  sm3lly RTX3090 via k8s Jobs (sm0l / ch0nky models)
 # Cloud tier:  HF Jobs A100 80GB (30B+ models, no timeout risk)
 #
-# Workflow:
+# ── PRIMARY PATH for a NEW job (retrofit A, task #50 B→C→retrofit-A) ─────────
+# `b00t-cli finetune` (TOML job manifest + OCI-layer distribution, see
+# docs/superpowers/specs/2026-09-01-generic-finetune-job-oci-distribution-design.md)
+# is now the recommended front door for a fresh fine-tune run — it shares this
+# justfile's `train` recipe as its actual training entrypoint (both the local
+# and cloud dispatch paths shell out to `just -f ai-finetune.just train
+# <config>`, exactly what train-kube/cloud-train already did), then packages
+# the resulting adapter as an OCI layer, pushes it to S3, and registers the
+# AI datum. Reach it from this justfile via:
+#   just ai-finetune::finetune-validate fine-tune/jobs/example-local.finetune.toml
+#   just ai-finetune::finetune-run      fine-tune/jobs/example-local.finetune.toml dry_run=true
+#   just ai-finetune::race                                    # sub-project C dual-agent race
+# The manifest system deliberately fixes LoRA hyperparameters (no
+# `[job.hyperparams]` section yet) and has no k8s-Job/billing-label dispatch —
+# the per-model recipes below (train-smol/train-kube/train-ch0nky/cloud-train/
+# cloud-coder/cloud-resume) stay as they are, unconverted, for exactly that
+# reason (each has an explicit comment on why it wasn't folded in — see
+# retrofit-A's PR description for the full rationale). This is backward
+# compatible: nothing below changed behavior, the manifest path is additive.
+#
+# Workflow (legacy, still fully supported):
 #   Dataset:   just ai-finetune::dataset [&& just ai-finetune::hf-push]
 #   Local sm0l: just ai-finetune::train-smol
 #   Cloud 30B:  just ai-finetune::hf-push → just ai-finetune::cloud-coder
@@ -22,6 +42,61 @@ _cli := `sh -c 'for c in ~/.local/bin/b00t-cli ~/.cargo/bin/b00t-cli; do [ -x "$
 dataset:
     uv run python3 fine-tune/generate_dataset.py
 
+# ── Generic job-manifest system (primary path for a NEW job) ────────────────
+# Sub-projects B (`b00t-cli finetune validate|pack|run`, TOML manifest + OCI
+# distribution) and C (`race`/`race-finalize`, dual-agent training race) —
+# task #50's B→C→retrofit-A sequence. These are thin `just` wrappers around
+# the already-tested `b00t-cli finetune` subcommand so the manifest system is
+# reachable from the justfile people already use, not just the raw CLI.
+# Example manifests: fine-tune/jobs/example-{local,cloud}.finetune.toml and
+# example-race-{local,cloud}.finetune.toml.
+
+# Validate a job manifest TOML without running anything
+finetune-validate manifest:
+    {{_cli}} finetune validate {{ manifest }}
+
+# Run a fine-tuning job manifest end-to-end (dispatch → OCI pack → S3 push → AI datum registration)
+# dry_run="true": print the commands without executing; live_push="true": real S3 push (needs aws CLI + spire-agent profile)
+finetune-run manifest dry_run="false" live_push="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ARGS=("{{ manifest }}")
+    [[ "{{ dry_run }}" == "true" ]] && ARGS+=(--dry-run)
+    [[ "{{ live_push }}" == "true" ]] && ARGS+=(--live-push)
+    {{_cli}} finetune run "${ARGS[@]}"
+
+# Package an existing LoRA adapter directory as a single OCI layer (no training)
+finetune-pack adapter_dir out job_id base_model framework="unsloth":
+    {{_cli}} finetune pack --adapter-dir {{ adapter_dir }} --out {{ out }} --job-id {{ job_id }} --base-model {{ base_model }} --framework {{ framework }}
+
+# Sub-project C: dispatch the two example race manifests (sm3lly local vs. HF Jobs cloud)
+# concurrently. Defaults to --dry-run for safety — pass dry_run="false" to actually launch both.
+# Custom competitors: just ai-finetune::finetune-race <manifest-a> <manifest-b> ...
+race manifest_a="fine-tune/jobs/example-race-local.finetune.toml" manifest_b="fine-tune/jobs/example-race-cloud.finetune.toml" label_a="sm3lly-local" label_b="hf-jobs-cloud" dry_run="true" live_push="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ARGS=("{{ manifest_a }}" "{{ manifest_b }}" --label-a "{{ label_a }}" --label-b "{{ label_b }}")
+    [[ "{{ dry_run }}" == "true" ]] && ARGS+=(--dry-run)
+    [[ "{{ live_push }}" == "true" ]] && ARGS+=(--live-push)
+    {{_cli}} finetune race "${ARGS[@]}"
+
+# Sub-project C: compare two completed race competitors by final training loss,
+# register the winner as the canonical AI datum. Requires each competitor's
+# training log + adapter dir gathered off sm3lly/HF Jobs after both finish —
+# see `race`'s printed follow-up instructions.
+race-finalize manifest_a="fine-tune/jobs/example-race-local.finetune.toml" label_a="sm3lly-local" log_a="" adapter_dir_a="" manifest_b="fine-tune/jobs/example-race-cloud.finetune.toml" label_b="hf-jobs-cloud" log_b="" adapter_dir_b="" race_out_dir=".b00t-race" live_push="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -z "{{ log_a }}" || -z "{{ adapter_dir_a }}" || -z "{{ log_b }}" || -z "{{ adapter_dir_b }}" ]] && {
+        echo "ERROR: log_a=, adapter_dir_a=, log_b=, adapter_dir_b= are required (gather them off each finished run first)"
+        exit 1
+    }
+    ARGS=(--manifest-a "{{ manifest_a }}" --label-a "{{ label_a }}" --log-a "{{ log_a }}" --adapter-dir-a "{{ adapter_dir_a }}" \
+          --manifest-b "{{ manifest_b }}" --label-b "{{ label_b }}" --log-b "{{ log_b }}" --adapter-dir-b "{{ adapter_dir_b }}" \
+          --race-out-dir "{{ race_out_dir }}")
+    [[ "{{ live_push }}" == "true" ]] && ARGS+=(--live-push)
+    {{_cli}} finetune race-finalize "${ARGS[@]}"
+
 # Generate rustdoc JSON for key workspace crates (requires nightly)
 rustdoc:
     ~/.cargo/bin/cargo +nightly rustdoc -p b00t-cli --lib -- --output-format json -Z unstable-options
@@ -30,6 +105,29 @@ rustdoc:
     @echo "Rustdoc JSON written to target/doc/. Re-run dataset to include."
 
 # ── Local k8s training ─────────────────────────────────────────────────────────
+# 🤓 NOT folded into `b00t-cli finetune run`'s local target (retrofit A, task
+#    #50) — left as-is deliberately, not an oversight. Two real gaps, not a
+#    cosmetic mismatch:
+#      1. Dispatch substrate differs: these apply a k8s Job (job.yaml /
+#         job-smol.yaml) with an initContainer that scales down the `sm0l`
+#         k8s Deployment before training starts. `b00t-cli finetune run`'s
+#         local target instead runs `b00t hive activate finetune`, which
+#         stops systemd units (`b00t@inference-qwen36-*.service` — see
+#         `_b00t_/finetune.hive.toml`'s own comment: "the original k8s-only
+#         assumption here didn't match reality"). Routing these recipes
+#         through the manifest system would silently swap which
+#         inference-serving mechanism gets paused before training.
+#      2. Hyperparameters differ per model and the manifest schema doesn't
+#         carry them yet: `config-smol.yaml` uses lora_r=32/alpha=64/
+#         dropout=0.05, `config-ch0nky.yaml` uses dropout=0.05 — but
+#         `finetune_job::generate_training_config_yaml` hardcodes
+#         r=16/alpha=32/dropout=0.0 (there is no `[job.hyperparams]` section
+#         in the approved manifest schema, by design — see
+#         docs/superpowers/specs/2026-09-01-generic-finetune-job-oci-distribution-design.md).
+#         Converting would silently retrain with different hyperparameters,
+#         not just re-plumb the same run.
+#    If/when the manifest schema grows per-run hyperparameter overrides and a
+#    k8s-Job local-dispatch mode, these are the recipes to fold in next.
 
 # Apply RBAC/namespace prerequisites for fine-tune Jobs (one-time)
 k8s-setup:
@@ -45,6 +143,13 @@ train-kube: k8s-setup
     kubectl scale deployment sm0l --replicas=1 -n b00t-inference
 
 # sm0l variant: trains Qwen2.5-0.5B → updates b00t sm0l adapter
+# 🤓 Qwen2.5-0.5B-Instruct base is a genuinely small/cheap tier (fits
+#    alongside ch0nky in ~5GB free VRAM per config-smol.yaml's own header) —
+#    NOT a candidate for the qwen38 (27B) retarget below; that's a different
+#    model tier serving a different purpose (lint/classify/grep/score vs.
+#    general chat/coding). No confirmed small-Qwen3.8-class successor exists
+#    yet, so this stays on Qwen2.5-0.5B-Instruct for now (see
+#    ai-finetune.skill.toml's updated sunset note).
 train-smol: k8s-setup
     kubectl scale deployment sm0l --replicas=0 -n b00t-inference || true
     kubectl delete job unsloth-train-smol -n b00t-finetune --ignore-not-found
@@ -367,8 +472,22 @@ hf-push-config config:
 # 🤓 /data mount is read-only dataset repo; /adapters is writable bucket for checkpoints
 # 🤓 pip install unsloth required even in unsloth image — image has vLLM variant, not training
 # 🤓 just download: versioned URL avoids GitHub /latest/ redirect → 404 on renamed assets
-
-# 🤓 timeout_hours: run `just ai-finetune::cost-estimate <flavor> <config>` first → wall_h + 1
+#
+# 🤓 NOT folded into `b00t-cli finetune run`'s cloud target (retrofit A, task
+#    #50), even though `finetune_job::hf_jobs_run_args` was built to produce
+#    the byte-identical `hf jobs run` argv this recipe already hardcodes (see
+#    that function's own unit test). The dispatch shape is a match; the
+#    *config contract* is not: this recipe's whole reason to exist (per the
+#    line above) is "hyperparams are entirely in the YAML config" — an
+#    operator can hand-edit lora_r/alpha/dropout/target_modules/batch_size
+#    per run. `finetune run`'s cloud path always calls
+#    `generate_training_config_yaml`, which hardcodes those fields (no
+#    `[job.hyperparams]` section in the manifest schema yet) — routing this
+#    recipe through it would silently discard whatever hyperparameters are
+#    in the referenced config file. Use `just ai-finetune::finetune-run
+#    <manifest>` instead for a fresh job that's fine with the manifest's
+#    fixed defaults; use this recipe when you need per-run hyperparameter
+#    control.
 cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
     hf jobs run ghcr.io/elasticdotventures/b00t-training-image:latest \
       --flavor {{ flavor }} \
@@ -387,6 +506,11 @@ cloud-train flavor="h200" config="config-cloud-coder.yaml" timeout_hours="10.0":
 # Convenience alias: Qwen3-Coder-30B on A100-large — budget-gated
 # 🤓 Gate runs first: calls ledgrrr_b00t_delegate_datum via b00t-mcp; exits non-zero if over cap.
 #    resume_token is stored in .b00t/last-delegate-token and passed as HF job label for billing reconciliation.
+# 🤓 NOT folded into the manifest system, same as cloud-train, plus one more
+#    gap: this recipe passes `--label ledgrrr_resume_token=<token>` on the
+#    `hf jobs run` invocation for cake-budget billing reconciliation —
+#    `finetune_job::hf_jobs_run_args` has no `--label`/billing-token concept
+#    at all. Folding this in would drop billing reconciliation silently.
 cloud-coder:
     #!/usr/bin/env python3
     import subprocess, sys, json, os, pathlib, datetime
@@ -428,6 +552,8 @@ cloud-coder:
 
 # ⚠️ DEPRECATED — Qwen2.5-Coder-14B-Instruct not desired; config archived for reference
 # Do not run. Create a new recipe + config for the target model instead.
+# 🤓 Also not a manifest-system conversion candidate (deprecated + same
+#    per-run-hyperparameter/billing-label gaps as cloud-coder above).
 cloud-coder-14b:
     #!/usr/bin/env python3
     import subprocess, sys, pathlib, datetime
@@ -466,6 +592,10 @@ cloud-coder-14b:
     sys.exit(result.returncode)
 
 # Resume a cancelled/timed-out cloud job from a HF Hub checkpoint
+# 🤓 Not a manifest-system conversion candidate: `FinetuneManifest`/`run_job`
+#    have no `resume_from_checkpoint` concept at all yet (nor a
+#    `[job.hyperparams]` section for the per-run config gap noted on
+#    cloud-train above) — there is nothing in the schema this could bind to.
 
 # checkpoint: HF Hub path e.g. elasticdotventures/b00t-qwen3-coder-30b/checkpoint-500
 cloud-resume flavor="a100-large" checkpoint="" config="config-cloud-coder.yaml" timeout_hours="13.0":
@@ -949,7 +1079,7 @@ train-smoke-test:
         -v "$(which uv):/usr/local/bin/uv:ro" \
         -v "$HOME/.cache/huggingface:/root/.cache/huggingface:Z" \
         -e MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
-        -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}" \
+        -e MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen38-finetune}" \
         -e HF_TOKEN="${HF_TOKEN:-}" \
         docker.io/unsloth/unsloth:latest \
         -c "uv pip install --python /opt/venv/bin/python3 -q 'transformers>=5.2.0' mlflow pyyaml datasets trl 2>&1 | tail -3 && \
@@ -983,7 +1113,7 @@ runpod-train:
     : "${RUNPOD_API_KEY:?RUNPOD_API_KEY required — add to ~/.b00t/.env}"
     : "${HF_TOKEN:?HF_TOKEN required for hub push}"
     : "${MLFLOW_TRACKING_URI:?MLFLOW_TRACKING_URI required — run mlflow-tunnel first}"
-    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen38-finetune}"
     b00t-cli runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB"
 
 # Tail logs for a running RunPod training pod.
@@ -1009,7 +1139,7 @@ runpod-delete pod_id:
 runpod-dry-run:
     #!/usr/bin/env bash
     export MLFLOW_TRACKING_URI="${MLFLOW_TRACKING_URI:-http://192.168.1.137:30803}"
-    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen36-finetune}"
+    export MLFLOW_EXPERIMENT_NAME="${MLFLOW_EXPERIMENT_NAME:-b00t-qwen38-finetune}"
     {{_cli}} runpod train --config fine-tune/config.yaml --gpu "NVIDIA A100-SXM4-80GB" --dry-run
 
 # ── SAM3 local provider ────────────────────────────────────────────────────────
@@ -1093,8 +1223,8 @@ runpod-gpu-status:
         print(f"{p['id']}  {p.get('name',''):30s}  {p.get('desiredStatus',''):10s}  GPUs={gpus}  ${cost}/hr  started={created}")
 
 # Check whether HF Hub adapter repo exists and show latest files.
-# Usage: just ai-finetune::runpod-hf-check repo="elasticdotventures/b00t-qwen36-35b-a3b"
-runpod-hf-check repo="elasticdotventures/b00t-qwen36-35b-a3b":
+# Usage: just ai-finetune::runpod-hf-check repo="elasticdotventures/b00t-qwen38-27b"
+runpod-hf-check repo="elasticdotventures/b00t-qwen38-27b":
     #!/usr/bin/env python3
     import json, os, sys, urllib.request, urllib.error
     repo = "{{repo}}"
@@ -1119,8 +1249,8 @@ runpod-hf-check repo="elasticdotventures/b00t-qwen36-35b-a3b":
             print(f"HTTP {e.code}: {e.reason}")
 
 # Poll pod status + HF Hub every N seconds until adapter appears or pod stops.
-# Usage: just ai-finetune::runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen36-35b-a3b" interval="120"
-runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen36-35b-a3b" interval="120":
+# Usage: just ai-finetune::runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen38-27b" interval="120"
+runpod-wait pod_id="dsmiude96elaym" repo="elasticdotventures/b00t-qwen38-27b" interval="120":
     #!/usr/bin/env bash
     set -euo pipefail
     KEY=$(grep -m1 'RUNPOD_API_KEY' ~/.b00t/.env 2>/dev/null | cut -d= -f2- | tr -d "\"'")
@@ -1212,7 +1342,7 @@ runpod-launch config="fine-tune/config.yaml" gpu="NVIDIA A100-SXM4-80GB" spot="f
 
 # Stage 2: Block until HF adapter appears or pod stops (calls runpod-wait).
 # Reads pod_id from /tmp/b00t-runpod-active-pod-id if not provided.
-runpod-await pod_id="" repo="elasticdotventures/b00t-qwen36-35b-a3b" timeout_min="180":
+runpod-await pod_id="" repo="elasticdotventures/b00t-qwen38-27b" timeout_min="180":
     #!/usr/bin/env bash
     set -euo pipefail
     PID="{{pod_id}}"
@@ -1236,7 +1366,7 @@ runpod-await pod_id="" repo="elasticdotventures/b00t-qwen36-35b-a3b" timeout_min
     fi
 
 # Stage 3: Verify adapter is usable (HF Hub exists + files present).
-runpod-verify repo="elasticdotventures/b00t-qwen36-35b-a3b":
+runpod-verify repo="elasticdotventures/b00t-qwen38-27b":
     #!/usr/bin/env python3
     import json, os, sys, urllib.request, urllib.error
     repo = "{{repo}}"
@@ -1266,7 +1396,7 @@ runpod-verify repo="elasticdotventures/b00t-qwen36-35b-a3b":
 #    3. agent fixed it → retry the failed stage ONCE
 #    4. only if the agent exhausted its iterations → record a NEW lfmf lesson
 #    This is fail → consult → agent-fix → (unfixable) → lfmf; NOT fail → lfmf.
-runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen36-35b-a3b" gpu="NVIDIA A100-SXM4-80GB" spot="false" timeout_min="180":
+runpod-pipeline config="fine-tune/config.yaml" repo="elasticdotventures/b00t-qwen38-27b" gpu="NVIDIA A100-SXM4-80GB" spot="false" timeout_min="180":
     #!/usr/bin/env bash
     set -euo pipefail
     # fail_stage: Kaizen agent-fix-first. Returns 0 if the agent fixed the
