@@ -67,6 +67,14 @@ async def run(args: argparse.Namespace) -> None:
     subject = args.subject or f"hive.{args.id}.>"
     basename = args.basename or f"hive-{args.id}-coord"
     log_dir = Path(args.log_dir) if args.log_dir else _default_log_dir()
+    # JWT/nkey .creds file, e.g. from capability-forge's mint_historian_creds
+    # (elasticdotventures/_b00t_#1235) - falls back to CREDS_FILE env var for
+    # the same reason NATS_URL is env-first: keep the path out of argv where
+    # any local user could see it via `ps aux` (matters less for a path than
+    # a password, but keeps both auth modes consistent). Plain user/password
+    # (embedded in nats_url) is still supported when this isn't set - servers
+    # not yet running in operator/JWT mode still need that path to work.
+    creds = args.creds or os.environ.get("CREDS_FILE")
 
     async def error_cb(e):
         print(f"[nats error] {e}")
@@ -80,10 +88,11 @@ async def run(args: argparse.Namespace) -> None:
     async def closed_cb():
         print("[nats] connection closed")
 
-    print(f"connecting to {_redact_nats_url(nats_url)} as {args.id!r}")
+    print(f"connecting to {_redact_nats_url(nats_url)} as {args.id!r}" + (f" (creds: {creds})" if creds else ""))
     nc = await nats.connect(
         nats_url,
         name=args.id,
+        user_credentials=creds,
         reconnect_time_wait=2,
         max_reconnect_attempts=-1,
         error_cb=error_cb,
@@ -173,6 +182,7 @@ _COMMON_OPTS = [
     (("--subject",), dict(help="NATS subject to subscribe/filter (default: hive.{id}.>)")),
     (("--log-dir",), dict(help="Root directory for NDJSON session logs (default: historian/sessions)")),
     (("--basename",), dict(help="Log file basename (default: hive-{id}-coord)")),
+    (("--creds",), dict(help="Path to a NATS .creds file (JWT + nkey seed) for operator/JWT-mode servers - see elasticdotventures/_b00t_#1235. Falls back to CREDS_FILE env var. Omit for plain user/password auth (embedded in --nats-url)")),
 ]
 
 _ID_DEFAULT = os.environ.get("HISTORIAN_ID", "hive")
