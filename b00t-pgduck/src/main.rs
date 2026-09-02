@@ -267,24 +267,23 @@ impl ExtendedQueryHandler for DuckDbBackend {
         }
     }
 
-    // KNOWN LIMITATION: unlike SQLite, DuckDB only exposes column
-    // metadata (column_type/column_name) AFTER a statement has executed
-    // - calling them on a freshly-prepared, unexecuted statement panics
-    // (confirmed empirically: duckdb-1.10505.0/src/raw_statement.rs:138,
-    // "The statement was not executed yet"). do_query works around this
-    // by reading the descriptor back via Rows::as_ref() post-execution
-    // (see row_desc_from_stmt call sites above), but Describe messages
-    // are protocol-level "tell me the result shape before I Execute"
-    // requests - there's no post-execution Rows to read from yet here.
-    // A client that issues Describe before Execute on a SELECT (some
-    // prepared-statement/ORM code paths do) will panic this connection's
-    // task. Not fixed: wrapping in catch_unwind risks poisoning the
-    // shared Mutex<Connection> for every other query on this connection
-    // if the panic happens mid-lock, which is worse than the current
-    // single-connection crash. Forgejo's own migration+startup e2e test
-    // (see infrastructure repo's pods/pgduck/test-forgejo-e2e.sh) passes
-    // clean, so this gap doesn't block that specific consumer - but it's
-    // a real, disclosed gap for others.
+    // Previously panicked here: unlike SQLite, DuckDB only exposes column
+    // metadata (column_type/column_name) on a Statement AFTER it has
+    // executed - calling them on a freshly-prepared, unexecuted statement
+    // panics (confirmed empirically: duckdb-1.10505.0/src/raw_statement.rs:138,
+    // "The statement was not executed yet"). Describe protocol messages
+    // arrive before Execute, so there's no post-execution Rows to read a
+    // descriptor from the real statement. Broke live 2026-09-02: Forgejo's
+    // Postgres driver issues Describe before Execute on its startup
+    // queries, the panic poisoned the shared Mutex<Connection>, and every
+    // subsequent connection to this server failed too (not just the one
+    // that panicked - a shared connection, so a mid-lock panic doesn't
+    // stay contained to a single client). Fixed for real via
+    // describe_query_fields below: DuckDB's own `DESCRIBE <query>`
+    // meta-statement returns the result shape (as a real, executed query
+    // against a different, always-safe statement) without running the
+    // original query's side effects or ever touching the not-yet-executed
+    // Statement's own column_type/column_name.
     async fn do_describe_statement<C>(
         &self,
         _client: &mut C,
@@ -299,10 +298,8 @@ impl ExtendedQueryHandler for DuckDbBackend {
             .iter()
             .map(|t| t.clone().unwrap_or(Type::UNKNOWN))
             .collect();
-        let prepared = conn
-            .prepare(&stmt.statement)
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-        row_desc_from_stmt(&prepared).map(|fields| DescribeStatementResponse::new(param_types, fields))
+        let fields = describe_query_fields(&conn, &stmt.statement)?;
+        Ok(DescribeStatementResponse::new(param_types, fields))
     }
 
     async fn do_describe_portal<C>(
@@ -314,10 +311,67 @@ impl ExtendedQueryHandler for DuckDbBackend {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let conn = self.conn.lock().unwrap();
-        let stmt = conn
-            .prepare(&portal.statement.statement)
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-        row_desc_from_stmt(&stmt).map(DescribePortalResponse::new)
+        let fields = describe_query_fields(&conn, &portal.statement.statement)?;
+        Ok(DescribePortalResponse::new(fields))
+    }
+}
+
+// See do_describe_statement's comment above for why this exists instead
+// of preparing+describing the real statement directly. `DESCRIBE <query>`
+// is itself a real, executable DuckDB statement (returns column_name,
+// column_type as text, null, key, default, extra - one row per result
+// column of the wrapped query) - .query()ing it is safe under the same
+// "only read metadata after executing" rule the panic above enforces,
+// because DESCRIBE's own result rows ARE what we read, not the wrapped
+// query's.
+fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<FieldInfo>> {
+    let format = Format::UnifiedText;
+    // Not every statement DuckDB accepts is describable this way (e.g.
+    // some DDL) - no result columns is a valid, non-error Describe
+    // response for those, matching what Postgres itself returns for an
+    // INSERT/DDL statement with no RETURNING clause.
+    let mut stmt = match conn.prepare(&format!("DESCRIBE {query}")) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let mut rows = stmt.query(duckdb::params![]).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+    let mut fields = Vec::new();
+    let mut idx = 0usize;
+    while let Ok(Some(row)) = rows.next() {
+        let name: String = row.get(0).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        let type_str: String = row.get(1).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        fields.push(FieldInfo::new(
+            name,
+            None,
+            None,
+            duckdb_type_str_to_pg_type(&type_str),
+            format.format_for(idx),
+        ));
+        idx += 1;
+    }
+    Ok(fields)
+}
+
+// DESCRIBE's column_type comes back as free-form SQL type text (e.g.
+// "INTEGER", "VARCHAR", "DECIMAL(10,2)"), not the typed arrow DataType
+// arrow_type_to_pg_type maps above - match on the leading type name,
+// ignoring any parenthesized precision/scale. Same "not all types"
+// honesty as arrow_type_to_pg_type: unmapped kinds fall back to UNKNOWN.
+fn duckdb_type_str_to_pg_type(type_str: &str) -> Type {
+    let base = type_str.split('(').next().unwrap_or(type_str).trim().to_uppercase();
+    match base.as_str() {
+        "BOOLEAN" | "BOOL" => Type::BOOL,
+        "TINYINT" | "UTINYINT" => Type::CHAR,
+        "SMALLINT" | "USMALLINT" | "INT2" => Type::INT2,
+        "INTEGER" | "UINTEGER" | "INT" | "INT4" => Type::INT4,
+        "BIGINT" | "UBIGINT" | "INT8" | "HUGEINT" | "UHUGEINT" => Type::INT8,
+        "FLOAT" | "REAL" | "FLOAT4" => Type::FLOAT4,
+        "DOUBLE" | "FLOAT8" => Type::FLOAT8,
+        "VARCHAR" | "TEXT" | "STRING" | "CHAR" | "BPCHAR" => Type::TEXT,
+        "BLOB" | "BYTEA" | "VARBINARY" => Type::BYTEA,
+        "DATE" => Type::DATE,
+        "TIMESTAMP" | "TIMESTAMP WITH TIME ZONE" | "TIMESTAMPTZ" | "DATETIME" => Type::TIMESTAMP,
+        _ => Type::UNKNOWN,
     }
 }
 
