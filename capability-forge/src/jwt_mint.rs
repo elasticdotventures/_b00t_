@@ -99,6 +99,44 @@ pub fn mint_service_jwt(
     Ok(token.sign(account_signing_key))
 }
 
+/// Mints a genuinely read-only NATS user JWT: subscribe-only on `sub_allow`, publish
+/// explicitly denied on every subject (`deny_publish(">")`), not merely omitted.
+///
+/// This distinction matters and is easy to get wrong: [`mint_service_jwt`] with an empty
+/// `pub_allow` does NOT produce a read-only credential - `nats-jwt` only emits a `nats.pub`
+/// permission block when `allow_publish`/`deny_publish` is called at least once
+/// (`NatsPermissions::is_empty()`, `skip_serializing_if`d away otherwise), and an absent
+/// permission block means NATS grants unrestricted access on that axis. A caller wanting
+/// "subscribe to X, never publish anything" must explicitly deny publish, not just skip
+/// allowing it - this function exists so that requirement doesn't have to be rediscovered
+/// per caller. Used by `bin/mint_historian_creds.rs`.
+pub fn mint_readonly_service_jwt(
+    account_signing_key: &KeyPair,
+    account_pubkey: &str,
+    user_pubkey: &str,
+    sub_allow: &[String],
+    ttl: chrono::Duration,
+) -> Result<String> {
+    anyhow::ensure!(ttl > chrono::Duration::zero(), "ttl must be positive");
+    anyhow::ensure!(
+        !sub_allow.is_empty(),
+        "sub_allow must not be empty (an empty NATS permission block means unrestricted access, not none)"
+    );
+
+    let expires_at = chrono::Utc::now()
+        .checked_add_signed(ttl)
+        .context("ttl overflows a representable expiry timestamp")?
+        .timestamp();
+
+    let mut token = Token::new_user(account_pubkey, user_pubkey).deny_publish(">".to_string());
+    for subject in sub_allow {
+        token = token.allow_subscribe(subject.clone());
+    }
+    token = token.expires(expires_at);
+
+    Ok(token.sign(account_signing_key))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
