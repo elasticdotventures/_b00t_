@@ -14,7 +14,7 @@ type = "hive_profile"
 hint = "Qwen3.8-27B (UD-Q4_K_XL) via llama.cpp container — podman nvidia-container-runtime, port 8001, EXCLUSIVE ch0nky tier; weights on /c0de"
 
 [b00t.hive.resources]
-ram_gb    = 6
+ram_gb    = 12
 gpu_mb    = 21500
 cpu_cores = 2
 
@@ -51,7 +51,7 @@ exec_start = """/usr/bin/podman run --rm \
   -e NVIDIA_VISIBLE_DEVICES=0 \
   -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
   --security-opt=label=disable \
-  --memory=6g --memory-swap=6g \
+  --memory=12g --memory-swap=12g \
   -p 8001:8080 \
   -v /c0de/models/qwen38-27b:/models:ro \
   ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 \
@@ -77,6 +77,10 @@ exec_start = """/usr/bin/podman run --rm \
 # 🤓 --alias ch0nky: /v1/models reports "ch0nky" so opencode `qwen36-local/ch0nky`
 #    and pi `--model ch0nky` keep working unchanged — only the weights behind :8001 change.
 # 🤓 no --spec-type: Qwen3.8-27B dense, no MTP draft head.
+# 🤓 --memory=12g (was 6g): -c 262144's host-side prompt cache alone is ~8GB
+#    (llama.cpp scales it with n_ctx); 6g got the container SIGKILLed by the
+#    cgroup OOM-killer at 13:02 (status=137) under real load — NOT a VRAM OOM,
+#    VRAM held at ~1.8GB free. Host has 31GB / ~23GB avail, 12g is safe.
 # 🤓 -np 2 + -c 262144: two 131072-token (128K) slots — Qwen3.8-27B's FULL
 #    native context, per slot, with pi + opencode co-resident on :8001. KV q4_0
 #    (~18 MiB / 1K tok on this box) → ~4.8GB KV, total ~22.4GB / 24GB, ~2GB margin.
