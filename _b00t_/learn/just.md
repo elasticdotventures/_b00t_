@@ -426,3 +426,7 @@ variadic-args-quoting: just splices {{ARGS}} unquoted into the recipe line — a
 
 ---
 MCP-recipe-routing: prefer the b00t_just MCP tool over shelling out to just — it takes the recipe name and args as typed parameters, so args bypass shell parsing entirely (see variadic-args-quoting above). Registered recipes carry higher action scores and produce verification evidence.
+
+
+---
+module-path-resolution: in a just module (`mod name 'path.just'`), use `source_directory()` to build paths relative to the module file — NOT `justfile_directory()`, which always returns the ROOT justfile's directory even from inside a module. Real failure: `agent_secrets::apply-vault-admin-grant` used `{{justfile_directory()}}/examples/admin-vault-access.bicep` from `msft-corp/agent-secrets.just` and resolved to `infrastructure/examples/...` instead of `infrastructure/msft-corp/examples/...`.

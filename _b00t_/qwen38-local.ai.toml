@@ -1,0 +1,47 @@
+# b00t AI datum — Qwen3.8-27B local (the EXCLUSIVE ch0nky slot on this node)
+# 🤓 Replaces qwen36 for all local inference. Served by inference-qwen38-27b.hive.toml
+#    (llama.cpp podman, :8001, weights on /c0de PCIe flash). --alias ch0nky means the
+#    OpenAI model id stays "ch0nky", so opencode `qwen36-local/ch0nky` and pi
+#    `--model ch0nky` keep working — only the weights behind :8001 changed.
+# 🔗参 _b00t_/inference-qwen38-27b.hive.toml, _b00t_/telnyx-inference.ai.toml (cloud twin)
+
+[b00t]
+name = "qwen38-local"
+type = "ai"
+hint = "Qwen3.8-27B UD-Q4_K_XL on llama.cpp @ :8001 — exclusive local ch0nky; weights on /c0de; RTX3090"
+aliases = ["ch0nky-local", "qwen38"]
+
+[b00t.ai]
+provider = "openai_compatible"
+api_type = "openai_compatible"
+models = ["ch0nky", "Qwen3.8-27B-UD-Q4_K_XL.gguf"]
+context_window = 131072         # -c 262144 / -np 2 = 128K per slot (Qwen3.8 full native context)
+pricing_model = "local"
+
+[b00t.env.defaults]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+
+# 🚩 DEPRECATED on this node (do not select): qwen36 / Qwen3.6-27B.
+#    _b00t_/qwen36-peer.ai.toml (192.168.1.137) remains valid as a NETWORK peer only.
+
+[[b00t.usage]]
+description = "Verify the served model is Qwen3.8"
+command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
+
+[[b00t.usage]]
+description = "Swap qwen36 → qwen38"
+command = "bash scripts/swap-to-qwen38.sh"
+
+[[b00t.references]]
+name = "unsloth/Qwen3.8-27B-GGUF"
+url  = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+
+# b00t:map v1
+# summary: Qwen3.8-27B UD-Q4_K_XL @ :8001 — exclusive local ch0nky, weights on /c0de, RTX3090; qwen36 deprecated on this node
+# tags: ai, qwen3.8, qwen38, ch0nky, local, llamacpp, c0de, rtx3090
+# tier: ch0nky
+# cmds: curl -s http://127.0.0.1:8001/v1/models
+# complexity: 2

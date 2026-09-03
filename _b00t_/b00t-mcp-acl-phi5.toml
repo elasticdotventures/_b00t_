@@ -1,0 +1,17 @@
+# b00t-mcp ACL — phi5-shacl agent. RESTRICTED: b00t-cli surface only.
+# 🤓 Loaded via: b00t-mcp --stdio -c _b00t_/b00t-mcp-acl-phi5.toml
+#    Everything the agent can do goes through `b00t_exec` / `b00t_discover` /
+#    `b00t_learn` / `b00t_status` / `b00t_whoami` — no file writes, no shell,
+#    no network tools. Its job is to *request* work (b00t task add), not do it.
+[b00t]
+allow = [
+  "b00t_exec",
+  "b00t_discover",
+  "b00t_learn",
+  "b00t_status",
+  "b00t_whoami",
+]
+deny = ["*"]
+
+# 🤓 b00t_exec itself is further constrained by the always-on hive-guards
+#    (_b00t_/hive-guards.hive.toml) — pip/docker/rm-rf etc. are blocked there.

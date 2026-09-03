@@ -1,35 +1,57 @@
-# ralph OODA executor mission — b00t task worker
+# Ralph Agent Instructions — Hive Watchdog Epic
 
-You are a b00t hive worker inside an OODA loop iteration. One iteration = one task. Laconic.
+You are an autonomous coding agent on a LOCAL model. **Context is scarce. Be frugal.**
 
-## Protocol (follow exactly)
+## Context Budget Rules (read first)
+- Read ONLY: `prd.json`, `progress.txt`, and the single file the current story touches.
+- Do NOT explore the repo, do NOT `ls -R`, do NOT open files a story does not name.
+- Keep replies short. No summaries of what you read. Act.
 
-1. **Claim**: run `b00t-cli task list` and select the highest-priority PENDING task
-   tagged `ralph-ready` — ONLY tasks with that tag. If none: print `PASS: no ralph-ready tasks` and stop.
-2. **Orient**: `b00t-cli task show <id>` — the description contains DESIRED STATE,
-   DoD COMMAND, and CONSTRAINTS. They are binding. If the description lacks an explicit
-   DoD COMMAND, do NOT attempt the task; print `FAIL: task <id> has no DoD command` and stop.
-3. **Act**: implement the DESIRED STATE within the CONSTRAINTS. Stay on the current
-   git branch. Touch only what the task names.
-4. **Verify**: run the task's DoD COMMAND verbatim. This is the only proof that counts.
-5. **Close**:
-   - DoD exit 0 → `b00t-cli task done <id>`, then print the evidence line verbatim:
-     the DoD command and its output.
-   - DoD nonzero → revert nothing, print `FAIL:` + the DoD output (max 5 lines), leave
-     the task pending.
-6. **Record**: if you hit a non-obvious sharp corner, `b00t-cli lfmf <topic> "<lesson>"`.
+## Your Task (one iteration = one story)
+1. Read `prd.json` and `progress.txt` (Codebase Patterns section at top first).
+2. Confirm branch is `ralph/hive-watchdog` (`git branch --show-current`). If not, `git checkout ralph/hive-watchdog`.
+3. Pick the highest-priority story where `passes: false`.
+4. Implement THAT ONE story. Touch only the files it names.
+5. Run its verification block (in the story's `acceptanceCriteria`). All commands must pass.
+6. If pass: `git add -A && git commit -m "feat: [Story ID] - [Story Title]"`. If the commit is
+   rejected by a pre-commit hook mentioning `cargo: command not found`, retry with `--no-verify`.
+7. Set `"passes": true` for that story in `prd.json` and commit that too.
+8. APPEND a short entry to `progress.txt` (never overwrite). Format below.
 
-## Output contract (last lines of your reply)
-
+## progress.txt entry format
 ```
-TASK: <id> <title>
-DoD: <command>
-PASS            — or —  FAIL: <5-line excerpt>
+## <ISO date> - <Story ID>
+- what changed (1-3 lines)
+- files touched
+- Learnings: <gotchas future iterations need; 1-3 bullets>
+---
 ```
+If you found a reusable pattern, also add one line to the `## Codebase Patterns` block at the TOP.
 
-## Hard rules
+## Quality bar
+- Shell scripts: `shellcheck <file>` clean (or only info-level), and `bash -n <file>` clean.
+- No secrets in code. Read NATS creds from `~/.b00t/secrets/hive-nats.env` at runtime only.
+- Keep changes minimal and POSIX-ish bash. No new language runtimes.
+- Never commit broken code.
 
-- NEVER `git commit`, push, or change branches.
-- NEVER touch tasks without the `ralph-ready` tag.
-- NEVER claim done without running the DoD command.
-- Prefer `just` recipes and `b00t-cli` over raw shell where they exist.
+## Environment facts (do not re-derive)
+- systemd is `--user`. Hive units match `b00t-hive-*.service` and `b00t@*.service`.
+- Local inference server: llama.cpp OpenAI API at `http://127.0.0.1:8001` (`/health` → 200).
+- `nats` CLI is at `/home/brianh/.local/bin/nats`. NATS at `nats://localhost:4222`, creds in
+  `~/.b00t/secrets/hive-nats.env` (`HIVE_NATS_USER`, `HIVE_NATS_PASSWORD`, `NATS_URL`).
+- Runtime state dir: `${XDG_RUNTIME_DIR:-/run/user/$(id -u)}`.
+- Repo root of the main checkout: `/home/brianh/.b00t` (this worktree lives under it).
+
+
+## Progress + forecast (required)
+At the top of each iteration:
+  source scripts/lib/agent-progress.sh
+  pr_forecast "iter:<story-id>" <your-estimate-seconds>
+Every few minutes of work: pr_progress "iter:<story-id>" <pct> <eta_secs> "<what>"
+Before the commit: pr_settle "iter:<story-id>" <elapsed-seconds>  — paste its accuracy line into progress.txt.
+See docs/hive-resilience-wiki/Progress-Forecast-Protocol.md.
+
+## Stop Condition
+After a story, if ALL stories in `prd.json` have `passes: true`, reply exactly:
+<promise>COMPLETE</promise>
+Otherwise end normally; the next iteration takes the next story.

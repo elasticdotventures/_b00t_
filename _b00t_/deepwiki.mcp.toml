@@ -1,0 +1,55 @@
+[b00t]
+name = "deepwiki"
+type = "mcp"
+hint = "DeepWiki MCP (Cognition/Devin) — ask questions & read auto-generated wikis for ANY public GitHub repo; the 'deepwiki=autoresearch' reviewer-gate pattern, now a live tool"
+lfmf_category = "deepwiki"
+
+[b00t.learn]
+topic = "deepwiki"
+auto_digest = true
+
+# 🤓 Public, no-auth, hosted by Cognition Labs. Streamable-HTTP endpoint
+#    https://mcp.deepwiki.com/mcp (SSE variant: https://mcp.deepwiki.com/sse).
+#    Verified against docs.devin.ai/work-with-devin/deepwiki-mcp 2026-09-03.
+#    Tools:
+#      read_wiki_structure(repoName)  — list the wiki's topic pages
+#      read_wiki_contents(repoName)   — full wiki markdown for a repo
+#      ask_question(repoName, question) — grounded Q&A over the repo's wiki+source
+#    repoName is "owner/repo" (e.g. "elasticdotventures/_b00t_").
+#
+# 🔗参 _b00t_/learn/deepwiki.md — the b00t "deepwiki=autoresearch=karpathy" pattern
+#    (sm0l reviewer gate between Orient and Act). This MCP is the retrieval half;
+#    keep the reviewer gate (grok ask / sm0l RELEVANT|SKIP) in front of Act.
+
+[[b00t.mcp.httpstream]]
+url = "https://mcp.deepwiki.com/mcp"
+transport = "httpstream"
+priority = 0
+requires = []
+requires_auth = false
+
+[[b00t.mcp.sse]]
+url = "https://mcp.deepwiki.com/sse"
+transport = "sse"
+priority = 10
+requires = []
+requires_auth = false
+
+[[b00t.usage]]
+description = "Register deepwiki MCP with Claude Code"
+command = "b00t-cli claude-code install mcp deepwiki"
+
+[[b00t.usage]]
+description = "Ask a grounded question about any public GitHub repo"
+command = "# via MCP: ask_question(repoName='owner/repo', question='...')"
+
+[[b00t.usage]]
+description = "Pull the whole auto-wiki for a repo"
+command = "# via MCP: read_wiki_contents(repoName='owner/repo')"
+
+# b00t:map v1
+# summary: DeepWiki MCP — hosted, no-auth Q&A + auto-wiki over any public GitHub repo; retrieval half of the deepwiki=autoresearch pattern
+# tags: deepwiki, mcp, autoresearch, karpathy, rag, github, wiki, handoff
+# tier: sm0l
+# cmds: b00t-cli claude-code install mcp deepwiki
+# complexity: 2

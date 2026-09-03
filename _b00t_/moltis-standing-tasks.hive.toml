@@ -1,0 +1,82 @@
+# b00t Hive Profile — moltis standing tasks (the hive's operator-facing heartbeat)
+# 🤓 moltis is the only hive agent with channel-aware durable cron + human comms
+#    (Slack/WhatsApp/telephony/voice/email). Its recurring jobs deliver hive state
+#    to humans — work `b00t task` (machine queue) deliberately does NOT do.
+#    Jobs run on moltis's own `moltis-cron` crate (sqlite-backed, survives restart),
+#    NOT systemd timers. This profile just ensures the moltis agent host is up and
+#    documents the schedule.
+# 🔗参 _b00t_/moltis.agent.toml — the agent + service spec
+# 🔗参 docs/moltis-b00t-integration.md — overlap analysis + rationale
+
+[b00t]
+name = "moltis-standing-tasks"
+type = "hive_profile"
+hint = "moltis recurring hive-ops jobs — health digest, PR triage, vendor-drift, crash escalation; via moltis-cron"
+
+[b00t.hive.resources]
+ram_gb    = 2
+gpu_mb    = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 2
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+group    = "moltis-agent"
+priority = 40
+
+[b00t.hive.services]
+# 🤓 reuse the moltis agent unit as the cron host; this profile only asserts it's running
+start = ["b00t@moltis-agent.service"]
+stop  = []
+
+# ── Standing jobs (registered into moltis-cron once, on activate) ─────────────
+# Each is `moltis cron add --name <name> --schedule '<cron>' --channel '<ch>' -- '<prompt/cmd>'`
+# Delivery channel is a moltis connector id (configure in moltis Settings first).
+
+[[b00t.usage]]
+description = "hive-health-digest — hourly GPU/service/watchdog snapshot to ops channel"
+command = """moltis cron add --name hive-health-digest --schedule '0 * * * *' --channel ops -- \
+'Run: b00t-cli hive status; tail -n 40 /home/brianh/.b00t/.b00t/hive-watchdog.jsonl; \
+timeout 3 nats sub b00t.hive.mesh.health.> . Summarise GPU heat/temp/util, each hive \
+service active/failed, any crashloop events, and NRestarts deltas. <=12 lines.'"""
+
+[[b00t.usage]]
+description = "pr-triage — daily 09:00 unreviewed/mergeable/stale PRs + forecast accuracy"
+command = """moltis cron add --name pr-triage --schedule '0 9 * * *' --channel ops -- \
+'Run: gh pr list --state open --json number,title,reviewDecision,mergeable; b00t-cli task list --filter pending; \
+tail -n 50 /home/brianh/.b00t/.b00t/forecasts.jsonl. Report PRs with no review, mergeable ones, \
+stale branches, and forecast abs-error trend. File a b00t task for anything needing a human.'"""
+
+[[b00t.usage]]
+description = "vendor-drift-watch — weekly Mon, submodule pins vs origin/main"
+command = """moltis cron add --name vendor-drift-watch --schedule '0 8 * * 1' --channel ops -- \
+'For each path in .gitmodules: git -C <path> fetch -q; compare HEAD to origin/main; \
+report modules that advanced with the commit range and count. File a b00t task per drifted module.'"""
+
+[[b00t.usage]]
+description = "soul-snapshot — daily 23:00 export moltis/ namespace to a git-committed archive"
+command = """moltis cron add --name soul-snapshot --schedule '0 23 * * *' -- \
+'Export the moltis/ key namespace from soul http://127.0.0.1:7700 to JSONL + Markdown; \
+git add + commit to docs/moltis-soul-archive/.'"""
+
+[[b00t.usage]]
+description = "crash-escalation — EVENT (not cron): phone the operator on a crashloop trip"
+command = """moltis cron add --name crash-escalation --event 'nats:b00t.hive.mesh.health.crashloop' --channel phone -- \
+'A hive service is crash-looping: {payload}. Place a Twilio call and send a WhatsApp to the operator with the unit name and last watchdog line.'"""
+
+[[b00t.usage]]
+description = "List / remove moltis cron jobs"
+command = "moltis cron list ; moltis cron remove --name <name>"
+
+[[b00t.usage]]
+description = "Activate (ensure moltis agent host is up; register jobs manually per above)"
+command = "b00t-cli hive activate moltis-standing-tasks"
+
+# b00t:map v1
+# summary: moltis standing tasks — hourly health digest, daily PR triage, weekly vendor-drift, daily soul snapshot, event-driven crash phone-escalation; runs on moltis-cron
+# tags: moltis, cron, standing-tasks, hive-ops, slack, telephony, recurring, watchdog, pr-triage, vendor-drift
+# tier: ch0nky
+# cmds: b00t-cli hive activate moltis-standing-tasks, moltis cron list
+# complexity: 5

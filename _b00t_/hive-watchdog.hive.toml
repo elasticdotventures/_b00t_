@@ -1,0 +1,59 @@
+# b00t hive profile — the Sentinel (crash-loop watchdog), always-on.
+# 🤓 Generated unit: b00t-hive-hive-watchdog.service (Restart=always). It watches
+#    every b00t-hive-*.service / b00t@*.service, stops any unit that restarts
+#    >= WATCHDOG_MAX_RESTARTS times within WATCHDOG_WINDOW_SECS, and heralds
+#    findings on NATS b00t.hive.mesh.health.{crashloop,snapshot}.
+#    Activate: b00t-cli hive activate hive-watchdog   (or: just hive-watchdog-ensure)
+# 🔗参 scripts/b00t-hive-watchdog.sh — the loop body
+# 🔗参 _b00t_/hive-guards.hive.toml — command-guard registry (separate concern)
+
+[b00t]
+name = "hive-watchdog"
+type = "hive"
+hint = "hive Sentinel — always-on crash-loop watchdog + NATS health herald"
+
+[b00t.hive.service]
+description = "hive Sentinel — crash-loop watchdog + NATS health herald"
+service_type = "simple"
+restart = "always"
+restart_sec = "15s"
+timeout_start_sec = "30"
+after = ["network.target", "hive-b00t-relay.service"]
+environment = [
+  "PATH=/home/brianh/.local/bin:/usr/local/bin:/usr/bin:/bin",
+  "B00T_REPO_ROOT=/home/brianh/.b00t",
+  "WATCHDOG_INTERVAL_SECS=15",
+  "WATCHDOG_MAX_RESTARTS=5",
+  "WATCHDOG_WINDOW_SECS=120",
+  "WATCHDOG_SELF_UNIT=b00t-hive-hive-watchdog.service",
+]
+exec_start = "bash /home/brianh/.b00t/scripts/b00t-hive-watchdog.sh"
+
+[b00t.hive.resources]
+ram_gb = 1
+gpu_mb = 0
+cpu_cores = 1
+
+[b00t.hive.resources.gate]
+ram_free_gb = 0
+gpu_free_mb = 0
+
+[b00t.hive.exclusion]
+# 🤓 not a workload profile — always active alongside whatever else runs
+group = "guards"
+priority = 90
+
+[[b00t.usage]]
+description = "Activate the always-on hive watchdog"
+command = "b00t-cli hive activate hive-watchdog"
+
+[[b00t.usage]]
+description = "Tail watchdog events"
+command = "tail -f /home/brianh/.b00t/.b00t/hive-watchdog.jsonl"
+
+# b00t:map v1
+# summary: hive Sentinel — always-on crash-loop watchdog; stops restart-storm units; NATS health herald
+# tags: hive, watchdog, crash-loop, resilience, nats, health, sentinel, systemd
+# tier: sm0l
+# cmds: b00t-cli hive activate hive-watchdog, just hive-watchdog-ensure
+# complexity: 4

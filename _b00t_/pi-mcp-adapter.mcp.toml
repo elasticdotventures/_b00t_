@@ -24,13 +24,13 @@ entangled_cli = ["pi-mcp-adapter.cli"]
 [[b00t.mcp.stdio]]
 # 🤓 pi --mode rpc starts pi as an MCP-compatible RPC server
 #    pi-mcp-adapter must be installed first: `pi install npm:pi-mcp-adapter`
-#    --provider openai uses OPENAI_BASE_URL; points directly to vLLM at :8001 (OpenAI-compatible API)
+#    --provider openai uses OPENAI_BASE_URL; points at the local ch0nky slot :8001 (qwen38-27b, OpenAI-compatible)
 command = "pi"
 args = ["--mode", "rpc", "--provider", "openai", "--model", "ch0nky", "--no-session"]
 transport = "stdio"
 priority = 0
-requires = ["pi-mcp-adapter", "b00t@inference-gemma4.service"]
-env = { OPENAI_BASE_URL = "http://127.0.0.1:8001/v1", OPENAI_API_KEY = "local-gemma4" }
+requires = ["pi-mcp-adapter", "b00t-hive-inference-qwen38-27b.service"]
+env = { OPENAI_BASE_URL = "http://127.0.0.1:8001/v1", OPENAI_API_KEY = "local-b00t" }
 
 # ── b00t mcp.json fragment for wiring into Claude Code ───────────────────────
 # Usage: b00t mcp install pi-mcp-adapter claudecode
@@ -38,7 +38,7 @@ env = { OPENAI_BASE_URL = "http://127.0.0.1:8001/v1", OPENAI_API_KEY = "local-ge
 
 # b00t:map v1
 # summary: pi-mcp-adapter MCP datum — pi as MCP server; token-efficient tool bridge for sub-agents
-# tags: pi, mcp, adapter, token-efficient, sub-agent, gemma4, rpc
+# tags: pi, mcp, adapter, token-efficient, sub-agent, qwen38, rpc
 # tier: ch0nky
 # cmds: b00t mcp install pi-mcp-adapter claudecode
 # complexity: 3

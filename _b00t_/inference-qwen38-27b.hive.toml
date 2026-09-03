@@ -1,0 +1,146 @@
+# b00t Hive Profile — Qwen3.8-27B llama.cpp via Podman, weights on /c0de PCIe flash
+# 🤓 Replaces inference-qwen36-27b-mtp-podman as the exclusive local ch0nky slot.
+#    Qwen3.8-27B is dense (no MTP head in unsloth/Qwen3.8-27B-GGUF) → plain llama.cpp,
+#    no --spec-type. UD-Q4_K_XL (17.56GB) + KV@262144 q4_0 (2 slots x 131072) ~ 22.4GB VRAM on the 3090 (~2GB margin).
+#    Weights live on /c0de/models/qwen38-27b (fast NVMe) — NOT the HF cache — so the
+#    17GB file never sits in system page-cache under memory pressure (see the tmpfs/OOM
+#    lesson) and cold-load is disk-fast.
+#
+# Activate: b00t hive activate inference-qwen38-27b
+
+[b00t]
+name = "inference-qwen38-27b"
+type = "hive_profile"
+hint = "Qwen3.8-27B (UD-Q4_K_XL) via llama.cpp container — podman nvidia-container-runtime, port 8001, EXCLUSIVE ch0nky tier; weights on /c0de"
+
+[b00t.hive.resources]
+ram_gb    = 12
+gpu_mb    = 21500
+cpu_cores = 2
+
+[b00t.hive.resources.gate]
+ram_free_gb = 2
+gpu_free_mb = 21000
+
+[b00t.hive.exclusion]
+# 🤓 priority 80 > qwen36 mtp-podman (75) and vllm (70): prefer Qwen3.8 whenever gate passes
+group    = "primary-workload"
+priority = 80
+
+[b00t.hive.services]
+start = ["b00t-hive-inference-qwen38-27b.service"]
+stop  = ["b00t-hive-inference-qwen38-27b.service"]
+
+[b00t.hive.service]
+description       = "Qwen3.8-27B llama.cpp container (podman nvidia-container-runtime, port 8001, weights on /c0de)"
+service_type      = "simple"
+restart           = "on-failure"
+restart_sec       = "10s"
+timeout_start_sec = "300"
+after             = ["network.target", "podman.socket"]
+environment       = [
+  "PATH=/home/brianh/.local/bin:/usr/local/bin:/usr/bin:/bin",
+]
+exec_start_pre = [
+  "/bin/bash -c '[ -f /c0de/models/qwen38-27b/Qwen3.8-27B-UD-Q4_K_XL.gguf ] || { echo \"GGUF missing on /c0de — run: hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-UD-Q4_K_XL.gguf --local-dir /c0de/models/qwen38-27b\" >&2; exit 1; }'",
+  "/bin/mkdir -p /home/brianh/.local/share/b00t/no-nvidia-hook",
+]
+exec_start = """/usr/bin/podman run --rm \
+  --name b00t-ch0nky-llamacpp \
+  --runtime /usr/bin/nvidia-container-runtime \
+  -e NVIDIA_VISIBLE_DEVICES=0 \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+  --security-opt=label=disable \
+  --memory=12g --memory-swap=12g \
+  -p 8001:8080 \
+  -v /c0de/models/qwen38-27b:/models:ro \
+  ghcr.io/ggml-org/llama.cpp:server-cuda-b9246 \
+  --host 0.0.0.0 --port 8080 \
+  --alias ch0nky \
+  -m /models/Qwen3.8-27B-UD-Q4_K_XL.gguf \
+  -c 262144 \
+  -b 4096 \
+  -ub 1024 \
+  -ngl 99 \
+  -fa on \
+  --cache-type-k q4_0 \
+  --cache-type-v q4_0 \
+  -np 2 \
+  --jinja \
+  --reasoning off \
+  --reasoning-format deepseek \
+  --temp 0.7 \
+  --top-p 0.8 \
+  --top-k 20 \
+  --min-p 0.0 \
+  --repeat-penalty 1.05"""
+# 🤓 --alias ch0nky: /v1/models reports "ch0nky" so opencode `qwen36-local/ch0nky`
+#    and pi `--model ch0nky` keep working unchanged — only the weights behind :8001 change.
+# 🤓 no --spec-type: Qwen3.8-27B dense, no MTP draft head.
+# 🤓 --memory=12g (was 6g): -c 262144's host-side prompt cache alone is ~8GB
+#    (llama.cpp scales it with n_ctx); 6g got the container SIGKILLed by the
+#    cgroup OOM-killer at 13:02 (status=137) under real load — NOT a VRAM OOM,
+#    VRAM held at ~1.8GB free. Host has 31GB / ~23GB avail, 12g is safe.
+# 🤓 -np 2 + -c 262144: two 131072-token (128K) slots — Qwen3.8-27B's FULL
+#    native context, per slot, with pi + opencode co-resident on :8001. KV q4_0
+#    (~18 MiB / 1K tok on this box) → ~4.8GB KV, total ~22.4GB / 24GB, ~2GB margin.
+#    This is the practical ceiling for a 24GB 3090 with this quant; a batch spike
+#    could OOM. If it crash-loops, drop back to -c 196608 (the tested-safe value).
+# 🤓 sampling: Qwen3.8 non-thinking recommended (temp 0.7 / top_p 0.8 / top_k 20).
+
+[b00t.hive.env]
+B00T_AI_CH0NKY_BASE  = "http://127.0.0.1:8001/v1"
+B00T_AI_CH0NKY_MODEL = "ch0nky"
+OPENAI_BASE_URL      = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY       = "local-b00t"
+PI_MODEL             = "ch0nky"
+LLAMA_CPP_BASE_URL   = "http://127.0.0.1:8001/v1"
+
+[[b00t.hive.guards]]
+pattern = "docker run"
+action  = "warn"
+message = "🦨 use podman --runtime /usr/bin/nvidia-container-runtime"
+
+install = """
+set -euo pipefail
+DIR=/c0de/models/qwen38-27b
+FILE=Qwen3.8-27B-UD-Q4_K_XL.gguf
+IMAGE=ghcr.io/ggml-org/llama.cpp:server-cuda-b9246
+echo "=== b00t inference-qwen38-27b install ==="
+mkdir -p "$DIR"
+[ -f "$DIR/$FILE" ] || hf download unsloth/Qwen3.8-27B-GGUF "$FILE" --local-dir "$DIR"
+[ -f "$DIR/$FILE" ] || { echo "❌ download failed" >&2; exit 1; }
+echo "✅ model: $DIR/$FILE ($(du -sh "$DIR/$FILE" | cut -f1))"
+podman pull "$IMAGE"
+echo "✅ done — activate: b00t hive activate inference-qwen38-27b"
+"""
+
+uninstall = """
+set -euo pipefail
+podman stop b00t-ch0nky-llamacpp 2>/dev/null || true
+podman rm   b00t-ch0nky-llamacpp 2>/dev/null || true
+systemctl --user stop    b00t-hive-inference-qwen38-27b.service 2>/dev/null || true
+systemctl --user disable  b00t-hive-inference-qwen38-27b.service 2>/dev/null || true
+echo "✅ stopped + disabled (weights preserved on /c0de)"
+"""
+
+[[b00t.references]]
+name = "unsloth/Qwen3.8-27B-GGUF"
+url  = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+
+[[b00t.usage]]
+description = "Install (download to /c0de + pull image)"
+command     = "b00t install inference-qwen38-27b"
+[[b00t.usage]]
+description = "Activate (swap in for qwen36)"
+command     = "b00t hive activate inference-qwen38-27b"
+[[b00t.usage]]
+description = "Verify"
+command     = "curl -s http://localhost:8001/v1/models | python3 -m json.tool"
+
+# b00t:map v1
+# summary: Qwen3.8-27B UD-Q4_K_XL via llama.cpp podman — EXCLUSIVE local ch0nky on :8001, weights on /c0de PCIe flash, RTX3090
+# tags: qwen3.8, qwen38, llamacpp, podman, nvidia-container-runtime, rtx3090, ch0nky, hive, c0de
+# tier: ch0nky
+# cmds: b00t install inference-qwen38-27b, b00t hive activate inference-qwen38-27b
+# complexity: 6

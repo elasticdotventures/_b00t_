@@ -1,10 +1,10 @@
 # b00t Agent Datum — moltis as first-class hive sub-agent
 # 🤓 moltis is a Rust-native binary from vendor/moltis-b00t submodule
-#    Repo: promptexecution/moltis-b00t (submodule at vendor/moltis-b00t)
+#    Repo: elasticdotventures/moltis-b00t (submodule; matches .gitmodules; fork of moltis-org/moltis)
 #    Soul/memory backend: b00t soul serve HTTP K/V on :7700
-#    Hive: shares :1234 litellm gateway
+#    Model: live ch0nky slot :8001 (qwen38-27b, --alias ch0nky) — same endpoint as opencode/pi
 #    Build: cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
-#    https://github.com/promptexecution/moltis-b00t
+#    https://github.com/elasticdotventures/moltis-b00t
 
 [b00t]
 name = "moltis"
@@ -19,7 +19,7 @@ from = "++abstract.agent"
 [b00t.agent]
 pid = "moltis-001"
 branch = "main"
-# 🤓 ch0nky tier — shares :1234 litellm gateway with hive
+# 🤓 ch0nky tier — model served by the live :8001 ch0nky slot (qwen38-27b)
 model = "ch0nky"
 skills = ["voice", "memory", "mcp-tools", "multi-channel"]
 personality = "pragmatic"
@@ -86,8 +86,8 @@ after = ["network.target", "b00t-soul.service"]
 environment = [
   "PATH=/home/brianh/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
   "MOLTIS_SOUL_URL=http://127.0.0.1:7700",
-  "OPENAI_BASE_URL=http://127.0.0.1:1234/v1",
-  "OPENAI_API_KEY=local-litellm",
+  "OPENAI_BASE_URL=http://127.0.0.1:8001/v1",
+  "OPENAI_API_KEY=local-b00t",
 ]
 exec_start = "vendor/moltis-b00t/target/release/moltis"
 
@@ -111,8 +111,8 @@ AGENT_ID = "moltis"
 AGENT_SKILLS = "code,voice,memory,mcp-tools,multi-channel,sandbox"
 MOLTIS_DIR = "vendor/moltis-b00t"
 MOLTIS_SOUL_URL = "http://127.0.0.1:7700"
-OPENAI_BASE_URL = "http://127.0.0.1:1234/v1"
-OPENAI_API_KEY = "local-litellm"
+OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+OPENAI_API_KEY = "local-b00t"
 
 [[b00t.usage]]
 description = "Build moltis binary from vendor submodule"
@@ -135,7 +135,7 @@ description = "Stop moltis agent service"
 command = "systemctl --user stop b00t@moltis-agent.service"
 
 # b00t:map v1
-# summary: moltis Rust-native claw — sandboxed, secure, auditable; voice+memory+MCP+multi-channel; soul K/V :7700; litellm :1234
+# summary: moltis Rust-native claw — sandboxed, secure, auditable; voice+memory+MCP+multi-channel; soul K/V :7700; ch0nky :8001
 # tags: moltis, agent, rust, soul, kv, memory, mcp-tools, voice, multi-channel, ch0nky, hive
 # tier: ch0nky
 # cmds: just moltis-build | just moltis-run | just moltis-soul-test

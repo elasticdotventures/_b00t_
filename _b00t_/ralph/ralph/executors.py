@@ -277,7 +277,7 @@ class OpenCodeExecutor:
                 return Failure(error)
 
         cwd_value = self.working_dir or self.prompt_path.parent
-        command: list[str] = ["opencode", "--model", self.model]
+        command: list[str] = ["opencode", "run", "--model", self.model]
 
         if self.extra_args:
             command.extend(self.extra_args.split())

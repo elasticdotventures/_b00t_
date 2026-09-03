@@ -14,8 +14,8 @@ hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with o
 
 entangled_mcp = ["pi-mcp-adapter.mcp", "b00t-mcp.mcp"]
 
-install = "npm install -g @mariozechner/pi-coding-agent@latest"
-update = "npm install -g @mariozechner/pi-coding-agent@latest"
+install = "npm install -g @earendil-works/pi-coding-agent@latest"
+update = "npm install -g @earendil-works/pi-coding-agent@latest"
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
@@ -38,9 +38,9 @@ cli_path = "pi"
 cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "write", "bash", "grep", "ls"]
 max_iterations = 10
-requires = ["b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
+requires = ["b00t-hive-inference-qwen38-27b.service"]
 # hive_profile activates the currently preferred ch0nky local model before invocation
-hive_profile = "inference-qwen36-35b-a3b-llamacpp"
+hive_profile = "inference-qwen38-27b"
 
 [b00t.agent.ipc]
 # 🤓 pi --mode rpc exposes stdio RPC; pi-mcp-adapter bridges to MCP clients
@@ -82,14 +82,14 @@ service_type = "simple"
 restart = "on-failure"
 restart_sec = "10s"
 timeout_start_sec = "60"
-after = ["network.target", "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
+after = ["network.target", "b00t-hive-inference-qwen38-27b.service"]
 environment = [
   "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
   # 🤓 OPENAI_API_KEY sourced from .env / CMDB; local llama.cpp proxy accepts any non-empty string
-  "OPENAI_API_KEY=${OPENAI_API_KEY:-local-b00t}",
+  "OPENAI_API_KEY=local-b00t",
 ]
-exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
+exec_start = "/home/brianh/.local/bin/pi-rpc-socket.sh"
 
 [b00t.hive.resources]
 ram_gb = 1
@@ -101,8 +101,9 @@ ram_free_gb = 1
 gpu_free_mb = 0
 
 [b00t.hive.exclusion]
-# 🤓 only one ch0nky coding-agent service active at a time; pi and opencode are mutually exclusive
-group = "ch0nky-coding-agent"
+# 🤓 2026-09-03: llama.cpp bumped to -np 2 (qwen38-27b unit) so pi + opencode can co-reside on :8001;
+# pi given its own exclusion group (was shared "ch0nky-coding-agent") to stop hive evicting opencode-agent on start
+group = "ch0nky-coding-agent-pi"
 priority = 50
 
 [b00t.env]
@@ -120,7 +121,7 @@ command = "systemctl --user start b00t@pi-agent.service"
 
 [[b00t.usage]]
 description = "Install or update pi to latest published version"
-command = "npm install -g @mariozechner/pi-coding-agent@latest"
+command = "npm install -g @earendil-works/pi-coding-agent@latest"
 
 [[b00t.usage]]
 description = "Verify the installed pi version"
@@ -152,7 +153,7 @@ command = "b00t mcp install pi-mcp-adapter claudecode"
 
 # b00t:map v1
 # summary: pi coding agent — systemd-managed RPC server; ch0nky slot; swap with opencode via hive stop/start
-# tags: pi, agent, gemma4, ch0nky, systemd, rpc, hive, swap, mcp-adapter
+# tags: pi, agent, qwen38, ch0nky, systemd, rpc, hive, swap, mcp-adapter, earendil-works
 # tier: ch0nky
 # cmds: systemctl --user start b00t@pi-agent.service
 # complexity: 5

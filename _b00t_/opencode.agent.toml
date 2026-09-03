@@ -76,10 +76,10 @@ restart_sec = "10s"
 timeout_start_sec = "60"
 after = ["network.target", "b00t-hive-inference-qwen36-27b.service"]
 environment = [
-  "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
+  "PATH=/home/brianh/.opencode/bin:/home/brianh/.bun/bin:/home/brianh/.local/bin:/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "OPENCODE_CONFIG=/home/brianh/.config/opencode/opencode.json",
 ]
-exec_start = "opencode serve --port 3000 --model qwen36-local/ch0nky"
+exec_start = "/home/brianh/.opencode/bin/opencode serve --port 3000 --hostname 127.0.0.1 --print-logs --log-level INFO"
 
 [b00t.hive.resources]
 ram_gb = 1
