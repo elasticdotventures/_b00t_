@@ -1,0 +1,107 @@
+# b00t AI provider datum — Telnyx Inference (PAYG, OpenAI-compatible)
+# 🤓 Telnyx serves open-weight models pay-as-you-go at api.telnyx.com/v2/ai,
+#    OpenAI-compatible (/v1/chat/completions with base_url override + Bearer key).
+#    Registered here because Telnyx carries BOTH "qwen38 27b" AND the GLM family —
+#    the two things the operator asked about. Pricing verified live via the Telnyx
+#    API `retrieve_models_ai` on 2026-09-03 (USD per 1M tokens).
+
+[b00t]
+name = "telnyx-inference"
+type = "ai"
+hint = "Telnyx Inference — PAYG open-weight models (GLM-5.x, Qwen3.8-27B, DeepSeek-V4-Flash); OpenAI-compatible; ch0nky/frontier cloud fallback"
+aliases = ["telnyx-ai", "telnyx-llm"]
+
+[b00t.ai]
+provider = "openai_compatible"
+api_type = "openai_compatible"
+pricing_model = "payg"
+regions = ["us-east-1", "us-west-1"]
+
+[b00t.env]
+required = ["TELNYX_API_KEY"]
+
+[b00t.env.defaults]
+TELNYX_API_BASE = "https://api.telnyx.com/v2/ai"
+# OpenAI-compatible path: ${TELNYX_API_BASE}/chat/completions
+
+# ── Models (id = Telnyx model id; cost_per_1k_* = USD; verified 2026-09-03) ──
+[models.glm-5_3-flash]
+telnyx_id = "zai-org/GLM-5.3-Flash"
+params = "320B"
+context_length = 1048576
+capabilities = "text,chat,code,reasoning,agentic,long_context"
+cost_per_1k_input_tokens = 0.000075
+cost_per_1k_output_tokens = 0.00025
+cost_per_1k_cached_input_tokens = 0.000015
+note = "cheapest capable GLM; strong ch0nky cloud fallback"
+
+[models.glm-5_2]
+telnyx_id = "zai-org/GLM-5.2"
+params = "753.9B"
+context_length = 1000000
+capabilities = "text,chat,code,reasoning,agentic,long_context"
+cost_per_1k_input_tokens = 0.001
+cost_per_1k_output_tokens = 0.004
+cost_per_1k_cached_input_tokens = 0.0002
+
+[models.glm-5_3]
+telnyx_id = "zai-org/GLM-5.3"
+params = "753B"
+context_length = 1048576
+capabilities = "text,chat,code,reasoning,agentic,long_context"
+cost_per_1k_input_tokens = 0.0014
+cost_per_1k_output_tokens = 0.0044
+cost_per_1k_cached_input_tokens = 0.00026
+note = "frontier-tier; use for architecture/security when local is busy"
+
+[models.glm-5_1-fp8]
+telnyx_id = "zai-org/GLM-5.1-FP8"
+params = "753.9B"
+context_length = 202752
+cost_per_1k_input_tokens = 0.00098
+cost_per_1k_output_tokens = 0.0044
+cost_per_1k_cached_input_tokens = 0.00013
+
+[models.qwen3_8-27b]
+telnyx_id = "Qwen/Qwen3.8-27B"
+params = "27B"
+context_length = 262144
+capabilities = "text,chat,code,vision,reasoning,agentic"
+license = "Apache 2.0"
+cost_per_1k_input_tokens = 0.0004
+cost_per_1k_output_tokens = 0.003
+cost_per_1k_cached_input_tokens = 0.00005
+note = "the 'qwen38 27b'; direct cloud twin of the local Qwen3.6-27B ch0nky slot"
+
+[models.deepseek-v4-flash]
+telnyx_id = "deepseek-ai/DeepSeek-V4-Flash-0731"
+params = "284B"
+context_length = 1048576
+cost_per_1k_input_tokens = 0.00013
+cost_per_1k_output_tokens = 0.00026
+cost_per_1k_cached_input_tokens = 0.00003
+note = "cheapest big-context option on Telnyx"
+
+[models.qwen3-235b-a22b]
+telnyx_id = "Qwen/Qwen3-235B-A22B"
+params = "235B (22B active)"
+note = "pricing not captured; verify via retrieve_models_ai"
+
+[[b00t.usage]]
+description = "List Telnyx inference models + pricing"
+command = "curl -s https://api.telnyx.com/v2/ai/models -H \"Authorization: Bearer $TELNYX_API_KEY\" | jq '.data[] | {id, pricing}'"
+
+[[b00t.usage]]
+description = "Chat completion against GLM-5.3-Flash"
+command = "curl -s $TELNYX_API_BASE/chat/completions -H \"Authorization: Bearer $TELNYX_API_KEY\" -d '{\"model\":\"zai-org/GLM-5.3-Flash\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}'"
+
+[[b00t.references]]
+name = "Telnyx Inference docs"
+url = "https://developers.telnyx.com/docs/inference/inference-models"
+
+# b00t:map v1
+# summary: Telnyx PAYG inference — GLM-5.x family + Qwen3.8-27B + DeepSeek-V4-Flash, OpenAI-compatible, verified pricing 2026-09-03
+# tags: ai, telnyx, payg, glm, qwen, qwen38, deepseek, cloud-fallback, ch0nky, openai-compatible
+# tier: ch0nky
+# cmds: b00t-cli datum show telnyx-inference
+# complexity: 3

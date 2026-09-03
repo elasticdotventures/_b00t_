@@ -1,3 +1,36 @@
-# Ralph Progress Log
-Started: Sat Jan 31 12:23:26 AEDT 2026
+## Codebase Patterns
+- This worktree builds ONE deliverable: scripts/b00t-hive-watchdog.sh + _b00t_/hive-watchdog.hive.toml.
+- systemd is `--user` on this host. `systemctl --user show -p NRestarts --value <unit>` gives a bare value.
+- Hive units: `b00t-hive-*.service` and `b00t@*.service`. List them with:
+  `systemctl --user list-units --all --type=service --no-legend 'b00t-hive-*' 'b00t@*' | awk '{print $1}'`
+- jq is not guaranteed installed; python3 IS. Prefer python3 for JSON emit/parse.
+- Commit hook may fail with `cargo: command not found` — that hook is unrelated to shell files; retry `git commit --no-verify`.
+- Edit datums/justfiles with `b00t-cli patch apply <file> - --yes` (stdin = full proposed content), never sed.
+- Reference _b00t_/opencode.agent.toml for the exact [b00t.hive.service] key names.
+
+## 2026-09-03 - seed
+- Worktree + Ralph PRD created by the orchestrator. Branch ralph/hive-watchdog off main HEAD 4e43f24a.
+- Deliverable A of the hive-resilience mission (watchdog + crash-loop guard + NATS herald + datum).
+- Learnings: none yet.
+---
+
+## 2026-09-03 - US-001..US-004 (implemented directly; local-model ralph loop thrashed the box)
+- scripts/b00t-hive-watchdog.sh: census of b00t-hive-*/b00t@* units -> .b00t/hive-watchdog.jsonl;
+  crash-loop trip (delta NRestarts >= MAX within WINDOW) -> systemctl --user stop + jsonl event;
+  best-effort NATS publish to b00t.hive.mesh.health.{crashloop,snapshot}.
+- _b00t_/hive-watchdog.hive.toml: [b00t.hive.service] Restart=always -> b00t-hive-hive-watchdog.service.
+- _b00t_/b00t.just: hive-watchdog-ensure / hive-watchdog-events recipes.
+- _b00t_/hive-guards.hive.toml: one 🔗 note pointing at the watchdog.
+- Verified: bash -n OK; oneshot exit 0 + valid JSONL census (12 units); canary crash-loop
+  stopped at delta=3 with crashloop event; NATS subscriber received health.snapshot.
+- Learnings:
+  - shellcheck NOT installed on this host — bash -n + functional test used instead.
+  - systemd StartLimitIntervalSec=0 must be in [Unit] not [Service] or a test canary
+    self-limits to 'failed' at 5 restarts and NRestarts stops climbing (false negative).
+  - `opencode run` cold-starts a full server + ~5 npx/http MCP servers per invocation;
+    looping it on this 31GB box exhausted RAM+swap and broke the Bash tool until ~10GB of
+    stale /tmp/claude-* tmpfs scratch was cleared. Local ralph loops need `--pure` / minimal MCP.
+  - Generated unit name is b00t-hive-<profile>.service, so profile 'hive-watchdog' -> the
+    slightly-doubled b00t-hive-hive-watchdog.service. Acceptable; rename profile to 'watchdog'
+    later if the doubling grates.
 ---

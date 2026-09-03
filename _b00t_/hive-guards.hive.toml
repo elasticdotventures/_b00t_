@@ -5,6 +5,8 @@ hint = "Universal command guards — always active regardless of hive profile; e
 
 # 🤓 This is the universal guard registry loaded by `b00t run` before profile-specific guards.
 # Profile guards supplement; these are always checked first.
+# 🔗 Runtime resilience: b00t-hive-hive-watchdog.service (profile 'hive-watchdog') is
+#    the always-on companion — it stops crash-looping units the guards can't see.
 # action: warn (proceed with message), block (refuse), redirect (replace command)
 
 [b00t.hive.exclusion]

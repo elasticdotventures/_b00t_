@@ -147,7 +147,7 @@ Examples:
     )
     run_parser.add_argument(
         "--tool",
-        choices=["amp", "claude", "codex", "opencode"],
+        choices=["amp", "claude", "codex", "opencode", "pi"],
         default="amp",
         help="Tool to run (default: amp)",
     )
