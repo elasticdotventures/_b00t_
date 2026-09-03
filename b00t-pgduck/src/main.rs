@@ -59,6 +59,8 @@ use pgwire::error::{PgWireError, PgWireResult};
 use pgwire::messages::data::DataRow;
 use pgwire::tokio::process_socket;
 
+use b00t_pgduck::{arrow_type_to_pg_type, duckdb_type_str_to_pg_type};
+
 pub struct DuckDbBackend {
     conn: Arc<Mutex<Connection>>,
     query_parser: Arc<NoopQueryParser>,
@@ -112,29 +114,6 @@ impl SimpleQueryHandler for DuckDbBackend {
                 })
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))
         }
-    }
-}
-
-// DuckDB's column_type() returns arrow's DataType, not a decl-type string
-// like SQLite - map the common scalars pgwire's wire protocol has a real
-// Type for; unmapped kinds (List/Struct/Array/Map/Union/Dictionary/etc)
-// fall back to UNKNOWN rather than erroring, same "not all types" honesty
-// as the upstream sqlite.rs example this was adapted from.
-fn arrow_type_to_pg_type(dt: &duckdb::arrow::datatypes::DataType) -> Type {
-    use duckdb::arrow::datatypes::DataType;
-    match dt {
-        DataType::Boolean => Type::BOOL,
-        DataType::Int8 | DataType::UInt8 => Type::CHAR,
-        DataType::Int16 | DataType::UInt16 => Type::INT2,
-        DataType::Int32 | DataType::UInt32 => Type::INT4,
-        DataType::Int64 | DataType::UInt64 => Type::INT8,
-        DataType::Float32 => Type::FLOAT4,
-        DataType::Float64 => Type::FLOAT8,
-        DataType::Utf8 | DataType::LargeUtf8 => Type::TEXT,
-        DataType::Binary | DataType::LargeBinary => Type::BYTEA,
-        DataType::Date32 | DataType::Date64 => Type::DATE,
-        DataType::Timestamp(_, _) => Type::TIMESTAMP,
-        _ => Type::UNKNOWN,
     }
 }
 
@@ -350,29 +329,6 @@ fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<Fie
         idx += 1;
     }
     Ok(fields)
-}
-
-// DESCRIBE's column_type comes back as free-form SQL type text (e.g.
-// "INTEGER", "VARCHAR", "DECIMAL(10,2)"), not the typed arrow DataType
-// arrow_type_to_pg_type maps above - match on the leading type name,
-// ignoring any parenthesized precision/scale. Same "not all types"
-// honesty as arrow_type_to_pg_type: unmapped kinds fall back to UNKNOWN.
-fn duckdb_type_str_to_pg_type(type_str: &str) -> Type {
-    let base = type_str.split('(').next().unwrap_or(type_str).trim().to_uppercase();
-    match base.as_str() {
-        "BOOLEAN" | "BOOL" => Type::BOOL,
-        "TINYINT" | "UTINYINT" => Type::CHAR,
-        "SMALLINT" | "USMALLINT" | "INT2" => Type::INT2,
-        "INTEGER" | "UINTEGER" | "INT" | "INT4" => Type::INT4,
-        "BIGINT" | "UBIGINT" | "INT8" | "HUGEINT" | "UHUGEINT" => Type::INT8,
-        "FLOAT" | "REAL" | "FLOAT4" => Type::FLOAT4,
-        "DOUBLE" | "FLOAT8" => Type::FLOAT8,
-        "VARCHAR" | "TEXT" | "STRING" | "CHAR" | "BPCHAR" => Type::TEXT,
-        "BLOB" | "BYTEA" | "VARBINARY" => Type::BYTEA,
-        "DATE" => Type::DATE,
-        "TIMESTAMP" | "TIMESTAMP WITH TIME ZONE" | "TIMESTAMPTZ" | "DATETIME" => Type::TIMESTAMP,
-        _ => Type::UNKNOWN,
-    }
 }
 
 impl DuckDbBackend {

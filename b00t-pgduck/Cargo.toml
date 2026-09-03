@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 description = "Postgres-wire-protocol OLAP server backed by DuckDB - drop-in replacement for the pods/postgres service, no Postgres binary required"
 
+[lib]
+name = "b00t_pgduck"
+path = "src/lib.rs"
+
 [[bin]]
 name = "b00t-pgduck"
 path = "src/main.rs"
