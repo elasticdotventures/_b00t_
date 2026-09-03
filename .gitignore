@@ -379,3 +379,4 @@ ralph-loop.nohup
 .b00t/ledgrrr-focus-queue.jsonl
 dl*.log
 curl-dl.log
+.b00t/gpu-heater-backlog.txt
