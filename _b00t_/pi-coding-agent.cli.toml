@@ -1,15 +1,17 @@
-# b00t CLI Datum — pi coding agent (@mariozechner/pi-coding-agent)
+# b00t CLI Datum — pi coding agent (@earendil-works/pi-coding-agent)
 # 🤓 Lightweight AI coding assistant; supports local models via openai-completions API
 # Wired as b00t hive sub-agent for sm0l/ch0nky tier tasks
 # https://github.com/badlogic/pi-mono/
 
 [b00t]
 name = "pi-coding-agent"
+# 🤓 pi-mcp-adapter is a standard companion — MCP client layer + pi-as-MCP-server
+entangled_cli = ["pi-mcp-adapter.cli"]
 type = "cli"
 desires = "latest"
 hint = "pi — lightweight AI coding agent; local model support via openai-completions; MCP via pi-mcp-adapter"
-install = "npm install -g @mariozechner/pi-coding-agent"
-update = "npm install -g @mariozechner/pi-coding-agent"
+install = "npm install -g @earendil-works/pi-coding-agent"
+update = "npm install -g @earendil-works/pi-coding-agent"
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
 
@@ -24,7 +26,7 @@ auto_digest = true
 # 🤓 verified 2026-04-30: ~/.pi/agent/models.json MUST use apiKey=local-b00t for the qwen36 ch0nky slot
 [[b00t.usage]]
 description = "Install or update pi to latest published version"
-command = "npm install -g @mariozechner/pi-coding-agent@latest"
+command = "npm install -g @earendil-works/pi-coding-agent@latest"
 
 # ── Non-interactive (sub-agent usage) ────────────────────────────────────────
 [[b00t.usage]]
