@@ -25,6 +25,7 @@ environment = [
   "WATCHDOG_INTERVAL_SECS=15",
   "WATCHDOG_MAX_RESTARTS=5",
   "WATCHDOG_WINDOW_SECS=120",
+  "WATCHDOG_SELF_UNIT=b00t-hive-hive-watchdog.service",
 ]
 exec_start = "bash /home/brianh/.b00t/scripts/b00t-hive-watchdog.sh"
 
