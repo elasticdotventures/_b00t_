@@ -59,6 +59,8 @@ use pgwire::error::{PgWireError, PgWireResult};
 use pgwire::messages::data::DataRow;
 use pgwire::tokio::process_socket;
 
+use b00t_pgduck::{arrow_type_to_pg_type, duckdb_type_str_to_pg_type};
+
 pub struct DuckDbBackend {
     conn: Arc<Mutex<Connection>>,
     query_parser: Arc<NoopQueryParser>,
@@ -112,29 +114,6 @@ impl SimpleQueryHandler for DuckDbBackend {
                 })
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))
         }
-    }
-}
-
-// DuckDB's column_type() returns arrow's DataType, not a decl-type string
-// like SQLite - map the common scalars pgwire's wire protocol has a real
-// Type for; unmapped kinds (List/Struct/Array/Map/Union/Dictionary/etc)
-// fall back to UNKNOWN rather than erroring, same "not all types" honesty
-// as the upstream sqlite.rs example this was adapted from.
-fn arrow_type_to_pg_type(dt: &duckdb::arrow::datatypes::DataType) -> Type {
-    use duckdb::arrow::datatypes::DataType;
-    match dt {
-        DataType::Boolean => Type::BOOL,
-        DataType::Int8 | DataType::UInt8 => Type::CHAR,
-        DataType::Int16 | DataType::UInt16 => Type::INT2,
-        DataType::Int32 | DataType::UInt32 => Type::INT4,
-        DataType::Int64 | DataType::UInt64 => Type::INT8,
-        DataType::Float32 => Type::FLOAT4,
-        DataType::Float64 => Type::FLOAT8,
-        DataType::Utf8 | DataType::LargeUtf8 => Type::TEXT,
-        DataType::Binary | DataType::LargeBinary => Type::BYTEA,
-        DataType::Date32 | DataType::Date64 => Type::DATE,
-        DataType::Timestamp(_, _) => Type::TIMESTAMP,
-        _ => Type::UNKNOWN,
     }
 }
 
@@ -267,24 +246,23 @@ impl ExtendedQueryHandler for DuckDbBackend {
         }
     }
 
-    // KNOWN LIMITATION: unlike SQLite, DuckDB only exposes column
-    // metadata (column_type/column_name) AFTER a statement has executed
-    // - calling them on a freshly-prepared, unexecuted statement panics
-    // (confirmed empirically: duckdb-1.10505.0/src/raw_statement.rs:138,
-    // "The statement was not executed yet"). do_query works around this
-    // by reading the descriptor back via Rows::as_ref() post-execution
-    // (see row_desc_from_stmt call sites above), but Describe messages
-    // are protocol-level "tell me the result shape before I Execute"
-    // requests - there's no post-execution Rows to read from yet here.
-    // A client that issues Describe before Execute on a SELECT (some
-    // prepared-statement/ORM code paths do) will panic this connection's
-    // task. Not fixed: wrapping in catch_unwind risks poisoning the
-    // shared Mutex<Connection> for every other query on this connection
-    // if the panic happens mid-lock, which is worse than the current
-    // single-connection crash. Forgejo's own migration+startup e2e test
-    // (see infrastructure repo's pods/pgduck/test-forgejo-e2e.sh) passes
-    // clean, so this gap doesn't block that specific consumer - but it's
-    // a real, disclosed gap for others.
+    // Previously panicked here: unlike SQLite, DuckDB only exposes column
+    // metadata (column_type/column_name) on a Statement AFTER it has
+    // executed - calling them on a freshly-prepared, unexecuted statement
+    // panics (confirmed empirically: duckdb-1.10505.0/src/raw_statement.rs:138,
+    // "The statement was not executed yet"). Describe protocol messages
+    // arrive before Execute, so there's no post-execution Rows to read a
+    // descriptor from the real statement. Broke live 2026-09-02: Forgejo's
+    // Postgres driver issues Describe before Execute on its startup
+    // queries, the panic poisoned the shared Mutex<Connection>, and every
+    // subsequent connection to this server failed too (not just the one
+    // that panicked - a shared connection, so a mid-lock panic doesn't
+    // stay contained to a single client). Fixed for real via
+    // describe_query_fields below: DuckDB's own `DESCRIBE <query>`
+    // meta-statement returns the result shape (as a real, executed query
+    // against a different, always-safe statement) without running the
+    // original query's side effects or ever touching the not-yet-executed
+    // Statement's own column_type/column_name.
     async fn do_describe_statement<C>(
         &self,
         _client: &mut C,
@@ -299,10 +277,8 @@ impl ExtendedQueryHandler for DuckDbBackend {
             .iter()
             .map(|t| t.clone().unwrap_or(Type::UNKNOWN))
             .collect();
-        let prepared = conn
-            .prepare(&stmt.statement)
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-        row_desc_from_stmt(&prepared).map(|fields| DescribeStatementResponse::new(param_types, fields))
+        let fields = describe_query_fields(&conn, &stmt.statement)?;
+        Ok(DescribeStatementResponse::new(param_types, fields))
     }
 
     async fn do_describe_portal<C>(
@@ -314,11 +290,45 @@ impl ExtendedQueryHandler for DuckDbBackend {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let conn = self.conn.lock().unwrap();
-        let stmt = conn
-            .prepare(&portal.statement.statement)
-            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-        row_desc_from_stmt(&stmt).map(DescribePortalResponse::new)
+        let fields = describe_query_fields(&conn, &portal.statement.statement)?;
+        Ok(DescribePortalResponse::new(fields))
     }
+}
+
+// See do_describe_statement's comment above for why this exists instead
+// of preparing+describing the real statement directly. `DESCRIBE <query>`
+// is itself a real, executable DuckDB statement (returns column_name,
+// column_type as text, null, key, default, extra - one row per result
+// column of the wrapped query) - .query()ing it is safe under the same
+// "only read metadata after executing" rule the panic above enforces,
+// because DESCRIBE's own result rows ARE what we read, not the wrapped
+// query's.
+fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<FieldInfo>> {
+    let format = Format::UnifiedText;
+    // Not every statement DuckDB accepts is describable this way (e.g.
+    // some DDL) - no result columns is a valid, non-error Describe
+    // response for those, matching what Postgres itself returns for an
+    // INSERT/DDL statement with no RETURNING clause.
+    let mut stmt = match conn.prepare(&format!("DESCRIBE {query}")) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let mut rows = stmt.query(duckdb::params![]).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+    let mut fields = Vec::new();
+    let mut idx = 0usize;
+    while let Ok(Some(row)) = rows.next() {
+        let name: String = row.get(0).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        let type_str: String = row.get(1).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        fields.push(FieldInfo::new(
+            name,
+            None,
+            None,
+            duckdb_type_str_to_pg_type(&type_str),
+            format.format_for(idx),
+        ));
+        idx += 1;
+    }
+    Ok(fields)
 }
 
 impl DuckDbBackend {
