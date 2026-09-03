@@ -2913,9 +2913,18 @@ command = "systemctl --user start b00t@{agent_name}-agent.service"
         let spec = profile
             .service_spec
             .expect("real opencode.agent.toml [b00t.hive.service] must be extracted");
-        assert_eq!(
-            spec.exec_start,
-            "opencode serve --port 3000 --model qwen36-local/ch0nky"
+        // exec_start was changed by #1253 (crash-loop fix: absolute binary path,
+        // no --model, added --hostname/--print-logs). Assert the stable parts
+        // instead of an exact string so flag tweaks don't re-break this test.
+        assert!(
+            spec.exec_start.contains("opencode serve --port 3000"),
+            "unexpected exec_start: {}",
+            spec.exec_start
+        );
+        assert!(spec.exec_start.contains("--hostname 127.0.0.1"));
+        assert!(
+            !spec.exec_start.contains("--model"),
+            "`opencode serve` no longer accepts --model"
         );
         assert_eq!(spec.restart.as_deref(), Some("on-failure"));
         assert!(spec.after.contains(&"network.target".to_string()));
