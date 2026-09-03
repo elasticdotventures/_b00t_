@@ -1,6 +1,8 @@
 # moltis ⇄ b00t — capability overlap & standing-task integration
 
-`vendor/moltis-b00t` (submodule, remote `app4dog/moltis-b00t`, upstream `moltis-org`)
+`vendor/moltis-b00t` (submodule; `.gitmodules` → `elasticdotventures/moltis-b00t`, a
+fork of `moltis-org/moltis`; some checkouts locally override `.git/config` to the
+synced `app4dog/moltis-b00t` fork)
 had drifted ~40 commits / 7 weeks past the b00t pin `5d171bb1` (2026-07-15).
 This bumps it to `4829e6a7` (2026-09-02) and proposes how moltis earns a standing
 seat in the hive.
@@ -54,8 +56,9 @@ Config surface: `_b00t_/moltis-standing-tasks.hive.toml` (this PR) lists the job
 `b00t hive activate moltis-standing-tasks`.
 
 ## Follow-ups (not in this PR)
-- `.gitmodules` / `moltis.agent.toml` name the remote as `elasticdotventures` /
-  `promptexecution`; actual is `app4dog/moltis-b00t` (upstream `moltis-org`). Reconcile.
+- Vendor link reconciled: `.gitmodules` + `moltis.agent.toml` now both point at
+  `elasticdotventures/moltis-b00t` (fork of `moltis-org/moltis`). Local `.git/config`
+  may still override to the synced `app4dog/moltis-b00t` — run `git submodule sync` to reset.
 - `moltis.agent.toml` points model at litellm `:1234` / `local-litellm`; the live
   gateway is `cli-proxy-api` `:1234` and the local slot is qwen38 `:8001`. Re-point.
 - Register moltis in `b00t chat` / the ACP mesh now that `crates/acp` is stdio-ready.

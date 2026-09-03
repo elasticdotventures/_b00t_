@@ -1,10 +1,10 @@
 # b00t Agent Datum — moltis as first-class hive sub-agent
 # 🤓 moltis is a Rust-native binary from vendor/moltis-b00t submodule
-#    Repo: promptexecution/moltis-b00t (submodule at vendor/moltis-b00t)
+#    Repo: elasticdotventures/moltis-b00t (submodule; matches .gitmodules; fork of moltis-org/moltis)
 #    Soul/memory backend: b00t soul serve HTTP K/V on :7700
 #    Hive: shares :1234 litellm gateway
 #    Build: cargo build --manifest-path vendor/moltis-b00t/Cargo.toml --release
-#    https://github.com/promptexecution/moltis-b00t
+#    https://github.com/elasticdotventures/moltis-b00t
 
 [b00t]
 name = "moltis"
