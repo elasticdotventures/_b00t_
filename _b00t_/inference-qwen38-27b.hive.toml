@@ -1,7 +1,7 @@
 # b00t Hive Profile — Qwen3.8-27B llama.cpp via Podman, weights on /c0de PCIe flash
 # 🤓 Replaces inference-qwen36-27b-mtp-podman as the exclusive local ch0nky slot.
 #    Qwen3.8-27B is dense (no MTP head in unsloth/Qwen3.8-27B-GGUF) → plain llama.cpp,
-#    no --spec-type. UD-Q4_K_XL (17.56GB) + KV@196608 q4_0 (2 slots x 98304) ~ 21GB VRAM on the 3090.
+#    no --spec-type. UD-Q4_K_XL (17.56GB) + KV@262144 q4_0 (2 slots x 131072) ~ 22.4GB VRAM on the 3090 (~2GB margin).
 #    Weights live on /c0de/models/qwen38-27b (fast NVMe) — NOT the HF cache — so the
 #    17GB file never sits in system page-cache under memory pressure (see the tmpfs/OOM
 #    lesson) and cold-load is disk-fast.
@@ -58,7 +58,7 @@ exec_start = """/usr/bin/podman run --rm \
   --host 0.0.0.0 --port 8080 \
   --alias ch0nky \
   -m /models/Qwen3.8-27B-UD-Q4_K_XL.gguf \
-  -c 196608 \
+  -c 262144 \
   -b 4096 \
   -ub 1024 \
   -ngl 99 \
@@ -77,11 +77,11 @@ exec_start = """/usr/bin/podman run --rm \
 # 🤓 --alias ch0nky: /v1/models reports "ch0nky" so opencode `qwen36-local/ch0nky`
 #    and pi `--model ch0nky` keep working unchanged — only the weights behind :8001 change.
 # 🤓 no --spec-type: Qwen3.8-27B dense, no MTP draft head.
-# 🤓 -np 2 + -c 196608: two 98304-token (96K) slots so pi (b00t-hive-pi-agent)
-#    and opencode (b00t-hive-opencode-agent) co-reside on :8001 AND each gets a
-#    whole-repo-sized window. KV is q4_0 (half of q8_0) to buy the context —
-#    ~2.85GB KV vs ~2.4GB before, total ~21GB / 24GB, ~3GB margin. Qwen3.8-27B's
-#    native context is 262K, so -c can go higher if VRAM frees up (watch OOM).
+# 🤓 -np 2 + -c 262144: two 131072-token (128K) slots — Qwen3.8-27B's FULL
+#    native context, per slot, with pi + opencode co-resident on :8001. KV q4_0
+#    (~18 MiB / 1K tok on this box) → ~4.8GB KV, total ~22.4GB / 24GB, ~2GB margin.
+#    This is the practical ceiling for a 24GB 3090 with this quant; a batch spike
+#    could OOM. If it crash-loops, drop back to -c 196608 (the tested-safe value).
 # 🤓 sampling: Qwen3.8 non-thinking recommended (temp 0.7 / top_p 0.8 / top_k 20).
 
 [b00t.hive.env]
