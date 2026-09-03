@@ -10,6 +10,40 @@ cost_per_1k_input_tokens = 0.00035
 cost_per_1k_output_tokens = 0.00040
 max_tokens = 4096
 
+# ── Qwen3.8 family — PAYG cloud ch0nky fallback (verified openrouter.ai 2026-09-03) ──
+# 🤓 route ch0nky here when the local RTX3090 :8001 is busy/OOM (see hive-watchdog).
+[models.qwen3_8-27b]
+# qwen/qwen3.8-27b — dense vision-language, "qwen38 27b"; matches local Qwen3.6-27B tier
+capabilities = "text,chat,code,vision,reasoning,agentic,long_context"
+context_length = 1000000
+cost_per_1k_input_tokens = 0.00025
+cost_per_1k_output_tokens = 0.00220
+max_tokens = 16384
+
+[models.qwen3_8-flash]
+# qwen/qwen3.8-flash — multimodal reasoning, fast+cheap; sm0l/ch0nky-lite tier
+capabilities = "text,chat,code,vision,reasoning,agentic"
+context_length = 1000000
+cost_per_1k_input_tokens = 0.00015
+cost_per_1k_output_tokens = 0.00047
+max_tokens = 16384
+
+[models.qwen3-30b-a3b]
+# qwen/qwen3-30b-a3b — MoE, closest analogue to the local 35B-A3B llamacpp profile
+capabilities = "text,chat,code,reasoning,agentic"
+context_length = 131072
+cost_per_1k_input_tokens = 0.00012
+cost_per_1k_output_tokens = 0.00050
+max_tokens = 16384
+
+[models.qwen3-coder]
+# qwen/qwen3-coder — 480B-A35B coding specialist
+capabilities = "text,chat,code,agentic,long_context"
+context_length = 262144
+cost_per_1k_input_tokens = 0.00030
+cost_per_1k_output_tokens = 0.00100
+max_tokens = 16384
+
 [models.kimi-k2]
 capabilities = "text,chat,long_context"
 context_length = 200000

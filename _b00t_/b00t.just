@@ -117,6 +117,17 @@ opencode-status:
 opencode-task task="hello":
     opencode run --model gemma4-local/ch0nky "{{task}}"
 
+# whatis: infer what a b00t topic IS (datum/agent/mcp/cli/skill/profile) + ecosystem xrefs
+whatis topic:
+    bash /home/brianh/.b00t/scripts/b00t-whatis.sh "{{topic}}"
+
+# hive Sentinel: always-on crash-loop watchdog (b00t-hive-hive-watchdog.service)
+hive-watchdog-ensure:
+    b00t-cli hive activate hive-watchdog
+
+hive-watchdog-events:
+    tail -n 40 -f /home/brianh/.b00t/.b00t/hive-watchdog.jsonl
+
 # ch0nky slot swap (pi ↔ opencode share exclusion group)
 ch0nky-use-pi:
     systemctl --user stop b00t@opencode-agent.service 2>/dev/null || true

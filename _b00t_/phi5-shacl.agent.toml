@@ -1,0 +1,93 @@
+# b00t Agent Datum — phi5-shacl
+# 🤓 A CPU-quantized Phi ("phi5" = phi-4-candle-local, Q4_K GGUF via candle-
+#    transformers, no GPU — leaves the RTX3090 entirely for the qwen ch0nky slot).
+#    RESTRICTED to the b00t-cli surface only (see b00t-mcp-acl-phi5.toml).
+#    Single responsibility: keep *requesting* a SHACL + pgwire vector-rs dynamic
+#    embedding query provider until one exists — it files tasks, it does not build.
+# 🔗参 _b00t_/phi.ai.tomllmd, _b00t_/phi-4-candle-local.model.ai.tomllmd, _b00t_/phi-candle.just
+# 🔗参 _b00t_/b00t-mcp-acl-phi5.toml — the ACL that pins it to b00t-cli
+
+[b00t]
+name = "phi5-shacl"
+type = "agent"
+hint = "CPU phi-4 (candle Q4_K) agent — b00t-cli ONLY; requests a SHACL + pgwire vector-rs dynamic-embedding query provider; never touches the GPU"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "phi5-shacl-001"
+model = "phi-4-candle-local"
+skills = ["b00t-cli", "task-request", "shacl", "ontology"]
+personality = "terse"
+humor = "none"
+role = "requester"
+
+[b00t.agent.inference]
+# 🤓 CPU only — device=cpu forced regardless of CUDA availability (b00t-candle-serve select_device()).
+endpoint = "candle:cpu"
+model = "phi-4-Q4_K.gguf"
+protocol = "candle-oneshot"
+health = "just phi-candle status"
+required = false          # CPU model; agent-doctor SKIPs (not an :8001 client)
+gpu = false
+
+[b00t.agent.ipc]
+transport = "stdio"
+protocol = "mcp+stdio"
+pubsub = false
+
+[b00t.agent.mcp]
+enabled = true
+transport = ["stdio"]
+# 🚩 ACL: b00t-cli surface only. No file/shell/network tools.
+acl = "_b00t_/b00t-mcp-acl-phi5.toml"
+command = ["b00t-mcp", "--stdio", "-c", "_b00t_/b00t-mcp-acl-phi5.toml"]
+
+[b00t.agent.crew]
+role = "requester"
+captain = false
+
+[b00t.agent.mission]
+# 🤓 The agent loops this until `b00t task list` shows the provider task done.
+objective = """
+Ensure the hive has a SHACL + pgwire "vector-rs" dynamic embedding query provider:
+a Postgres-wire endpoint (extend b00t-pgduck) that, on a SELECT carrying an
+embedding predicate, calls the local embedding service (b00t-embed-serve :8003,
+Qwen3-Embedding-0.6B) to embed the query text at request time, runs vector
+similarity (DuckDB vss / an hnsw-rs index), and validates the result rows
+against a SHACL shape before returning them.
+"""
+loop = [
+  "b00t task list --filter pending  — is there a task tagged 'pgwire-embed-provider'?",
+  "if not: b00t task add 'pgwire vector-rs dynamic embedding query provider' -p 2 -t pgwire-embed-provider,shacl,pgduck,embed,vector -c '<see acceptance below>'",
+  "b00t discover 'pgduck embed shacl vector'  — link any existing datums into the task description",
+  "b00t status  — report whether b00t-embed-serve is active; if not, request 'activate qwen3-embed-local' as a blocking sub-task",
+  "sleep, repeat",
+]
+acceptance = [
+  "b00t-pgduck accepts a SELECT ... WHERE embed_match(col, :text, k) and returns k rows",
+  ":text is embedded at query time via b00t-embed-serve :8003 (no precomputed query vector)",
+  "returned rows validate against a SHACL shape file (pyshacl or a rust shacl crate); invalid rows are dropped + logged",
+  "a datum _b00t_/pgwire-embed-provider.* documents the wire contract",
+]
+
+[b00t.env]
+AGENT_ID = "phi5-shacl"
+AGENT_SKILLS = "b00t-cli,task-request,shacl,ontology"
+CANDLE_DEVICE = "cpu"
+
+[[b00t.usage]]
+description = "One-shot: ask phi to check + file the provider request"
+command = "just phi-candle run \"$(cat _b00t_/phi5-shacl.agent.toml | sed -n '/objective = /,/\"\"\"/p')\""
+
+[[b00t.usage]]
+description = "Start phi5-shacl as an ACL-restricted MCP agent"
+command = "b00t-mcp --stdio -c _b00t_/b00t-mcp-acl-phi5.toml"
+
+# b00t:map v1
+# summary: CPU phi-4 agent, b00t-cli-only ACL, single job — keep requesting a SHACL+pgwire vector-rs dynamic embedding query provider; never uses the GPU
+# tags: agent, phi, phi4, candle, cpu, b00t-cli, acl, shacl, pgwire, pgduck, embedding, vector, requester
+# tier: sm0l
+# cmds: b00t-mcp --stdio -c _b00t_/b00t-mcp-acl-phi5.toml
+# complexity: 5

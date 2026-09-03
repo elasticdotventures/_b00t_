@@ -1,0 +1,76 @@
+{
+  "project": "b00t Hive Watchdog",
+  "branchName": "ralph/hive-watchdog",
+  "description": "An epic in four cantos: the hive gains a Sentinel that watches every service, breaks crash-loops before they burn the node, heralds its findings on the NATS bus, and takes its standing orders as an always-on hive service. Deliverable A of the hive-resilience mission. Local-model build: small stories, tight context.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "The Sentinel Awakens",
+      "description": "As the hive, I need a watchdog that takes a census of every hive service each cycle, so their state is observable.",
+      "acceptanceCriteria": [
+        "Create scripts/b00t-hive-watchdog.sh (bash, executable).",
+        "It enumerates systemd --user units matching 'b00t-hive-*.service' and 'b00t@*.service'.",
+        "For each unit it reads NRestarts, ActiveState, SubState, ExecMainStatus via 'systemctl --user show -p'.",
+        "Each cycle it appends ONE json line per unit to .b00t/hive-watchdog.jsonl with keys: ts, unit, NRestarts, ActiveState, SubState, ExecMainStatus.",
+        "Loop interval is env WATCHDOG_INTERVAL_SECS (default 15). If env WATCHDOG_ONESHOT=1 it runs exactly one cycle then exits 0.",
+        "Verify: 'WATCHDOG_ONESHOT=1 bash scripts/b00t-hive-watchdog.sh' exits 0 and the last line of .b00t/hive-watchdog.jsonl parses as JSON containing a 'unit' and 'NRestarts' key (check with python3 -c or jq).",
+        "Verify: 'shellcheck scripts/b00t-hive-watchdog.sh' and 'bash -n scripts/b00t-hive-watchdog.sh' both pass."
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Keep it one file. jq may be absent; prefer python3 for JSON emit if needed, or hand-rolled printf with escaped values."
+    },
+    {
+      "id": "US-002",
+      "title": "The Loop-Breaker",
+      "description": "As the hive, I need the Sentinel to stop a service that is crash-looping, so 95000-restart storms cannot recur.",
+      "acceptanceCriteria": [
+        "Extend scripts/b00t-hive-watchdog.sh only.",
+        "Persist per-unit (NRestarts, first-seen-ts) snapshots in ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/b00t-watchdog.state.",
+        "Crash-loop trip: NRestarts increased by >= WATCHDOG_MAX_RESTARTS (default 5) within WATCHDOG_WINDOW_SECS (default 120).",
+        "On trip: run 'systemctl --user stop <unit>', append a json line to .b00t/hive-watchdog.jsonl with event='crashloop', unit, delta, window_secs, action='stopped'.",
+        "The watchdog's own unit name 'b00t-hive-watchdog.service' is exempt and never stopped.",
+        "Verify: create ${HOME}/.config/systemd/user/wd-canary.service (ExecStart=/bin/false, Restart=always, StartLimitIntervalSec=0), 'systemctl --user daemon-reload', 'systemctl --user start wd-canary.service', wait ~10s, then run 6 oneshot cycles: 'for i in $(seq 6); do WATCHDOG_ONESHOT=1 WATCHDOG_WINDOW_SECS=3600 WATCHDOG_MAX_RESTARTS=3 bash scripts/b00t-hive-watchdog.sh; sleep 2; done'.",
+        "Verify: after that, 'systemctl --user is-active wd-canary.service' is NOT 'active' AND .b00t/hive-watchdog.jsonl contains a line with event='crashloop' and unit='wd-canary.service'.",
+        "Cleanup in the verify block: 'systemctl --user stop wd-canary.service 2>/dev/null; rm -f ${HOME}/.config/systemd/user/wd-canary.service; systemctl --user daemon-reload'.",
+        "Verify: shellcheck + bash -n still pass."
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "wd-canary must NOT match b00t-hive-* or b00t@* \u2014 but the watchdog should still be able to act on it for the test. Simplest: during the test the canary is passed via env WATCHDOG_EXTRA_UNITS='wd-canary.service' which the script appends to its unit list. Document this env in a comment."
+    },
+    {
+      "id": "US-003",
+      "title": "The Herald on the Bus",
+      "description": "As the hive, I want crash-loop trips and cycle snapshots published on NATS so peers and dashboards can react.",
+      "acceptanceCriteria": [
+        "Extend scripts/b00t-hive-watchdog.sh only.",
+        "If /home/brianh/.local/bin/nats exists AND ~/.b00t/secrets/hive-nats.env is readable: source the env, and on a crash-loop trip publish the same json to subject 'b00t.hive.mesh.health.crashloop'; once per cycle publish a compact rollup {ts, units:N, tripped:[...]} to 'b00t.hive.mesh.health.snapshot'.",
+        "NATS publishing is best-effort: any nats failure is logged to stderr and the loop continues (never exit non-zero because of nats).",
+        "Auth: pass --user \"$HIVE_NATS_USER\" --password \"$HIVE_NATS_PASSWORD\" --server \"${NATS_URL:-nats://localhost:4222}\" to nats pub.",
+        "Verify: start a background subscriber 'timeout 20 nats sub --user \"$HIVE_NATS_USER\" --password \"$HIVE_NATS_PASSWORD\" --server \"${NATS_URL:-nats://localhost:4222}\" \"b00t.hive.mesh.health.>\" > /tmp/wd-sub.out 2>&1 &' (source the env first), then run one oneshot cycle, wait, and assert /tmp/wd-sub.out contains 'b00t.hive.mesh.health.snapshot'.",
+        "If the nats server is unreachable during verify, the story still passes as long as the script exited 0 and shellcheck/bash -n pass \u2014 note this in progress.txt.",
+        "Verify: shellcheck + bash -n still pass."
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Do not print or echo the password. Only reference it as $HIVE_NATS_PASSWORD."
+    },
+    {
+      "id": "US-004",
+      "title": "Standing Orders",
+      "description": "As the hive, the Sentinel must be an always-on service, generated from a datum like every other hive unit.",
+      "acceptanceCriteria": [
+        "Create _b00t_/hive-watchdog.hive.toml with a [b00t] block (name='hive-watchdog', type unspecified is fine) and a [b00t.hive.service] block: description, service_type='simple', restart='always', restart_sec='15s', wanted_by='default.target' (or the key this codebase's other *.hive.toml with [b00t.hive.service] use \u2014 check _b00t_/opencode.agent.toml for the exact key names), exec_start pointing at 'bash /home/brianh/.b00t/scripts/b00t-hive-watchdog.sh', and environment including 'PATH=/home/brianh/.local/bin:/usr/bin:/bin'. Add [b00t.hive.resources] ram_gb=1 gpu_mb=0 cpu_cores=1 and a resources.gate mirroring opencode.agent.toml.",
+        "Add a recipe to _b00t_/b00t.just named 'hive-watchdog-ensure' that runs 'b00t-cli hive activate hive-watchdog'.",
+        "Add ONE comment line to _b00t_/hive-guards.hive.toml noting that b00t-hive-watchdog.service is always-on and enforces crash-loop protection.",
+        "Verify: 'b00t-cli hive plan hive-watchdog' exits 0 and its output mentions generating 'b00t-hive-watchdog.service'.",
+        "Verify: 'python3 -c \"import tomllib,sys; tomllib.load(open(\\\"_b00t_/hive-watchdog.hive.toml\\\",\\\"rb\\\"))\"' exits 0 (valid TOML).",
+        "Do NOT run 'hive activate' in this story \u2014 plan only."
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Mirror the structure of _b00t_/opencode.agent.toml's [b00t.hive.service] / [b00t.hive.resources] blocks exactly for key names."
+    }
+  ]
+}

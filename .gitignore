@@ -368,3 +368,14 @@ vscode.🆚/vscode-docs/
 # the repo-root-level dir, not _b00t_/test/ or other nested test/ dirs.
 /test/
 .dagu/
+ralph-B/*.log
+ralph-B/*.done
+ralph-loop.log
+ralph-loop.nohup
+.b00t/*.jsonl
+.b00t/*.out
+.b00t/*.log
+.b00t/*.nohup
+.b00t/ledgrrr-focus-queue.jsonl
+dl*.log
+curl-dl.log
