@@ -15,7 +15,7 @@ aliases = ["ch0nky-local", "qwen38"]
 provider = "openai_compatible"
 api_type = "openai_compatible"
 models = ["ch0nky", "Qwen3.8-27B-UD-Q4_K_XL.gguf"]
-context_window = 40960          # -c 40960 (Qwen3.8 native 262K; capped for VRAM)
+context_window = 98304          # -c 196608 / -np 2 = 96K per slot (Qwen3.8 native 262K)
 pricing_model = "local"
 
 [b00t.env.defaults]
