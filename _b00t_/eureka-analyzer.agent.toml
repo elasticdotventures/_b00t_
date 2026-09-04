@@ -19,6 +19,13 @@ tools = ["codebase-memory.mcp", "b00t-mcp.mcp"]
 skills = ["multi-framework-code-review"]
 # 🤓 multi-framework-code-review skill routes to Eureka phase when loaded by this agent
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "qwen36-local/ch0nky"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.crew]
 role = "specialist"
 captain = false
