@@ -25,6 +25,13 @@ personality = "pragmatic"
 humor = "low"
 role = "specialist"
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "qwen36-local/ch0nky"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.ipc]
 # 🤓 opencode ACP server listens on HTTP :3000; tasks submitted via opencode run --attach or HTTP
 socket = "/tmp/b00t/agents/opencode.sock"
@@ -74,7 +81,7 @@ service_type = "simple"
 restart = "on-failure"
 restart_sec = "10s"
 timeout_start_sec = "60"
-after = ["network.target", "b00t-hive-inference-qwen36-27b.service"]
+after = ["network.target", "b00t-hive-inference-qwen36-27b-mtp-podman.service"]
 environment = [
   "PATH=/home/brianh/.opencode/bin:/home/brianh/.bun/bin:/home/brianh/.local/bin:/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
   "OPENCODE_CONFIG=/home/brianh/.config/opencode/opencode.json",

@@ -26,6 +26,13 @@ personality = "pragmatic"
 humor = "low"
 role = "specialist"
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "ch0nky"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.executor]
 # 🤓 binary is built from submodule; not on global PATH until installed
 cli_path = "vendor/moltis-b00t/target/release/moltis"
