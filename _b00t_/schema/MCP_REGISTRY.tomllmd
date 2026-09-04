@@ -24,30 +24,30 @@ content = "stable"
 ## These are NOT stored in this file — they are generated at query time.
 
 ### loaded — MCP servers currently active in ~/.hermes/config.yaml
-| field | type | source | description |
-|-------|------|--------|-------------|
-| name | string | config.yaml mcp_servers key | Server name |
-| command | string | config.yaml mcp_servers[].command | Executable path |
-| args | string[] | config.yaml mcp_servers[].args | CLI arguments |
-| transport | string | config.yaml | "stdio" or "sse" |
-| health | string | runtime check | "running", "stopped", "unknown" |
+# | field | type | source | description |
+# |-------|------|--------|-------------|
+# | name | string | config.yaml mcp_servers key | Server name |
+# | command | string | config.yaml mcp_servers[].command | Executable path |
+# | args | string[] | config.yaml mcp_servers[].args | CLI arguments |
+# | transport | string | config.yaml | "stdio" or "sse" |
+# | health | string | runtime check | "running", "stopped", "unknown" |
 
 ### installed — MCP server datums available in _b00t_/*.mcp.toml
-| field | type | source | description |
-|-------|------|--------|-------------|
-| name | string | TOML [b00t].name | Datum name |
-| hint | string | TOML [b00t].hint | Description |
-| command | string | b00t.mcp.stdio[].command | First transport command |
-| requires | string[] | TOML requires | Dependencies |
-| transport_count | u32 | count of b00t.mcp.stdio/b00t.mcp.http | Number of transport definitions |
+# | field | type | source | description |
+# |-------|------|--------|-------------|
+# | name | string | TOML [b00t].name | Datum name |
+# | hint | string | TOML [b00t].hint | Description |
+# | command | string | b00t.mcp.stdio[].command | First transport command |
+# | requires | string[] | TOML requires | Dependencies |
+# | transport_count | u32 | count of b00t.mcp.stdio/b00t.mcp.http | Number of transport definitions |
 
 ### available — servers in the registry index (discoverable but not installed)
-| field | type | source | description |
-|-------|------|--------|-------------|
-| name | string | registry index | Server name |
-| description | string | registry index | One-line description |
-| tags | string[] | registry index | Searchable tags |
-| install_command | string | inferred | How to install (npm/pip/cargo) |
+# | field | type | source | description |
+# |-------|------|--------|-------------|
+# | name | string | registry index | Server name |
+# | description | string | registry index | One-line description |
+# | tags | string[] | registry index | Searchable tags |
+# | install_command | string | inferred | How to install (npm/pip/cargo) |
 
 # b00t:map v1
 # summary: MCP registry schema — dynamic state of loaded/installed/available servers; sparse datum, function-driven

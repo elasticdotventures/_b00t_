@@ -233,9 +233,11 @@ iso      = "crates/ufo-types/src/iso.rs"
 cargo    = "crates/ufo-types/Cargo.toml"
 
 [issue.510.docs_to_update_on_ship]
-- "vendor/l3dg3rr/AGENTS.md: add section on ufo-types module"
-- "vendor/l3dg3rr/docs/architecture.md: add ufo-types layer to architecture diagram"
-- "vendor/l3dg3rr/book/src/theory.md: add UFO grounding section"
+items = [
+    "vendor/l3dg3rr/AGENTS.md: add section on ufo-types module",
+    "vendor/l3dg3rr/docs/architecture.md: add ufo-types layer to architecture diagram",
+    "vendor/l3dg3rr/book/src/theory.md: add UFO grounding section",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #511: AU R&D Tax Incentive — domain ontology + satisfies impls
@@ -359,12 +361,14 @@ DoD: Evidence chain with all 4 new node/edge types roundtrips through JSON.
 
 [issue.511.files_to_create]
 au_rd        = "crates/ledger-core/src/au_rd.rs"
-evidence_ext = "crates/arc-kit-au/src/node.rs"  // extended
+evidence_ext = "crates/arc-kit-au/src/node.rs"  # extended
 
 [issue.511.docs_to_update_on_ship]
-- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add au_rd_* actions"
-- "vendor/l3dg3rr/AGENTS.md: add AU R&D section"
-- "vendor/l3dg3rr/rules/ONTOLOGY.md: add classify_au_rd_eligible.rhai"
+items = [
+    "vendor/l3dg3rr/docs/mcp-capability-contract.md: add au_rd_* actions",
+    "vendor/l3dg3rr/AGENTS.md: add AU R&D section",
+    "vendor/l3dg3rr/rules/ONTOLOGY.md: add classify_au_rd_eligible.rhai",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #512: US R&D Tax Credit — domain ontology + satisfies impls
@@ -424,8 +428,10 @@ DoD: Both methods produce correct values for known test cases.
 us_rdc = "crates/ledger-core/src/us_rdc.rs"
 
 [issue.512.docs_to_update_on_ship]
-- "vendor/l3dg3rr/book/src/tax.md: add US R&D Tax Credit chapter"
-- "vendor/l3dg3rr/docs/mcp-capability-contract.md: add us_rdc_* actions"
+items = [
+    "vendor/l3dg3rr/book/src/tax.md: add US R&D Tax Credit chapter",
+    "vendor/l3dg3rr/docs/mcp-capability-contract.md: add us_rdc_* actions",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #513: Crypto cost basis — cross-jurisdiction ontology + satisfies
@@ -502,8 +508,10 @@ crypto     = "crates/ledger-core/src/crypto.rs"
 rules_au   = "rules/classify_crypto_au.rhai"
 
 [issue.513.docs_to_update_on_ship]
-- "vendor/l3dg3rr/rules/ONTOLOGY.md: add crypto-au rule docs"
-- "vendor/l3dg3rr/docs/crypto.md: new crypto tax reference"
+items = [
+    "vendor/l3dg3rr/rules/ONTOLOGY.md: add crypto-au rule docs",
+    "vendor/l3dg3rr/docs/crypto.md: new crypto tax reference",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #514: MCP action layer — thin JSON-RPC wrappers over Satisfies
@@ -608,16 +616,18 @@ fn handle_au_rd_eligibility(service: &TurboLedgerService, args: &Value) -> Value
 '''
 
 [issue.514.files_to_modify]
-contract     = "crates/ledgerr-mcp/src/contract.rs"       // +TaxArgs variants +actions list
-mcp_adapter  = "crates/ledgerr-mcp/src/mcp_adapter.rs"    // +handler match arms
-au_rd_handler = "crates/ledgerr-mcp/src/au_rd.rs"         // NEW: thin handlers
-us_rdc_handler = "crates/ledgerr-mcp/src/us_rdc.rs"       // NEW: thin handlers
-crypto_handler = "crates/ledgerr-mcp/src/crypto.rs"       // NEW: thin handlers
+contract     = "crates/ledgerr-mcp/src/contract.rs"       # +TaxArgs variants +actions list
+mcp_adapter  = "crates/ledgerr-mcp/src/mcp_adapter.rs"    # +handler match arms
+au_rd_handler = "crates/ledgerr-mcp/src/au_rd.rs"         # NEW: thin handlers
+us_rdc_handler = "crates/ledgerr-mcp/src/us_rdc.rs"       # NEW: thin handlers
+crypto_handler = "crates/ledgerr-mcp/src/crypto.rs"       # NEW: thin handlers
 
 [issue.514.docs_to_update_on_ship]
-- "vendor/l3dg3rr/docs/mcp-capability-contract.md: regenerated"
-- "vendor/l3dg3rr/docs/agent-mcp-runbook.md: regenerated"
-- "scripts/mcp_cli_demo.sh: regenerated"
+items = [
+    "vendor/l3dg3rr/docs/mcp-capability-contract.md: regenerated",
+    "vendor/l3dg3rr/docs/agent-mcp-runbook.md: regenerated",
+    "scripts/mcp_cli_demo.sh: regenerated",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ISSUE #515: Skill content — SKILL.md files for tax-lawyer concepts
@@ -704,8 +714,10 @@ agent_test  = "b00t doctor check --probe tax-lawyer passes (skills resolvable)"
 doctest     = "b00t skill search 'rd tax incentive' returns the au-rd-tax-incentive skill"
 
 [issue.515.docs_to_update_on_ship]
-- "AGENTS.md: add tax-lawyer skill registration"
-- "justfile: add skill-tax-lawyer-* just recipes for each skill"
+items = [
+    "AGENTS.md: add tax-lawyer skill registration",
+    "justfile: add skill-tax-lawyer-* just recipes for each skill",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # EPIC ISSUE #509

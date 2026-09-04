@@ -62,21 +62,21 @@ content = "draft"
 ## This table documents the token, its ID (for common tokenizers), how it
 ## behaves in input vs output, and any known edge cases.
 
-| Model Family | Stop Token(s) | Token ID(s) | Input Behavior | Output Behavior | Edge Cases |
-|---|---|---|---|---|---|
-| GPT-2 / GPT-3 | `<|endoftext|>` | 50256 | Normal token; attends to all others | Inference halts on output | Single token; if embedded in file middle, context window contains it but model continues reading |
-| GPT-4 / ChatGPT | `<|im_start|>` `<|im_end|>` | 100264 / 100265 | Tokens in chat template wrapping only; raw text tokenized normally | `stop=["<|im_end|>"]` by default; output stops after assistant's turn | API strips special tokens from input; embedding raw `<|im_end|>` in user message may truncate context |
-| Llama 1/2 | `</s>` | 2 | Normal token; added as EOS during training | Generation stops when EOS token is sampled | If `</s>` appears mid-document in training data, it may be masked in loss (depends on pretraining impl) |
-| Llama 3 / 3.1 | `<|end_of_text|>` `<|eot_id|>` | 128001 / 128009 | `<|eot_id|>` signals end-of-turn in chat template; raw text tokenized as multi-byte tokens | Output stops on `<|end_of_text|>` or `<|eot_id|>` | `<|eot_id|>` in input conditions model to expect assistant turn next — subtle behavioral effect |
-| Mistral / Mixtral | `</s>` | 2 | Single token; part of instruction template `[INST][/INST]` | Generation stops on `</s>` | Instruction template tokens (`[INST]` `[/INST]`) are NOT the same as stop tokens — they are instruction markers, not generation halts |
-| Gemma (Google) | `<eos>` `<end_of_turn>` | 1 / 107 | Part of chat template; raw text tokenized as single tokens | Halts on `<eos>` or `<end_of_turn>` | `<end_of_turn>` in user input may cause the model to respond as if conversation ended |
-| Qwen / Qwen2.5 | `<|endoftext|>` `<|im_end|>` | 151643 / 151645 | Chat template wrapping; raw text tokenizes normally | Generation stops on either token | Qwen2.5 chat template enforces strict role alternation — embedded `<|im_end|>` in input may confuse role detection |
-| DeepSeek (V2/V3) | `<|end_of_sentence|>` | 100001 | Assistant-only suffix in chat template | Stops on EOS at inference | DeepSeek's tokenizer has separate Chinese/English tokens for "用户:" and "助理:" — these are format markers, not stop tokens |
-| Phi-3 (Microsoft) | `<|end|>` `<|user|>` `<|assistant|>` `<|system|>` | 32000-32003 | Chat template roles; raw text tokenized as single tokens | Stops on `<|end|>` | Embedding `<|assistant|>` in user text tricks the model into acting as if its turn just started |
-| Falcon (TII) | `<|endoftext|>` | 11 | Standard EOS token | Halts on EOS | Single token — trivial to embed, no special behavior |
-| Command-R (Cohere) | `<EOS_TOKEN>` | 255001 | Part of prompt template; tokenized as single token | Halts on EOS | API accepts `stop_sequences` list; raw `<EOS_TOKEN>` text in prompt is just content |
-| Starcoder2 / CodeLlama | `<|endoftext|>` + FIM tokens | Varies | FIM tokens (`<fim_prefix>`, `<fim_middle>`, `<fim_suffix>`) delimit infill regions | Halts on EOS; FIM tokens only active in fill-in-middle mode | FIM tokens in regular mode may cause unexpected infill behavior |
-| Anthropic Claude | `Human:` `Assistant:` | N/A (no special token IDs) | Format markers in prompt construction; raw text is just text | Claude checks for `\n\nHuman:` and `\n\nAssistant:` as conversation turn boundaries | These are NOT single tokens — they're multi-token strings. Claude API strips them from tool/function call turns internally |
+# | Model Family | Stop Token(s) | Token ID(s) | Input Behavior | Output Behavior | Edge Cases |
+# |---|---|---|---|---|---|
+# | GPT-2 / GPT-3 | `<|endoftext|>` | 50256 | Normal token; attends to all others | Inference halts on output | Single token; if embedded in file middle, context window contains it but model continues reading |
+# | GPT-4 / ChatGPT | `<|im_start|>` `<|im_end|>` | 100264 / 100265 | Tokens in chat template wrapping only; raw text tokenized normally | `stop=["<|im_end|>"]` by default; output stops after assistant's turn | API strips special tokens from input; embedding raw `<|im_end|>` in user message may truncate context |
+# | Llama 1/2 | `</s>` | 2 | Normal token; added as EOS during training | Generation stops when EOS token is sampled | If `</s>` appears mid-document in training data, it may be masked in loss (depends on pretraining impl) |
+# | Llama 3 / 3.1 | `<|end_of_text|>` `<|eot_id|>` | 128001 / 128009 | `<|eot_id|>` signals end-of-turn in chat template; raw text tokenized as multi-byte tokens | Output stops on `<|end_of_text|>` or `<|eot_id|>` | `<|eot_id|>` in input conditions model to expect assistant turn next — subtle behavioral effect |
+# | Mistral / Mixtral | `</s>` | 2 | Single token; part of instruction template `[INST][/INST]` | Generation stops on `</s>` | Instruction template tokens (`[INST]` `[/INST]`) are NOT the same as stop tokens — they are instruction markers, not generation halts |
+# | Gemma (Google) | `<eos>` `<end_of_turn>` | 1 / 107 | Part of chat template; raw text tokenized as single tokens | Halts on `<eos>` or `<end_of_turn>` | `<end_of_turn>` in user input may cause the model to respond as if conversation ended |
+# | Qwen / Qwen2.5 | `<|endoftext|>` `<|im_end|>` | 151643 / 151645 | Chat template wrapping; raw text tokenizes normally | Generation stops on either token | Qwen2.5 chat template enforces strict role alternation — embedded `<|im_end|>` in input may confuse role detection |
+# | DeepSeek (V2/V3) | `<|end_of_sentence|>` | 100001 | Assistant-only suffix in chat template | Stops on EOS at inference | DeepSeek's tokenizer has separate Chinese/English tokens for "用户:" and "助理:" — these are format markers, not stop tokens |
+# | Phi-3 (Microsoft) | `<|end|>` `<|user|>` `<|assistant|>` `<|system|>` | 32000-32003 | Chat template roles; raw text tokenized as single tokens | Stops on `<|end|>` | Embedding `<|assistant|>` in user text tricks the model into acting as if its turn just started |
+# | Falcon (TII) | `<|endoftext|>` | 11 | Standard EOS token | Halts on EOS | Single token — trivial to embed, no special behavior |
+# | Command-R (Cohere) | `<EOS_TOKEN>` | 255001 | Part of prompt template; tokenized as single token | Halts on EOS | API accepts `stop_sequences` list; raw `<EOS_TOKEN>` text in prompt is just content |
+# | Starcoder2 / CodeLlama | `<|endoftext|>` + FIM tokens | Varies | FIM tokens (`<fim_prefix>`, `<fim_middle>`, `<fim_suffix>`) delimit infill regions | Halts on EOS; FIM tokens only active in fill-in-middle mode | FIM tokens in regular mode may cause unexpected infill behavior |
+# | Anthropic Claude | `Human:` `Assistant:` | N/A (no special token IDs) | Format markers in prompt construction; raw text is just text | Claude checks for `\n\nHuman:` and `\n\nAssistant:` as conversation turn boundaries | These are NOT single tokens — they're multi-token strings. Claude API strips them from tool/function call turns internally |
 
 ## ── Tokenization analysis ────────────────────────────────────────────────────
 ##
@@ -87,19 +87,19 @@ content = "draft"
 ## are never "accidentally" generated, while single-token stop IDs are
 ## always exactly one token whether in input or output.
 ##
-| Tokenizer | Stop String | Is Single Token? | Tokens |
-|---|---|---|---|
-| GPT-2 (tiktoken p50k_base) | `<|endoftext|>` | YES | 1 token (id=50256) |
-| Llama 3 (tiktoken cl100k_base variant) | `<|end_of_text|>` | YES | 1 token (id=128001) |
-| Llama 3 (tiktoken variant) | `<|eot_id|>` | YES | 1 token (id=128009) |
-| Llama 2 (sentencepiece) | `</s>` | YES | 1 token (id=2) |
-| Mistral (sentencepiece) | `</s>` | YES | 1 token (id=2) |
-| Qwen2.5 (tiktoken variant) | `<|im_end|>` | YES | 1 token (id=151645) |
-| Gemma (sentencepiece) | `<end_of_turn>` | YES | 1 token (id=107) |
-| Phi-3 (tiktoken) | `<|end|>` | YES | 1 token (id=32000) |
-| Claude (Claude tokenizer) | `\n\nHuman:` | NO | ~5 tokens (no single ID) |
-| DeepSeek (tiktoken variant) | `<|end_of_sentence|>` | YES | 1 token (id=100001) |
-| Command-R (sentencepiece) | `<EOS_TOKEN>` | YES | 1 token (id=255001) |
+# | Tokenizer | Stop String | Is Single Token? | Tokens |
+# |---|---|---|---|
+# | GPT-2 (tiktoken p50k_base) | `<|endoftext|>` | YES | 1 token (id=50256) |
+# | Llama 3 (tiktoken cl100k_base variant) | `<|end_of_text|>` | YES | 1 token (id=128001) |
+# | Llama 3 (tiktoken variant) | `<|eot_id|>` | YES | 1 token (id=128009) |
+# | Llama 2 (sentencepiece) | `</s>` | YES | 1 token (id=2) |
+# | Mistral (sentencepiece) | `</s>` | YES | 1 token (id=2) |
+# | Qwen2.5 (tiktoken variant) | `<|im_end|>` | YES | 1 token (id=151645) |
+# | Gemma (sentencepiece) | `<end_of_turn>` | YES | 1 token (id=107) |
+# | Phi-3 (tiktoken) | `<|end|>` | YES | 1 token (id=32000) |
+# | Claude (Claude tokenizer) | `\n\nHuman:` | NO | ~5 tokens (no single ID) |
+# | DeepSeek (tiktoken variant) | `<|end_of_sentence|>` | YES | 1 token (id=100001) |
+# | Command-R (sentencepiece) | `<EOS_TOKEN>` | YES | 1 token (id=255001) |
 
 ## ── Experiment protocol (Issue #96) ──────────────────────────────────────────
 ##
@@ -127,12 +127,12 @@ content = "draft"
 ## to misinterpret the conversation structure. This is NOT the model
 ## "stopping" — it's the model being confused about whose turn it is.
 ##
-| Variation | Embedded Token | Expected Effect |
-|---|---|---|
-| Role confusion | `<|assistant|>` | Model may act as if assistant turn started |
-| Turn skip | `<|eot_id|>` | Model may skip user turn, start new assistant response |
-| EOS early | `<|end_of_text|>` | No effect on input; only matters if model outputs it |
-| Raw FIM token | `<fim_middle>` | Code models may enter infill mode unexpectedly |
+# | Variation | Embedded Token | Expected Effect |
+# |---|---|---|
+# | Role confusion | `<|assistant|>` | Model may act as if assistant turn started |
+# | Turn skip | `<|eot_id|>` | Model may skip user turn, start new assistant response |
+# | EOS early | `<|end_of_text|>` | No effect on input; only matters if model outputs it |
+# | Raw FIM token | `<fim_middle>` | Code models may enter infill mode unexpectedly |
 
 ## ── Practical implications ───────────────────────────────────────────────────
 ##
@@ -158,13 +158,13 @@ content = "draft"
 ## If you want to prevent models from reading past a boundary in a file,
 ## do NOT rely on stop sequences. Use one of these strategies instead:
 ##
-| Strategy | Mechanism | Works? |
-|---|---|---|
-| Stop sequence embedding | Token-level stop only checked on output | NO |
-| Truncate file before sending | Pre-processing | YES |
-| Instruction: "stop reading at <marker>" | Model instruction-following | Usually |
-| Segmented file with delimiter | Split into chunks + instruct | YES |
-| Token budget / sliding window | Slice prompt tokens | YES |
+# | Strategy | Mechanism | Works? |
+# |---|---|---|
+# | Stop sequence embedding | Token-level stop only checked on output | NO |
+# | Truncate file before sending | Pre-processing | YES |
+# | Instruction: "stop reading at <marker>" | Model instruction-following | Usually |
+# | Segmented file with delimiter | Split into chunks + instruct | YES |
+# | Token budget / sliding window | Slice prompt tokens | YES |
 
 ## ── Experimental log ─────────────────────────────────────────────────────────
 ##

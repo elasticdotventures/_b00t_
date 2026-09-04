@@ -30,43 +30,43 @@ review_required = false
 
 ## What is it?
 
-A lightweight Rust MCP server that reads justfiles and exposes each recipe as a
-typed MCP tool. This allows AI agents to discover and invoke project-specific
-just recipes through the Model Context Protocol without needing to parse
-justfiles manually.
+# A lightweight Rust MCP server that reads justfiles and exposes each recipe as a
+# typed MCP tool. This allows AI agents to discover and invoke project-specific
+# just recipes through the Model Context Protocol without needing to parse
+# justfiles manually.
 
 ## Key Interfaces (MCP Tools)
 
-- **just_recipes** — Lists all available recipes from the project justfile
-- **just_run** — Executes a specific recipe with optional arguments
-- **just_describe** — Gets the description and dependencies of a recipe
+# - **just_recipes** — Lists all available recipes from the project justfile
+# - **just_run** — Executes a specific recipe with optional arguments
+# - **just_describe** — Gets the description and dependencies of a recipe
 
 ## How It Works
 
-1. Reads the `.justfile` or `justfile` in the project root
-2. Parses recipe names, descriptions, and arguments
-3. Registers each recipe as a dynamic MCP tool
-4. Executes recipes via the `just` binary when invoked
+# 1. Reads the `.justfile` or `justfile` in the project root
+# 2. Parses recipe names, descriptions, and arguments
+# 3. Registers each recipe as a dynamic MCP tool
+# 4. Executes recipes via the `just` binary when invoked
 
 ## Dependencies
 
-- Rust 2024 edition
-- `rmcp` (optional, MCP framework)
-- `toml` (TOML parsing)
-- `serde` / `serde_json` (serialization)
+# - Rust 2024 edition
+# - `rmcp` (optional, MCP framework)
+# - `toml` (TOML parsing)
+# - `serde` / `serde_json` (serialization)
 
 ## Build Notes
 
-```
-cargo build --manifest-path just-mcp/Cargo.toml --release
-```
+# ```
+# cargo build --manifest-path just-mcp/Cargo.toml --release
+# ```
 
 
-[b00t.services.action_runner]
-local  = "wrkflw"
-remote = "github-actions"
+# [b00t.services.action_runner]
+# local  = "wrkflw"
+# remote = "github-actions"
 ## Security Considerations
 
-- Executes local just recipes — only as safe as the justfile allows
-- Stdio transport only; no network exposure
-- Recipes inherit the calling user's permissions
+# - Executes local just recipes — only as safe as the justfile allows
+# - Stdio transport only; no network exposure
+# - Recipes inherit the calling user's permissions
