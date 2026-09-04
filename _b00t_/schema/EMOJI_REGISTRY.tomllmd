@@ -28,33 +28,33 @@ content = "stable"  # never changes; hash is git's job, not the datum's
 ## Columns: literal | shortcode | g0spell | tier | action | description
 ## schema_version=1: these 6 columns in this order. Do NOT reorder — add to the right.
 
-| literal | shortcode | g0spell | tier | action | description |
-|---------|-----------|---------|------|--------|-------------|
-| 🦨 | :skunk: | skunk | 1 | warn+redirect | First offense — show warning, execute redirect |
-| 💩 | :poop: | antipattern | 2 | block+escalate | Repeat offense — block command, escalate to operator |
-| 🚫 | :block: | block | 0 | deny | Permanent denial — no retry, no escalation |
-| 🥾 | :b00t: | b00t | 0 | interpose | b00t guard interposition — command routed through guard DAG |
-| 🍰 | :cake: | cake | 0 | reward | Aligned behavior reward |
-| 🐛 | :bug: | bug | 0 | log | Known bug — noted, not yet fixed |
-| 🚩 | :cybersec: | cybersec_flag | 0 | log | Security flag — potential data disclosure |
-| 🧠 | :cognitive_soul: | cognitive_soul | 0 | reserved | 🔒 Reserved — cognitive soul interface token |
-| ✅ | :pass: | pass | 0 | ok | Capability check passed |
-| ❌ | :fail: | fail | 0 | nok | Capability missing or mismatch |
-| ⚠️ | :warn: | warn | 0 | log | Warning — read before proceeding |
-| 🔗 | :see: | see | 0 | reference | See also — cross-reference pointer |
-| 💡 | :example: | example | 0 | reference | Example usage instance |
-| 🤓 | :melvin: | melvin | 0 | reference | Tribal knowledge — non-obvious insight |
-| 💀 | :dead: | deprecated | 0 | log | Deprecated — do not use, will be removed |
+# | literal | shortcode | g0spell | tier | action | description |
+# |---------|-----------|---------|------|--------|-------------|
+# | 🦨 | :skunk: | skunk | 1 | warn+redirect | First offense — show warning, execute redirect |
+# | 💩 | :poop: | antipattern | 2 | block+escalate | Repeat offense — block command, escalate to operator |
+# | 🚫 | :block: | block | 0 | deny | Permanent denial — no retry, no escalation |
+# | 🥾 | :b00t: | b00t | 0 | interpose | b00t guard interposition — command routed through guard DAG |
+# | 🍰 | :cake: | cake | 0 | reward | Aligned behavior reward |
+# | 🐛 | :bug: | bug | 0 | log | Known bug — noted, not yet fixed |
+# | 🚩 | :cybersec: | cybersec_flag | 0 | log | Security flag — potential data disclosure |
+# | 🧠 | :cognitive_soul: | cognitive_soul | 0 | reserved | 🔒 Reserved — cognitive soul interface token |
+# | ✅ | :pass: | pass | 0 | ok | Capability check passed |
+# | ❌ | :fail: | fail | 0 | nok | Capability missing or mismatch |
+# | ⚠️ | :warn: | warn | 0 | log | Warning — read before proceeding |
+# | 🔗 | :see: | see | 0 | reference | See also — cross-reference pointer |
+# | 💡 | :example: | example | 0 | reference | Example usage instance |
+# | 🤓 | :melvin: | melvin | 0 | reference | Tribal knowledge — non-obvious insight |
+# | 💀 | :dead: | deprecated | 0 | log | Deprecated — do not use, will be removed |
 
 ## Guard Escalation Tier Map
 ## Columns: threshold | guard_action | emoji | shortcode | effect
 ## schema_version=1: these 5 columns in this order.
 
-| threshold | guard_action | emoji | shortcode | effect |
-|-----------|-------------|-------|-----------|--------|
-| count=0 | pass | ✅ | :pass: | No guard match — execute command as-is |
-| count=1 | warn+redirect | 🦨 | :skunk: | Log skunk datum, emit 🦨 warning, execute redirect |
-| count>=2 | block+escalate | 💩 | :poop: | Log antipattern datum, emit 💩, block command, escalate to operator |
+# | threshold | guard_action | emoji | shortcode | effect |
+# |-----------|-------------|-------|-----------|--------|
+# | count=0 | pass | ✅ | :pass: | No guard match — execute command as-is |
+# | count=1 | warn+redirect | 🦨 | :skunk: | Log skunk datum, emit 🦨 warning, execute redirect |
+# | count>=2 | block+escalate | 💩 | :poop: | Log antipattern datum, emit 💩, block command, escalate to operator |
 
 # b00t:map v1
 # summary: Emoji Registry — canonical shortcode↔literal lookup table for k0mmand3r guards; .tomllmd mdtable format

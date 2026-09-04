@@ -30,57 +30,57 @@ review_required = true
 
 ## What is it?
 
-l3dg3rr is the b00t ledger and governance subsystem — a Rust workspace providing
-bookkeeping, audit trails, Xero integration, and a desktop control plane. It
-implements the arc-kit evidence traceability model for provenance-verified
-accounting workflows.
+# l3dg3rr is the b00t ledger and governance subsystem — a Rust workspace providing
+# bookkeeping, audit trails, Xero integration, and a desktop control plane. It
+# implements the arc-kit evidence traceability model for provenance-verified
+# accounting workflows.
 
 ## Key Binaries
 
-- **ledgerr-mcp** — MCP server exposing TurboLedgerService tools
-- **host-tauri** — Tauri desktop host (primary UI)
-- **host-tray** — System tray/menubar control surface
-- **host-window** — ⚠️ DEPRECATED: Slint desktop host replaced by Tauri (ledgerr-tauri). Will be removed in next major release.
-- **ontology-extractor** — Ontology extraction from bookkeeping sources
-- **rotel-visual** — Evidence graph visualization
-- **mdbook-rhai-mermaid** — Rhai+Mermaid book rendering
-- **lfmf-stats** — LFMF counter statistics
+# - **ledgerr-mcp** — MCP server exposing TurboLedgerService tools
+# - **host-tauri** — Tauri desktop host (primary UI)
+# - **host-tray** — System tray/menubar control surface
+# - **host-window** — ⚠️ DEPRECATED: Slint desktop host replaced by Tauri (ledgerr-tauri). Will be removed in next major release.
+# - **ontology-extractor** — Ontology extraction from bookkeeping sources
+# - **rotel-visual** — Evidence graph visualization
+# - **mdbook-rhai-mermaid** — Rhai+Mermaid book rendering
+# - **lfmf-stats** — LFMF counter statistics
 
 ## Key Interfaces (MCP Tools)
 
-- `ledgerr_documents` — Document ingest (PDF, CSV, XLSX)
-- `ledgerr_review` — Transaction review and classification
-- `ledgerr_reconciliation` — Account reconciliation
-- `ledgerr_workflow` — Workflow orchestration
-- `ledgerr_audit` — Audit trail queries
-- `ledgerr_tax` — Tax preparation
-- `ledgerr_ontology` — Ledger ontology queries
-- `ledgerr_xero` — Xero accounting integration
+# - `ledgerr_documents` — Document ingest (PDF, CSV, XLSX)
+# - `ledgerr_review` — Transaction review and classification
+# - `ledgerr_reconciliation` — Account reconciliation
+# - `ledgerr_workflow` — Workflow orchestration
+# - `ledgerr_audit` — Audit trail queries
+# - `ledgerr_tax` — Tax preparation
+# - `ledgerr_ontology` — Ledger ontology queries
+# - `ledgerr_xero` — Xero accounting integration
 
 ## Dependencies
 
-- Rust 2024 edition
-- Tauri (desktop host)
-- Slint (⚠️ DEPRECATED — legacy UI, replaced by Tauri wry/webview)
-- Rhai scripting engine (rule evaluation)
-- arc-kit-au evidence graph library
+# - Rust 2024 edition
+# - Tauri (desktop host)
+# - Slint (⚠️ DEPRECATED — legacy UI, replaced by Tauri wry/webview)
+# - Rhai scripting engine (rule evaluation)
+# - arc-kit-au evidence graph library
 
 ## Build Notes
 
-Build all binaries:
-```
-cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release
-```
+# Build all binaries:
+# ```
+# cargo build --manifest-path vendor/ledgrrr/Cargo.toml --release
+# ```
 
-Tauri desktop host requires system libs (webkit2gtk on Linux).
+# Tauri desktop host requires system libs (webkit2gtk on Linux).
 
 
-[b00t.services.action_runner]
-local  = ["wrkflw-ci-build.yml", "wrkflw-docgen.yml"]
-remote = "github-actions"
+# [b00t.services.action_runner]
+# local  = ["wrkflw-ci-build.yml", "wrkflw-docgen.yml"]
+# remote = "github-actions"
 ## Security Considerations
 
-- MCP tools enforce deterministic tx_id hashing via Blake3
-- Xero credentials should be mediated through MCP worker processes,
-  not exposed directly to models
-- Audit trail is append-only with cryptographic evidence graph
+# - MCP tools enforce deterministic tx_id hashing via Blake3
+# - Xero credentials should be mediated through MCP worker processes,
+#   not exposed directly to models
+# - Audit trail is append-only with cryptographic evidence graph

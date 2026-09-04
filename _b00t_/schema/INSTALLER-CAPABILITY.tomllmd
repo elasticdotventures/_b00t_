@@ -249,21 +249,21 @@ vendor_datum = "VENDOR-LEDGRRR"
 
 [[b00t.check]]
 name = "disk-usage-tmp"
-check_command = "df -h /tmp | tail -1 | awk '{print \$5}' | sed 's/%//' | awk '\$1 < 80'"
+check_command = "df -h /tmp | tail -1 | awk '{print \\$5}' | sed 's/%//' | awk '\\$1 < 80'"
 remediation = "echo 'WARN: /tmp usage above 80% — clean up: find /tmp -atime +1 -delete'"
 required = false
 vendor_datum = ""
 
 [[b00t.check]]
 name = "disk-usage-target"
-check_command = "test -d target && du -sh target/ 2>/dev/null | awk '{print \$1}' | grep -v '^[0-9]*G' || true"
+check_command = "test -d target && du -sh target/ 2>/dev/null | awk '{print \\$1}' | grep -v '^[0-9]*G' || true"
 remediation = "echo 'INFO: target/ dir may be large — consider `cargo clean` if >5G'"
 required = false
 vendor_datum = ""
 
 [[b00t.check]]
 name = "disk-usage-hermes-logs"
-check_command = "test -d .hermes/logs && du -sh .hermes/logs/ 2>/dev/null | awk '{print \$1}' | grep -v '^[0-9]*G' || true"
+check_command = "test -d .hermes/logs && du -sh .hermes/logs/ 2>/dev/null | awk '{print \\$1}' | grep -v '^[0-9]*G' || true"
 remediation = "echo 'INFO: .hermes/logs/ may be large — consider log rotation'"
 required = false
 vendor_datum = ""
@@ -274,7 +274,7 @@ vendor_datum = ""
 
 [[b00t.check]]
 name = "vendor-required-tools"
-check_command = "echo 'Checking vendor required_tools...' && for tool in rustc cargo python3 uv pip just git gh gcc make go podman docker biome; do command -v \"\$tool\" >/dev/null 2>&1 || echo \"MISSING: \$tool\"; done"
+check_command = "echo 'Checking vendor required_tools...' && for tool in rustc cargo python3 uv pip just git gh gcc make go podman docker biome; do command -v \"\\$tool\" >/dev/null 2>&1 || echo \"MISSING: \\$tool\"; done"
 remediation = "echo 'See individual tool remediations above — run `b00t-cli grok ask \"how to install missing b00t tool\"`'"
 required = true
 vendor_datum = ""

@@ -25,152 +25,152 @@ content = "stable"
 
 ## ── Registry Operations ────────────────────────────────────────────────────────
 
-The operator agent exposes these registry operations to the captain:
+# The operator agent exposes these registry operations to the captain:
 
 ### search(query, filters)
-Search for candidate agents matching capability requirements.
+# Search for candidate agents matching capability requirements.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| query | string | yes | Natural language or keyword search for agent capabilities |
-| role | string | no | Filter by crew role (captain, executor, operator, specialist, bouncer) |
-| min_score | float | no | Minimum capability score threshold (0.0 - 1.0) |
-| source | string | no | Search source: "internal" (ontology), "external" (agency-agents/skillsgate), "all" (default) |
-| limit | u32 | no | Maximum results to return (default: 10) |
+# | Parameter | Type | Required | Description |
+# |-----------|------|----------|-------------|
+# | query | string | yes | Natural language or keyword search for agent capabilities |
+# | role | string | no | Filter by crew role (captain, executor, operator, specialist, bouncer) |
+# | min_score | float | no | Minimum capability score threshold (0.0 - 1.0) |
+# | source | string | no | Search source: "internal" (ontology), "external" (agency-agents/skillsgate), "all" (default) |
+# | limit | u32 | no | Maximum results to return (default: 10) |
 
-**Returns**: Array of candidate agents with capability scores.
+# **Returns**: Array of candidate agents with capability scores.
 
 ### enlist(agent_id, role, contract)
-Register an agent into the crew with a capability contract.
+# Register an agent into the crew with a capability contract.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| agent_id | string | yes | Agent PID to register (e.g. "pi-001") |
-| role | string | yes | Crew role to assign (captain, executor, operator, specialist, bouncer) |
-| contract | table | yes | Capability contract (see Contract format) |
-| captain | bool | no | Whether this agent is the crew captain (default: false) |
+# | Parameter | Type | Required | Description |
+# |-----------|------|----------|-------------|
+# | agent_id | string | yes | Agent PID to register (e.g. "pi-001") |
+# | role | string | yes | Crew role to assign (captain, executor, operator, specialist, bouncer) |
+# | contract | table | yes | Capability contract (see Contract format) |
+# | captain | bool | no | Whether this agent is the crew captain (default: false) |
 
-**Returns**: Crew binding record with status.
+# **Returns**: Crew binding record with status.
 
 ### train(agent_id, plan)
-Execute a training plan for an agent using b00t grok learn.
+# Execute a training plan for an agent using b00t grok learn.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| agent_id | string | yes | Agent PID to train |
-| plan | table | yes | Training plan definition (see Training Plan format) |
+# | Parameter | Type | Required | Description |
+# |-----------|------|----------|-------------|
+# | agent_id | string | yes | Agent PID to train |
+# | plan | table | yes | Training plan definition (see Training Plan format) |
 
-**Returns**: Training progress report with readiness score.
+# **Returns**: Training progress report with readiness score.
 
 ### status(agent_id)
-Query the current status and training progress of an agent.
+# Query the current status and training progress of an agent.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| agent_id | string | yes | Agent PID to query |
+# | Parameter | Type | Required | Description |
+# |-----------|------|----------|-------------|
+# | agent_id | string | yes | Agent PID to query |
 
-**Returns**: Agent status record (see Agent Status format).
+# **Returns**: Agent status record (see Agent Status format).
 
 ### dismiss(agent_id, reason)
-Remove an agent from the crew, archiving performance data.
+# Remove an agent from the crew, archiving performance data.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| agent_id | string | yes | Agent PID to dismiss |
-| reason | string | yes | Reason for dismissal (role-change, underperformance, mission-complete) |
+# | Parameter | Type | Required | Description |
+# |-----------|------|----------|-------------|
+# | agent_id | string | yes | Agent PID to dismiss |
+# | reason | string | yes | Reason for dismissal (role-change, underperformance, mission-complete) |
 
-**Returns**: Archived crew record with performance summary.
+# **Returns**: Archived crew record with performance summary.
 
 ## ── Data Structures ─────────────────────────────────────────────────────────────
 
 ### Candidate Agent
-Returned by `search()`:
+# Returned by `search()`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| agent_id | string | Agent PID |
-| name | string | Agent display name |
-| current_role | string | Current crew role |
-| capability_score | float | Match score against query (0.0 - 1.0) |
-| skills | string[] | Agent's declared skills |
-| model_tier | string | Model tier (frontier, ch0nky, sm0l) |
-| source | string | Discovery source (internal, agency-agents, skillsgate) |
-| status | string | Current lifecycle status (available, enlisted, training, deployed, dismissed) |
+# | Field | Type | Description |
+# |-------|------|-------------|
+# | agent_id | string | Agent PID |
+# | name | string | Agent display name |
+# | current_role | string | Current crew role |
+# | capability_score | float | Match score against query (0.0 - 1.0) |
+# | skills | string[] | Agent's declared skills |
+# | model_tier | string | Model tier (frontier, ch0nky, sm0l) |
+# | source | string | Discovery source (internal, agency-agents, skillsgate) |
+# | status | string | Current lifecycle status (available, enlisted, training, deployed, dismissed) |
 
 ### Capability Contract
-Submitted to `enlist()`:
+# Submitted to `enlist()`:
 
-```toml
-[contract]
+# ```toml
+# [contract]
 # Declared capabilities the agent commits to providing
-capabilities = ["code-gen", "refactor", "debug", "bash"]
+# capabilities = ["code-gen", "refactor", "debug", "bash"]
 # Minimum quality thresholds
-min_quality_score = 0.8
+# min_quality_score = 0.8
 # Expected availability
-availability = "on-demand"  # on-demand | persistent | scheduled
+# availability = "on-demand"  # on-demand | persistent | scheduled
 # Bouncer gates required
-gates = ["sanitize", "credential-check"]
-```
+# gates = ["sanitize", "credential-check"]
+# ```
 
 ### Training Plan
-Submitted to `train()`:
+# Submitted to `train()`:
 
-```toml
-[plan]
+# ```toml
+# [plan]
 # Target role to train for
-role = "specialist"
+# role = "specialist"
 # Training phases to execute
-phases = [
-  { name = "context-ingest", type = "grok-learn", topic = "coding-agent", source = "https://docs.example.com/coding-agent" },
-  { name = "skill-validation", type = "validate", schema = "CREW-ROLES" },
-  { name = "capability-register", type = "register", target = "sub-agent" },
-  { name = "bouncer-verify", type = "verify", gates = ["sanitize", "security-scan"] },
-]
-```
+# phases = [
+#   { name = "context-ingest", type = "grok-learn", topic = "coding-agent", source = "https://docs.example.com/coding-agent" },
+#   { name = "skill-validation", type = "validate", schema = "CREW-ROLES" },
+#   { name = "capability-register", type = "register", target = "sub-agent" },
+#   { name = "bouncer-verify", type = "verify", gates = ["sanitize", "security-scan"] },
+# ]
+# ```
 
 ### Agent Status
-Returned by `status()`:
+# Returned by `status()`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| agent_id | string | Agent PID |
-| lifecycle | string | Current lifecycle phase (FORM, ASSIGN, TRAIN, DEPLOY, REVIEW, ROTATE) |
-| training_progress | float | Training completion percentage (0.0 - 1.0) |
-| readiness_score | float | Overall readiness score (0.0 - 1.0) |
-| last_enlisted | string | ISO 8601 timestamp of last enlistment |
-| last_trained | string | ISO 8601 timestamp of last training completion |
-| performance_log | string[] | Performance history entries |
+# | Field | Type | Description |
+# |-------|------|-------------|
+# | agent_id | string | Agent PID |
+# | lifecycle | string | Current lifecycle phase (FORM, ASSIGN, TRAIN, DEPLOY, REVIEW, ROTATE) |
+# | training_progress | float | Training completion percentage (0.0 - 1.0) |
+# | readiness_score | float | Overall readiness score (0.0 - 1.0) |
+# | last_enlisted | string | ISO 8601 timestamp of last enlistment |
+# | last_trained | string | ISO 8601 timestamp of last training completion |
+# | performance_log | string[] | Performance history entries |
 
 ## ── Registry Storage ────────────────────────────────────────────────────────────
 
-The registry state is persisted as `.b00t/agent-registry.jsonl` — one JSON record per
-state transition:
+# The registry state is persisted as `.b00t/agent-registry.jsonl` — one JSON record per
+# state transition:
 
-```jsonl
-{"ts":"2026-05-08T00:00:00Z","action":"enlist","agent_id":"pi-001","role":"specialist","status":"enlisted"}
-{"ts":"2026-05-08T00:01:00Z","action":"train","agent_id":"pi-001","phase":"context-ingest","progress":0.25}
-{"ts":"2026-05-08T00:02:00Z","action":"deploy","agent_id":"pi-001","status":"deployed","readiness":0.95}
-```
+# ```jsonl
+# {"ts":"2026-05-08T00:00:00Z","action":"enlist","agent_id":"pi-001","role":"specialist","status":"enlisted"}
+# {"ts":"2026-05-08T00:01:00Z","action":"train","agent_id":"pi-001","phase":"context-ingest","progress":0.25}
+# {"ts":"2026-05-08T00:02:00Z","action":"deploy","agent_id":"pi-001","status":"deployed","readiness":0.95}
+# ```
 
 ## ── Query Examples ──────────────────────────────────────────────────────────────
 
 ### Search for coding agents
-```
-b00t ontology query --role specialist
-→ Returns: pi-001 (specialist, score 0.92), opencode (specialist, score 0.88)
-```
+# ```
+# b00t ontology query --role specialist
+# → Returns: pi-001 (specialist, score 0.92), opencode (specialist, score 0.88)
+# ```
 
 ### Enlist a discovered agent
-```
-b00t agent enlist pi-001 specialist --contract "..."
-→ Returns: Crew binding for pi-001 as specialist
-```
+# ```
+# b00t agent enlist pi-001 specialist --contract "..."
+# → Returns: Crew binding for pi-001 as specialist
+# ```
 
 ### Check training status
-```
-b00t agent status pi-001
-→ Returns: lifecycle=TRAIN, progress=0.5, readiness=0.3
-```
+# ```
+# b00t agent status pi-001
+# → Returns: lifecycle=TRAIN, progress=0.5, readiness=0.3
+# ```
 
 # b00t:map v1
 # summary: Agent registry protocol — search (capability scoring), enlist (contract binding), train (grok learn plans), status (progress tracking), dismiss (archive + performance) for hive crew management by operator agent
