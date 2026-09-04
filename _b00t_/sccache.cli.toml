@@ -7,13 +7,16 @@ name = "sccache"
 type = "cli"
 hint = "Shared compilation cache — wraps rustc/gcc to cache .o artifacts across rebuilds"
 desires = "latest"
+# @tribal (b00t task #40): install MUST live here under [b00t], not in a
+# separate top-level [install] table — BootDatum.install only ever reads a
+# nested `[b00t].install` key. A top-level `[install]` table (the old shape
+# here) doesn't map to any UnifiedConfig field, so it was silently dropped
+# and `b00t install sccache` was a no-op. See b00t-cli/src/config_types.rs.
+install = "cargo install sccache --locked"
 
 [version]
 cmd = "sccache --version"
 regex = "(\\d+\\.\\d+\\.\\d+)"
-
-[install]
-command = "cargo install sccache --locked"
 
 [validate]
 command = "sccache --version"

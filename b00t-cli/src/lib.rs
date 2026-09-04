@@ -719,8 +719,131 @@ hint = "containers"
         let datum: TestDatum =
             toml::from_str(r#"install = { requires = ["node", "npm"] }"#).unwrap();
 
-        assert!(matches!(datum.install, InstallSpec::Metadata { .. }));
+        assert!(matches!(datum.install, InstallSpec::Metadata(_)));
         assert!(datum.install.command_string().is_none());
+    }
+
+    #[test]
+    fn install_command_table_with_command_key_resolves() {
+        // Mirrors sccache.cli.toml / cranelift.cli.toml's `[install]\ncommand = "..."`
+        // table shape. Before the b00t task #40 fix this silently matched
+        // InstallSpec::Metadata { requires: None } instead of erroring or
+        // resolving, because Metadata had no #[serde(deny_unknown_fields)]
+        // and its only field is optional.
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { command = "cargo install sccache --locked" }"#)
+                .unwrap();
+
+        assert!(matches!(datum.install, InstallSpec::CommandTable(_)));
+        let command = datum
+            .install
+            .command_string()
+            .expect("command-table install must resolve to a runnable command, not Metadata");
+        assert_eq!(command, "cargo install sccache --locked");
+    }
+
+    #[test]
+    fn install_command_table_with_cmd_alias_resolves() {
+        // Mirrors servo.cli.toml / xpra.cli.toml's `[install]\ncmd = "..."`
+        // table shape (same bug, different key name for the command).
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+
+        let datum: TestDatum =
+            toml::from_str(r#"install = { cmd = "xpra --version" }"#).unwrap();
+
+        assert!(matches!(datum.install, InstallSpec::CommandTable(_)));
+        let command = datum
+            .install
+            .command_string()
+            .expect("command-table install must resolve to a runnable command, not Metadata");
+        assert_eq!(command, "xpra --version");
+    }
+
+    #[test]
+    fn install_table_with_unrecognized_field_now_errors_loudly() {
+        // Regression guard for the root cause itself: a table that matches
+        // none of the real variants must now fail deserialization instead of
+        // silently absorbing into Metadata.
+        #[derive(Deserialize)]
+        struct TestDatum {
+            #[allow(dead_code)]
+            install: InstallSpec,
+        }
+
+        let result: Result<TestDatum, _> =
+            toml::from_str(r#"install = { totally_unknown_field = "oops" }"#);
+        assert!(
+            result.is_err(),
+            "expected deserialization to fail loudly, not silently fall through to Metadata"
+        );
+    }
+
+    /// End-to-end regression helper for b00t task #40: `b00t install
+    /// <name>` was a silent no-op for sccache/cranelift/servo/xpra because
+    /// (a) the untagged InstallSpec enum fell through to Metadata for the
+    /// `{ command = "..." }` / `{ cmd = "..." }` table shape those datums
+    /// used, AND (b) that `[install]` table lived at the top level of the
+    /// file instead of nested under `[b00t]`, so it never reached
+    /// `BootDatum.install` at all. This parses the *actual* production
+    /// config file shape (`[b00t]` table with a nested `install` key,
+    /// exactly like the already-working
+    /// node.cli.toml/corepack.cli.toml/pnpm.cli.toml datums) and returns the
+    /// resolved command string, panicking (via `.expect`) if it falls back
+    /// to `InstallSpec::Metadata` the way it used to.
+    fn resolve_cli_datum_install_command(datum_file: &str) -> String {
+        #[derive(Deserialize)]
+        struct TestDatum {
+            install: InstallSpec,
+        }
+        #[derive(Deserialize)]
+        struct TestFile {
+            b00t: TestDatum,
+        }
+
+        let toml_text = std::fs::read_to_string(format!(
+            "{}/../_b00t_/{datum_file}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap_or_else(|e| panic!("{datum_file} should exist: {e}"));
+        let file: TestFile = toml::from_str(&toml_text)
+            .unwrap_or_else(|e| panic!("{datum_file} should parse as a UnifiedConfig shape: {e}"));
+        file.b00t.install.command_string().unwrap_or_else(|| {
+            panic!(
+                "{datum_file} [b00t].install must resolve to a runnable command, not InstallSpec::Metadata"
+            )
+        })
+    }
+
+    #[test]
+    fn sccache_cli_install_resolves_end_to_end() {
+        let command = resolve_cli_datum_install_command("sccache.cli.toml");
+        assert!(command.contains("cargo install sccache"));
+    }
+
+    #[test]
+    fn cranelift_cli_install_resolves_end_to_end() {
+        let command = resolve_cli_datum_install_command("cranelift.cli.toml");
+        assert!(command.contains("rustup component add rustc-codegen-cranelift-preview"));
+    }
+
+    #[test]
+    fn servo_cli_install_resolves_end_to_end() {
+        let command = resolve_cli_datum_install_command("servo.cli.toml");
+        assert!(command.contains("servo-x86_64-linux-gnu.tar.gz"));
+    }
+
+    #[test]
+    fn xpra_cli_install_resolves_end_to_end() {
+        let command = resolve_cli_datum_install_command("xpra.cli.toml");
+        assert!(command.contains("xpra-server xpra-x11 xpra-html5 xpra-codecs"));
     }
 
     #[test]
