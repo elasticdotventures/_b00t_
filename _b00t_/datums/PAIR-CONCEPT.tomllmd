@@ -30,375 +30,375 @@ content = "draft"
 
 ## ── What is a b00t pair? ───────────────────────────────────────────────────────
 
-A **b00t pair** is an autonomous agent (or pair of agents) assigned as
-maintainer and subject matter domain expert (SME) of a specific subsystem.
-Subsystems can be:
+# A **b00t pair** is an autonomous agent (or pair of agents) assigned as
+# maintainer and subject matter domain expert (SME) of a specific subsystem.
+# Subsystems can be:
 
-- A Git repository (e.g., `b00t-cli`, `b00t-c0re-lib`)
-- A subdirectory tree (e.g., `b00t-cli/src/commands/`)
-- A service or daemon (e.g., `b00t-mcp`, `plantuml-server`)
-- A bounded code domain (e.g., tool integrations, ontology, datums)
+# - A Git repository (e.g., `b00t-cli`, `b00t-c0re-lib`)
+# - A subdirectory tree (e.g., `b00t-cli/src/commands/`)
+# - A service or daemon (e.g., `b00t-mcp`, `plantuml-server`)
+# - A bounded code domain (e.g., tool integrations, ontology, datums)
 
-The pair concept is inspired by extreme programming (XP) pair programming,
-applied at the subsystem-ownership level rather than per-commit.
+# The pair concept is inspired by extreme programming (XP) pair programming,
+# applied at the subsystem-ownership level rather than per-commit.
 
 ### Key principles
 
-| principle | description |
-|-----------|-------------|
-| **Subsystem ownership** | Each pair owns one subsystem end-to-end |
-| **Two heads** | Maintainer + Reviewer; never a single point of context failure |
-| **Rotating pairs** | Pairs shuffle periodically to spread domain knowledge |
-| **Autonomous but accountable** | Pairs drive changes independently; review is mandatory |
-| **Discovery-driven** | Pairs find their subsystem via `b00t idiomap scan`, not manual assignment |
+# | principle | description |
+# |-----------|-------------|
+# | **Subsystem ownership** | Each pair owns one subsystem end-to-end |
+# | **Two heads** | Maintainer + Reviewer; never a single point of context failure |
+# | **Rotating pairs** | Pairs shuffle periodically to spread domain knowledge |
+# | **Autonomous but accountable** | Pairs drive changes independently; review is mandatory |
+# | **Discovery-driven** | Pairs find their subsystem via `b00t idiomap scan`, not manual assignment |
 
 ## ── Pair roles ─────────────────────────────────────────────────────────────────
 
-Each pair has two complementary roles:
+# Each pair has two complementary roles:
 
 ### Maintainer
 
-| responsibility | description |
-|----------------|-------------|
-| **Drive changes** | Implements features, fixes bugs, refactors code |
-| **Subsystem health** | Monitors CI, dependency updates, security advisories |
-| **Context building** | Maintains deep understanding of the subsystem's architecture |
-| **Documentation** | Keeps subsystem docs, datums, and ADRs current |
-| **First responder** | Triages issues and PRs tagged for the subsystem |
+# | responsibility | description |
+# |----------------|-------------|
+# | **Drive changes** | Implements features, fixes bugs, refactors code |
+# | **Subsystem health** | Monitors CI, dependency updates, security advisories |
+# | **Context building** | Maintains deep understanding of the subsystem's architecture |
+# | **Documentation** | Keeps subsystem docs, datums, and ADRs current |
+# | **First responder** | Triages issues and PRs tagged for the subsystem |
 
 ### Reviewer
 
-| responsibility | description |
-|----------------|-------------|
-| **Code review** | Reviews all changes before merge |
-| **Quality gate** | Ensures tests pass, style conforms, no regressions |
-| **Knowledge shadow** | Maintains enough context to take over if maintainer rotates |
-| **Challenge assumptions** | Questions design decisions, suggests alternatives |
-| **Cross-pollination** | Brings patterns and lessons from other subsystems |
+# | responsibility | description |
+# |----------------|-------------|
+# | **Code review** | Reviews all changes before merge |
+# | **Quality gate** | Ensures tests pass, style conforms, no regressions |
+# | **Knowledge shadow** | Maintains enough context to take over if maintainer rotates |
+# | **Challenge assumptions** | Questions design decisions, suggests alternatives |
+# | **Cross-pollination** | Brings patterns and lessons from other subsystems |
 
 ### Role switching
 
-Roles are NOT permanent. The pair swaps maintainer/reviewer on a regular
-cadence (see lifecycle below) to ensure both members build deep context.
+# Roles are NOT permanent. The pair swaps maintainer/reviewer on a regular
+# cadence (see lifecycle below) to ensure both members build deep context.
 
 ## ── Pair lifecycle ─────────────────────────────────────────────────────────────
 
-The pair lifecycle follows a four-phase loop:
+# The pair lifecycle follows a four-phase loop:
 
-```
-  ┌──────────────────────────────────────────────────┐
-  │                                                   │
-  ▼                                                   │
-ASSIGN ──► PAIR ──► REVIEW ──► ROTATE ───────────────┘
-```
+# ```
+#   ┌──────────────────────────────────────────────────┐
+#   │                                                   │
+#   ▼                                                   │
+# ASSIGN ──► PAIR ──► REVIEW ──► ROTATE ───────────────┘
+# ```
 
 ### Phase 1: ASSIGN
 
-Triggered by `b00t idiomap scan` (see discovery section below). When a
-subsystem is identified (new directory, new repo, new service), the system:
+# Triggered by `b00t idiomap scan` (see discovery section below). When a
+# subsystem is identified (new directory, new repo, new service), the system:
 
-1. Detects the subsystem boundary (by `t.b00t` file, idiomatic structure, etc.)
-2. Selects candidate agents from the pool based on capability match
-3. Assigns a maintainer and a reviewer
-4. Creates the pair binding in the agent registry
-5. Notifies both agents of their assignment
+# 1. Detects the subsystem boundary (by `t.b00t` file, idiomatic structure, etc.)
+# 2. Selects candidate agents from the pool based on capability match
+# 3. Assigns a maintainer and a reviewer
+# 4. Creates the pair binding in the agent registry
+# 5. Notifies both agents of their assignment
 
 ### Phase 2: PAIR
 
-The active pairing phase. The maintainer works on the subsystem while the
-reviewer shadows. During this phase:
+# The active pairing phase. The maintainer works on the subsystem while the
+# reviewer shadows. During this phase:
 
-- Maintainer drives all changes to the subsystem
-- Reviewer stays informed (reads diffs, reviews architecture decisions)
-- Both agents maintain a shared context document (stored as a datum or note)
-- Handoffs occur when the maintainer needs assist (see Pair Protocol)
+# - Maintainer drives all changes to the subsystem
+# - Reviewer stays informed (reads diffs, reviews architecture decisions)
+# - Both agents maintain a shared context document (stored as a datum or note)
+# - Handoffs occur when the maintainer needs assist (see Pair Protocol)
 
 ### Phase 3: REVIEW
 
-Before any change reaches the subsystem:
+# Before any change reaches the subsystem:
 
-1. Maintainer submits the proposed change for review
-2. Reviewer examines for correctness, style, test coverage, regressions
-3. Reviewer approves, requests changes, or escalates (see Escalation)
-4. On approval, the change is merged
+# 1. Maintainer submits the proposed change for review
+# 2. Reviewer examines for correctness, style, test coverage, regressions
+# 3. Reviewer approves, requests changes, or escalates (see Escalation)
+# 4. On approval, the change is merged
 
 ### Phase 4: ROTATE
 
-On a defined cadence (configurable per subsystem via `t.b00t`, default every
-sprint or N commits):
+# On a defined cadence (configurable per subsystem via `t.b00t`, default every
+# sprint or N commits):
 
-1. Maintainer and reviewer swap roles
-2. If the rotation is permanent, a new partner may be assigned
-3. Handoff document is updated with current state
-4. New maintainer picks up where the previous left off
+# 1. Maintainer and reviewer swap roles
+# 2. If the rotation is permanent, a new partner may be assigned
+# 3. Handoff document is updated with current state
+# 4. New maintainer picks up where the previous left off
 
 ### Rotation cadence options
 
-| cadence | trigger | use case |
-|---------|---------|----------|
-| Time-based | Every N days/weeks | Stable subsystems with steady flow |
-| Commit-based | Every N commits | Active development sprints |
-| Event-based | On milestone/release | Release-bound work |
-| On-demand | Manual trigger | Context handoff when maintainer is blocked or pulled away |
+# | cadence | trigger | use case |
+# |---------|---------|----------|
+# | Time-based | Every N days/weeks | Stable subsystems with steady flow |
+# | Commit-based | Every N commits | Active development sprints |
+# | Event-based | On milestone/release | Release-bound work |
+# | On-demand | Manual trigger | Context handoff when maintainer is blocked or pulled away |
 
 ## ── Pair protocol ──────────────────────────────────────────────────────────────
 
 ### Handoff
 
-When transferring work between pair members:
+# When transferring work between pair members:
 
-1. Maintainer writes a concise handoff note covering:
-   - Current state of the work
-   - Decisions made and rationale
-   - Open questions or blockers
-   - Next steps for the incoming maintainer
-2. Handoff note is stored as a subsystem datum or attached to the pair record
-3. Incoming maintainer acknowledges receipt and reviews the context
-4. The pair record is updated to reflect the active maintainer
+# 1. Maintainer writes a concise handoff note covering:
+#    - Current state of the work
+#    - Decisions made and rationale
+#    - Open questions or blockers
+#    - Next steps for the incoming maintainer
+# 2. Handoff note is stored as a subsystem datum or attached to the pair record
+# 3. Incoming maintainer acknowledges receipt and reviews the context
+# 4. The pair record is updated to reflect the active maintainer
 
 ### Escalation
 
-When a pair cannot resolve a disagreement internally:
+# When a pair cannot resolve a disagreement internally:
 
-| escalation level | who | what happens |
-|------------------|-----|--------------|
-| Level 1 | Peer discussion | Maintainer and reviewer discuss; reviewer's concerns addressed or overridden with rationale |
-| Level 2 | SME review | A third agent with deeper subsystem knowledge is consulted |
-| Level 3 | Captain resolution | The crew captain makes a binding decision |
-| Level 4 | Human operator | The human operator is notified and decides |
+# | escalation level | who | what happens |
+# |------------------|-----|--------------|
+# | Level 1 | Peer discussion | Maintainer and reviewer discuss; reviewer's concerns addressed or overridden with rationale |
+# | Level 2 | SME review | A third agent with deeper subsystem knowledge is consulted |
+# | Level 3 | Captain resolution | The crew captain makes a binding decision |
+# | Level 4 | Human operator | The human operator is notified and decides |
 
-Escalation is tracked in the pair record and reviewed during rotation
-retrospectives.
+# Escalation is tracked in the pair record and reviewed during rotation
+# retrospectives.
 
 ### Conflict resolution
 
-| conflict type | resolution strategy |
-|---------------|--------------------|
-| Design disagreement | Both parties write a short ADR; captain selects |
-| Priority conflict | Referenced against subsystem goals and crew priorities |
-| Code quality dispute | Run automated linters/metrics; review against subsystem standards |
-| Role boundary dispute | Escalate to captain who may redefine subsystem boundaries |
-| Schedule conflict | Rotation calendar is adjusted; backup pair members activated |
+# | conflict type | resolution strategy |
+# |---------------|--------------------|
+# | Design disagreement | Both parties write a short ADR; captain selects |
+# | Priority conflict | Referenced against subsystem goals and crew priorities |
+# | Code quality dispute | Run automated linters/metrics; review against subsystem standards |
+# | Role boundary dispute | Escalate to captain who may redefine subsystem boundaries |
+# | Schedule conflict | Rotation calendar is adjusted; backup pair members activated |
 
 ### Conflict resolution rules
 
-1. **Data over opinion** — automated metrics, test results, and benchmarks
-   win subjective preferences
-2. **Subsystem goals over individual preference** — the subsystem's
-   documented purpose and constraints take priority
-3. **Escalate quickly** — if a disagreement persists past 2 exchanges,
-   escalate rather than stall
-4. **Log the resolution** — every resolution is recorded in the pair record
-   for future reference
+# 1. **Data over opinion** — automated metrics, test results, and benchmarks
+#    win subjective preferences
+# 2. **Subsystem goals over individual preference** — the subsystem's
+#    documented purpose and constraints take priority
+# 3. **Escalate quickly** — if a disagreement persists past 2 exchanges,
+#    escalate rather than stall
+# 4. **Log the resolution** — every resolution is recorded in the pair record
+#    for future reference
 
 ## ── Subsystem discovery (b00t idiomap) ──────────────────────────────────────────
 
-Pairs discover their subsystem through `b00t idiomap scan`. This is the
-mechanism by which b00t identifies code boundaries and proposes pair
-assignments.
+# Pairs discover their subsystem through `b00t idiomap scan`. This is the
+# mechanism by which b00t identifies code boundaries and proposes pair
+# assignments.
 
 ### What idiomap scan detects
 
-| signal | detection method |
-|--------|------------------|
-| `t.b00t` file | Reads `.b00t/config` or `t.b00t` at a directory root |
-| Repository root | Detects `.git` directory |
-| Subdirectory structure | Recognizes idiomatic project layouts (src/, lib/, cmd/) |
-| Datum presence | Finds `_b00t_/datums/*.tomllmd` files |
-| Service definition | Detects `Dockerfile`, `docker-compose.yml`, `service.yaml` |
-| Package manifest | Reads `Cargo.toml`, `package.json`, `pyproject.toml`, etc. |
+# | signal | detection method |
+# |--------|------------------|
+# | `t.b00t` file | Reads `.b00t/config` or `t.b00t` at a directory root |
+# | Repository root | Detects `.git` directory |
+# | Subdirectory structure | Recognizes idiomatic project layouts (src/, lib/, cmd/) |
+# | Datum presence | Finds `_b00t_/datums/*.tomllmd` files |
+# | Service definition | Detects `Dockerfile`, `docker-compose.yml`, `service.yaml` |
+# | Package manifest | Reads `Cargo.toml`, `package.json`, `pyproject.toml`, etc. |
 
 ### Discovery flow
 
-```
-b00t idiomap scan --recursive
-  │
-  ├── /home/user/projects/b00t-cli/        (t.b00t found)
-  │     └── ASSIGN pair: agent-alpha (M) + agent-beta (R)
-  │
-  ├── /home/user/projects/b00t-c0re-lib/   (t.b00t found)
-  │     └── ASSIGN pair: agent-gamma (M) + agent-delta (R)
-  │
-  └── /home/user/projects/website/src/     (no t.b00t, idiomatic dir)
-        └── PROMPT: create t.b00t for this subsystem?
-```
+# ```
+# b00t idiomap scan --recursive
+#   │
+#   ├── /home/user/projects/b00t-cli/        (t.b00t found)
+#   │     └── ASSIGN pair: agent-alpha (M) + agent-beta (R)
+#   │
+#   ├── /home/user/projects/b00t-c0re-lib/   (t.b00t found)
+#   │     └── ASSIGN pair: agent-gamma (M) + agent-delta (R)
+#   │
+#   └── /home/user/projects/website/src/     (no t.b00t, idiomatic dir)
+#         └── PROMPT: create t.b00t for this subsystem?
+# ```
 
 ### Output
 
-`b00t idiomap scan` produces a subsystem map that feeds the pair assignment
-engine:
+# `b00t idiomap scan` produces a subsystem map that feeds the pair assignment
+# engine:
 
-```json
-{
-  "subsystems": [
-    {
-      "path": "/home/user/projects/b00t-cli",
-      "type": "repository",
-      "t_b00t": true,
-      "pair": "b00t-cli-pair",
-      "maintainer": "agent-alpha",
-      "reviewer": "agent-beta"
-    }
-  ]
-}
-```
+# ```json
+# {
+#   "subsystems": [
+#     {
+#       "path": "/home/user/projects/b00t-cli",
+#       "type": "repository",
+#       "t_b00t": true,
+#       "pair": "b00t-cli-pair",
+#       "maintainer": "agent-alpha",
+#       "reviewer": "agent-beta"
+#     }
+#   ]
+# }
+# ```
 
 ## ── t.b00t file pattern ────────────────────────────────────────────────────────
 
-The `t.b00t` file (pronounced "t-dot-b00t" or "t b00t") is the configuration
-marker that assigns a pair to a subdirectory or subsystem. It is placed at
-the root of the subsystem it governs.
+# The `t.b00t` file (pronounced "t-dot-b00t" or "t b00t") is the configuration
+# marker that assigns a pair to a subdirectory or subsystem. It is placed at
+# the root of the subsystem it governs.
 
 ### Purpose
 
-- Marks a directory as an owned subsystem
-- Configures pair assignments, rotation cadence, and subsystem metadata
-- Provides the primary discovery signal for `b00t idiomap scan`
-- Stores subsystem-level configuration overrides
+# - Marks a directory as an owned subsystem
+# - Configures pair assignments, rotation cadence, and subsystem metadata
+# - Provides the primary discovery signal for `b00t idiomap scan`
+# - Stores subsystem-level configuration overrides
 
 ### Location
 
-```
-<subsystem-root>/
-  ├── t.b00t              # Pair assignment and subsystem config
-  ├── src/
-  ├── tests/
-  └── ...
-```
+# ```
+# <subsystem-root>/
+#   ├── t.b00t              # Pair assignment and subsystem config
+#   ├── src/
+#   ├── tests/
+#   └── ...
+# ```
 
 ### Schema
 
-```toml
-[b00t.pair]
+# ```toml
+# [b00t.pair]
 # Agent IDs assigned to this subsystem
-maintainer = "agent-name"
-reviewer = "agent-name"
+# maintainer = "agent-name"
+# reviewer = "agent-name"
 
 # Rotation configuration
-[b00t.pair.rotation]
-cadence = "time"           # time | commits | event | on-demand
-interval_days = 14         # For time-based cadence
-commit_threshold = 50      # For commit-based cadence
+# [b00t.pair.rotation]
+# cadence = "time"           # time | commits | event | on-demand
+# interval_days = 14         # For time-based cadence
+# commit_threshold = 50      # For commit-based cadence
 
 # Subsystem metadata
-[b00t.pair.subsystem]
-name = "b00t-cli"
-type = "repository"        # repository | directory | service | domain
-description = "b00t CLI tool — commands and REPL"
-tags = ["cli", "rust", "commands"]
+# [b00t.pair.subsystem]
+# name = "b00t-cli"
+# type = "repository"        # repository | directory | service | domain
+# description = "b00t CLI tool — commands and REPL"
+# tags = ["cli", "rust", "commands"]
 
 # Escalation path
-[b00t.pair.escalation]
-captain = "captain-agent-name"
-backup_reviewer = "backup-agent-name"
-auto_escalate_after_days = 3
-```
+# [b00t.pair.escalation]
+# captain = "captain-agent-name"
+# backup_reviewer = "backup-agent-name"
+# auto_escalate_after_days = 3
+# ```
 
 ### Field reference
 
-| field | type | required | default | description |
-|-------|------|----------|---------|-------------|
-| `b00t.pair.maintainer` | string | yes | — | Agent ID of the current maintainer |
-| `b00t.pair.reviewer` | string | yes | — | Agent ID of the current reviewer |
-| `b00t.pair.rotation.cadence` | string | no | `"time"` | Rotation trigger: `time`, `commits`, `event`, `on-demand` |
-| `b00t.pair.rotation.interval_days` | integer | no | 14 | Days between rotations (time cadence) |
-| `b00t.pair.rotation.commit_threshold` | integer | no | 50 | Commits between rotations (commit cadence) |
-| `b00t.pair.subsystem.name` | string | yes | — | Human-readable subsystem name |
-| `b00t.pair.subsystem.type` | string | yes | `"directory"` | Subsystem classification |
-| `b00t.pair.subsystem.description` | string | no | — | One-line subsystem description |
-| `b00t.pair.subsystem.tags` | string[] | no | [] | Tags for discovery and filtering |
-| `b00t.pair.escalation.captain` | string | no | — | Default escalation target |
-| `b00t.pair.escalation.backup_reviewer` | string | no | — | Fallback reviewer |
-| `b00t.pair.escalation.auto_escalate_after_days` | integer | no | 3 | Auto-escalate unresolved issues |
+# | field | type | required | default | description |
+# |-------|------|----------|---------|-------------|
+# | `b00t.pair.maintainer` | string | yes | — | Agent ID of the current maintainer |
+# | `b00t.pair.reviewer` | string | yes | — | Agent ID of the current reviewer |
+# | `b00t.pair.rotation.cadence` | string | no | `"time"` | Rotation trigger: `time`, `commits`, `event`, `on-demand` |
+# | `b00t.pair.rotation.interval_days` | integer | no | 14 | Days between rotations (time cadence) |
+# | `b00t.pair.rotation.commit_threshold` | integer | no | 50 | Commits between rotations (commit cadence) |
+# | `b00t.pair.subsystem.name` | string | yes | — | Human-readable subsystem name |
+# | `b00t.pair.subsystem.type` | string | yes | `"directory"` | Subsystem classification |
+# | `b00t.pair.subsystem.description` | string | no | — | One-line subsystem description |
+# | `b00t.pair.subsystem.tags` | string[] | no | [] | Tags for discovery and filtering |
+# | `b00t.pair.escalation.captain` | string | no | — | Default escalation target |
+# | `b00t.pair.escalation.backup_reviewer` | string | no | — | Fallback reviewer |
+# | `b00t.pair.escalation.auto_escalate_after_days` | integer | no | 3 | Auto-escalate unresolved issues |
 
 ### Example: Single-repo setup
 
-```toml
+# ```toml
 # /home/user/projects/b00t-cli/t.b00t
-[b00t.pair]
-maintainer = "ralph"
-reviewer = "zed"
+# [b00t.pair]
+# maintainer = "ralph"
+# reviewer = "zed"
 
-[b00t.pair.rotation]
-cadence = "commits"
-commit_threshold = 25
+# [b00t.pair.rotation]
+# cadence = "commits"
+# commit_threshold = 25
 
-[b00t.pair.subsystem]
-name = "b00t-cli"
-type = "repository"
-description = "b00t CLI — commands, REPL, and tool dispatch"
-tags = ["cli", "rust", "core"]
+# [b00t.pair.subsystem]
+# name = "b00t-cli"
+# type = "repository"
+# description = "b00t CLI — commands, REPL, and tool dispatch"
+# tags = ["cli", "rust", "core"]
 
-[b00t.pair.escalation]
-captain = "b00t-captain"
-backup_reviewer = "alice"
-```
+# [b00t.pair.escalation]
+# captain = "b00t-captain"
+# backup_reviewer = "alice"
+# ```
 
 ### Example: Subdirectory subsystem
 
-```toml
+# ```toml
 # /home/user/projects/b00t/b00t-c0re-lib/t.b00t
-[b00t.pair]
-maintainer = "bob"
-reviewer = "carol"
+# [b00t.pair]
+# maintainer = "bob"
+# reviewer = "carol"
 
-[b00t.pair.rotation]
-cadence = "time"
-interval_days = 21
+# [b00t.pair.rotation]
+# cadence = "time"
+# interval_days = 21
 
-[b00t.pair.subsystem]
-name = "b00t-c0re-lib"
-type = "directory"
-description = "Core b00t agent library — agent manager, MCP bridge, Redis, IR ontology"
-tags = ["library", "rust", "core", "agents"]
+# [b00t.pair.subsystem]
+# name = "b00t-c0re-lib"
+# type = "directory"
+# description = "Core b00t agent library — agent manager, MCP bridge, Redis, IR ontology"
+# tags = ["library", "rust", "core", "agents"]
 
-[b00t.pair.escalation]
-captain = "b00t-captain"
-auto_escalate_after_days = 5
-```
+# [b00t.pair.escalation]
+# captain = "b00t-captain"
+# auto_escalate_after_days = 5
+# ```
 
 ## ── Pair registry ──────────────────────────────────────────────────────────────
 
-Pair assignments are tracked in the b00t agent registry
-(`b00t-c0re-lib/src/agent_manager.rs`). Each pair record contains:
+# Pair assignments are tracked in the b00t agent registry
+# (`b00t-c0re-lib/src/agent_manager.rs`). Each pair record contains:
 
-| field | type | description |
-|-------|------|-------------|
-| pair_id | string | Unique pair identifier |
-| subsystem_id | string | FK to the subsystem |
-| maintainer | string | Agent ID |
-| reviewer | string | Agent ID |
-| status | string | `active`, `rotating`, `on-break`, `disbanded` |
-| created_at | timestamp | When the pair was formed |
-| last_rotation | timestamp | When roles last swapped |
-| rotation_count | integer | Total rotations performed |
-| escalation_log | json[] | History of escalations |
-| handoff_log | json[] | History of handoffs |
-| captain | string | Default escalation target agent ID |
+# | field | type | description |
+# |-------|------|-------------|
+# | pair_id | string | Unique pair identifier |
+# | subsystem_id | string | FK to the subsystem |
+# | maintainer | string | Agent ID |
+# | reviewer | string | Agent ID |
+# | status | string | `active`, `rotating`, `on-break`, `disbanded` |
+# | created_at | timestamp | When the pair was formed |
+# | last_rotation | timestamp | When roles last swapped |
+# | rotation_count | integer | Total rotations performed |
+# | escalation_log | json[] | History of escalations |
+# | handoff_log | json[] | History of handoffs |
+# | captain | string | Default escalation target agent ID |
 
 ## ── Pair in the b00t ecosystem ─────────────────────────────────────────────────
 
-The pair concept integrates with existing b00t subsystems:
+# The pair concept integrates with existing b00t subsystems:
 
-| subsystem | integration |
-|-----------|-------------|
-| **agent_manager.rs** | Pair lifecycle, role assignments, registry |
-| **idiomap scan** | Subsystem discovery, t.b00t detection |
-| **Ontology / datums** | Subsystem metadata stored as datums |
-| **Crew coordination** | Pairs are the atomic unit of a crew |
-| **Hive guards** | Pair-based access control for subsystem commands |
-| **Task system** | Tasks can be scoped to a pair's subsystem |
-| **grok RAG** | Pair context documents indexed for retrieval |
+# | subsystem | integration |
+# |-----------|-------------|
+# | **agent_manager.rs** | Pair lifecycle, role assignments, registry |
+# | **idiomap scan** | Subsystem discovery, t.b00t detection |
+# | **Ontology / datums** | Subsystem metadata stored as datums |
+# | **Crew coordination** | Pairs are the atomic unit of a crew |
+# | **Hive guards** | Pair-based access control for subsystem commands |
+# | **Task system** | Tasks can be scoped to a pair's subsystem |
+# | **grok RAG** | Pair context documents indexed for retrieval |
 
 ## ── Future considerations ──────────────────────────────────────────────────────
 
-| area | description |
-|------|-------------|
-| **Multi-pair subsystems** | Large subsystems may warrant multiple pairs (e.g., frontend + backend pair for a web service) |
-| **Pair health metrics** | Track review latency, rotation frequency, escalation rate |
-| **Automatic pair assignment** | ML-based capability matching from agent profiles to subsystem requirements |
-| **Cross-pair review** | Pairs can request external review from other pairs for sensitive changes |
-| **Pair affinity** | Track which pairs work well together across rotations |
+# | area | description |
+# |------|-------------|
+# | **Multi-pair subsystems** | Large subsystems may warrant multiple pairs (e.g., frontend + backend pair for a web service) |
+# | **Pair health metrics** | Track review latency, rotation frequency, escalation rate |
+# | **Automatic pair assignment** | ML-based capability matching from agent profiles to subsystem requirements |
+# | **Cross-pair review** | Pairs can request external review from other pairs for sensitive changes |
+# | **Pair affinity** | Track which pairs work well together across rotations |
 
 # b00t:map v1
 # summary: b00t Pair concept — autonomous agent maintainer + SME for subsystems: pair roles (maintainer + reviewer), lifecycle (assign → pair → review → rotate), protocol (handoff, escalation, conflict resolution), subsystem discovery via b00t idiomap scan, and t.b00t configuration file schema

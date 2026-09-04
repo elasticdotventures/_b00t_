@@ -30,49 +30,49 @@ review_required = true
 
 ## What is it?
 
-A high-performance, pure C implementation of an MCP server that indexes codebases
-into a knowledge graph. Uses tree-sitter for AST extraction, xxhash for fast
-hashing, yyjson for JSON parsing, and SQLite for persistence. Provides graph-
-augmented code search, dependency tracing, and architecture discovery.
+# A high-performance, pure C implementation of an MCP server that indexes codebases
+# into a knowledge graph. Uses tree-sitter for AST extraction, xxhash for fast
+# hashing, yyjson for JSON parsing, and SQLite for persistence. Provides graph-
+# augmented code search, dependency tracing, and architecture discovery.
 
 ## Key Interfaces (MCP Tools)
 
-- **search_graph** — BM25 full-text search with structural label boosting
-- **search_code** — Grep + graph enrichment with deduplication
-- **trace_path** — Caller/callee/data-flow tracing through code graphs
-- **get_code_snippet** — Read source by qualified symbol name
-- **get_architecture** — High-level project structure overview
-- **index_repository** — Multi-mode indexing (fast/moderate/full/cross-repo)
-- **detect_changes** — Git-aware change impact analysis
+# - **search_graph** — BM25 full-text search with structural label boosting
+# - **search_code** — Grep + graph enrichment with deduplication
+# - **trace_path** — Caller/callee/data-flow tracing through code graphs
+# - **get_code_snippet** — Read source by qualified symbol name
+# - **get_architecture** — High-level project structure overview
+# - **index_repository** — Multi-mode indexing (fast/moderate/full/cross-repo)
+# - **detect_changes** — Git-aware change impact analysis
 
 ## Dependencies
 
-- GCC or Clang (C11 required)
-- Make (build system)
-- libgit2 (optional, faster git history; falls back to git popen)
-- tree-sitter (vendored in internal/cbm/vendored/)
-- yyjson, xxhash, SQLite (all vendored)
+# - GCC or Clang (C11 required)
+# - Make (build system)
+# - libgit2 (optional, faster git history; falls back to git popen)
+# - tree-sitter (vendored in internal/cbm/vendored/)
+# - yyjson, xxhash, SQLite (all vendored)
 
 ## Build Notes
 
-Build the production binary:
-```
-just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm
-```
+# Build the production binary:
+# ```
+# just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm
+# ```
 
-With embedded graph UI:
-```
-just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm-with-ui
-```
+# With embedded graph UI:
+# ```
+# just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile cbm-with-ui
+# ```
 
-Test suite:
-```
-just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile test
-```
+# Test suite:
+# ```
+# just -f vendor/b00tyverse/codebase-memory-mcp-b00t-ir0n-ledg3rr/justfile test
+# ```
 
 ## Security Considerations
 
-- Compiled C binary with no runtime dependencies (self-contained)
-- ASan/UBSan builds available for test/debug
-- Cross-repo indexing creates CALLS edges between projects — review before
-  enabling cross-repo intelligence mode on sensitive codebases
+# - Compiled C binary with no runtime dependencies (self-contained)
+# - ASan/UBSan builds available for test/debug
+# - Cross-repo indexing creates CALLS edges between projects — review before
+#   enabling cross-repo intelligence mode on sensitive codebases

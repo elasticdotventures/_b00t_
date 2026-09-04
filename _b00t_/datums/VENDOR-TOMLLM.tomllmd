@@ -30,54 +30,54 @@ review_required = false
 
 ## What is it?
 
-tomllm is a parser and convention system for enriched TOML files designed for
-LLM consumption. `.tomllm` files are valid TOML with enhanced comment semantics:
+# tomllm is a parser and convention system for enriched TOML files designed for
+# LLM consumption. `.tomllm` files are valid TOML with enhanced comment semantics:
 
-- Comments associate with the next key-value pair or section header
-- Special prefixes encode tribal knowledge: `# 🤓`, `# @tribal:`, `# @example:`
-- Tail-map block (last <=10 lines): fast executive agent scanning
-- Cognitive tier declaration: `sm0l`, `ch0nky`, or `frontier`
-- Comments are FOR agents reading the source file as documentation
+# - Comments associate with the next key-value pair or section header
+# - Special prefixes encode tribal knowledge: `# 🤓`, `# @tribal:`, `# @example:`
+# - Tail-map block (last <=10 lines): fast executive agent scanning
+# - Cognitive tier declaration: `sm0l`, `ch0nky`, or `frontier`
+# - Comments are FOR agents reading the source file as documentation
 
 ## Key Interfaces
 
-- **Rust binary** — `tomllm` CLI for parsing and validating .tomllm files
-- **Python package** — `pip install tomllm/` for Python integration
-- **Library crate** — Can be used as a Rust dependency for .tomllm parsing
+# - **Rust binary** — `tomllm` CLI for parsing and validating .tomllm files
+# - **Python package** — `pip install tomllm/` for Python integration
+# - **Library crate** — Can be used as a Rust dependency for .tomllm parsing
 
 ## Dependencies
 
-- Rust 2024 edition
-- Python 3.11+ (for Python package)
-- serde / serde_json
+# - Rust 2024 edition
+# - Python 3.11+ (for Python package)
+# - serde / serde_json
 
 ## Build Notes
 
-Rust binary:
-```
-cargo build --manifest-path vendor/tomllm/Cargo.toml --release
-```
+# Rust binary:
+# ```
+# cargo build --manifest-path vendor/tomllm/Cargo.toml --release
+# ```
 
-Python package:
-```
-uv pip install vendor/tomllm/
-```
+# Python package:
+# ```
+# uv pip install vendor/tomllm/
+# ```
 
 ## Cognitive Tiers
 
-| Tier | Models | Tasks |
-|------|--------|-------|
-| `sm0l` | qwen2.5-3B, haiku | classify, route, grep, format |
-| `ch0nky` | qwen3-coder (local) | implement, refactor, debug |
-| `frontier` | claude-opus/sonnet | architecture, security, novel design |
+# | Tier | Models | Tasks |
+# |------|--------|-------|
+# | `sm0l` | qwen2.5-3B, haiku | classify, route, grep, format |
+# | `ch0nky` | qwen3-coder (local) | implement, refactor, debug |
+# | `frontier` | claude-opus/sonnet | architecture, security, novel design |
 
 
-[b00t.services.action_runner]
-local  = "wrkflw"
-remote = "github-actions"
+# [b00t.services.action_runner]
+# local  = "wrkflw"
+# remote = "github-actions"
 ## Security Considerations
 
-- Parser-only; no execution or network access
-- Safe to run on untrusted .tomllm files
-- Comment content is preserved for agent consumption but stripped for
-  downstream data pipelines
+# - Parser-only; no execution or network access
+# - Safe to run on untrusted .tomllm files
+# - Comment content is preserved for agent consumption but stripped for
+#   downstream data pipelines

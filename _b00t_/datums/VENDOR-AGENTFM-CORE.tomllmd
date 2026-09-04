@@ -30,37 +30,37 @@ review_required = false
 
 ## What is it?
 
-agentfm-core is a P2P compute grid that lets AI agents run on remote hardware.
-Think "SETI@Home for AI" — it discovers idle compute via libp2p DHT and
-schedules sandboxed (Podman) agent jobs across the network.
+# agentfm-core is a P2P compute grid that lets AI agents run on remote hardware.
+# Think "SETI@Home for AI" — it discovers idle compute via libp2p DHT and
+# schedules sandboxed (Podman) agent jobs across the network.
 
 ## Key Interfaces
 
-- **agentfm** — CLI daemon that registers node, accepts jobs, hosts agents
-- **relay** — Lightweight relay node for NAT traversal
-- **OpenAI-compatible API** — Remote agents accessed via standard /v1/chat interface
-- **AgentFM SDK** — Go SDK for building grid-aware agents (agentfm-go/agent-sdk)
-- **REST API** — Job submission, status polling, artifact streaming
+# - **agentfm** — CLI daemon that registers node, accepts jobs, hosts agents
+# - **relay** — Lightweight relay node for NAT traversal
+# - **OpenAI-compatible API** — Remote agents accessed via standard /v1/chat interface
+# - **AgentFM SDK** — Go SDK for building grid-aware agents (agentfm-go/agent-sdk)
+# - **REST API** — Job submission, status polling, artifact streaming
 
 ## Dependencies
 
-- Go 1.25+ (required for build)
-- Podman or Docker (for sandboxed execution)
-- libp2p (vendored via go modules)
-- Make (build system)
+# - Go 1.25+ (required for build)
+# - Podman or Docker (for sandboxed execution)
+# - libp2p (vendored via go modules)
+# - Make (build system)
 
 ## Build Notes
 
-Build the agentfm binary:
-```
-make -C vendor/agentfm-core/agentfm-go build
-```
+# Build the agentfm binary:
+# ```
+# make -C vendor/agentfm-core/agentfm-go build
+# ```
 
-This produces `build/agentfm` in the agentfm-go directory.
+# This produces `build/agentfm` in the agentfm-go directory.
 
 ## Security Considerations
 
-- Agents run in Podman containers with configurable resource limits
-- P2P network uses libp2p noise handshake for transport encryption
-- Job artifacts are streamed live; no persistent storage on remote nodes
-- Relay nodes are untrusted — no plaintext flows through them
+# - Agents run in Podman containers with configurable resource limits
+# - P2P network uses libp2p noise handshake for transport encryption
+# - Job artifacts are streamed live; no persistent storage on remote nodes
+# - Relay nodes are untrusted — no plaintext flows through them

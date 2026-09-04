@@ -97,31 +97,31 @@ wheel_5_verdict = "⬅️ Double down. This is the key innovation. File a patent
 # The right architecture follows Browser-Use's validated pattern but with Rust
 # for performance-critical paths and our data-b00t-* enrichment as the differentiator.
 
-┌─────────────────────────────────────────────────────────────────────┐
-│                       b00t RPA Architecture v2                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐    │
-│  │ LLM Agent     │───▶│  Orchestrator    │───▶│  Data Pipeline    │    │
-│  │ (Qwen3.6-27B) │    │  (state machine) │    │  (extract→store)  │    │
-│  │ sm0l/ch0nky   │    │  wrkflw engine   │    │  CSV/JSON/SQLite  │    │
-│  └──────────────┘    └─────────────────┘    └──────────────────┘    │
-│                           │                                         │
-│                           ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              Playwright Python (standard RPA)                 │   │
-│  │  +90% of automation: navigate, click, type, screenshot        │   │
-│  │  Cross-browser, auto-waiting, network intercept, codegen      │   │
-│  └────────────┬─────────────────────────────────────────────┬───┘   │
-│               │                                             │       │
-│               ▼                                             ▼       │
-│  ┌─────────────────────┐              ┌──────────────────────────┐  │
-│  │ Playwright (std)     │              │ b00t-rpa (chromiumoxide) │  │
-│  │ Normal pages, forms, │              │ High-throughput, stealth │  │
-│  │ cross-browser         │              │ DOM enrichment injection │  │
-│  └─────────────────────┘              │ data-b00t-* deep access  │  │
-│                                        └──────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+# ┌─────────────────────────────────────────────────────────────────────┐
+# │                       b00t RPA Architecture v2                       │
+# ├─────────────────────────────────────────────────────────────────────┤
+# │                                                                     │
+# │  ┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐    │
+# │  │ LLM Agent     │───▶│  Orchestrator    │───▶│  Data Pipeline    │    │
+# │  │ (Qwen3.6-27B) │    │  (state machine) │    │  (extract→store)  │    │
+# │  │ sm0l/ch0nky   │    │  wrkflw engine   │    │  CSV/JSON/SQLite  │    │
+# │  └──────────────┘    └─────────────────┘    └──────────────────┘    │
+# │                           │                                         │
+# │                           ▼                                         │
+# │  ┌──────────────────────────────────────────────────────────────┐   │
+# │  │              Playwright Python (standard RPA)                 │   │
+# │  │  +90% of automation: navigate, click, type, screenshot        │   │
+# │  │  Cross-browser, auto-waiting, network intercept, codegen      │   │
+# │  └────────────┬─────────────────────────────────────────────┬───┘   │
+# │               │                                             │       │
+# │               ▼                                             ▼       │
+# │  ┌─────────────────────┐              ┌──────────────────────────┐  │
+# │  │ Playwright (std)     │              │ b00t-rpa (chromiumoxide) │  │
+# │  │ Normal pages, forms, │              │ High-throughput, stealth │  │
+# │  │ cross-browser         │              │ DOM enrichment injection │  │
+# │  └─────────────────────┘              │ data-b00t-* deep access  │  │
+# │                                        └──────────────────────────┘  │
+# └─────────────────────────────────────────────────────────────────────┘
 
 [llm_integration_plan]
 tier_sm0l = "Qwen2.5-3B (local vLLM) — DOM parsing, element selection from __b00t.find(). Cost: ~0. 'Given user wants to X, which element should I click?'"

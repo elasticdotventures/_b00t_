@@ -1,175 +1,172 @@
----
-name: DARED-001
-description: |
-  DARED-001: eliminate 20 vendor submodules via josh-proxy filtered projections.
-  Summary classification: SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision
-version: 2.0.0
-tags: [DARED, DARE, josh, submodule, vendor, proposal, agent-safety]
-tier: frontier
-complexity: 8
-applies_to:
-  - "vendor submodule management"
-  - "agent git safety"
-  - "CI pipeline"
-  - "b00tyverse architecture"
-output_types: [.tomllmd, .rs]
-depends_on: ["DARED", "josh"]
-unlocks:
-  - "DARED-JOSH-AGENT-PROTOCOL"
-  - "just vendor-sync recipe"
-  - "just vendor-status recipe"
-metadata:
-  ufo_stereotype: Relator
-  proposal_id: "DARED-001"
-  status: "proposed"
-  ooda_phase: "Decide"
-  rust_type: "DaredProposal"
----
+# b00t DARED-001 datum
+# 🤓 converted from stray YAML-frontmatter .tomllmd (task #115 datum-errors cleanup):
+#    original content preserved, reformatted as valid TOML frontmatter + comment-prose body
+
+[b00t]
+name = "DARED-001"
+type = "specification"
+hint = "DARED-001: eliminate 20 vendor submodules via josh-proxy filtered projections. Summary classification: SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision"
+version = "2.0.0"
+tags = ["DARED", "DARE", "josh", "submodule", "vendor", "proposal", "agent-safety"]
+tier = "frontier"
+complexity = 8
+applies_to = ["vendor submodule management", "agent git safety", "CI pipeline", "b00tyverse architecture"]
+output_types = [".tomllmd", ".rs"]
+depends_on = ["DARED", "josh"]
+unlocks = ["DARED-JOSH-AGENT-PROTOCOL", "just vendor-sync recipe", "just vendor-status recipe"]
+
+[b00t.metadata]
+ufo_stereotype = "Relator"
+proposal_id = "DARED-001"
+status = "proposed"
+ooda_phase = "Decide"
+rust_type = "DaredProposal"
+
 ## DARED-001: Eliminate vendor submodules via josh
 
-<|🤓|>20 submodules ⊆ vendor/ burden. Each git submodule update --init
---recursive is a ∅→N risk surface expansion — agent hallucination of submodule
-commands mutates .git/modules/ state. Josh collapses the surface to 1 clone
-with N filtered projections. The ExecutiveDecision signs off on the vendor.josh
-contract: artifacts persist, submodule gitlinks removed, agent protocol datum
-published. DARED acceptance gate: 5 alternatives considered, 5 risks mitigated,
-summary chain `SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision`
-grounds this in b00t's FOL query space.</🤓|>
+# <|🤓|>20 submodules ⊆ vendor/ burden. Each git submodule update --init
+# --recursive is a ∅→N risk surface expansion — agent hallucination of submodule
+# commands mutates .git/modules/ state. Josh collapses the surface to 1 clone
+# with N filtered projections. The ExecutiveDecision signs off on the vendor.josh
+# contract: artifacts persist, submodule gitlinks removed, agent protocol datum
+# published. DARED acceptance gate: 5 alternatives considered, 5 risks mitigated,
+# summary chain `SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision`
+# grounds this in b00t's FOL query space.</🤓|>
 
 ### Decision — Perdurant
 
-```toml
-[decision]
-what = """
-Replace 20 vendor/ git submodules with josh-proxy filtered projections
-from a single unified vendor history. Each vendor/X becomes a josh
-filter ::vendor/X/ — cloned once, projected infinitely. Agents never
-run git submodule commands again.
-"""
-who = "b00t-core (operator approval required per PAIR-CONCEPT)"
-when = "post-#527 merge, pre-#516 MCP action layer"
-scope = [
-    "vendor/ tree (20 submodules → 20 filtered projections)",
-    "CI pipeline (remove git submodule update --init --recursive)",
-    "agent sandboxing (read-only per-agent projections via josh proxy)",
-    "justfile (new vendor-sync, vendor-status recipes)",
-]
-explicitly_out_of_scope = [
-    "b00t-cli/ crate",
-    "b00t-mcp/ crate",
-    "crates/ufo-types",
-    "Full monorepo migration",
-]
-```
+# ```toml
+# [decision]
+# what = """
+# Replace 20 vendor/ git submodules with josh-proxy filtered projections
+# from a single unified vendor history. Each vendor/X becomes a josh
+# filter ::vendor/X/ — cloned once, projected infinitely. Agents never
+# run git submodule commands again.
+# """
+# who = "b00t-core (operator approval required per PAIR-CONCEPT)"
+# when = "post-#527 merge, pre-#516 MCP action layer"
+# scope = [
+#     "vendor/ tree (20 submodules → 20 filtered projections)",
+#     "CI pipeline (remove git submodule update --init --recursive)",
+#     "agent sandboxing (read-only per-agent projections via josh proxy)",
+#     "justfile (new vendor-sync, vendor-status recipes)",
+# ]
+# explicitly_out_of_scope = [
+#     "b00t-cli/ crate",
+#     "b00t-mcp/ crate",
+#     "crates/ufo-types",
+#     "Full monorepo migration",
+# ]
+# ```
 
 ### Alternative — Abstract
 
-```toml
-[[alternatives]]
-name = "Do nothing — keep 20 submodules"
-viable = "Zero migration cost; zero risk"
-rejected_because = "Agent safety surface compounds; CI time grows; submodule drift creates invisible coupling"
+# ```toml
+# [[alternatives]]
+# name = "Do nothing — keep 20 submodules"
+# viable = "Zero migration cost; zero risk"
+# rejected_because = "Agent safety surface compounds; CI time grows; submodule drift creates invisible coupling"
 
-[[alternatives]]
-name = "git-subrepo — merge externals into single repo"
-viable = "No external tool dependency; history preserved in-repo"
-rejected_because = "Loses upstream remote tracking; manual resync burden; 21k+ commits bloat"
+# [[alternatives]]
+# name = "git-subrepo — merge externals into single repo"
+# viable = "No external tool dependency; history preserved in-repo"
+# rejected_because = "Loses upstream remote tracking; manual resync burden; 21k+ commits bloat"
 
-[[alternatives]]
-name = "git-filter-repo — one-time split/merge"
-viable = "Well-maintained Python tool; used by large orgs"
-rejected_because = "One-time operation; no live proxy; no agent safety gain"
+# [[alternatives]]
+# name = "git-filter-repo — one-time split/merge"
+# viable = "Well-maintained Python tool; used by large orgs"
+# rejected_because = "One-time operation; no live proxy; no agent safety gain"
 
-[[alternatives]]
-name = "GitButler but CLI only — no josh backend"
-viable = "Agent-friendly undoable git; already packaged"
-rejected_because = "Solves UX layer but not submodule problem; complementary to josh, not alternative"
+# [[alternatives]]
+# name = "GitButler but CLI only — no josh backend"
+# viable = "Agent-friendly undoable git; already packaged"
+# rejected_because = "Solves UX layer but not submodule problem; complementary to josh, not alternative"
 
-[[alternatives]]
-name = "git-subtree — built-in git, no external dep"
-viable = "Zero external dependencies; std git only"
-rejected_because = "Push/pull friction with upstreams; no filtered projection concept; merge conflicts on subtree splits"
-```
+# [[alternatives]]
+# name = "git-subtree — built-in git, no external dep"
+# viable = "Zero external dependencies; std git only"
+# rejected_because = "Push/pull friction with upstreams; no filtered projection concept; merge conflicts on subtree splits"
+# ```
 
 ### Risk — Moment
 
-```toml
-[[risks]]
-name = "josh project maturity"
-severity = "HIGH"
-description = "josh has ~1 active maintainer, 1.9k stars. Project could go unmaintained."
-mitigation = "Pin to known-good SHA; keep .gitmodules fallback 90 days; b00t controls proxy layer"
+# ```toml
+# [[risks]]
+# name = "josh project maturity"
+# severity = "HIGH"
+# description = "josh has ~1 active maintainer, 1.9k stars. Project could go unmaintained."
+# mitigation = "Pin to known-good SHA; keep .gitmodules fallback 90 days; b00t controls proxy layer"
 
-[[risks]]
-name = "Agent retraining failure"
-severity = "HIGH"
-description = "Agents trained on git submodule commands may hallucinate them post-migration."
-mitigation = "DARED agent protocol datum; just vendor-sync wraps ALL ops; block-git-submodule gate"
+# [[risks]]
+# name = "Agent retraining failure"
+# severity = "HIGH"
+# description = "Agents trained on git submodule commands may hallucinate them post-migration."
+# mitigation = "DARED agent protocol datum; just vendor-sync wraps ALL ops; block-git-submodule gate"
 
-[[risks]]
-name = "CI pipeline breakage"
-severity = "MEDIUM"
-description = "All workflows use git submodule update --init --recursive today."
-mitigation = "Replace with josh proxy service; dual-run 2 weeks; CI diff gate between paths"
+# [[risks]]
+# name = "CI pipeline breakage"
+# severity = "MEDIUM"
+# description = "All workflows use git submodule update --init --recursive today."
+# mitigation = "Replace with josh proxy service; dual-run 2 weeks; CI diff gate between paths"
 
-[[risks]]
-name = "Vendor contribution workflow friction"
-severity = "MEDIUM"
-description = "Contributing upstream changes becomes different."
-mitigation = "josh-link bidirectional sync; just vendor-contribute recipe"
+# [[risks]]
+# name = "Vendor contribution workflow friction"
+# severity = "MEDIUM"
+# description = "Contributing upstream changes becomes different."
+# mitigation = "josh-link bidirectional sync; just vendor-contribute recipe"
 
-[[risks]]
-name = "Operator unfamiliarity with josh"
-severity = "LOW"
-description = "Operator has not used josh before."
-mitigation = "DARED documents provide complete context; just vendor-status shows health at a glance"
-```
+# [[risks]]
+# name = "Operator unfamiliarity with josh"
+# severity = "LOW"
+# description = "Operator has not used josh before."
+# mitigation = "DARED documents provide complete context; just vendor-status shows health at a glance"
+# ```
 
 ### ExecutiveDecision — Relator
 
-```toml
-[executive_decision]
-summary = "SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision"
+# ```toml
+# [executive_decision]
+# summary = "SubmoduleElimination ⊆ VendorGovernance ⊆ ArchitectureDecision"
 
-artifacts = [
-    "vendor.josh — declarative workspace file for all 20 vendor projections",
-    "just vendor-sync — update all projections to pinned revs",
-    "just vendor-status — show projection health: rev, upstream, drift",
-    "just vendor-contribute <name> — open PR against upstream",
-    "_b00t_/datums/DARED-JOSH-AGENT-PROTOCOL.tomllmd — agent-safe josh rules",
-    "_b00t_/scripts/josh-recovery.rhai — projection recovery script",
-    "gate: validate-vendor-workspace — CI gate for vendor.josh parseability",
-    "gate: vendor-drift-check — CI gate comparing trees against pinned revs",
-    "fine-tune/corpus/josh-agent-examples.jsonl — training data",
-]
+# artifacts = [
+#     "vendor.josh — declarative workspace file for all 20 vendor projections",
+#     "just vendor-sync — update all projections to pinned revs",
+#     "just vendor-status — show projection health: rev, upstream, drift",
+#     "just vendor-contribute <name> — open PR against upstream",
+#     "_b00t_/datums/DARED-JOSH-AGENT-PROTOCOL.tomllmd — agent-safe josh rules",
+#     "_b00t_/scripts/josh-recovery.rhai — projection recovery script",
+#     "gate: validate-vendor-workspace — CI gate for vendor.josh parseability",
+#     "gate: vendor-drift-check — CI gate comparing trees against pinned revs",
+#     "fine-tune/corpus/josh-agent-examples.jsonl — training data",
+# ]
 
-removed = [
-    ".gitmodules (all 20 vendor entries)",
-    "All vendor/ gitlinks from git index",
-    "git submodule update --init --recursive from all CI workflows",
-    "git submodule update --remote from all just recipes",
-    "Submodule drift warnings from pre-commit hook",
-]
+# removed = [
+#     ".gitmodules (all 20 vendor entries)",
+#     "All vendor/ gitlinks from git index",
+#     "git submodule update --init --recursive from all CI workflows",
+#     "git submodule update --remote from all just recipes",
+#     "Submodule drift warnings from pre-commit hook",
+# ]
 
-acceptance_criteria = [
-    "vendor.josh exists and is parseable by josh-compose",
-    "just vendor-sync succeeds; all 20 projections at pinned revs",
-    "CI passes without any git submodule commands",
-    "Agent protocol datum loaded by b00t learn josh-agent-protocol",
-    "Gate validate-vendor-workspace passes in CI",
-    "All removed artifacts confirmed absent from codebase",
-]
-```
+# acceptance_criteria = [
+#     "vendor.josh exists and is parseable by josh-compose",
+#     "just vendor-sync succeeds; all 20 projections at pinned revs",
+#     "CI passes without any git submodule commands",
+#     "Agent protocol datum loaded by b00t learn josh-agent-protocol",
+#     "Gate validate-vendor-workspace passes in CI",
+#     "All removed artifacts confirmed absent from codebase",
+# ]
+# ```
 
 ### Transition Plan
 
-```
-Week 1-2:  vendor.josh created, josh proxy running alongside submodules
-Week 3:    Agent protocol datum published, training examples in corpus
-Week 4:    Submodule gitlinks removed, CI switched to josh-only
-Week 5-12: Fallback .gitmodules kept (read-only), agents retrained
-Week 13:   Fallback removed, DARED verified against acceptance criteria
-```
+# ```
+# Week 1-2:  vendor.josh created, josh proxy running alongside submodules
+# Week 3:    Agent protocol datum published, training examples in corpus
+# Week 4:    Submodule gitlinks removed, CI switched to josh-only
+# Week 5-12: Fallback .gitmodules kept (read-only), agents retrained
+# Week 13:   Fallback removed, DARED verified against acceptance criteria
+# ```
 
 # b00t:map v1
 # summary: DARED-001 — eliminate 20 vendor submodules via josh-proxy filtered projections
