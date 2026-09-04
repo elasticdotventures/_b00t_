@@ -1,0 +1,35 @@
+{
+  "comment": "Production-scale (real o200k_base tiktoken, topic_max=25, body_max=250) regression fixtures for issue #934, ported from the superseded PR #1183 onto PR #1163's shipped fix (auto_topic() 5-word-summary+ellipsis capping in b00t-cli/src/commands/lfmf.rs). The '_regression' cases mirror the two real _b00t_/learn/*.md entries at the center of #934: cargo-workspace-install.md was a genuine topic==body duplicate that #1163 re-emitted cleanly; guard-session-fixtures.md's topic was already a legitimate truncated summary (confirmed by #1163's own investigation), not corruption — kept here as a non-regression guard so the truncation branch of auto_topic() doesn't regress either. '_well_formed' cases use the proper 'topic: body' syntax that would re-emit those same lessons without any salvage.",
+  "topic_max": 25,
+  "body_max": 250,
+  "cases": [
+    {
+      "name": "cargo_workspace_install_regression",
+      "raw": "Use cargo install --locked for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution",
+      "expect_salvage": "no_colon",
+      "expect_topic": "Use cargo install --locked for…",
+      "assert_anti_duplication": true
+    },
+    {
+      "name": "guard_session_fixtures_no_regression",
+      "raw": "Session guards a/b/c from June 27 b00t tests persisted in ~/.b00t/session-guards.json and blocked unrelated audited commands; tests MUST isolate or remove session guards on teardown. Operator checkpoint docs also use invalid rustc --edition without a value.",
+      "expect_salvage": "no_colon",
+      "expect_topic": "Session guards a/b/c from June 27 b00t tests persisted in ~/.b00t/session-guards.json and blocked",
+      "assert_anti_duplication": true
+    },
+    {
+      "name": "cargo_workspace_install_well_formed",
+      "raw": "cargo install --locked: use it for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution",
+      "expect_salvage": null,
+      "expect_topic": "cargo install --locked",
+      "expect_body": "use it for workspace path binaries to preserve the repository lockfile and MSRV-compatible resolution"
+    },
+    {
+      "name": "guard_session_fixtures_well_formed",
+      "raw": "session guards must not leak across test runs: guards persisted in ~/.b00t/session-guards.json can block unrelated audited commands if not isolated or torn down; tests MUST clean up session guards on teardown",
+      "expect_salvage": null,
+      "expect_topic": "session guards must not leak across test runs",
+      "expect_body": "guards persisted in ~/.b00t/session-guards.json can block unrelated audited commands if not isolated or torn down; tests MUST clean up session guards on teardown"
+    }
+  ]
+}
