@@ -17,6 +17,13 @@ skills = ["compile", "test", "install", "long-session", "ch0nky-code", "nats-acp
 personality = "laconic"
 role = "specialist"
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "qwen36/ch0nky"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.ipc]
 protocol = "nats+acp"
 pubsub = true
