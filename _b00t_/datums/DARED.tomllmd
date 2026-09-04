@@ -12,7 +12,7 @@ tier = "frontier"
 complexity = 8
 applies_to = ["architecture decision", "proposal", "OODA state change", "governance", "first-order logic"]
 output_types = [".tomllmd", ".rs"]
-depends_on = ["ufo-types-crate-511"]
+depends_on = ["ufo-types-crate-511.skill"]
 unlocks = ["all architecture proposals"]
 
 [b00t.metadata]
@@ -141,3 +141,4 @@ test_count = 28
 # tier: frontier
 # cmds: just ufo-test, cargo test -p ufo-types dare
 # complexity: 8
+
