@@ -1,0 +1,96 @@
+# 🤓 Extracted from ci.yml (#1261/#1264): the single "cargo check + test
+#    (workspace)" job was CANCELLED at exactly 60:00 twice, blocking every
+#    Rust PR. Fix: split into a fast `check` job and a `test` job sharded via
+#    `cargo nextest run --partition`, so total wall-clock per job drops well
+#    under the timeout instead of one job carrying the whole workspace.
+#    This composite action is the setup both jobs share (checkout, vendor
+#    submodule/ledgrrr init, Rust toolchain, sccache + rust-cache wiring) --
+#    keep it in ONE place so the two jobs can't drift out of sync with each
+#    other the way copy-pasted steps would.
+#
+#    Callers MUST run `actions/checkout@v4` themselves BEFORE this action --
+#    a local `uses: ./...` action can only be loaded after the repo
+#    containing it is checked out, so checkout can't live inside here.
+name: 'Set up Rust workspace (b00t CI)'
+description: >-
+  Inits the vendor submodules + ledgrrr clone this workspace's Cargo.toml
+  needs, installs the stable Rust toolchain, and wires up sccache + rust-cache.
+  Requires actions/checkout to have already run in this job.
+
+runs:
+  using: composite
+  steps:
+    # 🤓 Container-job-only wrinkle: on the host runner, actions/checkout's
+    #    own safe.directory handling is enough. Inside a container the
+    #    checked-out tree is owned by a different uid than git expects, so
+    #    a *separate* git invocation (submodule update below) hits
+    #    "detected dubious ownership" even though Checkout itself just
+    #    succeeded. `*` covers the submodule paths too, which get their
+    #    own nested .git dirs below.
+    - name: Mark workspace as git-safe (container job)
+      shell: bash
+      run: git config --global --add safe.directory '*'
+
+    - name: Init workspace-required vendor submodules
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 🤓 Exactly the two carrying *active* path deps via a real git
+        # submodule. tomllm and irontology-mcp are commented out in
+        # Cargo.toml and are NOT required -- do not re-add them by reflex.
+        #   vendor/embed-anything-b00t -> embed_anything (b00t-embed)
+        #   vendor/runpod-sdk          -> runpod-sdk     (b00t-cli)
+        git submodule update --init --depth 1 \
+          vendor/embed-anything-b00t \
+          vendor/runpod-sdk
+
+    - name: Clone vendor/ledgrrr
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 🤓 ledgrrr's canonical checkout now lives at promptexecution/ledgrrr;
+        # vendor/ledgrrr here is a linked git worktree of it on developer
+        # machines, not a submodule. CI has no sibling checkout to link
+        # against, so it gets a plain shallow clone instead.
+        #   vendor/ledgrrr -> b00t-reflect-types
+        git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
+
+    - name: Verify the init produced usable, in-sync checkouts
+      shell: bash
+      run: |
+        set -euo pipefail
+        # 🤓 This does NOT guard developer-machine drift -- the step above just
+        # forced these to their recorded commits, so drift is impossible
+        # here by construction. Local drift is #923's `b00t doctor` job.
+        # What this catches is the init silently under-delivering: a
+        # submodule left uninitialized ('-') or landing off-commit ('+'),
+        # which otherwise surfaces later as a confusing cargo path error.
+        bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk | grep -E '^[-+]' || true)"
+        if [ -n "$bad" ]; then
+          echo "FAIL: submodule(s) uninitialized or off-commit:"
+          echo "$bad"
+          exit 1
+        fi
+        # The path deps must actually resolve to crates.
+        for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/ledgrrr/crates/b00t-reflect-types; do
+          test -f "$p/Cargo.toml" || { echo "FAIL: $p/Cargo.toml missing"; exit 1; }
+        done
+        echo "PASS: 2 submodules + ledgrrr clone initialized, in-sync, path deps resolve"
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    # 🤓 sccache: proven 7-10x locally (merged PR #662, `_b00t_/sccache.cli.toml`
+    # datum). Caches per-compilation-unit, complementary to Swatinem/rust-cache's
+    # coarser whole-target/registry cache below -- keep both.
+    - name: Set up sccache
+      uses: mozilla-actions/sccache-action@v0.0.11
+
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Enable sccache as the rustc wrapper
+      shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
