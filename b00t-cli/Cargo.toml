@@ -108,6 +108,11 @@ zeroize = { version = "1", features = ["alloc"] }
 hex = "0.4"
 walkdir = "2"
 flate2 = "1"
+# 🤓 already resolved transitively (Cargo.lock) — declaring directly for
+#    finetune_job.rs's OCI-layer tar/retry logic reuses the already-fetched
+#    crates instead of adding new ones to the dependency tree.
+tar = "0.4"
+backon = "1"
 
 # Apalis - Background job processing for workflow execution
 apalis = "1.0.0-rc.3"
