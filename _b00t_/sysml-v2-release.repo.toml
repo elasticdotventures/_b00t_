@@ -1,0 +1,67 @@
+# b00t Repo Datum — Systems-Modeling/SysML-v2-Release
+# 🤓 The OMG's canonical incremental release of the SysML v2 language: spec PDFs, the
+#    textual/graphical BNF grammar, the normative standard library (sysml.library —
+#    Kernel / Domain / Systems libraries), curated validation models, training models,
+#    KerML + SysML examples, and the Jupyter kernel installer. EPL-2.0 (repo-level
+#    LICENSE covers all models + the standard library; spec PDFs under doc/ are
+#    OMG-copyright — do NOT redistribute those).
+# 🤓 Monthly tags, format YYYY-MM. Tracks the formally adopted (30 June 2025) KerML 1.0 /
+#    SysML 2.0 / Systems Modeling API & Services 1.0 baseline.
+# 🤓 This is the b00tyverse's SysML v2 CONFORMANCE GROUND TRUTH. Consumed as a pinned,
+#    fetched-not-vendored corpus:
+#      - kr0ki: docs/conformance-target.toml pins tag 2026-07; scripts/fetch-sysml-v2-
+#        release.sh extracts only sysml/src/{validation,examples}, kerml/src/examples,
+#        sysml.library, bnf. Gated: validation corpus 56/56, standard library 94/94
+#        (via sysml-v2-parser 0.55 — see the sysml-v2-parser datum).
+#      - sysml-v2-parser (elan8): its own docs/conformance-target pins a tag and
+#        gates BNF coverage + roundtrip against the same tree.
+# 🤓 The repo tarball is ~1.9 GB extracted (XMI blobs + PDFs). Fetch via
+#    github.com/Systems-Modeling/SysML-v2-Release/archive/refs/tags/<TAG>.tar.gz and
+#    extract only the textual paths (~1.85 MB of .sysml/.kerml). No expected-ERROR
+#    corpus exists here (positive fixtures only); the negative suite is in the OMG
+#    Pilot Implementation's Xtext-coupled *.xt xpect tests.
+
+[b00t]
+name = "sysml-v2-release"
+type = "repo"
+type_tags = ["reference"]
+hint = "OMG canonical SysML v2 release: spec + BNF grammar + normative standard library + validation/training/example models + Jupyter kernel. The b00tyverse SysML v2 conformance ground truth (EPL-2.0, monthly YYYY-MM tags, currently pinned at 2026-07)."
+keywords = ["sysml", "sysml2", "kerml", "omg-spec", "conformance", "standard-library", "bnf-grammar", "systems-modeling", "validation-corpus"]
+
+[b00t.source]
+url = "https://github.com/Systems-Modeling/SysML-v2-Release"
+
+[b00t.repo]
+description = "The OMG's monthly incremental release of the SysML v2 / KerML language: specifications, textual + graphical BNF, the normative model library, curated validation models, and the Jupyter kernel. Purpose: the pinned corpus every b00tyverse SysML v2 tool validates against."
+license = "EPL-2.0"
+topics = ["sysml", "sysml-v2", "kerml", "omg", "modeling-language", "standard-library", "conformance"]
+# ⚠️ verify: latest tag 2026-07 (published 2026-08-27). b00tyverse pin: 2026-07.
+#    Bump procedure lives in kr0ki docs/CONFORMANCE.md (edit conformance-target.toml,
+#    re-run, adjust the ratcheting baselines) — keep in lockstep with sysml-v2-parser.
+
+[[b00t.references]]
+name = "kr0ki conformance harness — docs/CONFORMANCE.md (phase 1: consume sysml-v2-parser)"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/CONFORMANCE.md"
+
+[[b00t.references]]
+name = "sysml-v2-parser (elan8) — the pure-Rust nom parser that exercises this corpus"
+url = "https://github.com/elan8/sysml-v2-parser"
+
+[[b00t.references]]
+name = "OMG SysML v2 spec"
+url = "https://www.omg.org/spec/SysML/2.0/"
+
+[[b00t.references]]
+name = "OMG Pilot Implementation (Java/Xtext) — holds the expected-error xpect suite"
+url = "https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation"
+
+[[b00t.references]]
+name = "sysml-v2-docs — the vendored spec markdown corpus (companion; agent-authored .sysml)"
+url = "https://github.com/PromptExecution/ufo-types"
+
+# b00t:map v1
+# summary: OMG canonical SysML v2 release — spec + BNF + normative standard library + validation corpus; the b00tyverse SysML v2 conformance ground truth (EPL-2.0, tag 2026-07)
+# tags: reference, sysml, sysml-v2, kerml, omg-spec, conformance, standard-library, bnf
+# tier: sm0l
+# cmds: b00t-cli datum show sysml-v2-release.repo
+# complexity: 3

@@ -1,0 +1,59 @@
+# b00t Repo Datum — eclipse-syson/syson (Eclipse SysON)
+# 🤓 Web-based open-source SysML v2 modeler built on Eclipse Sirius Web. EPL-2.0.
+#    Java 21 / Spring Boot backend, React/TS frontend, PostgreSQL. Co-led by Obeo
+#    (product/UX) + CEA List (spec compliance, OMG representation). CalVer, ~2-monthly
+#    releases, very active.
+# 🤓 Renders the FOUR standard SysML v2 ViewDefinitions — General, Interconnection,
+#    Action Flow, State Transition — plus a Requirements Table. Graphical (React Flow +
+#    client-side elkjs layout) AND a growing subset of textual notation (via Sensmetry
+#    SySIDE). Image export is client-side (html-to-image) — there is NO headless render
+#    API; a headless render needs a real browser (Playwright).
+# 🤓 Partial OMG Systems Modeling API at /api/rest/ (read-mostly). Does NOT support the
+#    SysML v2 Standard JSON serialization for import/export.
+# 🤓 kr0ki's posture (kr0ki docs/EVAL-syson.md): SysON is (a) a REFERENCE ORACLE — the
+#    best OSS impl of standard v2 notation, CEA-backed — validate kr0ki output against
+#    its structure, not its pixels (client-side ELK makes visual parity hard); and
+#    (b) an OPTIONAL upstream authoring front-end via the textual / partial-REST path.
+#    It is NOT a competitor for kr0ki's headless-cached-artifact role. Its
+#    ViewUsage.exposedElement model is useful view-scoping input. Reusable JVM libs:
+#    syson-sysml-metamodel / -import / -export / -validation.
+
+[b00t]
+name = "eclipse-syson"
+type = "repo"
+type_tags = ["reference"]
+hint = "Eclipse SysON — web-based open-source SysML v2 modeler on Sirius Web (EPL-2.0, Obeo + CEA List). Four standard ViewDefinitions + Requirements Table; partial OMG REST API; no headless render API. kr0ki's reference oracle + optional authoring front-end (not a competitor)."
+keywords = ["sysml", "sysml2", "kerml", "mbse", "modeler", "sirius-web", "eclipse", "obeo", "cea", "viewpoint"]
+
+[b00t.source]
+url = "https://github.com/eclipse-syson/syson"
+
+[b00t.repo]
+description = "A web-based graphical + textual SysML v2 authoring environment built on Eclipse Sirius Web. Reference implementation of the standard SysML v2 view definitions; the b00tyverse's SysML v2 notation oracle and an optional upstream authoring front-end for kr0ki."
+license = "EPL-2.0"
+topics = ["sysml", "sysml-v2", "kerml", "mbse", "sirius-web", "eclipse", "modeling-tool"]
+# ⚠️ verify: latest ~v2026.7.4 (2026-09-03). Docker image eclipsesyson/syson + Postgres.
+#    Multi-arch images from v2026.9.0. No Helm chart in-repo.
+
+[[b00t.references]]
+name = "kr0ki EVAL-syson — the client/oracle assessment"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/EVAL-syson.md"
+
+[[b00t.references]]
+name = "SysON site + user manual"
+url = "https://mbse-syson.org"
+
+[[b00t.references]]
+name = "Eclipse project page"
+url = "https://projects.eclipse.org/projects/modeling.syson"
+
+[[b00t.references]]
+name = "OMG Systems Modeling API and Services"
+url = "https://www.omg.org/spec/SystemsModelingAPI/"
+
+# b00t:map v1
+# summary: Eclipse SysON — web SysML v2 modeler on Sirius Web (EPL-2.0); 4 standard ViewDefinitions; partial OMG REST API, no headless render; kr0ki's notation oracle + optional authoring front-end
+# tags: reference, sysml, sysml-v2, kerml, mbse, sirius-web, eclipse, viewpoint
+# tier: sm0l
+# cmds: b00t-cli datum show eclipse-syson.repo
+# complexity: 3

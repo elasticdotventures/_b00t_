@@ -3,17 +3,24 @@
 #    the b00t ecosystem, served from kr0ki.b00t.promptexecution.com. It renders; it does
 #    not model. It wraps kroki-mcp (vendored) + systhread-core's isometric renderer as
 #    input formats — it does NOT duplicate them.
-# 🤓 Top-level b00tyverse project, registered 2026-09-05. Status: foundational
-#    (PRD-KR0KI-001 only — no implementation yet). Five open decisions block the plan;
-#    see the PRD §5 (ledgrrr#202/#203, nem-poweragent-lab#53 follow-up, infra DNS/CDN).
+# 🤓 Top-level b00tyverse project. Registered 2026-09-05; substantially built out the
+#    same day. Status: P0 render loop + SysML-v2-Release conformance harness +
+#    kr0ki-sysmlv2-client all SHIPPED on main. The SysML-model ingestion path
+#    (FR1/FR3/FR4) is planned in PLAN-KR0KI-002 and blocked on the UFO semantic-graph
+#    layer landing in ufo-types + at least one pattern recognizer.
 # 🤓 Cut-node semantics: kroki-b00t (infrastructure#217, comic engine) is a DOWNSTREAM
 #    LEAF consumer of kr0ki's SVGs, not part of kr0ki core. The canonical model anchor
-#    upstream is _b00t_/types/b00tyverse.kerm + ufo_types::{iso_ir,stereotype,sysml,mbse}.
+#    upstream is _b00t_/types/b00tyverse.kerm + ufo_types::{iso_ir, stereotype, sysml,
+#    mbse, sysml_model, ontology, view}.
+# 🤓 Five-box ingestion pipeline (PLAN-KR0KI-002 §2): source (k8s / Rust / SysML-v2)
+#    → canonical UFO-typed semantic graph (ufo_types) → pattern recognizers
+#    → SysML v2 viewpoints (ufo_types::sysml_model) → kr0ki renderer adapters.
+#    kr0ki MUST NOT infer architecture from diagram syntax or raw iso_ir strings.
 
 [b00t]
 name = "kr0ki"
 type = "repo"
-hint = "b00tyverse cut-node between Kroki and b00t/systhread: SysML/KerML diagram rendering + CDN-cached artifact service (kr0ki.b00t.promptexecution.com). Foundational stage — PRD only. (github.com/PromptExecution/kr0ki)"
+hint = "b00tyverse cut-node between Kroki and b00t/systhread: SysML/KerML diagram rendering + CDN-cached artifact service (kr0ki.b00t.promptexecution.com). P0 render loop + conformance harness + OMG-SysML-v2-API client shipped; model-ingestion path planned (PLAN-KR0KI-002). (github.com/PromptExecution/kr0ki)"
 
 [b00t.source]
 url = "https://github.com/PromptExecution/kr0ki"
@@ -21,19 +28,38 @@ url = "https://github.com/PromptExecution/kr0ki"
 [b00t.repo]
 description = "The rendering + CDN-cached-artifact service layer for SysML/KerML diagrams in the b00t ecosystem. The single sanctioned crossing between the model side (systhread / ufo-types / KerML) and the render side (Mermaid / PlantUML / GraphViz / D2 / SVG / isometric)."
 license = "MIT"
-topics = ["sysml", "kerml", "mbse", "kroki", "diagram-rendering", "b00tyverse", "systhread", "cut-node"]
-# ⚠️ verify: created 2026-09-05, empty→scaffolded this session; no releases, no impl yet.
+topics = ["sysml", "kerml", "mbse", "kroki", "diagram-rendering", "b00tyverse", "systhread", "cut-node", "sysml-v2-api"]
+# ⚠️ verify: created 2026-09-05. As of 2026-09-05: crates kr0ki-core (P0 render loop),
+#    kr0ki-server (axum HTTP), kr0ki-sysmlv2-client (OMG Systems Modeling API client);
+#    SysML-v2-Release conformance harness pinned at tag 2026-07 via sysml-v2-parser 0.55.
+#    No tagged release yet; not deployed.
 
 [[b00t.references]]
 name = "PRD-KR0KI-001 — foundational requirements"
 url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/PRD-KR0KI-001-foundational.md"
 
 [[b00t.references]]
-name = "b00t SysML v2 spine epic (closed) — the upstream model/validation layer"
-url = "https://github.com/elasticdotventures/_b00t_/issues/1177"
+name = "PLAN-KR0KI-002 — the SysML-model ingestion path (five-box pipeline; D3 operator-resolved)"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/PLAN-KR0KI-002.md"
 
 [[b00t.references]]
-name = "ufo-types v0.11.0 — iso_ir / stereotype / sysml / mbse (kr0ki's input vocabulary)"
+name = "DESIGN-NOTE — typed model layer (SysML v2 / KerML only; v1 DiagramKind rejected)"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/DESIGN-NOTE-typed-model-layer.md"
+
+[[b00t.references]]
+name = "PATTERNS-kubernetes — first pattern recognizer: UFO 4-category bridge + 25 canonical relations"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/PATTERNS-kubernetes.md"
+
+[[b00t.references]]
+name = "EVAL-flexo — Open-MBEE Flexo MMS as the primary OMG-SysML-v2-API model server"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/EVAL-flexo.md"
+
+[[b00t.references]]
+name = "EVAL-syson — Eclipse SysON as reference oracle + optional authoring front-end"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/EVAL-syson.md"
+
+[[b00t.references]]
+name = "ufo-types — iso_ir / stereotype / sysml / mbse + sysml_model (ElementKind, Relation) + ontology (UfoRelation, OntologicalEdge) + view (SysmlViewKind)"
 url = "https://github.com/PromptExecution/ufo-types"
 
 [[b00t.references]]
@@ -45,20 +71,24 @@ name = "kroki-b00t (comic engine) — a downstream leaf consumer, not kr0ki core
 url = "https://github.com/PromptExecution/infrastructure/issues/217"
 
 [[b00t.references]]
-name = "ledgrrr#202 — OPEN decision: sysml-derive extend-vs-wrap-vs-re-export (kr0ki defers)"
+name = "ledgrrr#202 — OPEN decision D1: sysml-derive extend-vs-wrap-vs-re-export (only gates the authoring path)"
 url = "https://github.com/PromptExecution/ledgrrr/issues/202"
 
 [[b00t.references]]
-name = "ledgrrr#203 — OPEN decision: holon-viz as a real (non-dev) dependency (kr0ki defers)"
+name = "ledgrrr#203 — OPEN decision D2: holon-viz as a real (non-dev) dependency"
 url = "https://github.com/PromptExecution/ledgrrr/issues/203"
 
 [[b00t.references]]
 name = "vendored renderer — PromptExecution/kroki-mcp (b00tyverse fork of utain/kroki-mcp, MIT)"
 url = "https://github.com/PromptExecution/kroki-mcp"
 
+[[b00t.references]]
+name = "SysML-v2-Release — the conformance corpus (see sysml-v2-release datum)"
+url = "https://github.com/Systems-Modeling/SysML-v2-Release"
+
 # b00t:map v1
-# summary: kr0ki — b00tyverse cut-node between Kroki and b00t/systhread; SysML/KerML render + CDN-cache service; foundational (PRD only)
-# tags: sysml, kerml, mbse, kroki, diagram, b00tyverse, systhread, cut-node, cdn, rendering
+# summary: kr0ki — b00tyverse cut-node between Kroki and b00t/systhread; SysML/KerML render + CDN-cache service; P0 + conformance + OMG-API client shipped, model-ingestion path planned (PLAN-KR0KI-002)
+# tags: sysml, kerml, mbse, kroki, diagram, b00tyverse, systhread, cut-node, cdn, rendering, sysml-v2-api
 # tier: frontier
 # cmds: b00t-cli datum show kr0ki.repo
 # complexity: 6

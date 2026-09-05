@@ -1,0 +1,60 @@
+# b00t Repo Datum — elan8/sysml-v2-parser
+# 🤓 Pure-Rust (nom-8 parser-combinator, NO Java/Xtext) parser for the SysML v2 textual
+#    notation. MIT. Two entry points: parse() strict / all-or-nothing, and
+#    parse_for_editor() resilient (partial AST + diagnostics, never panics).
+#    ufo_types::sysml::validate_sysml_v2 wraps it as the b00tyverse SysML v2 SYNTAX GATE.
+# 🤓 elan8 is (per a 2026-09-05 survey) plausibly the elastic.ventures account — treat as
+#    an in-house / fork-fix-forward crate, not a third-party black box.
+# 🤓 Self-contained conformance rig: docs/conformance-target pins a SysML-v2-Release tag,
+#    scripts/fetch-sysml-v2-release.sh pulls the tarball, build.rs recomputes an FNV-1a
+#    hash of the two textual BNF files and FAILS the build on drift from the pin.
+#    Conformance layers (docs/CONFORMANCE.md): L1 BNF production coverage, L2 full
+#    sysml.library parse, L2.5 roundtrip parse→emit→reparse on the validation corpus
+#    (ROUNDTRIP_PASS ratchet). L3 semantics explicitly NOT claimed.
+# 🤓 Consumers: kr0ki-core dev-depends on "0.55" for its phase-1 conformance harness
+#    (crates/kr0ki-core/tests/conformance.rs). Version MUST be pinned in lockstep with
+#    ufo-types (a parser-version skew means the two disagree on "valid SysML v2").
+# 🚩 known (sysml-v2-parser 0.55): the recursive-descent parser stack-overflows
+#    (SIGABRT) on a few deeply-nested example models with the default 2 MiB thread
+#    stack. kr0ki contains it with a 256 MiB worker thread; worth an upstream issue +
+#    b00t task.
+
+[b00t]
+name = "sysml-v2-parser"
+type = "repo"
+type_tags = ["reference"]
+hint = "Pure-Rust (nom-8, no Java) SysML v2 textual-notation parser. MIT. strict parse() + resilient parse_for_editor(); wrapped by ufo_types::sysml::validate_sysml_v2 as the b00tyverse SysML v2 syntax gate. Tag-pinned conformance rig against SysML-v2-Release. crates.io: sysml-v2-parser (0.55.0)."
+keywords = ["sysml", "sysml2", "kerml", "parser", "rust", "nom", "syntax-validation", "conformance"]
+
+[b00t.source]
+url = "https://github.com/elan8/sysml-v2-parser"
+
+[b00t.repo]
+description = "A hand-written nom parser-combinator implementation of the SysML v2 textual grammar in Rust — no JVM, no Xtext. The syntax-validation layer for the b00tyverse SysML v2 stack, with a self-contained tag-pinned conformance harness against the OMG SysML-v2-Release corpus."
+license = "MIT"
+topics = ["sysml", "sysml-v2", "kerml", "parser", "rust", "nom", "conformance"]
+# ⚠️ verify: crates.io sysml-v2-parser 0.55.0 (2026-08-27), repository elan8/sysml-v2-parser.
+#    Rapid cadence (0.44→0.55 in ~5 weeks). deps: nom 8, nom_locate, memchr, stacker.
+
+[[b00t.references]]
+name = "crates.io — sysml-v2-parser"
+url = "https://crates.io/crates/sysml-v2-parser"
+
+[[b00t.references]]
+name = "SysML-v2-Release — the corpus this crate's conformance rig pins (see that datum)"
+url = "https://github.com/Systems-Modeling/SysML-v2-Release"
+
+[[b00t.references]]
+name = "ufo-types — ufo_types::sysml::validate_sysml_v2 wraps this crate"
+url = "https://github.com/PromptExecution/ufo-types"
+
+[[b00t.references]]
+name = "kr0ki — dev-depends on it for the phase-1 conformance harness"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/CONFORMANCE.md"
+
+# b00t:map v1
+# summary: pure-Rust (nom-8, no Java) SysML v2 textual parser; the b00tyverse SysML v2 syntax gate (wrapped by ufo_types::sysml::validate_sysml_v2); tag-pinned conformance rig; crates.io 0.55.0
+# tags: reference, sysml, sysml-v2, kerml, parser, rust, nom, conformance
+# tier: ch0nky
+# cmds: b00t-cli datum show sysml-v2-parser.repo
+# complexity: 4
