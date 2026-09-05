@@ -182,6 +182,9 @@ FROM scratch AS b00t-resources
 # Copy _b00t_ configuration files and resources (datums, scripts, templates)
 # Includes: *.toml datums, scripts/, learn/, datum directories (bash.🐚, docker.🐳, etc.)
 COPY _b00t_/ /opt/b00t/config/
+# _b00t_/AGENT.md points at ../AGENTS.md; package its target alongside the
+# config tree so the symlink remains usable in the runtime image.
+COPY AGENTS.md /opt/b00t/AGENTS.md
 
 # ================================
 # Stage 5: b00t-cli Distribution Layer
