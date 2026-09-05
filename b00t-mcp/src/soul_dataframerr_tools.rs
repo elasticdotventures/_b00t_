@@ -5,7 +5,7 @@
 use crate::clap_reflection::{McpExecutor, McpReflection};
 use anyhow::Result;
 use clap::Parser;
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -65,18 +65,46 @@ impl McpReflection for SoulTableCreateCommand {
     }
 }
 
+impl SoulTableCreateCommand {
+    /// Extract `columns` from MCP params as a `Vec<String>` of "name:type"
+    /// shorthand entries.
+    ///
+    /// Bug fix: the previous implementation used
+    /// `.and_then(|v| v.as_array()).unwrap_or_default()`, which SILENTLY
+    /// turned any non-array `columns` value (e.g. a plain string — exactly
+    /// what a caller following the tool's old, incorrectly-declared
+    /// `"type": "string"` schema would send) into an empty `Vec`. That made
+    /// `soul_table_create` report success while creating a table with zero
+    /// columns, which then made every subsequent `frame-insert`'s fields
+    /// invisible in `frame-dump` (its column list is empty). Now a
+    /// non-array, non-null `columns` value is a hard error instead of a
+    /// silent no-op; omitting `columns` entirely still yields an empty
+    /// (schemaless) table, unchanged from before.
+    fn columns_from_params(params: &HashMap<String, Value>) -> Result<Vec<String>> {
+        match params.get("columns") {
+            None | Some(Value::Null) => Ok(Vec::new()),
+            Some(Value::Array(arr)) => arr
+                .iter()
+                .map(|v| {
+                    v.as_str().map(String::from).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "soul_table_create: columns[] entries must be strings \
+                             ('name:type' or 'name:type?'), got: {v}"
+                        )
+                    })
+                })
+                .collect(),
+            Some(other) => Err(anyhow::anyhow!(
+                "soul_table_create requires columns: array of \"name:type\" strings, got: {other}"
+            )),
+        }
+    }
+}
+
 impl McpExecutor for SoulTableCreateCommand {
     fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
         let name = str_param(params, "name")?;
-        let columns: Vec<String> = params
-            .get("columns")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let columns = Self::columns_from_params(params)?;
         let mut args: Vec<&str> = vec!["table-create", name];
         let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
         args.extend(col_refs.iter());
@@ -141,17 +169,46 @@ impl McpReflection for SoulRowInsertCommand {
     fn command_path() -> Vec<String> {
         vec!["soul".into(), "frame-insert".into()]
     }
+
+    /// `fields` is a `Vec<String>` of "key=value" tokens at the CLAP layer,
+    /// which the generic reflection in `McpReflection::generate_json_schema`
+    /// would (after the generic array-inference fix) correctly describe as `"type":
+    /// "array"` of strings — but PRD-DATAFRAMERR §4 deliberately specifies
+    /// `soul_row_insert(table: str, fields: dict, ...)`: a JSON object is a
+    /// much nicer MCP-client ergonomic than an array of pre-formatted
+    /// "key=value" strings, and `execute_mcp_call` below has always parsed
+    /// it as one. Before this fix the schema still said `"type": "string"`
+    /// (the pre-fix generic bug), which matched neither the array the
+    /// generic rule would now infer nor the object the executor actually
+    /// requires — this override makes the declared schema match the real
+    /// contract exactly.
+    fn schema_override(arg_name: &str) -> Option<Map<String, Value>> {
+        if arg_name == "fields" {
+            let mut m = Map::new();
+            m.insert("type".to_string(), json!("object"));
+            m.insert(
+                "description".to_string(),
+                json!(
+                    "Field key=value pairs, e.g. {\"task\": \"rust_codegen\", \"rank\": 0}"
+                ),
+            );
+            m.insert("additionalProperties".to_string(), json!(true));
+            Some(m)
+        } else {
+            None
+        }
+    }
 }
 
-impl McpExecutor for SoulRowInsertCommand {
-    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
-        let table = str_param(params, "table")?;
+impl SoulRowInsertCommand {
+    /// Extract `fields` from MCP params (a JSON object) as "key=value"
+    /// CLAP argv tokens for `frame-insert`.
+    fn fields_from_params(params: &HashMap<String, Value>) -> Result<Vec<String>> {
         let fields_obj = params
             .get("fields")
             .and_then(|v| v.as_object())
             .ok_or_else(|| anyhow::anyhow!("soul_row_insert requires fields: object"))?;
-        // Build "key=value" pairs
-        let pairs: Vec<String> = fields_obj
+        Ok(fields_obj
             .iter()
             .map(|(k, v)| {
                 let val = match v {
@@ -162,7 +219,14 @@ impl McpExecutor for SoulRowInsertCommand {
                 };
                 format!("{k}={val}")
             })
-            .collect();
+            .collect())
+    }
+}
+
+impl McpExecutor for SoulRowInsertCommand {
+    fn execute_mcp_call(params: &HashMap<String, Value>) -> Result<String> {
+        let table = str_param(params, "table")?;
+        let pairs = Self::fields_from_params(params)?;
         let mut args: Vec<&str> = vec!["frame-insert", table];
         let pair_refs: Vec<&str> = pairs.iter().map(|s| s.as_str()).collect();
         args.extend(pair_refs.iter());
@@ -480,4 +544,112 @@ pub fn register_dataframerr_tools(builder: &mut crate::clap_reflection::McpComma
         .register::<SoulAlarmCheckCommand>()
         .register::<SoulTokenEncodeCommand>()
         .register::<SoulTokenDecodeCommand>();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ── schema shape ────────────────────────────────────────────────────────
+
+    #[test]
+    fn table_create_columns_schema_is_array_of_strings() {
+        // Regression test: this was declared as "type": "string" before the
+        // generic clap_reflection fix, which is what led a compliant MCP
+        // client to send a plain string for `columns` — silently producing
+        // a zero-column table (see columns_from_params tests below).
+        let tool = SoulTableCreateCommand::to_mcp_tool();
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert_eq!(props["columns"]["type"], json!("array"));
+        assert_eq!(props["columns"]["items"]["type"], json!("string"));
+    }
+
+    #[test]
+    fn row_insert_fields_schema_is_object() {
+        // Regression test for the reported MCP-layer mismatch: schema said
+        // "string", runtime demanded "object". PRD-DATAFRAMERR §4 specifies
+        // `fields: dict`, so the corrected schema must say "object" — not
+        // "array" (what the generic Vec<String> rule alone would infer) or
+        // "string" (the old, wrong value).
+        let tool = SoulRowInsertCommand::to_mcp_tool();
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert_eq!(props["fields"]["type"], json!("object"));
+    }
+
+    // ── SoulTableCreateCommand::columns_from_params ─────────────────────────
+
+    #[test]
+    fn columns_from_params_accepts_proper_array() {
+        let mut params = HashMap::new();
+        params.insert(
+            "columns".to_string(),
+            json!(["task:text", "provider:text", "rank:int?"]),
+        );
+        let cols = SoulTableCreateCommand::columns_from_params(&params).unwrap();
+        assert_eq!(cols, vec!["task:text", "provider:text", "rank:int?"]);
+    }
+
+    #[test]
+    fn columns_from_params_missing_is_empty_table() {
+        let params = HashMap::new();
+        let cols = SoulTableCreateCommand::columns_from_params(&params).unwrap();
+        assert!(cols.is_empty());
+    }
+
+    #[test]
+    fn columns_from_params_rejects_plain_string_instead_of_silently_dropping() {
+        // Repro: a caller following the (pre-fix) "type": "string"
+        // schema would send `columns` as one comma-separated string. The old
+        // code turned that into an EMPTY Vec via `.unwrap_or_default()`,
+        // silently creating a zero-column table and reporting success. It
+        // must now be a clear error instead.
+        let mut params = HashMap::new();
+        params.insert(
+            "columns".to_string(),
+            json!("task:text, provider:text, model:text"),
+        );
+        let err = SoulTableCreateCommand::columns_from_params(&params).unwrap_err();
+        assert!(
+            err.to_string().contains("array"),
+            "error should explain columns must be an array, got: {err}"
+        );
+    }
+
+    #[test]
+    fn columns_from_params_rejects_non_string_array_entries() {
+        let mut params = HashMap::new();
+        params.insert("columns".to_string(), json!(["task:text", 42]));
+        let err = SoulTableCreateCommand::columns_from_params(&params).unwrap_err();
+        assert!(err.to_string().contains("must be strings"));
+    }
+
+    // ── SoulRowInsertCommand::fields_from_params ────────────────────────────
+
+    #[test]
+    fn fields_from_params_converts_object_to_key_value_pairs() {
+        let mut params = HashMap::new();
+        params.insert(
+            "fields".to_string(),
+            json!({"task": "rust_codegen", "rank": 0, "flopped": true}),
+        );
+        let mut pairs = SoulRowInsertCommand::fields_from_params(&params).unwrap();
+        pairs.sort();
+        assert_eq!(
+            pairs,
+            vec![
+                "flopped=true".to_string(),
+                "rank=0".to_string(),
+                "task=rust_codegen".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn fields_from_params_rejects_non_object() {
+        let mut params = HashMap::new();
+        params.insert("fields".to_string(), json!("task=rust_codegen"));
+        let err = SoulRowInsertCommand::fields_from_params(&params).unwrap_err();
+        assert!(err.to_string().contains("object"));
+    }
 }

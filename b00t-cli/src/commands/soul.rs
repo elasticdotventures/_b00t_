@@ -1730,4 +1730,106 @@ mod shard_tests {
         // Deleting again is a no-op, not an error.
         df_shard_delete(&scope).unwrap();
     }
+
+    /// End-to-end regression test for the reported `soul table-create` /
+    /// `soul frame-insert` bug (surfaced via the b00t-mcp `soul_table_create`
+    /// tool creating zero-column tables): a table created with a
+    /// multi-column spec must register EVERY declared column (not zero), and
+    /// rows inserted afterwards must persist and round-trip EVERY inserted
+    /// field (not just the auto `id`/`created_at`). Exercises the exact
+    /// command-handler functions the CLI dispatches to (`df_table_create`,
+    /// `df_frame_insert`) with the same table/column/field shapes from the
+    /// original bug report, going through real TOML save+reload — not just
+    /// the lower-level `SoulDataFramerr` struct (which already had its own
+    /// unit tests and was never the bug).
+    #[test]
+    fn table_create_with_columns_then_frame_insert_roundtrips_all_fields() {
+        let _home = TempHome::new();
+        let scope = SoulScope::new(ShardKind::Agent, "provider-rank-repro");
+
+        let column_specs = [
+            "task:text",
+            "provider:text",
+            "model:text",
+            "rank:int?",
+            "status:text",
+            "evidence:text",
+            "recorded_at:timestamp",
+        ];
+        df_table_create(
+            "provider_task_rank",
+            &column_specs.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            Some(scope.clone()),
+        )
+        .unwrap();
+
+        // Bug 1: table-create must register ALL declared columns, not zero.
+        let doc = load_soul_doc_scoped(Some(&scope)).unwrap();
+        let reg = load_registry(&doc).unwrap();
+        let table = reg.tables.get("provider_task_rank").unwrap();
+        assert_eq!(
+            table.columns.len(),
+            column_specs.len(),
+            "all declared columns must be registered — got: {:?}",
+            table.columns
+        );
+        let names: Vec<&str> = table.columns.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["task", "provider", "model", "rank", "status", "evidence", "recorded_at"]
+        );
+
+        // Insert 5 rows, mirroring the original bug report's repro shape.
+        for i in 0..5 {
+            let model = if i % 2 == 0 {
+                "apac.amazon.nova-pro-v1:0"
+            } else {
+                "apac.amazon.nova-lite-v1:0"
+            };
+            df_frame_insert(
+                "provider_task_rank",
+                &[
+                    "task=rust_codegen".to_string(),
+                    "provider=bedrock".to_string(),
+                    format!("model={model}"),
+                    "rank=0".to_string(),
+                    "status=flopped".to_string(),
+                    format!("evidence=run-{i}"),
+                    "recorded_at=2026-09-05T12:46:00Z".to_string(),
+                ],
+                Some(scope.clone()),
+            )
+            .unwrap();
+        }
+
+        // Bug 2: every inserted field must persist and round-trip — not just
+        // id/created_at. This is downstream of bug 1: frame-dump renders
+        // columns from `df.columns`, so it only ever showed anything once
+        // that list stopped being empty.
+        let doc = load_soul_doc_scoped(Some(&scope)).unwrap();
+        let reg = load_registry(&doc).unwrap();
+        let table = reg.tables.get("provider_task_rank").unwrap();
+        assert_eq!(table.rows.len(), 5);
+        assert_eq!(table.columns.len(), column_specs.len());
+
+        let row = &table.rows[0];
+        assert_eq!(row.id, 1);
+        assert_eq!(row.fields.get("task"), Some(&SoulValue::Text("rust_codegen".into())));
+        assert_eq!(row.fields.get("provider"), Some(&SoulValue::Text("bedrock".into())));
+        assert_eq!(
+            row.fields.get("model"),
+            Some(&SoulValue::Text("apac.amazon.nova-pro-v1:0".into()))
+        );
+        assert_eq!(row.fields.get("rank"), Some(&SoulValue::Int(0)));
+        assert_eq!(row.fields.get("status"), Some(&SoulValue::Text("flopped".into())));
+        assert_eq!(row.fields.get("evidence"), Some(&SoulValue::Text("run-0".into())));
+        assert_eq!(
+            row.fields.get("recorded_at"),
+            Some(&SoulValue::Text("2026-09-05T12:46:00Z".into()))
+        );
+
+        // frame-get iterates row.fields directly, so it must also see them.
+        let last_row = df_frame_get("provider_task_rank", 5, Some(scope.clone()));
+        assert!(last_row.is_ok());
+    }
 }
