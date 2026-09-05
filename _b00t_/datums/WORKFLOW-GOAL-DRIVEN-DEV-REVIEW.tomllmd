@@ -20,198 +20,198 @@ agent-framework = "VENDOR-AGENT-FRAMEWORK"
 
 ## Overview
 
-A multi-agent workflow where a **captain agent** decomposes a development goal into
-subtasks, then coordinates **specialized agents** (implementer, reviewer, tester)
-through structured handoffs. Each agent operates at its appropriate cognitive tier
-(sm0l for tests, ch0nky for implementation, frontier for architecture/captain).
+# A multi-agent workflow where a **captain agent** decomposes a development goal into
+# subtasks, then coordinates **specialized agents** (implementer, reviewer, tester)
+# through structured handoffs. Each agent operates at its appropriate cognitive tier
+# (sm0l for tests, ch0nky for implementation, frontier for architecture/captain).
 
 ## Agent Roles
 
 ### Captain (frontier tier)
-- **Role**: Goal decomposition, task routing, final sign-off
-- **Model**: claude-sonnet / claude-opus
-- **Skills**: goal_parser, task_router, crew_assembler, acceptance_checker
-- **Handoff targets**: implementer, reviewer, specialist
+# - **Role**: Goal decomposition, task routing, final sign-off
+# - **Model**: claude-sonnet / claude-opus
+# - **Skills**: goal_parser, task_router, crew_assembler, acceptance_checker
+# - **Handoff targets**: implementer, reviewer, specialist
 
 ### Implementer (ch0nky tier)
-- **Role**: Code generation, refactoring, implementation
-- **Model**: qwen3-coder-next (vllm)
-- **Skills**: code_generator, refactor_engine, test_writer, git_integrator
-- **Handoff targets**: reviewer (for PR review), tester (for verification)
+# - **Role**: Code generation, refactoring, implementation
+# - **Model**: qwen3-coder-next (vllm)
+# - **Skills**: code_generator, refactor_engine, test_writer, git_integrator
+# - **Handoff targets**: reviewer (for PR review), tester (for verification)
 
 ### Reviewer (frontier tier)
-- **Role**: Code review, security audit, quality gate
-- **Model**: claude-sonnet
-- **Skills**: code_reviewer, security_scanner, style_checker, diff_analyzer
-- **Handoff targets**: implementer (if changes requested), captain (if approved)
+# - **Role**: Code review, security audit, quality gate
+# - **Model**: claude-sonnet
+# - **Skills**: code_reviewer, security_scanner, style_checker, diff_analyzer
+# - **Handoff targets**: implementer (if changes requested), captain (if approved)
 
 ### Tester (sm0l tier)
-- **Role**: Test execution, lint, type checking
-- **Model**: qwen2.5-3b / haiku (local via ollama)
-- **Skills**: test_runner, lint_checker, type_checker, benchmark_runner
-- **Handoff targets**: implementer (if tests fail), reviewer (if tests pass)
+# - **Role**: Test execution, lint, type checking
+# - **Model**: qwen2.5-3b / haiku (local via ollama)
+# - **Skills**: test_runner, lint_checker, type_checker, benchmark_runner
+# - **Handoff targets**: implementer (if tests fail), reviewer (if tests pass)
 
 ### Specialist (ch0nky/frontier)
-- **Role**: Domain-specific expertise (DB schema, API design, security, DevOps)
-- **Model**: task-dependent
-- **Skills**: domain_tools (varies by specialization)
-- **Handoff targets**: implementer, captain
+# - **Role**: Domain-specific expertise (DB schema, API design, security, DevOps)
+# - **Model**: task-dependent
+# - **Skills**: domain_tools (varies by specialization)
+# - **Handoff targets**: implementer, captain
 
 ## Workflow Graph (MAF MagenticBuilder + HandoffBuilder)
 
-```
-                    ┌─────────────┐
-                    │   GOAL      │
-                    │  (user)     │
-                    └──────┬──────┘
-                           │
-                    ┌──────▼──────┐
-                    │  CAPTAIN    │  frontier tier
-                    │  decompose  │
-                    │  route      │
-                    └──┬───┬───┬──┘
-                       │   │   │
-              ┌────────┘   │   └────────┐
-              │            │            │
-       ┌──────▼──────┐ ┌──▼────────┐ ┌─▼──────────┐
-       │ IMPLEMENTER │ │ REVIEWER  │ │ SPECIALIST │ ch0nky/frontier
-       │  ch0nky     │ │ frontier  │ │  tier      │
-       │  generate   │ │  review   │ │  advise    │
-       └──┬───┬──────┘ └──┬───┬───┘ └──────┬─────┘
-          │   │           │   │            │
-          │   └───────────┘   │            │
-          │  handoff          │ approve    │
-          │                   │            │
-       ┌──▼──────────┐        │            │
-       │   TESTER    │◄───────┘            │
-       │   sm0l      │                     │
-       │   verify    │                     │
-       └──────┬──────┘                     │
-              │                            │
-              └──────────┬─────────────────┘
-                         │
-                  ┌──────▼──────┐
-                  │  CAPTAIN    │
-                  │  accept     │
-                  └─────────────┘
-```
+# ```
+#                     ┌─────────────┐
+#                     │   GOAL      │
+#                     │  (user)     │
+#                     └──────┬──────┘
+#                            │
+#                     ┌──────▼──────┐
+#                     │  CAPTAIN    │  frontier tier
+#                     │  decompose  │
+#                     │  route      │
+#                     └──┬───┬───┬──┘
+#                        │   │   │
+#               ┌────────┘   │   └────────┐
+#               │            │            │
+#        ┌──────▼──────┐ ┌──▼────────┐ ┌─▼──────────┐
+#        │ IMPLEMENTER │ │ REVIEWER  │ │ SPECIALIST │ ch0nky/frontier
+#        │  ch0nky     │ │ frontier  │ │  tier      │
+#        │  generate   │ │  review   │ │  advise    │
+#        └──┬───┬──────┘ └──┬───┬───┘ └──────┬─────┘
+#           │   │           │   │            │
+#           │   └───────────┘   │            │
+#           │  handoff          │ approve    │
+#           │                   │            │
+#        ┌──▼──────────┐        │            │
+#        │   TESTER    │◄───────┘            │
+#        │   sm0l      │                     │
+#        │   verify    │                     │
+#        └──────┬──────┘                     │
+#               │                            │
+#               └──────────┬─────────────────┘
+#                          │
+#                   ┌──────▼──────┐
+#                   │  CAPTAIN    │
+#                   │  accept     │
+#                   └─────────────┘
+# ```
 
 ## Handoff Rules
 
-```python
+# ```python
 # Captain → Implementer: task assigned with spec
-handoff(captain → implementer, trigger="task_assigned",
-        payload={"goal": str, "spec": str, "context": dict})
+# handoff(captain → implementer, trigger="task_assigned",
+#         payload={"goal": str, "spec": str, "context": dict})
 
 # Implementer → Reviewer: PR-ready code
-handoff(implementer → reviewer, trigger="pr_ready",
-        payload={"diff": str, "files": list, "tests_passed": bool})
+# handoff(implementer → reviewer, trigger="pr_ready",
+#         payload={"diff": str, "files": list, "tests_passed": bool})
 
 # Reviewer → Implementer: changes requested
-handoff(reviewer → implementer, trigger="changes_requested",
-        payload={"issues": list, "severity": str})
+# handoff(reviewer → implementer, trigger="changes_requested",
+#         payload={"issues": list, "severity": str})
 
 # Reviewer → Captain: approved
-handoff(reviewer → captain, trigger="approved",
-        payload={"review_summary": str, "score": float})
+# handoff(reviewer → captain, trigger="approved",
+#         payload={"review_summary": str, "score": float})
 
 # Tester → Reviewer: verification complete
-handoff(tester → reviewer, trigger="tests_complete",
-        payload={"results": dict, "passed": bool, "coverage": float})
+# handoff(tester → reviewer, trigger="tests_complete",
+#         payload={"results": dict, "passed": bool, "coverage": float})
 
 # Tester → Implementer: tests failed
-handoff(tester → implementer, trigger="tests_failed",
-        payload={"failures": list, "output": str})
-```
+# handoff(tester → implementer, trigger="tests_failed",
+#         payload={"failures": list, "output": str})
+# ```
 
 ## b00t CLI Integration
 
-```bash
+# ```bash
 # Start a goal-driven workflow
-b00t agent workflow goal-driven \
-  --goal "Implement OAuth2 authentication" \
-  --context "b00t-cli Rust codebase" \
-  --tier ch0nky \
-  --review-required
+# b00t agent workflow goal-driven \
+#   --goal "Implement OAuth2 authentication" \
+#   --context "b00t-cli Rust codebase" \
+#   --tier ch0nky \
+#   --review-required
 
 # Check workflow status
-b00t agent workflow status --id <workflow-id>
+# b00t agent workflow status --id <workflow-id>
 
 # Intervene manually
-b00t agent workflow handoff --from reviewer --to implementer \
-  --message "Re-review the auth module with security focus"
-```
+# b00t agent workflow handoff --from reviewer --to implementer \
+#   --message "Re-review the auth module with security focus"
+# ```
 
 ## Scriptable Definition (YAML — declarative)
 
-```yaml
+# ```yaml
 # _b00t_/workflows/goal-driven-dev.yaml
-workflow:
-  name: goal-driven-development
-  version: "1.0"
-  entry_point: captain
+# workflow:
+#   name: goal-driven-development
+#   version: "1.0"
+#   entry_point: captain
 
-agents:
-  - name: captain
-    model: claude-sonnet
-    tier: frontier
-    instructions: |
-      You are a development captain. Decompose goals into tasks.
-      Route each task to the appropriate specialist.
-      Review final output and accept or reject.
-    tools: [goal_parser, task_router, crew_assembler]
-    handoffs: [implementer, reviewer, specialist]
+# agents:
+#   - name: captain
+#     model: claude-sonnet
+#     tier: frontier
+#     instructions: |
+#       You are a development captain. Decompose goals into tasks.
+#       Route each task to the appropriate specialist.
+#       Review final output and accept or reject.
+#     tools: [goal_parser, task_router, crew_assembler]
+#     handoffs: [implementer, reviewer, specialist]
 
-  - name: implementer
-    model: qwen3-coder-next
-    tier: ch0nky
-    instructions: |
-      You are a code implementer. Generate code from specifications.
-      Write tests. Fix issues flagged by reviewer.
-    tools: [code_generator, test_writer, git_integrator]
-    handoffs: [reviewer, tester]
+#   - name: implementer
+#     model: qwen3-coder-next
+#     tier: ch0nky
+#     instructions: |
+#       You are a code implementer. Generate code from specifications.
+#       Write tests. Fix issues flagged by reviewer.
+#     tools: [code_generator, test_writer, git_integrator]
+#     handoffs: [reviewer, tester]
 
-  - name: reviewer
-    model: claude-sonnet
-    tier: frontier
-    instructions: |
-      You are a code reviewer. Check for bugs, security issues, style violations.
-      Approve clean code, request changes otherwise.
-    tools: [code_reviewer, security_scanner, diff_analyzer]
-    handoffs: [implementer, captain]
+#   - name: reviewer
+#     model: claude-sonnet
+#     tier: frontier
+#     instructions: |
+#       You are a code reviewer. Check for bugs, security issues, style violations.
+#       Approve clean code, request changes otherwise.
+#     tools: [code_reviewer, security_scanner, diff_analyzer]
+#     handoffs: [implementer, captain]
 
-  - name: tester
-    model: qwen2.5-3b
-    tier: sm0l
-    instructions: |
-      You are a test engineer. Run tests, lints, type checks.
-      Report failures to implementer, pass results to reviewer.
-    tools: [test_runner, lint_checker, type_checker]
-    handoffs: [implementer, reviewer]
+#   - name: tester
+#     model: qwen2.5-3b
+#     tier: sm0l
+#     instructions: |
+#       You are a test engineer. Run tests, lints, type checks.
+#       Report failures to implementer, pass results to reviewer.
+#     tools: [test_runner, lint_checker, type_checker]
+#     handoffs: [implementer, reviewer]
 
-orchestration: magentic
-```
+# orchestration: magentic
+# ```
 
 ## Acceptance Criteria
 
-- [ ] Captain decomposes goal into ≤5 subtasks
-- [ ] Implementer generates compilable code for each task
-- [ ] Reviewer catches bugs and enforces code-quality standards
-- [ ] Tester runs `cargo test`, `cargo clippy`, `cargo check` per task
-- [ ] Failed tasks loop back to implementer with review notes
-- [ ] Captain accepts final output only after all gates pass
-- [ ] Workflow survives agent disconnection (MAF durable task backend)
-- [ ] MCP tools bridge b00t MCP servers to MAF agents
+# - [ ] Captain decomposes goal into ≤5 subtasks
+# - [ ] Implementer generates compilable code for each task
+# - [ ] Reviewer catches bugs and enforces code-quality standards
+# - [ ] Tester runs `cargo test`, `cargo clippy`, `cargo check` per task
+# - [ ] Failed tasks loop back to implementer with review notes
+# - [ ] Captain accepts final output only after all gates pass
+# - [ ] Workflow survives agent disconnection (MAF durable task backend)
+# - [ ] MCP tools bridge b00t MCP servers to MAF agents
 
 ## b00t Crew Mapping
 
-| Crew Role     | Workflow Agent | Tier     |
-|---------------|----------------|----------|
-| Captain       | captain        | frontier |
-| Executor      | implementer    | ch0nky   |
-| Operator      | reviewer       | frontier |
-| Specialist    | specialist     | ch0nky   |
-| Bouncer       | tester         | sm0l     |
+# | Crew Role     | Workflow Agent | Tier     |
+# |---------------|----------------|----------|
+# | Captain       | captain        | frontier |
+# | Executor      | implementer    | ch0nky   |
+# | Operator      | reviewer       | frontier |
+# | Specialist    | specialist     | ch0nky   |
+# | Bouncer       | tester         | sm0l     |
 
 # b00t:map v1
 # summary: Goal-driven development workflow — multi-agent orchestration with role-based review handoffs across b00t cognitive tiers

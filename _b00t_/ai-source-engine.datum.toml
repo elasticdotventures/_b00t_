@@ -57,8 +57,7 @@ action = "digest"
 
 [ponytail.rung_7]
 name = "minimum"
-answer = "Digest ENGINEERING_GUIDE.md + src/al10/math.py + src/al10/receipt.py.
-         Skip CLI (30KB boilerplate), server (8KB FastAPI wrapper), README (manifesto)."
+answer = "Digest ENGINEERING_GUIDE.md + src/al10/math.py + src/al10/receipt.py. Skip CLI (30KB boilerplate), server (8KB FastAPI wrapper), README (manifesto)."
 action = "digest minimal set"
 
 # ── What to Digest ───────────────────────────────────────────────────────────

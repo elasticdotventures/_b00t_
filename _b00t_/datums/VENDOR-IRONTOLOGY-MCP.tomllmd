@@ -30,56 +30,56 @@ review_required = true
 
 ## What is it?
 
-A Rust MCP server that provides semantic ontology capabilities for the b00t
-knowledge graph. Includes: ontology graph querying with semantic predicates,
-code repository indexing with fusion retrieval (BM25 + embedding), and
-semantic runtime for knowledge navigation.
+# A Rust MCP server that provides semantic ontology capabilities for the b00t
+# knowledge graph. Includes: ontology graph querying with semantic predicates,
+# code repository indexing with fusion retrieval (BM25 + embedding), and
+# semantic runtime for knowledge navigation.
 
 ## Key Interfaces (MCP Tools)
 
-- **ontology_list_classes** — List available ontology classes
-- **ontology_related_resources** — Resolve semantic objects via predicates
-- **repo_search** — Fusion retrieval search over code repositories
-- **repo_read_symbol** — Read symbol metadata by identifier
+# - **ontology_list_classes** — List available ontology classes
+# - **ontology_related_resources** — Resolve semantic objects via predicates
+# - **repo_search** — Fusion retrieval search over code repositories
+# - **repo_read_symbol** — Read symbol metadata by identifier
 
 ## Key Crates
 
-- `mcp-server` — Main MCP server binary (the primary interface)
-- `cli` — CLI tool for ontology management
-- `dsl` — Ontology DSL for defining semantic rules
-- `indexer` — Code repository indexing engine
-- `retrieval` — Fusion retrieval (BM25 + vector search)
-- `semantic-runtime` — Ontology evaluation runtime
-- `tomllm` — TOML/LLM comment format parser
-- `intake` — Document intake pipeline
-- `storage-neumann` — Persistent storage using neumann backend
+# - `mcp-server` — Main MCP server binary (the primary interface)
+# - `cli` — CLI tool for ontology management
+# - `dsl` — Ontology DSL for defining semantic rules
+# - `indexer` — Code repository indexing engine
+# - `retrieval` — Fusion retrieval (BM25 + vector search)
+# - `semantic-runtime` — Ontology evaluation runtime
+# - `tomllm` — TOML/LLM comment format parser
+# - `intake` — Document intake pipeline
+# - `storage-neumann` — Persistent storage using neumann backend
 
 ## Dependencies
 
-- Rust 2024 edition
-- Cargo workspace with 20+ crates
-- Neural DB (for vector embeddings)
-- CodeGraph (for AST extraction)
+# - Rust 2024 edition
+# - Cargo workspace with 20+ crates
+# - Neural DB (for vector embeddings)
+# - CodeGraph (for AST extraction)
 
 ## Build Notes
 
-Build just the MCP server:
-```
-cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release -p mcp-server
-```
+# Build just the MCP server:
+# ```
+# cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release -p mcp-server
+# ```
 
-Build all:
-```
-cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release
-```
+# Build all:
+# ```
+# cargo build --manifest-path vendor/irontology-mcp/Cargo.toml --release
+# ```
 
 
-[b00t.services.action_runner]
-local  = "wrkflw"
-remote = "github-actions"
+# [b00t.services.action_runner]
+# local  = "wrkflw"
+# remote = "github-actions"
 ## Security Considerations
 
-- Retrieval engine handles potentially sensitive code from indexed repos
-- Fusion retrieval combines local and remote embeddings — data stays local
-  by default
-- MCP transport over stdio; no network port exposure by default
+# - Retrieval engine handles potentially sensitive code from indexed repos
+# - Fusion retrieval combines local and remote embeddings — data stays local
+#   by default
+# - MCP transport over stdio; no network port exposure by default
