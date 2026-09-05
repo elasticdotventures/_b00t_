@@ -1,0 +1,74 @@
+# b00t Repo Datum — philippemerle/KubeDiagrams
+# 🤓 Kubernetes architecture diagram generator: a stream of k8s API objects as YAML
+#    (raw manifests, `kubectl get -o yaml`, `helm template`, `kubectl kustomize`,
+#    `helmfile template`, live cluster) → png/svg/pdf/dot/dot_json/d2/mermaid/drawio.
+#    Python 3.9+, mingrammer/diagrams → Graphviz. Apache-2.0. Actively maintained
+#    (~2.7k stars, releases every ~4-6 weeks; INRIA / IEEE VISSOFT lineage).
+#    Container philippemerle/kubediagrams, `kubectl-diagrams` plugin, GitHub Action.
+# 🤓 The whole resource→node/edge mapping is one declarative file, bin/kube-diagrams.yaml
+#    (~1050 lines): `nodes:` keyed "Kind/apiGroup/version" → icon + an embedded Python
+#    `edges:` snippet calling a fixed helper library (add_owned_resources,
+#    add_edges_for_service, add_all_volume_resources, add_service_account, add_role,
+#    add_ingress_and_egress_rules, add_webhooks, add_edge_to<jsonpath>, …). ~51 kinds +
+#    the full Gateway API. CRDs are added via a `-c` config.
+# 🤓 Only ~6 semantic edge kinds at render time — OWNER, CONTROLLED_BY, SELECTOR,
+#    REFERENCE (overloaded catch-all), COMMUNICATION (NetworkPolicy), DEPENDENCE. The
+#    specific relation (volume mount vs env ref vs PVC↔PV bind vs ingress→service)
+#    survives only as the JSONPath string at each add_edge_to call site.
+# 🚩 `-c` config files run arbitrary Python (exec()). Never expose `-c` to untrusted
+#    input in a service; run the subprocess sandboxed (rootless, no network, ro FS).
+# 🤓 kr0ki's posture (kr0ki docs/EVAL-kubediagrams.md): (b) PORT kube-diagrams.yaml's
+#    GVK→relationship ruleset into kr0ki's box-3 Kubernetes pattern recognizer,
+#    keeping the per-JSONPath distinction → the 25 canonical ufo_types::UfoRelation
+#    kinds (OWNER/CONTROLLED_BY/SELECTOR map 1:1 to has_part/controls/selects); plus
+#    (c) keep KubeDiagrams as a CI topology-recall oracle over its examples/ corpus.
+#    (a) a sandboxed KubeDiagramsBackend (k8s YAML → SVG) is a valid P0 fast-path LEAF
+#    feature but bypasses the UFO-graph pipeline — hash dot_json, pin Graphviz.
+# 🤓 Companion: philippemerle/Awesome-Kubernetes-Architecture-Diagrams (CC0) — the
+#    landscape survey. Nothing on it maps k8s → SysML/KerML/UFO/RDF; kubectl-graph
+#    (steveteuber) is the nearest prior art (k8s → typed property graph, Cypher/AQL).
+
+[b00t]
+name = "kubediagrams"
+type = "repo"
+type_tags = ["reference"]
+hint = "Kubernetes manifests / Helm / kustomize / live cluster → architecture diagram (png/svg/dot/dot_json/d2/mermaid/drawio). Python + mingrammer/diagrams → Graphviz, Apache-2.0. kr0ki's k8s recognizer prior art + CI topology oracle + optional sandboxed fast-path render backend."
+keywords = ["kubernetes", "k8s", "iac", "diagram", "architecture", "graphviz", "helm", "kustomize", "manifest", "kr0ki"]
+
+[b00t.source]
+url = "https://github.com/philippemerle/KubeDiagrams"
+
+[b00t.repo]
+description = "Generate Kubernetes architecture diagrams from manifest files, kustomize, Helm charts, helmfile, or an actual cluster. The GVK→relationship ruleset (bin/kube-diagrams.yaml) is the prior art for kr0ki's Kubernetes pattern recognizer; the tool itself is a CI topology-recall oracle and an optional sandboxed fast-path k8s render backend."
+license = "Apache-2.0"
+topics = ["kubernetes", "diagrams", "graphviz", "helm", "kustomize", "architecture", "iac"]
+# ⚠️ verify: v0.8.0 (2026-07-08), v0.9.0 dev head as of 2026-09. PyPI: KubeDiagrams.
+#    Container docker.io/philippemerle/kubediagrams. Deps: diagrams (MIT), pygraphviz
+#    (BSD-3), PyYAML (MIT), graphviz2drawio (MIT), Graphviz (EPL-1.0).
+
+[[b00t.references]]
+name = "kr0ki EVAL-kubediagrams — backend (leaf) vs recognizer prior art vs oracle"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/EVAL-kubediagrams.md"
+
+[[b00t.references]]
+name = "kr0ki PATTERNS-kubernetes — the box-3 recognizer this ruleset is ported into"
+url = "https://github.com/PromptExecution/kr0ki/blob/main/docs/PATTERNS-kubernetes.md"
+
+[[b00t.references]]
+name = "Awesome-Kubernetes-Architecture-Diagrams (CC0) — the landscape survey"
+url = "https://github.com/philippemerle/Awesome-Kubernetes-Architecture-Diagrams"
+
+[[b00t.references]]
+name = "kubectl-graph — nearest prior art: k8s → typed property graph (Cypher/AQL)"
+url = "https://github.com/steveteuber/kubectl-graph"
+
+[[b00t.references]]
+name = "KubeDiagrams homepage (INRIA)"
+url = "https://kubediagrams.lille.inria.fr/"
+
+# b00t:map v1
+# summary: Kubernetes YAML/Helm/kustomize/cluster → architecture diagram (Graphviz); its kube-diagrams.yaml GVK→relationship ruleset is kr0ki's k8s recognizer prior art; also a CI topology oracle + optional sandboxed fast-path render backend
+# tags: reference, kubernetes, k8s, iac, diagram, graphviz, helm, kustomize, kr0ki, pattern-recognizer
+# tier: sm0l
+# cmds: b00t-cli datum show kubediagrams.repo
+# complexity: 3
