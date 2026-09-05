@@ -429,3 +429,16 @@ slash-b00t:
     #!/usr/bin/env bash
     set -euo pipefail
     bash _b00t_/scripts/slash-b00t.sh
+
+# ─── Agent-Doctor (BD-001..005) ──────────────────────────────────────────────
+# Census + probe + fix + register for _b00t_/*.agent.toml local-inference agents.
+# See docs/hive-resilience-wiki/Agent-Doctor.md
+
+agent-doctor:
+    ./scripts/b00t-agent-doctor.py --check
+
+agent-doctor-fix:
+    ./scripts/b00t-agent-doctor.py --check --fix
+
+agent-register:
+    ./scripts/b00t-agent-doctor.py --check --register
