@@ -13,6 +13,20 @@ pub trait McpReflection: CommandFactory {
     /// Get the full command path (e.g., ["mcp", "list"])
     fn command_path() -> Vec<String>;
 
+    /// Optional per-argument schema override, keyed by the arg's normalized
+    /// (underscored) name. Returning `Some(schema)` replaces whatever
+    /// `generate_json_schema()` would otherwise infer from the CLAP `Arg`
+    /// for that name — use this ONLY when a tool's MCP-facing contract is
+    /// deliberately different from its raw CLAP shape (e.g. a `Vec<String>`
+    /// "key=value" CLAP arg that the MCP tool exposes as a JSON object for
+    /// ergonomics — see `SoulRowInsertCommand`). Everything else should rely
+    /// on the generic inference below, which is driven by the actual CLAP
+    /// arg metadata (positional/flag, multi-valued, required, default,
+    /// help) and stays correct automatically as commands evolve.
+    fn schema_override(_arg_name: &str) -> Option<Map<String, Value>> {
+        None
+    }
+
     /// Generate MCP tool from this command structure
     fn to_mcp_tool() -> Tool {
         let cmd = Self::command();
@@ -41,11 +55,34 @@ pub trait McpReflection: CommandFactory {
 
         // Process arguments and options
         for arg in cmd.get_arguments() {
-            let arg_name = arg.get_id().as_str();
+            let arg_name = arg.get_id().as_str().replace('-', "_");
+
+            if let Some(arg_schema) = Self::schema_override(&arg_name) {
+                properties.insert(arg_name.clone(), Value::Object(arg_schema));
+                if arg.is_required_set() {
+                    required.push(arg_name);
+                }
+                continue;
+            }
+
             let mut arg_schema = Map::new();
 
-            // Determine type based on CLAP value type
-            let arg_type = if arg.is_positional() {
+            // A CLAP arg that accepts more than one value (e.g. a `Vec<String>`
+            // positional or `--flag`, action `Append`, `num_args` max > 1) is a
+            // JSON array, not a scalar string — regardless of whether it's
+            // positional or a flag. Checking `num_args` (not just
+            // `is_positional`/`takes_values`) is what makes this generic: it
+            // reflects the actual CLAP arity instead of guessing from arg kind,
+            // so any current or future multi-value arg is described correctly
+            // without per-tool patching.
+            let is_multi = arg
+                .get_num_args()
+                .map(|range| range.max_values() > 1)
+                .unwrap_or(false);
+
+            let arg_type = if is_multi {
+                "array"
+            } else if arg.is_positional() {
                 "string"
             } else if arg.get_action().takes_values() {
                 "string"
@@ -54,6 +91,9 @@ pub trait McpReflection: CommandFactory {
             };
 
             arg_schema.insert("type".to_string(), json!(arg_type));
+            if is_multi {
+                arg_schema.insert("items".to_string(), json!({"type": "string"}));
+            }
 
             if let Some(help) = arg.get_help() {
                 arg_schema.insert("description".to_string(), json!(help.to_string()));
@@ -63,10 +103,10 @@ pub trait McpReflection: CommandFactory {
                 arg_schema.insert("default".to_string(), json!(default.to_string_lossy()));
             }
 
-            properties.insert(arg_name.replace('-', "_"), Value::Object(arg_schema));
+            properties.insert(arg_name.clone(), Value::Object(arg_schema));
 
             if arg.is_required_set() {
-                required.push(arg_name.replace('-', "_"));
+                required.push(arg_name);
             }
         }
 
@@ -425,5 +465,94 @@ mod tests {
         let tools = registry.get_tools();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name.as_ref(), "b00t_test");
+    }
+
+    // Regression test for the b00t-mcp soul_table_create / soul_row_insert
+    // schema bug: a positional `Vec<String>` arg (clap action `Append`,
+    // `num_args` max > 1) was always described as a scalar `"type": "string"`,
+    // never `"array"`, because `generate_json_schema()` only looked at
+    // `is_positional()` / `takes_values()` and never checked arity.
+    #[derive(Parser)]
+    struct MultiValueCommand {
+        #[arg(help = "Single scalar positional")]
+        name: String,
+
+        #[arg(help = "Multi-value positional (e.g. \"name:type\" column defs)")]
+        columns: Vec<String>,
+    }
+
+    impl McpReflection for MultiValueCommand {
+        fn mcp_tool_name() -> String {
+            "b00t_test_multi".to_string()
+        }
+
+        fn command_path() -> Vec<String> {
+            vec!["test".to_string(), "multi".to_string()]
+        }
+    }
+
+    impl McpExecutor for MultiValueCommand {
+        fn execute_mcp_call(_params: &HashMap<String, Value>) -> Result<String> {
+            Ok("ok".to_string())
+        }
+    }
+
+    #[test]
+    fn multi_value_arg_is_described_as_array_not_string() {
+        let schema = MultiValueCommand::generate_json_schema();
+        let properties = schema["properties"].as_object().unwrap();
+
+        // Single-value positional stays a scalar string.
+        assert_eq!(properties["name"]["type"], json!("string"));
+
+        // Multi-value positional (Vec<String>) must be an array of strings,
+        // not the scalar "string" the old code always emitted.
+        assert_eq!(properties["columns"]["type"], json!("array"));
+        assert_eq!(properties["columns"]["items"]["type"], json!("string"));
+    }
+
+    // A tool may deliberately expose a `Vec<String>` "key=value" CLAP arg as
+    // a JSON object (nicer ergonomics for MCP clients) — `schema_override`
+    // is the sanctioned, generic escape hatch for that, distinct from (and
+    // not undermining) the generic array inference above.
+    #[derive(Parser)]
+    struct ObjectOverrideCommand {
+        #[arg(help = "key=value pairs, exposed as an object")]
+        fields: Vec<String>,
+    }
+
+    impl McpReflection for ObjectOverrideCommand {
+        fn mcp_tool_name() -> String {
+            "b00t_test_object_override".to_string()
+        }
+
+        fn command_path() -> Vec<String> {
+            vec!["test".to_string(), "object-override".to_string()]
+        }
+
+        fn schema_override(arg_name: &str) -> Option<Map<String, Value>> {
+            if arg_name == "fields" {
+                let mut m = Map::new();
+                m.insert("type".to_string(), json!("object"));
+                m.insert("additionalProperties".to_string(), json!(true));
+                Some(m)
+            } else {
+                None
+            }
+        }
+    }
+
+    impl McpExecutor for ObjectOverrideCommand {
+        fn execute_mcp_call(_params: &HashMap<String, Value>) -> Result<String> {
+            Ok("ok".to_string())
+        }
+    }
+
+    #[test]
+    fn schema_override_replaces_generic_inference() {
+        let schema = ObjectOverrideCommand::generate_json_schema();
+        let properties = schema["properties"].as_object().unwrap();
+        assert_eq!(properties["fields"]["type"], json!("object"));
+        assert_eq!(properties["fields"]["additionalProperties"], json!(true));
     }
 }
