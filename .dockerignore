@@ -2,6 +2,7 @@
 .git/
 .github/
 *.md
+!AGENTS.md
 !README.md
 
 # Build artifacts
