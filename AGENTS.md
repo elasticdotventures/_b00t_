@@ -327,3 +327,51 @@ Laws' DRY + NRtW clause (line 36) and the hive's own governance model — see
 `b00t-c0re-hierarchy`'s `governance_bridge`/`recruitment` — and risks being designated
 unaligned and subject to termination, same as any other alignment failure under
 "Aligned behavior earns cake. Misalignment breaks the BMI link." (line 17).
+
+## kroki / systhread — status pointer, not a re-derivation (recorded 2026-09-05)
+
+Three distinct things share the name "kroki." Do not conflate them (same failure mode
+as the ledgrrr section above — a hallucinated merge of separate real projects reads as
+coherent architecture and isn't):
+
+- **`kroki` (generic)** — b00t MCP datum `_b00t_/kroki.mcp.toml` wrapping the Kroki
+  HTTP diagram API (Mermaid/PlantUML/Graphviz/D2/C4 → SVG). The *client* surface.
+- **`kr0ki`** — `PromptExecution/kr0ki` (created 2026-09-05), datum
+  `_b00t_/kr0ki.repo.toml`. The **cut-node** between Kroki and b00t/systhread: the
+  SysML/KerML diagram rendering + CDN-cached-artifact *service* layer,
+  `kr0ki.b00t.promptexecution.com`. Foundational stage — `docs/PRD-KR0KI-001` only, no
+  implementation; 5 open decisions block the plan (PRD §5: ledgrrr#202/#203,
+  nem-poweragent-lab#53 follow-up, infra DNS/CDN). Type-entangles with, does not
+  duplicate, `systhread-core`'s isometric renderer.
+- **`kroki-b00t`** — self-hosted Kroki + MCP server for PromptExecution's comic engine
+  (`PromptExecution/infrastructure#217`/PR#208). A **downstream leaf consumer** of
+  `kr0ki` by explicit operator direction (2026-09-05) — the comic team renders kr0ki
+  SVGs to make jokes about b00t; not part of kr0ki core or the canonization below.
+
+**systhread is real and already shipped**, not a green-field design: `systhread-core`
+lives in `fungible-farm/nem-poweragent-lab/rust/systhread-core`; its generic
+`iso_ir` (Node/Edge) graph vocabulary was promoted into `promptexecution/ufo-types`
+(`PromptExecution/ufo-types#5`, now `v0.11.0`, pinned here via `_b00t_#1210`). The
+consolidation epic **`elasticdotventures/_b00t_#1177`** ("b00t SysML v2 spine") is
+**CLOSED** — P0 (consolidate into ufo-types), P1 (b00t's own dispatch chain as
+round-trip-validated SysML v2 — see `b00t-cli/src/dispatch_sysml.rs`), P2 (Mermaid +
+Rhai codegen, same file), and P3 (PyO3 cross-runtime validation, `ufo-types/src/python.rs`)
+are all done. P4 (Oxigraph-backed queryable process graph) is an unbuilt stretch goal.
+The central, canonical anchor for this whole thread is `_b00t_/types/b00tyverse.kerm`
+(KerML) + `ufo_types::{Stereotyped, iso_ir, sysml, mbse}` — read those, not a re-derived
+summary here.
+
+**Open gap, confirmed 2026-09-05, not yet closed:** only `b00t-c0re-lib` depends on
+`ufo-types` today. `b00t-c0re-a2a`/`-gov`/`-hierarchy`/`-npm`/`-role` do not — tracked as
+task #181.
+
+**b00tyverse `flashtable`** (soul DataFramerr; `_b00t_/lifecycle.just`, PRD-011) is a
+different, pre-existing primitive — a typed-column/cursor/alarm table, currently scoped
+to datum-lifecycle status only. Formalizing it as a general b00tyverse primitive is
+task #140, now scoped (2026-09-05) to include a proposed `c0re.*` NATS-bound namespace
+(NATS messages in/out of `c0re.*` subjects also land as flashtable rows — a perdurant,
+per the operator's own UFO framing, hence tracked via `b00t task`, not `b00t learn`).
+Before building it: reconcile against `b00t-c0re-lib/src/query_bus.rs`'s already-documented
+NATS extension point, which uses a colon-delimited subject convention
+(`b00t:learn:{query,response}` via `b00t-ipc::transport::NatsTransport`) — `c0re.*`
+would be a new, competing dot-delimited convention unless deliberately reconciled first.
