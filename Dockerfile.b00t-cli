@@ -71,6 +71,7 @@ COPY b00t-lsp/ ./b00t-lsp/
 COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-mcp-npm/ ./b00t-mcp-npm/
 COPY b00t-mermaid-wasm/ ./b00t-mermaid-wasm/
+COPY b00t-pgduck/ ./b00t-pgduck/
 COPY b00t-pyverse/ ./b00t-pyverse/
 COPY b00t-stt-serve/ ./b00t-stt-serve/
 COPY b00t-ui-wasm/ ./b00t-ui-wasm/
@@ -147,6 +148,7 @@ COPY b00t-lsp/ ./b00t-lsp/
 COPY b00t-mcp/ ./b00t-mcp/
 COPY b00t-mcp-npm/ ./b00t-mcp-npm/
 COPY b00t-mermaid-wasm/ ./b00t-mermaid-wasm/
+COPY b00t-pgduck/ ./b00t-pgduck/
 COPY b00t-pyverse/ ./b00t-pyverse/
 COPY b00t-stt-serve/ ./b00t-stt-serve/
 COPY b00t-ui-wasm/ ./b00t-ui-wasm/
@@ -180,6 +182,9 @@ FROM scratch AS b00t-resources
 # Copy _b00t_ configuration files and resources (datums, scripts, templates)
 # Includes: *.toml datums, scripts/, learn/, datum directories (bash.🐚, docker.🐳, etc.)
 COPY _b00t_/ /opt/b00t/config/
+# _b00t_/AGENT.md points at ../AGENTS.md; package its target alongside the
+# config tree so the symlink remains usable in the runtime image.
+COPY AGENTS.md /opt/b00t/AGENTS.md
 
 # ================================
 # Stage 5: b00t-cli Distribution Layer
