@@ -44,6 +44,13 @@ unlocks = [
 # 3. VENDOR/ SUBMODULES — assimilated forks. Fork-fix-forward doctrine:
 #    each fork exists to carry a fix or a b00t adaptation upstream, and its
 #    assimilation cost is sunk cake that pays out on every retrieval.
+#
+# 4. M0LTIS — the b00t ecosystem variant of moltis (upstream moltis-org/moltis).
+#    b00t's secure integrated alternative to OpenClaw and the hive's multi-channel
+#    human front-door (Slack/WhatsApp/Signal/telephony/voice — things b00t itself
+#    does not do). Assimilated fork today (vendor/moltis-b00t); graduating to its own
+#    sub-superproject workspace. Charter: assist upstream excellence, minimal fork
+#    delta, providers→agent/ai→ufo-types. Datum: _b00t_/m0ltis.repo.toml.
 
 # ── Platform Entries ──────────────────────────────────────────────────────────
 
@@ -141,11 +148,17 @@ production_cost_cake = 80
 retrieval_value_cake = 15
 
 [[b00t.map.entry]]
-name = "vendor/moltis-b00t"
-kind = "vendor-fork"
-contributes = ["soul-log", "moltis-integration"]
-production_cost_cake = 70
-retrieval_value_cake = 15
+name = "m0ltis"
+kind = "platform"
+owner = "PromptExecution"
+# 🤓 Promoted from vendor-fork 2026-09-07: m0ltis = moltis (upstream moltis-org/moltis,
+#    vendored at vendor/moltis-b00t) + b00t plugins. b00t's secure integrated alternative
+#    to OpenClaw and the hive's multi-channel human front-door. Graduating to its own
+#    sub-superproject workspace. Datum: _b00t_/m0ltis.repo.toml.
+contributes = ["human-front-door", "sandboxed-exec-tier", "durable-channel-cron", "acp-agent", "secure-openclaw-alternative", "soul-memory-backend", "provider-ufo-types-lowering"]
+anchors = ["_b00t_/m0ltis.repo.toml", "_b00t_/datums/VENDOR-MOLTIS-B00T.tomllmd", "_b00t_/moltis.agent.toml", "_b00t_/moltis-standing-tasks.hive.toml", "vendor/moltis-b00t", "docs/moltis-b00t-integration.md"]
+production_cost_cake = 320
+retrieval_value_cake = 55
 
 [[b00t.map.entry]]
 name = "vendor/pingap-devproxy-b00t"
@@ -159,7 +172,7 @@ retrieval_value_cake = 35
 [b00t.skill.recipes."b00tyverse-map::orient"]
 description = "Orient a fresh agent inside the portfolio graph"
 steps = [
-    "1. Read this map's entries; identify which current your task serves (tax-lawyer / doggolingo / harness / vendor)",
+    "1. Read this map's entries; identify which current your task serves (tax-lawyer / doggolingo / harness / m0ltis / vendor)",
     "2. git config -f .gitmodules --get-regexp path — live inventory of assimilated forks vs this map",
     "3. b00t-cli ontology sparql --subject <entry-name> --predicate all — walk the entry's type-graph neighbors",
     "4. Before writing anything new: does an entry already contribute this capability? (DRY+NRtW)",
@@ -186,8 +199,8 @@ composes_with = [
 ]
 
 # b00t:map v1
-# summary: b00tyverse portfolio graph — tax-lawyer platform, doggolingo client capability, assimilated vendor forks, cake (🎂) provenance per entry
-# tags: b00tyverse, portfolio, ecosystem, map, cake, provenance, tax-lawyer, doggolingo, vendor
+# summary: b00tyverse portfolio graph — tax-lawyer platform, doggolingo client capability, m0ltis (secure OpenClaw alternative / human front-door), assimilated vendor forks, cake (🎂) provenance per entry
+# tags: b00tyverse, portfolio, ecosystem, map, cake, provenance, tax-lawyer, doggolingo, m0ltis, openclaw-alternative, vendor
 # tier: frontier
 # cmds: b00t learn b00tyverse-map; git config -f .gitmodules --get-regexp path; b00t-cli ontology sparql --subject <entry>
 # complexity: 4
