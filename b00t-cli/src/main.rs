@@ -109,6 +109,7 @@ use b00t_cli::commands::{
     InitCommands,
     JobCommands,
     provider::ProviderCommands,
+    finetune_job::FinetuneCommands,
     K8sCommands,
     LifecycleCommands, McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, PythonCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
@@ -498,6 +499,13 @@ The system will:
     Provider {
         #[clap(subcommand)]
         provider_command: ProviderCommands,
+    },
+    #[clap(
+        about = "Generic fine-tuning job manifest runner — thin layer over ai-finetune.just (local/cloud dispatch, OCI-layer packaging, S3 push, AI datum registration)"
+    )]
+    Finetune {
+        #[clap(subcommand)]
+        finetune_command: FinetuneCommands,
     },
     #[clap(about = "Job workflow orchestration with checkpoints and sub-agents")]
     Job {
@@ -2581,6 +2589,17 @@ async fn main() {
             if let Err(e) =
                 b00t_cli::commands::provider::handle_provider_command(provider_command.clone())
                     .await
+            {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Finetune { finetune_command }) => {
+            if let Err(e) = b00t_cli::commands::finetune_job::handle_finetune_command(
+                finetune_command,
+                &cli.path,
+            )
+            .await
             {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
