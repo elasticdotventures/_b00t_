@@ -1,0 +1,121 @@
+name: moltis upstream sync (stage 2 — submodule bump)
+
+# Two-stage moltis → m0ltis upstream sync. See docs/moltis-b00t-integration.md.
+#
+#   stage 1 (in the fork, elasticdotventures/moltis-b00t):
+#     docs/moltis/fork-upstream-sync.yml merges moltis-org/main → fork main via PR.
+#   stage 2 (this workflow, in _b00t_):
+#     when the fork's main is ahead of the pinned vendor/moltis-b00t SHA, open a
+#     submodule-bump PR here. Merging it triggers datum-validate-graph.yml.
+#
+# "system normal" tracks the fork's main (nightly-equivalent). The PR body also
+# reports the latest upstream dated release (LTS-equivalent) for conservative pins.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'   # Monday 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: moltis-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout _b00t_ (no recursive submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      - name: Resolve pinned vs fork-main SHAs
+        id: sha
+        run: |
+          set -euo pipefail
+          pinned="$(git ls-tree HEAD vendor/moltis-b00t | awk '{print $3}')"
+          fork_main="$(git ls-remote https://github.com/elasticdotventures/moltis-b00t.git refs/heads/main | awk '{print $1}')"
+          echo "pinned=$pinned"     >> "$GITHUB_OUTPUT"
+          echo "fork_main=$fork_main" >> "$GITHUB_OUTPUT"
+          if [ "$pinned" = "$fork_main" ]; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Nothing to do
+        if: steps.sha.outputs.up_to_date == 'true'
+        run: echo "vendor/moltis-b00t already pinned at fork main (${{ steps.sha.outputs.pinned }})"
+
+      - name: Compute commit range + upstream release delta
+        if: steps.sha.outputs.up_to_date == 'false'
+        id: delta
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          git clone --quiet --filter=blob:none https://github.com/elasticdotventures/moltis-b00t.git "$work/fork"
+          git -C "$work/fork" remote add upstream https://github.com/moltis-org/moltis.git
+          git -C "$work/fork" fetch --quiet --tags upstream
+          range="$(git -C "$work/fork" log --oneline --no-decorate \
+            ${{ steps.sha.outputs.pinned }}..${{ steps.sha.outputs.fork_main }} | head -80)"
+          count="$(git -C "$work/fork" rev-list --count \
+            ${{ steps.sha.outputs.pinned }}..${{ steps.sha.outputs.fork_main }})"
+          latest_rel="$(git -C "$work/fork" tag --list --sort=-creatordate | head -1 || true)"
+          {
+            echo "count=$count"
+            echo "latest_rel=$latest_rel"
+            echo 'range<<RANGE'
+            echo "$range"
+            echo 'RANGE'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Stage submodule bump
+        if: steps.sha.outputs.up_to_date == 'false'
+        run: |
+          set -euo pipefail
+          git config user.name  "b00t CI Bot"
+          git config user.email "ci@promptexecution.com"
+          branch="chore/moltis-vendor-bump-$(date -u +%Y%m%d)"
+          git checkout -b "$branch"
+          # Bump the gitlink without a recursive submodule checkout.
+          git update-index --cacheinfo 160000,${{ steps.sha.outputs.fork_main }},vendor/moltis-b00t
+          git commit -m "chore(vendor): bump moltis-b00t ${{ steps.sha.outputs.pinned }} -> ${{ steps.sha.outputs.fork_main }} (${{ steps.delta.outputs.count }} commits)"
+          git push -u origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_ENV"
+
+      - name: Open submodule-bump PR
+        if: steps.sha.outputs.up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/body.md <<EOF
+          Automated stage-2 sync of the vendored moltis fork (\`vendor/moltis-b00t\`).
+
+          - pinned: \`${{ steps.sha.outputs.pinned }}\`
+          - fork main: \`${{ steps.sha.outputs.fork_main }}\` (${{ steps.delta.outputs.count }} commits ahead)
+          - latest upstream dated release (LTS-equivalent): \`${{ steps.delta.outputs.latest_rel }}\`
+
+          <details><summary>fork commit range</summary>
+
+          \`\`\`
+          ${{ steps.delta.outputs.range }}
+          \`\`\`
+          </details>
+
+          m0ltis charter: assist upstream excellence, minimal fork delta, providers→agent/ai→ufo-types.
+          See \`docs/moltis-b00t-integration.md\`. Merging this runs \`datum-validate-graph.yml\`.
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          EOF
+          gh pr create \
+            --title "chore(vendor): bump moltis-b00t (+${{ steps.delta.outputs.count }} upstream commits)" \
+            --body-file /tmp/body.md \
+            --base main \
+            --head "$branch" \
+            --label "vendor-drift" || echo "PR may already exist for $branch"

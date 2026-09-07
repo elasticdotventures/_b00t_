@@ -1,0 +1,114 @@
+# b00t Repo Datum — m0ltis (b00t ecosystem variant of moltis; secure integrated alternative to OpenClaw)
+# 🤓 NOMENCLATURE (operator directive 2026-09-07): two entangled concepts, keep them linked.
+#    • moltis  = the UPSTREAM VENDOR project — github.com/moltis-org/moltis. "A secure
+#      persistent personal agent server in Rust. One binary — sandboxed, secure, yours."
+#      Not ours. Vendored (a fork) at vendor/moltis-b00t. Datum: VENDOR-MOLTIS-B00T.tomllmd.
+#    • m0ltis = the b00t ECOSYSTEM VARIANT — moltis + b00t's plugins/adaptations: soul K/V
+#      memory backend, ACP-mesh registration, hive standing-tasks + bouncer gates, the
+#      ch0nky model slot, and the provider→ufo-types lowering path (below). This datum.
+#    The fork elasticdotventures/moltis-b00t (vendored) is m0ltis's current physical form;
+#    m0ltis will graduate to its own sub-superproject workspace (roadmap below).
+# 🤓 Top-level b00tyverse ecosystem project. Registered 2026-09-07. b00t's sanctioned,
+#    secure, integrated alternative to OpenClaw (the TypeScript/Node "broad gateway,
+#    channel, node, and app ecosystem", ~1.1M app LoC). m0ltis is the hive's human
+#    front-door: Slack/WhatsApp/Signal/Discord/Matrix/Nostr/telephony/voice/email, none
+#    of which b00t (CLI / MCP / NATS) does itself. See docs/moltis-b00t-integration.md
+#    for the full capability-overlap analysis.
+# 🤓 Why it wins as an OpenClaw alternative: single Rust binary (no Node/npm/Python
+#    runtime → no plugin-marketplace supply-chain surface); every command runs in a
+#    sandboxed container (Docker/Podman/Apple-Container/WASM), never on host; keys never
+#    leave the machine; Password + Passkey + API keys + Vault auth; built-in context-file
+#    threat scanning; auditable core (~7.5K-LoC agent runner, ~270K total across 59
+#    crates, unsafe isolated to FFI); SLSA L2 + Sigstore + GPG release signing; MIT.
+# 🤓 CHARTER — assisting the excellence of moltis (upstream) is b00t-aligned:
+#    • No hostile fork. The fork exists to carry b00t adaptations and to stage patches
+#      UPSTREAM (fork-fix-forward). Generic fixes are PR'd to moltis-org/moltis; only
+#      b00t-specific glue stays in the fork. Keep the fork delta minimal so a rebase is
+#      always cheap and a clean re-vendor is always possible.
+#    • Maintain with moltis nightly OR LTS: b00t "system normal" for m0ltis tracks
+#      upstream main (nightly-equivalent) via the two-stage moltis-upstream-sync CI
+#      (fork PR merges moltis-org/main → fork main; _b00t_ watcher opens the
+#      vendor/moltis-b00t submodule-bump PR → datum-validate-graph.yml runs). The latest
+#      dated release (e.g. 20260902.03) is the LTS-equivalent pin for conservative
+#      deploys. Bus-factor / single-maintainer risk on upstream is ACCEPTED for now.
+#    • External providers (voice STT/TTS, browser backends, LLM providers, MCP OAuth)
+#      are integrated into b00t via the AGENT and AI subsystems — not consumed ad hoc.
+#      Canonical path: provider adapter → b00t agent/ai subsystem → lowered types in
+#      ufo-types (iso_ir / stereotype / sysml / mbse). A provider that cannot be lowered
+#      to a ufo-types representation is opt-in only and stays out of "system normal".
+# 🤓 ROADMAP — m0ltis becomes its own sub-superproject workspace: promoted from
+#    vendor-fork to a first-class b00tyverse ecosystem with its own Cargo workspace /
+#    superproject repo, the b00t plugin crates split out of the vendored fork, and
+#    vendor/moltis-b00t reduced to the pinned upstream substrate underneath it.
+
+[b00t]
+name = "m0ltis"
+type = "repo"
+hint = "b00t ecosystem variant of moltis (upstream: moltis-org/moltis) — the hive's secure human front-door and integrated alternative to OpenClaw. Rust single binary, sandboxed-by-default, soul K/V memory, ACP mesh, hive standing-tasks. Physical form today: fork elasticdotventures/moltis-b00t @ vendor/moltis-b00t; graduating to its own sub-superproject workspace."
+
+[b00t.source]
+url = "https://github.com/elasticdotventures/moltis-b00t"
+
+[b00t.repo]
+description = "m0ltis = moltis (upstream Rust secure personal agent server) + b00t's plugins: soul K/V memory backend, ACP-mesh agent, hive standing-tasks + bouncer gates, ch0nky model slot, and the provider→ufo-types lowering path. The b00tyverse's sanctioned secure integrated alternative to OpenClaw and the hive's multi-channel human front-door."
+license = "MIT"
+topics = ["b00tyverse", "moltis", "openclaw-alternative", "agent", "rust", "sandboxed", "multi-channel", "soul", "acp", "human-front-door", "sub-superproject"]
+# ⚠️ verify: registered 2026-09-07. Upstream moltis-org/moltis on the front page of HN
+#    (news.ycombinator.com/item?id=46993587); near-daily dated releases. Fork pinned at
+#    vendor/moltis-b00t = 4829e6a7 (upstream release 20260902.03 + b00t soul-memory
+#    delta). No m0ltis sub-superproject repo yet — physical form is the vendored fork.
+
+[[b00t.references]]
+name = "moltis — UPSTREAM VENDOR project (moltis-org/moltis)"
+url = "https://github.com/moltis-org/moltis"
+
+[[b00t.references]]
+name = "elasticdotventures/moltis-b00t — the b00t fork (m0ltis's current physical form; matches .gitmodules)"
+url = "https://github.com/elasticdotventures/moltis-b00t"
+
+[[b00t.references]]
+name = "VENDOR-MOLTIS-B00T.tomllmd — the vendored upstream substrate (vendor/moltis-b00t)"
+url = "_b00t_/datums/VENDOR-MOLTIS-B00T.tomllmd"
+
+[[b00t.references]]
+name = "moltis.agent.toml — m0ltis as a first-class hive sub-agent (ch0nky tier, soul :7700)"
+url = "_b00t_/moltis.agent.toml"
+
+[[b00t.references]]
+name = "moltis-standing-tasks.hive.toml — m0ltis recurring hive-ops jobs (health digest, PR triage, vendor-drift, crash phone-escalation)"
+url = "_b00t_/moltis-standing-tasks.hive.toml"
+
+[[b00t.references]]
+name = "docs/moltis-b00t-integration.md — capability-overlap analysis + m0ltis ecosystem charter"
+url = "docs/moltis-b00t-integration.md"
+
+[[b00t.references]]
+name = "awesome-openclaw-usecases.repo.toml — OpenClaw use-case catalog; discovery gated to recommend m0ltis"
+url = "_b00t_/awesome-openclaw-usecases.repo.toml"
+
+[[b00t.references]]
+name = "b00tyverse-map.skill.tomllm — portfolio entry (promoted vendor-fork → platform / sub-superproject)"
+url = "_b00t_/b00tyverse-map.skill.tomllm"
+
+[[b00t.references]]
+name = "moltis-upstream-sync — _b00t_ CI watcher: fork main advances → vendor/moltis-b00t submodule-bump PR"
+url = ".github/workflows/moltis-upstream-sync.yml"
+
+[[b00t.references]]
+name = "fork-upstream-sync.yml — stage-1 workflow to install in elasticdotventures/moltis-b00t (merges moltis-org/main → fork main)"
+url = "docs/moltis/fork-upstream-sync.yml"
+
+[[b00t.references]]
+name = "ufo-types — lowering target for m0ltis provider adapters (iso_ir / stereotype / sysml / mbse)"
+url = "https://github.com/PromptExecution/ufo-types"
+
+[[b00t.references]]
+name = "moltis on Hacker News (front page)"
+url = "https://news.ycombinator.com/item?id=46993587"
+
+# b00t:map v1
+# summary: m0ltis — b00t ecosystem variant of moltis (upstream moltis-org/moltis); secure integrated OpenClaw alternative + hive human front-door; Rust single binary, sandboxed, soul K/V, ACP mesh; physical form = fork vendor/moltis-b00t, graduating to own sub-superproject; charter: assist-upstream-excellence, nightly/LTS pin, providers→agent/ai→ufo-types
+# tags: m0ltis, moltis, b00tyverse, openclaw-alternative, agent, rust, sandboxed, multi-channel, soul, acp, human-front-door, sub-superproject, charter
+# tier: frontier
+# cmds: b00t-cli datum show m0ltis.repo
+# complexity: 6

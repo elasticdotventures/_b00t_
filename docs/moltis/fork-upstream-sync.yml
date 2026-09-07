@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# INSTALL THIS FILE IN THE FORK, NOT IN _b00t_.
+#
+#   target: elasticdotventures/moltis-b00t/.github/workflows/upstream-sync.yml
+#
+# Stage 1 of the two-stage moltis → m0ltis sync (see _b00t_/docs/moltis-b00t-integration.md
+# and _b00t_/.github/workflows/moltis-upstream-sync.yml for stage 2).
+#
+# This workflow merges moltis-org/moltis:main into the fork's main via a PR, so the
+# b00t-specific delta on the fork (soul memory adapter, etc.) is replayed on top of
+# fresh upstream on a schedule. Keep the fork delta small — generic fixes go UPSTREAM.
+# ─────────────────────────────────────────────────────────────────────────────
+name: upstream sync (moltis-org/main -> fork main)
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # Monday 05:00 UTC — ahead of _b00t_ stage 2 (07:00)
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'upstream ref to merge (default: main; use a dated release tag for an LTS pin)'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name  "moltis-b00t sync bot"
+          git config user.email "ci@promptexecution.com"
+          git remote add upstream https://github.com/moltis-org/moltis.git
+          git fetch --quiet --tags upstream
+          ref='${{ github.event.inputs.ref }}'
+          ref="${ref:-main}"
+          target="upstream/${ref}"
+          git rev-parse --verify "refs/tags/${ref}" >/dev/null 2>&1 && target="refs/tags/${ref}"
+          base="$(git rev-parse HEAD)"
+          head="$(git rev-parse "$target")"
+          if [ "$base" = "$head" ] || git merge-base --is-ancestor "$head" "$base"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "fork main already contains ${target}"
+            exit 0
+          fi
+          branch="sync/upstream-$(date -u +%Y%m%d)"
+          git checkout -b "$branch"
+          if ! git merge --no-ff --no-edit "$target" -m "Merge ${target} into main (automated upstream sync)"; then
+            echo "changed=conflict" >> "$GITHUB_OUTPUT"
+            git merge --abort || true
+            git checkout "$branch" 2>/dev/null || git checkout -b "$branch"
+            git merge --no-commit --no-ff "$target" || true
+            git add -A
+            git commit -m "Merge ${target} into main (CONFLICTS — needs human resolution)" || true
+          fi
+          git push -u origin "$branch"
+          {
+            echo "changed=true"
+            echo "branch=$branch"
+            echo "count=$(git rev-list --count "${base}..HEAD")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open sync PR
+        if: steps.merge.outputs.changed == 'true' || steps.merge.outputs.changed == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          note=""
+          [ "${{ steps.merge.outputs.changed }}" = "conflict" ] && note="⚠️ **merge conflicts** — resolve before merging."
+          gh pr create \
+            --title "Merge upstream moltis-org/main into fork main ($(date -u +%Y-%m-%d))" \
+            --body "Automated stage-1 upstream sync. ${note}
+
+          Replays the b00t fork delta on top of fresh \`moltis-org/moltis\`. After this
+          merges, the \`_b00t_\` \`moltis-upstream-sync\` watcher opens the
+          \`vendor/moltis-b00t\` submodule-bump PR.
+
+          Keep the fork delta minimal — generic fixes belong upstream (fork-fix-forward)." \
+            --base main --head "${{ steps.merge.outputs.branch }}" || echo "PR may already exist"

@@ -1,4 +1,7 @@
-# b00t Agent Datum — moltis as first-class hive sub-agent
+# b00t Agent Datum — m0ltis as first-class hive sub-agent
+# 🤓 NOMENCLATURE: moltis = upstream vendor project (moltis-org/moltis); m0ltis = the
+#    b00t ecosystem variant (this agent + b00t plugins). Top-level datum:
+#    _b00t_/m0ltis.repo.toml. Vendored substrate: _b00t_/datums/VENDOR-MOLTIS-B00T.tomllmd.
 # 🤓 moltis is a Rust-native binary from vendor/moltis-b00t submodule
 #    Repo: elasticdotventures/moltis-b00t (submodule; matches .gitmodules; fork of moltis-org/moltis)
 #    Soul/memory backend: b00t soul serve HTTP K/V on :7700
@@ -136,7 +139,7 @@ command = "systemctl --user stop b00t@moltis-agent.service"
 
 # b00t:map v1
 # summary: moltis Rust-native claw — sandboxed, secure, auditable; voice+memory+MCP+multi-channel; soul K/V :7700; ch0nky :8001
-# tags: moltis, agent, rust, soul, kv, memory, mcp-tools, voice, multi-channel, ch0nky, hive
+# tags: m0ltis, moltis, agent, rust, soul, kv, memory, mcp-tools, voice, multi-channel, ch0nky, hive
 # tier: ch0nky
 # cmds: just moltis-build | just moltis-run | just moltis-soul-test
 # complexity: 6
