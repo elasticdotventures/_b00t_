@@ -192,12 +192,12 @@ pub fn parse_final_train_loss(log_text: &str) -> Result<f64> {
             .with_context(|| "trainer_state.json has no usable \"log_history\" array")?;
         for entry in history.iter().rev() {
             if let Some(loss) = entry.get("train_loss").and_then(|x| x.as_f64()) {
-                return Ok(loss);
+                return ensure_finite_loss(loss);
             }
         }
         for entry in history.iter().rev() {
             if let Some(loss) = entry.get("loss").and_then(|x| x.as_f64()) {
-                return Ok(loss);
+                return ensure_finite_loss(loss);
             }
         }
         bail!("trainer_state.json's log_history has no \"train_loss\" or \"loss\" entry");
@@ -215,6 +215,7 @@ pub fn parse_final_train_loss(log_text: &str) -> Result<f64> {
     last_train_loss
         .or(last_loss)
         .context("no 'loss' or 'train_loss' value found in training log text")
+        .and_then(ensure_finite_loss)
 }
 
 /// Extracts a numeric value following `'key':` or `"key":` in one log line.
@@ -235,6 +236,17 @@ fn extract_dict_key_f64(line: &str, key: &str) -> Option<f64> {
         }
     }
     None
+}
+
+/// A diverged training run reports `train_loss: nan` (or `inf`); Rust's
+/// `f64::from_str` and `serde_json` both accept those, so every value that
+/// leaves `parse_final_train_loss` is funnelled through this check — a
+/// non-finite loss is a failed run, not a comparable score that silently wins.
+fn ensure_finite_loss(loss: f64) -> Result<f64> {
+    if !loss.is_finite() {
+        bail!("training run diverged: final loss is {loss} (not finite) \u{2014} no comparable score");
+    }
+    Ok(loss)
 }
 
 // ── Phase 2: comparison — pure, independently unit-testable from dispatch ──
@@ -713,6 +725,23 @@ mirror_to_hf = true
         assert!(parse_final_train_loss(json).is_err());
     }
 
+    #[test]
+    fn rejects_diverged_run_nan_dict_repr() {
+        // exactly what transformers.Trainer prints for a diverged run
+        let log = "{'train_runtime': 12.3, 'train_loss': nan, 'epoch': 1.0}";
+        let err = parse_final_train_loss(log).unwrap_err().to_string();
+        assert!(err.contains("diverged"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_diverged_run_inf_dict_repr() {
+        let log = "{'loss': 2.0, 'epoch': 0.5}\n{'train_loss': inf, 'epoch': 1.0}";
+        assert!(
+            parse_final_train_loss(log).is_err(),
+            "an infinite train_loss must not parse as a valid score"
+        );
+    }
+
     // ── compare_results / build_race_report ─────────────────────────────
 
     fn result_with_loss(label: &str, loss: f64) -> RaceResult {
@@ -802,6 +831,21 @@ mirror_to_hf = true
         let manifest = FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
         let err = build_race_result("sm3lly-local", &manifest, "no loss here").unwrap_err();
         assert!(err.to_string().contains("sm3lly-local"));
+    }
+
+    #[test]
+    fn build_race_result_aborts_on_diverged_run() {
+        // A diverged competitor must fail here, before compare_results /
+        // finalize_race can package its adapter as the race winner.
+        let manifest =
+            FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
+        let diverged = "{'train_runtime': 1.0, 'train_loss': nan, 'epoch': 1.0}\n";
+        let err = build_race_result("sm3lly-local", &manifest, diverged).unwrap_err();
+        assert!(err.to_string().contains("sm3lly-local"), "got: {err}");
+        assert!(
+            format!("{err:#}").contains("diverged"),
+            "root cause should be the divergence guard, got: {err:#}"
+        );
     }
 
     // ── finalize_race: end-to-end with mocked logs + fake adapter dirs ────
