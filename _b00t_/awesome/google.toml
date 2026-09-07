@@ -1,0 +1,64 @@
+# b00t awesome list — Google (GCP + Workspace) capability catalog for elastic.ventures.
+# Seeded 2026-09-07 from what was actually verified live this session, not a speculative
+# comprehensive listing — see GOOGLE-AWES0ME.tomllmd for status/growth process. Every entry
+# here has a concrete, checkable source; add entries only when verified, not assumed.
+
+[[capability]]
+category = "Identity/Org"
+use_case = "Google Cloud Organization"
+recommended = ["organizations/182343552845"]
+[capability.notes]
+"organizations/182343552845" = "elastic.ventures' GCP org ID — confirmed via cloudbilling.googleapis.com billingAccounts.get parent field."
+
+[[capability]]
+category = "Billing"
+use_case = "Cloud Billing"
+recommended = ["EV Amex (010CF0-14B757-AF79DC)"]
+[capability.notes]
+"EV Amex (010CF0-14B757-AF79DC)" = "The org's one billing account, currency AUD, shared by the promptexecution and app4dog projects (both billingEnabled=true). No BigQuery Billing Export configured yet as of 2026-09-07 — see infra's docs/gcp-billing-export-status.md."
+
+[[capability]]
+category = "Projects"
+use_case = "GCP Projects"
+recommended = ["promptexecution", "app4dog"]
+[capability.notes]
+"promptexecution" = "Primary infra project — terraform/google root, SPIRE workload identity federation, Entra-hub OIDC trust (google-oidc-entra.tf), BigQuery API enabled, zero BigQuery datasets."
+"app4dog" = "App project — has at least one Terraform-provisioned BigQuery dataset (lake_au_vic_melbourne, australia-southeast2)."
+
+[[capability]]
+category = "Identity/Federation"
+use_case = "Workload Identity Federation"
+recommended = ["aws-machine-pool", "entra-hub-pool"]
+[capability.notes]
+"aws-machine-pool" = "Existing pool federating an AWS IAM role (infra-machine-role) into GCP — confirmed via `gcloud auth list`. Depends on being ON an AWS EC2 instance (uses the 169.254.169.254 metadata service) — breaks on non-EC2 hosts like sm3lly."
+"entra-hub-pool" = "SPIRE-JWT -> Entra-federated -> GCP trust, built this session (terraform/google/google-oidc-entra.tf). Bound to spire-agent@promptexecution.iam.gserviceaccount.com, currently zero IAM permissions (scaffolding only). Live-tested end to end (STS token exchange + IAM Credentials impersonation both succeeded)."
+
+[[capability]]
+category = "Compute"
+use_case = "BigQuery"
+recommended = ["bigquery.googleapis.com"]
+[capability.notes]
+"bigquery.googleapis.com" = "Enabled on promptexecution. Target for the planned FOCUS billing-export ingestion pipeline (see infra's docs/gcp-billing-export-status.md and the dazzling-snuggling-bee plan)."
+
+[[capability]]
+category = "Compute"
+use_case = "Cloud Run"
+recommended = ["Cloud Run Jobs (planned, not yet deployed)"]
+[capability.notes]
+"Cloud Run Jobs (planned, not yet deployed)" = "Chosen shape for the GCP-hosted terragrunt/FOCUS-ingest workload — run-to-completion billing (no standing cost between runs), triggered by Cloud Scheduler. No google_cloud_run_v2_job resource exists anywhere in the monorepo yet."
+
+# --- Aspirational / not yet verified — do not treat as fact, confirm before relying on ---
+
+[[capability]]
+category = "Workspace"
+use_case = "Google Workspace (Gmail, Drive, Calendar) for elastic.ventures"
+recommended = ["unconfirmed"]
+[capability.notes]
+"unconfirmed" = "Referenced in conversation as eventually in scope for the g00gle delegation surface (personal/corporate inbox, Drive, etc.) — not yet surveyed. No datum, no API check performed. Fill in once actually investigated."
+
+[[capability]]
+category = "AI/ML"
+use_case = "Gemini"
+recommended = ["unconfirmed"]
+[capability.notes]
+"unconfirmed" = "GOOGLE_API_KEY confirmed present in this session's environment and used successfully (pydantic-ai + Gemini terragrunt demo, 2026-09-05/07), but no formal capability mapping of which Gemini models/quotas/billing this maps to exists yet."

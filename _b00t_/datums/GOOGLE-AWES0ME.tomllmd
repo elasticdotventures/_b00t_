@@ -1,0 +1,47 @@
+# b00t awesome-list datum — Google (GCP + Workspace) capability catalog for elastic.ventures.
+# 🤓 The "0" spelling ("awes0me", "g00gle") is the operator's own explicit b00t naming
+#    convention — not a typo. Distinct from the awesome-*.repo.toml pattern (e.g.
+#    awesome-openclaw-usecases.repo.toml), which references an EXTERNAL community list —
+#    this one is natively authored, cataloging elastic.ventures' OWN Google org/capability
+#    landscape, not a third-party repo.
+# 🤓 "g00gle" itself (as a concept, distinct from this catalog) is the b00t projection of
+#    Google Cloud + personal/corporate Google surfaces (Gmail, Drive, etc. for
+#    elastic.ventures) — see the "Future work / vision" section of the
+#    dazzling-snuggling-bee plan (infra repo work, 2026-09-07) for the larger,
+#    NOT-yet-built delegation-surface vision this catalog is meant to eventually support.
+# 🤓 Status: seed only. Every entry in awesome/google.toml as of first authoring has a
+#    concrete, session-verified source (billing account, projects, workload identity pools,
+#    enabled APIs) — the "Aspirational / not yet verified" section at the bottom of that
+#    file is explicitly marked as such, not conflated with verified fact. Grow this by
+#    adding verified entries, not by assuming Google's product surface.
+
+[b00t]
+name = "google-awes0me"
+type = "repo"
+hint = "b00t-native awesome-list catalog of Google Cloud + Workspace capabilities/mappings for elastic.ventures' org — not an external reference, actively grown as capabilities are verified"
+
+[b00t.source]
+vendor_path = "_b00t_/awesome/google.toml"
+
+[b00t.repo]
+description = "Structured [[capability]] catalog (category/use_case/recommended/notes) of Google org capabilities actually confirmed for elastic.ventures — billing account, projects, workload identity pools, enabled APIs, planned compute shape. Mirrors the existing awesome/rust.toml catalog's TOML shape."
+topics = ["awesome-list", "google-cloud", "gcp", "google-workspace", "capability-mapping", "b00tyverse", "g00gle"]
+
+[[b00t.references]]
+name = "awesome/rust.toml — the existing b00t awesome-list convention this mirrors"
+url = "_b00t_/awesome/rust.toml"
+
+[[b00t.references]]
+name = "infrastructure docs/gcp-billing-export-status.md — Phase 0 verification this catalog's Billing/Projects entries are sourced from"
+url = "infrastructure/docs/gcp-billing-export-status.md"
+
+[[b00t.references]]
+name = "dazzling-snuggling-bee plan — GCP-hosted terragrunt + FOCUS pipeline (approved 2026-09-07); its Future Work section is where the larger g00gle vision lives"
+url = "~/.claude/plans/dazzling-snuggling-bee.md"
+
+# b00t:map v1
+# summary: Native (not external-reference) awesome-list of elastic.ventures' verified Google Cloud + Workspace capabilities; seed-stage, grows as things get confirmed
+# tags: awesome-list, google, gcp, workspace, capability-mapping, g00gle, catalog
+# tier: sm0l
+# cmds: b00t-cli datum show google-awes0me.repo
+# complexity: 1
