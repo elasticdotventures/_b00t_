@@ -1,0 +1,18 @@
+# dstack server config — rendered by deploy_cp_node.py to
+# ~/.dstack/server/config.yml (0600). Plan gleaming-jingling-nygaard, Phase 3.
+#
+# GCP backend only. Auth is the control-node VM's attached service account via
+# the metadata server (`creds: type: default`) — no key file, no WIF for the
+# server. RunPod is DEFERRED (backup backend only); re-add a `- type: runpod`
+# block here + its --data guard in deploy_cp_node.py if it's ever needed.
+projects:
+  - name: {{ dstack_project }}
+    backends:
+      - type: gcp
+        project_id: {{ gcp_project_id }}
+        regions: [{{ gcp_region }}]
+        creds:
+          type: default
+        vm_service_account: {{ build_vm_sa_email }}
+{% if vpc_name %}        vpc_name: {{ vpc_name }}
+{% endif %}

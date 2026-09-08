@@ -1,0 +1,18 @@
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Derived by `just tf-render` (scripts/render-tfvars.py) from _b00t_.toml +
+# _b00t_/keyring.tomllm — regenerate, never hand-edit, never commit.
+generated.auto.tfvars.json
+
+# Local overrides (see .env.template)
+.env
+
+# Build artifacts (see `just clean`)
+node_modules/
+template/

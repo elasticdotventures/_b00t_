@@ -34,6 +34,10 @@ command = "mkdir -p ~/.cargo && echo '[build]' >> ~/.cargo/config.toml && echo '
 description = "Clear sccache cache"
 command = "sccache --clear"
 
+[[b00t.usage]]
+description = "b00t build plane remote box — set via dev-env env: (Phase 6)"
+command = "export RUSTC_WRAPPER=sccache SCCACHE_DIR=/mnt/cache/sccache SCCACHE_CACHE_SIZE=40G CARGO_INCREMENTAL=0 && sccache --start-server"
+
 [roles]
 required_for = ["developer"]
 optional_for = ["orchestrator"]

@@ -1,0 +1,41 @@
+# Build + push the prebaked b00t-build box image to Artifact Registry.
+# Plan gleaming-jingling-nygaard — replaces the fat dev-env init: toolchain
+# install. Keyless auth via WIF (see wif-smoke.yml).
+name: b00t-build-image
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 15 * * 1"   # weekly, Mondays 15:00 UTC — pick up toolchain updates
+  push:
+    branches: [main]
+    paths: ["containers/b00t-build/**", ".github/workflows/b00t-build-image.yml"]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: promptexecution
+          workload_identity_provider: projects/308167228204/locations/global/workloadIdentityPools/github-actions/providers/github-oidc
+          service_account: b00t-ci@promptexecution.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker australia-southeast1-docker.pkg.dev --quiet
+
+      - name: Build + push
+        run: |
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA::12}" \
+            -f containers/b00t-build/Containerfile containers/b00t-build
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA::12}"

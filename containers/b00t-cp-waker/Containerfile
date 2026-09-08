@@ -1,0 +1,16 @@
+# b00t-cp-waker — scale-to-zero dstack waker for Cloud Run.
+# Stdlib-only Python; no pip install, tiny image.
+FROM docker.io/library/python:3.12-slim
+
+# curl kept for debugging / manual readiness probes inside the container.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY waker.py /app/waker.py
+
+# Cloud Run injects PORT; default for local runs.
+ENV PORT=8080
+EXPOSE 8080
+
+ENTRYPOINT ["python", "/app/waker.py"]

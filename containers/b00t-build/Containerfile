@@ -1,0 +1,49 @@
+# b00t-build — prebaked build-box image for the dstack build plane.
+# Bakes the toolchain so the dev-env `init:` only has to: mount the cache,
+# clone the repo, start sccache. Cuts first-provision from ~10 min to ~2.
+#
+# Build + push (Artifact Registry, in-project so Cloud Run / dstack pull with
+# no extra IAM):
+#   podman build -t australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest -f Containerfile .
+#   podman push  australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+# Then point dev-env/b00t-build.dev-environment.yaml `image:` at it and trim init:.
+FROM docker.io/library/ubuntu:24.04
+
+ARG RUST_VERSION=stable
+ARG SCCACHE_VERSION=0.10.0
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PATH=/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin \
+    CARGO_HOME=/root/.cargo \
+    RUSTUP_HOME=/root/.rustup
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake clang lld pkg-config libssl-dev z3 \
+      protobuf-compiler git curl ca-certificates \
+      gnupg lsb-release fuse3 nfs-common \
+    && rm -rf /var/lib/apt/lists/*
+
+# rustup + stable
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+    && rustc --version
+
+# sccache + cargo-nextest — prebuilt (source builds are 10-20 min each)
+RUN curl -fsSL "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      | tar xz -C /tmp \
+    && install -m755 /tmp/sccache-*/sccache /usr/local/bin/sccache \
+    && curl -fsSL https://get.nexte.st/latest/linux | tar xz -C /tmp \
+    && install -m755 /tmp/cargo-nextest /usr/local/bin/cargo-nextest \
+    && rm -rf /tmp/sccache-* /tmp/cargo-nextest \
+    && sccache --version && cargo-nextest --version
+
+# gcsfuse (for the cache mount; needs privileged at run time for /dev/fuse)
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt gcsfuse-noble main" \
+      > /etc/apt/sources.list.d/gcsfuse.list \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+      | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && apt-get update && apt-get install -y --no-install-recommends gcsfuse \
+    && rm -rf /var/lib/apt/lists/* \
+    && gcsfuse --version
+
+WORKDIR /data

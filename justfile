@@ -1463,45 +1463,121 @@ frigate-status:
     journalctl --user -u frigate.service --no-pager -n 100 | grep -iE "teflon_tfl|No NPU was detected" || echo "  (no matching lines yet)"
 
 # 🥾 Standby cloud build server (GCP dstack dev-environment) — recipes only,
-# deliberately no new b00t-cli subcommand (YAGNI, ops tooling not a
-# feature). See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md
-# for the full design and dev-env/*.yaml for the actual dstack configs.
-# Requires the `dstack` CLI on PATH and a GCP backend already configured in
-# its config.yml (ambient Application Default Credentials — no secrets to
-# manage here).
+# deliberately no new b00t-cli subcommand (YAGNI, ops tooling not a feature).
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md +
+# plan gleaming-jingling-nygaard + dev-env/*.yaml.
+#
+# The dstack server runs on the GCP control node (Phase 3), NOT locally.
+# One-time on your workstation:
+#   dstack project add main \
+#     --url $(cd b00t-tf && tofu output -raw gcp_control_node_endpoint) \
+#     --token <server admin token from ~/.dstack/server/config.yml on the box>
+# That points the CLI at the waker, which powers the control node on first
+# call. Recipes below export DSTACK_PROJECT=main and begin by waking it.
 
-# Idempotent: applies the fleet then the volume then the dev-environment.
-# Run once before the first remote-push/remote-build/remote-test.
-remote-provision:
-    #!/bin/bash
+# dstack reads the project from $DSTACK_PROJECT. "main" is the server-side
+# project the control node auto-creates. `dstack --project` is a per-subcommand
+# option (NOT `dstack -p <name> <cmd>`), so relying on the env is cleanest.
+export DSTACK_PROJECT := "main"
+_CHECKOUT := "/data/b00t"
+
+# Wake the control plane: hit the waker until it answers, then confirm the
+# operator's local dstack project reaches the server. The control node
+# self-powers-off when idle, so this is the required preamble.
+remote-doctor:
+    #!/usr/bin/env bash
     set -euo pipefail
-    echo "🥾 provisioning b00t-build-fleet..."
+    URL="$(cd b00t-tf && tofu output -raw gcp_control_node_endpoint 2>/dev/null || true)"
+    if [ -n "$URL" ]; then
+      echo "🔔 waking control plane via $URL ..."
+      curl -sf --max-time 150 --retry 5 --retry-all-errors "$URL/_waker/health" >/dev/null \
+        && echo "✅ waker up (control node starting/awake)"
+    fi
+    dstack fleet >/dev/null 2>&1 || { echo "❌ dstack project '$DSTACK_PROJECT' not reachable — run: dstack project add --name $DSTACK_PROJECT --url $URL --token <server admin token>"; exit 1; }
+    echo "✅ remote-doctor: dstack '$DSTACK_PROJECT' reachable"
+
+# One-time: upload the read-only GitHub deploy key + cache password as
+# dstack secrets the dev-environment consumes. Run after `just gcp-apply`
+# + `deploy_cp_node.py`, before the first remote-provision.
+#   just remote-bootstrap ~/.ssh/b00t_build_deploy_key <cache-password>
+# 🤓 dstack 0.20.28: `dstack secret set NAME VALUE` (positional, no --file/-y).
+remote-bootstrap deploy_key_file cache_password: remote-doctor
+    dstack secret set b00t_build_deploy_key "$(cat {{deploy_key_file}})"
+    dstack secret set cache_password '{{cache_password}}'
+    @echo "✅ secrets set: b00t_build_deploy_key, cache_password"
+
+# Idempotent: fleet (nodes 0..2) then a per-branch dev-environment run named
+# `b00t-build-<branch>`. Two can run concurrently (one per fleet node); both
+# share the sccache-over-GCS cache. `branch` defaults to "dev".
+remote-provision branch="dev": remote-doctor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    RUN="b00t-build-{{branch}}"
+    echo "🥾 fleet b00t-build-fleet (nodes 0..2)..."
     dstack apply -f dev-env/b00t-build-fleet.yaml -y
-    echo "🥾 provisioning b00t-build-cache volume..."
-    dstack apply -f dev-env/b00t-build-cache.volume.yaml -y
-    echo "🥾 provisioning b00t-build dev-environment..."
-    dstack apply -f dev-env/b00t-build.dev-environment.yaml -y
-    echo "✅ b00t-build ready — ssh b00t-build, or: just remote-push <branch> && just remote-test <branch>"
+    echo "🥾 dev-environment $RUN ..."
+    dstack apply -f dev-env/b00t-build.dev-environment.yaml -n "$RUN" -y
+    dstack attach "$RUN" >/dev/null 2>&1 &
+    sleep 8
+    ssh -o ConnectTimeout=20 "$RUN" true && echo "✅ $RUN reachable"
+    echo "✅ $RUN ready — just remote-push {{branch}} && just remote-test {{branch}}"
 
 # Pushes local HEAD to a scratch branch on origin for the build box to fetch.
 # Git-native sync — no rsync, no reverse-SSH into a NAT'd local machine.
 remote-push branch:
-    git push origin HEAD:refs/heads/scratch/{{branch}}
+    git push -f origin HEAD:refs/heads/scratch/{{branch}}
 
-# SSHes into b00t-build, fetches + checks out the scratch branch, and runs
-# `cargo build`. Streams live over the SSH session — no polling, no
-# separate result-fetch step. First run after remote-provision is cold
-# (real full compile); every run after is warm because /data/b00t persists
-# on the volume independent of the dev-environment's own stop/resume.
-remote-build branch:
-    ssh b00t-build "cd /data/b00t && git fetch origin && git checkout scratch/{{branch}} && cargo build"
+# Fetch + checkout the scratch branch on b00t-build-<branch> and `cargo build`.
+# Streams live over SSH. First run is cold; every run after is warm because
+# sccache replays compiled crates from GCS (target/ is local/ephemeral).
+remote-build branch="dev": (_attach ("b00t-build-" + branch))
+    ssh b00t-build-{{branch}} 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build && sccache --show-stats | grep -E "Cache hits rate|Compile requests"'
 
-# Same as remote-build, but `cargo test` instead.
-remote-test branch:
-    ssh b00t-build "cd /data/b00t && git fetch origin && git checkout scratch/{{branch}} && cargo test"
+# Same as remote-build, but `cargo nextest run` instead.
+remote-test branch="dev": (_attach ("b00t-build-" + branch))
+    ssh b00t-build-{{branch}} 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
 
-# Manual stop — belt-and-suspenders alongside the fleet's own 30m
-# idle_duration auto-stop (explicit "I'm done for the day" vs. the idle
-# timer catching "forgot to").
-remote-stop:
-    dstack stop b00t-build -y
+# Ensure `ssh <run>` resolves — dstack 0.20.28 needs `dstack attach` to write
+# ~/.dstack/ssh/config. Backgrounded; harmless if already attached.
+_attach run="b00t-build-dev":
+    #!/usr/bin/env bash
+    ssh -o ConnectTimeout=8 {{run}} true 2>/dev/null && exit 0
+    dstack attach {{run}} >/dev/null 2>&1 &
+    for i in $(seq 1 15); do ssh -o ConnectTimeout=8 {{run}} true 2>/dev/null && exit 0; sleep 2; done
+    echo "❌ could not reach {{run}} via ssh (dstack attach)"; exit 1
+
+# Keep the control plane awake past its idle grace (e.g. a long unattended
+# build). `--release` clears the hold. Uses `gcloud compute ssh` by name+zone —
+# the control node has NO static IP and the reaper churns the ephemeral one, so
+# never cache an address; gcloud resolves it live each call.
+remote-keepalive *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ZONE="$(cd b00t-tf && tofu output -raw gcp_control_zone 2>/dev/null || echo australia-southeast1-a)"
+    if [ "{{args}}" = "--release" ]; then
+      gcloud compute ssh b00t-dstack-control --zone "$ZONE" --tunnel-through-iap --command 'sudo rm -f /run/b00t-cp-hold' && echo "hold released"
+    else
+      gcloud compute ssh b00t-dstack-control --zone "$ZONE" --tunnel-through-iap --command 'sudo touch /run/b00t-cp-hold' && echo "control plane held awake — clear with: just remote-keepalive --release"
+    fi
+
+# Stop a build-box run (default b00t-build-dev) — belt-and-suspenders alongside
+# the fleet's own 30m idle_duration. The control node then self-reaps once idle.
+remote-stop branch="dev":
+    dstack stop b00t-build-{{branch}} -y
+
+# Tear down EVERYTHING build-box-side (all runs + the fleet), leaving the
+# control node (which self-reaps) + the GCS sccache cache.
+remote-teardown:
+    -dstack stop --all -y
+    dstack fleet delete b00t-build-fleet -y
+
+# Force the control node off now (refuses if a fleet instance is still up).
+remote-down:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "$(dstack fleet 2>/dev/null | sed '1d' | grep -c .)" -gt 0 ]; then
+      echo "❌ fleet non-empty — run 'just remote-stop' first"; exit 1
+    fi
+    ZONE="$(cd b00t-tf && tofu output -raw gcp_control_zone 2>/dev/null || echo australia-southeast1-a)"
+    gcloud compute instances stop b00t-dstack-control --zone "$ZONE" -q
+    @echo "💤 control node stopped (the waker will restart it on next request)"

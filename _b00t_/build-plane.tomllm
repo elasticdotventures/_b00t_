@@ -1,0 +1,133 @@
+# b00t GCP build plane — the remote Rust build server.
+#
+# Purpose: local `cargo` builds of this workspace hit a 1h+ cold-compile wall
+# (b00t-cli + Qdrant/candle/kube/embed-anything/OpenTelemetry). The build plane
+# is a scale-to-zero GCP dev-environment with a warm, object-backed cache so
+# iteration on Rust PRs doesn't lean on CI.
+#
+# Plan: docs/superpowers/plans/... gleaming-jingling-nygaard.
+# Spec:  docs/superpowers/specs/2026-08-10-cloud-build-server-design.md
+# Runbook: docs/runbooks/remote-build-server.md
+# IaC: b00t-tf/modules/gcp-build-plane/ (+ modules/gcp-bootstrap/ for state)
+# Provisioning: nats/pyinfra/deploy_cp_node.py
+#
+# 🤓 Status 2026-09-08: Phase 2 APPLIED (27 resources) + Phase 3 RUN. VM
+#    b00t-dstack-control RUNNING; dstack 0.20.28 server (systemd, :3000, http
+#    200) + dstack-idle-reaper.timer both active/enabled; git installed. Waker
+#    VERIFIED (VM TERMINATED -> hit endpoint -> instances.start -> RUNNING).
+#    Endpoint https://b00t-cp-waker-mvwkz7iijq-ts.a.run.app, ext IP 34.116.68.13.
+#    Server-side dstack project = "main" (dstack default). Access = TF
+#    var.access_accounts (@elastic.ventures) -> roles/iap.tunnelResourceAccessor.
+#    NEXT: Phase 8 — `dstack project add main` on the workstation, then a real
+#    remote build. keyring.tomllm still pending (SSH via IAP meanwhile).
+
+[b00t]
+name      = "BUILD-PLANE"
+type      = "config"
+hint      = "Scale-to-zero GCP dstack build server for this workspace's Rust builds — pingap-waker-activated control node, self-reaping VM, GCS-backed cache. ~$18-30/mo (Spot build box)."
+type_tags = ["infrastructure", "build", "dstack", "gcp", "rust", "sccache", "opentofu", "cost-control"]
+keywords  = ["build-plane", "remote-build", "dstack", "cloud-build", "sccache", "zerofs", "waker", "control-node"]
+
+[resource]
+name   = "b00t GCP build plane"
+region = "australia-southeast1"
+project = "promptexecution"
+monthly_cost_estimate_usd = "18-30"   # Spot build box (operator decision 2026-09-08)
+build_box_spot_policy = "spot"        # spot-only + retry (auto was seen picking on-demand)
+static_ip = "none — no google_compute_address. SSH via IAP tunnel (address-independent); dstack API via the stable waker URL + internal IP. Reaper churns the ephemeral external IP — never cache it."
+
+[resource.budget]
+# Cost attribution — ledgrrr FOCUS experiment `gcp-build-plane`
+# (mcp__ledgrrr__ledgerr_focus). Reconcile actuals against GCP billing export.
+project_cost_center = "gcp-build-plane"
+billing_account     = "010CF0-14B757-AF79DC (EV Amex, AUD)"
+gcp_project         = "promptexecution"
+budget_monthly_usd  = 30
+projected_monthly_usd = 24   # Spot box ~2h/day + scale-to-zero control node + GCS cache
+focus_experiment_id = "gcp-build-plane"
+session_2026_09_08_actual_usd = 1.00   # standing it up + acceptance testing (build box on-demand ~1.6h @ $0.38)
+recorded_via = "ledgrrr FOCUS append_focus_record (3 rows: 2 session-actual, 1 monthly projection)"
+
+[resource.control_node]
+# The dstack server host. Powered on by the pingap waker on inbound traffic,
+# powers ITSELF off (dstack-idle-reaper.timer) when dstack has no work.
+machine_type   = "e2-small"
+boot_disk      = "pd-standard 10GB"
+instance_name  = "b00t-dstack-control"
+sa             = "b00t-dstack-server (metadata ADC — keyless dstack GCP backend identity)"
+dstack_server  = "systemd unit, --host 0.0.0.0:3000, firewall-bounded to the waker/tailnet"
+idle_reaper    = "IDLE_GRACE 45m (> the fleet's 30m idle_duration)"
+never          = "runs on the operator workstation"
+
+[resource.waker]
+# Scale-to-zero traffic activator. `dstack project add main --url <this> --token <admin>`.
+kind          = "Cloud Run v2, min-instances=0 (~$0 idle)"
+impl          = "containers/b00t-cp-waker/waker.py — stdlib reverse proxy + wake (v1; pingap is the Phase 2.75 tailnet-edge upgrade)"
+image         = "australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-cp-waker:latest (Artifact Registry repo 'b00t', in-project)"
+sa            = "b00t-cp-waker (compute.instances.get+start on the one instance only)"
+tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phase 2.75)"
+
+[resource.cache]
+# No persistent PD, NO FUSE mount (rev 2026-09-08d). sccache writes STRAIGHT to
+# the GCS bucket via its native backend; a rebuild on a fresh box replays it.
+bucket        = "b00t-buildcache-promptexecution"
+sccache       = "native GCS: SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution, SCCACHE_GCS_KEY_PREFIX=sccache, SCCACHE_GCS_RW_MODE=READ_WRITE, auth = build-VM metadata SA (b00t-build-vm, objectAdmin). No gcsfuse, no privileged container."
+holds         = "sccache compilation-unit blobs only. target/ + the git checkout are LOCAL disk (ephemeral)."
+target_dir_measured = "target/ on any object FS is DEAD: cargo/rustc write thousands of tiny .d/.rmeta/fingerprint files each fsync'd = a GCS round-trip; ~15-20x slower. target/ stays local; sccache-over-GCS is the ONLY persistence."
+gcsfuse_note  = "gcsfuse DOES work (68 MB/s, needs privileged for /dev/fuse) — used to prove the concept, then dropped for native GCS which needs neither. cache-up.sh + CACHE_BACKEND=zerofs kept in-repo as an opt-in alt only."
+
+[resource.measured_2026_09_08]
+# e2-standard-8 Spot/on-demand, 8 vCPU Intel Xeon @ 2.2GHz, Ubuntu 24.04.
+box_provision           = "~4 min (submit -> running, incl. image pull)"
+first_provision_init    = "~6-10 min (ci-occt is empty — apt toolchain + rustup; prebuilt sccache/nextest). A baked b00t-build image cuts this to ~2 min."
+cold_b00t_cli_no_cache  = "~9 min  (cargo build -p b00t-cli, empty cache, no sccache)"
+cold_b00t_cli_w_sccache = "~8.5 min (RUN1 — populates the GCS sccache; ~10% write overhead)"
+warm_b00t_cli_sccache   = "~3 min (RUN2 — `cargo clean` then rebuild; sccache 99.7% hit rate from GCS). This is the idle-stop -> warm-rebuild proof: target/ (9.5G local) was wiped, only the GCS-backed sccache dir (1.2G) persisted."
+warm_b00t_cli_incr      = "~1.5 min (1-file change, target/ intact — normal incremental)"
+noop_b00t_cli           = "~1.4 min (b00t-cli's compile-time build.rs + ~338 non-cacheable proc-macro/build-script calls always run)"
+target_on_gcsfuse       = "DEAD — ~15-20x slower (small-file fsync). target/ + checkout stay local; ONLY sccache on the mount."
+spot_note               = "spot_policy: auto was seen picking ON-DEMAND ($0.38 vs $0.19); fleet now pins spot_policy: spot + retry."
+sccache_native_gcs      = "TODO — sccache has SCCACHE_GCS_BUCKET (direct GCS client, no FUSE). Cleaner than gcsfuse for the cache path; switch the dev-env to it."
+
+[resource.wif]
+# The one place keyless OIDC federation is needed: GitHub Actions -> GCP.
+pool      = "github-actions"
+provider  = "github-oidc"
+ci_sa     = "b00t-ci (buildcache objectViewer)"
+principal = "principalSet://.../attribute.repository/elasticdotventures/_b00t_"
+
+[resource.network]
+build_phase = "network_mode=public — ephemeral external IP, public Cloud Run waker"
+end_state   = "network_mode=tailnet — NO public ingress; reach over Tailscale, firewalls admit only 100.64.0.0/10; nodes get a Tailscale egress"
+
+[resource.runpod_non_parity]
+# RunPod has no Terraform provider and no OIDC. Deferred — backup dstack
+# backend only, not wired in v1. RUNPOD_API_KEY stays in ~/.env / untouched.
+status = "deferred; re-add a `- type: runpod` block + --data guard if ever needed"
+
+[[resource.usages]]
+description = "Wake the control plane + assert the dstack project (run before any remote-* recipe)"
+command     = "just remote-doctor"
+
+[[resource.usages]]
+description = "One-time: provision the fleet + dev-environment"
+command     = "just remote-provision"
+
+[[resource.usages]]
+description = "Push local HEAD to a scratch branch and build/test it remotely"
+command     = "just remote-push <branch> && just remote-test <branch>"
+
+[[resource.usages]]
+description = "Keep the control plane awake past its idle grace (long unattended build)"
+command     = "just remote-keepalive   # --release to clear"
+
+[[resource.usages]]
+description = "Stand up the GCP infra (after operator Phase-0 inputs + gcloud ADC)"
+command     = "cd b00t-tf && just tf-init-migrate && just gcp-apply"
+
+# b00t:map v1
+# summary: Scale-to-zero GCP dstack build server for this workspace's Rust builds — waker-activated control node, self-reaping VM, GCS-backed pluggable cache, ~$18-30/mo (Spot build box)
+# tags: infrastructure, build, dstack, gcp, rust, sccache, waker, opentofu, cost-control, tailnet
+# tier: frontier
+# cmds: just remote-doctor, just remote-provision, just remote-push <b> && just remote-test <b>
+# complexity: 6

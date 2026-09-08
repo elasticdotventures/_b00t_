@@ -1,0 +1,29 @@
+# Keyless GitHub Actions -> GCP auth canary (plan gleaming-jingling-nygaard,
+# Phase 8.6). Proves the Workload Identity Federation path with NO JSON key.
+# Manual only. Safe to delete once the build plane is merged + trusted.
+name: wif-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required to mint the OIDC token
+  contents: read
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - id: auth
+        name: Authenticate to GCP (keyless, WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: promptexecution
+          workload_identity_provider: projects/308167228204/locations/global/workloadIdentityPools/github-actions/providers/github-oidc
+          service_account: b00t-ci@promptexecution.iam.gserviceaccount.com
+
+      - name: gcloud sanity (no key was used)
+        run: |
+          gcloud auth list
+          gcloud storage ls gs://b00t-buildcache-promptexecution/ || \
+            echo "bucket empty or not yet populated — auth itself succeeded"

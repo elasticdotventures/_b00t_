@@ -1,24 +1,59 @@
 # b00t standby cloud build server — backing fleet.
-# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md.
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md and
+# plan gleaming-jingling-nygaard (Phase 4).
 #
 # 🤓 Not in that design doc's original "Components" list — added here
 # because dstack requires a fleet to already exist before a dev-environment
 # can be provisioned against it ("Before running a dev environment, make
 # sure you've... created a fleet" — dstack's own dev-environments docs).
 # `idle_duration` also belongs here, not on the dev-environment: verified
-# against dstack's real fleet/dev-environment reference docs before writing
-# this (the design doc's own idle_duration placement, on the
-# dev-environment, doesn't match dstack's actual schema — this fleet is
-# where dstack actually enforces it, deprovisioning instances above `min`
-# once idle past this duration).
+# against dstack's real fleet/dev-environment reference docs (the design
+# doc's own idle_duration placement, on the dev-environment, doesn't match
+# dstack's actual schema — this fleet is where dstack actually enforces it,
+# deprovisioning instances above `min` once idle past this duration).
 type: fleet
 name: b00t-build-fleet
-# min 0 (costs nothing while nothing's running), max 1 — a single-box build
-# server, not a pool. Matches DstackProvider::ensure_fleet's own 0..1
-# philosophy for on-demand capacity.
-nodes: 0..1
-# No GPU — this is a CPU/disk/network build server, not an ML job. Matches
-# the design doc's explicit non-goal ("No GPU, no RunPod backend").
+
+# 🤓 Region pin (plan decision #2, 2026-09-08): every build-plane resource
+# pins to australia-southeast1 — a network volume can only attach to compute
+# in its own region, so the fleet must match b00t-build-cache.volume.yaml.
+# This deliberately overrides the older "don't hardcode fleet scope"
+# convention (2026-07-23-b00t-dstack-gcp-backend-design.md).
+regions: [australia-southeast1]
+
+# min 0 (costs nothing while nothing's running), max 2 — two concurrent build
+# boxes (operator decision 2026-09-08). Each dev-env run (`just remote-provision
+# <branch>` -> run name b00t-build-<branch>) lands on its own node; both SHARE
+# the sccache-over-GCS cache, so box 2 replays box 1's compiled crates. Each is
+# Spot ~$0.19/hr, only while building. Bump higher for more parallel branches.
+nodes: 0..2
+
+# CPU/disk/network build box, no GPU. Floor sized for this workspace's cold
+# compile (b00t-cli + Qdrant/candle/kube/embed-anything/OpenTelemetry): a
+# smaller box thrashes. `..` = "at least".
 resources:
+  cpu: 8..
+  memory: 32GB..
+  disk: 200GB..
   gpu: 0
+
+# Spot only (operator decision 2026-09-08, "lets try spot, eviction is okay if
+# restart can be achieved"). e2-standard-8 Spot ≈ $0.19/hr vs ≈ $0.38 on-demand.
+# 🤓 2026-09-08: `spot_policy: auto` was observed picking ON-DEMAND (it grabs
+# the first viable offer, not necessarily spot). `spot` forces spot; the retry
+# below rides out a transient no-capacity window. Switch back to `auto` if a
+# build must never be blocked and 2× cost is acceptable.
+spot_policy: spot
+
+# Auto re-provision an evicted / capacity-starved node (verified accepted by
+# dstack 0.20.28: on_events, values interruption / no-capacity / error).
+retry:
+  on_events: [interruption, no-capacity]
+  duration: 1h
+
 idle_duration: 30m
+# 🤓 Restart after a spot eviction: the node re-provisions (retry above), the
+# dev-env `init:` re-runs (idempotent, re-mounts /mnt/cache from GCS), and the
+# in-flight `cargo` dies — just re-run `just remote-build`/`remote-test`, which
+# resumes WARM because target/ + sccache live on the GCS-backed mount, not the
+# ephemeral box.
