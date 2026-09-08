@@ -3,11 +3,17 @@
 # gleaming-jingling-nygaard, Phase 5. Shipped onto the box via the dev-env
 # `files:` mapping and called from `init:` before any cargo.
 #
-# NON-FATAL by design: if no object backend can be mounted, bind a LOCAL dir
-# at $CACHE_MOUNT and warn — the build still works, it just isn't warm after
-# an idle-stop. Exit 0 either way; exit 1 only on an internal error.
+# What lives on the mount: ONLY $SCCACHE_DIR (sccache blobs — whole
+# compilation outputs, write-once, gcsfuse-friendly). NOT target/ or the git
+# checkout — those stay on local disk (measured 2026-09-08: target/ on gcsfuse
+# is ~15-20x slower from the small-file fsync pattern). sccache-over-GCS is
+# what makes a rebuild after an idle-stop warm.
 #
-# $CACHE_BACKEND: gcsfuse (default, verified) | zerofs | rustfs
+# NON-FATAL by design: if no object backend can be mounted, bind a LOCAL dir
+# at $CACHE_MOUNT and warn — the build still works, sccache just won't persist
+# past an idle-stop. Exit 0 either way; exit 1 only on an internal error.
+#
+# $CACHE_BACKEND: gcsfuse (default, VERIFIED) | zerofs | rustfs
 set -uo pipefail
 
 CACHE_BACKEND="${CACHE_BACKEND:-gcsfuse}"
@@ -23,7 +29,7 @@ if mountpoint -q "$CACHE_MOUNT"; then log "$CACHE_MOUNT already mounted"; exit 0
 
 fallback_local() {
   log "⚠️  object cache unavailable ($1) — binding a LOCAL dir at $CACHE_MOUNT."
-  log "⚠️  the build works but target/ + sccache will NOT survive an idle-stop."
+  log "⚠️  the build works but sccache will NOT survive an idle-stop (no warm rebuild)."
   sudo mkdir -p /var/lib/b00t-cache
   sudo mount --bind /var/lib/b00t-cache "$CACHE_MOUNT"
   sudo chown -R "$(id -u):$(id -g)" "$CACHE_MOUNT" 2>/dev/null || true

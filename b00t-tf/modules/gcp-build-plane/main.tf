@@ -376,6 +376,15 @@ resource "google_storage_bucket_iam_member" "ci_objviewer" {
   member = "serviceAccount:${google_service_account.ci.email}"
 }
 
+# CI pushes the prebaked b00t-build / b00t-cp-waker images
+# (.github/workflows/b00t-build-image.yml) — writer on the AR repo only.
+resource "google_artifact_registry_repository_iam_member" "ci_writer" {
+  location   = google_artifact_registry_repository.containers.location
+  repository = google_artifact_registry_repository.containers.name
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${google_service_account.ci.email}"
+}
+
 # ---------------------------------------------------------------------------
 # GitHub Actions -> GCP, keyless (Workload Identity Federation)
 # ---------------------------------------------------------------------------
