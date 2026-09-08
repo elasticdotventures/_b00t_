@@ -120,6 +120,23 @@ delivery_via    = "just dstack-server-config"
 volume_idle_cost = "storage-rate only, no compute charge"
 dev_environment_default = "set inactivity_duration on every dev-environment config — no default auto-shutdown otherwise"
 
+[resource.build_plane]
+# 🤓 The b00t GCP build plane (see _b00t_/build-plane.tomllm) runs its OWN
+#    dstack server on a dedicated GCP control node — NOT the local
+#    ~/.dstack/server + `just dstack-server-config` path above. That control
+#    node's config is rendered by nats/pyinfra/deploy_cp_node.py from
+#    templates/dstack-server-config.yml.j2: GCP backend ONLY, `creds: type:
+#    default` (the VM's attached SA via metadata — no key file, no WIF for the
+#    server). RunPod is DEFERRED there (backup backend only, not wired in v1;
+#    RUNPOD_API_KEY stays in ~/.env untouched). The local multi-backend recipe
+#    stays for workstation experiments.
+project        = "b00t"
+server_host    = "GCP control node b00t-dstack-control (systemd dstack-server.service)"
+server_url     = "the pingap waker — `tofu output -raw gcp_control_node_endpoint`"
+backend        = "gcp only (regions: [australia-southeast1], vm_service_account: b00t-build-vm)"
+runpod         = "deferred — re-add `- type: runpod` + --data guard if ever needed"
+recipes        = "just remote-doctor | remote-provision | remote-push | remote-test | remote-keepalive | remote-down"
+
 [[resource.usages]]
 description = "Submit a one-off batch job via b00t CLI (provider-agnostic) — fresh pod, no volume"
 command     = "b00t-cli provider job submit-batch --provider dstack --image <image> --config <path> --flavor <flavor>"

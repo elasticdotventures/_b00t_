@@ -1,0 +1,99 @@
+# b00t GCP build plane — the remote Rust build server.
+#
+# Purpose: local `cargo` builds of this workspace hit a 1h+ cold-compile wall
+# (b00t-cli + Qdrant/candle/kube/embed-anything/OpenTelemetry). The build plane
+# is a scale-to-zero GCP dev-environment with a warm, object-backed cache so
+# iteration on Rust PRs doesn't lean on CI.
+#
+# Plan: docs/superpowers/plans/... gleaming-jingling-nygaard.
+# Spec:  docs/superpowers/specs/2026-08-10-cloud-build-server-design.md
+# Runbook: docs/runbooks/remote-build-server.md
+# IaC: b00t-tf/modules/gcp-build-plane/ (+ modules/gcp-bootstrap/ for state)
+# Provisioning: nats/pyinfra/deploy_cp_node.py
+#
+# 🤓 Status 2026-09-08: IaC + pyinfra + dev-env authored & validated; NOT yet
+#    applied to real GCP infra. `just gcp-apply` gated on operator Phase-0
+#    inputs (spend confirm, egress CIDR, ~/.ssh/id_ed25519.pub in keyring).
+
+[b00t]
+name      = "BUILD-PLANE"
+type      = "config"
+hint      = "Scale-to-zero GCP dstack build server for this workspace's Rust builds — pingap-waker-activated control node, self-reaping VM, GCS-backed cache. ~$25-40/mo."
+type_tags = ["infrastructure", "build", "dstack", "gcp", "rust", "sccache", "opentofu", "cost-control"]
+keywords  = ["build-plane", "remote-build", "dstack", "cloud-build", "sccache", "zerofs", "waker", "control-node"]
+
+[resource]
+name   = "b00t GCP build plane"
+region = "australia-southeast1"
+project = "promptexecution"
+monthly_cost_estimate_usd = "25-40"
+
+[resource.control_node]
+# The dstack server host. Powered on by the pingap waker on inbound traffic,
+# powers ITSELF off (dstack-idle-reaper.timer) when dstack has no work.
+machine_type   = "e2-small"
+boot_disk      = "pd-standard 10GB"
+instance_name  = "b00t-dstack-control"
+sa             = "b00t-dstack-server (metadata ADC — keyless dstack GCP backend identity)"
+dstack_server  = "systemd unit, --host 0.0.0.0:3000, firewall-bounded to the waker/tailnet"
+idle_reaper    = "IDLE_GRACE 45m (> the fleet's 30m idle_duration)"
+never          = "runs on the operator workstation"
+
+[resource.waker]
+# Scale-to-zero traffic activator. `dstack project add --url <this>`.
+kind          = "pingap on Cloud Run v2, min-instances=0 (~$0 idle)"
+sa            = "b00t-cp-waker (compute.instances.get+start on the one instance only)"
+tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phase 2.75)"
+container     = "containers/b00t-cp-waker/ (built on vendor/pingap-devproxy-b00t)"
+
+[resource.cache]
+# No persistent PD — the standby cost lever. State is in GCS, so the cache is
+# warm the moment the box resumes.
+bucket        = "b00t-buildcache-promptexecution"
+mount         = "/mnt/cache (dev-env/cache-up.sh)"
+backend       = "pluggable: zerofs (NBD/NFS kernel client) | rustfs (S3 API) | gcsfuse"
+holds         = "git checkout, target/, sccache (SCCACHE_DIR=/mnt/cache/sccache, CARGO_INCREMENTAL=0)"
+target_dir_open_question = "network-FS vs local-SSD+sync vs a small 20-30GB PD — decide by measuring an incremental build"
+
+[resource.wif]
+# The one place keyless OIDC federation is needed: GitHub Actions -> GCP.
+pool      = "github-actions"
+provider  = "github-oidc"
+ci_sa     = "b00t-ci (buildcache objectViewer)"
+principal = "principalSet://.../attribute.repository/elasticdotventures/_b00t_"
+
+[resource.network]
+build_phase = "network_mode=public — ephemeral external IP, public Cloud Run waker"
+end_state   = "network_mode=tailnet — NO public ingress; reach over Tailscale, firewalls admit only 100.64.0.0/10; nodes get a Tailscale egress"
+
+[resource.runpod_non_parity]
+# RunPod has no Terraform provider and no OIDC. Deferred — backup dstack
+# backend only, not wired in v1. RUNPOD_API_KEY stays in ~/.env / untouched.
+status = "deferred; re-add a `- type: runpod` block + --data guard if ever needed"
+
+[[resource.usages]]
+description = "Wake the control plane + assert the dstack project (run before any remote-* recipe)"
+command     = "just remote-doctor"
+
+[[resource.usages]]
+description = "One-time: provision the fleet + dev-environment"
+command     = "just remote-provision"
+
+[[resource.usages]]
+description = "Push local HEAD to a scratch branch and build/test it remotely"
+command     = "just remote-push <branch> && just remote-test <branch>"
+
+[[resource.usages]]
+description = "Keep the control plane awake past its idle grace (long unattended build)"
+command     = "just remote-keepalive   # --release to clear"
+
+[[resource.usages]]
+description = "Stand up the GCP infra (after operator Phase-0 inputs + gcloud ADC)"
+command     = "cd b00t-tf && just tf-init-migrate && just gcp-apply"
+
+# b00t:map v1
+# summary: Scale-to-zero GCP dstack build server for this workspace's Rust builds — waker-activated control node, self-reaping VM, GCS-backed pluggable cache, ~$25-40/mo
+# tags: infrastructure, build, dstack, gcp, rust, sccache, waker, opentofu, cost-control, tailnet
+# tier: frontier
+# cmds: just remote-doctor, just remote-provision, just remote-push <b> && just remote-test <b>
+# complexity: 6

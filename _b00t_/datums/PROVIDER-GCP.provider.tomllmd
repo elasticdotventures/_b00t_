@@ -98,6 +98,32 @@ command = "gcloud auth application-default print-access-token"
 description = "Check real per-zone GPU hardware availability (not quota) before targeting a region"
 command = "curl -s -H \"Authorization: Bearer $(gcloud auth application-default print-access-token)\" 'https://compute.googleapis.com/compute/v1/projects/<project>/zones/<zone>/acceleratorTypes'"
 
+# --- b00t build plane (CPU, not GPU) — see _b00t_/build-plane.tomllm ---------
+# OpenTofu-managed CPU build server in australia-southeast1. Separate concern
+# from the GPU/mesh3d notes above. IaC: b00t-tf/modules/gcp-build-plane/
+# (+ modules/gcp-bootstrap/ for remote state). Authored 2026-09-08, not yet
+# applied.
+[resource.build_plane]
+region        = "australia-southeast1"
+state_bucket  = "b00t-tf-state-promptexecution (versioned, UBLA, prevent_destroy)"
+buildcache    = "b00t-buildcache-promptexecution (no persistent PD — standby-cost lever)"
+control_node  = "b00t-dstack-control — e2-small, SA b00t-dstack-server (metadata ADC = keyless dstack backend), pingap-waker-activated, self-reaping"
+waker         = "Cloud Run b00t-cp-waker (min-instances=0) in `public` mode; tsnet service on b00t-node in `tailnet` mode"
+service_accts = ["b00t-dstack-server", "b00t-build-vm (dstack vm_service_account)", "b00t-cp-waker", "b00t-ci (WIF)"]
+apis_added    = ["run.googleapis.com", "vpcaccess.googleapis.com"]
+
+[resource.build_plane.wif]
+# The one keyless OIDC path: GitHub Actions -> GCP.
+pool      = "github-actions"
+provider  = "github-oidc"
+ci_sa     = "b00t-ci"
+condition = "assertion.repository == 'elasticdotventures/_b00t_'"
+principal = "principalSet://iam.googleapis.com/<pool>/attribute.repository/elasticdotventures/_b00t_"
+
+[resource.build_plane.keyring]
+# Control-node VM ssh-keys metadata is rendered from this datum, not hardcoded.
+source = "_b00t_/keyring.tomllm (active entries scoped 'gcp-build-plane-control')"
+
 # b00t:map v1
 # summary: GCP as a dstack backend — project promptexecution; Sydney has real GPU hardware (T4/H100), Melbourne has none on any cloud; quota != availability
 # tags: provider, gcp, cloud, dstack-backend, gpu, sydney, melbourne

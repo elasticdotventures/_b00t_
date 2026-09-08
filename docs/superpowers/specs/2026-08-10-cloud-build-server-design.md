@@ -1,6 +1,15 @@
 # Design: Standby Cloud Build Server (GCP dstack dev-environment)
 
-**Status**: Implemented (`dev-env/*.yaml` + `just remote-*` recipes) — not yet applied to real GCP infra; that's an explicit operator decision (cost/backend/region), not something implementing the config itself commits to.
+**Status**: Superseded in scope by plan `gleaming-jingling-nygaard` (2026-09-08).
+IaC (`b00t-tf/modules/gcp-build-plane/`), control-node provisioning
+(`nats/pyinfra/deploy_cp_node.py`), and the `dev-env/*.yaml` + `just remote-*`
+layer are authored & validated — **not yet applied** to real GCP infra
+(`just gcp-apply`), gated on operator Phase-0 inputs. Key deltas from this
+original doc: standardized on `australia-southeast1`; the dstack server runs on
+an OpenTofu-managed **scale-to-zero e2-small control node** (pingap waker +
+self-reaper), not locally; the build cache is a **GCS bucket, no persistent
+PD**; end-state networking is **tailnet-only** (`network_mode` toggle). Live
+detail: `_b00t_/build-plane.tomllm` + `docs/runbooks/remote-build-server.md`.
 **Motivated by**: this local machine's build times — a cold `cargo build` for `b00t-c0re-lib`
 alone took 13+ minutes, and `cargo run` on `b00t-cli` appeared to trigger a full
 dependency-tree rebuild on effectively every invocation (Qdrant, embed-anything, candle,
