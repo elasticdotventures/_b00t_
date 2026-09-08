@@ -1,0 +1,65 @@
+# Run the test suite on the GCP dstack build plane instead of ubuntu-latest.
+# Plan gleaming-jingling-nygaard — CI-on-the-build-plane wiring.
+#
+# The heavy `cargo nextest` shards run on Spot e2-standard-8 boxes that share
+# the sccache-over-GCS cache with `just remote-*`, so a warm run is minutes.
+# `ci.yml` (ubuntu-latest) stays as the always-on fast path; this is opt-in:
+#   - `workflow_dispatch` (manual), or
+#   - a PR labeled `build-plane-ci`.
+#
+# Repo settings required (Settings -> Secrets and variables -> Actions):
+#   variable DSTACK_URL          = the waker URL
+#                                  (`cd b00t-tf && tofu output -raw gcp_control_node_endpoint`)
+#   secret   DSTACK_ADMIN_TOKEN  = the `token:` from ~/.dstack/server/config.yml
+#                                  on the control node
+# The dev-env secrets (b00t_build_deploy_key) are already `dstack secret set`
+# on the `main` project.
+name: ci-build-plane
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: git ref / sha to test
+        required: false
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+concurrency:
+  group: ci-build-plane-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nextest:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'build-plane-ci')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: ["1/4", "2/4", "3/4", "4/4"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install 'dstack[all]==0.20.28'
+
+      - name: Point dstack at the build plane (via the waker)
+        run: |
+          dstack project add --name main \
+            --url "${{ vars.DSTACK_URL }}" \
+            --token "${{ secrets.DSTACK_ADMIN_TOKEN }}"
+
+      - name: Test partition ${{ matrix.partition }} on the build plane
+        env:
+          DSTACK_PROJECT: main
+        run: |
+          REF="${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}"
+          NAME="ci-${GITHUB_RUN_ID}-p$(echo '${{ matrix.partition }}' | tr / -)"
+          # `dstack apply` for a task streams logs and exits with the task's code.
+          dstack apply -f dev-env/ci-build.task.yaml -n "$NAME" \
+            -e CI_REF="$REF" -e NEXTEST_PARTITION="${{ matrix.partition }}" \
+            --yes
+        # dstack tears the task instance down on completion; retry policy in the
+        # task config rides out a spot eviction.

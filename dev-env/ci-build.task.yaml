@@ -1,0 +1,54 @@
+# CI test run on the b00t build plane (plan gleaming-jingling-nygaard).
+# A dstack TASK (runs `commands:` to completion, exits with their code) —
+# driven by .github/workflows/ci-build-plane.yml. No fleet needed: `dstack
+# apply` provisions this on-demand and tears it down when done.
+#
+# Shares the sccache-over-GCS cache with `just remote-*` and the other
+# partitions, so partition 2 replays partition 1's compiled crates.
+type: task
+name: b00t-ci
+
+image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+
+resources:
+  cpu: 8..
+  memory: 32GB..
+  disk: 200GB..
+  gpu: 0
+
+spot_policy: spot
+retry:
+  on_events: [no-capacity, interruption]
+  duration: 20m
+
+env:
+  - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}
+  - RUSTC_WRAPPER=sccache
+  - SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution
+  - SCCACHE_GCS_KEY_PREFIX=sccache
+  - SCCACHE_GCS_RW_MODE=READ_WRITE
+  - SCCACHE_GCS_SERVICE_ACCOUNT=b00t-build-vm@promptexecution.iam.gserviceaccount.com
+  - CARGO_INCREMENTAL=0
+  - CARGO_TARGET_DIR=/data/b00t/target
+  # supplied per-run by the workflow via `dstack apply -e`:
+  - CI_REF                        # git ref / sha to test
+  - NEXTEST_PARTITION=            # e.g. "1/4"; empty = whole suite
+
+commands:
+  - set -e
+  - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  - printf '%s\n' "$b00t_build_deploy_key" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+  - ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+  - git clone --filter=blob:none git@github.com:elasticdotventures/_b00t_.git /data/b00t
+  - cd /data/b00t && git checkout "$CI_REF" && git rev-parse --short HEAD
+  - git submodule update --init --depth 1 vendor/embed-anything-b00t vendor/tomllm vendor/runpod-sdk
+  - '[ -d vendor/ledgrrr/.git ] || git clone --depth 1 https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr'
+  - . "$HOME/.cargo/env"
+  - sccache --start-server
+  - |
+    if [ -n "$NEXTEST_PARTITION" ]; then
+      cargo nextest run --workspace --partition "count:$NEXTEST_PARTITION"
+    else
+      cargo nextest run --workspace
+    fi
+  - sccache --show-stats
