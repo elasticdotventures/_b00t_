@@ -1,0 +1,15 @@
+# Oneshot fired by dstack-idle-reaper.timer. Plan gleaming-jingling-nygaard,
+# Phase 2.5. Powers the control node off when dstack has no work — so it costs
+# ~$0 idle and the pingap waker only ever needs to START it.
+# Rendered by deploy_cp_node.py.
+[Unit]
+Description=b00t control-node idle reaper (powers off when dstack is idle)
+After=dstack-server.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=IDLE_GRACE_MIN={{ idle_grace_min }}
+Environment=DSTACK_PROJECT={{ dstack_project }}
+Environment=DSTACK_BIN={{ dstack_bin }}
+ExecStart=/usr/local/bin/b00t-cp-idle-reaper.sh

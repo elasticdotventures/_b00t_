@@ -1,14 +1,65 @@
 # b00t standby cloud build server.
-# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md.
+# See docs/superpowers/specs/2026-08-10-cloud-build-server-design.md and
+# plan gleaming-jingling-nygaard (Phases 4 + 5 + 6).
 #
-# SSH-only by design (no `ide:` property) — this is a build server accessed
-# via `just remote-build`/`remote-test` over SSH, not an interactive desktop
-# IDE target. `dstack apply` provisions it against b00t-build-fleet.yaml
-# (must be applied first — see justfile's `remote-provision` recipe) and
-# mounts b00t-build-cache.volume.yaml at /data/b00t.
+# SSH-only by design (no `ide:` property) — accessed via `just remote-build`/
+# `remote-test` over SSH, not an interactive IDE. `dstack apply` provisions it
+# against b00t-build-fleet.yaml (apply that first — see the justfile
+# `remote-provision` recipe).
+#
+# Persistence model (rev 2026-09-08b): NO persistent PD. Everything durable
+# lives under /mnt/cache, an object-storage-backed POSIX mount (GCS bucket
+# b00t-buildcache-promptexecution) established by dev-env/cache-up.sh before
+# any cargo runs. The git checkout, sccache, and target/ all live there, so
+# the cache is warm the moment the box resumes from idle-stop — state is in
+# GCS, not on a disk that's billed while stopped.
 type: dev-environment
 name: b00t-build
 
-volumes:
-  - name: b00t-build-cache
-    path: /data/b00t
+# CI's image — OCCT / protobuf / cmake / clang / pkg-config baked in
+# (.github/actions/setup-rust-workspace). Keeps init: to source + toolchain.
+image: ghcr.io/elasticdotventures/ci-occt:latest
+
+# Required for the NBD path in cache-up.sh (nbd-client -> /dev/nbd0). If
+# cache-up.sh settles on the NFS backend instead, this can be dropped.
+privileged: true
+
+env:
+  # --- cache mount (Phase 5) ---
+  - CACHE_BACKEND=zerofs                      # zerofs | rustfs | gcsfuse
+  - CACHE_BUCKET=b00t-buildcache-promptexecution
+  - CACHE_MOUNT=/mnt/cache
+  - CACHE_ENCRYPTION_PASSWORD                 # from `dstack secret set cache_password`
+  # --- sccache (Phase 6) ---
+  - RUSTC_WRAPPER=sccache
+  - SCCACHE_DIR=/mnt/cache/sccache
+  - SCCACHE_CACHE_SIZE=40G
+  - CARGO_INCREMENTAL=0                       # sccache rejects incremental — required
+  # --- workspace ---
+  - CARGO_TARGET_DIR=/mnt/cache/b00t/target
+  - OCCT_ROOT=/opt/occt
+  - CHECKOUT=/mnt/cache/b00t
+
+# Idempotent — runs on every boot/resume, MUST finish before the box is
+# "ready". `remote-build`/`remote-test` re-assert the mount before cargo.
+init:
+  # -- git identity for the private clone (deploy key from a dstack secret) --
+  - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  - 'test -f ~/.ssh/id_ed25519 || { echo "$B00T_BUILD_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519; }'
+  - grep -q github.com ~/.ssh/known_hosts 2>/dev/null || ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+  # -- object cache mount (Phase 5) — blocks until /mnt/cache is a mountpoint --
+  - bash dev-env/cache-up.sh
+  # -- source checkout on the cache mount --
+  - '[ -d "$CHECKOUT/.git" ] || git clone git@github.com:elasticdotventures/_b00t_.git "$CHECKOUT"'
+  - git -C "$CHECKOUT" submodule update --init --depth 1 vendor/embed-anything-b00t vendor/runpod-sdk || true
+  - '[ -d "$CHECKOUT/vendor/ledgrrr/.git" ] || git clone --depth 1 -b main https://github.com/PromptExecution/ledgrrr.git "$CHECKOUT/vendor/ledgrrr"'
+  # -- toolchain (image has protobuf/cmake/clang/occt; add rust + z3 + tools) --
+  - command -v rustup >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+  - . "$HOME/.cargo/env" && rustup toolchain install stable --profile minimal
+  - sudo apt-get update && sudo apt-get install -y z3 libssl-dev
+  - . "$HOME/.cargo/env" && (command -v cargo-nextest >/dev/null || cargo install cargo-nextest --locked)
+  - . "$HOME/.cargo/env" && (command -v just >/dev/null || cargo install just --locked)
+  - . "$HOME/.cargo/env" && (command -v sccache >/dev/null || cargo install sccache --locked)
+  # -- final ordering guarantee: cargo must not run against a cold cache --
+  - mountpoint -q "$CACHE_MOUNT" || { echo "FATAL: $CACHE_MOUNT not mounted"; exit 1; }
+  - mkdir -p "$SCCACHE_DIR" "$CARGO_TARGET_DIR"

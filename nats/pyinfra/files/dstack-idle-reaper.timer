@@ -1,0 +1,11 @@
+# Runs the idle reaper every 5 minutes. Plan gleaming-jingling-nygaard, Phase 2.5.
+[Unit]
+Description=Run the b00t control-node idle reaper every 5 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

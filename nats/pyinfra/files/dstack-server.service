@@ -1,0 +1,26 @@
+# dstack server on the GCP control node. Plan gleaming-jingling-nygaard, Phase 3.
+#
+# --host 0.0.0.0: reachable on the internal NIC so the pingap waker (Cloud Run
+# direct VPC egress, or the tailnet waker) can proxy it. Exposure is bounded by
+# the `b00t-control-dstack` firewall, which admits only the waker's source range
+# (the build-plane subnet in public mode, or 100.64.0.0/10 in tailnet mode) —
+# never the public internet.
+#
+# The VM powers ITSELF off when idle (dstack-idle-reaper.timer). Restart=always
+# + WantedBy=multi-user.target bring the server back on the next boot; run/job
+# state persists in ~/.dstack on the pd-standard boot disk across poweroff.
+[Unit]
+Description=dstack server (b00t GCP build-plane control plane)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brianh
+Environment=HOME=/home/brianh
+ExecStart=/home/brianh/.local/bin/dstack server --host 0.0.0.0 --port 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

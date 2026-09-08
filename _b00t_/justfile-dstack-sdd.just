@@ -94,6 +94,12 @@ ledger-append line:
 # env-var-chain creds type for this backend, so the key must land in this
 # file at runtime — this recipe is the one place that happens, sourced fresh
 # from .env every run, never pasted or typed literally. Idempotent; 0600.
+# ⚠️ LOCAL-FALLBACK ONLY. The production dstack server runs on the GCP control
+# node and its config is rendered by nats/pyinfra/deploy_cp_node.py from
+# templates/dstack-server-config.yml.j2 (GCP backend, metadata ADC, no keys —
+# plan gleaming-jingling-nygaard Phase 3). Use this recipe only to run a dstack
+# server on your workstation for experiments. RunPod is deferred in the
+# production path; it's still wired here for local multi-backend testing.
 dstack-server-config:
     #!/bin/bash
     set -euo pipefail
@@ -104,7 +110,7 @@ dstack-server-config:
     : "${RUNPOD_API_KEY:?RUNPOD_API_KEY not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
     : "${AZURE_TENANT_ID:?AZURE_TENANT_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
     : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID not set in $root/.env — see _b00t_/learn/managing-secrets.md}"
-    GCP_PROJECT_ID="${GCP_PROJECT_ID:-app4dog}"
+    GCP_PROJECT_ID="${GCP_PROJECT_ID:-promptexecution}"
     mkdir -p ~/.dstack/server
     umask 077
     printf '%s\n' \
