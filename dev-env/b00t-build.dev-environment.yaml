@@ -14,11 +14,11 @@
 type: dev-environment
 name: b00t-build
 
-# 🤓 ci-occt is a MINIMAL image — only `git` (verified 2026-09-08). The init:
-# block installs the toolchain (~6-10 min first boot). The purpose-built
-# `containers/b00t-build/` image bakes it (~2 min) — swap `image:` to it +
-# trim init: once it is pushed to AR.
-image: ghcr.io/elasticdotventures/ci-occt:latest
+# Prebaked toolchain image (containers/b00t-build/) — Ubuntu 24.04 +
+# build-essential/cmake/clang/protoc/z3 + rustup stable + prebuilt sccache/
+# nextest + gcsfuse. Rebuilt weekly by .github/workflows/b00t-build-image.yml.
+# The `command -v X ||` guards in init: make it also work on a bare image.
+image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
 
 env:
   # dstack 0.20.28: bare `- FOO` resolves from the LOCAL shell only; secrets
