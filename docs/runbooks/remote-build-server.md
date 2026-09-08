@@ -69,12 +69,18 @@ Verify: `ssh brianh@$CP_HOST 'systemctl is-active dstack-server'` → `active`.
 
 ## 3. Point the local dstack CLI at the waker
 
+The server-side project is **`main`** (dstack's default; the control node
+auto-creates it). Grab its admin token off the box and register it locally:
+
 ```sh
-dstack project add --name b00t \
-  --url $(cd b00t-tf && tofu output -raw gcp_control_node_endpoint) \
-  --token <admin token from ~/.dstack/server/config.yml on the control node>
-dstack project set-default b00t
+TOKEN=$(gcloud compute ssh b00t-dstack-control --zone australia-southeast1-a \
+  --tunnel-through-iap --command \
+  "python3 -c \"import yaml;print(yaml.safe_load(open('/home/brianh/.dstack/server/config.yml')).get('token',''))\"")
+dstack project add main \
+  --url $(cd b00t-tf && tofu output -raw gcp_control_node_endpoint) --token "$TOKEN"
 ```
+
+The `just remote-*` recipes export `DSTACK_PROJECT=main`.
 
 First call wakes the VM (~30–60 s). Break-glass without the waker (SSH via IAP —
 **no static or external IP needed**; the reaper churns the ephemeral one so
@@ -113,7 +119,7 @@ rebuild**, only changed crates recompile; `ssh b00t-build 'mountpoint -q
 
 ```sh
 just remote-stop
-dstack -p b00t delete --all ; dstack -p b00t fleet delete b00t-build-fleet
+dstack delete --all ; dstack fleet delete b00t-build-fleet   # DSTACK_PROJECT=main
 ssh brianh@$CP_HOST 'sudo systemctl disable --now dstack-server dstack-idle-reaper.timer'
 gcloud storage rm -r gs://b00t-buildcache-promptexecution/**      # the cache — rebuilds
 cd b00t-tf && tofu destroy -target=module.gcp_build_plane          # takes the waker + SAs + VPC

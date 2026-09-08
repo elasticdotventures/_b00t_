@@ -9,6 +9,10 @@ After=dstack-server.service
 [Service]
 Type=oneshot
 User=root
+# HOME points at the login user so `dstack` finds ~/.dstack/config.yml (the
+# "main" CLI project configure-local-dstack.sh set up). Running as root still
+# lets the script `systemctl poweroff`.
+Environment=HOME={{ home }}
 Environment=IDLE_GRACE_MIN={{ idle_grace_min }}
 Environment=DSTACK_PROJECT={{ dstack_project }}
 Environment=DSTACK_BIN={{ dstack_bin }}

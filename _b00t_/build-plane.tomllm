@@ -11,18 +11,20 @@
 # IaC: b00t-tf/modules/gcp-build-plane/ (+ modules/gcp-bootstrap/ for state)
 # Provisioning: nats/pyinfra/deploy_cp_node.py
 #
-# 🤓 Status 2026-09-08: Phase 2 APPLIED to promptexecution (27 resources — VM
-#    b00t-dstack-control RUNNING, VPC, 4 SAs, 3 roles, 3 firewalls IAP-only,
-#    buildcache bucket, WIF, AR repo). Waker VERIFIED (wake-on-request test:
-#    VM TERMINATED -> hit endpoint -> instances.start -> RUNNING). Endpoint
-#    https://b00t-cp-waker-mvwkz7iijq-ts.a.run.app, ext IP 34.116.68.13.
-#    NEXT: Phase 3 pyinfra (dstack server + idle reaper) — the box is RUNNING
-#    with no reaper yet. keyring.tomllm still pending -> SSH via IAP.
+# 🤓 Status 2026-09-08: Phase 2 APPLIED (27 resources) + Phase 3 RUN. VM
+#    b00t-dstack-control RUNNING; dstack 0.20.28 server (systemd, :3000, http
+#    200) + dstack-idle-reaper.timer both active/enabled; git installed. Waker
+#    VERIFIED (VM TERMINATED -> hit endpoint -> instances.start -> RUNNING).
+#    Endpoint https://b00t-cp-waker-mvwkz7iijq-ts.a.run.app, ext IP 34.116.68.13.
+#    Server-side dstack project = "main" (dstack default). Access = TF
+#    var.access_accounts (@elastic.ventures) -> roles/iap.tunnelResourceAccessor.
+#    NEXT: Phase 8 — `dstack project add main` on the workstation, then a real
+#    remote build. keyring.tomllm still pending (SSH via IAP meanwhile).
 
 [b00t]
 name      = "BUILD-PLANE"
 type      = "config"
-hint      = "Scale-to-zero GCP dstack build server for this workspace's Rust builds — pingap-waker-activated control node, self-reaping VM, GCS-backed cache. ~$25-40/mo."
+hint      = "Scale-to-zero GCP dstack build server for this workspace's Rust builds — pingap-waker-activated control node, self-reaping VM, GCS-backed cache. ~$18-30/mo (Spot build box)."
 type_tags = ["infrastructure", "build", "dstack", "gcp", "rust", "sccache", "opentofu", "cost-control"]
 keywords  = ["build-plane", "remote-build", "dstack", "cloud-build", "sccache", "zerofs", "waker", "control-node"]
 
@@ -46,7 +48,7 @@ idle_reaper    = "IDLE_GRACE 45m (> the fleet's 30m idle_duration)"
 never          = "runs on the operator workstation"
 
 [resource.waker]
-# Scale-to-zero traffic activator. `dstack project add --url <this>`.
+# Scale-to-zero traffic activator. `dstack project add main --url <this> --token <admin>`.
 kind          = "Cloud Run v2, min-instances=0 (~$0 idle)"
 impl          = "containers/b00t-cp-waker/waker.py — stdlib reverse proxy + wake (v1; pingap is the Phase 2.75 tailnet-edge upgrade)"
 image         = "australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-cp-waker:latest (Artifact Registry repo 'b00t', in-project)"
@@ -99,7 +101,7 @@ description = "Stand up the GCP infra (after operator Phase-0 inputs + gcloud AD
 command     = "cd b00t-tf && just tf-init-migrate && just gcp-apply"
 
 # b00t:map v1
-# summary: Scale-to-zero GCP dstack build server for this workspace's Rust builds — waker-activated control node, self-reaping VM, GCS-backed pluggable cache, ~$25-40/mo
+# summary: Scale-to-zero GCP dstack build server for this workspace's Rust builds — waker-activated control node, self-reaping VM, GCS-backed pluggable cache, ~$18-30/mo (Spot build box)
 # tags: infrastructure, build, dstack, gcp, rust, sccache, waker, opentofu, cost-control, tailnet
 # tier: frontier
 # cmds: just remote-doctor, just remote-provision, just remote-push <b> && just remote-test <b>

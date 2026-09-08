@@ -29,7 +29,10 @@ from pyinfra.facts.files import File
 from pyinfra.operations import apt, files, server, systemd
 
 DSTACK_VERSION = "0.20.28"
-DSTACK_PROJECT = "b00t"
+# "main" = dstack's default project name (the server auto-creates it and writes
+# the CLI's ~/.dstack/config.yml against it). Standardize on it everywhere —
+# the reaper, the post-check, and the operator's `dstack project add main ...`.
+DSTACK_PROJECT = "main"
 SSH_USER = "brianh"
 HOME = f"/home/{SSH_USER}"
 
@@ -138,6 +141,7 @@ files.template(
     name="Render dstack-idle-reaper.service (0644)",
     src="templates/dstack-idle-reaper.service.j2",
     dest="/etc/systemd/system/dstack-idle-reaper.service",
+    home=HOME,
     idle_grace_min=idle_grace_min,
     dstack_project=DSTACK_PROJECT,
     dstack_bin=f"{HOME}/.local/bin/dstack",
@@ -162,8 +166,8 @@ systemd.service(
 server.shell(
     name="Post-check: dstack server up + GCP backend healthy",
     commands=[
-        f"{HOME}/.local/bin/dstack server --version",
+        f"{HOME}/.local/bin/dstack --version",
         "curl -sf http://127.0.0.1:3000/ >/dev/null && echo 'dstack server: responding'",
-        f"{HOME}/.local/bin/dstack -p {DSTACK_PROJECT} fleet 2>&1 | head -5 || true",
+        f"{HOME}/.local/bin/dstack fleet --project {DSTACK_PROJECT} 2>&1 | head -5 || true",
     ],
 )

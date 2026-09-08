@@ -11,7 +11,9 @@ set -uo pipefail
 
 IDLE_GRACE_MIN="${IDLE_GRACE_MIN:-45}"                 # keep > fleet idle_duration (30m)
 DSTACK="${DSTACK_BIN:-/home/brianh/.local/bin/dstack}"
-DSTACK_PROJECT="${DSTACK_PROJECT:-b00t}"
+# dstack reads --project from $DSTACK_PROJECT natively. "main" is the project
+# the server auto-creates locally (see ~/.dstack/config.yml); it just works.
+export DSTACK_PROJECT="${DSTACK_PROJECT:-main}"
 KEEPALIVE_FILE="/run/b00t-cp-keepalive"                 # waker touches this per proxied request
 HOLD_FILE="/run/b00t-cp-hold"                           # `just remote-keepalive` sets this
 LOG_TAG="cp-reaper"
@@ -35,15 +37,15 @@ if ss -Htn state established '( sport = :3000 )' 2>/dev/null | grep -q .; then
 fi
 
 # --- 3. dstack has active runs -------------------------------------------
-#   ⚠️ verify the `dstack ps` column/JSON shape against dstack 0.20.28 before
-#   trusting this in production. Fail-safe: a non-zero exit => stay up.
-runs="$("$DSTACK" -p "$DSTACK_PROJECT" ps -a 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
+#   `dstack ps -a` on 0.20.28 prints a table; --project comes from
+#   $DSTACK_PROJECT. Fail-safe: a non-zero exit => stay up.
+runs="$("$DSTACK" ps -a 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
 if printf '%s\n' "$runs" | grep -qiE 'provisioning|pending|running|terminating'; then
   stay "dstack has a non-terminal run"
 fi
 
 # --- 4. dstack fleet not empty ----------------------------------------------
-fleet="$("$DSTACK" -p "$DSTACK_PROJECT" fleet 2>/dev/null)" || stay "dstack fleet query failed (fail-safe)"
+fleet="$("$DSTACK" fleet 2>/dev/null)" || stay "dstack fleet query failed (fail-safe)"
 # Header line always prints; a data row means an instance exists.
 if [ "$(printf '%s\n' "$fleet" | sed '1d' | grep -c .)" -gt 0 ]; then
   stay "dstack fleet non-empty"

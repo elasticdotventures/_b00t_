@@ -1468,35 +1468,41 @@ frigate-status:
 # plan gleaming-jingling-nygaard + dev-env/*.yaml.
 #
 # The dstack server runs on the GCP control node (Phase 3), NOT locally.
-# `dstack project add --name b00t --url $(cd b00t-tf && tofu output -raw
-# gcp_control_node_endpoint) --token <admin>` points the CLI at the pingap
-# waker, which powers the control node on first call. Every recipe below
-# passes `-p b00t` and begins by waking the control plane.
+# One-time on your workstation:
+#   dstack project add main \
+#     --url $(cd b00t-tf && tofu output -raw gcp_control_node_endpoint) \
+#     --token <server admin token from ~/.dstack/server/config.yml on the box>
+# That points the CLI at the waker, which powers the control node on first
+# call. Recipes below export DSTACK_PROJECT=main and begin by waking it.
 
-_DSTACK_P := "dstack -p b00t"
+# dstack reads the project from $DSTACK_PROJECT. "main" is the server-side
+# project the control node auto-creates. `dstack --project` is a per-subcommand
+# option (NOT `dstack -p <name> <cmd>`), so relying on the env is cleanest.
+export DSTACK_PROJECT := "main"
 _CHECKOUT := "/mnt/cache/b00t"
 
-# Wake the control plane: hit the pingap waker until dstack answers. The
-# control node self-powers-off when idle, so this is the required preamble.
+# Wake the control plane: hit the waker until it answers, then confirm the
+# operator's local dstack project reaches the server. The control node
+# self-powers-off when idle, so this is the required preamble.
 remote-doctor:
     #!/usr/bin/env bash
     set -euo pipefail
     URL="$(cd b00t-tf && tofu output -raw gcp_control_node_endpoint 2>/dev/null || true)"
     if [ -n "$URL" ]; then
       echo "🔔 waking control plane via $URL ..."
-      curl -sf --max-time 150 --retry 5 --retry-all-errors "$URL/healthz" >/dev/null \
-        && echo "✅ control plane awake"
+      curl -sf --max-time 150 --retry 5 --retry-all-errors "$URL/_waker/health" >/dev/null \
+        && echo "✅ waker up (control node starting/awake)"
     fi
-    {{_DSTACK_P}} project list | grep -q ' b00t ' || { echo "❌ no dstack project 'b00t' — run: dstack project add --name b00t --url $URL --token <admin>"; exit 1; }
-    echo "✅ remote-doctor: dstack project 'b00t' reachable"
+    dstack fleet >/dev/null 2>&1 || { echo "❌ dstack project '$DSTACK_PROJECT' not reachable — run: dstack project add $DSTACK_PROJECT --url $URL --token <server admin token>"; exit 1; }
+    echo "✅ remote-doctor: dstack '$DSTACK_PROJECT' reachable"
 
 # One-time: upload the read-only GitHub deploy key + cache password as
 # dstack secrets the dev-environment consumes. Run after `just gcp-apply`
 # + `deploy_cp_node.py`, before the first remote-provision.
 #   just remote-bootstrap ~/.ssh/b00t_build_deploy_key <cache-password>
 remote-bootstrap deploy_key_file cache_password: remote-doctor
-    {{_DSTACK_P}} secret set b00t_build_deploy_key --file {{deploy_key_file}} -y
-    {{_DSTACK_P}} secret set cache_password --value {{cache_password}} -y
+    dstack secret set b00t_build_deploy_key --file {{deploy_key_file}} -y
+    dstack secret set cache_password --value {{cache_password}} -y
     @echo "✅ secrets set: b00t_build_deploy_key, cache_password"
 
 # Idempotent: fleet then dev-environment (no PD volume by default — the
@@ -1506,11 +1512,11 @@ remote-provision: remote-doctor
     #!/usr/bin/env bash
     set -euo pipefail
     echo "🥾 provisioning b00t-build-fleet..."
-    {{_DSTACK_P}} apply -f dev-env/b00t-build-fleet.yaml -y
+    dstack apply -f dev-env/b00t-build-fleet.yaml -y
     echo "🥾 provisioning b00t-build dev-environment..."
-    {{_DSTACK_P}} apply -f dev-env/b00t-build.dev-environment.yaml -y
+    dstack apply -f dev-env/b00t-build.dev-environment.yaml -y
     echo "🔌 populating the ~/.ssh/config 'b00t-build' alias..."
-    {{_DSTACK_P}} ssh b00t-build -- true
+    dstack ssh b00t-build -- true
     echo "✅ b00t-build ready — just remote-push <branch> && just remote-test <branch>"
 
 # Pushes local HEAD to a scratch branch on origin for the build box to fetch.
@@ -1546,13 +1552,13 @@ remote-keepalive *args:
 # Manual stop of the build box — belt-and-suspenders alongside the fleet's
 # own 30m idle_duration. The control node then self-reaps once idle.
 remote-stop:
-    {{_DSTACK_P}} stop b00t-build -y
+    dstack stop b00t-build -y
 
 # Force the control node off now (refuses if a fleet instance is still up).
 remote-down:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ "$({{_DSTACK_P}} fleet 2>/dev/null | sed '1d' | grep -c .)" -gt 0 ]; then
+    if [ "$(dstack fleet 2>/dev/null | sed '1d' | grep -c .)" -gt 0 ]; then
       echo "❌ fleet non-empty — run 'just remote-stop' first"; exit 1
     fi
     ZONE="$(cd b00t-tf && tofu output -raw gcp_control_zone 2>/dev/null || echo australia-southeast1-a)"
