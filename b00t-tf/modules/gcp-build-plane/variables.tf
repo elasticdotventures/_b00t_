@@ -103,9 +103,9 @@ variable "github_repository" {
 }
 
 variable "waker_image" {
-  description = "Container image for the pingap scale-to-zero waker (Cloud Run). Build from containers/b00t-cp-waker/."
+  description = "Container image for the scale-to-zero waker (Cloud Run). Build/push from containers/b00t-cp-waker/ (`just push` there). Artifact Registry in-project so Cloud Run pulls it with no extra IAM."
   type        = string
-  default     = "ghcr.io/promptexecution/b00t-cp-waker:latest"
+  default     = "australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-cp-waker:latest"
 }
 
 variable "waker_public" {

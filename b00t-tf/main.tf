@@ -167,8 +167,17 @@ module "cloudflare" {
   anthropic_api_key = local.anthropic_api_key
 }
 
+# The Artifact Registry repo for the waker image was created out of band (it
+# must exist before the image can be pushed, which must happen before the Cloud
+# Run waker can apply cleanly). Adopt it on the next apply. Safe to leave in
+# place — a no-op once imported.
+import {
+  to = module.gcp_build_plane.google_artifact_registry_repository.containers
+  id = "projects/promptexecution/locations/australia-southeast1/repositories/b00t"
+}
+
 # GCP build plane — control node + build-VM identity + buildcache + GitHub WIF
-# + scale-to-zero pingap waker. Apply scoped: `just gcp-apply`.
+# + scale-to-zero waker. Apply scoped: `just gcp-apply`.
 module "gcp_build_plane" {
   source = "./modules/gcp-build-plane"
 

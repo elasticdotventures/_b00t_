@@ -1,0 +1,30 @@
+# b00t-cp-waker — build / push / deploy.
+# Plan gleaming-jingling-nygaard, Phase 2.5.
+
+image := "ghcr.io/promptexecution/b00t-cp-waker:latest"
+region := "australia-southeast1"
+
+# Syntax + a quick local smoke (starts, answers /_waker/health, exits).
+smoke:
+    python3 -m py_compile waker.py
+    PROJECT_ID=x CONTROL_ZONE=x CONTROL_INSTANCE=x DSTACK_UPSTREAM_ADDR=127.0.0.1:1 \
+      PORT=8099 python3 waker.py & \
+    pid=$!; sleep 1; \
+    curl -sf http://127.0.0.1:8099/_waker/health && echo " smoke OK"; \
+    kill $pid
+
+build:
+    podman build -t {{image}} -f Containerfile .
+
+# ghcr login uses $GITHUB_TOKEN (gh auth token). Package must be PUBLIC for
+# Cloud Run to pull without registry creds — set it public once at
+# github.com/orgs/PromptExecution/packages after the first push.
+push: build
+    printf '%s' "$GITHUB_TOKEN" | podman login ghcr.io -u elasticdotventures --password-stdin
+    podman push {{image}}
+
+# The image ref + env are TF-managed (b00t-tf module var.waker_image); this
+# recipe is a manual redeploy without a full `tofu apply`.
+deploy:
+    gcloud run deploy b00t-cp-waker --region {{region}} --image {{image}} \
+      --no-allow-unauthenticated=false

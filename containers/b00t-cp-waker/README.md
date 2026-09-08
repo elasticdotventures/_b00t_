@@ -34,23 +34,28 @@ upstream address.
 | `IDLE_GRACE` | informational here; the reaper on the VM owns shutdown |
 | `GCP_SA_KEY_FILE` | tailnet mode only — path to the `0600` SA key; unset ⇒ metadata ADC |
 
-## Proxy tier — pingap
+## v1 impl — `waker.py` (not pingap)
 
-`pingap` (`vendor/pingap-devproxy-b00t`, upstream `vicanso/pingap`) is the
-reverse-proxy / TLS / health-check / JSON-status layer. Single upstream
-(`DSTACK_UPSTREAM_ADDR`), config templated from env at container start.
+pingap has no native "run code and block until upstream up" request hook, needs
+a sidecar for the wake, and its routing/TLS/plugins are wasted on a single
+Cloud-Run-fronted upstream. So v1 is `waker.py` — stdlib-only (~140 lines):
+`GET /_waker/health` → 200 without waking; anything else → `ensure_running()`
+(metadata-ADC `instances.get`; `instances.start` if not RUNNING; poll
+`READINESS_PATH` to `START_DEADLINE_SECONDS`, else 503 + `Retry-After`) → then
+reverse-proxy method/headers/body to `DSTACK_UPSTREAM_ADDR`.
 
-**Open item:** pingap has no native "run code and block until upstream up"
-request hook. Chosen wiring: pingap health-check on the upstream + a `webhook`
-on health-status→unhealthy that calls `bin/wake.sh`; the first client request
-gets a 503 + `Retry-After` while the VM boots, and `remote-doctor` / the
-`remote-*` recipes already do a warm-up `curl --max-time 150` with retries. If
-pingap's webhook proves awkward, fall back to a 40-line reverse proxy (hyper /
-axum) that does start-then-proxy inline. Decide when building the image.
+`pingap` (`vendor/pingap-devproxy-b00t`) is the **Phase 2.75** upgrade, where it
+earns its keep as the *tailnet edge* (host routing, TLS, plugins) rather than a
+single-upstream shim.
 
 ## Files (this dir)
 
-- `bin/wake.sh` — the wake core (present).
-- `Containerfile`, `pingap/*.toml.tmpl`, `bin/run.sh`, `justfile` — TODO, next
-  authoring pass. Held back deliberately: the `network_mode=tailnet` decision
-  (2026-09-08b) may move this off Cloud Run, which changes the entrypoint shape.
+- `waker.py` — v1 proxy + wake, **working** (`just smoke`).
+- `Containerfile` — `python:3.12-slim` + `waker.py`.
+- `justfile` — `smoke` / `build` / `push` / `deploy`.
+- `bin/wake.sh` — earlier standalone wake core; superseded by `waker.py`, kept
+  for the tailnet-mode / non-container path.
+
+**Image**: `australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-cp-waker:latest`
+(Artifact Registry, in-project → Cloud Run pulls with no extra IAM). TF ref =
+`var.waker_image`; `just push` to rebuild.

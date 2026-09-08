@@ -43,10 +43,11 @@ never          = "runs on the operator workstation"
 
 [resource.waker]
 # Scale-to-zero traffic activator. `dstack project add --url <this>`.
-kind          = "pingap on Cloud Run v2, min-instances=0 (~$0 idle)"
+kind          = "Cloud Run v2, min-instances=0 (~$0 idle)"
+impl          = "containers/b00t-cp-waker/waker.py — stdlib reverse proxy + wake (v1; pingap is the Phase 2.75 tailnet-edge upgrade)"
+image         = "australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-cp-waker:latest (Artifact Registry repo 'b00t', in-project)"
 sa            = "b00t-cp-waker (compute.instances.get+start on the one instance only)"
 tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phase 2.75)"
-container     = "containers/b00t-cp-waker/ (built on vendor/pingap-devproxy-b00t)"
 
 [resource.cache]
 # No persistent PD — the standby cost lever. State is in GCS, so the cache is

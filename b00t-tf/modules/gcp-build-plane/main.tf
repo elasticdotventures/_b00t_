@@ -91,12 +91,24 @@ locals {
 # `tofu destroy` of the build plane never yanks an API another resource needs.
 resource "google_project_service" "build_plane" {
   for_each = toset(concat(
-    ["run.googleapis.com", "vpcaccess.googleapis.com"],
+    ["run.googleapis.com", "vpcaccess.googleapis.com", "artifactregistry.googleapis.com"],
     var.enable_iap_ssh ? ["iap.googleapis.com"] : [],
   ))
   service                    = each.value
   disable_on_destroy         = false
   disable_dependent_services = false
+}
+
+# Container registry for the waker image (and future b00t images). Cloud Run in
+# the same project pulls from here without extra IAM. Created out of band +
+# imported (see the import block in the root module) — an empty repo is cheap
+# and TF-tracking it keeps teardown complete.
+resource "google_artifact_registry_repository" "containers" {
+  location      = var.region
+  repository_id = "b00t"
+  format        = "DOCKER"
+  description   = "b00t container images"
+  depends_on    = [google_project_service.build_plane]
 }
 
 # ---------------------------------------------------------------------------
@@ -409,6 +421,11 @@ resource "google_cloud_run_v2_service" "cp_waker" {
   location   = var.region
   ingress    = "INGRESS_TRAFFIC_ALL"
   depends_on = [google_project_service.build_plane]
+
+  # A stateless scale-to-zero shim that gets rebuilt/replaced routinely — the
+  # default deletion_protection=true only gets in the way (blocks the replace
+  # of a tainted revision).
+  deletion_protection = false
 
   template {
     service_account = google_service_account.cp_waker.email
