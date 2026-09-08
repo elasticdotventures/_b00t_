@@ -11,9 +11,13 @@
 # IaC: b00t-tf/modules/gcp-build-plane/ (+ modules/gcp-bootstrap/ for state)
 # Provisioning: nats/pyinfra/deploy_cp_node.py
 #
-# 🤓 Status 2026-09-08: IaC + pyinfra + dev-env authored & validated; NOT yet
-#    applied to real GCP infra. `just gcp-apply` gated on operator Phase-0
-#    inputs (spend confirm, egress CIDR, ~/.ssh/id_ed25519.pub in keyring).
+# 🤓 Status 2026-09-08: Phase 2 APPLIED to promptexecution (27 resources — VM
+#    b00t-dstack-control RUNNING, VPC, 4 SAs, 3 roles, 3 firewalls IAP-only,
+#    buildcache bucket, WIF, AR repo). Waker VERIFIED (wake-on-request test:
+#    VM TERMINATED -> hit endpoint -> instances.start -> RUNNING). Endpoint
+#    https://b00t-cp-waker-mvwkz7iijq-ts.a.run.app, ext IP 34.116.68.13.
+#    NEXT: Phase 3 pyinfra (dstack server + idle reaper) — the box is RUNNING
+#    with no reaper yet. keyring.tomllm still pending -> SSH via IAP.
 
 [b00t]
 name      = "BUILD-PLANE"
