@@ -35,14 +35,16 @@ resources:
   disk: 200GB..
   gpu: 0
 
-# Spot: ~60-70% cheaper (operator decision 2026-09-08, "eviction is okay if
-# restart can be achieved"). `auto` = prefer spot, fall back to on-demand when
-# spot capacity is unavailable so a build is never fully blocked; switch to
-# `spot` for pure-cheapest (fails instead of falling back).
-spot_policy: auto
+# Spot only (operator decision 2026-09-08, "lets try spot, eviction is okay if
+# restart can be achieved"). e2-standard-8 Spot ≈ $0.19/hr vs ≈ $0.38 on-demand.
+# 🤓 2026-09-08: `spot_policy: auto` was observed picking ON-DEMAND (it grabs
+# the first viable offer, not necessarily spot). `spot` forces spot; the retry
+# below rides out a transient no-capacity window. Switch back to `auto` if a
+# build must never be blocked and 2× cost is acceptable.
+spot_policy: spot
 
-# Auto re-provision an evicted node. ⚠️ verify `on_events` vs `on_status` and
-# the accepted event names against dstack 0.20.28 before trusting this.
+# Auto re-provision an evicted / capacity-starved node (verified accepted by
+# dstack 0.20.28: on_events, values interruption / no-capacity / error).
 retry:
   on_events: [interruption, no-capacity]
   duration: 1h

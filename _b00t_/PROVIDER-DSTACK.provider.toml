@@ -137,6 +137,15 @@ backend        = "gcp only (regions: [australia-southeast1], vm_service_account:
 runpod         = "deferred — re-add `- type: runpod` + --data guard if ever needed"
 recipes        = "just remote-doctor | remote-provision | remote-push | remote-test | remote-keepalive | remote-down"
 
+[resource.build_plane.cli_0_20_28]
+# 🤓 Verified against installed dstack 0.20.28 (2026-09-08), corrections vs the
+# original build-plane design:
+project        = "server-side project name is 'main' (dstack auto-creates it + writes ~/.dstack/config.yml). `dstack project add --name main --url <waker> --token <server admin token>`."
+project_flag   = "`--project` is a PER-SUBCOMMAND option (default $DSTACK_PROJECT), NOT `dstack -p <name> <cmd>`."
+ssh            = "NO top-level `dstack ssh` — use `dstack attach <run>` (writes ~/.dstack/ssh/config with `Host <run>`), then plain `ssh <run>`."
+secret         = "`dstack secret set NAME VALUE` (positional; no --file/--value/-y). Bare `env: - NAME` in a dev-env resolves NAME from a secret of the same name."
+repo           = "dev-env `files:` maps local files onto the box (used to ship cache-up.sh before the checkout exists). `repos:` / `dstack init` also mount the local repo natively."
+
 [[resource.usages]]
 description = "Submit a one-off batch job via b00t CLI (provider-agnostic) — fresh pod, no volume"
 command     = "b00t-cli provider job submit-batch --provider dstack --image <image> --config <path> --flavor <flavor>"

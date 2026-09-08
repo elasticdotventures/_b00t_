@@ -260,8 +260,13 @@ resource "google_compute_instance" "control" {
   labels = var.labels
 
   lifecycle {
-    # The reaper flips this to TERMINATED; do not let apply restart it.
-    ignore_changes = [desired_status]
+    # desired_status: the reaper flips it to TERMINATED — don't let apply
+    #   restart it.
+    # metadata["ssh-keys"]: `gcloud compute ssh` and dstack append per-user
+    #   keys here out of band. TF seeds it once from the keyring
+    #   (var.control_authorized_ssh_keys) and then leaves it alone; to re-assert
+    #   the keyring, `tofu taint` the instance.
+    ignore_changes = [desired_status, metadata["ssh-keys"]]
   }
 }
 

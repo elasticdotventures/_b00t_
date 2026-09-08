@@ -1493,16 +1493,17 @@ remote-doctor:
       curl -sf --max-time 150 --retry 5 --retry-all-errors "$URL/_waker/health" >/dev/null \
         && echo "✅ waker up (control node starting/awake)"
     fi
-    dstack fleet >/dev/null 2>&1 || { echo "❌ dstack project '$DSTACK_PROJECT' not reachable — run: dstack project add $DSTACK_PROJECT --url $URL --token <server admin token>"; exit 1; }
+    dstack fleet >/dev/null 2>&1 || { echo "❌ dstack project '$DSTACK_PROJECT' not reachable — run: dstack project add --name $DSTACK_PROJECT --url $URL --token <server admin token>"; exit 1; }
     echo "✅ remote-doctor: dstack '$DSTACK_PROJECT' reachable"
 
 # One-time: upload the read-only GitHub deploy key + cache password as
 # dstack secrets the dev-environment consumes. Run after `just gcp-apply`
 # + `deploy_cp_node.py`, before the first remote-provision.
 #   just remote-bootstrap ~/.ssh/b00t_build_deploy_key <cache-password>
+# 🤓 dstack 0.20.28: `dstack secret set NAME VALUE` (positional, no --file/-y).
 remote-bootstrap deploy_key_file cache_password: remote-doctor
-    dstack secret set b00t_build_deploy_key --file {{deploy_key_file}} -y
-    dstack secret set cache_password --value {{cache_password}} -y
+    dstack secret set b00t_build_deploy_key "$(cat {{deploy_key_file}})"
+    dstack secret set cache_password '{{cache_password}}'
     @echo "✅ secrets set: b00t_build_deploy_key, cache_password"
 
 # Idempotent: fleet then dev-environment (no PD volume by default — the
@@ -1515,8 +1516,10 @@ remote-provision: remote-doctor
     dstack apply -f dev-env/b00t-build-fleet.yaml -y
     echo "🥾 provisioning b00t-build dev-environment..."
     dstack apply -f dev-env/b00t-build.dev-environment.yaml -y
-    echo "🔌 populating the ~/.ssh/config 'b00t-build' alias..."
-    dstack ssh b00t-build -- true
+    echo "🔌 populating the 'b00t-build' ssh alias (dstack 0.20.28: attach, not ssh)..."
+    dstack attach b00t-build >/dev/null 2>&1 &
+    sleep 8
+    ssh -o ConnectTimeout=20 b00t-build true && echo "✅ b00t-build reachable"
     echo "✅ b00t-build ready — just remote-push <branch> && just remote-test <branch>"
 
 # Pushes local HEAD to a scratch branch on origin for the build box to fetch.
@@ -1528,12 +1531,21 @@ remote-push branch:
 # Streams live over SSH — no polling. First run after remote-provision is
 # cold; every run after is warm because $CHECKOUT + target/ + sccache live
 # on /mnt/cache (GCS), independent of the box's stop/resume.
-remote-build branch:
+remote-build branch: _attach
     ssh b00t-build 'mountpoint -q /mnt/cache && sccache --start-server; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build'
 
 # Same as remote-build, but `cargo nextest run` instead.
-remote-test branch:
+remote-test branch: _attach
     ssh b00t-build 'mountpoint -q /mnt/cache && sccache --start-server; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
+
+# Ensure `ssh b00t-build` resolves — dstack 0.20.28 needs `dstack attach` to
+# write ~/.dstack/ssh/config. Backgrounded; harmless if already attached.
+_attach:
+    #!/usr/bin/env bash
+    ssh -o ConnectTimeout=8 b00t-build true 2>/dev/null && exit 0
+    dstack attach b00t-build >/dev/null 2>&1 &
+    for i in $(seq 1 15); do ssh -o ConnectTimeout=8 b00t-build true 2>/dev/null && exit 0; sleep 2; done
+    echo "❌ could not reach b00t-build via ssh (dstack attach)"; exit 1
 
 # Keep the control plane awake past its idle grace (e.g. a long unattended
 # build). `--release` clears the hold. Uses `gcloud compute ssh` by name+zone —

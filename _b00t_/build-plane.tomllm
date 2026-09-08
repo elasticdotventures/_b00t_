@@ -59,10 +59,19 @@ tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phas
 # No persistent PD — the standby cost lever. State is in GCS, so the cache is
 # warm the moment the box resumes.
 bucket        = "b00t-buildcache-promptexecution"
-mount         = "/mnt/cache (dev-env/cache-up.sh)"
-backend       = "pluggable: zerofs (NBD/NFS kernel client) | rustfs (S3 API) | gcsfuse"
+mount         = "/mnt/cache (dev-env/cache-up.sh, shipped via dev-env `files:`)"
+backend       = "gcsfuse (default, verified installable) | zerofs (NBD, UNVERIFIED) | rustfs (TODO). cache-up.sh falls back to a LOCAL bind + warning if none mount."
 holds         = "git checkout, target/, sccache (SCCACHE_DIR=/mnt/cache/sccache, CARGO_INCREMENTAL=0)"
-target_dir_open_question = "network-FS vs local-SSD+sync vs a small 20-30GB PD — decide by measuring an incremental build"
+target_dir_open_question = "gcsfuse small-file perf for target/ is unmeasured — fallbacks: local-SSD+rclone-bisync, or a small 20-30GB PD"
+
+[resource.measured_2026_09_08]
+# e2-standard-8 Spot/on-demand, 8 vCPU Intel Xeon @ 2.2GHz, Ubuntu 24.04.
+box_provision      = "~4 min (submit -> running, incl. image pull)"
+cold_b00t_cli      = "~9 min  (cargo build -p b00t-cli, empty cache, no sccache)"
+warm_b00t_cli      = "~1.5 min (1-file change in b00t-cli)"
+noop_b00t_cli      = "~1.4 min (b00t-cli's compile-time build.rs always re-runs)"
+image_reality      = "🚩 ghcr.io/elasticdotventures/ci-occt is MINIMAL (only git) — init: installs the whole toolchain (~6-10 min first boot). Bake a b00t-build image as a follow-up."
+spot_note          = "spot_policy: auto was seen picking ON-DEMAND ($0.38 vs $0.19); fleet now pins spot_policy: spot + retry."
 
 [resource.wif]
 # The one place keyless OIDC federation is needed: GitHub Actions -> GCP.
