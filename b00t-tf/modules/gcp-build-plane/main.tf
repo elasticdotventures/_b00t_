@@ -499,3 +499,50 @@ resource "google_cloud_run_v2_service_iam_member" "waker_public" {
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
+
+# ---------------------------------------------------------------------------
+# Spend-alert budget — optional (needs billing-account access + the
+# billingbudgets API). Thresholds at 50/90/100% of var.budget_amount_usd,
+# scoped to this project. Alert-only; does not cap anything.
+# ---------------------------------------------------------------------------
+resource "google_billing_budget" "build_plane" {
+  count           = var.budget_billing_account != "" ? 1 : 0
+  billing_account = var.budget_billing_account
+  display_name    = "b00t build plane (${var.project_id})"
+
+  budget_filter {
+    projects               = ["projects/${var.project_id}"]
+    calendar_period        = "MONTH"
+    credit_types_treatment = "INCLUDE_ALL_CREDITS"
+  }
+
+  amount {
+    specified_amount {
+      currency_code = "USD"
+      units         = tostring(var.budget_amount_usd)
+    }
+  }
+
+  dynamic "threshold_rules" {
+    for_each = [0.5, 0.9, 1.0]
+    content {
+      threshold_percent = threshold_rules.value
+      spend_basis       = "CURRENT_SPEND"
+    }
+  }
+
+  dynamic "all_updates_rule" {
+    for_each = length(var.budget_alert_emails) > 0 ? [1] : []
+    content {
+      monitoring_notification_channels = google_monitoring_notification_channel.budget[*].id
+      disable_default_iam_recipients   = false
+    }
+  }
+}
+
+resource "google_monitoring_notification_channel" "budget" {
+  for_each     = toset(var.budget_alert_emails)
+  display_name = "b00t build plane budget — ${each.value}"
+  type         = "email"
+  labels       = { email_address = each.value }
+}

@@ -196,6 +196,14 @@ module "gcp_build_plane" {
   allowed_cidrs               = local.gcp_allowed_cidrs
   network_mode                = local.gcp_network_mode
   access_accounts             = local.gcp_access_accounts
+
+  # Optional spend-alert budget. Set [gcp].budget_billing_account in _b00t_.toml
+  # (or GCP_BUDGET_BILLING_ACCOUNT in .env) to enable. Empty = no budget resource.
+  budget_billing_account = coalesce(
+    try(var.dotenv_entries.GCP_BUDGET_BILLING_ACCOUNT, null),
+    try(local.b00t_config.gcp.budget_billing_account, null),
+    "",
+  )
 }
 
 # Outputs

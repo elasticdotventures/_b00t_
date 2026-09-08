@@ -133,3 +133,21 @@ variable "labels" {
     module     = "gcp-build-plane"
   }
 }
+
+variable "budget_billing_account" {
+  description = "Billing account id (e.g. \"010CF0-14B757-AF79DC\") for a spend-alert budget scoped to this project. Empty = no budget resource (needs billing-account-level access + billingbudgets API)."
+  type        = string
+  default     = ""
+}
+
+variable "budget_amount_usd" {
+  description = "Monthly budget amount (USD) for the alert. Thresholds fire at 50/90/100% of this."
+  type        = number
+  default     = 40
+}
+
+variable "budget_alert_emails" {
+  description = "Emails that get the budget-threshold notifications (via a Cloud Monitoring notification channel). Empty = Billing-account admins only."
+  type        = list(string)
+  default     = []
+}
