@@ -90,10 +90,10 @@ locals {
 # bootstrap) so this module is self-contained; disable_on_destroy = false so a
 # `tofu destroy` of the build plane never yanks an API another resource needs.
 resource "google_project_service" "build_plane" {
-  for_each = toset([
-    "run.googleapis.com",
-    "vpcaccess.googleapis.com",
-  ])
+  for_each = toset(concat(
+    ["run.googleapis.com", "vpcaccess.googleapis.com"],
+    var.enable_iap_ssh ? ["iap.googleapis.com"] : [],
+  ))
   service                    = each.value
   disable_on_destroy         = false
   disable_dependent_services = false
@@ -220,10 +220,14 @@ resource "google_compute_instance" "control" {
   network_interface {
     subnetwork = google_compute_subnetwork.build_plane.id
 
-    # Ephemeral external IP only in "public" (build-phase) mode — for the
-    # pyinfra provisioning SSH and the break-glass tunnel; tcp/22 is firewalled
-    # to var.allowed_cidrs. In "tailnet" mode there is no external IP; reach the
-    # node over Tailscale (Phase 2.75).
+    # NO reserved/static IP (no google_compute_address anywhere in this module).
+    # "public" mode gets an EPHEMERAL external IP for pyinfra provisioning + the
+    # break-glass tunnel — and it CHANGES on every reaper stop/start, so nothing
+    # may cache it: reach the box by name with `gcloud compute ssh
+    # b00t-dstack-control --zone <zone>` (resolves the current IP each call).
+    # The stable paths do not use it: the pingap waker proxies dstack via the
+    # INTERNAL IP (network_ip, persists across stop/start), and "tailnet" mode
+    # has no external IP at all — reach it by MagicDNS name over Tailscale.
     dynamic "access_config" {
       for_each = local.is_public ? [1] : []
       content {}
@@ -265,6 +269,39 @@ resource "google_compute_firewall" "control_ssh" {
   source_ranges = local.ssh_sources
   target_tags   = ["dstack-control"]
   description   = local.is_public ? "Operator SSH to the control node (build phase)." : "Tailnet SSH to the control node."
+}
+
+# SSH via IAP TCP forwarding — no external IP needed at all (static or
+# ephemeral). This is the recommended access path since there is no static IP.
+resource "google_compute_firewall" "control_ssh_iap" {
+  count   = var.enable_iap_ssh ? 1 : 0
+  name    = "b00t-control-ssh-iap"
+  network = google_compute_network.build_plane.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  # IAP's fixed forwarding range.
+  source_ranges = ["35.235.240.0/20"]
+  target_tags   = ["dstack-control"]
+  description   = "SSH via `gcloud compute ssh --tunnel-through-iap` — address-independent."
+}
+
+# Grant the operator IAP tunnel access, scoped by IAM condition to the one
+# instance. Empty ssh_iap_members => grant `roles/iap.tunnelResourceAccessor`
+# yourself (project- or instance-scoped).
+resource "google_project_iam_member" "ssh_iap" {
+  for_each = var.enable_iap_ssh ? toset(var.ssh_iap_members) : []
+  project  = var.project_id
+  role     = "roles/iap.tunnelResourceAccessor"
+  member   = each.value
+
+  condition {
+    title      = "only-the-control-instance"
+    expression = "resource.name == \"projects/${var.project_id}/zones/${local.control_zone}/instances/${google_compute_instance.control.name}\""
+  }
 }
 
 resource "google_compute_firewall" "control_dstack" {

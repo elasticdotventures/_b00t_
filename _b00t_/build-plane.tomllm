@@ -26,7 +26,9 @@ keywords  = ["build-plane", "remote-build", "dstack", "cloud-build", "sccache", 
 name   = "b00t GCP build plane"
 region = "australia-southeast1"
 project = "promptexecution"
-monthly_cost_estimate_usd = "25-40"
+monthly_cost_estimate_usd = "18-30"   # Spot build box (operator decision 2026-09-08)
+build_box_spot_policy = "auto"        # prefer spot; fall back to on-demand only on no-capacity
+static_ip = "none — no google_compute_address. SSH via IAP tunnel (address-independent); dstack API via the stable waker URL + internal IP. Reaper churns the ephemeral external IP — never cache it."
 
 [resource.control_node]
 # The dstack server host. Powered on by the pingap waker on inbound traffic,

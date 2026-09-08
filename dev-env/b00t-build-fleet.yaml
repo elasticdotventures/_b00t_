@@ -35,4 +35,21 @@ resources:
   disk: 200GB..
   gpu: 0
 
+# Spot: ~60-70% cheaper (operator decision 2026-09-08, "eviction is okay if
+# restart can be achieved"). `auto` = prefer spot, fall back to on-demand when
+# spot capacity is unavailable so a build is never fully blocked; switch to
+# `spot` for pure-cheapest (fails instead of falling back).
+spot_policy: auto
+
+# Auto re-provision an evicted node. ⚠️ verify `on_events` vs `on_status` and
+# the accepted event names against dstack 0.20.28 before trusting this.
+retry:
+  on_events: [interruption, no-capacity]
+  duration: 1h
+
 idle_duration: 30m
+# 🤓 Restart after a spot eviction: the node re-provisions (retry above), the
+# dev-env `init:` re-runs (idempotent, re-mounts /mnt/cache from GCS), and the
+# in-flight `cargo` dies — just re-run `just remote-build`/`remote-test`, which
+# resumes WARM because target/ + sccache live on the GCS-backed mount, not the
+# ephemeral box.

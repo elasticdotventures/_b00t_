@@ -1530,14 +1530,17 @@ remote-test branch:
     ssh b00t-build 'mountpoint -q /mnt/cache && sccache --start-server; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
 
 # Keep the control plane awake past its idle grace (e.g. a long unattended
-# build). `--release` clears the hold.
+# build). `--release` clears the hold. Uses `gcloud compute ssh` by name+zone —
+# the control node has NO static IP and the reaper churns the ephemeral one, so
+# never cache an address; gcloud resolves it live each call.
 remote-keepalive *args:
     #!/usr/bin/env bash
     set -euo pipefail
+    ZONE="$(cd b00t-tf && tofu output -raw gcp_control_zone 2>/dev/null || echo australia-southeast1-a)"
     if [ "{{args}}" = "--release" ]; then
-      {{_DSTACK_P}} ssh b00t-dstack-control -- 'sudo rm -f /run/b00t-cp-hold' && echo "hold released"
+      gcloud compute ssh b00t-dstack-control --zone "$ZONE" --tunnel-through-iap --command 'sudo rm -f /run/b00t-cp-hold' && echo "hold released"
     else
-      {{_DSTACK_P}} ssh b00t-dstack-control -- 'sudo touch /run/b00t-cp-hold' && echo "control plane held awake — clear with: just remote-keepalive --release"
+      gcloud compute ssh b00t-dstack-control --zone "$ZONE" --tunnel-through-iap --command 'sudo touch /run/b00t-cp-hold' && echo "control plane held awake — clear with: just remote-keepalive --release"
     fi
 
 # Manual stop of the build box — belt-and-suspenders alongside the fleet's

@@ -76,8 +76,16 @@ dstack project add --name b00t \
 dstack project set-default b00t
 ```
 
-First call wakes the VM (~30–60 s). Break-glass without the waker:
-`gcloud compute ssh b00t-dstack-control --zone <zone> -- -L 3000:127.0.0.1:3000`.
+First call wakes the VM (~30–60 s). Break-glass without the waker (SSH via IAP —
+**no static or external IP needed**; the reaper churns the ephemeral one so
+never cache an address):
+```sh
+gcloud compute ssh b00t-dstack-control --zone <zone> --tunnel-through-iap \
+  -- -L 3000:127.0.0.1:3000
+```
+IAP needs `roles/iap.tunnelResourceAccessor` — set `ssh_iap_members` in
+`b00t-tf/.env` / the module before apply, or grant it yourself:
+`gcloud projects add-iam-policy-binding promptexecution --member=user:you@… --role=roles/iap.tunnelResourceAccessor`.
 
 ## 4. Secrets + provision
 
@@ -114,6 +122,7 @@ cd b00t-tf && tofu destroy -target=module.gcp_build_plane          # takes the w
 
 ## Cost
 
-~$25–40/mo: e2-small powered off when idle (~$2–3) + 10 GB pd-standard (~$0.50)
-+ waker (~$0) + build box compute (~$15–25, ~2 h/day) + GCS cache (~$1–4) +
-egress. No persistent cache PD.
+~$18–30/mo (Spot build box): e2-small powered off when idle (~$2–3) + 10 GB
+pd-standard (~$0.50) + waker (~$0) + **Spot** build box compute (~$6–10, ~2 h/day;
+`spot_policy: auto` falls back to on-demand only when Spot has no capacity) +
+GCS cache (~$1–4) + egress (~$2–8). No persistent cache PD, no reserved IP.

@@ -66,6 +66,18 @@ variable "tailnet_cidr" {
   default     = "100.64.0.0/10"
 }
 
+variable "enable_iap_ssh" {
+  description = "Allow SSH via IAP TCP forwarding (`gcloud compute ssh --tunnel-through-iap`). Works with NO external IP, static or ephemeral — the recommended access path given there is no static IP. Adds a tcp/22 firewall rule for IAP's range 35.235.240.0/20."
+  type        = bool
+  default     = true
+}
+
+variable "ssh_iap_members" {
+  description = "IAM members (e.g. \"user:me@example.com\") granted roles/iap.tunnelResourceAccessor on the control node. Empty => grant it yourself out of band."
+  type        = list(string)
+  default     = []
+}
+
 variable "build_plane_subnet_cidr" {
   description = "Primary range for the build-plane subnet. Cloud Run direct-VPC-egress source IPs come from here, so it is also the tcp/3000 firewall source for the pingap waker -> dstack server."
   type        = string
