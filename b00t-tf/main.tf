@@ -139,6 +139,14 @@ locals {
     "public"
   )
 
+  # Build-plane access list — bare @elastic.ventures emails. _b00t_.toml
+  # [gcp].access_accounts (a list), or .env GCP_ACCESS_ACCOUNTS (comma-sep).
+  # Each gets roles/iap.tunnelResourceAccessor on the control instance.
+  gcp_access_accounts = distinct(concat(
+    try(local.b00t_config.gcp.access_accounts, []),
+    compact(split(",", try(var.dotenv_entries.GCP_ACCESS_ACCOUNTS, ""))),
+  ))
+
   # Control-node authorized SSH keys, from the keyring datum (var.keyring_keys):
   # active entries whose `scope` includes "gcp-build-plane-control", formatted
   # "<user>:<public_key>" and newline-joined for GCE `ssh-keys` metadata.
@@ -187,6 +195,7 @@ module "gcp_build_plane" {
   control_authorized_ssh_keys = local.control_authorized_ssh_keys
   allowed_cidrs               = local.gcp_allowed_cidrs
   network_mode                = local.gcp_network_mode
+  access_accounts             = local.gcp_access_accounts
 }
 
 # Outputs

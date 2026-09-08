@@ -72,10 +72,15 @@ variable "enable_iap_ssh" {
   default     = true
 }
 
-variable "ssh_iap_members" {
-  description = "IAM members (e.g. \"user:me@example.com\") granted roles/iap.tunnelResourceAccessor on the control node. Empty => grant it yourself out of band."
+variable "access_accounts" {
+  description = "The people allowed to reach the build plane — bare Google account emails (e.g. \"brianh@elastic.ventures\"). Each is granted roles/iap.tunnelResourceAccessor, IAM-conditioned to the control instance, so they can `gcloud compute ssh --tunnel-through-iap`. This is the single source of truth for build-plane access; do not grant it out of band."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for a in var.access_accounts : can(regex("^[^@]+@[^@]+$", a))])
+    error_message = "access_accounts entries are bare emails (user@domain), not \"user:...\" members."
+  }
 }
 
 variable "build_plane_subnet_cidr" {

@@ -46,9 +46,12 @@ if not build_vm_sa_email:
     )
 
 # ─── 1. Base packages ──────────────────────────────────────────────────────
+# git: dstack's CLI + server import GitPython, which hard-fails at import time
+# without a `git` binary on PATH ("Bad git executable"). iproute2: the reaper's
+# `ss`. curl: uv installer + health probes.
 apt.packages(
-    name="Install curl + python3 + iproute2 (reaper needs `ss`)",
-    packages=["curl", "python3", "iproute2", "ca-certificates"],
+    name="Install git + curl + python3 + iproute2 (reaper needs `ss`)",
+    packages=["git", "curl", "python3", "iproute2", "ca-certificates"],
     update=True,
     _sudo=True,
 )

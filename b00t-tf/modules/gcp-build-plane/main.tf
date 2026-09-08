@@ -301,14 +301,15 @@ resource "google_compute_firewall" "control_ssh_iap" {
   description   = "SSH via `gcloud compute ssh --tunnel-through-iap` — address-independent."
 }
 
-# Grant the operator IAP tunnel access, scoped by IAM condition to the one
-# instance. Empty ssh_iap_members => grant `roles/iap.tunnelResourceAccessor`
-# yourself (project- or instance-scoped).
-resource "google_project_iam_member" "ssh_iap" {
-  for_each = var.enable_iap_ssh ? toset(var.ssh_iap_members) : []
+# Build-plane access list — every var.access_accounts entry gets
+# roles/iap.tunnelResourceAccessor, IAM-conditioned to the control instance, so
+# `gcloud compute ssh --tunnel-through-iap` works. TF is the source of truth;
+# no out-of-band grants.
+resource "google_project_iam_member" "access_iap" {
+  for_each = var.enable_iap_ssh ? toset(var.access_accounts) : []
   project  = var.project_id
   role     = "roles/iap.tunnelResourceAccessor"
-  member   = each.value
+  member   = "user:${each.value}"
 
   condition {
     title      = "only-the-control-instance"
