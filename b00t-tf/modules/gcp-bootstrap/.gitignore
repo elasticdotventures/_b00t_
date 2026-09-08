@@ -1,0 +1,7 @@
+# Local-state module — never commit the state or provider cache.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log

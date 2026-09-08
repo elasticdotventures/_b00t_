@@ -1,0 +1,14 @@
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local overrides (see .env.template)
+.env
+
+# Build artifacts (see `just clean`)
+node_modules/
+template/

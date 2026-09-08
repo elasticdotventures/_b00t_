@@ -45,6 +45,33 @@ tf-destroy: tf-init
     tofu destroy
     @echo "💥 Infrastructure destroyed"
 
+# === GCP BOOTSTRAP (one-time, local state) ===
+# Creates the GCS remote-state bucket + enables the GCP APIs the root
+# `gcp-build-plane` module needs. Separate local-state module — run once with
+# operator Application Default Credentials. See modules/gcp-bootstrap/README.md.
+
+gcp-bootstrap:
+    tofu -chdir=modules/gcp-bootstrap init
+    tofu -chdir=modules/gcp-bootstrap apply
+    @echo "✅ gcp-bootstrap applied — remote-state bucket + APIs ready"
+
+# Read-only preview of the bootstrap.
+gcp-bootstrap-plan:
+    tofu -chdir=modules/gcp-bootstrap init
+    tofu -chdir=modules/gcp-bootstrap plan
+
+# GUARDED teardown. The state bucket has prevent_destroy=true — migrate root
+# state back to local (tofu init -migrate-state) and remove that lifecycle
+# block in modules/gcp-bootstrap/main.tf FIRST.
+gcp-bootstrap-destroy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "⚠️  This destroys the OpenTofu remote-state bucket for the whole build plane."
+    read -rp "Type 'destroy-bootstrap' to continue: " ans
+    [ "$ans" = "destroy-bootstrap" ] || { echo "aborted"; exit 1; }
+    tofu -chdir=modules/gcp-bootstrap destroy
+    echo "💥 gcp-bootstrap destroyed"
+
 # === VALIDATION ===
 
 # Validate manifest.json schema
