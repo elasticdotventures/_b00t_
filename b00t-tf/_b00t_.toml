@@ -8,8 +8,19 @@ hint = "OpenTofu infrastructure provisioning defaults"
 
 [session]
 project_name = "b00t"
-aws_region = "us-east-1" 
+aws_region = "us-east-1"
 cloudflare_zone = ""
+
+[gcp]
+# Build plane (plan gleaming-jingling-nygaard). .env keys GCP_PROJECT_ID /
+# GCP_REGION / GCP_CONTROL_MACHINE_TYPE / GCP_ALLOWED_CIDRS / GCP_NETWORK_MODE
+# override these.
+project_id = "promptexecution"
+region = "australia-southeast1"
+control_machine_type = "e2-small"
+# "public" = build phase (external IP + Cloud Run waker). "tailnet" = end state
+# (no public ingress; reach over Tailscale). See plan Phase 2.75.
+network_mode = "public"
 
 [providers]
 anthropic_enabled = true

@@ -25,8 +25,14 @@ test-bootstrapping: install-deps
 
 # === TERRAFORM/OPENTOFU ===
 
+# Render _b00t_.toml + _b00t_/keyring.tomllm -> generated.auto.tfvars.json.
+# OpenTofu has no native tomldecode; this is the stdlib prestep (b00t task #187
+# tracks a real function-provider to replace it). Idempotent, fast, no creds.
+tf-render:
+    python3 scripts/render-tfvars.py
+
 # Initialize OpenTofu
-tf-init:
+tf-init: tf-render
     tofu init
     @echo "✅ OpenTofu initialized"
 
@@ -44,6 +50,32 @@ tf-apply: tf-init
 tf-destroy: tf-init
     tofu destroy
     @echo "💥 Infrastructure destroyed"
+
+# One-time: migrate root state local -> gcs backend (after `just gcp-bootstrap`).
+tf-init-migrate:
+    tofu init -migrate-state
+    @echo "✅ root state migrated to gs://b00t-tf-state-promptexecution"
+
+# Provider-only init + validate/fmt — no backend, no creds, no state. CI-safe.
+tf-check: tf-render
+    tofu init -backend=false
+    tofu validate
+    tofu fmt -check -recursive
+    tofu -chdir=modules/gcp-build-plane init -backend=false
+    tofu -chdir=modules/gcp-build-plane validate
+
+# === GCP BUILD PLANE (root module, gcs state) ===
+# Author: plan gleaming-jingling-nygaard Phase 2. Needs `just tf-init-migrate`
+# once, then operator ADC + the keyring datum populated (Phase 0 input #3).
+
+# Scoped plan for the build-plane module only.
+gcp-plan: tf-init
+    tofu plan -target=module.gcp_build_plane
+
+# Scoped apply for the build-plane module only.
+gcp-apply: tf-init
+    tofu apply -target=module.gcp_build_plane
+    @echo "🚀 gcp-build-plane applied"
 
 # === GCP BOOTSTRAP (one-time, local state) ===
 # Creates the GCS remote-state bucket + enables the GCP APIs the root

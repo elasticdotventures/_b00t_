@@ -1,0 +1,58 @@
+# b00t keyring — authorized SSH PUBLIC keys, keyed by user@machine.
+#
+# 🤓 PUBLIC keys only. This file is committed. Private keys never live here and
+#    never live in git — they stay in the operator's ~/.ssh (per-machine) or,
+#    post-cutover, behind a hardware token via ssh-agent (see [b00t.roadmap]).
+#
+# Consumers:
+#   - b00t-tf/main.tf renders `[[key]]` entries with status="active" and
+#     "gcp-build-plane-control" in `scope` into the control-node VM `ssh-keys`
+#     metadata (format "<user>:<public_key>").
+#   - (future) nats/pyinfra syncs the same set into ~/.ssh/authorized_keys on
+#     every b00t node, filtered by `scope`.
+#
+# Add an entry: fill every field, set status="active", commit. An entry with
+# status other than "active" is inert (TF/pyinfra skip it) — use "pending" for a
+# slot awaiting the operator's real pubkey, "deprecated" for a retired key.
+
+[b00t]
+name = "KEYRING"
+type = "config"
+hint = "Authorized SSH public keys by user@machine for b00t nodes. Per-machine keys today; consolidating to one hardware-token-backed authoritative key via ssh-agent."
+keywords = ["ssh", "authorized-keys", "keyring", "credentials", "yubikey", "access-control"]
+
+# ---------------------------------------------------------------------------
+# Keys
+# ---------------------------------------------------------------------------
+
+[[key]]
+# PENDING operator input #3 (plan gleaming-jingling-nygaard, Phase 0):
+# paste the contents of ~/.ssh/id_ed25519.pub and this workstation's `hostname`,
+# fill `fingerprint` (ssh-keygen -lf ~/.ssh/id_ed25519.pub), flip status to
+# "active". Until then TF renders zero control-node keys.
+user        = "brianh"
+machine     = "REPLACE-with-workstation-hostname"
+kind        = "ssh-ed25519"
+public_key  = "ssh-ed25519 REPLACE-with-id_ed25519.pub-key-body brianh@REPLACE-hostname"
+fingerprint = "SHA256:REPLACE"
+added       = "2026-09-08"
+scope       = ["gcp-build-plane-control"]
+status      = "pending"
+note        = "Operator workstation per-machine key. Retire on hardware-token cutover — see [b00t.roadmap]."
+
+# ---------------------------------------------------------------------------
+# Roadmap
+# ---------------------------------------------------------------------------
+
+[b00t.roadmap]
+target = "One authoritative key: hardware token (YubiKey FIDO2/PIV) -> ssh-agent -> every b00t node."
+mechanism = "sk-ssh-ed25519@openssh.com resident key on the token; ssh-agent forwarding or per-host agent; no private key material on disk on any machine."
+cutover = "When the authoritative key lands: add it as a [[key]] with scope covering all nodes, mark every per-machine entry status=\"deprecated\", re-apply TF + re-run the pyinfra authorized_keys sync, then remove deprecated public keys from all authorized_keys files."
+rationale = "Per-machine keys mean N private keys to protect and revoke. One hardware-backed key is non-exportable, phishing-resistant, and revoked in one place."
+
+# b00t:map v1
+# summary: Authorized SSH public keys by user@machine — feeds control-node VM metadata + (future) node authorized_keys sync
+# tags: ssh, authorized-keys, keyring, yubikey, access-control, build-plane
+# tier: sm0l
+# cmds: ssh-keygen -lf ~/.ssh/id_ed25519.pub
+# complexity: 2
