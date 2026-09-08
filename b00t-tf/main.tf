@@ -127,10 +127,10 @@ locals {
     "e2-small"
   )
 
-  # Comma-separated in .env (e.g. "1.2.3.4/32,5.6.7.0/24"); empty => no SSH rule.
-  gcp_allowed_cidrs = compact(split(",",
-    coalesce(try(var.dotenv_entries.GCP_ALLOWED_CIDRS, null), "")
-  ))
+  # Comma-separated in .env (e.g. "1.2.3.4/32,5.6.7.0/24"); empty/unset => no
+  # SSH rule (IAP is the address-independent path anyway). `coalesce` rejects
+  # an all-empty arg list, so use `try` with an empty-string default directly.
+  gcp_allowed_cidrs = compact(split(",", try(var.dotenv_entries.GCP_ALLOWED_CIDRS, "")))
 
   # "public" (build phase) or "tailnet" (end state — Phase 2.75). Default public.
   gcp_network_mode = coalesce(
