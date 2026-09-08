@@ -78,12 +78,16 @@ target_dir_measured = "🚩 target/ ON gcsfuse is DEAD: cargo/rustc write thousa
 
 [resource.measured_2026_09_08]
 # e2-standard-8 Spot/on-demand, 8 vCPU Intel Xeon @ 2.2GHz, Ubuntu 24.04.
-box_provision      = "~4 min (submit -> running, incl. image pull)"
-cold_b00t_cli      = "~9 min  (cargo build -p b00t-cli, empty cache, no sccache)"
-warm_b00t_cli      = "~1.5 min (1-file change in b00t-cli)"
-noop_b00t_cli      = "~1.4 min (b00t-cli's compile-time build.rs always re-runs)"
-image_reality      = "🚩 ghcr.io/elasticdotventures/ci-occt is MINIMAL (only git) — init: installs the whole toolchain (~6-10 min first boot). Bake a b00t-build image as a follow-up."
-spot_note          = "spot_policy: auto was seen picking ON-DEMAND ($0.38 vs $0.19); fleet now pins spot_policy: spot + retry."
+box_provision           = "~4 min (submit -> running, incl. image pull)"
+first_provision_init    = "~6-10 min (ci-occt is empty — apt toolchain + rustup; prebuilt sccache/nextest). A baked b00t-build image cuts this to ~2 min."
+cold_b00t_cli_no_cache  = "~9 min  (cargo build -p b00t-cli, empty cache, no sccache)"
+cold_b00t_cli_w_sccache = "~8.5 min (RUN1 — populates the GCS sccache; ~10% write overhead)"
+warm_b00t_cli_sccache   = "~3 min (RUN2 — `cargo clean` then rebuild; sccache 99.7% hit rate from GCS). This is the idle-stop -> warm-rebuild proof: target/ (9.5G local) was wiped, only the GCS-backed sccache dir (1.2G) persisted."
+warm_b00t_cli_incr      = "~1.5 min (1-file change, target/ intact — normal incremental)"
+noop_b00t_cli           = "~1.4 min (b00t-cli's compile-time build.rs + ~338 non-cacheable proc-macro/build-script calls always run)"
+target_on_gcsfuse       = "DEAD — ~15-20x slower (small-file fsync). target/ + checkout stay local; ONLY sccache on the mount."
+spot_note               = "spot_policy: auto was seen picking ON-DEMAND ($0.38 vs $0.19); fleet now pins spot_policy: spot + retry."
+sccache_native_gcs      = "TODO — sccache has SCCACHE_GCS_BUCKET (direct GCS client, no FUSE). Cleaner than gcsfuse for the cache path; switch the dev-env to it."
 
 [resource.wif]
 # The one place keyless OIDC federation is needed: GitHub Actions -> GCP.
