@@ -20,6 +20,21 @@ name: b00t-build
 # The `command -v X ||` guards in init: make it also work on a bare image.
 image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
 
+# The dev-environment drives its OWN provisioning (a fleet with target=0 has
+# no idle nodes to land on) — so it needs its own resources + spot policy, not
+# just the fleet's. Match the fleet floor.
+resources:
+  cpu: 8..
+  memory: 32GB..
+  disk: 200GB..
+  gpu: 0
+spot_policy: spot
+retry:
+  on_events: [no-capacity, interruption]
+  duration: 30m
+# Stop the box after 30m with no SSH (matches the fleet's idle_duration intent).
+inactivity_duration: 30m
+
 env:
   # dstack 0.20.28: bare `- FOO` resolves from the LOCAL shell only; secrets
   # need `- FOO=${{ secrets.FOO }}` (server-side substitution).

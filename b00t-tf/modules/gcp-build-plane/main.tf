@@ -385,6 +385,24 @@ resource "google_artifact_registry_repository_iam_member" "ci_writer" {
   member     = "serviceAccount:${google_service_account.ci.email}"
 }
 
+# The build VM pulls the b00t-build toolchain image.
+resource "google_artifact_registry_repository_iam_member" "build_vm_reader" {
+  location   = google_artifact_registry_repository.containers.location
+  repository = google_artifact_registry_repository.containers.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${google_service_account.build_vm.email}"
+}
+
+# Public read on the images — they hold no secrets (toolchain + a stdlib
+# proxy), and `dstack apply` inspects the image manifest anonymously from the
+# client before provisioning. Avoids wiring registry_auth into every dev-env.
+resource "google_artifact_registry_repository_iam_member" "public_reader" {
+  location   = google_artifact_registry_repository.containers.location
+  repository = google_artifact_registry_repository.containers.name
+  role       = "roles/artifactregistry.reader"
+  member     = "allUsers"
+}
+
 # ---------------------------------------------------------------------------
 # GitHub Actions -> GCP, keyless (Workload Identity Federation)
 # ---------------------------------------------------------------------------
