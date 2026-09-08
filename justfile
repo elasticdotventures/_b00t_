@@ -1506,46 +1506,45 @@ remote-bootstrap deploy_key_file cache_password: remote-doctor
     dstack secret set cache_password '{{cache_password}}'
     @echo "✅ secrets set: b00t_build_deploy_key, cache_password"
 
-# Idempotent: fleet then dev-environment (no PD volume by default — the
-# cache is the GCS bucket, mounted by dev-env/cache-up.sh). Run once before
-# the first remote-push/remote-build/remote-test.
-remote-provision: remote-doctor
+# Idempotent: fleet (nodes 0..2) then a per-branch dev-environment run named
+# `b00t-build-<branch>`. Two can run concurrently (one per fleet node); both
+# share the sccache-over-GCS cache. `branch` defaults to "dev".
+remote-provision branch="dev": remote-doctor
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "🥾 provisioning b00t-build-fleet..."
+    RUN="b00t-build-{{branch}}"
+    echo "🥾 fleet b00t-build-fleet (nodes 0..2)..."
     dstack apply -f dev-env/b00t-build-fleet.yaml -y
-    echo "🥾 provisioning b00t-build dev-environment..."
-    dstack apply -f dev-env/b00t-build.dev-environment.yaml -y
-    echo "🔌 populating the 'b00t-build' ssh alias (dstack 0.20.28: attach, not ssh)..."
-    dstack attach b00t-build >/dev/null 2>&1 &
+    echo "🥾 dev-environment $RUN ..."
+    dstack apply -f dev-env/b00t-build.dev-environment.yaml -n "$RUN" -y
+    dstack attach "$RUN" >/dev/null 2>&1 &
     sleep 8
-    ssh -o ConnectTimeout=20 b00t-build true && echo "✅ b00t-build reachable"
-    echo "✅ b00t-build ready — just remote-push <branch> && just remote-test <branch>"
+    ssh -o ConnectTimeout=20 "$RUN" true && echo "✅ $RUN reachable"
+    echo "✅ $RUN ready — just remote-push {{branch}} && just remote-test {{branch}}"
 
 # Pushes local HEAD to a scratch branch on origin for the build box to fetch.
 # Git-native sync — no rsync, no reverse-SSH into a NAT'd local machine.
 remote-push branch:
-    git push origin HEAD:refs/heads/scratch/{{branch}}
+    git push -f origin HEAD:refs/heads/scratch/{{branch}}
 
-# Fetch + checkout the scratch branch on the build box and `cargo build`.
-# Streams live over SSH — no polling. First run after remote-provision is
-# cold; every run after is warm because $CHECKOUT + target/ + sccache live
-# on /mnt/cache (GCS), independent of the box's stop/resume.
-remote-build branch: _attach
-    ssh b00t-build 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build'
+# Fetch + checkout the scratch branch on b00t-build-<branch> and `cargo build`.
+# Streams live over SSH. First run is cold; every run after is warm because
+# sccache replays compiled crates from GCS (target/ is local/ephemeral).
+remote-build branch="dev": (_attach ("b00t-build-" + branch))
+    ssh b00t-build-{{branch}} 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build && sccache --show-stats | grep -E "Cache hits rate|Compile requests"'
 
 # Same as remote-build, but `cargo nextest run` instead.
-remote-test branch: _attach
-    ssh b00t-build 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
+remote-test branch="dev": (_attach ("b00t-build-" + branch))
+    ssh b00t-build-{{branch}} 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
 
-# Ensure `ssh b00t-build` resolves — dstack 0.20.28 needs `dstack attach` to
-# write ~/.dstack/ssh/config. Backgrounded; harmless if already attached.
-_attach:
+# Ensure `ssh <run>` resolves — dstack 0.20.28 needs `dstack attach` to write
+# ~/.dstack/ssh/config. Backgrounded; harmless if already attached.
+_attach run="b00t-build-dev":
     #!/usr/bin/env bash
-    ssh -o ConnectTimeout=8 b00t-build true 2>/dev/null && exit 0
-    dstack attach b00t-build >/dev/null 2>&1 &
-    for i in $(seq 1 15); do ssh -o ConnectTimeout=8 b00t-build true 2>/dev/null && exit 0; sleep 2; done
-    echo "❌ could not reach b00t-build via ssh (dstack attach)"; exit 1
+    ssh -o ConnectTimeout=8 {{run}} true 2>/dev/null && exit 0
+    dstack attach {{run}} >/dev/null 2>&1 &
+    for i in $(seq 1 15); do ssh -o ConnectTimeout=8 {{run}} true 2>/dev/null && exit 0; sleep 2; done
+    echo "❌ could not reach {{run}} via ssh (dstack attach)"; exit 1
 
 # Keep the control plane awake past its idle grace (e.g. a long unattended
 # build). `--release` clears the hold. Uses `gcloud compute ssh` by name+zone —
@@ -1561,10 +1560,16 @@ remote-keepalive *args:
       gcloud compute ssh b00t-dstack-control --zone "$ZONE" --tunnel-through-iap --command 'sudo touch /run/b00t-cp-hold' && echo "control plane held awake — clear with: just remote-keepalive --release"
     fi
 
-# Manual stop of the build box — belt-and-suspenders alongside the fleet's
-# own 30m idle_duration. The control node then self-reaps once idle.
-remote-stop:
-    dstack stop b00t-build -y
+# Stop a build-box run (default b00t-build-dev) — belt-and-suspenders alongside
+# the fleet's own 30m idle_duration. The control node then self-reaps once idle.
+remote-stop branch="dev":
+    dstack stop b00t-build-{{branch}} -y
+
+# Tear down EVERYTHING build-box-side (all runs + the fleet), leaving the
+# control node (which self-reaps) + the GCS sccache cache.
+remote-teardown:
+    -dstack stop --all -y
+    dstack fleet delete b00t-build-fleet -y
 
 # Force the control node off now (refuses if a fleet instance is still up).
 remote-down:

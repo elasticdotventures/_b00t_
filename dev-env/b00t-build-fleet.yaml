@@ -21,10 +21,12 @@ name: b00t-build-fleet
 # convention (2026-07-23-b00t-dstack-gcp-backend-design.md).
 regions: [australia-southeast1]
 
-# min 0 (costs nothing while nothing's running), max 1 — a single-box build
-# server, not a pool. Matches DstackProvider::ensure_fleet's own 0..1
-# philosophy for on-demand capacity.
-nodes: 0..1
+# min 0 (costs nothing while nothing's running), max 2 — two concurrent build
+# boxes (operator decision 2026-09-08). Each dev-env run (`just remote-provision
+# <branch>` -> run name b00t-build-<branch>) lands on its own node; both SHARE
+# the sccache-over-GCS cache, so box 2 replays box 1's compiled crates. Each is
+# Spot ~$0.19/hr, only while building. Bump higher for more parallel branches.
+nodes: 0..2
 
 # CPU/disk/network build box, no GPU. Floor sized for this workspace's cold
 # compile (b00t-cli + Qdrant/candle/kube/embed-anything/OpenTelemetry): a

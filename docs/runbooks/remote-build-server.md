@@ -109,43 +109,50 @@ The read-only **deploy key** for `elasticdotventures/_b00t_` (the box clones
 that private repo; the `vendor/*` submodules are public, no key needed):
 
 ```sh
-# generate + register the private half:
+# generate + register the private half (only _b00t_ is private; vendor/* are public):
 ssh-keygen -t ed25519 -N '' -f ~/.ssh/b00t_build_deploy_key -C b00t-build-plane
 dstack secret set b00t_build_deploy_key "$(cat ~/.ssh/b00t_build_deploy_key)"
-dstack secret set cache_password "$(openssl rand -hex 24)"   # zerofs only; harmless otherwise
 # then paste ~/.ssh/b00t_build_deploy_key.pub into
 #   github.com/elasticdotventures/_b00t_ -> Settings -> Deploy keys (read-only)
 
-just remote-provision      # fleet (Spot e2-standard-8) + dev-environment
+just remote-provision my-branch    # fleet (Spot e2-standard-8, nodes 0..2) + run b00t-build-my-branch
 ```
 
-⚠️ `init:` installs the whole toolchain — **`ci-occt` is a minimal image**
-(only `git`), not "OCCT/cmake/protoc baked". First provision ≈ 6–10 min
-(apt + rustup + `cargo install` sccache/nextest); the source clone + submodules
-add ~1 min. The cache mount is `gcsfuse` by default (`CACHE_BACKEND` in the
-dev-env `env:`); if it can't mount, `cache-up.sh` binds a local dir and warns —
-the build still runs, it just isn't warm across an idle-stop.
+⚠️ `init:` installs the toolchain — **`ci-occt` is a minimal image** (only
+`git`). First provision ≈ 6–10 min (apt + rustup + prebuilt sccache/nextest +
+clone). The purpose-built `containers/b00t-build/` image bakes the toolchain
+(≈ 2 min) — swap the dev-env `image:` to
+`australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest`
+and trim `init:` once it's pushed.
+
+**Cache = sccache → GCS directly** (native `SCCACHE_GCS_*`, no FUSE, no
+privileged; auth is the build-VM metadata SA). `target/` + checkout are local
+disk (ephemeral). Nothing to mount.
 
 ## 5. Use it
 
 ```sh
 just remote-push my-branch
-just remote-test my-branch   # first run cold; every run after is warm (cache in GCS)
-just remote-keepalive        # optional — hold the control plane awake for a long build
+just remote-test my-branch    # first run cold; every run after replays from the GCS sccache
+just remote-keepalive         # optional — hold the control plane awake for a long build
 ```
 
+Two branches build concurrently: `just remote-provision a & just remote-provision b`
+→ two Spot nodes on the fleet, **sharing** the sccache-over-GCS cache.
+
 **Measured (e2-standard-8, 8 vCPU @ 2.2 GHz, 2026-09-08):**
-`cargo build -p b00t-cli` cold, empty cache ≈ **9 min** · warm (1-file change) ≈
-**1.5 min** · no-op ≈ **1.4 min** (b00t-cli's compile-time build.rs).
+`cargo build -p b00t-cli` — cold empty cache ≈ **9 min** · rebuild from GCS
+sccache (fresh box) ≈ **3 min** (99.7% hit) · incremental 1-file ≈ **1.5 min** ·
+no-op ≈ **1.4 min** (b00t-cli's compile-time `build.rs`).
 
 ## 6. Acceptance proof
 
-`just remote-stop`; wait > 30 min; `just remote-test my-branch` → **no full
-rebuild**, only changed crates recompile; `ssh b00t-build 'mountpoint -q
-/mnt/cache'` true. `gcloud compute instances describe b00t-dstack-control` →
-`TERMINATED` (reaper fired); the next `remote-*` transparently wakes it.
-⚠️ This proof requires the `gcsfuse`/`zerofs` mount actually working — with the
-local fallback the cache does NOT survive the stop.
+`just remote-stop my-branch`; wait > 30 min; `just remote-test my-branch` →
+only changed crates + downstream recompile, the rest replay from the GCS
+sccache. `gcloud compute instances describe b00t-dstack-control` → `TERMINATED`
+(reaper fired); the next `remote-*` transparently wakes the control node.
+The proof holds because sccache writes to GCS directly — nothing to mount, no
+fallback to worry about.
 
 ## 7. Teardown
 

@@ -5,64 +5,46 @@
 # SSH-only (no `ide:`) — driven by `just remote-build`/`remote-test`. Provisioned
 # against b00t-build-fleet.yaml (apply that first — `just remote-provision`).
 #
-# Persistence: NO PD. Everything durable lives under /mnt/cache — an
-# object-storage POSIX mount (GCS bucket b00t-buildcache-promptexecution)
-# established by dev-env/cache-up.sh (shipped via `files:` below) before any
-# cargo. If the mount can't be established, cache-up.sh binds a LOCAL dir there
-# and warns — the build still works, it just isn't warm after an idle-stop.
+# Persistence model (rev 2026-09-08d): NO PD, NO FUSE mount. `target/` and the
+# git checkout are LOCAL disk (ephemeral). The ONLY thing that survives an
+# idle-stop is the **sccache cache**, which sccache writes straight to the GCS
+# bucket via its native backend (SCCACHE_GCS_* below) — no gcsfuse, no privileged
+# container. A rebuild on a fresh box replays 99.7% of compilation units from
+# GCS (measured 2026-09-08: cold ~9 min -> warm ~3 min for b00t-cli).
 type: dev-environment
 name: b00t-build
 
-# 🤓 ci-occt is a MINIMAL image — only `git`. NOT "OCCT/protobuf/cmake baked"
-# (verified 2026-09-08). The init: block installs the whole toolchain
-# (~4-6 min first boot). A purpose-built b00t-build image would bake that —
-# tracked as a follow-up.
+# 🤓 ci-occt is a MINIMAL image — only `git` (verified 2026-09-08). The init:
+# block installs the toolchain (~6-10 min first boot). The purpose-built
+# `containers/b00t-build/` image bakes it (~2 min) — swap `image:` to it +
+# trim init: once it is pushed to AR.
 image: ghcr.io/elasticdotventures/ci-occt:latest
 
-# REQUIRED. The dev-environment runs in a Docker container on the VM; without
-# `privileged` there is no /dev/fuse (gcsfuse fails "fusermount: exit status 1")
-# and no nbd module. Verified 2026-09-08: with privileged, /dev/fuse is present,
-# CapEff is full, and `gcsfuse gs://b00t-buildcache-promptexecution /mnt/cache`
-# mounts + does 68 MB/s writes via ambient ADC (build-VM SA, no key).
-privileged: true
-
-# Ship cache-up.sh onto the box before the checkout exists (chicken-egg: the
-# script lives in the repo we haven't cloned yet).
-files:
-  # 🤓 `files:` src is relative to THIS config's dir (dev-env/), not repo root.
-  - cache-up.sh:/opt/b00t/cache-up.sh
-
 env:
-  # --- cache mount (Phase 5). Bare names resolve from dstack secrets. ---
-  - CACHE_BACKEND=gcsfuse                      # gcsfuse (default, verified) | zerofs | rustfs
-  - CACHE_BUCKET=b00t-buildcache-promptexecution
-  - CACHE_MOUNT=/mnt/cache
-  # 🤓 dstack 0.20.28: a bare `- FOO` resolves from the LOCAL shell only.
-  # Secrets need explicit `${{ secrets.FOO }}` — the CLI skips it, the server
-  # substitutes from the project's secrets (`dstack secret set FOO VALUE`).
-  - cache_password=${{ secrets.cache_password }}                 # zerofs encryption; unused by gcsfuse
+  # dstack 0.20.28: bare `- FOO` resolves from the LOCAL shell only; secrets
+  # need `- FOO=${{ secrets.FOO }}` (server-side substitution).
   - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}   # read-only deploy key for elasticdotventures/_b00t_
-  # --- sccache (Phase 6). ONLY sccache lives on the object mount — its blobs
-  #     are whole compilation outputs, written once (gcsfuse-friendly). This is
-  #     what makes a rebuild after an idle-stop warm. ---
+
+  # --- sccache -> GCS directly (opendal), no FUSE mount. Auth = the build-VM's
+  #     attached SA via the metadata server (b00t-build-vm has
+  #     storage.objectAdmin on the bucket — granted in b00t-tf Phase 2). ---
   - RUSTC_WRAPPER=sccache
-  - SCCACHE_DIR=/mnt/cache/sccache
-  - SCCACHE_CACHE_SIZE=40G
-  - CARGO_INCREMENTAL=0                        # sccache rejects incremental — required
-  # --- workspace — checkout + target/ on LOCAL disk ---
-  # 🚩 target/ on gcsfuse is DEAD (measured 2026-09-08): cargo/rustc write
-  # thousands of tiny fingerprint/.d/.rmeta files, each fsync = a GCS round-trip
-  # -> ~15-20x slower. target/ + the checkout stay local (ephemeral); sccache
-  # over GCS is the persistence layer.
+  - SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution
+  - SCCACHE_GCS_KEY_PREFIX=sccache
+  - SCCACHE_GCS_RW_MODE=READ_WRITE                                # default is READ_ONLY
+  - SCCACHE_GCS_SERVICE_ACCOUNT=b00t-build-vm@promptexecution.iam.gserviceaccount.com
+  - CARGO_INCREMENTAL=0                                           # sccache rejects incremental
+
+  # --- workspace — checkout + target/ on LOCAL disk (target/ on an object FS
+  #     is ~15-20x slower — measured). ---
   - CHECKOUT=/data/b00t
   - CARGO_TARGET_DIR=/data/b00t/target
 
 # Idempotent — runs on every boot/resume, MUST finish before "ready".
-# `remote-build`/`remote-test` re-assert sccache before cargo.
 init:
   # -- toolchain (ci-occt has only git) --
   - sudo apt-get update -qq
-  - sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang protobuf-compiler pkg-config libssl-dev z3 curl nfs-common nbd-client fuse
+  - sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang protobuf-compiler pkg-config libssl-dev z3 curl
   - command -v rustc >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
   # Prebuilt binaries — `cargo install` from source is 10-20 min each on 8 vCPU.
   - command -v sccache >/dev/null || { curl -fsSL "https://github.com/mozilla/sccache/releases/download/v0.10.0/sccache-v0.10.0-x86_64-unknown-linux-musl.tar.gz" | tar xz -C /tmp && sudo install -m755 /tmp/sccache-*/sccache /usr/local/bin/sccache; }
@@ -71,12 +53,10 @@ init:
   - mkdir -p ~/.ssh && chmod 700 ~/.ssh
   - printf '%s\n' "$b00t_build_deploy_key" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
   - grep -q github.com ~/.ssh/known_hosts 2>/dev/null || ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts
-  # -- object cache at /mnt/cache (non-fatal: local fallback + warn) --
-  - CACHE_PASSWORD="$cache_password" bash /opt/b00t/cache-up.sh
-  # -- source checkout ON the cache mount --
+  # -- source checkout (local disk) --
   - '[ -d "$CHECKOUT/.git" ] || git clone git@github.com:elasticdotventures/_b00t_.git "$CHECKOUT"'
   - git -C "$CHECKOUT" submodule update --init --depth 1 vendor/embed-anything-b00t vendor/tomllm vendor/runpod-sdk
   - '[ -d "$CHECKOUT/vendor/ledgrrr/.git" ] || git clone --depth 1 https://github.com/PromptExecution/ledgrrr.git "$CHECKOUT/vendor/ledgrrr"'
-  # -- ready --
-  - mkdir -p "$SCCACHE_DIR" "$CARGO_TARGET_DIR"
-  - . "$HOME/.cargo/env" && cd "$CHECKOUT" && echo "b00t-build ready @ $(git rev-parse --short HEAD) — toolchain $(rustc --version)"
+  # -- warm sccache + report --
+  - sccache --start-server && sccache --show-stats | head -3
+  - . "$HOME/.cargo/env" && cd "$CHECKOUT" && echo "b00t-build ready @ $(git rev-parse --short HEAD) — $(rustc --version)"

@@ -24,6 +24,14 @@
 # cargo's global config never fails with "program not found" on a fresh
 # host. Swap in `sccache`/`mold`/etc. by editing the installed copies
 # directly; this installer will not overwrite an existing file.
+#
+# 🤓 The b00t GCP build plane (plan gleaming-jingling-nygaard) sets
+# `RUSTC_WRAPPER=sccache` directly in the dev-env `env:` (with
+# SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution, SCCACHE_GCS_RW_MODE=
+# READ_WRITE) — it does NOT use these shims. RUSTC_WRAPPER (env) overrides
+# `[build].rustc-wrapper` (config) anyway. On the workstation these stay
+# no-op passthroughs; adopt sccache locally by editing the installed copy to
+# `exec sccache "$@"` + exporting SCCACHE_DIR + CARGO_INCREMENTAL=0.
 
 set -euo pipefail
 

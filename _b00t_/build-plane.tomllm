@@ -68,13 +68,13 @@ sa            = "b00t-cp-waker (compute.instances.get+start on the one instance 
 tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phase 2.75)"
 
 [resource.cache]
-# No persistent PD — the standby cost lever. State is in GCS, so the cache is
-# warm the moment the box resumes.
+# No persistent PD, NO FUSE mount (rev 2026-09-08d). sccache writes STRAIGHT to
+# the GCS bucket via its native backend; a rebuild on a fresh box replays it.
 bucket        = "b00t-buildcache-promptexecution"
-mount         = "/mnt/cache (dev-env/cache-up.sh, shipped via dev-env `files:`)"
-backend       = "gcsfuse (VERIFIED — mounts via ambient ADC, 68 MB/s seq write, needs privileged) | zerofs (NBD, unverified) | rustfs (TODO). cache-up.sh falls back to a local bind + warning."
-holds         = "sccache blobs + the git checkout. NOT target/ (see below)."
-target_dir_measured = "🚩 target/ ON gcsfuse is DEAD: cargo/rustc write thousands of tiny .d/.rmeta/fingerprint files each with an fsync = one GCS round-trip; observed ~15-20x slower, effectively hours. RESOLUTION: CARGO_TARGET_DIR = LOCAL disk (/root/target, ephemeral); SCCACHE_DIR on the gcsfuse mount (whole-compilation blobs, write-once — gcsfuse-friendly). Warm rebuilds after an idle-stop pull from sccache-over-GCS, not from a persisted target/."
+sccache       = "native GCS: SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution, SCCACHE_GCS_KEY_PREFIX=sccache, SCCACHE_GCS_RW_MODE=READ_WRITE, auth = build-VM metadata SA (b00t-build-vm, objectAdmin). No gcsfuse, no privileged container."
+holds         = "sccache compilation-unit blobs only. target/ + the git checkout are LOCAL disk (ephemeral)."
+target_dir_measured = "target/ on any object FS is DEAD: cargo/rustc write thousands of tiny .d/.rmeta/fingerprint files each fsync'd = a GCS round-trip; ~15-20x slower. target/ stays local; sccache-over-GCS is the ONLY persistence."
+gcsfuse_note  = "gcsfuse DOES work (68 MB/s, needs privileged for /dev/fuse) — used to prove the concept, then dropped for native GCS which needs neither. cache-up.sh + CACHE_BACKEND=zerofs kept in-repo as an opt-in alt only."
 
 [resource.measured_2026_09_08]
 # e2-standard-8 Spot/on-demand, 8 vCPU Intel Xeon @ 2.2GHz, Ubuntu 24.04.
