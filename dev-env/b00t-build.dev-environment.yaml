@@ -42,14 +42,20 @@ env:
   # substitutes from the project's secrets (`dstack secret set FOO VALUE`).
   - cache_password=${{ secrets.cache_password }}                 # zerofs encryption; unused by gcsfuse
   - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}   # read-only deploy key for elasticdotventures/_b00t_
-  # --- sccache (Phase 6) ---
+  # --- sccache (Phase 6). ONLY sccache lives on the object mount — its blobs
+  #     are whole compilation outputs, written once (gcsfuse-friendly). This is
+  #     what makes a rebuild after an idle-stop warm. ---
   - RUSTC_WRAPPER=sccache
   - SCCACHE_DIR=/mnt/cache/sccache
   - SCCACHE_CACHE_SIZE=40G
   - CARGO_INCREMENTAL=0                        # sccache rejects incremental — required
-  # --- workspace ---
-  - CHECKOUT=/mnt/cache/b00t
-  - CARGO_TARGET_DIR=/mnt/cache/b00t/target
+  # --- workspace — checkout + target/ on LOCAL disk ---
+  # 🚩 target/ on gcsfuse is DEAD (measured 2026-09-08): cargo/rustc write
+  # thousands of tiny fingerprint/.d/.rmeta files, each fsync = a GCS round-trip
+  # -> ~15-20x slower. target/ + the checkout stay local (ephemeral); sccache
+  # over GCS is the persistence layer.
+  - CHECKOUT=/data/b00t
+  - CARGO_TARGET_DIR=/data/b00t/target
 
 # Idempotent — runs on every boot/resume, MUST finish before "ready".
 # `remote-build`/`remote-test` re-assert sccache before cargo.

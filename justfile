@@ -1479,7 +1479,7 @@ frigate-status:
 # project the control node auto-creates. `dstack --project` is a per-subcommand
 # option (NOT `dstack -p <name> <cmd>`), so relying on the env is cleanest.
 export DSTACK_PROJECT := "main"
-_CHECKOUT := "/mnt/cache/b00t"
+_CHECKOUT := "/data/b00t"
 
 # Wake the control plane: hit the waker until it answers, then confirm the
 # operator's local dstack project reaches the server. The control node
@@ -1532,11 +1532,11 @@ remote-push branch:
 # cold; every run after is warm because $CHECKOUT + target/ + sccache live
 # on /mnt/cache (GCS), independent of the box's stop/resume.
 remote-build branch: _attach
-    ssh b00t-build 'mountpoint -q /mnt/cache && sccache --start-server; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build'
+    ssh b00t-build 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo build'
 
 # Same as remote-build, but `cargo nextest run` instead.
 remote-test branch: _attach
-    ssh b00t-build 'mountpoint -q /mnt/cache && sccache --start-server; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
+    ssh b00t-build 'sccache --start-server 2>/dev/null; cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} && cargo nextest run'
 
 # Ensure `ssh b00t-build` resolves — dstack 0.20.28 needs `dstack attach` to
 # write ~/.dstack/ssh/config. Backgrounded; harmless if already attached.

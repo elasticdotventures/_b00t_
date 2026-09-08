@@ -72,9 +72,9 @@ tailnet_mode  = "becomes a tsnet service on b00t-node; Cloud Run destroyed (Phas
 # warm the moment the box resumes.
 bucket        = "b00t-buildcache-promptexecution"
 mount         = "/mnt/cache (dev-env/cache-up.sh, shipped via dev-env `files:`)"
-backend       = "gcsfuse (default, verified installable) | zerofs (NBD, UNVERIFIED) | rustfs (TODO). cache-up.sh falls back to a LOCAL bind + warning if none mount."
-holds         = "git checkout, target/, sccache (SCCACHE_DIR=/mnt/cache/sccache, CARGO_INCREMENTAL=0)"
-target_dir_open_question = "gcsfuse small-file perf for target/ is unmeasured — fallbacks: local-SSD+rclone-bisync, or a small 20-30GB PD"
+backend       = "gcsfuse (VERIFIED — mounts via ambient ADC, 68 MB/s seq write, needs privileged) | zerofs (NBD, unverified) | rustfs (TODO). cache-up.sh falls back to a local bind + warning."
+holds         = "sccache blobs + the git checkout. NOT target/ (see below)."
+target_dir_measured = "🚩 target/ ON gcsfuse is DEAD: cargo/rustc write thousands of tiny .d/.rmeta/fingerprint files each with an fsync = one GCS round-trip; observed ~15-20x slower, effectively hours. RESOLUTION: CARGO_TARGET_DIR = LOCAL disk (/root/target, ephemeral); SCCACHE_DIR on the gcsfuse mount (whole-compilation blobs, write-once — gcsfuse-friendly). Warm rebuilds after an idle-stop pull from sccache-over-GCS, not from a persisted target/."
 
 [resource.measured_2026_09_08]
 # e2-standard-8 Spot/on-demand, 8 vCPU Intel Xeon @ 2.2GHz, Ubuntu 24.04.
