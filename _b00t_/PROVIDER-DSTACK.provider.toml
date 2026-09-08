@@ -137,6 +137,16 @@ backend        = "gcp only (regions: [australia-southeast1], vm_service_account:
 runpod         = "deferred — re-add `- type: runpod` + --data guard if ever needed"
 recipes        = "just remote-doctor | remote-provision | remote-push | remote-test | remote-keepalive | remote-down"
 
+[resource.build_plane.repo_auth]
+# The private repo `elasticdotventures/_b00t_` is cloned in the dev-env init:.
+# Options, simplest first:
+#   1. read-only Deploy key -> `dstack secret set b00t_build_deploy_key` (done
+#      2026-09-08; operator added the .pub to repo Settings -> Deploy keys).
+#   2. GitHub App installation token (org-wide, auto-rotating) — the org has an
+#      App; preferred long-term. Wire via `gh api` / a token-minting step in init:.
+# The vendor/* submodules (embed-anything-b00t, tomllm, runpod-sdk) are PUBLIC
+# https — no auth needed. Only _b00t_ itself needs a credential.
+
 [resource.build_plane.cli_0_20_28]
 # 🤓 Verified against installed dstack 0.20.28 (2026-09-08), corrections vs the
 # original build-plane design:

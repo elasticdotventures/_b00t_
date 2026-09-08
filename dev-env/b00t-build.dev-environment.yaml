@@ -19,22 +19,29 @@ name: b00t-build
 # tracked as a follow-up.
 image: ghcr.io/elasticdotventures/ci-occt:latest
 
-# Needed for the NBD path in cache-up.sh (nbd-client -> /dev/nbd0). Harmless
-# for the gcsfuse / local-fallback paths.
+# REQUIRED. The dev-environment runs in a Docker container on the VM; without
+# `privileged` there is no /dev/fuse (gcsfuse fails "fusermount: exit status 1")
+# and no nbd module. Verified 2026-09-08: with privileged, /dev/fuse is present,
+# CapEff is full, and `gcsfuse gs://b00t-buildcache-promptexecution /mnt/cache`
+# mounts + does 68 MB/s writes via ambient ADC (build-VM SA, no key).
 privileged: true
 
 # Ship cache-up.sh onto the box before the checkout exists (chicken-egg: the
 # script lives in the repo we haven't cloned yet).
 files:
-  - dev-env/cache-up.sh:/opt/b00t/cache-up.sh
+  # 🤓 `files:` src is relative to THIS config's dir (dev-env/), not repo root.
+  - cache-up.sh:/opt/b00t/cache-up.sh
 
 env:
   # --- cache mount (Phase 5). Bare names resolve from dstack secrets. ---
   - CACHE_BACKEND=gcsfuse                      # gcsfuse (default, verified) | zerofs | rustfs
   - CACHE_BUCKET=b00t-buildcache-promptexecution
   - CACHE_MOUNT=/mnt/cache
-  - cache_password                             # dstack secret (zerofs encryption; unused by gcsfuse)
-  - b00t_build_deploy_key                      # dstack secret — read-only deploy key for elasticdotventures/_b00t_
+  # 🤓 dstack 0.20.28: a bare `- FOO` resolves from the LOCAL shell only.
+  # Secrets need explicit `${{ secrets.FOO }}` — the CLI skips it, the server
+  # substitutes from the project's secrets (`dstack secret set FOO VALUE`).
+  - cache_password=${{ secrets.cache_password }}                 # zerofs encryption; unused by gcsfuse
+  - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}   # read-only deploy key for elasticdotventures/_b00t_
   # --- sccache (Phase 6) ---
   - RUSTC_WRAPPER=sccache
   - SCCACHE_DIR=/mnt/cache/sccache
@@ -51,8 +58,9 @@ init:
   - sudo apt-get update -qq
   - sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential cmake clang protobuf-compiler pkg-config libssl-dev z3 curl nfs-common nbd-client fuse
   - command -v rustc >/dev/null || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-  - . "$HOME/.cargo/env" && (command -v sccache       >/dev/null || cargo install sccache --locked)
-  - . "$HOME/.cargo/env" && (command -v cargo-nextest >/dev/null || cargo install cargo-nextest --locked)
+  # Prebuilt binaries — `cargo install` from source is 10-20 min each on 8 vCPU.
+  - command -v sccache >/dev/null || { curl -fsSL "https://github.com/mozilla/sccache/releases/download/v0.10.0/sccache-v0.10.0-x86_64-unknown-linux-musl.tar.gz" | tar xz -C /tmp && sudo install -m755 /tmp/sccache-*/sccache /usr/local/bin/sccache; }
+  - command -v cargo-nextest >/dev/null || { curl -fsSL "https://get.nexte.st/latest/linux" | tar xz -C /tmp && sudo install -m755 /tmp/cargo-nextest /usr/local/bin/cargo-nextest; }
   # -- deploy key for the private clone --
   - mkdir -p ~/.ssh && chmod 700 ~/.ssh
   - printf '%s\n' "$b00t_build_deploy_key" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519

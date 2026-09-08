@@ -33,8 +33,20 @@ name   = "b00t GCP build plane"
 region = "australia-southeast1"
 project = "promptexecution"
 monthly_cost_estimate_usd = "18-30"   # Spot build box (operator decision 2026-09-08)
-build_box_spot_policy = "auto"        # prefer spot; fall back to on-demand only on no-capacity
+build_box_spot_policy = "spot"        # spot-only + retry (auto was seen picking on-demand)
 static_ip = "none — no google_compute_address. SSH via IAP tunnel (address-independent); dstack API via the stable waker URL + internal IP. Reaper churns the ephemeral external IP — never cache it."
+
+[resource.budget]
+# Cost attribution — ledgrrr FOCUS experiment `gcp-build-plane`
+# (mcp__ledgrrr__ledgerr_focus). Reconcile actuals against GCP billing export.
+project_cost_center = "gcp-build-plane"
+billing_account     = "010CF0-14B757-AF79DC (EV Amex, AUD)"
+gcp_project         = "promptexecution"
+budget_monthly_usd  = 30
+projected_monthly_usd = 24   # Spot box ~2h/day + scale-to-zero control node + GCS cache
+focus_experiment_id = "gcp-build-plane"
+session_2026_09_08_actual_usd = 1.00   # standing it up + acceptance testing (build box on-demand ~1.6h @ $0.38)
+recorded_via = "ledgrrr FOCUS append_focus_record (3 rows: 2 session-actual, 1 monthly projection)"
 
 [resource.control_node]
 # The dstack server host. Powered on by the pingap waker on inbound traffic,
