@@ -19,8 +19,8 @@ output "control_node_internal_ip" {
 }
 
 output "control_node_endpoint" {
-  description = "Public pingap waker URL in network_mode=\"public\" — `dstack project add --url` target; the waker powers the VM on first call. Empty in \"tailnet\" mode (reach dstack at http://<magicdns>:3000)."
-  value       = local.is_public ? one(google_cloud_run_v2_service.cp_waker[*].uri) : ""
+  description = "`dstack project add --url` target. Public: the Cloud Run pingap waker. Tailnet: the k0s-pod waker on vultr1 (`var.tailnet_waker_addr`) — both power the VM on first call and proxy to dstack :3000."
+  value       = local.is_public ? one(google_cloud_run_v2_service.cp_waker[*].uri) : var.tailnet_waker_addr
 }
 
 output "buildcache_bucket" {

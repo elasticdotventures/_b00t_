@@ -35,7 +35,44 @@ jobs:
 
       - name: Build + push
         run: |
+          # context = repo root so the Containerfile can COPY dev-env/gcs-obj.sh
           docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA::12}" \
-            -f containers/b00t-build/Containerfile containers/b00t-build
+            -f containers/b00t-build/Containerfile .
           docker push "$IMAGE:latest"
           docker push "$IMAGE:${GITHUB_SHA::12}"
+
+  # Generate + push a SOCI index alongside the image, so the kubernetes backend
+  # (k0s + soci-snapshotter) can lazily pull b00t-build. The image itself is
+  # unchanged — the index is a separate OCI artifact (Referrers). No-op for the
+  # GCP VM backend (dockerd ignores it). Plan gleaming-jingling-nygaard.
+  soci-index:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      SOCI_VERSION: "0.15.0"
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: promptexecution
+          workload_identity_provider: projects/308167228204/locations/global/workloadIdentityPools/github-actions/providers/github-oidc
+          service_account: b00t-ci@promptexecution.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install soci + start a containerd for it
+        run: |
+          curl -fsSL -o /tmp/soci.tgz \
+            "https://github.com/awslabs/soci-snapshotter/releases/download/v${SOCI_VERSION}/soci-snapshotter-${SOCI_VERSION}-linux-amd64.tar.gz"
+          sudo tar -C /usr/local/bin -xzf /tmp/soci.tgz soci
+          sudo systemctl start containerd
+          soci --version
+
+      - name: Build the SOCI index and push it to Artifact Registry
+        run: |
+          REF_LATEST="$IMAGE:latest"
+          TOK="$(gcloud auth print-access-token)"
+          # pull the freshly-pushed image into containerd's content store
+          sudo ctr -n default images pull -u "oauth2accesstoken:${TOK}" "$REF_LATEST"
+          # zTOC threshold: only index layers bigger than this many bytes
+          sudo /usr/local/bin/soci create "$REF_LATEST" --min-layer-size 1000000
+          sudo /usr/local/bin/soci push -u "oauth2accesstoken:${TOK}" "$REF_LATEST"
+          sudo /usr/local/bin/soci index list "$REF_LATEST" || true

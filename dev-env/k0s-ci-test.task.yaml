@@ -1,0 +1,62 @@
+# CI RUN stage on the KUBERNETES backend (k0s on vultr1) — plan
+# gleaming-jingling-nygaard. Same job as ci-test.task.yaml (run one nextest
+# partition from the archive, no compilation) as a k8s Pod instead of a GCP
+# Spot VM: no Docker on the node (k0s containerd 2.x), lazy image pull via SOCI.
+#
+# GCS auth is KEYLESS and VERIFIED (2026-09-09): the Pod's SA (b00t-ci in ns
+# b00t-ci) is a SPIRE workload (spiffe://promptexecution.com/ns/b00t-ci/sa/
+# b00t-ci); spiffe-helper writes a JWT-SVID; gcs-obj.sh's external_account path
+# exchanges it at STS and impersonates b00t-buildplane-ci
+# (roles/storage.objectViewer on the buildcache). SPIRE + the WIF binding live
+# in PromptExecution/infrastructure (terraform/google/google-oidc-spire*.tf,
+# k0s/spire/{agent,csi-driver}.yaml). See
+# docs/superpowers/specs/2026-09-09-build-plane-identity.md.
+#
+# ⚠️ dstack's `kubernetes` backend must allow the task Pod to carry the
+# csi.spiffe.io volume + a spiffe-helper init container + the ADC ConfigMap.
+# If dstack does not surface pod-spec injection, run this via the Dagster/
+# kubectl path instead (orchestration/dagster/), applying the Pod directly.
+type: task
+name: b00t-ci-test-k0s
+
+image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+
+backends: [kubernetes]
+
+resources:
+  cpu: 4..
+  memory: 16GB..
+  disk: 40GB..
+  gpu: 0
+
+env:
+  - BUILDCACHE_BUCKET=b00t-buildcache-promptexecution
+  # written by the spiffe-helper init container (see the Pod overlay); points
+  # gcs-obj.sh at the JWT-SVID for the STS exchange.
+  - GOOGLE_APPLICATION_CREDENTIALS=/cfg/credential-configuration.json
+  - GCP_WIF_AUDIENCE=//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider
+  # supplied per-run by the workflow / Dagster:
+  - CI_ARCHIVE_KEY
+  - CI_REF
+  - NEXTEST_PARTITION            # e.g. "1/4"
+
+commands:
+  - set -eu
+  - . "$HOME/.cargo/env"
+  - test -s /cfg/credential-configuration.json   # spiffe-helper init must have run
+  - mkdir -p /data/src
+  - gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/src.tar.zst" /data/src.tar.zst
+  - gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/nextest.tar.zst" /data/nextest.tar.zst
+  - tar -I zstd -xf /data/src.tar.zst -C /data/src
+  - du -sh /data/src /data/nextest.tar.zst
+  - cargo nextest run
+      --archive-file /data/nextest.tar.zst
+      --workspace-remap /data/src
+      --partition "count:${NEXTEST_PARTITION}"
+
+# --- Pod overlay for the kubernetes backend (SVID delivery) ---------------
+# The verified shape (keyless-e2e 2026-09-09): a `csi.spiffe.io` ephemeral
+# volume + a spiffe-helper init container writing /svid/jwt_svid.token, and an
+# ADC ConfigMap at /cfg. dstack applies this via `pod_spec` if supported;
+# otherwise the Dagster path applies the full Pod. Reference manifest:
+#   k0s/spire/agent.yaml  (in PromptExecution/infrastructure)

@@ -151,3 +151,9 @@ variable "budget_alert_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "tailnet_waker_addr" {
+  description = "network_mode=\"tailnet\": the k0s-pod control-plane waker's address on the tailnet (vultr1). `dstack project add --url` + `just remote-doctor` target. See _b00t_ deploy/k0s-waker."
+  type        = string
+  default     = "http://100.109.101.1:8088"
+}

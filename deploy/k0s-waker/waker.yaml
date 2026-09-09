@@ -1,0 +1,83 @@
+# Tailnet control-plane waker — Phase 2.75. Runs on vultr1's k0s (always-on),
+# reachable at http://100.109.101.1:8088 over the tailnet. On any request it
+# starts the GCP control node (if TERMINATED) then reverse-proxies to
+# dstack-server at the control node's tailnet IP:3000. Replaces the public
+# Cloud Run waker so network_mode="tailnet" (no external IP) is viable.
+#
+# Keyless: the pod is a SPIRE workload (SA b00t-ci → spiffe://promptexecution
+# .com/ns/b00t-ci/sa/b00t-ci); spiffe-helper keeps a JWT-SVID fresh; waker.py's
+# _token() exchanges it at STS and impersonates b00t-buildplane-ci, which needs
+# compute.instances.start on b00t-dstack-control (infra
+# terraform/google/google-oidc-spire-buildplane.tf).
+#
+#   kubectl kustomize deploy/k0s-waker | \
+#     sed -e "s/CONTROL_TS_IP/100.92.193.0/" | kubectl apply -f -
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: waker-src, namespace: b00t-ci }
+data:
+  helper.conf: |
+    agent_address = "/spiffe-workload-api/spire-agent.sock"
+    daemon_mode = true
+    jwt_svids = [{ jwt_audience = "//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider", jwt_svid_file_name = "/svid/jwt_svid.token" }]
+  credential-configuration.json: |
+    {
+      "type": "external_account",
+      "audience": "//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider",
+      "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+      "token_url": "https://sts.googleapis.com/v1/token",
+      "credential_source": { "file": "/svid/jwt_svid.token", "format": { "type": "text" } },
+      "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/b00t-buildplane-ci@promptexecution.iam.gserviceaccount.com:generateAccessToken"
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: b00t-cp-waker, namespace: b00t-ci, labels: { app: b00t-cp-waker, b00t.plane: build } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: b00t-cp-waker } }
+  template:
+    metadata: { labels: { app: b00t-cp-waker, b00t.plane: build } }
+    spec:
+      serviceAccountName: b00t-ci
+      containers:
+        - name: spiffe-helper
+          image: ghcr.io/spiffe/spiffe-helper:0.11.0
+          args: ["-config", "/cfg/helper.conf"]
+          securityContext: { runAsUser: 0 }
+          volumeMounts:
+            - { name: spiffe, mountPath: /spiffe-workload-api, readOnly: true }
+            - { name: svid, mountPath: /svid }
+            - { name: cfg, mountPath: /cfg, readOnly: true }
+        - name: waker
+          image: docker.io/library/python:3.12-slim
+          command: ["python3", "/app/waker.py"]
+          env:
+            - { name: PROJECT_ID, value: promptexecution }
+            - { name: CONTROL_ZONE, value: australia-southeast1-a }
+            - { name: CONTROL_INSTANCE, value: b00t-dstack-control }
+            - { name: DSTACK_UPSTREAM_ADDR, value: "CONTROL_TS_IP:3000" }
+            - { name: READINESS_PATH, value: "/" }
+            - { name: PORT, value: "8088" }
+            - { name: START_DEADLINE_SECONDS, value: "150" }
+            - { name: GOOGLE_APPLICATION_CREDENTIALS, value: /cfg/credential-configuration.json }
+          ports: [{ containerPort: 8088, hostPort: 8088 }]
+          volumeMounts:
+            - { name: src, mountPath: /app }
+            - { name: svid, mountPath: /svid, readOnly: true }
+            - { name: cfg, mountPath: /cfg, readOnly: true }
+          readinessProbe: { httpGet: { path: /_waker/health, port: 8088 }, initialDelaySeconds: 5, periodSeconds: 20 }
+      volumes:
+        - { name: spiffe, csi: { driver: csi.spiffe.io, readOnly: true } }
+        - { name: svid, emptyDir: {} }
+        - { name: cfg, configMap: { name: waker-src } }
+        - name: src
+          configMap: { name: waker-py }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: b00t-cp-waker, namespace: b00t-ci }
+spec:
+  selector: { app: b00t-cp-waker }
+  ports: [{ port: 8088, targetPort: 8088 }]

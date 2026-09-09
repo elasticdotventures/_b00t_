@@ -1,0 +1,16 @@
+# Tailnet control-plane waker for vultr1 k0s. Phase 2.75.
+#   kubectl kustomize deploy/k0s-waker | sed "s/CONTROL_TS_IP/<control-node tailnet IP>/" | kubectl apply -f -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: b00t-ci
+
+resources:
+  - waker.yaml
+
+configMapGenerator:
+  - name: waker-py
+    files:
+      - waker.py=../../containers/b00t-cp-waker/waker.py
+
+generatorOptions:
+  disableNameSuffixHash: true

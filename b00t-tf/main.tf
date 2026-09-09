@@ -199,9 +199,12 @@ module "gcp_build_plane" {
 
   # Optional spend-alert budget. Set [gcp].budget_billing_account in _b00t_.toml
   # (or GCP_BUDGET_BILLING_ACCOUNT in .env) to enable. Empty = no budget resource.
-  budget_billing_account = coalesce(
-    try(var.dotenv_entries.GCP_BUDGET_BILLING_ACCOUNT, null),
-    try(local.b00t_config.gcp.budget_billing_account, null),
+  # 🤓 `try`, not `coalesce`: OpenTofu's coalesce rejects an all-empty arg list,
+  # so the "" fallback (meaning "no budget") crashed the apply once
+  # var.dotenv_entries went empty. try() returns the first non-erroring value.
+  budget_billing_account = try(
+    var.dotenv_entries.GCP_BUDGET_BILLING_ACCOUNT,
+    local.b00t_config.gcp.budget_billing_account,
     "",
   )
 }
