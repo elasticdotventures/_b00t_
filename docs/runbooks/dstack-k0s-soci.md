@@ -104,3 +104,19 @@ dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
   compile-free test fan-out; GCP Spot keeps `build_archive`.
 - Dagster: add a `backend` knob to `DstackResource` so `ci_build_plane` can
   target k8s for the run ops.
+
+## ⚠️ dstack 0.20.28 kubernetes backend — `NO_OFFERS` (2026-09-09)
+
+The backend is wired and the control node reaches the k8s API + `proxy_jump`
+(both verified), but `dstack apply` (task or fleet) against `backends:
+[kubernetes]` fails with **`NO_OFFERS (No offers found)`** — dstack 0.20.28's
+k8s backend doesn't enumerate a self-managed single-node cluster's allocatable
+resources as "offers".
+
+- **Fix path:** bump dstack `0.20.28 → 0.21.x` (b00t task #189) — 0.21 rewrote
+  the kubernetes backend. Retest after.
+- **Interim:** drive the k8s build-plane pods directly (kubectl / the Dagster
+  path in `orchestration/dagster/`) using the verified pieces — SOCI image,
+  SPIRE SVID delivery (`k0s/spire/` + spiffe-helper), keyless GCS
+  (`gcs-obj.sh` external_account). `dev-env/k0s-ci-test.task.yaml` documents the
+  pod shape; apply it as a raw Pod for now, not via `dstack apply`.

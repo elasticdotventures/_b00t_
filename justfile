@@ -1487,10 +1487,14 @@ _CHECKOUT := "/data/b00t"
 remote-doctor:
     #!/usr/bin/env bash
     set -euo pipefail
+    # public: Cloud Run waker URL. tailnet (Phase 2.75): the k0s-pod waker on
+    # vultr1 (deploy/k0s-waker). tofu output covers both; fall back to the
+    # tailnet default if state hasn't been refreshed.
     URL="$(cd b00t-tf && tofu output -raw gcp_control_node_endpoint 2>/dev/null || true)"
+    URL="${URL:-http://100.109.101.1:8088}"
     if [ -n "$URL" ]; then
       echo "🔔 waking control plane via $URL ..."
-      curl -sf --max-time 150 --retry 5 --retry-all-errors "$URL/_waker/health" >/dev/null \
+      curl -sf --max-time 200 --retry 5 --retry-all-errors "$URL/_waker/health" >/dev/null \
         && echo "✅ waker up (control node starting/awake)"
     fi
     dstack fleet >/dev/null 2>&1 || { echo "❌ dstack project '$DSTACK_PROJECT' not reachable — run: dstack project add --name $DSTACK_PROJECT --url $URL --token <server admin token>"; exit 1; }

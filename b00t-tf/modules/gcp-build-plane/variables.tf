@@ -152,59 +152,8 @@ variable "budget_alert_emails" {
   default     = []
 }
 
-# --- Keyless federation for the kubernetes backend (k0s) + Entra ------------
-# All empty by default -> no WIF resources created. See wif-k0s.tf.
-
-variable "k0s_oidc_issuer_uri" {
-  description = "Public HTTPS URL serving the k0s cluster's OIDC discovery doc + JWKS (e.g. a public GCS bucket URL). Empty = no k0s WIF."
+variable "tailnet_waker_addr" {
+  description = "network_mode=\"tailnet\": the k0s-pod control-plane waker's address on the tailnet (vultr1). `dstack project add --url` + `just remote-doctor` target. See _b00t_ deploy/k0s-waker."
   type        = string
-  default     = ""
-}
-
-variable "k0s_wif_subject" {
-  description = "The k0s ServiceAccount token `sub` allowed to federate, e.g. system:serviceaccount:b00t-ci:b00t-ci."
-  type        = string
-  default     = "system:serviceaccount:b00t-ci:b00t-ci"
-}
-
-variable "entra_tenant_id" {
-  description = "Azure AD / Entra tenant id. Empty = no Entra WIF provider."
-  type        = string
-  default     = ""
-}
-
-variable "entra_app_id" {
-  description = "Entra app registration (client) id allowed to impersonate the workload SA."
-  type        = string
-  default     = ""
-}
-
-variable "entra_wif_condition" {
-  description = "CEL attribute_condition for the Entra provider (defaults to matching entra_app_id)."
-  type        = string
-  default     = "true"
-}
-
-variable "entra_allowed_audiences" {
-  description = "Allowed `aud` values in Entra tokens presented to GCP STS."
-  type        = list(string)
-  default     = ["api://b00t-gcp-federation"]
-}
-
-variable "trust_domain" {
-  description = "SPIFFE trust domain for the eventual SPIRE-rooted identity plane (e.g. b00t.promptexecution.com). Fixed now so workload IDs / bindings anticipate it; not yet consumed by resources. See docs/superpowers/specs/2026-09-09-identity-plane-minimum-requirements.md."
-  type        = string
-  default     = "b00t.promptexecution.com"
-}
-
-variable "spire_oidc_issuer_uri" {
-  description = "SPIRE OIDC Discovery Provider URL (https://oidc.<trust_domain>). When set, adds a `spire-oidc` provider to the external-idp pool — the end-state issuer that supersedes k0s-oidc. Empty = not created."
-  type        = string
-  default     = ""
-}
-
-variable "spire_spiffe_id" {
-  description = "SPIFFE ID allowed to federate via the spire-oidc provider."
-  type        = string
-  default     = "spiffe://b00t.promptexecution.com/ns/b00t-ci/sa/b00t-ci"
+  default     = "http://100.109.101.1:8088"
 }

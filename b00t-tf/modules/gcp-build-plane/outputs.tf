@@ -19,8 +19,8 @@ output "control_node_internal_ip" {
 }
 
 output "control_node_endpoint" {
-  description = "Public pingap waker URL in network_mode=\"public\" — `dstack project add --url` target; the waker powers the VM on first call. Empty in \"tailnet\" mode (reach dstack at http://<magicdns>:3000)."
-  value       = local.is_public ? one(google_cloud_run_v2_service.cp_waker[*].uri) : ""
+  description = "`dstack project add --url` target. Public: the Cloud Run pingap waker. Tailnet: the k0s-pod waker on vultr1 (`var.tailnet_waker_addr`) — both power the VM on first call and proxy to dstack :3000."
+  value       = local.is_public ? one(google_cloud_run_v2_service.cp_waker[*].uri) : var.tailnet_waker_addr
 }
 
 output "buildcache_bucket" {
@@ -61,24 +61,4 @@ output "network_self_link" {
 output "subnetwork_self_link" {
   description = "Build-plane subnet self-link."
   value       = google_compute_subnetwork.build_plane.self_link
-}
-
-output "k0s_wif_provider_name" {
-  description = "Full resource name of the k0s OIDC WIF provider (empty if disabled)."
-  value       = try(google_iam_workload_identity_pool_provider.k0s_oidc[0].name, "")
-}
-
-output "entra_wif_provider_name" {
-  description = "Full resource name of the Entra WIF provider (empty if disabled)."
-  value       = try(google_iam_workload_identity_pool_provider.entra[0].name, "")
-}
-
-output "k0s_workload_sa_email" {
-  description = "SA that federated k0s / Entra identities impersonate (empty if no WIF enabled)."
-  value       = try(google_service_account.k0s_workload[0].email, "")
-}
-
-output "external_wif_pool_name" {
-  description = "Full resource name of the external-IdP WIF pool (empty if no WIF enabled)."
-  value       = try(google_iam_workload_identity_pool.external[0].name, "")
 }
