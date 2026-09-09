@@ -196,3 +196,15 @@ variable "trust_domain" {
   type        = string
   default     = "b00t.promptexecution.com"
 }
+
+variable "spire_oidc_issuer_uri" {
+  description = "SPIRE OIDC Discovery Provider URL (https://oidc.<trust_domain>). When set, adds a `spire-oidc` provider to the external-idp pool — the end-state issuer that supersedes k0s-oidc. Empty = not created."
+  type        = string
+  default     = ""
+}
+
+variable "spire_spiffe_id" {
+  description = "SPIFFE ID allowed to federate via the spire-oidc provider."
+  type        = string
+  default     = "spiffe://b00t.promptexecution.com/ns/b00t-ci/sa/b00t-ci"
+}

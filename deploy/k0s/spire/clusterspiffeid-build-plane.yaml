@@ -1,0 +1,26 @@
+# Maps the build-plane workload ServiceAccount to a SPIFFE ID. Reconciled by
+# spire-controller-manager (no hand-registration — requirement #8).
+# The resulting SVID `sub` is spiffe://b00t.promptexecution.com/ns/b00t-ci/sa/b00t-ci
+# — that string is what GCP WIF / Azure / AWS trust conditions pin.
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: b00t-build-plane
+spec:
+  # spiffe://<trustDomain><spiffeIDTemplate>
+  spiffeIDTemplate: "/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  podSelector:
+    matchLabels:
+      b00t.plane: build
+  namespaceSelector:
+    matchLabels:
+      b00t.plane: build
+  # Attestation, not possession (requirement #3): also bind the workload
+  # container image so a different image in the same ns/SA gets a different ID.
+  autoPopulateDNSNames: false
+  ttl: 30m
+  jwtSVIDTTL: 15m
+  # Audiences the JWT-SVID may target — one per federated cloud.
+  # (the OIDC discovery provider serves the keys; each cloud validates aud)
+  federatesWith: []
+  hint: "b00t build plane — GCP/Azure/AWS federated"

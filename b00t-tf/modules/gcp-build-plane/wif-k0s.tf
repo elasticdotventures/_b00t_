@@ -22,8 +22,9 @@
 
 locals {
   k0s_wif_enabled   = var.k0s_oidc_issuer_uri != ""
+  spire_wif_enabled = var.spire_oidc_issuer_uri != ""
   entra_wif_enabled = var.entra_tenant_id != ""
-  any_wif_enabled   = local.k0s_wif_enabled || local.entra_wif_enabled
+  any_wif_enabled   = local.k0s_wif_enabled || local.spire_wif_enabled || local.entra_wif_enabled
 }
 
 # A single pool holds both the k0s-issuer and the Entra providers.
@@ -52,6 +53,33 @@ resource "google_iam_workload_identity_pool_provider" "k0s_oidc" {
   oidc {
     issuer_uri = var.k0s_oidc_issuer_uri
   }
+}
+
+# --- SPIRE trust domain (the end-state issuer, identity-plane step 3) ------
+# When set, this supersedes k0s-oidc: point spire_oidc_issuer_uri at the SPIRE
+# OIDC Discovery Provider URL and the same workload SA is reachable via a
+# SPIFFE-ID subject. k0s-oidc can then be removed.
+resource "google_iam_workload_identity_pool_provider" "spire_oidc" {
+  count                              = local.spire_wif_enabled ? 1 : 0
+  workload_identity_pool_id          = google_iam_workload_identity_pool.external[0].workload_identity_pool_id
+  workload_identity_pool_provider_id = "spire-oidc"
+  display_name                       = "SPIRE (${var.trust_domain})"
+
+  attribute_mapping = {
+    "google.subject" = "assertion.sub" # spiffe://<trust-domain>/...
+  }
+  attribute_condition = "assertion.sub == \"${var.spire_spiffe_id}\""
+
+  oidc {
+    issuer_uri = var.spire_oidc_issuer_uri
+  }
+}
+
+resource "google_service_account_iam_member" "spire_wif_user" {
+  count              = local.spire_wif_enabled ? 1 : 0
+  service_account_id = google_service_account.k0s_workload[0].name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.external[0].name}/subject/${var.spire_spiffe_id}"
 }
 
 # --- Entra ID (Azure AD) ---------------------------------------------------

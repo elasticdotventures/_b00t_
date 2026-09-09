@@ -77,13 +77,18 @@ has to be unwound. So the end-state identity root is not optional and not
 
 ## Revised sequence
 
-| # | Step | Effort | Notes |
+| # | Step | Status | Notes |
 |---|---|---|---|
-| 1 | **#1280 bootstrap keys** (scoped `objectViewer` / `artifactregistry.reader`) | days | unblocks the build plane immediately |
-| 2 | **#1280 k0s-issuer WIF (GCP only)** | ~days | **deliberately temporary.** Proves the WIF mechanics — bucket, provider, attribute conditions, `gcs-obj.sh` `external_account` path — *all of which transfer to SPIRE unchanged* (SPIRE only swaps the `issuer_uri`). Cap the spend; build **no** per-cluster tooling. |
-| 3 | **SPIRE trust domain** | weeks, staffed | server HA + datastore; k8s workload attestor + `spire-controller-manager`; OIDC Discovery Provider on a public URL. Re-point GCP + Azure WIF `issuer_uri` at SPIRE. Build plane = tenant #1. |
-| 4 | **AWS onboards against SPIRE** | with SPIRE, before general AWS use | IAM OIDC provider (pods) + IAM Roles Anywhere w/ SPIRE CA (EC2/on-prem). **Never** a per-cluster AWS issuer. |
-| 5 | **SPIRE ↔ SPIRE federation** | as regions / BUs multiply | additive |
+| 1 | **#1280 bootstrap keys** (scoped `objectViewer` / `artifactregistry.reader`) | authored (#1280) | unblocks the build plane immediately |
+| 2 | **#1280 k0s-issuer WIF (GCP only)** | authored (#1280) | **deliberately temporary.** Proves the WIF mechanics — bucket, provider, attribute conditions, `gcs-obj.sh` `external_account` path — *all of which transfer to SPIRE unchanged* (SPIRE only swaps the `issuer_uri`). Cap the spend; build **no** per-cluster tooling. |
+| 3 | **SPIRE trust domain** | **authored (#1280)** — `deploy/k0s/spire/` (Helm values + `ClusterSPIFFEID` CR + CSI-driver delivery), `spire-oidc` provider in `wif-k0s.tf` (gated). Production hardening (datastore, CA, ingress cert, monitoring) is the staffed work. | server HA + datastore; k8s workload attestor + `spire-controller-manager`; OIDC Discovery Provider on a public URL. Re-point GCP + Azure WIF `issuer_uri` at SPIRE. Build plane = tenant #1. |
+| 4 | **AWS onboards against SPIRE** | **authored (#1280)** — `modules/identity-aws/` (IAM OIDC provider + web-identity role for JWT-SVID; Roles Anywhere trust anchor + profile + role for X.509-SVID), all gated. `tofu validate` Success. | **Never** a per-cluster AWS issuer. |
+| 5 | **SPIRE ↔ SPIRE federation** | design only | `ClusterFederatedTrustDomain` CRs; additive as regions / BUs multiply |
+
+All of steps 1–4 are authored + offline-validated in PR #1280 and gated
+(empty vars → zero resources). They are **not applied** — steps 3–4 in
+particular need staffed platform work (SPIRE datastore/CA/ingress, AWS account
+access) before `tofu apply` / `helm install`.
 
 Steps 1–2 are the current PR and are still worth shipping: they are the
 keyless-mechanics spike, they de-risk step 3, and every artifact is reused.
