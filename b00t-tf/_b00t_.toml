@@ -20,7 +20,7 @@ region = "australia-southeast1"
 control_machine_type = "e2-small"
 # "public" = build phase (external IP + Cloud Run waker). "tailnet" = end state
 # (no public ingress; reach over Tailscale). See plan Phase 2.75.
-network_mode = "public"
+network_mode = "tailnet"
 # Build-plane access — bare @elastic.ventures emails. Each gets
 # roles/iap.tunnelResourceAccessor on the control instance (`gcloud compute ssh
 # --tunnel-through-iap`). TF is the source of truth — no out-of-band grants.

@@ -130,6 +130,31 @@ resource "google_compute_subnetwork" "build_plane" {
   private_ip_google_access = true
 }
 
+# Cloud NAT — tailnet mode only. With no external IP, private_ip_google_access
+# covers *.googleapis.com but NOT the Tailscale coordination/DERP servers, so
+# tailscaled goes offline without egress. NAT gives the control node (and any
+# in-VPC runner) outbound to the internet. Not needed in public mode (external
+# IP). Phase 2.75.
+resource "google_compute_router" "build_plane" {
+  count   = local.is_public ? 0 : 1
+  name    = "b00t-build-plane-nat"
+  region  = var.region
+  network = google_compute_network.build_plane.id
+}
+
+resource "google_compute_router_nat" "build_plane" {
+  count                              = local.is_public ? 0 : 1
+  name                               = "b00t-build-plane-nat"
+  router                             = google_compute_router.build_plane[0].name
+  region                             = var.region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+  log_config {
+    enable = false
+    filter = "ERRORS_ONLY"
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Service accounts
 # ---------------------------------------------------------------------------
