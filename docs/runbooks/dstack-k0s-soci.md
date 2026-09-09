@@ -35,7 +35,7 @@ operator-gated.
 
 ```sh
 pyinfra --dry <inv-with-b00t-node> nats/pyinfra/deploy_k0s_soci.py \
-  --data soci_version=0.10.0 --data k0s_role=controller   # single combined node
+  --data soci_version=0.15.0 --data k0s_role=controller   # single combined node
 # review, then drop --dry
 ```
 

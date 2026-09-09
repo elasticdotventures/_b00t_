@@ -6,7 +6,7 @@ k0s/SOCI follow-up to the build-plane leverage pass.
 Idempotent. Targets b00t-node (the k0s box in Vultr), NOT the GCP control node.
 
   pyinfra --dry <inventory-with-b00t-node> nats/pyinfra/deploy_k0s_soci.py \
-      --data soci_version=0.10.0 \
+      --data soci_version=0.15.0 \
       --data k0s_role=worker            # or "controller" for a single combined node
 
 Verify after apply (on b00t-node):
@@ -24,7 +24,7 @@ from pyinfra import host
 from pyinfra.facts.files import File
 from pyinfra.operations import files, server, systemd
 
-SOCI_VERSION = str(host.data.get("soci_version", "0.10.0"))
+SOCI_VERSION = str(host.data.get("soci_version", "0.15.0"))
 K0S_ROLE = host.data.get("k0s_role", "worker")  # worker | controller
 K0S_SERVICE = "k0scontroller" if K0S_ROLE == "controller" else "k0sworker"
 
