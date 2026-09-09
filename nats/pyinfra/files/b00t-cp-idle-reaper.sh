@@ -44,11 +44,22 @@ if printf '%s\n' "$runs" | grep -qiE 'provisioning|pending|running|terminating';
   stay "dstack has a non-terminal run"
 fi
 
-# --- 4. dstack fleet not empty ----------------------------------------------
+# --- 4. dstack fleet has a LIVE instance ----------------------------------
+#   0.21.x prints one row per fleet plus an `instance=N` row per node. A
+#   `kubernetes`-backend fleet (kept up as a standing prereq for k8s runs)
+#   shows its instance `terminated` forever — it provisions no VM and costs
+#   nothing, so it must NOT pin the control node up. Only an instance in a
+#   live state counts. Fail-safe: a query error, or fleet rows present with
+#   no recognizable `instance=` line, => stay up.
 fleet="$("$DSTACK" fleet 2>/dev/null)" || stay "dstack fleet query failed (fail-safe)"
-# Header line always prints; a data row means an instance exists.
 if [ "$(printf '%s\n' "$fleet" | sed '1d' | grep -c .)" -gt 0 ]; then
-  stay "dstack fleet non-empty"
+  inst_rows="$(printf '%s\n' "$fleet" | grep -cE '^[[:space:]]+instance=')"
+  live_rows="$(printf '%s\n' "$fleet" | grep -E '^[[:space:]]+instance=' \
+                | grep -cviE 'terminated|failed')"
+  if [ "$inst_rows" -eq 0 ] || [ "$live_rows" -gt 0 ]; then
+    stay "dstack fleet has a live (or unrecognized) instance"
+  fi
+  log "fleet present but all ${inst_rows} instance row(s) terminated/failed — not a hold"
 fi
 
 # --- nothing holding it — power off --------------------------------------
