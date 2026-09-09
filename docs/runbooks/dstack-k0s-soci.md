@@ -108,7 +108,16 @@ dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
 
 ## Open follow-ups
 
-- Short-lived token refreshers for both keys (🚩 above).
+- **Retire both 🚩 keys → keyless via Workload Identity Federation.** k0s's own
+  OIDC issuer federates to GCP; a projected ServiceAccount token is exchanged at
+  STS for a short-lived access token — no key file. Full design +
+  step-by-step in `docs/superpowers/specs/2026-09-09-keyless-gcp-identity-k0s.md`.
+  `gcs-obj.sh` already handles the `external_account` config type, so only the
+  infra wiring (public JWKS bucket, WIF pool/provider, projected-token volume)
+  remains. AR image pull needs a token-refresher DaemonSet or a kubelet
+  credential provider — the last piece to go keyless.
+- Fold Entra ID in as a second WIF provider if/when a workload needs Azure +
+  GCP together (same doc).
 - `proxy_jump.hostname` → tailnet IP once Phase 2.75 tailnet cutover lands.
 - b00t-node sizing: too small for `--workspace` cold builds → k0s hosts the
   compile-free test fan-out; GCP Spot keeps `build_archive`.

@@ -5,29 +5,70 @@
 #   gcs-obj.sh get    <bucket> <object-name> <local-file>
 #   gcs-obj.sh exists <bucket> <object-name>            # exit 0 if present
 #
-# Auth, in order:
-#   1. GCE metadata server  — the build VM's attached SA (GCP backend; sccache
-#      uses the same identity).
-#   2. GOOGLE_APPLICATION_CREDENTIALS — a service-account key JSON. Used on the
-#      kubernetes backend (k0s on Vultr has no GCE metadata). Token is minted
-#      locally via a signed JWT bearer grant (openssl + curl, no gcloud).
+# Auth, in order of preference (first that works wins):
+#   1. GCE metadata server — the VM's attached SA (GCP backend; sccache uses
+#      the same identity). No config, no key.
+#   2. GOOGLE_APPLICATION_CREDENTIALS = an *external_account* config
+#      (Workload Identity Federation). KEYLESS: exchanges a projected token
+#      (e.g. a k8s ServiceAccount JWT) at STS for a federated/impersonated
+#      access token. This is the k0s path — no long-lived key.
+#   3. GOOGLE_APPLICATION_CREDENTIALS = a *service_account* key JSON.
+#      Long-lived key; bootstrap only. Token minted via a signed JWT bearer
+#      grant (openssl + curl).
 set -euo pipefail
 
 _SCOPE="https://www.googleapis.com/auth/devstorage.read_write"
-
 _b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+_jget() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get(sys.argv[2],""))' "$1" "$2"; }
+_pluck() { python3 -c 'import sys,json; print(json.load(sys.stdin).get(sys.argv[1],""))' "$1"; }
 
 _token_metadata() {
   curl -sf --max-time 3 -H 'Metadata-Flavor: Google' \
     'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])'
+    | _pluck access_token
 }
 
+# WIF: projected subject token -> STS federated token -> (optional) impersonated SA token.
+_token_external_account() {
+  local cfg="${GOOGLE_APPLICATION_CREDENTIALS:-}"
+  [ -n "$cfg" ] && [ -f "$cfg" ] || return 1
+  [ "$(_jget "$cfg" type)" = "external_account" ] || return 1
+
+  local aud token_url subj_file subj_type subj imp fed
+  aud=$(_jget "$cfg" audience)
+  token_url=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("token_url","https://sts.googleapis.com/v1/token"))' "$cfg")
+  subj_type=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("subject_token_type","urn:ietf:params:oauth:token-type:jwt"))' "$cfg")
+  subj_file=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["credential_source"]["file"])' "$cfg")
+  imp=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("service_account_impersonation_url",""))' "$cfg")
+  subj=$(cat "$subj_file")
+
+  fed=$(curl -sf --retry 3 --retry-all-errors -X POST "$token_url" \
+    -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+    -d requested_token_type=urn:ietf:params:oauth:token-type:access_token \
+    --data-urlencode "audience=${aud}" \
+    --data-urlencode "scope=https://www.googleapis.com/auth/cloud-platform" \
+    --data-urlencode "subject_token_type=${subj_type}" \
+    --data-urlencode "subject_token=${subj}" \
+    | _pluck access_token)
+  [ -n "$fed" ] || return 1
+
+  if [ -n "$imp" ]; then
+    curl -sf --retry 3 --retry-all-errors -X POST "$imp" \
+      -H "Authorization: Bearer ${fed}" -H "Content-Type: application/json" \
+      -d "{\"scope\":[\"${_SCOPE}\"]}" \
+      | _pluck accessToken
+  else
+    printf '%s' "$fed"   # direct principalSet:// grant on the bucket
+  fi
+}
+
+# Long-lived SA key: signed JWT bearer grant.
 _token_sa_key() {
   local key="${GOOGLE_APPLICATION_CREDENTIALS:-}"
   [ -n "$key" ] && [ -f "$key" ] || return 1
+  [ "$(_jget "$key" type)" = "service_account" ] || return 1
   local iss pem now hdr clm si sig jwt
-  iss=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["client_email"])' "$key")
+  iss=$(_jget "$key" client_email)
   pem=$(mktemp); python3 -c 'import json,sys;open(sys.argv[2],"w").write(json.load(open(sys.argv[1]))["private_key"])' "$key" "$pem"
   now=$(date +%s)
   hdr=$(printf '{"alg":"RS256","typ":"JWT"}' | _b64url)
@@ -40,14 +81,16 @@ _token_sa_key() {
   curl -sf --retry 3 --retry-all-errors -X POST https://oauth2.googleapis.com/token \
     -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
     --data-urlencode "assertion=${jwt}" \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])'
+    | _pluck access_token
 }
 
 _token() {
-  _token_metadata 2>/dev/null || _token_sa_key || {
-    echo "gcs-obj: no usable credentials (GCE metadata + GOOGLE_APPLICATION_CREDENTIALS both failed)" >&2
-    return 1
-  }
+  local t
+  t=$(_token_metadata 2>/dev/null)        && [ -n "$t" ] && { printf '%s' "$t"; return 0; }
+  t=$(_token_external_account 2>/dev/null) && [ -n "$t" ] && { printf '%s' "$t"; return 0; }
+  t=$(_token_sa_key 2>/dev/null)           && [ -n "$t" ] && { printf '%s' "$t"; return 0; }
+  echo "gcs-obj: no usable credentials (metadata / external_account / service_account key all failed)" >&2
+  return 1
 }
 
 _enc() { python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.argv[1], safe=""))' "$1"; }
