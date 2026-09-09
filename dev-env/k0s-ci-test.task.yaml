@@ -3,6 +3,18 @@
 # partition from the archive, no compilation) as a k8s Pod instead of a GCP
 # Spot VM: no Docker on the node (k0s containerd 2.x), lazy image pull via SOCI.
 #
+# PREREQ: the unconstrained kubernetes fleet must be up once:
+#   dstack apply -f dev-env/k0s-ci-fleet.yaml -y
+# The dstack 0.21.5 k8s backend is VERIFIED end-to-end (2026-09-09): a plain
+# task on `backends: [kubernetes]` schedules a real Pod on vultr1 and exits 0.
+# See docs/runbooks/dstack-k0s-soci.md § "dstack 0.21.5 k8s backend — VERIFIED".
+#
+# ⚠️ NODE-SIZE CEILING: vultr1 is 2 vCPU / ~3.7GB allocatable / ~67GB ephemeral.
+# A full `cpu: 4 / memory: 16GB` nextest partition will NEVER get an offer here
+# — keep the real test fan-out on GCP Spot (ci-test.task.yaml), or grow the k0s
+# node. This file runs a REDUCED partition sized to fit vultr1, for smoke /
+# identity-path coverage.
+#
 # GCS auth is KEYLESS and VERIFIED (2026-09-09): the Pod's SA (b00t-ci in ns
 # b00t-ci) is a SPIRE workload (spiffe://promptexecution.com/ns/b00t-ci/sa/
 # b00t-ci); spiffe-helper writes a JWT-SVID; gcs-obj.sh's external_account path
@@ -12,10 +24,14 @@
 # k0s/spire/{agent,csi-driver}.yaml). See
 # docs/superpowers/specs/2026-09-09-build-plane-identity.md.
 #
-# ⚠️ dstack's `kubernetes` backend must allow the task Pod to carry the
-# csi.spiffe.io volume + a spiffe-helper init container + the ADC ConfigMap.
-# If dstack does not surface pod-spec injection, run this via the Dagster/
-# kubectl path instead (orchestration/dagster/), applying the Pod directly.
+# ⚠️ dstack 0.21.5's `kubernetes` backend does NOT surface pod-spec injection
+# (confirmed vs source: compute.py `_create_job_pod` — only `resources`,
+# `privileged`, and PVC/hostPath `volumes:` mounts; no init container, no
+# inline csi.spiffe.io volume, no configMap volume, no serviceAccountName).
+# So this Pod — csi.spiffe.io volume + spiffe-helper init + ADC ConfigMap +
+# the b00t-ci ServiceAccount — MUST run via the kubectl / Dagster path
+# (orchestration/dagster/), applying the full Pod manifest directly. Only
+# identity-free compile-free tasks go through `dstack apply` (verified).
 type: task
 name: b00t-ci-test-k0s
 
@@ -23,10 +39,12 @@ image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:lates
 
 backends: [kubernetes]
 
+# Sized to fit vultr1 (2 vCPU / ~3.7GB / ~67GB eph). disk is a range so it
+# combines with the unconstrained fleet.
 resources:
-  cpu: 4..
-  memory: 16GB..
-  disk: 40GB..
+  cpu: 2
+  memory: 3GB
+  disk: 30GB..60GB
   gpu: 0
 
 env:
@@ -57,6 +75,7 @@ commands:
 # --- Pod overlay for the kubernetes backend (SVID delivery) ---------------
 # The verified shape (keyless-e2e 2026-09-09): a `csi.spiffe.io` ephemeral
 # volume + a spiffe-helper init container writing /svid/jwt_svid.token, and an
-# ADC ConfigMap at /cfg. dstack applies this via `pod_spec` if supported;
-# otherwise the Dagster path applies the full Pod. Reference manifest:
+# ADC ConfigMap at /cfg. dstack 0.21.5 cannot apply this (no pod-spec
+# injection — see the ⚠️ above); the Dagster / kubectl path applies the full
+# Pod. Reference manifest:
 #   k0s/spire/agent.yaml  (in PromptExecution/infrastructure)
