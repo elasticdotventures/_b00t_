@@ -151,3 +151,42 @@ variable "budget_alert_emails" {
   type        = list(string)
   default     = []
 }
+
+# --- Keyless federation for the kubernetes backend (k0s) + Entra ------------
+# All empty by default -> no WIF resources created. See wif-k0s.tf.
+
+variable "k0s_oidc_issuer_uri" {
+  description = "Public HTTPS URL serving the k0s cluster's OIDC discovery doc + JWKS (e.g. a public GCS bucket URL). Empty = no k0s WIF."
+  type        = string
+  default     = ""
+}
+
+variable "k0s_wif_subject" {
+  description = "The k0s ServiceAccount token `sub` allowed to federate, e.g. system:serviceaccount:b00t-ci:b00t-ci."
+  type        = string
+  default     = "system:serviceaccount:b00t-ci:b00t-ci"
+}
+
+variable "entra_tenant_id" {
+  description = "Azure AD / Entra tenant id. Empty = no Entra WIF provider."
+  type        = string
+  default     = ""
+}
+
+variable "entra_app_id" {
+  description = "Entra app registration (client) id allowed to impersonate the workload SA."
+  type        = string
+  default     = ""
+}
+
+variable "entra_wif_condition" {
+  description = "CEL attribute_condition for the Entra provider (defaults to matching entra_app_id)."
+  type        = string
+  default     = "true"
+}
+
+variable "entra_allowed_audiences" {
+  description = "Allowed `aud` values in Entra tokens presented to GCP STS."
+  type        = list(string)
+  default     = ["api://b00t-gcp-federation"]
+}

@@ -62,3 +62,23 @@ output "subnetwork_self_link" {
   description = "Build-plane subnet self-link."
   value       = google_compute_subnetwork.build_plane.self_link
 }
+
+output "k0s_wif_provider_name" {
+  description = "Full resource name of the k0s OIDC WIF provider (empty if disabled)."
+  value       = try(google_iam_workload_identity_pool_provider.k0s_oidc[0].name, "")
+}
+
+output "entra_wif_provider_name" {
+  description = "Full resource name of the Entra WIF provider (empty if disabled)."
+  value       = try(google_iam_workload_identity_pool_provider.entra[0].name, "")
+}
+
+output "k0s_workload_sa_email" {
+  description = "SA that federated k0s / Entra identities impersonate (empty if no WIF enabled)."
+  value       = try(google_service_account.k0s_workload[0].email, "")
+}
+
+output "external_wif_pool_name" {
+  description = "Full resource name of the external-IdP WIF pool (empty if no WIF enabled)."
+  value       = try(google_iam_workload_identity_pool.external[0].name, "")
+}
