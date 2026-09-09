@@ -42,6 +42,18 @@ build_vm_sa_email = host.data.get("build_vm_sa_email")
 vpc_name = host.data.get("vpc_name", "")
 idle_grace_min = str(host.data.get("idle_grace_min", 45))
 
+# Tailnet join (Phase 2.75). Policy: control nodes are ALWAYS on the tailnet and
+# non-tailnet SSH is closed before finalizing (see the _b00t_ memory
+# feedback-control-nodes-tailnet-only). Pass:
+#   --data tailscale_authkey=tskey-auth-...   (mint: POST /api/v2/tailnet/-/keys
+#                                              with tag tag:b00t-cp, preauthorized)
+#   --data tailscale_tag=tag:b00t-cp          (default)
+# Run this while the node still has its build-phase public SSH; then flip
+# b00t-tf network_mode -> "tailnet" (drops the external IP + tightens the
+# firewall to tailnet_cidr) and reach the node by MagicDNS afterwards.
+tailscale_authkey = host.data.get("tailscale_authkey", "")
+tailscale_tag = host.data.get("tailscale_tag", "tag:b00t-cp")
+
 # Optional kubernetes backend (k0s on b00t-node). Pass:
 #   --data k0s_kubeconfig=/local/path/to/b00t-node.kubeconfig
 #   --data k0s_proxy_jump_host=<b00t-node tailnet IP>   [--data k0s_proxy_jump_port=22]
@@ -75,6 +87,31 @@ apt.packages(
     update=True,
     _sudo=True,
 )
+
+# ─── 1.5 Tailnet join (Phase 2.75) ───────────────────────────────────────
+# Control nodes are ALWAYS on the tailnet. Run with --data tailscale_authkey=
+# while the node still has build-phase public SSH; then flip b00t-tf
+# network_mode -> "tailnet".
+if tailscale_authkey:
+    server.shell(
+        name="Install tailscale",
+        commands=["command -v tailscale || curl -fsSL https://tailscale.com/install.sh | sh"],
+        _sudo=True,
+    )
+    server.shell(
+        name=f"tailscale up ({tailscale_tag})",
+        commands=[
+            "tailscale up --ssh --accept-dns=false "
+            f"--advertise-tags={tailscale_tag} "
+            f"--authkey={tailscale_authkey} --hostname=b00t-dstack-control"
+        ],
+        _sudo=True,
+    )
+    server.shell(
+        name="Post-check: tailnet IP",
+        commands=["tailscale ip -4"],
+        _sudo=True,
+    )
 
 # ─── 2. uv + dstack (as the login user, not root) ─────────────────────────
 if not host.get_fact(File, path=f"{HOME}/.local/bin/uv"):
