@@ -118,10 +118,21 @@ case "$cmd" in
     echo "get gs://${bucket}/${obj} -> $file ($(stat -c%s "$file") bytes)"
     ;;
   exists)
-    code=$(curl -s -o /dev/null -w '%{http_code}' \
-      -H "Authorization: Bearer $TOKEN" \
-      "https://storage.googleapis.com/storage/v1/b/${bucket}/o/$(_enc "$obj")")
-    [ "$code" = "200" ]
+    # a name ending in "/" is a prefix, not an object — check the listing is non-empty
+    case "$obj" in
+      */)
+        n=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+          "https://storage.googleapis.com/storage/v1/b/${bucket}/o?maxResults=1&prefix=$(_enc "$obj")" \
+          | python3 -c 'import sys,json; print(len(json.load(sys.stdin).get("items",[])))')
+        [ "${n:-0}" -gt 0 ]
+        ;;
+      *)
+        code=$(curl -s -o /dev/null -w '%{http_code}' \
+          -H "Authorization: Bearer $TOKEN" \
+          "https://storage.googleapis.com/storage/v1/b/${bucket}/o/$(_enc "$obj")")
+        [ "$code" = "200" ]
+        ;;
+    esac
     ;;
   *) echo "unknown subcommand: $cmd" >&2; exit 2 ;;
 esac
