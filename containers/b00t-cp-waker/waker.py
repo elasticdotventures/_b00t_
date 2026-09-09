@@ -24,6 +24,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -49,12 +50,45 @@ def log(*a: object) -> None:
 
 
 def _token() -> str:
-    req = urllib.request.Request(
-        f"{_META}/instance/service-accounts/default/token",
-        headers={"Metadata-Flavor": "Google"},
-    )
-    with urllib.request.urlopen(req, timeout=5) as r:
-        return json.load(r)["access_token"]
+    """GCP access token. GCE metadata SA (Cloud Run / VM) first; else an
+    external_account (WIF/SPIRE-SVID) config at GOOGLE_APPLICATION_CREDENTIALS —
+    the tailnet waker runs as a k0s pod on vultr1 with no metadata server."""
+    try:
+        req = urllib.request.Request(
+            f"{_META}/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"},
+        )
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return json.load(r)["access_token"]
+    except (urllib.error.URLError, OSError):
+        pass
+
+    cfg_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+    if cfg.get("type") != "external_account":
+        raise RuntimeError("no GCE metadata and GOOGLE_APPLICATION_CREDENTIALS is not external_account")
+    subj = open(cfg["credential_source"]["file"]).read().strip()
+    sts = urllib.parse.urlencode({
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "audience": cfg["audience"],
+        "scope": "https://www.googleapis.com/auth/cloud-platform",
+        "subject_token_type": cfg.get("subject_token_type", "urn:ietf:params:oauth:token-type:jwt"),
+        "subject_token": subj,
+    }).encode()
+    with urllib.request.urlopen(urllib.request.Request(
+        cfg.get("token_url", "https://sts.googleapis.com/v1/token"), data=sts,
+    ), timeout=15) as r:
+        fed = json.load(r)["access_token"]
+    imp = cfg.get("service_account_impersonation_url")
+    if not imp:
+        return fed
+    with urllib.request.urlopen(urllib.request.Request(
+        imp, data=b'{"scope":["https://www.googleapis.com/auth/cloud-platform"]}',
+        headers={"Authorization": f"Bearer {fed}", "Content-Type": "application/json"},
+    ), timeout=15) as r:
+        return json.load(r)["accessToken"]
 
 
 def _api(path: str, method: str = "GET") -> dict:
