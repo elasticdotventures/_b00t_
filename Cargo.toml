@@ -54,6 +54,17 @@ exclude = ["vendor/embed-anything-b00t",
 # pass, so excluding a nonexistent path is no longer needed.
 resolver = "2"
 
+# 🤓 CI-only profile for the dstack build plane (plan gleaming-jingling-nygaard,
+# leverage #3). Inherits `test` but drops debuginfo — a much smaller `cargo
+# nextest archive` to ship between the build and fan-out run stages, and a
+# faster mold link. Selected explicitly via `--cargo-profile ci`; local dev and
+# `ci.yml` never touch it, so the default sccache namespace is unaffected.
+[profile.ci]
+inherits = "test"
+debug = 0
+strip = "debuginfo"
+codegen-units = 256
+
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth

@@ -1,0 +1,56 @@
+# CI RUN stage on the b00t build plane (plan gleaming-jingling-nygaard,
+# leverage #1). Executes ONE nextest partition from the archive built by
+# ci-build.task.yaml — NO rustc, NO cargo compile, NO sccache. Just download
+# + run. Small + fast; the workflow fans 4 of these out in a matrix.
+type: task
+name: b00t-ci-test
+
+image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+
+# No compilation here — a quarter the box of the build stage.
+resources:
+  cpu: 4..
+  memory: 16GB..
+  disk: 60GB..
+  gpu: 0
+
+spot_policy: spot
+retry:
+  on_events: [no-capacity, interruption]
+  duration: 20m
+
+env:
+  - BUILDCACHE_BUCKET=b00t-buildcache-promptexecution
+  # supplied per-run by the workflow:
+  - CI_ARCHIVE_KEY             # gs://…/ci-archives/<run>-<attempt>
+  - CI_REF                     # for the deploy key / gcs-obj.sh checkout only
+  - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}
+  - NEXTEST_PARTITION          # e.g. "1/4"
+
+commands:
+  - set -eu
+  - . "$HOME/.cargo/env"
+  - mkdir -p /data/src
+
+  # gcs-obj.sh needs no repo — fetch just that one script over raw git is
+  # overkill; it ships in the src tarball, so grab src first via a tiny
+  # bootstrap copy baked in the image path is not available. Use a minimal
+  # inline metadata-token GET for the first object, then src has the script.
+  - |
+    TOKEN=$(curl -sf -H 'Metadata-Flavor: Google' \
+      'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' \
+      | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+    enc() { python3 -c 'import sys,urllib.parse as u;print(u.quote(sys.argv[1],safe=""))' "$1"; }
+    curl -sf --retry 5 --retry-all-errors -H "Authorization: Bearer $TOKEN" -o /data/src.tar.zst \
+      "https://storage.googleapis.com/storage/v1/b/${BUILDCACHE_BUCKET}/o/$(enc "$CI_ARCHIVE_KEY/src.tar.zst")?alt=media"
+    curl -sf --retry 5 --retry-all-errors -H "Authorization: Bearer $TOKEN" -o /data/nextest.tar.zst \
+      "https://storage.googleapis.com/storage/v1/b/${BUILDCACHE_BUCKET}/o/$(enc "$CI_ARCHIVE_KEY/nextest.tar.zst")?alt=media"
+  - tar -I zstd -xf /data/src.tar.zst -C /data/src
+  - du -sh /data/src /data/nextest.tar.zst
+
+  # Run the partition from the archive, remapped onto the downloaded source
+  # tree (tests that read workspace-relative fixture files need it).
+  - cargo nextest run
+      --archive-file /data/nextest.tar.zst
+      --workspace-remap /data/src
+      --partition "count:${NEXTEST_PARTITION}"

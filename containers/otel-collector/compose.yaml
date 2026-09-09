@@ -1,0 +1,37 @@
+# OpenTelemetry Collector for the build / orchestration plane.
+# Runs on the dstack control node (podman-compose) or any orchestration host.
+# Plan gleaming-jingling-nygaard.
+#
+#   podman-compose -f containers/otel-collector/compose.yaml up -d
+#   (or: just otel-up)
+#
+# Point emitters at it:
+#   dstack server : OTEL_EXPORTER_OTLP_ENDPOINT=http://<host>:4317   (>=0.20.28)
+#   Dagster       : OTEL_EXPORTER_OTLP_ENDPOINT=http://<host>:4317
+# Scrape metrics : http://<host>:8889/metrics   (plane) + :8888 (collector self)
+# Health         : http://<host>:13133/
+
+services:
+  otelcol:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.160.0
+    container_name: b00t-otelcol
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/otelcol/entrypoint.sh"]
+    environment:
+      OTEL_LOG_VERBOSITY: "${OTEL_LOG_VERBOSITY:-basic}"
+      OTEL_DOWNSTREAM_ENDPOINT: "${OTEL_DOWNSTREAM_ENDPOINT:-}"
+      OTEL_DOWNSTREAM_AUTH: "${OTEL_DOWNSTREAM_AUTH:-}"
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+      - "8889:8889"    # Prometheus (plane telemetry)
+      - "8888:8888"    # Prometheus (collector self-metrics)
+      - "13133:13133"  # health_check
+    volumes:
+      - ./otelcol-config.yaml:/etc/otelcol/otelcol-config.yaml:ro
+      - ./otelcol-config.downstream.yaml:/etc/otelcol/otelcol-config.downstream.yaml:ro
+      - ./entrypoint.sh:/etc/otelcol/entrypoint.sh:ro
+      - otelcol-data:/var/lib/otelcol
+
+volumes:
+  otelcol-data:

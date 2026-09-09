@@ -1,0 +1,7 @@
+.venv/
+uv.lock
+__pycache__/
+*.pyc
+.tmp_dagster_home_*/
+.dagster/
+dagster_home/
