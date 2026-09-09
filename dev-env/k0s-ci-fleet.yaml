@@ -1,0 +1,22 @@
+# dstack `kubernetes`-backend fleet for the k0s build plane (vultr1) — plan
+# gleaming-jingling-nygaard. VERIFIED end-to-end 2026-09-09 with dstack 0.21.5.
+#
+# dstack 0.21.x assigns every run to a fleet. The kubernetes backend cannot
+# provision fleet capacity (no `create_instance` — idle Pods are meaningless),
+# so this fleet's own instance sits at `terminated / no_offers` forever. That is
+# cosmetic: the fleet STATUS stays `active`, and task/service runs schedule
+# through dstack's Pod-creation path (`run_job`), not the fleet instance.
+#
+# It MUST NOT carry a `resources:` block — dstack intersects the fleet's
+# resources with each task's, and disjoint ranges raise
+# "Cannot combine fleet requirements" -> FAILED_TO_START_DUE_TO_NO_CAPACITY.
+# Unconstrained combines with anything.
+#
+#   dstack apply -f dev-env/k0s-ci-fleet.yaml -y      # once; leave it up
+#
+# One-time cleanup if a task fails with `409 Conflict` creating the jump pod:
+#   kubectl -n default delete pod dstack-main-ssh-jump-pod --ignore-not-found
+type: fleet
+name: k0s
+nodes: 1
+backends: [kubernetes]

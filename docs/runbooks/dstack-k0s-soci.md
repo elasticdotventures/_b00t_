@@ -112,33 +112,61 @@ dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
 cluster — but two gotchas:
 
 1. **Default `disk: 100GB` exceeds vultr1's 72GB ephemeral-storage** → no node
-   matches → `NO_OFFERS`. Set an explicit small `disk:` (e.g. `5GB`) in the task
-   / fleet `resources:`. `dev-env/k0s-ci-test.task.yaml` sets `disk: 40GB..` —
-   lower it or grow the node.
+   matches → `NO_OFFERS`. Give the task an explicit `disk:` **range** (e.g.
+   `disk: 10GB..60GB`) — a bare value that is disjoint from the fleet's raises
+   "Cannot combine fleet requirements" (see item 3).
 2. **dstack creates an SSH jump-pod `Service` with `nodePort: <proxy_jump.port>`**
    → `nodePort: 22` is outside k8s's `30000-32767` range → `422 Unprocessable
    Entity`. Fix: `proxy_jump.port: 30022` (now the `deploy_cp_node.py` default)
    + open `tcp:30022` `tag:vultr1` in the tailnet ACL (done).
 
-With both applied, dstack 0.21.5 gets a valid k8s offer and attempted pod
-creation (past the 422). **BUT** — on further testing (2026-09-09) dstack
-0.21.5's kubernetes-backend fleet provisioning is unreliable for this
-single-node self-managed cluster: explicit `type: fleet` configs return
-`NO_OFFERS` regardless of `resources:` sizing, and a task then fails with
-`no fleets`. One task attempt earlier *did* get an offer + create a pod, so the
-path fundamentally works; the fleet/offer loop does not settle. Tracked as a
-b00t follow-up.
+### 3. dstack 0.21.5 k8s backend — VERIFIED end-to-end (2026-09-09)
 
-### Interim (works today): drive k8s pods directly, not via `dstack apply`
+`dstack apply` runs a real Pod on the k0s node. Two more requirements beyond
+the disk/nodePort fixes above:
 
-`kubectl` / `orchestration/dagster/` schedule the build-plane pods using every
-verified piece — SOCI-indexed `b00t-build` image, SPIRE SVID delivery
-(`k0s/spire/` agent DS + `spiffe-helper`), keyless GCS (`gcs-obj.sh`
-`external_account`). The keyless-e2e Pod (SVID → STS → impersonate
-`b00t-buildplane-ci` → GCS 200) is exactly this path. `dev-env/k0s-ci-test.task.yaml`
-documents the Pod shape; apply it as a raw Pod (+ `csi.spiffe.io` volume +
-spiffe-helper init) rather than through the dstack kubernetes backend until
-the fleet issue is resolved.
+3. **A `kubernetes` fleet must exist, and must NOT carry a `resources:` block.**
+   0.21.5 assigns every run to a fleet; `get_fleet_requirements` intersects the
+   fleet's `resources:` with the task's, and disjoint ranges (e.g. fleet
+   `disk: 10GB`, task `disk: 5GB`) → `"Cannot combine fleet requirements"` →
+   `FAILED_TO_START_DUE_TO_NO_CAPACITY`. An unconstrained fleet combines with
+   anything:
+
+   ```yaml
+   # dev-env/k0s-ci-fleet.yaml
+   type: fleet
+   name: k0s
+   nodes: 1
+   backends: [kubernetes]
+   ```
+
+   `dstack apply -f dev-env/k0s-ci-fleet.yaml -y`. The fleet's own instance
+   shows `terminated / no_offers` forever — the k8s backend has no
+   `create_instance` (idle Pods are meaningless), so it can't provision fleet
+   capacity. **That is cosmetic**: fleet `STATUS` stays `active`, and jobs
+   schedule through the `run_job` Pod-creation path, not the fleet instance.
+
+4. **Delete any stale `dstack-<project>-ssh-jump-pod`.** An orphan jump Pod from
+   an earlier attempt (Service missing) makes `create_namespaced_pod` return
+   `409 Conflict`. One-time cleanup:
+   `kubectl -n default delete pod dstack-main-ssh-jump-pod --ignore-not-found`.
+   dstack then recreates the jump Pod + `NodePort` Service (`nodePort: 30022`)
+   itself.
+
+Verified task (`alpine:3.20`, `cpu: 1 / memory: 512MB / disk: 10GB..60GB`,
+`backends: [kubernetes]`) → offer `cpu=x86:1 mem=0.5GB disk=10GB vultr $0` →
+Pod `dstack-main-<run>-0-0-<sfx>` scheduled on `vultr` → commands ran →
+`Exited (0)`. Repeatable. `proxy_jump` (control node → 100.109.101.1:30022) and
+the tailnet path both exercised.
+
+### Interim for the SVID-carrying CI pod
+
+`dev-env/k0s-ci-test.task.yaml` still needs the `csi.spiffe.io` volume +
+spiffe-helper init container in its Pod. If dstack 0.21.5 does not surface
+pod-spec injection for that, apply that one Pod via `kubectl` /
+`orchestration/dagster/` while the plain-task path above runs through
+`dstack apply`. Every other piece — SOCI image, SPIRE SVID delivery
+(`k0s/spire/`), keyless GCS (`gcs-obj.sh` `external_account`) — is verified.
 
 ## (historical) dstack 0.20.28 kubernetes backend — `NO_OFFERS`
 

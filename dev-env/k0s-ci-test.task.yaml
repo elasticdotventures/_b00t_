@@ -3,6 +3,18 @@
 # partition from the archive, no compilation) as a k8s Pod instead of a GCP
 # Spot VM: no Docker on the node (k0s containerd 2.x), lazy image pull via SOCI.
 #
+# PREREQ: the unconstrained kubernetes fleet must be up once:
+#   dstack apply -f dev-env/k0s-ci-fleet.yaml -y
+# The dstack 0.21.5 k8s backend is VERIFIED end-to-end (2026-09-09): a plain
+# task on `backends: [kubernetes]` schedules a real Pod on vultr1 and exits 0.
+# See docs/runbooks/dstack-k0s-soci.md § "dstack 0.21.5 k8s backend — VERIFIED".
+#
+# ⚠️ NODE-SIZE CEILING: vultr1 is 2 vCPU / ~3.7GB allocatable / ~67GB ephemeral.
+# A full `cpu: 4 / memory: 16GB` nextest partition will NEVER get an offer here
+# — keep the real test fan-out on GCP Spot (ci-test.task.yaml), or grow the k0s
+# node. This file runs a REDUCED partition sized to fit vultr1, for smoke /
+# identity-path coverage.
+#
 # GCS auth is KEYLESS and VERIFIED (2026-09-09): the Pod's SA (b00t-ci in ns
 # b00t-ci) is a SPIRE workload (spiffe://promptexecution.com/ns/b00t-ci/sa/
 # b00t-ci); spiffe-helper writes a JWT-SVID; gcs-obj.sh's external_account path
@@ -23,10 +35,12 @@ image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:lates
 
 backends: [kubernetes]
 
+# Sized to fit vultr1 (2 vCPU / ~3.7GB / ~67GB eph). disk is a range so it
+# combines with the unconstrained fleet.
 resources:
-  cpu: 4..
-  memory: 16GB..
-  disk: 40GB..
+  cpu: 2
+  memory: 3GB
+  disk: 30GB..60GB
   gpu: 0
 
 env:
