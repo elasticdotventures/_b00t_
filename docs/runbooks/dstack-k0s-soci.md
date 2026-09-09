@@ -120,10 +120,25 @@ cluster — but two gotchas:
    Entity`. Fix: `proxy_jump.port: 30022` (now the `deploy_cp_node.py` default)
    + open `tcp:30022` `tag:vultr1` in the tailnet ACL (done).
 
-With both applied, dstack 0.21.5 gets a valid k8s offer and attempts pod
-creation. A fleet must exist first (`type: fleet` + `backends: [kubernetes]` +
-sized `resources:`); a residual fleet/offer retry interaction is still being
-worked — drive pods via kubectl/Dagster if `dstack apply` stalls.
+With both applied, dstack 0.21.5 gets a valid k8s offer and attempted pod
+creation (past the 422). **BUT** — on further testing (2026-09-09) dstack
+0.21.5's kubernetes-backend fleet provisioning is unreliable for this
+single-node self-managed cluster: explicit `type: fleet` configs return
+`NO_OFFERS` regardless of `resources:` sizing, and a task then fails with
+`no fleets`. One task attempt earlier *did* get an offer + create a pod, so the
+path fundamentally works; the fleet/offer loop does not settle. Tracked as a
+b00t follow-up.
+
+### Interim (works today): drive k8s pods directly, not via `dstack apply`
+
+`kubectl` / `orchestration/dagster/` schedule the build-plane pods using every
+verified piece — SOCI-indexed `b00t-build` image, SPIRE SVID delivery
+(`k0s/spire/` agent DS + `spiffe-helper`), keyless GCS (`gcs-obj.sh`
+`external_account`). The keyless-e2e Pod (SVID → STS → impersonate
+`b00t-buildplane-ci` → GCS 200) is exactly this path. `dev-env/k0s-ci-test.task.yaml`
+documents the Pod shape; apply it as a raw Pod (+ `csi.spiffe.io` volume +
+spiffe-helper init) rather than through the dstack kubernetes backend until
+the fleet issue is resolved.
 
 ## (historical) dstack 0.20.28 kubernetes backend — `NO_OFFERS`
 
