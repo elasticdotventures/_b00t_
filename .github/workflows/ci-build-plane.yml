@@ -1,0 +1,88 @@
+# Run the test suite on the GCP dstack build plane instead of ubuntu-latest.
+# Plan gleaming-jingling-nygaard — CI-on-the-build-plane, leverage #1.
+#
+# Two stages:
+#   build  — ONE Spot e2-standard-8 compiles the workspace once and publishes
+#            a relocatable `cargo nextest` archive + source tarball to GCS.
+#   test   — 4 compile-free Spot e2-standard-4 boxes each run one nextest
+#            partition from that archive. No rustc, no sccache, no rebuild.
+# Was 4x whole-workspace compiles; now 1x. `ci.yml` (ubuntu-latest) stays the
+# always-on fast path. Opt-in: `workflow_dispatch` or a PR labeled
+# `build-plane-ci`.
+#
+# Repo settings required (Settings -> Secrets and variables -> Actions):
+#   variable DSTACK_URL          = the waker URL
+#                                  (`cd b00t-tf && tofu output -raw gcp_control_node_endpoint`)
+#   secret   DSTACK_ADMIN_TOKEN  = the `token:` from ~/.dstack/server/config.yml
+#   ( enrol repos with: just remote-enroll [--label] owner/repo … )
+name: ci-build-plane
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: git ref / sha to test
+        required: false
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+concurrency:
+  group: ci-build-plane-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DSTACK_PROJECT: main
+  # one archive namespace per run attempt
+  ARCHIVE_KEY: ci-archives/${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'build-plane-ci')
+    runs-on: ubuntu-latest
+    outputs:
+      archive_key: ${{ env.ARCHIVE_KEY }}
+      ci_ref: ${{ steps.ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install 'dstack[all]==0.20.28'
+      - id: ref
+        run: echo "sha=${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}" >> "$GITHUB_OUTPUT"
+      - name: Point dstack at the build plane
+        run: |
+          dstack project add --name main \
+            --url "${{ vars.DSTACK_URL }}" \
+            --token "${{ secrets.DSTACK_ADMIN_TOKEN }}"
+      - name: Build + archive (1 VM, 1 compile)
+        run: |
+          dstack apply -f dev-env/ci-build.task.yaml -n "ci-build-${GITHUB_RUN_ID}" \
+            -e CI_REF="${{ steps.ref.outputs.sha }}" \
+            -e CI_ARCHIVE_KEY="${ARCHIVE_KEY}" \
+            --yes
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: ["1/4", "2/4", "3/4", "4/4"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install 'dstack[all]==0.20.28'
+      - name: Point dstack at the build plane
+        run: |
+          dstack project add --name main \
+            --url "${{ vars.DSTACK_URL }}" \
+            --token "${{ secrets.DSTACK_ADMIN_TOKEN }}"
+      - name: Run partition ${{ matrix.partition }} from the archive (no compile)
+        run: |
+          NAME="ci-test-${GITHUB_RUN_ID}-p$(echo '${{ matrix.partition }}' | tr / -)"
+          dstack apply -f dev-env/ci-test.task.yaml -n "$NAME" \
+            -e CI_ARCHIVE_KEY="${{ needs.build.outputs.archive_key }}" \
+            -e CI_REF="${{ needs.build.outputs.ci_ref }}" \
+            -e NEXTEST_PARTITION="${{ matrix.partition }}" \
+            --yes

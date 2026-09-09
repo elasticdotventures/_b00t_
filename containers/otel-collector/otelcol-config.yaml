@@ -1,0 +1,78 @@
+# OpenTelemetry Collector — build / orchestration plane telemetry hub (BASE).
+# Plan gleaming-jingling-nygaard. One collector on the dstack control node
+# (later: one per orchestration substrate). The dstack server (>=0.20.28) and
+# Dagster runs push OTLP here; the collector fans out to local durable capture
+# + a Prometheus pull surface. An optional downstream (Grafana Cloud / Tempo /
+# Mimir) is layered on by otelcol-config.downstream.yaml when
+# OTEL_DOWNSTREAM_ENDPOINT is set (see entrypoint.sh).
+#
+# 🤓 OTEL_LOG_VERBOSITY = basic | normal | detailed  (default basic)
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: otelcol-self
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["127.0.0.1:8888"]
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+  resourcedetection/gcp:
+    detectors: [env, gcp]
+    timeout: 5s
+    override: false
+
+exporters:
+  file/local:
+    path: /var/lib/otelcol/telemetry.jsonl
+    rotation:
+      max_megabytes: 128
+      max_backups: 5
+  debug:
+    verbosity: ${env:OTEL_LOG_VERBOSITY:-basic}
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/gcp, batch]
+      exporters: [file/local, debug]
+    metrics:
+      receivers: [otlp, prometheus/self]
+      processors: [memory_limiter, resourcedetection/gcp, batch]
+      exporters: [file/local, prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/gcp, batch]
+      exporters: [file/local, debug]

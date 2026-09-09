@@ -1,0 +1,95 @@
+# CI BUILD stage on the b00t build plane (plan gleaming-jingling-nygaard,
+# leverage #1 + #2 + #3). ONE VM compiles the workspace exactly once and
+# publishes a relocatable `cargo nextest` archive + a source tarball to GCS;
+# the fan-out RUN stage (ci-test.task.yaml) then executes partitions with
+# zero compilation. Driven by .github/workflows/ci-build-plane.yml.
+#
+# Was: 4 matrix VMs each rebuilt the whole workspace before running their ¼.
+# Now: 1 build + 4 compile-free runs. ~4x fewer Spot-minutes on compile.
+type: task
+name: b00t-ci-build
+
+image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+
+resources:
+  cpu: 8..
+  memory: 32GB..
+  disk: 200GB..
+  gpu: 0
+
+spot_policy: spot
+retry:
+  on_events: [no-capacity, interruption]
+  duration: 20m
+
+env:
+  - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}
+
+  # --- sccache -> GCS (opendal), auth = build-VM metadata SA ---
+  - RUSTC_WRAPPER=sccache
+  - SCCACHE_GCS_BUCKET=b00t-buildcache-promptexecution
+  - SCCACHE_GCS_KEY_PREFIX=sccache
+  - SCCACHE_GCS_RW_MODE=READ_WRITE
+  - SCCACHE_GCS_SERVICE_ACCOUNT=b00t-build-vm@promptexecution.iam.gserviceaccount.com
+  - CARGO_INCREMENTAL=0
+
+  # --- leverage #3: mold linker + lean CI codegen. Kept identical in
+  #     b00t-build.dev-environment.yaml so the sccache cache stays shared. ---
+  - RUSTFLAGS=-C link-arg=-fuse-ld=mold
+  - CARGO_PROFILE=ci
+
+  # --- leverage #2: CARGO_HOME (registry index + .crate src + git db) on a
+  #     GCS tarball cache, keyed by Cargo.lock. sccache covers compile output,
+  #     NOT crate-source download/unpack — this closes that gap. ---
+  - CARGO_HOME=/data/cargo
+  - CHECKOUT=/data/b00t
+  - CARGO_TARGET_DIR=/data/b00t/target
+  - BUILDCACHE_BUCKET=b00t-buildcache-promptexecution
+
+  # supplied per-run by the workflow:
+  - CI_REF                     # git sha to test
+  - CI_ARCHIVE_KEY             # gs://…/ci-archives/<run>-<attempt>
+
+commands:
+  - set -eu
+  - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+  - printf '%s\n' "$b00t_build_deploy_key" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+  - ssh-keyscan -t rsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+  - git clone --filter=blob:none git@github.com:elasticdotventures/_b00t_.git "$CHECKOUT"
+  - cd "$CHECKOUT" && git checkout "$CI_REF" && git rev-parse --short HEAD
+  - git submodule update --init --depth 1 vendor/embed-anything-b00t vendor/tomllm vendor/runpod-sdk
+  - '[ -d vendor/ledgrrr/.git ] || git clone --depth 1 https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr'
+  - . "$HOME/.cargo/env"
+
+  # --- restore CARGO_HOME cache (keyed by Cargo.lock hash; best-effort) ---
+  - mkdir -p "$CARGO_HOME"
+  - LOCKHASH=$(sha256sum "$CHECKOUT/Cargo.lock" | cut -c1-16)
+  - CH_KEY="cargo-home/${LOCKHASH}.tar.zst"
+  - |
+    if bash "$CHECKOUT/dev-env/gcs-obj.sh" exists "$BUILDCACHE_BUCKET" "$CH_KEY"; then
+      bash "$CHECKOUT/dev-env/gcs-obj.sh" get "$BUILDCACHE_BUCKET" "$CH_KEY" /tmp/ch.tar.zst
+      tar -I zstd -xf /tmp/ch.tar.zst -C "$CARGO_HOME" && echo "CARGO_HOME cache HIT ($CH_KEY)"
+      CH_HIT=1
+    else
+      echo "CARGO_HOME cache MISS ($CH_KEY)"; CH_HIT=0
+    fi
+  - sccache --start-server
+
+  # --- the one and only workspace compile: produce a relocatable archive ---
+  - cargo nextest archive --workspace --cargo-profile "$CARGO_PROFILE" --archive-file /data/nextest.tar.zst
+  - sccache --show-stats
+
+  # --- publish artifacts for the RUN stage ---
+  - tar -I zstd -cf /data/src.tar.zst -C "$CHECKOUT" --exclude=.git --exclude=target .
+  - bash "$CHECKOUT/dev-env/gcs-obj.sh" put "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/nextest.tar.zst" /data/nextest.tar.zst
+  - bash "$CHECKOUT/dev-env/gcs-obj.sh" put "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/src.tar.zst" /data/src.tar.zst
+
+  # --- refresh the CARGO_HOME cache on a miss (registry/ + git/ only) ---
+  - |
+    if [ "${CH_HIT:-0}" = "0" ]; then
+      tar -I 'zstd -3' -cf /tmp/ch.tar.zst -C "$CARGO_HOME" \
+        $( [ -d "$CARGO_HOME/registry" ] && echo registry ) \
+        $( [ -d "$CARGO_HOME/git" ] && echo git ) 2>/dev/null || true
+      [ -f /tmp/ch.tar.zst ] && bash "$CHECKOUT/dev-env/gcs-obj.sh" put "$BUILDCACHE_BUCKET" "$CH_KEY" /tmp/ch.tar.zst || true
+    fi
+  - echo "build stage done -> $CI_ARCHIVE_KEY/{nextest,src}.tar.zst"

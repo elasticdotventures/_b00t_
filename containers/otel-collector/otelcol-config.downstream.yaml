@@ -1,0 +1,28 @@
+# Downstream overlay — merged as a SECOND `--config` after the base only when
+# OTEL_DOWNSTREAM_ENDPOINT is set (entrypoint.sh). otelcol merges configs
+# key-by-key; a pipeline's `exporters` list is REPLACED, so each pipeline is
+# re-listed here with the downstream exporter appended.
+#
+# 🤓 OTEL_DOWNSTREAM_ENDPOINT  e.g. https://otlp.eu.grafana.net/otlp
+#    OTEL_DOWNSTREAM_AUTH      full Authorization header value, e.g.
+#                              "Basic <base64>" or "Bearer <token>" (default: empty)
+#    For headers other than Authorization, edit this file directly.
+
+exporters:
+  otlphttp/downstream:
+    endpoint: ${env:OTEL_DOWNSTREAM_ENDPOINT}
+    headers:
+      authorization: "${env:OTEL_DOWNSTREAM_AUTH:-}"
+    retry_on_failure:
+      enabled: true
+    sending_queue:
+      enabled: true
+
+service:
+  pipelines:
+    traces:
+      exporters: [file/local, debug, otlphttp/downstream]
+    metrics:
+      exporters: [file/local, prometheus, otlphttp/downstream]
+    logs:
+      exporters: [file/local, debug, otlphttp/downstream]

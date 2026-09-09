@@ -1506,6 +1506,32 @@ remote-bootstrap deploy_key_file cache_password: remote-doctor
     dstack secret set cache_password '{{cache_password}}'
     @echo "✅ secrets set: b00t_build_deploy_key, cache_password"
 
+# Enrol GitHub repo(s) onto the build plane: writes the DSTACK_URL variable +
+# DSTACK_ADMIN_TOKEN secret ci-build-plane.yml needs (personal-account repos
+# have no org secrets, so it's per-repo). Selective by design — only repos with
+# a >10min cold `cargo build`. Token via $DSTACK_ADMIN_TOKEN[_FILE] or prompt.
+#   just remote-enroll --check elasticdotventures/_b00t_
+#   just remote-enroll --label owner/repo owner/other-repo
+remote-enroll *args:
+    scripts/build-plane-enroll-repo.sh {{args}}
+
+# OpenTelemetry Collector for the build / orchestration plane
+# (containers/otel-collector/). Runs on the dstack control node or any
+# orchestration host. Set OTEL_DOWNSTREAM_ENDPOINT[+_AUTH] to fan out to a
+# hosted backend; unset = local capture only (file + prometheus :8889).
+otel-up:
+    podman-compose -f containers/otel-collector/compose.yaml up -d
+
+otel-down:
+    podman-compose -f containers/otel-collector/compose.yaml down
+
+otel-logs:
+    podman logs -f b00t-otelcol
+
+# Validate both collector configs against the pinned image (no network).
+otel-validate:
+    podman run --rm --memory=512m --cpus=1 --network=none -e OTEL_DOWNSTREAM_ENDPOINT=https://x/otlp -e OTEL_DOWNSTREAM_AUTH=x -v {{justfile_directory()}}/containers/otel-collector/otelcol-config.yaml:/c/b.yaml:ro -v {{justfile_directory()}}/containers/otel-collector/otelcol-config.downstream.yaml:/c/d.yaml:ro docker.io/otel/opentelemetry-collector-contrib:0.160.0 validate --config /c/b.yaml --config /c/d.yaml
+
 # Idempotent: fleet (nodes 0..2) then a per-branch dev-environment run named
 # `b00t-build-<branch>`. Two can run concurrently (one per fleet node); both
 # share the sccache-over-GCS cache. `branch` defaults to "dev".

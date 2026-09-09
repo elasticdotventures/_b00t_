@@ -18,10 +18,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     RUSTUP_HOME=/root/.rustup
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential cmake clang lld pkg-config libssl-dev z3 \
+      build-essential cmake clang lld mold pkg-config libssl-dev z3 \
       protobuf-compiler git curl ca-certificates \
-      gnupg lsb-release fuse3 nfs-common \
-    && rm -rf /var/lib/apt/lists/*
+      gnupg lsb-release fuse3 nfs-common zstd \
+    && rm -rf /var/lib/apt/lists/* \
+    && mold --version
 
 # rustup + stable
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
