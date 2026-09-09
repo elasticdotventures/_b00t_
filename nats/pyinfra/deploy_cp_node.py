@@ -42,6 +42,23 @@ build_vm_sa_email = host.data.get("build_vm_sa_email")
 vpc_name = host.data.get("vpc_name", "")
 idle_grace_min = str(host.data.get("idle_grace_min", 45))
 
+# Optional kubernetes backend (k0s on b00t-node). Pass:
+#   --data k0s_kubeconfig=/local/path/to/b00t-node.kubeconfig
+#   --data k0s_proxy_jump_host=<b00t-node tailnet IP>   [--data k0s_proxy_jump_port=22]
+# k0s_kubeconfig is a LOCAL file (fetched via files/fetch-k0s-kubeconfig.sh);
+# it is put to ~/.dstack/kube/ on the control node and referenced by the config.
+k0s_kubeconfig_src = host.data.get("k0s_kubeconfig", "")
+k0s_proxy_jump_host = host.data.get("k0s_proxy_jump_host", "")
+k0s_proxy_jump_port = str(host.data.get("k0s_proxy_jump_port", 22))
+k0s_kubeconfig_dest = (
+    f"{HOME}/.dstack/kube/b00t-node.kubeconfig" if k0s_kubeconfig_src else ""
+)
+if k0s_kubeconfig_src and not k0s_proxy_jump_host:
+    raise ValueError(
+        "--data k0s_kubeconfig also needs --data k0s_proxy_jump_host=<b00t-node IP "
+        "reachable from the control node> (dstack proxies SSH into Pods through it)"
+    )
+
 if not build_vm_sa_email:
     raise ValueError(
         "pass --data build_vm_sa_email=<the b00t-build-vm SA email> "
@@ -73,13 +90,29 @@ server.shell(
     ],
 )
 
-# ─── 3. dstack server config (GCP backend only, metadata ADC) ─────────────
+# ─── 3. dstack server config (GCP backend + optional k0s kubernetes) ──────
 files.directory(
     name="Create ~/.dstack/server",
     path=f"{HOME}/.dstack/server",
     user=SSH_USER,
     group=SSH_USER,
 )
+if k0s_kubeconfig_src:
+    files.directory(
+        name="Create ~/.dstack/kube",
+        path=f"{HOME}/.dstack/kube",
+        user=SSH_USER,
+        group=SSH_USER,
+        mode="700",
+    )
+    files.put(
+        name="Put b00t-node k0s kubeconfig (0600)",
+        src=k0s_kubeconfig_src,
+        dest=k0s_kubeconfig_dest,
+        mode="600",
+        user=SSH_USER,
+        group=SSH_USER,
+    )
 files.template(
     name="Render ~/.dstack/server/config.yml (0600)",
     src="templates/dstack-server-config.yml.j2",
@@ -92,6 +125,9 @@ files.template(
     gcp_region=gcp_region,
     build_vm_sa_email=build_vm_sa_email,
     vpc_name=vpc_name,
+    k0s_kubeconfig_dest=k0s_kubeconfig_dest,
+    k0s_proxy_jump_host=k0s_proxy_jump_host,
+    k0s_proxy_jump_port=k0s_proxy_jump_port,
 )
 
 # ─── 4. dstack-server.service ────────────────────────────────────────────

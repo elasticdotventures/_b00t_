@@ -1,0 +1,23 @@
+# /etc/soci-snapshotter-grpc/config.toml — plan gleaming-jingling-nygaard.
+# Prefetch-heavy defaults: per the snapshotter eval, lazy pull moves failure
+# from pull-time to first-read-time, so we background-fetch the rest of the
+# image aggressively once the container is Ready. Good for CI/batch.
+
+# Fall back to a normal (eager) pull when an image has no SOCI index, so an
+# un-indexed image still runs — just without the lazy speed-up.
+no_prometheus = false
+metrics_address = "127.0.0.1:9464"
+
+[pull_modes]
+[pull_modes.soci_v1]
+enable = true
+
+[background_fetch]
+# start pulling the remaining layers this long after the fs is mounted
+silence_period_msec = 3000
+fetch_period_msec = 100
+max_queue_depth = 8
+
+[blob]
+valid_interval_sec = 3600
+check_always = false

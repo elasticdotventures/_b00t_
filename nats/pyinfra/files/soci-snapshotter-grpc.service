@@ -1,0 +1,22 @@
+[Unit]
+Description=soci-snapshotter containerd remote snapshotter (lazy image pull)
+Documentation=https://github.com/awslabs/soci-snapshotter
+After=network-online.target
+Before=k0sworker.service k0scontroller.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+Environment=HOME=/root
+ExecStart=/usr/local/bin/soci-snapshotter-grpc --log-level info --config /etc/soci-snapshotter-grpc/config.toml
+Restart=always
+RestartSec=1
+KillMode=mixed
+Delegate=yes
+LimitNOFILE=1048576
+# soci-snapshotter mounts FUSE filesystems for lazily-pulled layers
+DeviceAllow=/dev/fuse rwm
+MountFlags=shared
+
+[Install]
+WantedBy=multi-user.target

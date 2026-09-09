@@ -1532,6 +1532,20 @@ otel-logs:
 otel-validate:
     podman run --rm --memory=512m --cpus=1 --network=none -e OTEL_DOWNSTREAM_ENDPOINT=https://x/otlp -e OTEL_DOWNSTREAM_AUTH=x -v {{justfile_directory()}}/containers/otel-collector/otelcol-config.yaml:/c/b.yaml:ro -v {{justfile_directory()}}/containers/otel-collector/otelcol-config.downstream.yaml:/c/d.yaml:ro docker.io/otel/opentelemetry-collector-contrib:0.160.0 validate --config /c/b.yaml --config /c/d.yaml
 
+# dstack kubernetes backend on k0s + SOCI lazy pull. Authored infra — every
+# on-node step is operator-gated. See docs/runbooks/dstack-k0s-soci.md.
+# k0s-kubeconfig runs ON b00t-node; the rest drive pyinfra with --dry first.
+k0s-kubeconfig host="":
+    nats/pyinfra/files/fetch-k0s-kubeconfig.sh {{host}}
+
+# --dry pyinfra: install soci-snapshotter + wire k0s containerd (b00t-node).
+k0s-soci-plan inventory role="controller":
+    pyinfra --dry {{inventory}} nats/pyinfra/deploy_k0s_soci.py --data k0s_role={{role}}
+
+# Offline test of gcs-obj.sh's key-based (GOOGLE_APPLICATION_CREDENTIALS) auth path.
+gcs-obj-test:
+    dev-env/tests/gcs-obj-jwt-test.sh
+
 # Idempotent: fleet (nodes 0..2) then a per-branch dev-environment run named
 # `b00t-build-<branch>`. Two can run concurrently (one per fleet node); both
 # share the sccache-over-GCS cache. `branch` defaults to "dev".

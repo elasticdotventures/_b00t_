@@ -1,0 +1,19 @@
+# /etc/k0s/containerd.d/soci.toml — k0s merges every *.toml in this dir into
+# its managed containerd config. Registers soci-snapshotter as a proxy plugin
+# and makes CRI use it. Plan gleaming-jingling-nygaard — k0s/SOCI follow-up.
+#
+# Apply: drop this file, then `systemctl restart k0sworker` (or k0scontroller
+# on a single combined node). Verify: `k0s ctr plugin ls | grep soci` and
+# `crictl info | jq '.config.containerd.snapshotter'` -> "soci".
+version = 2
+
+[proxy_plugins]
+  [proxy_plugins.soci]
+    type = "snapshot"
+    address = "/run/soci-snapshotter-grpc/soci-snapshotter-grpc.sock"
+
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  snapshotter = "soci"
+  # SOCI needs the image-pull layer annotations to reach the snapshotter
+  disable_snapshot_annotations = false
+  discard_unpacked_layers = false

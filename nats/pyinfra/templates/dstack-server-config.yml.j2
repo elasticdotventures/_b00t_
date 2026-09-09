@@ -1,10 +1,15 @@
 # dstack server config — rendered by deploy_cp_node.py to
-# ~/.dstack/server/config.yml (0600). Plan gleaming-jingling-nygaard, Phase 3.
+# ~/.dstack/server/config.yml (0600). Plan gleaming-jingling-nygaard, Phase 3
+# (+ k0s/SOCI follow-up).
 #
-# GCP backend only. Auth is the control-node VM's attached service account via
-# the metadata server (`creds: type: default`) — no key file, no WIF for the
-# server. RunPod is DEFERRED (backup backend only); re-add a `- type: runpod`
-# block here + its --data guard in deploy_cp_node.py if it's ever needed.
+# GCP backend: auth is the control-node VM's attached service account via the
+# metadata server (`creds: type: default`) — no key file, no WIF for the server.
+#
+# kubernetes backend (optional): rendered only when --data k0s_kubeconfig=<path>
+# is passed to deploy_cp_node.py. Targets a pre-provisioned k0s cluster
+# (b00t-node in Vultr); dstack schedules Pods via the k8s API — no Docker on the
+# node — and proxies SSH through `proxy_jump`. This is the "no Docker" path and
+# the one that can host the SOCI snapshotter. RunPod is DEFERRED.
 projects:
   - name: {{ dstack_project }}
     backends:
@@ -15,4 +20,11 @@ projects:
           type: default
         vm_service_account: {{ build_vm_sa_email }}
 {% if vpc_name %}        vpc_name: {{ vpc_name }}
+{% endif %}
+{% if k0s_kubeconfig_dest %}      - type: kubernetes
+        kubeconfig:
+          filename: {{ k0s_kubeconfig_dest }}
+        proxy_jump:
+          hostname: {{ k0s_proxy_jump_host }}
+          port: {{ k0s_proxy_jump_port | default(22) }}
 {% endif %}
