@@ -39,10 +39,14 @@ locals {
   #   - stripping non-alphanumeric chars
   #   - appending a short deterministic hash
   #   - truncating so that "b00tsa" + suffix <= 24 characters
-  clean_node_id = lower(regexreplace(var.node_id, "[^0-9a-z]", ""))
-  node_id_hash  = lower(regexreplace(base64encode(sha1(var.node_id)), "[^0-9a-z]", ""))
-  sa_suffix     = substr("${clean_node_id}${node_id_hash}", 0, 18)
-  sa_name       = "b00tsa${sa_suffix}"
+  # 🤓 fix (b00t task #190): `regexreplace` is not an OpenTofu/Terraform
+  # function — `replace(str, "/regex/", repl)` treats a slash-wrapped substr as
+  # a regex. And sibling `locals` need the `local.` prefix. Module never
+  # `validate`d since PR #287. Behaviour preserved (strip-then-lower).
+  clean_node_id = lower(replace(var.node_id, "/[^0-9a-z]/", ""))
+  node_id_hash  = lower(replace(base64encode(sha1(var.node_id)), "/[^0-9a-z]/", ""))
+  sa_suffix     = substr("${local.clean_node_id}${local.node_id_hash}", 0, 18)
+  sa_name       = "b00tsa${local.sa_suffix}"
 
   table_name         = "b00tLeases"
   budget_start_date  = formatdate("YYYY-MM-01T00:00:00Z", timestamp())
