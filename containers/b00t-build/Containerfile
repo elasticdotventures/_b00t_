@@ -47,4 +47,10 @@ RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
     && rm -rf /var/lib/apt/lists/* \
     && gcsfuse --version
 
+# Keyless GCS get/put helper (metadata SA -> external_account/WIF -> SA key).
+# Used by ci-build.task.yaml and k0s-ci-test.task.yaml. Build context is the
+# repo root (see .github/workflows/b00t-build-image.yml).
+COPY dev-env/gcs-obj.sh /usr/local/bin/gcs-obj.sh
+RUN chmod 0755 /usr/local/bin/gcs-obj.sh && bash -n /usr/local/bin/gcs-obj.sh
+
 WORKDIR /data
