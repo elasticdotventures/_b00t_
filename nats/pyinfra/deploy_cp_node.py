@@ -24,9 +24,14 @@ Usage:
     pyinfra --dry nats/pyinfra/inventory_cp.py nats/pyinfra/deploy_cp_node.py --data ...
 """
 
+from pathlib import Path
+
 from pyinfra import host
 from pyinfra.facts.files import File
 from pyinfra.operations import apt, files, server, systemd
+
+# pyinfra resolves files.put/template `src` against CWD, not this script's dir.
+_D = Path(__file__).parent
 
 DSTACK_VERSION = "0.20.28"
 # "main" = dstack's default project name (the server auto-creates it and writes
@@ -46,13 +51,13 @@ idle_grace_min = str(host.data.get("idle_grace_min", 45))
 # non-tailnet SSH is closed before finalizing (see the _b00t_ memory
 # feedback-control-nodes-tailnet-only). Pass:
 #   --data tailscale_authkey=tskey-auth-...   (mint: POST /api/v2/tailnet/-/keys
-#                                              with tag tag:b00t-cp, preauthorized)
-#   --data tailscale_tag=tag:b00t-cp          (default)
+#                                              with tag tag:b00t-control-plane, preauthorized)
+#   --data tailscale_tag=tag:b00t-control-plane          (default)
 # Run this while the node still has its build-phase public SSH; then flip
 # b00t-tf network_mode -> "tailnet" (drops the external IP + tightens the
 # firewall to tailnet_cidr) and reach the node by MagicDNS afterwards.
 tailscale_authkey = host.data.get("tailscale_authkey", "")
-tailscale_tag = host.data.get("tailscale_tag", "tag:b00t-cp")
+tailscale_tag = host.data.get("tailscale_tag", "tag:b00t-control-plane")
 
 # Optional kubernetes backend (k0s on b00t-node). Pass:
 #   --data k0s_kubeconfig=/local/path/to/b00t-node.kubeconfig
@@ -152,7 +157,7 @@ if k0s_kubeconfig_src:
     )
 files.template(
     name="Render ~/.dstack/server/config.yml (0600)",
-    src="templates/dstack-server-config.yml.j2",
+    src=str(_D / "templates/dstack-server-config.yml.j2"),
     dest=f"{HOME}/.dstack/server/config.yml",
     mode="600",
     user=SSH_USER,
@@ -170,7 +175,7 @@ files.template(
 # ─── 4. dstack-server.service ────────────────────────────────────────────
 files.put(
     name="Install dstack-server.service",
-    src="files/dstack-server.service",
+    src=str(_D / "files/dstack-server.service"),
     dest="/etc/systemd/system/dstack-server.service",
     _sudo=True,
 )
@@ -187,7 +192,7 @@ systemd.service(
 # ─── 5. Local dstack CLI project (so the reaper can introspect) ──────────
 files.put(
     name="Install configure-local-dstack.sh",
-    src="files/configure-local-dstack.sh",
+    src=str(_D / "files/configure-local-dstack.sh"),
     dest="/usr/local/bin/configure-local-dstack.sh",
     mode="755",
     _sudo=True,
@@ -205,14 +210,14 @@ server.shell(
 # supplies them, so the script itself is a plain put with no templating.
 files.put(
     name="Install b00t-cp-idle-reaper.sh",
-    src="files/b00t-cp-idle-reaper.sh",
+    src=str(_D / "files/b00t-cp-idle-reaper.sh"),
     dest="/usr/local/bin/b00t-cp-idle-reaper.sh",
     mode="755",
     _sudo=True,
 )
 files.template(
     name="Render dstack-idle-reaper.service (0644)",
-    src="templates/dstack-idle-reaper.service.j2",
+    src=str(_D / "templates/dstack-idle-reaper.service.j2"),
     dest="/etc/systemd/system/dstack-idle-reaper.service",
     home=HOME,
     idle_grace_min=idle_grace_min,
@@ -222,7 +227,7 @@ files.template(
 )
 files.put(
     name="Install dstack-idle-reaper.timer",
-    src="files/dstack-idle-reaper.timer",
+    src=str(_D / "files/dstack-idle-reaper.timer"),
     dest="/etc/systemd/system/dstack-idle-reaper.timer",
     _sudo=True,
 )
