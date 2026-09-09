@@ -46,7 +46,7 @@ resources:
 spot_policy: spot
 
 # Auto re-provision an evicted / capacity-starved node (verified accepted by
-# dstack 0.20.28: on_events, values interruption / no-capacity / error).
+# dstack 0.21.5: on_events, values interruption / no-capacity / error).
 retry:
   on_events: [interruption, no-capacity]
   duration: 1h

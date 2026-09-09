@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv tool install 'dstack[all]==0.20.28'
+      - run: uv tool install 'dstack[all]==0.21.5'
       - id: ref
         run: echo "sha=${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}" >> "$GITHUB_OUTPUT"
       - name: Point dstack at the build plane
@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv tool install 'dstack[all]==0.20.28'
+      - run: uv tool install 'dstack[all]==0.21.5'
       - name: Point dstack at the build plane
         run: |
           dstack project add --name main \

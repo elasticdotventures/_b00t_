@@ -37,7 +37,7 @@ if ss -Htn state established '( sport = :3000 )' 2>/dev/null | grep -q .; then
 fi
 
 # --- 3. dstack has active runs -------------------------------------------
-#   `dstack ps -a` on 0.20.28 prints a table; --project comes from
+#   `dstack ps -a` on 0.21.5 prints a table; --project comes from
 #   $DSTACK_PROJECT. Fail-safe: a non-zero exit => stay up.
 runs="$("$DSTACK" ps -a 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
 if printf '%s\n' "$runs" | grep -qiE 'provisioning|pending|running|terminating'; then
