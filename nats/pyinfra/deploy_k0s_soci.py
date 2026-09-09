@@ -20,9 +20,15 @@ References:
   docs/superpowers/specs/2026-09-09-dstack-runtime-podman-k0s.md
 """
 
+from pathlib import Path
+
 from pyinfra import host
 from pyinfra.facts.files import File
 from pyinfra.operations import files, server, systemd
+
+# pyinfra resolves files.put/template `src` against CWD, not this script's dir.
+# Make them absolute so the deploy works from any working directory.
+_F = str(Path(__file__).parent / "files")
 
 SOCI_VERSION = str(host.data.get("soci_version", "0.15.0"))
 K0S_ROLE = host.data.get("k0s_role", "worker")  # worker | controller
@@ -64,7 +70,7 @@ files.directory(name="Create /etc/soci-snapshotter-grpc", path="/etc/soci-snapsh
 
 files.put(
     name="Install soci-snapshotter-grpc config",
-    src="files/soci-snapshotter-config.toml",
+    src=f"{_F}/soci-snapshotter-config.toml",
     dest="/etc/soci-snapshotter-grpc/config.toml",
     _sudo=True,
 )
@@ -72,7 +78,7 @@ files.put(
 # ── 3. systemd unit for the snapshotter daemon ─────────────────────────
 snap_unit = files.put(
     name="Install soci-snapshotter-grpc.service",
-    src="files/soci-snapshotter-grpc.service",
+    src=f"{_F}/soci-snapshotter-grpc.service",
     dest="/etc/systemd/system/soci-snapshotter-grpc.service",
     _sudo=True,
 )
@@ -90,7 +96,7 @@ systemd.service(
 files.directory(name="Create /etc/k0s/containerd.d", path="/etc/k0s/containerd.d", _sudo=True)
 cri_dropin = files.put(
     name="Install k0s containerd SOCI drop-in",
-    src="files/k0s-containerd-soci.toml",
+    src=f"{_F}/k0s-containerd-soci.toml",
     dest="/etc/k0s/containerd.d/soci.toml",
     _sudo=True,
 )
