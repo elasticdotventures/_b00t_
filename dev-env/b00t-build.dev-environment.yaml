@@ -36,7 +36,7 @@ retry:
 inactivity_duration: 30m
 
 env:
-  # dstack 0.20.28: bare `- FOO` resolves from the LOCAL shell only; secrets
+  # dstack 0.21.5: bare `- FOO` resolves from the LOCAL shell only; secrets
   # need `- FOO=${{ secrets.FOO }}` (server-side substitution).
   - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}   # read-only deploy key for elasticdotventures/_b00t_
 

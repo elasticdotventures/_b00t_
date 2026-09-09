@@ -105,7 +105,27 @@ dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
 - Dagster: add a `backend` knob to `DstackResource` so `ci_build_plane` can
   target k8s for the run ops.
 
-## ⚠️ dstack 0.20.28 kubernetes backend — `NO_OFFERS` (2026-09-09)
+## dstack kubernetes backend — bring-up notes (2026-09-09)
+
+**dstack 0.20.28: `NO_OFFERS` for everything.** Bumped to **0.21.5** (b00t #189,
+`deploy_cp_node.py DSTACK_VERSION`). 0.21's k8s backend actually enumerates the
+cluster — but two gotchas:
+
+1. **Default `disk: 100GB` exceeds vultr1's 72GB ephemeral-storage** → no node
+   matches → `NO_OFFERS`. Set an explicit small `disk:` (e.g. `5GB`) in the task
+   / fleet `resources:`. `dev-env/k0s-ci-test.task.yaml` sets `disk: 40GB..` —
+   lower it or grow the node.
+2. **dstack creates an SSH jump-pod `Service` with `nodePort: <proxy_jump.port>`**
+   → `nodePort: 22` is outside k8s's `30000-32767` range → `422 Unprocessable
+   Entity`. Fix: `proxy_jump.port: 30022` (now the `deploy_cp_node.py` default)
+   + open `tcp:30022` `tag:vultr1` in the tailnet ACL (done).
+
+With both applied, dstack 0.21.5 gets a valid k8s offer and attempts pod
+creation. A fleet must exist first (`type: fleet` + `backends: [kubernetes]` +
+sized `resources:`); a residual fleet/offer retry interaction is still being
+worked — drive pods via kubectl/Dagster if `dstack apply` stalls.
+
+## (historical) dstack 0.20.28 kubernetes backend — `NO_OFFERS`
 
 The backend is wired and the control node reaches the k8s API + `proxy_jump`
 (both verified), but `dstack apply` (task or fleet) against `backends:

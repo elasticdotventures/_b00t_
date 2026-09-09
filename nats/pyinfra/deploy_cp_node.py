@@ -33,7 +33,7 @@ from pyinfra.operations import apt, files, server, systemd
 # pyinfra resolves files.put/template `src` against CWD, not this script's dir.
 _D = Path(__file__).parent
 
-DSTACK_VERSION = "0.20.28"
+DSTACK_VERSION = "0.21.5"
 # "main" = dstack's default project name (the server auto-creates it and writes
 # the CLI's ~/.dstack/config.yml against it). Standardize on it everywhere —
 # the reaper, the post-check, and the operator's `dstack project add main ...`.
@@ -61,12 +61,12 @@ tailscale_tag = host.data.get("tailscale_tag", "tag:b00t-control-plane")
 
 # Optional kubernetes backend (k0s on b00t-node). Pass:
 #   --data k0s_kubeconfig=/local/path/to/b00t-node.kubeconfig
-#   --data k0s_proxy_jump_host=<b00t-node tailnet IP>   [--data k0s_proxy_jump_port=22]
+#   --data k0s_proxy_jump_host=<b00t-node tailnet IP>   [--data k0s_proxy_jump_port=30022]
 # k0s_kubeconfig is a LOCAL file (fetched via files/fetch-k0s-kubeconfig.sh);
 # it is put to ~/.dstack/kube/ on the control node and referenced by the config.
 k0s_kubeconfig_src = host.data.get("k0s_kubeconfig", "")
 k0s_proxy_jump_host = host.data.get("k0s_proxy_jump_host", "")
-k0s_proxy_jump_port = str(host.data.get("k0s_proxy_jump_port", 22))
+k0s_proxy_jump_port = str(host.data.get("k0s_proxy_jump_port", 30022))
 k0s_kubeconfig_dest = (
     f"{HOME}/.dstack/kube/b00t-node.kubeconfig" if k0s_kubeconfig_src else ""
 )

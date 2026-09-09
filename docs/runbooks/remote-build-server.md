@@ -70,7 +70,7 @@ CP_HOST=localhost pyinfra --ssh-port 2222 --ssh-user brianh \
 (`~/.ssh/google_compute_engine` is auto-created by a first
 `gcloud compute ssh b00t-dstack-control --zone australia-southeast1-a --tunnel-through-iap`.)
 
-Installs `dstack[all]==0.20.28`, renders `~/.dstack/server/config.yml` (GCP
+Installs `dstack[all]==0.21.5`, renders `~/.dstack/server/config.yml` (GCP
 backend, metadata ADC — no keys), the `dstack-server` systemd unit, and the
 `dstack-idle-reaper` timer (powers the VM off when dstack is idle).
 
