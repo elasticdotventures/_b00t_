@@ -24,10 +24,14 @@
 # k0s/spire/{agent,csi-driver}.yaml). See
 # docs/superpowers/specs/2026-09-09-build-plane-identity.md.
 #
-# ⚠️ dstack's `kubernetes` backend must allow the task Pod to carry the
-# csi.spiffe.io volume + a spiffe-helper init container + the ADC ConfigMap.
-# If dstack does not surface pod-spec injection, run this via the Dagster/
-# kubectl path instead (orchestration/dagster/), applying the Pod directly.
+# ⚠️ dstack 0.21.5's `kubernetes` backend does NOT surface pod-spec injection
+# (confirmed vs source: compute.py `_create_job_pod` — only `resources`,
+# `privileged`, and PVC/hostPath `volumes:` mounts; no init container, no
+# inline csi.spiffe.io volume, no configMap volume, no serviceAccountName).
+# So this Pod — csi.spiffe.io volume + spiffe-helper init + ADC ConfigMap +
+# the b00t-ci ServiceAccount — MUST run via the kubectl / Dagster path
+# (orchestration/dagster/), applying the full Pod manifest directly. Only
+# identity-free compile-free tasks go through `dstack apply` (verified).
 type: task
 name: b00t-ci-test-k0s
 
@@ -71,6 +75,7 @@ commands:
 # --- Pod overlay for the kubernetes backend (SVID delivery) ---------------
 # The verified shape (keyless-e2e 2026-09-09): a `csi.spiffe.io` ephemeral
 # volume + a spiffe-helper init container writing /svid/jwt_svid.token, and an
-# ADC ConfigMap at /cfg. dstack applies this via `pod_spec` if supported;
-# otherwise the Dagster path applies the full Pod. Reference manifest:
+# ADC ConfigMap at /cfg. dstack 0.21.5 cannot apply this (no pod-spec
+# injection — see the ⚠️ above); the Dagster / kubectl path applies the full
+# Pod. Reference manifest:
 #   k0s/spire/agent.yaml  (in PromptExecution/infrastructure)

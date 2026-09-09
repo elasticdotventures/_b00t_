@@ -159,14 +159,26 @@ Pod `dstack-main-<run>-0-0-<sfx>` scheduled on `vultr` → commands ran →
 `Exited (0)`. Repeatable. `proxy_jump` (control node → 100.109.101.1:30022) and
 the tailnet path both exercised.
 
-### Interim for the SVID-carrying CI pod
+### The SVID-carrying CI pod goes through kubectl/Dagster, NOT dstack
 
-`dev-env/k0s-ci-test.task.yaml` still needs the `csi.spiffe.io` volume +
-spiffe-helper init container in its Pod. If dstack 0.21.5 does not surface
-pod-spec injection for that, apply that one Pod via `kubectl` /
-`orchestration/dagster/` while the plain-task path above runs through
-`dstack apply`. Every other piece — SOCI image, SPIRE SVID delivery
-(`k0s/spire/`), keyless GCS (`gcs-obj.sh` `external_account`) — is verified.
+dstack 0.21.5's `kubernetes` backend does **not** surface pod-spec injection —
+confirmed against source (`dstack/_internal/core/backends/kubernetes/compute.py`
+`_create_job_pod`, 0.21.5). The only user-controlled pod-spec knobs are:
+`resources` (cpu / memory / gpu / `shm_size`), `privileged: true`, and `volumes:`
+mount points that each resolve to **either** a dstack-managed PVC
+(`KubernetesVolumeConfiguration` → `persistentVolumeClaim`) **or** a `hostPath`
+(`InstanceMountPoint`, `DirectoryOrCreate`). There is no init-container,
+inline-CSI (`csi.spiffe.io`), configMap-volume, or `serviceAccountName`
+support, and no raw pod-spec / strategic-merge-patch passthrough.
+
+So `dev-env/k0s-ci-test.task.yaml`'s Pod — which needs a `csi.spiffe.io`
+ephemeral volume + a `spiffe-helper` init container + the ADC ConfigMap + its
+own `b00t-ci` ServiceAccount — **cannot** run through `dstack apply`. Apply
+that one Pod via `kubectl` / `orchestration/dagster/` (full manifest, ref
+`k0s/spire/agent.yaml` in PromptExecution/infrastructure). Plain compile-free
+tasks with no identity requirement DO run through `dstack apply` (verified
+above). Every other piece — SOCI image, SPIRE SVID delivery (`k0s/spire/`),
+keyless GCS (`gcs-obj.sh` `external_account`) — is verified.
 
 ## (historical) dstack 0.20.28 kubernetes backend — `NO_OFFERS`
 
