@@ -26,8 +26,8 @@ operator-gated.
 | `nats/pyinfra/files/soci-snapshotter-config.toml` | b00t-node | prefetch-heavy snapshotter config |
 | `nats/pyinfra/files/k0s-containerd-soci.toml` | b00t-node | `/etc/k0s/containerd.d/` drop-in — CRI `snapshotter = "soci"` |
 | `.github/workflows/b00t-build-image.yml` (`soci-index` job) | CI | `soci create` + `soci push` the index to Artifact Registry |
-| `dev-env/k0s-ci-test.task.yaml` | — | RUN-stage task pinned to `backends: [kubernetes]`, key-based GCS auth |
-| `dev-env/gcs-obj.sh` | build/test box | now falls back to `GOOGLE_APPLICATION_CREDENTIALS` (openssl JWT) when GCE metadata is absent |
+| `dev-env/k0s-ci-test.task.yaml` | — | RUN-stage task pinned to `backends: [kubernetes]`; keyless GCS via a SPIRE SVID + `external_account` config |
+| `dev-env/gcs-obj.sh` | build/test box (baked into the image) | credential order: GCE metadata → `external_account` (WIF/SVID, keyless STS exchange) → SA key |
 
 ## Apply order
 
@@ -47,37 +47,23 @@ k0s ctr plugin ls | grep soci                 # -> ok
 crictl info | jq -r '.config.containerd.snapshotter'   # -> "soci"
 ```
 
-### 2. b00t-node — GCS read key for the k8s test tasks
+### 2. Identity — keyless via the existing SPIRE plane (NOT here)
 
-k0s on Vultr has no GCE metadata SA. Create a **minimal** key:
+k0s on Vultr has no GCE metadata SA. GCS + Artifact Registry access for
+build-plane pods is **keyless via `PromptExecution/infrastructure`'s live SPIRE
+trust domain** (`spiffe://promptexecution.com`, issuer
+`spire-oidc.promptexecution.com`). The delta needed there — a
+`fleet/spire-agents.json` entry, the first real `objectViewer` +
+`artifactregistry.reader` role grants on the bound SA, and a SPIRE
+registration entry — is tracked in
+`docs/superpowers/specs/2026-09-09-build-plane-identity.md`. Do **not** mint a
+long-lived key or a parallel WIF pool here.
 
-```sh
-gcloud iam service-accounts create b00t-k0s-gcsread --project promptexecution
-gcloud storage buckets add-iam-policy-binding gs://b00t-buildcache-promptexecution \
-  --member "serviceAccount:b00t-k0s-gcsread@promptexecution.iam.gserviceaccount.com" \
-  --role roles/storage.objectViewer
-gcloud iam service-accounts keys create b00t-k0s-gcsread.json \
-  --iam-account b00t-k0s-gcsread@promptexecution.iam.gserviceaccount.com
-dstack secret set gcs_sa_key "$(cat b00t-k0s-gcsread.json)" && shred -u b00t-k0s-gcsread.json
-```
+`dev-env/gcs-obj.sh` (baked into the `b00t-build` image) already consumes an
+`external_account` config → SVID → STS exchange; the pod just needs the SVID +
+config delivered by the SPIRE CSI driver / `spiffe-helper`.
 
-🚩 Long-lived key. Scope is objectViewer-on-one-bucket only. **Follow-up:**
-replace with a short-lived-token refresher (CronJob) once the path is proven.
-
-### 3. Artifact Registry pull secret for k0s
-
-```sh
-kubectl create secret docker-registry ar-pull \
-  --docker-server=australia-southeast1-docker.pkg.dev \
-  --docker-username=_json_key --docker-password="$(cat b00t-k0s-arpull.json)" \
-  -n default
-kubectl patch serviceaccount default -n default \
-  -p '{"imagePullSecrets":[{"name":"ar-pull"}]}'
-```
-
-(same 🚩 — scoped `artifactregistry.reader`, rotation TODO.)
-
-### 4. Control node — add the kubernetes backend
+### 3. Control node — add the kubernetes backend
 
 ```sh
 # on b00t-node:
@@ -92,13 +78,13 @@ pyinfra --dry nats/pyinfra/inventory_cp.py nats/pyinfra/deploy_cp_node.py \
 
 Verify: `dstack server` restarts, `dstack fleet` / `dstack apply` can target k8s.
 
-### 5. Build a SOCI-indexed image
+### 4. Build a SOCI-indexed image
 
 Run the `b00t-build-image` workflow (dispatch or push to `containers/b00t-build/**`).
 The `soci-index` job pushes the index. Check b00t-node's
 `journalctl -u soci-snapshotter-grpc` on the next k8s run for lazy mounts.
 
-### 6. Smoke the k8s test task
+### 5. Smoke the k8s test task
 
 ```sh
 dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
@@ -108,21 +94,11 @@ dstack apply -f dev-env/k0s-ci-test.task.yaml -n k0s-smoke \
 
 ## Open follow-ups
 
-- **Retire both 🚩 keys → keyless via Workload Identity Federation.** k0s's own
-  OIDC issuer federates to GCP; a projected ServiceAccount token is exchanged at
-  STS for a short-lived access token — no key file. Wiring:
-  `b00t-tf/modules/gcp-build-plane/wif-k0s.tf` (gated) + `deploy/k0s/`
-  (kustomize base: SA, `external_account` ConfigMap, AR-pull refresher CronJob)
-  + `deploy/k0s/publish-oidc-discovery.sh`. `gcs-obj.sh` already handles the
-  `external_account` config type. Design: `docs/superpowers/specs/2026-09-09-keyless-gcp-identity-k0s.md`.
-- ⚠️ **The k0s-issuer WIF is a time-boxed bootstrap.** The multi-cloud end
-  state (GCP + Azure + AWS) uses a **SPIRE trust domain** as the single OIDC
-  issuer — build it before AWS onboards; do not add a second per-cluster
-  issuer. Requirements + sequence:
-  `docs/superpowers/specs/2026-09-09-identity-plane-minimum-requirements.md`.
-- Entra ID provider is already in `wif-k0s.tf` (gated by `entra_tenant_id`);
-  the reverse (GCP/GitHub → Azure) is in
-  `modules/azure-control-plane/wif-reverse.tf`.
+- **Identity is keyless via the existing SPIRE plane** — the delta lives in
+  `PromptExecution/infrastructure` (`fleet/spire-agents.json` + first real role
+  grants + a SPIRE registration entry). See
+  `docs/superpowers/specs/2026-09-09-build-plane-identity.md`. `_b00t_` only
+  consumes SVIDs; no WIF pool / long-lived key here.
 - `proxy_jump.hostname` → tailnet IP once Phase 2.75 tailnet cutover lands.
 - b00t-node sizing: too small for `--workspace` cold builds → k0s hosts the
   compile-free test fan-out; GCP Spot keeps `build_archive`.

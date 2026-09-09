@@ -50,6 +50,12 @@ env:
   - SCCACHE_GCS_SERVICE_ACCOUNT=b00t-build-vm@promptexecution.iam.gserviceaccount.com
   - CARGO_INCREMENTAL=0                                           # sccache rejects incremental
 
+  # leverage #3: mold linker. Kept byte-identical to ci-build.task.yaml so an
+  # interactive `cargo build --profile ci` lands on the same sccache entries CI
+  # produced. 🤓 gcc/clang >= 12 accept `-fuse-ld=mold` directly (Ubuntu 24.04
+  # ships gcc 13); on an older cc use `-C link-arg=--ld-path=/usr/bin/mold`.
+  - RUSTFLAGS=-C link-arg=-fuse-ld=mold
+
   # --- workspace — checkout + target/ on LOCAL disk (target/ on an object FS
   #     is ~15-20x slower — measured). ---
   - CHECKOUT=/data/b00t

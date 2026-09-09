@@ -1,15 +1,19 @@
-# CI RUN stage on the KUBERNETES backend (k0s on b00t-node) — plan
-# gleaming-jingling-nygaard, k0s/SOCI follow-up. Same job as ci-test.task.yaml
-# (run one nextest partition from the archive, no compilation) but scheduled as
-# a k8s Pod instead of a GCP Spot VM:
-#   - no Docker on the node (k0s containerd)
-#   - image pull is lazy via the SOCI snapshotter (if b00t-build has a SOCI index)
-#   - no GCE metadata SA -> GCS auth is a mounted service-account key
+# CI RUN stage on the KUBERNETES backend (k0s on vultr1) — plan
+# gleaming-jingling-nygaard. Same job as ci-test.task.yaml (run one nextest
+# partition from the archive, no compilation) but scheduled as a k8s Pod
+# instead of a GCP Spot VM: no Docker on the node (k0s containerd), lazy image
+# pull via SOCI (if b00t-build has an index).
 #
-# Requires a dstack `kubernetes` backend (deploy_cp_node.py --data k0s_kubeconfig=…)
-# and a `gcs_sa_key` secret:
-#   dstack secret set gcs_sa_key "$(cat b00t-k0s-gcsread.json)"
-# The key needs ONLY roles/storage.objectViewer on b00t-buildcache-promptexecution.
+# GCS auth is KEYLESS: the pod receives a SPIRE JWT-SVID
+# (spiffe://promptexecution.com/...) and gcs-obj.sh exchanges it at STS for a
+# short-lived token via the `external_account` config path. SPIRE + the WIF
+# binding live in PromptExecution/infrastructure (terraform/google/
+# google-oidc-spire.tf, fleet/spire-agents.json) — NOT here. See
+# docs/superpowers/specs/2026-09-09-build-plane-identity.md.
+#
+# Requires: a dstack `kubernetes` backend (deploy_cp_node.py --data
+# k0s_kubeconfig=…) and the SPIRE SVID + external_account config delivered to
+# the pod at the paths below (SPIRE CSI driver / spiffe-helper, per infra).
 type: task
 name: b00t-ci-test-k0s
 
@@ -20,14 +24,14 @@ backends: [kubernetes]
 resources:
   cpu: 4..
   memory: 16GB..
-  # k8s: ephemeral Pod storage, not a PD
   disk: 40GB..
   gpu: 0
 
 env:
   - BUILDCACHE_BUCKET=b00t-buildcache-promptexecution
-  - GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcs-sa.json
-  - gcs_sa_key=${{ secrets.gcs_sa_key }}
+  # external_account config written by the SVID-delivery sidecar; its
+  # credential_source.file points at the JWT-SVID under /spiffe-workload-api.
+  - GOOGLE_APPLICATION_CREDENTIALS=/var/run/gcp/credential-configuration.json
   - b00t_build_deploy_key=${{ secrets.b00t_build_deploy_key }}
   # supplied per-run by the workflow / Dagster:
   - CI_ARCHIVE_KEY
@@ -37,29 +41,13 @@ env:
 commands:
   - set -eu
   - . "$HOME/.cargo/env"
-  - printf '%s' "$gcs_sa_key" > /tmp/gcs-sa.json && chmod 600 /tmp/gcs-sa.json
   - mkdir -p /data/src
-
-  # gcs-obj.sh ships in the src tarball; bootstrap-fetch src + archive with a
-  # minimal inline GET that reuses the same key-based JWT path.
-  - |
-    SCOPE=https://www.googleapis.com/auth/devstorage.read_only
-    b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
-    iss=$(python3 -c 'import json,sys;print(json.load(open("/tmp/gcs-sa.json"))["client_email"])')
-    python3 -c 'import json;open("/tmp/k.pem","w").write(json.load(open("/tmp/gcs-sa.json"))["private_key"])'
-    now=$(date +%s)
-    h=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
-    c=$(printf '{"iss":"%s","scope":"%s","aud":"https://oauth2.googleapis.com/token","iat":%d,"exp":%d}' "$iss" "$SCOPE" "$now" "$((now+3600))" | b64url)
-    sig=$(printf '%s' "$h.$c" | openssl dgst -sha256 -sign /tmp/k.pem | b64url)
-    TOKEN=$(curl -sf -X POST https://oauth2.googleapis.com/token -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer --data-urlencode "assertion=$h.$c.$sig" | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
-    enc() { python3 -c 'import sys,urllib.parse as u;print(u.quote(sys.argv[1],safe=""))' "$1"; }
-    curl -sf --retry 5 --retry-all-errors -H "Authorization: Bearer $TOKEN" -o /data/src.tar.zst \
-      "https://storage.googleapis.com/storage/v1/b/${BUILDCACHE_BUCKET}/o/$(enc "$CI_ARCHIVE_KEY/src.tar.zst")?alt=media"
-    curl -sf --retry 5 --retry-all-errors -H "Authorization: Bearer $TOKEN" -o /data/nextest.tar.zst \
-      "https://storage.googleapis.com/storage/v1/b/${BUILDCACHE_BUCKET}/o/$(enc "$CI_ARCHIVE_KEY/nextest.tar.zst")?alt=media"
+  # gcs-obj.sh ships in the src tarball, but we need it before we have src.
+  # It is also baked into the b00t-build image at /usr/local/bin — use that.
+  - gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/src.tar.zst" /data/src.tar.zst
+  - gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/nextest.tar.zst" /data/nextest.tar.zst
   - tar -I zstd -xf /data/src.tar.zst -C /data/src
   - du -sh /data/src /data/nextest.tar.zst
-
   - cargo nextest run
       --archive-file /data/nextest.tar.zst
       --workspace-remap /data/src
