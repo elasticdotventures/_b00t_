@@ -190,3 +190,9 @@ variable "entra_allowed_audiences" {
   type        = list(string)
   default     = ["api://b00t-gcp-federation"]
 }
+
+variable "trust_domain" {
+  description = "SPIFFE trust domain for the eventual SPIRE-rooted identity plane (e.g. b00t.promptexecution.com). Fixed now so workload IDs / bindings anticipate it; not yet consumed by resources. See docs/superpowers/specs/2026-09-09-identity-plane-minimum-requirements.md."
+  type        = string
+  default     = "b00t.promptexecution.com"
+}

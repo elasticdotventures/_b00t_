@@ -155,15 +155,19 @@ ways to fold Entra in:
    - **Entra ID as the org IdP** — if PromptExecution's identity root is already
      Entra, register it once with GCP WIF and let everything federate from it.
 
-**Recommendation:** don't boil the ocean. Sequence:
+**Recommendation** (superseded by
+`2026-09-09-identity-plane-minimum-requirements.md` once the multi-cloud end
+state was made explicit — read that for the authoritative sequence):
 
 1. **PR #1280 as-is** — scoped keys as bootstrap (already flagged interim).
-2. **k0s-issuer WIF** (steps 1–3 above) — retires `gcs_sa_key`. Small, isolated,
-   `gcs-obj.sh` is ready.
-3. **AR pull via refresher DaemonSet** — retires `ar-pull` key.
-4. **Add Entra as a WIF provider** when a workload actually needs Azure + GCP in
-   one place. Evaluate SPIFFE/SPIRE only if the cross-cloud fleet grows past a
-   handful of nodes.
+2. **k0s-issuer WIF** (steps 1–3 above) — retires `gcs_sa_key`. **Deliberately
+   temporary** — it exists to de-risk the WIF mechanics, which transfer
+   unchanged to a SPIRE issuer.
+3. **AR pull via refresher CronJob** — retires `ar-pull` key.
+4. **SPIRE trust domain** as the single OIDC issuer every cloud (GCP, Azure,
+   **AWS**) federates against — this is *next, before AWS onboards*, not
+   "maybe later." The Entra provider added in this PR then re-points its
+   `issuer_uri` at SPIRE.
 
 ## Code status
 

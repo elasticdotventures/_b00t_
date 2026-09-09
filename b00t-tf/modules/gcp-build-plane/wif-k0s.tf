@@ -3,10 +3,20 @@
 # Entra ID (Azure AD) provider — retires the two long-lived keys from the
 # k0s/SOCI PR. Plan gleaming-jingling-nygaard.
 #
-# Everything here is gated: with k0s_oidc_issuer_uri = "" nothing is created,
-# so `tofu validate` / existing applies are unaffected.
+# ⚠️ The `k0s-oidc` provider (raw k0s ServiceAccount-token issuer) is a
+# DELIBERATELY TEMPORARY BOOTSTRAP. The multi-cloud (GCP+Azure+AWS) end state
+# uses a SPIRE trust domain as the single OIDC issuer that every cloud
+# federates against — see
+# docs/superpowers/specs/2026-09-09-identity-plane-minimum-requirements.md.
+# When SPIRE lands, add a `spire-oidc` provider in this same `external-idp`
+# pool and point `k0s_oidc_issuer_uri` at SPIRE's discovery URL; the SA
+# bindings, attribute_mapping and gcs-obj.sh do not change. Do NOT add a
+# second per-cluster issuer here.
 #
-# See docs/superpowers/specs/2026-09-09-keyless-gcp-identity-k0s.md and
+# Everything is gated: with k0s_oidc_issuer_uri = "" nothing is created, so
+# `tofu validate` / existing applies are unaffected.
+#
+# See also docs/superpowers/specs/2026-09-09-keyless-gcp-identity-k0s.md and
 # .../2026-09-09-spiffe-spire-cross-cloud.md.
 # ---------------------------------------------------------------------------
 

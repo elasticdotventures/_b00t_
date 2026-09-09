@@ -57,10 +57,14 @@ whole fleet.
 | A few clusters, 2 clouds | keep per-cluster-issuer WIF, or make Entra the single root both clouds federate from |
 | Many clusters / many clouds / need service-to-service mTLS / per-workload (not per-SA) identity | **SPIRE** trust domain as the root; GCP + Azure WIF both trust SPIRE's OIDC; optional SPIRE↔SPIRE federation |
 
-**Recommendation:** ship the k0s-issuer + Entra WIF (this PR). Treat SPIRE as a
-*documented future consolidation* triggered by the 1000s-of-services / multi-
-cloud reality — not now. When it lands, the WIF providers change their
-`issuer_uri` to SPIRE's; the SA bindings and `gcs-obj.sh` do not change.
+**Recommendation** (revised — see
+`2026-09-09-identity-plane-minimum-requirements.md`): the multi-cloud end state
+(GCP + Azure + **AWS**) is now explicit, so SPIRE is **not** "maybe later" — it
+is the identity root to build **before AWS onboards**, because per-cluster
+issuers create an unmanageable C×K trust matrix. Ship the k0s-issuer + Entra
+WIF (this PR) as a *time-boxed bootstrap* that de-risks the WIF mechanics; the
+`issuer_uri` swaps to SPIRE's next, and the SA bindings / `gcs-obj.sh` don't
+change. Do not add a second per-cluster issuer.
 
 ## Part 2 — templating: jinja/pyinfra vs kustomize vs …
 
