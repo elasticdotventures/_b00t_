@@ -60,3 +60,16 @@ export function jwksResponse(body: { keys: Jwk[] }): Response {
     },
   });
 }
+
+/** Public verify key derived from the private PEM (RS256). */
+export async function loadVerifyKey(env: JwksEnv): Promise<CryptoKey> {
+  const priv = await loadSigningKey(env);
+  const full = (await crypto.subtle.exportKey("jwk", priv)) as JsonWebKey;
+  return crypto.subtle.importKey(
+    "jwk",
+    { kty: "RSA", n: full.n, e: full.e, alg: "RS256", ext: true },
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+}

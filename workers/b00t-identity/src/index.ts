@@ -130,7 +130,7 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       }
-      return new Response(JSON.stringify(result.payload), {
+      return new Response(JSON.stringify(result.claims), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });

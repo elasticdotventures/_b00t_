@@ -1,10 +1,12 @@
 import { lookupTenant } from "./registry";
 import type { TenantNode } from "./tenant-do";
+import { loadSigningKey, loadVerifyKey } from "./jwks";
 
 export interface Env {
   DB: D1Database;
   TENANT_DO: DurableObjectNamespace<TenantNode>;
-  TOKEN_SIGNING_KEY: string;
+  JWT_PRIVATE_KEY_PEM: string;
+  JWT_KID: string;
 }
 
 export interface IssueTokenInput {
@@ -12,21 +14,26 @@ export interface IssueTokenInput {
   agentId: string;
   nodeId: string;
   requestedShards: string[];
+  r0le?: string; // SP1-04 threads this from the route; defaults to "member"
 }
 
 export type IssueTokenResult = { token: string } | { error: string };
 
-export interface TokenPayload {
-  tenantId: string;
-  agentId: string;
-  rootDoId: string;
-  nodeId: string;
-  shards: string[];
-  issuedAt: string;
-  expiresAt: string;
+/** RS256 JWT claims (SP1-02). `exp - iat` is always 900. */
+export interface AgentClaims {
+  iss: string;
+  sub: string; // agent id
+  tenant: string;
+  r0le: string;
+  scopes: string[];
+  budget_ref: string;
+  iat: number; // seconds since epoch
+  exp: number; // seconds since epoch
+  jti: string;
 }
 
-const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+export const TOKEN_ISS = "https://b00t.promptexecution.com";
+const TOKEN_TTL_SECONDS = 900;
 
 function bufferToBase64Url(buffer: ArrayBufferLike): string {
   const bytes = new Uint8Array(buffer);
@@ -52,61 +59,62 @@ function base64UrlToString(base64url: string): string {
   return new TextDecoder().decode(base64UrlToBuffer(base64url));
 }
 
-async function getSigningKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"]
+/** Sign claims as a 3-part RS256 JWS. Header carries `kid`. */
+export async function signJwt(env: Env, claims: AgentClaims): Promise<string> {
+  const header = { alg: "RS256", typ: "JWT", kid: env.JWT_KID };
+  const signingInput = `${stringToBase64Url(JSON.stringify(header))}.${stringToBase64Url(
+    JSON.stringify(claims),
+  )}`;
+  const key = await loadSigningKey(env);
+  const sig = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(signingInput),
   );
+  return `${signingInput}.${bufferToBase64Url(sig)}`;
 }
 
-async function signData(secret: string, data: string): Promise<ArrayBuffer> {
-  const key = await getSigningKey(secret);
-  return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-}
+export type VerifyTokenResult =
+  | { valid: true; claims: AgentClaims }
+  | { valid: false; error: string };
 
-async function verifySignature(secret: string, data: string, signature: ArrayBuffer): Promise<boolean> {
-  const key = await getSigningKey(secret);
-  return crypto.subtle.verify("HMAC", key, signature, new TextEncoder().encode(data));
-}
-
-export async function signPayload(secret: string, payload: TokenPayload): Promise<string> {
-  const payloadPart = stringToBase64Url(JSON.stringify(payload));
-  const signature = await signData(secret, payloadPart);
-  const signaturePart = bufferToBase64Url(signature);
-  return `${payloadPart}.${signaturePart}`;
-}
-
-export type VerifyTokenResult = { valid: true; payload: TokenPayload } | { valid: false; error: string };
-
-export async function verifyToken(env: Env, token: string): Promise<VerifyTokenResult> {
+/** Verify a 3-part RS256 JWS and its `exp`. */
+export async function verifyJwt(env: Env, token: string): Promise<VerifyTokenResult> {
   const parts = token.split(".");
-  if (parts.length !== 2) {
+  if (parts.length !== 3) return { valid: false, error: "malformed token" };
+  const [headerPart, payloadPart, signaturePart] = parts;
+
+  let header: { alg?: string; kid?: string };
+  try {
+    header = JSON.parse(base64UrlToString(headerPart));
+  } catch {
     return { valid: false, error: "malformed token" };
   }
-  const [payloadPart, signaturePart] = parts;
+  if (header.alg !== "RS256") return { valid: false, error: "invalid signature" };
 
-  const signature = base64UrlToBuffer(signaturePart);
-  const signatureValid = await verifySignature(env.TOKEN_SIGNING_KEY, payloadPart, signature);
-  if (!signatureValid) {
-    return { valid: false, error: "invalid signature" };
-  }
+  const key = await loadVerifyKey(env);
+  const ok = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    base64UrlToBuffer(signaturePart),
+    new TextEncoder().encode(`${headerPart}.${payloadPart}`),
+  );
+  if (!ok) return { valid: false, error: "invalid signature" };
 
-  let payload: TokenPayload;
+  let claims: AgentClaims;
   try {
-    payload = JSON.parse(base64UrlToString(payloadPart));
+    claims = JSON.parse(base64UrlToString(payloadPart));
   } catch {
-    return { valid: false, error: "malformed payload" };
+    return { valid: false, error: "malformed token" };
   }
-
-  if (new Date(payload.expiresAt).getTime() < Date.now()) {
+  if (typeof claims.exp !== "number" || claims.exp * 1000 < Date.now()) {
     return { valid: false, error: "expired" };
   }
-
-  return { valid: true, payload };
+  return { valid: true, claims };
 }
+
+/** Back-compat alias used by the /verify route and tests. */
+export const verifyToken = verifyJwt;
 
 export async function issueToken(env: Env, input: IssueTokenInput): Promise<IssueTokenResult> {
   const tenant = await lookupTenant(env.DB, input.tenantId);
@@ -126,16 +134,18 @@ export async function issueToken(env: Env, input: IssueTokenInput): Promise<Issu
     return { error: "unauthorized" };
   }
 
-  const now = Date.now();
-  const payload: TokenPayload = {
-    tenantId: input.tenantId,
-    agentId: input.agentId,
-    rootDoId: tenant.rootDoId,
-    nodeId: input.nodeId,
-    shards: input.requestedShards,
-    issuedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + TOKEN_TTL_MS).toISOString(),
+  const iat = Math.floor(Date.now() / 1000);
+  const claims: AgentClaims = {
+    iss: TOKEN_ISS,
+    sub: input.agentId,
+    tenant: input.tenantId,
+    r0le: input.r0le ?? "member",
+    scopes: input.requestedShards,
+    budget_ref: "", // SP1-04: set from the ledgrrr authorize-spend response
+    iat,
+    exp: iat + TOKEN_TTL_SECONDS,
+    jti: crypto.randomUUID(),
   };
-  const token = await signPayload(env.TOKEN_SIGNING_KEY, payload);
+  const token = await signJwt(env, claims);
   return { token };
 }

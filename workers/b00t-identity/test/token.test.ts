@@ -39,7 +39,7 @@ describe("issueToken", () => {
       const verified = await verifyToken(env, result.token);
       expect(verified.valid).toBe(true);
       if (verified.valid) {
-        expect(verified.payload.agentId).toBe("agent-1");
+        expect(verified.claims.sub).toBe("agent-1");
       }
     }
   });
