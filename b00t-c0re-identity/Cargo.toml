@@ -7,15 +7,25 @@ license.workspace = true
 repository.workspace = true
 description = "Agent identity: RS256 JWT claims + pluggable token source (product plane, SP1)"
 
+[features]
+default = []
+# SP4-07 — the shared axum identity middleware (`axum_auth`). Off by default so
+# `b00t-cli` / non-HTTP consumers don't pull axum; `b00t-mcp` and every backend
+# MCP server enable it.
+axum = ["dep:axum"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+chrono = { workspace = true }
 jsonwebtoken = { version = "10.4", features = ["rust_crypto"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rsa = { version = "0.9", features = ["pem"] }
 base64 = "0.22"
+axum = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+tower = { version = "0.5", features = ["util"] }

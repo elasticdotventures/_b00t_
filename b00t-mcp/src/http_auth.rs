@@ -1,85 +1,24 @@
 //! SP3-02a — HTTP identity middleware.
 //!
-//! Verifies `Authorization: Bearer <jwt>` against the identity worker's JWKS
-//! ([`JwksVerifier`]) and injects a [`CallerIdentity`] into the request
-//! extensions. `B00T_MCP_REQUIRE_AUTH=1` makes a missing/invalid bearer a
-//! `401`. Invalid supplied credentials always fail; only missing credentials
-//! may proceed as `CallerIdentity::anon()` when authentication is optional.
-//! rmcp forwards these extensions inside the HTTP request Parts.
+//! The implementation moved to `b00t-c0re-identity::axum_auth` in SP4-07 (enabled
+//! via that crate's `axum` feature) so the proxy and every backend MCP server
+//! run byte-identical bearer verification. This module re-exports it; the tests
+//! below still run here as the CP-4 auth-parity regression gate.
 
-use std::sync::Arc;
-
-use axum::{
-    body::Body,
-    extract::State,
-    http::{Request, StatusCode, header::AUTHORIZATION},
-    middleware::Next,
-    response::Response,
-};
-
-use crate::identity::{CallerIdentity, JwksVerifier};
-
-/// Shared state for [`identity_middleware`].
-#[derive(Clone)]
-pub struct IdentityLayerState {
-    pub verifier: Arc<JwksVerifier>,
-    pub require_auth: bool,
-}
-
-impl IdentityLayerState {
-    /// `verifier` from `$B00T_IDENTITY_JWKS` / `$B00T_IDENTITY_URL`;
-    /// `require_auth` from `$B00T_MCP_REQUIRE_AUTH` (`1` / `true`).
-    pub fn from_env() -> Self {
-        Self {
-            verifier: Arc::new(JwksVerifier::from_env()),
-            require_auth: std::env::var("B00T_MCP_REQUIRE_AUTH")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
-        }
-    }
-}
-
-fn bearer(req: &Request<Body>) -> Option<String> {
-    req.headers()
-        .get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.trim().to_string())
-}
-
-/// axum middleware: `Bearer` → verified [`CallerIdentity`] in request extensions.
-pub async fn identity_middleware(
-    State(state): State<IdentityLayerState>,
-    mut req: Request<Body>,
-    next: Next,
-) -> Response {
-    let identity = match bearer(&req) {
-        Some(token) => match state.verifier.verify(&token).await {
-            Ok(id) => Some(id),
-            Err(_) => None,
-        },
-        None if state.require_auth || req.headers().contains_key(AUTHORIZATION) => None,
-        None => Some(CallerIdentity::anon()),
-    };
-
-    match identity {
-        Some(id) => {
-            req.extensions_mut().insert(id);
-            next.run(req).await
-        }
-        None => Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .header("content-type", "application/json")
-            .body(Body::from(r#"{"error":"unauthorized"}"#))
-            .expect("static 401 response builds"),
-    }
-}
+pub use b00t_c0re_identity::axum_auth::{IdentityLayerState, identity_middleware};
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{Router, body::to_bytes, routing::get};
+    use crate::identity::{CallerIdentity, JwksVerifier};
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Request, StatusCode},
+        routing::get,
+        Router,
+    };
     use b00t_c0re_identity::{MockTokenSource, TokenRequest};
+    use std::sync::Arc;
     use tower::ServiceExt; // oneshot
 
     fn app(require_auth: bool, jwks: String) -> Router {

@@ -1629,13 +1629,16 @@ version = "0.10.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.8.9",
  "base64 0.22.1",
+ "chrono",
  "jsonwebtoken",
  "reqwest 0.12.28",
  "rsa",
  "serde",
  "serde_json",
  "tokio",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -1800,6 +1803,7 @@ dependencies = [
  "b00t-c0re-gov",
  "b00t-c0re-hierarchy",
  "b00t-c0re-identity",
+ "b00t-c0re-ledgrrr",
  "b00t-c0re-lib",
  "b00t-c0re-role",
  "b00t-chat",
@@ -1873,6 +1877,7 @@ dependencies = [
  "tokenizers 0.22.2",
  "tokio",
  "toml 1.1.2+spec-1.1.0",
+ "tower 0.5.3",
  "tracing",
  "ufo-types",
  "url",

@@ -60,6 +60,8 @@ pub mod lsp_proxy;
 pub mod man_page;
 pub mod mcp_proxy;
 pub mod remote_mcp_proxy;
+pub mod mcp_placement;
+pub mod mcp_placement_aca;
 pub mod mcp_registry;
 pub mod ooda;
 pub mod pipeline_nodes;
@@ -125,6 +127,8 @@ pub use lfmf::{Lesson, LfmfConfig, LfmfSystem};
 pub use man_page::{ManPage, ManSection};
 pub use mcp_proxy::{GenericMcpProxy, McpToolDefinition, McpToolRequest, McpToolResponse};
 pub use remote_mcp_proxy::{RemoteMcpProxy, RemoteRoute};
+pub use mcp_placement::{Endpoint, LaunchSpec, McpPlacement, PlacementStatus, PodmanPlacement};
+pub use mcp_placement_aca::AcaPlacement;
 pub use mcp_registry::{
     McpRegistry, McpServerConfig, McpServerRegistration, create_registration_from_datum,
 };

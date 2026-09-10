@@ -53,6 +53,7 @@ thiserror = "2"
 rhai = { workspace = true }
 b00t-c0re-lib = { workspace = true }
 b00t-c0re-identity = { workspace = true }
+b00t-c0re-ledgrrr = { workspace = true }
 b00t-l3dg3rr-viz = { workspace = true }
 b00t-bouncer = { path = "../b00t-bouncer" }
 blessed = { path = "../blessed" }
@@ -174,3 +175,4 @@ keyring = []
 [dev-dependencies]
 assert_cmd = "2.0"
 tempfile = "3.13.0"
+tower = { version = "0.5", features = ["util"] }
