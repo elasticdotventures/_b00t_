@@ -32,6 +32,13 @@ personality = "pragmatic"
 humor = "low"
 role = "specialist"
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "ch0nky"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.executor]
 # 🤓 cli_path must be on PATH; pi --mode rpc is the persistent path; this is one-shot fallback via handle_invoke
 cli_path = "pi"

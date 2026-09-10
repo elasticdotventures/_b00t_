@@ -23,6 +23,13 @@ personality = "strategic"
 humor = "low"
 role = "executive"
 
+[b00t.agent.inference]
+endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
+health   = "http://127.0.0.1:8001/health"
+model    = "claude-sonnet-4-6"
+protocol = "openai"                      # openai | acp | rpc
+required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
+
 [b00t.agent.ipc]
 socket = "/tmp/b00t/agents/executive.sock"
 pubsub = true
