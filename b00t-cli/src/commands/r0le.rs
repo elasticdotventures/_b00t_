@@ -11,8 +11,12 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 
+use crate::boot_datum::BootDatum;
 use crate::commands::blessing::collect_role_unlocks;
+use crate::config_types::UnifiedConfig;
+use crate::DatumType;
 use crate::datum_agent_profile::{AgentProfileSpec, ModelTier, ShardMode, SoulShardGrant};
+use crate::datum_utils::get_all_datums_for_tenant;
 use crate::soul_scope::ShardKind;
 use crate::whoami::load_role_datum;
 
@@ -48,6 +52,28 @@ pub enum R0leCmd {
         /// Override the `_b00t_` directory (default `$_B00T_Path` or `~/.b00t/_b00t_`).
         #[clap(long)]
         b00t_path: Option<String>,
+    },
+    /// Print an r0le package (`b00t datum` of type AgentProfile).
+    Show {
+        /// Datum key (e.g. `worker`).
+        id: String,
+        #[clap(long)]
+        tenant: Option<String>,
+        #[clap(long)]
+        json: bool,
+        #[clap(long)]
+        b00t_path: Option<String>,
+    },
+    /// Verify an r0le package's signature against a JWKS.
+    Verify {
+        id: String,
+        #[clap(long)]
+        tenant: Option<String>,
+        #[clap(long)]
+        b00t_path: Option<String>,
+        /// JWKS JSON file (default: `$B00T_IDENTITY_JWKS` inline).
+        #[clap(long)]
+        jwks: Option<PathBuf>,
     },
 }
 
@@ -106,6 +132,57 @@ pub fn compose_agent_profile(
     })
 }
 
+/// Wrap an `AgentProfileSpec` as a `DatumType::AgentProfile` BootDatum and
+/// render it to `.agentprofile.toml` text (`[b00t]` + `[b00t.agent_profile]`).
+pub fn render_agent_profile_datum(role: &str, spec: AgentProfileSpec) -> Result<String> {
+    let datum = BootDatum {
+        name: role.to_string(),
+        datum_type: Some(DatumType::AgentProfile),
+        hint: format!("r0le package for {role}"),
+        agent_profile: Some(spec),
+        ..Default::default()
+    };
+    let cfg = UnifiedConfig {
+        b00t: datum,
+        service_contract: Vec::new(),
+        env: None,
+        sections: None,
+    };
+    Ok(toml::to_string_pretty(&cfg)?)
+}
+
+/// Load the `AgentProfileSpec` of the r0le datum keyed `id`.
+fn load_r0le_spec(
+    b00t_path: &str,
+    tenant: Option<&str>,
+    id: &str,
+) -> Result<AgentProfileSpec> {
+    let datums = get_all_datums_for_tenant(b00t_path, tenant, Some(6))?;
+    // Datum keys are filename-minus-`.toml`, so `worker.agentprofile.toml` keys
+    // as `worker.agentprofile` — try the bare id and the suffixed forms.
+    let (datum, _path) = datums
+        .get(id)
+        .or_else(|| datums.get(&format!("{id}.agentprofile")))
+        .or_else(|| datums.get(&format!("{id}.agent_profile")))
+        .or_else(|| datums.get(&format!("{id}.r0le")))
+        .ok_or_else(|| anyhow!("no r0le datum keyed '{id}' under {b00t_path}"))?;
+    if datum.datum_type != Some(DatumType::AgentProfile) {
+        return Err(anyhow!("datum '{id}' is not an AgentProfile (r0le) datum"));
+    }
+    datum
+        .agent_profile
+        .clone()
+        .ok_or_else(|| anyhow!("datum '{id}' has no [b00t.agent_profile] payload"))
+}
+
+fn read_jwks(jwks: Option<&std::path::Path>) -> Result<String> {
+    if let Some(p) = jwks {
+        return std::fs::read_to_string(p).map_err(|e| anyhow!("read {}: {e}", p.display()));
+    }
+    std::env::var("B00T_IDENTITY_JWKS")
+        .map_err(|_| anyhow!("no --jwks and $B00T_IDENTITY_JWKS is unset"))
+}
+
 pub fn handle_r0le(args: &R0leArgs) -> Result<()> {
     match &args.cmd {
         R0leCmd::Build {
@@ -131,7 +208,7 @@ pub fn handle_r0le(args: &R0leArgs) -> Result<()> {
                 spec.sign(&kid, &pem)?;
             }
 
-            let toml = toml::to_string_pretty(&spec)?;
+            let toml = render_agent_profile_datum(role, spec)?;
             match out {
                 Some(p) => {
                     std::fs::write(p, &toml)?;
@@ -140,6 +217,49 @@ pub fn handle_r0le(args: &R0leArgs) -> Result<()> {
                 None => print!("{toml}"),
             }
             Ok(())
+        }
+        R0leCmd::Show {
+            id,
+            tenant,
+            json,
+            b00t_path,
+        } => {
+            let path = b00t_path.clone().unwrap_or_else(default_b00t_path);
+            let spec = load_r0le_spec(&path, tenant.as_deref(), id)?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&spec)?);
+            } else {
+                println!("r0le: {id}");
+                println!("  model_tier      : {:?}", spec.model_tier);
+                println!("  budget_ceiling  : {}", spec.budget_ceiling);
+                println!("  skills          : {}", spec.skills.join(", "));
+                println!("  tool_allowlist  : {}", spec.tool_allowlist.join(", "));
+                println!("  permissions     : {}", spec.permissions.join(", "));
+                println!("  shard grants    : {}", spec.soul_shard_grants.len());
+                match &spec.signature {
+                    Some(s) => println!("  signature       : {} (kid={})", s.alg, s.kid),
+                    None => println!("  signature       : <unsigned>"),
+                }
+            }
+            Ok(())
+        }
+        R0leCmd::Verify {
+            id,
+            tenant,
+            b00t_path,
+            jwks,
+        } => {
+            let path = b00t_path.clone().unwrap_or_else(default_b00t_path);
+            let spec = load_r0le_spec(&path, tenant.as_deref(), id)?;
+            let jwks_json = read_jwks(jwks.as_deref())?;
+            match spec.verify(&jwks_json) {
+                Ok(()) => {
+                    let kid = spec.signature.as_ref().map(|s| s.kid.as_str()).unwrap_or("?");
+                    println!("✅ signature valid (kid={kid})");
+                    Ok(())
+                }
+                Err(e) => Err(anyhow!("❌ {e}")),
+            }
         }
     }
 }
@@ -199,5 +319,51 @@ mod tests {
         assert_eq!(parse_tier("ch0nky").unwrap(), ModelTier::Ch0nky);
         assert_eq!(parse_tier("frontier").unwrap(), ModelTier::Frontier);
         assert!(parse_tier("turbo").is_err());
+    }
+
+    #[test]
+    fn build_output_is_a_parseable_agent_profile_datum() {
+        let spec = AgentProfileSpec {
+            tool_allowlist: vec!["cargo.*".into()],
+            skills: vec!["rust.skill".into()],
+            budget_ceiling: 7,
+            ..Default::default()
+        };
+        let toml = render_agent_profile_datum("worker", spec).unwrap();
+        assert!(toml.contains("[b00t]"));
+        assert!(toml.contains("[b00t.agent_profile]"));
+        let cfg: crate::config_types::UnifiedConfig = toml::from_str(&toml).unwrap();
+        assert_eq!(cfg.b00t.datum_type, Some(DatumType::AgentProfile));
+        let ap = cfg.b00t.agent_profile.unwrap();
+        assert_eq!(ap.tool_allowlist, ["cargo.*"]);
+        assert_eq!(ap.budget_ceiling, 7);
+    }
+
+    #[test]
+    fn show_and_verify_resolve_a_built_datum() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path();
+        std::fs::write(
+            p.join("worker.role.toml"),
+            "[b00t]\nname = \"worker\"\ntype = \"role\"\ndepends_on = [\"rust.skill\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            p.join("rust.skill.toml"),
+            "[b00t]\nname = \"rust\"\ntype = \"skill\"\nunlocks = [\"cargo.*\"]\n",
+        )
+        .unwrap();
+
+        let spec = compose_agent_profile(p.to_str().unwrap(), "worker", ModelTier::Ch0nky, 5).unwrap();
+        let datum_toml = render_agent_profile_datum("worker", spec).unwrap();
+        std::fs::write(p.join("worker.agentprofile.toml"), datum_toml).unwrap();
+
+        // show
+        let loaded = load_r0le_spec(p.to_str().unwrap(), None, "worker").unwrap();
+        assert!(loaded.tool_allowlist.contains(&"cargo.*".to_string()));
+        assert!(loaded.signature.is_none());
+
+        // verify of an unsigned spec must error
+        assert!(loaded.verify("{\"keys\":[]}").is_err());
     }
 }

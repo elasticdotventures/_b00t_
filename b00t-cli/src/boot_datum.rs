@@ -216,6 +216,11 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
+    /// Payload of a `DatumType::AgentProfile` (`.agentprofile.toml`) — the
+    /// signed r0le package. `[b00t.agent_profile]` in the datum file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_profile: Option<crate::datum_agent_profile::AgentProfileSpec>,
+
     // Classifier hints
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger_words: Option<Vec<String>>,
