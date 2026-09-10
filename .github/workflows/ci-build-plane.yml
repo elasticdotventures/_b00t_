@@ -95,6 +95,8 @@ jobs:
             echo "project add not ready yet (attempt $i) — sleeping 15s"; sleep 15
           done
           [ -n "$ok" ] || { echo "::error::control plane unreachable via $DSTACK_URL after retries"; exit 1; }
+      - name: Ensure the elastic GCP fleet exists
+        run: dstack apply -f dev-env/gcp-ci-fleet.yaml -y
       - name: Build + archive (1 VM, 1 compile)
         run: |
           dstack apply -f dev-env/ci-build.task.yaml -n "ci-build-${GITHUB_RUN_ID}" \
@@ -137,6 +139,8 @@ jobs:
             echo "project add not ready yet (attempt $i) — sleeping 15s"; sleep 15
           done
           [ -n "$ok" ] || { echo "::error::control plane unreachable via $DSTACK_URL after retries"; exit 1; }
+      - name: Ensure the elastic GCP fleet exists
+        run: dstack apply -f dev-env/gcp-ci-fleet.yaml -y
       - name: Run partition ${{ matrix.partition }} from the archive (no compile)
         run: |
           NAME="ci-test-${GITHUB_RUN_ID}-p$(echo '${{ matrix.partition }}' | tr / -)"
