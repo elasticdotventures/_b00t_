@@ -4,6 +4,12 @@
 //!
 //! A non-namespaced tool name (`no __`) yields `route() == None` — the caller
 //! then dispatches it against the local registry, unchanged.
+//!
+//! SP4-09 — when `$B00T_MCP_CONTROL_URL` is set, [`RemoteMcpProxy::call`] first
+//! asks that control plane (`GET {control}/_b00t/route/<svc>`) where `<svc>`
+//! actually lives — it may need to wake a scaled-to-zero backend — and uses the
+//! returned `fqdn`. Unset → straight-through to `<svc>.<base-domain>` (today's
+//! behaviour).
 
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -25,8 +31,12 @@ pub struct RemoteRoute {
 /// Routes namespaced tool calls to per-service MCP endpoints.
 pub struct RemoteMcpProxy {
     base_domain: String,
-    /// Full override for tests: when set, every route's URL is `<base_url>/mcp`.
+    /// Full override for tests: when set, every route's URL is `<base_url>/mcp`
+    /// and the control plane is skipped.
     base_url_override: Option<String>,
+    /// SP4-09 — `$B00T_MCP_CONTROL_URL`. When set (and no `base_url_override`),
+    /// `call` resolves the live host via `GET {this}/_b00t/route/<svc>`.
+    control_plane_url: Option<String>,
     client: reqwest::Client,
 }
 
@@ -38,12 +48,14 @@ impl Default for RemoteMcpProxy {
 
 impl RemoteMcpProxy {
     /// `$B00T_MCP_ROUTING_DOMAIN` (default `b00t.promptexecution.com`) +
-    /// `$B00T_MCP_ROUTING_BASE_URL` (test override — forces every route host).
+    /// `$B00T_MCP_ROUTING_BASE_URL` (test override — forces every route host) +
+    /// `$B00T_MCP_CONTROL_URL` (SP4-09 — control-plane resolve).
     pub fn from_env() -> Self {
         Self {
             base_domain: std::env::var("B00T_MCP_ROUTING_DOMAIN")
                 .unwrap_or_else(|_| DEFAULT_BASE_DOMAIN.to_string()),
             base_url_override: std::env::var("B00T_MCP_ROUTING_BASE_URL").ok(),
+            control_plane_url: std::env::var("B00T_MCP_CONTROL_URL").ok(),
             client: reqwest::Client::new(),
         }
     }
@@ -52,6 +64,7 @@ impl RemoteMcpProxy {
         Self {
             base_domain: domain.into(),
             base_url_override: None,
+            control_plane_url: None,
             client: reqwest::Client::new(),
         }
     }
@@ -60,6 +73,17 @@ impl RemoteMcpProxy {
         Self {
             base_domain: DEFAULT_BASE_DOMAIN.to_string(),
             base_url_override: Some(base_url.into()),
+            control_plane_url: None,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// SP4-09 — route via a control plane at `control_url`.
+    pub fn with_control_plane(control_url: impl Into<String>) -> Self {
+        Self {
+            base_domain: DEFAULT_BASE_DOMAIN.to_string(),
+            base_url_override: None,
+            control_plane_url: Some(control_url.into()),
             client: reqwest::Client::new(),
         }
     }
@@ -91,17 +115,68 @@ impl RemoteMcpProxy {
         })
     }
 
+    /// Where `route.svc` actually is right now.
+    ///
+    /// * `base_url_override` set → the override (control plane skipped).
+    /// * `control_plane_url` set → `GET {control}/_b00t/route/<svc>`, use `fqdn`
+    ///   (waking a cold backend if needed); `503` → the launch was refused.
+    /// * neither → `route.url` (SP3-08 straight-through).
+    async fn resolve_url(&self, route: &RemoteRoute) -> Result<String> {
+        if self.base_url_override.is_some() {
+            return Ok(route.url.clone());
+        }
+        let Some(control) = &self.control_plane_url else {
+            return Ok(route.url.clone());
+        };
+
+        let ctl_url = format!(
+            "{}/_b00t/route/{}",
+            control.trim_end_matches('/'),
+            route.svc
+        );
+        let res = self
+            .client
+            .get(&ctl_url)
+            .send()
+            .await
+            .with_context(|| format!("GET {ctl_url}"))?;
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        if status.as_u16() == 503 {
+            anyhow::bail!("control plane refused to launch '{}': {text}", route.svc);
+        }
+        if !status.is_success() {
+            anyhow::bail!("control plane {ctl_url} -> {status}: {text}");
+        }
+        let v: Value =
+            serde_json::from_str(&text).context("parse control-plane route response")?;
+        let fqdn = v
+            .get("fqdn")
+            .and_then(|f| f.as_str())
+            .filter(|s| !s.is_empty())
+            .with_context(|| {
+                format!("control-plane response for '{}' has no fqdn: {text}", route.svc)
+            })?;
+        let base = if fqdn.starts_with("http://") || fqdn.starts_with("https://") {
+            fqdn.to_string()
+        } else {
+            format!("https://{fqdn}")
+        };
+        Ok(format!("{}/mcp", base.trim_end_matches('/')))
+    }
+
     /// Invoke `tool` on its per-service endpoint, forwarding `bearer` (the
     /// caller's JWT) as `Authorization: Bearer`. Returns the JSON-RPC `result`.
     pub async fn call(&self, tool: &str, params: &Value, bearer: Option<&str>) -> Result<Value> {
         let route = self
             .route(tool)
             .with_context(|| format!("'{tool}' is not a routable <svc>__<tool> name"))?;
+        let target = self.resolve_url(&route).await?;
         let body = Self::build_call_body(&route.bare_tool, params);
 
         let mut req = self
             .client
-            .post(&route.url)
+            .post(&target)
             .header("content-type", "application/json")
             .header("accept", "application/json, text/event-stream")
             .json(&body);
@@ -109,11 +184,11 @@ impl RemoteMcpProxy {
             req = req.header("authorization", format!("Bearer {b}"));
         }
 
-        let res = req.send().await.with_context(|| format!("POST {}", route.url))?;
+        let res = req.send().await.with_context(|| format!("POST {target}"))?;
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
         if !status.is_success() {
-            anyhow::bail!("{} -> {status}: {text}", route.url);
+            anyhow::bail!("{target} -> {status}: {text}");
         }
         let parsed: Value = serde_json::from_str(&text).context("parse JSON-RPC response")?;
         if let Some(err) = parsed.get("error") {
@@ -146,10 +221,7 @@ mod tests {
     #[test]
     fn base_url_override_wins() {
         let p = RemoteMcpProxy::with_base_url("http://127.0.0.1:9999");
-        assert_eq!(
-            p.route("gh__x").unwrap().url,
-            "http://127.0.0.1:9999/mcp"
-        );
+        assert_eq!(p.route("gh__x").unwrap().url, "http://127.0.0.1:9999/mcp");
     }
 
     #[test]
@@ -158,6 +230,16 @@ mod tests {
         assert_eq!(b["method"], "tools/call");
         assert_eq!(b["params"]["name"], "list_repos");
         assert_eq!(b["params"]["arguments"]["org"], "acme");
+    }
+
+    #[tokio::test]
+    async fn resolve_url_is_straight_through_without_a_control_plane() {
+        let p = RemoteMcpProxy::with_base_domain("b00t.promptexecution.com");
+        let route = p.route("gh__x").unwrap();
+        assert_eq!(
+            p.resolve_url(&route).await.unwrap(),
+            "https://gh.b00t.promptexecution.com/mcp"
+        );
     }
 
     #[tokio::test]
@@ -192,5 +274,84 @@ mod tests {
         assert!(reqtxt.contains("POST /mcp HTTP/1.1"));
         assert!(reqtxt.to_lowercase().contains("authorization: bearer test.jwt.token"));
         assert!(reqtxt.contains("\"name\":\"list_repos\""));
+    }
+
+    /// CP-5 — with a control plane, `call` does one `route/<svc>` round-trip and
+    /// then hits the FQDN the control plane returned.
+    #[tokio::test]
+    async fn call_resolves_via_the_control_plane_first() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            // conn 1: the control-plane GET /_b00t/route/gh
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = sock.read(&mut buf).await.unwrap();
+            let ctl_req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let body = format!(r#"{{"fqdn":"http://{addr}","warm":true}}"#);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            sock.flush().await.unwrap();
+
+            // conn 2: the actual MCP POST /mcp
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let n = sock.read(&mut buf).await.unwrap();
+            let mcp_req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let rb = r#"{"jsonrpc":"2.0","id":1,"result":{"ok":true}}"#;
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                rb.len(),
+                rb
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            sock.flush().await.unwrap();
+            (ctl_req, mcp_req)
+        });
+
+        let proxy = RemoteMcpProxy::with_control_plane(format!("http://{addr}"));
+        let result = proxy
+            .call("gh__list_repos", &json!({}), Some("jwt"))
+            .await
+            .unwrap();
+        assert_eq!(result, json!({"ok": true}));
+
+        let (ctl_req, mcp_req) = server.await.unwrap();
+        assert!(ctl_req.contains("GET /_b00t/route/gh HTTP/1.1"));
+        assert!(mcp_req.contains("POST /mcp HTTP/1.1"));
+        assert!(mcp_req.to_lowercase().contains("authorization: bearer jwt"));
+    }
+
+    /// A `503` from the control plane (budget denied) fails the call.
+    #[tokio::test]
+    async fn control_plane_503_is_surfaced() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let _ = sock.read(&mut buf).await.unwrap();
+            let body = r#"{"error":"budget_exceeded"}"#;
+            let resp = format!(
+                "HTTP/1.1 503 Service Unavailable\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            sock.flush().await.unwrap();
+        });
+
+        let proxy = RemoteMcpProxy::with_control_plane(format!("http://{addr}"));
+        let err = proxy
+            .call("gh__list_repos", &json!({}), None)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("budget_exceeded"), "unexpected error: {err}");
+        server.await.unwrap();
     }
 }
