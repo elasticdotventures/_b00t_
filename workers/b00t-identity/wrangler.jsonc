@@ -2,6 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "b00t-identity",
   "main": "src/index.ts",
+  "routes": [
+    { "pattern": "b00t.promptexecution.com/.well-known/*", "zone_name": "promptexecution.com" },
+    { "pattern": "b00t.promptexecution.com/identity/*", "zone_name": "promptexecution.com" }
+  ],
   "compatibility_date": "2026-08-01",
   "d1_databases": [
     {

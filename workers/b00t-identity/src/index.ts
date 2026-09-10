@@ -31,6 +31,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // F1 routes: /.well-known/* is served as-is; /identity/* is stripped so the
+    // handlers below keep matching bare paths (/tokens, /verify, /tenants, …).
+    if (url.pathname.startsWith("/identity/")) {
+      url.pathname = url.pathname.slice("/identity".length);
+    }
+
     // Public — no auth. The JWT trust root.
     if (request.method === "GET" && url.pathname === "/.well-known/jwks.json") {
       return jwksResponse(await jwks(env));
