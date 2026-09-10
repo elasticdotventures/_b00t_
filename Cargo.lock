@@ -2045,6 +2045,7 @@ dependencies = [
  "b00t-council",
  "b00t-reflect-types",
  "base64 0.22.1",
+ "capability-forge",
  "chrono",
  "clap",
  "dirs",

@@ -67,6 +67,50 @@ pub struct B00tMcpServerRusty {
     /// SP3-05 — skills learned this session. A gated tool stays locked until
     /// its unlocking skill is in here (populated by a successful `b00t_learn`).
     learned: std::sync::Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
+    /// SP3-07 — tools granted this session via `b00t_r0le_request_escalation`,
+    /// merged into the `list_tools` allow-list. Session-scoped, never persisted,
+    /// never widens the JWT.
+    granted_extra: std::sync::Arc<std::sync::RwLock<Vec<String>>>,
+    /// SP3-07 — escalation policy (`B00T_MCP_JUDGE`: `deny` default | `grant`).
+    judge: std::sync::Arc<dyn capability_forge::judge::EscalationJudge>,
+}
+
+/// SP3-07 — pick the escalation policy from `$B00T_MCP_JUDGE`
+/// (`grant` → always-grant; anything else → always-deny).
+fn default_escalation_judge() -> std::sync::Arc<dyn capability_forge::judge::EscalationJudge> {
+    match std::env::var("B00T_MCP_JUDGE").as_deref() {
+        Ok("grant") => std::sync::Arc::new(capability_forge::judge::FakeJudge::always_grant()),
+        _ => std::sync::Arc::new(capability_forge::judge::FakeJudge::always_deny(
+            "escalation disabled (set B00T_MCP_JUDGE=grant)",
+        )),
+    }
+}
+
+/// The synthetic name of the runtime-escalation tool (not a registry command).
+pub const ESCALATION_TOOL: &str = "b00t_r0le_request_escalation";
+
+/// The `list_tools` entry for [`ESCALATION_TOOL`].
+fn escalation_tool_def() -> rmcp::model::Tool {
+    let mut t = rmcp::model::Tool::default();
+    t.name = ESCALATION_TOOL.into();
+    t.title = Some(ESCALATION_TOOL.to_string());
+    t.description =
+        Some("Request runtime escalation of tool access. Judged; grants are session-scoped and fire tools/list_changed.".into());
+    let mut schema = serde_json::Map::new();
+    schema.insert("type".to_string(), serde_json::json!("object"));
+    schema.insert(
+        "properties".to_string(),
+        serde_json::json!({
+            "tools": { "type": "array", "items": { "type": "string" } },
+            "justification": { "type": "string" }
+        }),
+    );
+    schema.insert(
+        "required".to_string(),
+        serde_json::json!(["tools", "justification"]),
+    );
+    t.input_schema = std::sync::Arc::new(schema);
+    t
 }
 
 impl B00tMcpServerRusty {
@@ -127,6 +171,8 @@ impl B00tMcpServerRusty {
             learned: std::sync::Arc::new(std::sync::RwLock::new(
                 std::collections::HashSet::new(),
             )),
+            granted_extra: std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+            judge: default_escalation_judge(),
         })
     }
 
@@ -200,6 +246,69 @@ impl B00tMcpServerRusty {
         }
     }
 
+    /// Test / SP3-09 hook: install the escalation judge.
+    pub fn with_judge(
+        self,
+        judge: std::sync::Arc<dyn capability_forge::judge::EscalationJudge>,
+    ) -> Self {
+        Self { judge, ..self }
+    }
+
+    /// SP3-07 — `b00t_r0le_request_escalation` handler. Judges each requested
+    /// tool; granted tools are added to `granted_extra` (session-scoped) and a
+    /// `tools/list_changed` is fired. Returns `{granted:[], denied:[{tool,reason}]}`.
+    async fn handle_escalation(
+        &self,
+        caller: &crate::identity::CallerIdentity,
+        params: &HashMap<String, serde_json::Value>,
+    ) -> CallToolResult {
+        let tools: Vec<String> = params
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let justification = params
+            .get("justification")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let mut granted: Vec<String> = Vec::new();
+        let mut denied: Vec<serde_json::Value> = Vec::new();
+        for tool in tools {
+            match self
+                .judge
+                .judge(&caller.agent, &tool, "runtime tool escalation", justification)
+                .await
+            {
+                capability_forge::judge::JudgeOutcome::Granted => granted.push(tool),
+                capability_forge::judge::JudgeOutcome::Denied { reason } => {
+                    denied.push(serde_json::json!({ "tool": tool, "reason": reason }))
+                }
+            }
+        }
+
+        if !granted.is_empty() {
+            if let Ok(mut g) = self.granted_extra.write() {
+                for t in &granted {
+                    if !g.contains(t) {
+                        g.push(t.clone());
+                    }
+                }
+            }
+            // reuse the same peer notification stack_load/unload uses
+            self.notify_tools_changed();
+        }
+
+        self.create_success_result(
+            &serde_json::json!({ "granted": granted, "denied": denied }).to_string(),
+            "",
+        )
+    }
+
     /// SP3-06 — flat per-call spend gate. `anon` callers are not metered.
     /// Returns `Err` with JSON-RPC code -32004 when ledgrrr denies the spend.
     async fn authorize_call(
@@ -247,7 +356,12 @@ impl B00tMcpServerRusty {
         }
         match self.r0le_resolver.resolve(None, r0le) {
             Ok(resolved) => {
-                let filter = crate::acl::AllowlistFilter::new(&resolved.tool_allowlist);
+                // SP3-07 — session escalations widen the live allow-list.
+                let mut allow = resolved.tool_allowlist;
+                if let Ok(extra) = self.granted_extra.read() {
+                    allow.extend(extra.iter().cloned());
+                }
+                let filter = crate::acl::AllowlistFilter::new(&allow);
                 tools
                     .into_iter()
                     .filter(|t| filter.allows(t.name.as_ref()))
@@ -354,7 +468,12 @@ impl ServerHandler for B00tMcpServerRusty {
         // r0le package allows. Anon callers, and callers whose r0le can't be
         // resolved, get the full set unchanged (SP3-09 can tighten this).
         let r0le = self.caller().await.r0le;
-        let tools = self.filter_tools_for_r0le(tools, &r0le);
+        let mut tools = self.filter_tools_for_r0le(tools, &r0le);
+
+        // SP3-07 — identified callers may request runtime escalation.
+        if r0le != "anon" {
+            tools.push(escalation_tool_def());
+        }
 
         info!(
             "🦀 Serving {} compile-time tools from b00t-cli CLAP structures",
@@ -400,6 +519,12 @@ impl ServerHandler for B00tMcpServerRusty {
         );
 
         let caller = self.caller().await;
+
+        // SP3-07 — the runtime-escalation tool is handled here (not a registry
+        // command); the judge decides, grants widen the live allow-list.
+        if tool_name == ESCALATION_TOOL {
+            return Ok(self.handle_escalation(&caller, &params).await);
+        }
 
         // SP3-05 — unlock gate. A gated tool is refused until its unlocking
         // skill has been learned this session (`b00t_learn`). anon is not gated.
@@ -967,5 +1092,75 @@ mod tests {
             // unknown role → empty gate, nothing locked
             assert!(server.unlock_gate_for("ghost").is_empty());
         });
+    }
+
+    #[tokio::test]
+    async fn sp3_07_escalation_grant_widens_allowlist() {
+        use crate::identity::CallerIdentity;
+        use crate::r0le_resolver::{FixtureR0leResolver, ResolvedR0le};
+        use b00t_cli::datum_agent_profile::ModelTier;
+        use capability_forge::judge::FakeJudge;
+
+        let temp_dir = TempDir::new().unwrap();
+        let all_tools = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+            .unwrap()
+            .registry
+            .get_tools();
+        assert!(all_tools.len() > 3);
+        let base_allow: Vec<String> =
+            all_tools.iter().take(1).map(|t| t.name.to_string()).collect();
+        let extra_tool = all_tools[2].name.to_string();
+
+        let resolver = std::sync::Arc::new(FixtureR0leResolver::new().with(
+            "worker",
+            ResolvedR0le {
+                tool_allowlist: base_allow.clone(),
+                skills: vec![],
+                budget_ceiling: 0,
+                model_tier: ModelTier::Ch0nky,
+            },
+        ));
+        let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+            .unwrap()
+            .with_r0le_resolver(resolver.clone())
+            .with_judge(std::sync::Arc::new(FakeJudge::always_grant()));
+
+        let worker = CallerIdentity {
+            tenant: "t".into(),
+            agent: "a".into(),
+            r0le: "worker".into(),
+            scopes: vec![],
+            budget_ref: String::new(),
+        };
+
+        assert_eq!(
+            server.filter_tools_for_r0le(all_tools.clone(), "worker").len(),
+            1
+        );
+
+        let mut params = HashMap::new();
+        params.insert("tools".to_string(), serde_json::json!([extra_tool]));
+        params.insert(
+            "justification".to_string(),
+            serde_json::json!("needed for the task"),
+        );
+        let _ = server.handle_escalation(&worker, &params).await;
+
+        // grant widened the live allow-list
+        assert_eq!(
+            server.filter_tools_for_r0le(all_tools.clone(), "worker").len(),
+            2
+        );
+
+        // a denying judge grants nothing
+        let deny = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+            .unwrap()
+            .with_r0le_resolver(resolver)
+            .with_judge(std::sync::Arc::new(FakeJudge::always_deny("no")));
+        let _ = deny.handle_escalation(&worker, &params).await;
+        assert_eq!(
+            deny.filter_tools_for_r0le(all_tools.clone(), "worker").len(),
+            1
+        );
     }
 }

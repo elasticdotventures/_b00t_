@@ -39,6 +39,7 @@ b00t-cli = { workspace = true }
 b00t-c0re-lib = { workspace = true }
 b00t-c0re-identity = { workspace = true }
 b00t-c0re-ledgrrr = { workspace = true }
+capability-forge = { path = "../capability-forge" }
 ufo-types = { workspace = true }
 b00t-reflect-types = { workspace = true }
 b00t-chat = { workspace = true }
