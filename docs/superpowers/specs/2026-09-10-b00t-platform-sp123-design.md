@@ -261,3 +261,176 @@ Critical path: `SP1-01 → SP1-02 → SP1-08 → SP3-01 → SP3-02 → SP3-04 �
 - Sub-task dispatch: `just compile-agent <role> <n> /tmp/agent.md && claude
   --agent`, or `mcp__b00t-mcp__b00t_agent_*`, or fix `b00t agent invoke` (task
   #158) — pick during F-wave.
+
+---
+
+# F-wave decisions (resolved 2026-09-10, session_01Cj7a4Bkh8pRQuzcErD1j2E)
+
+Investigation corrected two plan assumptions: **`workers/ledgrrr-tenant-registry/`
+is in the public `_b00t_` repo** (`_b00t_/workers/`, tracked — not
+`infrastructure`), and **three workers already bind D1 `b00t-agents`**
+(`ledgrrr-tenant-registry`, `b00t-mcp-vault`, the website's `b00t_api`). Baseline
+worker: HMAC 2-part `payload.sig` token (`TOKEN_SIGNING_KEY`, 1h TTL), routes
+`POST /tenants` · `GET /tenants/:id` · `POST /tokens` · `POST /verify` **all**
+gated by `Bearer == REGISTRY_ADMIN_KEY`; `issueToken` = `lookupTenant` →
+`TENANT_DO.idFromString(rootDoId)` → `hasMembershipPath` → `nodeGrantsShards` →
+sign (no budget call); `verifyToken` = sig + `expiresAt` only (no DO round-trip).
+`TenantNode` DO methods: `createNode`, `addMember(agentId,nodeId,role)`,
+`hasMembershipPath`, `nodeGrantsShards`, `deleteNode`, `cakeRollup`; tables
+`nodes`, `members`, `_placeholder_leaf_balances`. `workers/cf-workers.just` has
+`deploy <worker>` and `migrate-remote <worker> <db>` (`wrangler d1 migrations
+apply --remote`).
+
+## F1 — identity-plane hosting architecture — DECIDED
+
+- **Own worker, renamed.** `_b00t_/workers/ledgrrr-tenant-registry/` →
+  **`_b00t_/workers/b00t-identity/`** (`wrangler.jsonc` `name: "b00t-identity"`).
+  Per D1 the service is b00t's; ledgrrr is an outbound HTTP call, not a name.
+  **Do NOT fold into `b00t_api`** — that couples the public harness's identity
+  plane to the private `b00t-website` submodule.
+- **Route split on `b00t.promptexecution.com`** (path-carved, standard OIDC):
+  `b00t-identity` owns `b00t.promptexecution.com/.well-known/*` (JWKS +
+  `openid-configuration`) **and** `b00t.promptexecution.com/identity/*`
+  (`/identity/tenants/*`, `/identity/tokens`, `/identity/verify`,
+  `/identity/register`). `iss` claim = `https://b00t.promptexecution.com`;
+  `jwks_uri` = `…/.well-known/jwks.json`. Unchanged: `/api/*` → `b00t_api`;
+  `/dashboard/*` → Pages `b00t-dashboard`; `*.b00t.promptexecution.com/*` →
+  `b00t-mcp-cloudflare`; `/` → marketing homepage.
+- **TF reconciliation** — mirror `terraform/b00t/website-worker.tf`: wrangler +
+  `workers/cf-workers.just` deploy the code; new `terraform/b00t/identity-worker.tf`
+  adopts the `b00t-identity` script (post first deploy), `ignore_changes` on
+  `content`/`compatibility_date`, manages only the two `routes` + the
+  `secret_text` bindings. D1 `b00t-agents` stays `prevent_destroy` + import-only
+  in TF; `b00t-identity` merely *binds* it via `wrangler.jsonc`.
+- **Secrets** → Azure Key Vault `config-global-b00t-identity-*` JSON, read via
+  `data external` `az-keyvault-secret.sh`: `JWT_PRIVATE_KEY_PEM` (PKCS#8),
+  `JWT_KID`, `REGISTRY_ADMIN_KEY`, `LEDGRRR_BASE_URL`, `LEDGRRR_MODE`.
+- **Migration state** — `0001_create_tenants.sql` is almost certainly **not
+  applied to prod D1** (the worker has never had a `routes` block ⇒ never
+  deployed; the website D1 schema has no `tenants` table). Actions: add
+  `IF NOT EXISTS` to `0001` (additive-only, harmless if applied); SP1-* dev
+  against `wrangler d1 migrations apply b00t-agents --local`; **SP1-10 runs
+  `wrangler d1 migrations list b00t-agents --remote` and confirms before the
+  first `--remote` apply**. `0002_tenant_slug.sql` (`ALTER TABLE … ADD COLUMN`)
+  is run-once — guard or accept.
+
+## F2 — canonical b00t↔ledgrrr HTTP contract — DECIDED
+
+Greenfield: ledgrrr today exposes `budget` only as an **MCP tool**
+(`ledgerr-mcp` `handle_budget_tool` / `BudgetArgs`); no HTTP endpoint,
+`http_gateway.rs` is backlog (ledgrrr #228). b00t defines the contract; ledgrrr
+implements it later (ledgrrr #175). Until then both sides run the mock.
+
+- **`POST {LEDGRRR_BASE_URL}/v1/authorize-spend`**
+  req `{tenant, agent, cost:int (cake units), ref:string, idempotency_key:string}`
+  → `200 {ok:true, budget_remaining:int}` | `200 {ok:false, budget_remaining:int, reason:string}`
+  | `4xx {ok:false, reason}`. **Reserve-then-settle is out of scope** — `authorize-spend`
+  is an advisory pre-check + soft decrement keyed by `idempotency_key` (same key ⇒
+  same answer, no double-count). `cost` is in **cake** (ledgrrr's canonical unit;
+  USD is an exchange rate — see `ledgerr-cloud` `usd_per_cake`).
+- **`POST {LEDGRRR_BASE_URL}/v1/usage`**
+  req `{tenant, agent, units:int, ref:string, idempotency_key:string, meta:object}`
+  → `200 {ok:true}`. Fire-and-forget from the caller's view (best-effort, retried).
+- **Error codes**: transport failure / non-200 ⇒ caller treats as `{ok:false,
+  reason:"ledgrrr_unavailable"}` and **fails closed** in prod (`LEDGRRR_MODE=http`),
+  **open** in dev (`LEDGRRR_MODE=mock`).
+- **Rust side = a shared crate `b00t-c0re-ledgrrr`** (not inlined): `trait
+  SpendAuthorizer { authorize_spend, record_usage }`, `HttpSpendAuthorizer`,
+  `MockSpendAuthorizer`. Consumed by SP3-06; the TS twin (SP1-03) is
+  `src/ledgrrr.ts` with the same shapes. One JSON Schema file
+  `docs/schemas/ledgrrr-v1.json` is the contract of record (CP-F).
+
+## F3 — per-caller identity threading through rmcp — DECIDED
+
+`b00t-mcp` uses `axum 0.8` + `tower 0.5` + `tower-http 0.6`; `rmcp`'s
+`RequestContext<RoleServer>` carries an `extensions: Extensions`. `call_tool`
+already takes `context`; `list_tools` takes `_context` (unused).
+
+- **HTTP `/mcp`**: a `tower` middleware layer extracts `Authorization: Bearer`,
+  calls `JwksVerifier::verify`, and **inserts `CallerIdentity` into the request
+  `Extensions`**. Change `list_tools(_context)` → `list_tools(context)` and read
+  `context.extensions.get::<CallerIdentity>()` in both `list_tools` and
+  `call_tool`. No bearer + `B00T_MCP_REQUIRE_AUTH=1` ⇒ `401`; unset ⇒ inject
+  `CallerIdentity{r0le:"anon"}`.
+- **stdio**: no per-request auth. Read `B00T_AGENT_JWT` at startup, verify once
+  (sig + `iss` + `kid`), store on the server struct
+  `caller: Arc<RwLock<Option<CallerIdentity>>>`. `initialize.params.meta.b00t_jwt`
+  (read in `on_initialized`, same place `client_info` is captured) overrides.
+- **Token lifetime (folds F5)**: stdio verification treats `exp` as **advisory**
+  — logs a warning past expiry, does not 401 (the process boundary is the trust
+  boundary; a stdio session is one agent for its lifetime). HTTP enforces `exp`
+  strictly ⇒ `401`; the Rust `b00t-c0re-identity` client re-mints via
+  `HttpTokenSource` on a 401 and the caller reconnects. Runtime escalations
+  (SP3-07) live only in `granted_extra: Arc<RwLock<Vec<String>>>` on the session
+  — **never persisted, never written back into a JWT**; they die with the
+  connection.
+
+## F4 — datum signing scheme — DECIDED
+
+No existing canonical-JSON / JCS / datum-signing code in b00t — greenfield.
+
+- **Sign a canonical JSON projection, never TOML bytes.**
+  `AgentProfileSpec::canonical_bytes()` builds a `serde_json::Value` from the
+  semantic fields **with `signature` excluded**, then canonicalizes: object keys
+  sorted (recursively), and the list fields `tool_allowlist`, `skills`,
+  `permissions` **sorted** (their order is not semantic);
+  `soul_shard_grants` sorted by `(kind, id)`. `serde_json::to_vec` of that.
+  This survives the `.tomllmd`>`.tomllm`>`.toml` rank-rule re-serialization.
+- **One RS256 key, both purposes.** The `b00t-identity` worker's signing key
+  signs JWTs **and** datum canonical bytes; **one `kid`**; verifiers fetch the
+  same `…/.well-known/jwks.json`. (Rust side signs with the `rsa` crate's
+  `pkcs1v15::SigningKey<Sha256>` — `jsonwebtoken` can't sign raw bytes.)
+  `DatumSignature{ kid, alg:"RS256", sig_b64, signed_fields_sha256 }`.
+- **Key source for CLI signing** (`b00t r0le build --sign`):
+  `B00T_DATUM_SIGNING_KEY_PEM` env, else OS keyring `b00t/datum-signing-key`.
+  In practice the operator holds the PKCS#8 private key that was also uploaded to
+  the worker as `JWT_PRIVATE_KEY_PEM`.
+- **Rotation**: new `kid`, both public keys served in the JWKS during the overlap
+  window; re-sign profiles lazily. `verify` accepts any `kid` present in JWKS.
+
+## F5 — token lifetime vs long sessions — DECIDED (merged into F3)
+
+See F3 "Token lifetime": HTTP strict `exp` + client re-mint on 401; stdio
+`exp`-advisory; escalations session-scoped and non-persistent. No separate
+sub-task — SP3-02a/b and SP3-07 carry it.
+
+## F6 — tenant-namespaced datum resolution — DECIDED
+
+`datum_utils.rs`: `get_all_datums(b00t_path)`, `get_all_datums_with_paths(...)`,
+`get_all_datums_with_diagnostics(...)`, private `scan_datums_recursive(...)`;
+keys = filename-minus-ext, rank `.tomllmd`>`.tomllm`>`.toml`, later-scan-wins on
+tie, good-parse beats degraded.
+
+- **New `pub fn get_all_datums_for_tenant(b00t_path, tenant: Option<&str>,
+  depth) -> Result<HashMap<String,(BootDatum,String)>>`.** Scans base
+  `b00t_path` (e.g. `~/.b00t/_b00t_`) with the existing rank rules → base map.
+  If `tenant = Some(t)`: also scans `<b00t_path>/../tenants/<t>/_b00t_`
+  (`~/.b00t/tenants/<t>/_b00t_`) with the same rank rules → overlay map; then
+  **for every overlay key, replace the base entry** (overlay always wins — it is
+  an explicit tenant override, *not* a rank comparison).
+- **Keys stay bare** (`worker.role`) so `b00t r0le build` is tenant-agnostic —
+  the resolver, not the key, carries the tenant.
+- **Cross-tenant isolation is structural**: each call passes exactly one
+  `tenant`; the two scan roots are disjoint directories; there is no shared
+  mutable map and two tenants never co-occur in one resolution. A tenant's tree
+  cannot reference another tenant's — `depends_on` resolves within the merged
+  (base+one-overlay) map only.
+- **`--strict-tenant`** (and a `TenantScope::Strict` variant) ⇒ overlay map
+  only; base `_b00t_` invisible. Default is overlay-over-base.
+- Existing `get_all_datums*` callers unchanged; `get_all_datums_for_tenant(_,
+  None, _)` ≡ `get_all_datums_with_paths`.
+
+## Net effect on the sub-task DAG
+
+- **SP1** worker dir/name is `_b00t_/workers/b00t-identity/`; routes are the two
+  path-carved patterns above; `iss` = `https://b00t.promptexecution.com`.
+- **F2** adds a small crate `b00t-c0re-ledgrrr` to Wave A (shared by SP1-03's TS
+  twin and SP3-06) + `docs/schemas/ledgrrr-v1.json`.
+- **SP3-02** reads `CallerIdentity` from `RequestContext::extensions` (HTTP) /
+  server-struct `RwLock` (stdio); `list_tools` signature changes `_context` →
+  `context`.
+- **SP2-04** signs `canonical_bytes()` (sorted JSON projection) with the `rsa`
+  crate; one `kid` shared with SP1 JWT signing.
+- **SP2-06** = `get_all_datums_for_tenant` + `~/.b00t/tenants/<t>/_b00t_`
+  overlay-wins semantics + `--strict-tenant`.
+- **F5** is not a standalone sub-task (folded into SP3-02a/b + SP3-07).
