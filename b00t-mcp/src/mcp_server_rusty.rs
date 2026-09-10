@@ -191,6 +191,9 @@ impl B00tMcpServerRusty {
             crate::mcp_tools::create_mcp_registry_with_notify(notify_fn)
         };
 
+        // resolve the r0le resolver before `working_dir` is moved into the struct
+        let r0le_resolver = default_r0le_resolver(&working_dir);
+
         Ok(Self {
             working_dir,
             registry,
@@ -202,7 +205,7 @@ impl B00tMcpServerRusty {
                 std::env::var("B00T_AGENT_JWT").ok().filter(|s| !s.is_empty()),
             )),
             identity_verifier: std::sync::Arc::new(crate::identity::JwksVerifier::from_env()),
-            r0le_resolver: default_r0le_resolver(&working_dir),
+            r0le_resolver,
             spend_authorizer: default_spend_authorizer(),
             learned: std::sync::Arc::new(std::sync::RwLock::new(
                 std::collections::HashSet::new(),
