@@ -159,7 +159,42 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       }
+      // Re-present to the owning tenant DO — a deleted grant/membership means
+      // the token is revoked even though the signature is still valid.
+      const tenant = await lookupTenant(env.DB, result.claims.tenant);
+      if (!tenant) {
+        return new Response(JSON.stringify({ error: "revoked" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const vstub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+      if (!(await vstub.checkStillGranted(result.claims.sub))) {
+        return new Response(JSON.stringify({ error: "revoked" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify(result.claims), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const agentMatch = url.pathname.match(/^\/tenants\/([^/]+)\/agents\/([^/]+)$/);
+    if (request.method === "DELETE" && agentMatch) {
+      // admin only — the scoped gate already required a valid admin key here
+      const tenant = await lookupTenant(env.DB, decodeURIComponent(agentMatch[1]));
+      if (!tenant) {
+        return new Response(JSON.stringify({ error: "tenant not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const nodeId = url.searchParams.get("nodeId") ?? undefined;
+      const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+      const out = await stub.revokeAgentEverywhere(decodeURIComponent(agentMatch[2]), nodeId);
+      return new Response(JSON.stringify(out), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });

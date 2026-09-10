@@ -152,6 +152,60 @@ export class TenantNode extends DurableObject {
     return this.nodeGrantsShards(nodeId, requestedShards);
   }
 
+  /**
+   * Coarse revocation check: after JWT verification the caller re-presents.
+   * The agent is still valid iff it retains at least one `agent_grants` row
+   * OR one `members` row in this tenant. `revokeAgent` / the admin DELETE
+   * remove those rows, so a revoked agent fails here.
+   */
+  async checkStillGranted(agentId: string): Promise<boolean> {
+    const g = this.ctx.storage.sql
+      .exec("SELECT 1 FROM agent_grants WHERE agent_id = ? LIMIT 1", agentId)
+      .toArray();
+    if (g.length > 0) return true;
+    const m = this.ctx.storage.sql
+      .exec("SELECT 1 FROM members WHERE agent_id = ? LIMIT 1", agentId)
+      .toArray();
+    return m.length > 0;
+  }
+
+  /**
+   * Admin revoke. With `nodeId` — drop the agent's grant + membership on that
+   * node only. Without — drop every grant + membership the agent has in this
+   * tenant. Returns whether anything was removed.
+   */
+  async revokeAgentEverywhere(agentId: string, nodeId?: string): Promise<{ revoked: boolean }> {
+    let removed = 0;
+    if (nodeId) {
+      removed += this.ctx.storage.sql
+        .exec("SELECT 1 FROM agent_grants WHERE agent_id = ? AND node_id = ?", agentId, nodeId)
+        .toArray().length;
+      removed += this.ctx.storage.sql
+        .exec("SELECT 1 FROM members WHERE agent_id = ? AND node_id = ?", agentId, nodeId)
+        .toArray().length;
+      this.ctx.storage.sql.exec(
+        "DELETE FROM agent_grants WHERE agent_id = ? AND node_id = ?",
+        agentId,
+        nodeId,
+      );
+      this.ctx.storage.sql.exec(
+        "DELETE FROM members WHERE agent_id = ? AND node_id = ?",
+        agentId,
+        nodeId,
+      );
+    } else {
+      removed += this.ctx.storage.sql
+        .exec("SELECT 1 FROM agent_grants WHERE agent_id = ?", agentId)
+        .toArray().length;
+      removed += this.ctx.storage.sql
+        .exec("SELECT 1 FROM members WHERE agent_id = ?", agentId)
+        .toArray().length;
+      this.ctx.storage.sql.exec("DELETE FROM agent_grants WHERE agent_id = ?", agentId);
+      this.ctx.storage.sql.exec("DELETE FROM members WHERE agent_id = ?", agentId);
+    }
+    return { revoked: removed > 0 };
+  }
+
   async deleteNode(nodeId: string): Promise<{ deleted: boolean; reason?: string }> {
     const children = this.ctx.storage.sql
       .exec("SELECT id FROM nodes WHERE parent_id = ?", nodeId)
