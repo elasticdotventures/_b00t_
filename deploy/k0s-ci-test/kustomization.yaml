@@ -1,0 +1,7 @@
+# `kubectl apply -k deploy/k0s-ci-test` applies only the ConfigMap. The Job
+# is per-run and $-substituted — apply it with deploy/k0s-ci-test/run.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: b00t-ci
+resources:
+  - configmap.yaml

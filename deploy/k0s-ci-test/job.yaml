@@ -1,0 +1,90 @@
+# One compile-free nextest partition as a k0s Job that carries the SPIRE
+# workload identity — the piece dstack 0.21.5's kubernetes backend cannot
+# express (no pod-spec injection: no init/sidecar container, no csi.spiffe.io
+# inline volume, no serviceAccountName). b00t task #193.
+#
+# What it proves: pod (SA b00t-ci) -> spiffe-csi-driver -> spiffe-helper
+# JWT-SVID -> external_account STS exchange -> impersonate b00t-buildplane-ci
+# -> KEYLESS read of gs://b00t-buildcache-promptexecution -> run tests from
+# the prebuilt nextest archive. No SA key, no GCE metadata.
+#
+# Per-run values are $-substituted (see run.sh):
+#   CI_ARCHIVE_KEY     e.g. ci-archives/<run>-<attempt>  (from ci-build.task.yaml)
+#   NEXTEST_PARTITION  e.g. 1/16   (small — vultr1 is 2 vCPU / ~3.7Gi / ~67Gi eph)
+#   JOB_SUFFIX         unique per apply
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: b00t-ci-test-${JOB_SUFFIX}
+  namespace: b00t-ci
+  labels: { app: b00t-ci-test, b00t.plane: build }
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 2400
+  template:
+    metadata: { labels: { app: b00t-ci-test, b00t.plane: build } }
+    spec:
+      serviceAccountName: b00t-ci
+      restartPolicy: Never
+      initContainers:
+        # Native sidecar (k8s >= 1.28): starts before `run`, keeps the
+        # JWT-SVID fresh for the whole Job, does not block completion.
+        - name: spiffe-helper
+          image: ghcr.io/spiffe/spiffe-helper:0.11.0
+          args: ["-config", "/cfg/helper.conf"]
+          restartPolicy: Always
+          securityContext: { runAsUser: 0 }
+          # No probe: ghcr.io/spiffe/spiffe-helper is distroless (no shell,
+          # no `test`) so an exec probe errors forever. As a native sidecar it
+          # is "started" once its container runs; the `run` script below polls
+          # for the first SVID write (it lands in ~1s).
+          volumeMounts:
+            - { name: spiffe, mountPath: /spiffe-workload-api, readOnly: true }
+            - { name: svid, mountPath: /svid }
+            - { name: cfg, mountPath: /cfg, readOnly: true }
+      containers:
+        - name: run
+          image: australia-southeast1-docker.pkg.dev/promptexecution/b00t/b00t-build:latest
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              . "$HOME/.cargo/env"
+              test -s /cfg/credential-configuration.json
+              for i in $(seq 1 60); do [ -s /svid/jwt_svid.token ] && break; sleep 1; done
+              test -s /svid/jwt_svid.token
+              echo "SVID present ($(wc -c </svid/jwt_svid.token) bytes) after ${i}s"
+              mkdir -p /data/src
+              echo "--- keyless GCS fetch (external_account -> STS -> impersonate b00t-buildplane-ci) ---"
+              gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/src.tar.zst"     /data/src.tar.zst
+              gcs-obj.sh get "$BUILDCACHE_BUCKET" "$CI_ARCHIVE_KEY/nextest.tar.zst" /data/nextest.tar.zst
+              tar -I zstd -xf /data/src.tar.zst -C /data/src
+              du -sh /data/src /data/nextest.tar.zst
+              # b00t-c0re-lib hardcodes a ts-rs export_to path (see #202)
+              mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
+              echo "--- nextest run (partition ${NEXTEST_PARTITION}) ---"
+              exec cargo nextest run \
+                --archive-file /data/nextest.tar.zst \
+                --workspace-remap /data/src \
+                --partition "count:${NEXTEST_PARTITION}" \
+                --test-threads 2 --no-fail-fast
+          env:
+            - { name: BUILDCACHE_BUCKET, value: b00t-buildcache-promptexecution }
+            - { name: GOOGLE_APPLICATION_CREDENTIALS, value: /cfg/credential-configuration.json }
+            - { name: GCP_WIF_AUDIENCE, value: "//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider" }
+            - { name: CI_ARCHIVE_KEY, value: "${CI_ARCHIVE_KEY}" }
+            - { name: NEXTEST_PARTITION, value: "${NEXTEST_PARTITION}" }
+            - { name: CARGO_TERM_COLOR, value: never }
+          resources:
+            requests: { cpu: "1", memory: "1200Mi", ephemeral-storage: "8Gi" }
+            limits:   { cpu: "2", memory: "3Gi",    ephemeral-storage: "45Gi" }
+          volumeMounts:
+            - { name: svid, mountPath: /svid, readOnly: true }
+            - { name: cfg, mountPath: /cfg, readOnly: true }
+            - { name: data, mountPath: /data }
+      volumes:
+        - { name: spiffe, csi: { driver: csi.spiffe.io, readOnly: true } }
+        - { name: svid, emptyDir: {} }
+        - { name: cfg, configMap: { name: b00t-ci-test-src } }
+        - { name: data, emptyDir: {} }

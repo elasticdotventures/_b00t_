@@ -1,0 +1,23 @@
+# SPIRE JWT-SVID -> GCP external_account (WIF) wiring for the k0s CI test Job.
+# Identical audience / impersonated SA to deploy/k0s-waker (the same
+# spiffe://promptexecution.com/ns/b00t-ci/sa/b00t-ci workload identity), kept
+# as a SEPARATE ConfigMap so the Job doesn't couple to the waker's lifecycle.
+# b00t task #193. See PromptExecution/infrastructure
+# terraform/google/google-oidc-spire-buildplane.tf + k0s/spire/.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: b00t-ci-test-src, namespace: b00t-ci }
+data:
+  helper.conf: |
+    agent_address = "/spiffe-workload-api/spire-agent.sock"
+    daemon_mode = true
+    jwt_svids = [{ jwt_audience = "//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider", jwt_svid_file_name = "/svid/jwt_svid.token" }]
+  credential-configuration.json: |
+    {
+      "type": "external_account",
+      "audience": "//iam.googleapis.com/projects/308167228204/locations/global/workloadIdentityPools/spire-pool/providers/spire-provider",
+      "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+      "token_url": "https://sts.googleapis.com/v1/token",
+      "credential_source": { "file": "/svid/jwt_svid.token", "format": { "type": "text" } },
+      "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/b00t-buildplane-ci@promptexecution.iam.gserviceaccount.com:generateAccessToken"
+    }
