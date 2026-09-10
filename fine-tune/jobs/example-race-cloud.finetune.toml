@@ -1,0 +1,41 @@
+# Example fine-tuning job manifest — CLOUD competitor in sub-project C's
+# dual-agent training race (sm3lly RTX3090 vs. HF Jobs cloud).
+#
+# Paired with example-race-local.finetune.toml: both target the SAME base
+# model + dataset and differ ONLY in [target], so `b00t-cli finetune race`
+# compares like-for-like runs. Schema is B's — see
+# fine-tune/jobs/example-cloud.finetune.toml for the schema this reuses
+# verbatim; this file is not a new format, just a race-paired instance of it.
+#
+# Run with:
+#   b00t-cli finetune validate fine-tune/jobs/example-race-cloud.finetune.toml
+#   b00t-cli finetune race \
+#     fine-tune/jobs/example-race-local.finetune.toml \
+#     fine-tune/jobs/example-race-cloud.finetune.toml \
+#     --label-a sm3lly-local --label-b hf-jobs-cloud --dry-run
+#
+# See docs/superpowers/specs/2026-09-01-generic-finetune-job-oci-distribution-design.md
+# for the manifest schema, and the sub-project C PR description for the race
+# orchestrator + comparison design this manifest feeds into.
+
+[job]
+id = "qwen38-peer-race-cloud-2026-09-01"
+base_model = "unsloth/Qwen3.8-27B-unsloth-bnb-4bit"
+framework = "unsloth"
+
+[dataset]
+source = "hf://datasets/elasticdotventures/b00t-training"
+
+[target]
+kind = "cloud"
+image = "ghcr.io/elasticdotventures/b00t-training-image:latest"
+flavor = "a100-large"     # a100-large ($2.50/h, 80GB) | h200 ($5/h, 141GB) | a10g-large ($1.50/h, 24GB)
+timeout_hours = 10.0
+
+[output]
+# Same datum name as example-race-local.finetune.toml — whichever competitor
+# wins gets registered here as the canonical version.
+datum = "qwen38-peer-race"
+storage = "s3"
+s3_bucket = "b00t-finetune-artifacts"
+mirror_to_hf = true
