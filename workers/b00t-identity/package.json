@@ -1,5 +1,5 @@
 {
-  "name": "ledgrrr-tenant-registry",
+  "name": "b00t-identity",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",

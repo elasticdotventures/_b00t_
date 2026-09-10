@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ledgrrr-tenant-registry",
+  "name": "b00t-identity",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
   "d1_databases": [
