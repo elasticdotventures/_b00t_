@@ -57,12 +57,12 @@ pub struct B00tMcpServerRusty {
     pending_jwt: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// JWKS verifier (from `$B00T_IDENTITY_JWKS` / `$B00T_IDENTITY_URL`).
     identity_verifier: std::sync::Arc<crate::identity::JwksVerifier>,
-    /// SP3-04 — resolves `caller.r0le` → tool allow-list for `list_tools`
-    /// filtering. Default resolves nothing (non-anon callers get the full set
-    /// until SP3-09 wires a real `DatumR0leResolver`).
+    /// SP3-04/09 — resolves `caller.r0le` → tool allow-list for `list_tools`.
+    /// Default: a `DatumR0leResolver` over the `_b00t_` tree (an unresolvable
+    /// r0le is fail-open in `list_tools`).
     r0le_resolver: std::sync::Arc<dyn crate::r0le_resolver::R0leResolver>,
-    /// SP3-06 — ledgrrr spend gate for `call_tool`. Default is an always-ok
-    /// mock (SP3-09 wires `HttpSpendAuthorizer` when `B00T_LEDGRRR_MODE=http`).
+    /// SP3-06/09 — ledgrrr spend gate for `call_tool`. Default: an always-ok
+    /// mock, or `HttpSpendAuthorizer` when `B00T_LEDGRRR_MODE=http`.
     spend_authorizer: std::sync::Arc<dyn b00t_c0re_ledgrrr::SpendAuthorizer>,
     /// SP3-05 — skills learned this session. A gated tool stays locked until
     /// its unlocking skill is in here (populated by a successful `b00t_learn`).
@@ -73,6 +73,46 @@ pub struct B00tMcpServerRusty {
     granted_extra: std::sync::Arc<std::sync::RwLock<Vec<String>>>,
     /// SP3-07 — escalation policy (`B00T_MCP_JUDGE`: `deny` default | `grant`).
     judge: std::sync::Arc<dyn capability_forge::judge::EscalationJudge>,
+}
+
+/// SP3-09 — the `_b00t_` directory: `$_B00T_Path`, else `<working_dir>/_b00t_`.
+fn resolve_b00t_path(working_dir: &Path) -> String {
+    std::env::var("_B00T_Path").unwrap_or_else(|_| {
+        working_dir.join("_b00t_").to_string_lossy().into_owned()
+    })
+}
+
+/// SP3-09 — the default r0le resolver. Reads `DatumType::AgentProfile` datums
+/// from the `_b00t_` tree; `B00T_MCP_REQUIRE_SIGNED_R0LE=1` (+ `B00T_IDENTITY_JWKS`)
+/// makes an unsigned/bad-sig r0le a hard reject. An unresolvable r0le is
+/// fail-open in `list_tools` regardless.
+fn default_r0le_resolver(
+    working_dir: &Path,
+) -> std::sync::Arc<dyn crate::r0le_resolver::R0leResolver> {
+    let path = resolve_b00t_path(working_dir);
+    let want_signed = matches!(std::env::var("B00T_MCP_REQUIRE_SIGNED_R0LE").as_deref(), Ok("1"));
+    match (want_signed, std::env::var("B00T_IDENTITY_JWKS")) {
+        (true, Ok(jwks)) => std::sync::Arc::new(
+            crate::r0le_resolver::DatumR0leResolver::new(path).require_signature(jwks),
+        ),
+        _ => std::sync::Arc::new(crate::r0le_resolver::DatumR0leResolver::new(path)),
+    }
+}
+
+/// SP3-09 — the default ledgrrr authorizer. `B00T_LEDGRRR_MODE=http` →
+/// `HttpSpendAuthorizer` at `$B00T_LEDGRRR_URL` / `$B00T_LEDGRRR_BASE_URL`;
+/// anything else → an always-ok mock (fully local, behaviour identical to today).
+fn default_spend_authorizer() -> std::sync::Arc<dyn b00t_c0re_ledgrrr::SpendAuthorizer> {
+    let http = matches!(std::env::var("B00T_LEDGRRR_MODE").as_deref(), Ok("http"));
+    let base = std::env::var("B00T_LEDGRRR_URL")
+        .or_else(|_| std::env::var("B00T_LEDGRRR_BASE_URL"))
+        .ok();
+    match (http, base) {
+        (true, Some(url)) => {
+            std::sync::Arc::new(b00t_c0re_ledgrrr::HttpSpendAuthorizer::new(url))
+        }
+        _ => std::sync::Arc::new(b00t_c0re_ledgrrr::MockSpendAuthorizer::always_ok()),
+    }
 }
 
 /// SP3-07 — pick the escalation policy from `$B00T_MCP_JUDGE`
@@ -162,12 +202,8 @@ impl B00tMcpServerRusty {
                 std::env::var("B00T_AGENT_JWT").ok().filter(|s| !s.is_empty()),
             )),
             identity_verifier: std::sync::Arc::new(crate::identity::JwksVerifier::from_env()),
-            r0le_resolver: std::sync::Arc::new(
-                crate::r0le_resolver::FixtureR0leResolver::new(),
-            ),
-            spend_authorizer: std::sync::Arc::new(
-                b00t_c0re_ledgrrr::MockSpendAuthorizer::always_ok(),
-            ),
+            r0le_resolver: default_r0le_resolver(&working_dir),
+            spend_authorizer: default_spend_authorizer(),
             learned: std::sync::Arc::new(std::sync::RwLock::new(
                 std::collections::HashSet::new(),
             )),
@@ -731,6 +767,15 @@ impl ServerHandler for B00tMcpServerRusty {
                 "🦀 b00t-mcp connected to client: {} v{}",
                 client_name, client_version
             );
+
+            // SP3-02b / SP3-09 — `initialize.params._meta.b00t_jwt` overrides
+            // `$B00T_AGENT_JWT` for this session.
+            if let Some(meta) = &peer_info.meta {
+                if let Some(jwt) = meta.get("b00t_jwt").and_then(|v| v.as_str()) {
+                    info!("🔑 b00t-mcp: identity from initialize._meta.b00t_jwt");
+                    self.set_pending_jwt(jwt);
+                }
+            }
         }
 
         info!("🦀 Rusty b00t-mcp server initialized successfully");
@@ -1162,5 +1207,22 @@ mod tests {
             deny.filter_tools_for_r0le(all_tools.clone(), "worker").len(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn sp3_09_no_env_is_local_anon_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
+
+        // registry is the same slim set a fresh server builds
+        let fresh = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
+        assert!(server.tool_count() > 0);
+        assert_eq!(server.tool_count(), fresh.tool_count());
+
+        // no pending jwt → anon; anon filtering is a no-op
+        assert!(server.caller().await.is_anon());
+        let tools = server.registry.get_tools();
+        let n = tools.len();
+        assert_eq!(server.filter_tools_for_r0le(tools, "anon").len(), n);
     }
 }
