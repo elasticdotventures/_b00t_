@@ -36,16 +36,26 @@ if ss -Htn state established '( sport = :3000 )' 2>/dev/null | grep -q .; then
   stay "established connection on :3000"
 fi
 
-# --- 3. dstack has active runs -------------------------------------------
-#   `dstack ps` (WITHOUT -a) lists only runs dstack still considers
-#   non-terminal, INCLUDING one inside its no-capacity retry window. The
-#   old `-a` + status-word allow-list missed that state and powered the
-#   node off mid-`dstack apply` (2026-09-10 run 34419799571 -> CLI 503).
-#   Any data row here => a run is live. Fail-safe: non-zero exit => stay up.
-runs="$("$DSTACK" ps 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
-if [ "$(printf '%s\n' "$runs" | sed '1d' | grep -cvE '^[[:space:]]*$')" -gt 0 ]; then
-  stay "dstack has a live run"
-fi
+# --- 3. dstack has a non-terminal run ----------------------------------
+#   Parse `dstack ps --format json` and HOLD only when a run's status is
+#   non-terminal. `dstack ps` (plain, no -a) STILL lists finished runs for
+#   a retention window — a prior "any row => hold" check pinned the node
+#   up for 6h+ after a `failed` partition (2026-09-10). And an all-status-
+#   word allow-list missed the no-capacity retry state and powered off
+#   mid-`dstack apply` (run 34419799571 -> CLI 503). Terminal set =
+#   done|failed|terminated|aborted; everything else (submitted, pending,
+#   provisioning, running, terminating, pulling, retrying) => real work.
+#   Fail-safe: query error or unparseable JSON => stay up.
+runs="$("$DSTACK" ps --format json 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
+live="$(printf '%s' "$runs" | jq -r '
+    [.runs[]?.status]
+    | map(select(. != "done" and . != "failed" and . != "terminated" and . != "aborted"))
+    | length' 2>/dev/null)"
+case "${live:-x}" in
+  x|"") stay "dstack ps JSON unparseable (fail-safe)" ;;
+  0)    : ;;
+  *)    stay "dstack has ${live} non-terminal run(s)" ;;
+esac
 
 # --- 4. dstack fleet has a LIVE instance ----------------------------------
 #   0.21.x prints one row per fleet plus an `instance=N` row per node. A
