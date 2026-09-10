@@ -64,6 +64,9 @@ pub struct B00tMcpServerRusty {
     /// SP3-06 — ledgrrr spend gate for `call_tool`. Default is an always-ok
     /// mock (SP3-09 wires `HttpSpendAuthorizer` when `B00T_LEDGRRR_MODE=http`).
     spend_authorizer: std::sync::Arc<dyn b00t_c0re_ledgrrr::SpendAuthorizer>,
+    /// SP3-05 — skills learned this session. A gated tool stays locked until
+    /// its unlocking skill is in here (populated by a successful `b00t_learn`).
+    learned: std::sync::Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
 }
 
 impl B00tMcpServerRusty {
@@ -121,7 +124,22 @@ impl B00tMcpServerRusty {
             spend_authorizer: std::sync::Arc::new(
                 b00t_c0re_ledgrrr::MockSpendAuthorizer::always_ok(),
             ),
+            learned: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashSet::new(),
+            )),
         })
+    }
+
+    /// SP3-05 — the unlock gate for `r0le`, built from its blessing chain.
+    /// Empty (gates nothing) when the r0le has no discoverable skills.
+    pub(crate) fn unlock_gate_for(&self, r0le: &str) -> crate::unlock_gate::UnlockGate {
+        let b00t_path = std::env::var("_B00T_Path").unwrap_or_else(|_| {
+            self.working_dir.join("_b00t_").to_string_lossy().into_owned()
+        });
+        match b00t_cli::commands::blessing::collect_role_unlocks(&b00t_path, r0le) {
+            Ok(manifest) => crate::unlock_gate::UnlockGate::from_manifest(&manifest),
+            Err(_) => crate::unlock_gate::UnlockGate::default(),
+        }
     }
 
     /// SP3-02b — the verified caller for this process. Lazily verifies
@@ -381,8 +399,33 @@ impl ServerHandler for B00tMcpServerRusty {
             tool_name, params
         );
 
-        // SP3-06 — ledgrrr spend precheck. On denial the tool is NOT executed.
         let caller = self.caller().await;
+
+        // SP3-05 — unlock gate. A gated tool is refused until its unlocking
+        // skill has been learned this session (`b00t_learn`). anon is not gated.
+        if caller.r0le != "anon" {
+            let gate = self.unlock_gate_for(&caller.r0le);
+            if !gate.is_empty() {
+                let learned = self
+                    .learned
+                    .read()
+                    .map(|g| g.clone())
+                    .unwrap_or_default();
+                if !gate.is_satisfied(tool_name, &learned) {
+                    let skill = gate.required_skill(tool_name).unwrap_or("<skill>");
+                    return Err(McpError {
+                        code: rmcp::model::ErrorCode(-32003),
+                        message: format!(
+                            "tool '{tool_name}' locked: run b00t_learn('{skill}') first"
+                        )
+                        .into(),
+                        data: None,
+                    });
+                }
+            }
+        }
+
+        // SP3-06 — ledgrrr spend precheck. On denial the tool is NOT executed.
         self.authorize_call(&caller, tool_name).await?;
 
         let execution_result = self.registry.execute(tool_name, &params);
@@ -391,6 +434,15 @@ impl ServerHandler for B00tMcpServerRusty {
         match execution_result {
             Ok(output) => {
                 info!("✅ Successfully executed tool: {}", tool_name);
+                // SP3-05 — a successful b00t_learn unlocks its topic for the
+                // rest of the session.
+                if tool_name == "b00t_learn" {
+                    if let Some(topic) = params.get("topic").and_then(|v| v.as_str()) {
+                        if let Ok(mut g) = self.learned.write() {
+                            g.insert(topic.to_string());
+                        }
+                    }
+                }
                 // best-effort usage record (never fails the call)
                 if caller.r0le != "anon" {
                     let _ = self
@@ -882,5 +934,38 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code, rmcp::model::ErrorCode(-32004));
+    }
+
+    #[test]
+    fn sp3_05_unlock_gate_from_a_real_role() {
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let b00t = temp_dir.path().join("_b00t_");
+            std::fs::create_dir_all(&b00t).unwrap();
+            std::fs::write(
+                b00t.join("worker.role.toml"),
+                "[b00t]\nname = \"worker\"\ntype = \"role\"\ndepends_on = [\"rust.skill\"]\n",
+            )
+            .unwrap();
+            std::fs::write(
+                b00t.join("rust.skill.toml"),
+                "[b00t]\nname = \"rust\"\ntype = \"skill\"\nunlocks = [\"cargo_*\"]\n",
+            )
+            .unwrap();
+
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
+            let gate = server.unlock_gate_for("worker");
+            assert!(!gate.is_empty());
+            assert_eq!(gate.required_skill("cargo_build"), Some("rust.skill"));
+            assert_eq!(gate.required_skill("b00t_status"), None);
+
+            let mut learned = std::collections::HashSet::new();
+            assert!(!gate.is_satisfied("cargo_build", &learned));
+            learned.insert("rust.skill".to_string());
+            assert!(gate.is_satisfied("cargo_build", &learned));
+
+            // unknown role → empty gate, nothing locked
+            assert!(server.unlock_gate_for("ghost").is_empty());
+        });
     }
 }
