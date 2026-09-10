@@ -38,6 +38,32 @@ RUN curl -fsSL "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_
     && rm -rf /tmp/sccache-* /tmp/cargo-nextest \
     && sccache --version && cargo-nextest --version
 
+# Test-runtime deps the build-plane RUN stage (dev-env/ci-test.task.yaml)
+# needs but that are NOT compile deps — kept in lockstep with the same
+# installs in .github/workflows/ci.yml's `test` job (b00t #202):
+#   just >= 1.13  -> b00t-cli::{datum_justfile,just_ast} (`just --dump` json)
+#   nats-server   -> capability-forge::e2e_local_nats (spawns a real server)
+#   z3            -> already in the apt block above
+ARG JUST_VERSION=1.36.0
+ARG NATS_VERSION=2.14.5
+RUN curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      | tar xz -C /usr/local/bin just \
+    && just --version \
+    && curl -fsSL "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-amd64.tar.gz" \
+      | tar xz -C /tmp \
+    && install -m0755 "/tmp/nats-server-v${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/nats-server \
+    && rm -rf /tmp/nats-server-* \
+    && nats-server --version
+
+# b00t-c0re-lib/src/b00t_config.rs hardcodes #[ts(export_to = "/home/brianh/
+# promptexecution/infrastructure/b00t-website/dashboard/src/types/")] on 10+
+# types. ts-rs emits an export_bindings_* #[test] per type that WRITES there
+# (a compile-time-constant path, so --workspace-remap does not touch it), so
+# the dir must exist for those tests to pass off the maintainer's box. This
+# mirrors ci.yml's "Prepare ts-rs export target dir" step. Real fix = drop
+# the hardcoded path (#919).
+RUN mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
+
 # gcsfuse (for the cache mount; needs privileged at run time for /dev/fuse)
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt gcsfuse-noble main" \
       > /etc/apt/sources.list.d/gcsfuse.list \

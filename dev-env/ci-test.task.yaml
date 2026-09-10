@@ -34,6 +34,14 @@ env:
 commands:
   - set -eu
   - . "$HOME/.cargo/env"
+
+  # Test-runtime parity with ci.yml's `test` job (b00t #202). just / nats-server
+  # / z3 are baked into the b00t-build image (containers/b00t-build/Containerfile);
+  # this is a fail-fast guard if a stale image is in play, plus a runtime
+  # fallback for the ts-rs export dir that b00t-c0re-lib hardcodes.
+  - mkdir -p /home/brianh/promptexecution/infrastructure/b00t-website/dashboard/src/types
+  - 'for b in just nats-server z3; do command -v "$b" >/dev/null || { echo "MISSING $b in b00t-build image — rebuild containers/b00t-build (b00t #202)"; exit 1; }; done'
+
   - mkdir -p /data/src
 
   # gcs-obj.sh needs no repo — fetch just that one script over raw git is
