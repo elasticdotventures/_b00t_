@@ -44,6 +44,7 @@ members = [
     # membership; it's a leaf wasm-bindgen crate (no path deps), safe to add.
     "b00t-c0re-npm",
     "b00t-forge-kv",
+    "b00t-c0re-identity",
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",
@@ -118,6 +119,7 @@ sha2 = "0.10"
 # b00t-embed — unified embedding adapter  
 b00t-embed = { path = "b00t-embed" }
 b00t-datum-core = { path = "b00t-datum-core" }
+b00t-c0re-identity = { path = "b00t-c0re-identity" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
 b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
