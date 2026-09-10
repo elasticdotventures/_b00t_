@@ -3,5 +3,7 @@ declare module "cloudflare:test" {
     DB: D1Database;
     TENANT_DO: DurableObjectNamespace<import("../src/tenant-do").TenantNode>;
     TOKEN_SIGNING_KEY: string;
+    JWT_PRIVATE_KEY_PEM: string;
+    JWT_KID: string;
   }
 }

@@ -1,6 +1,7 @@
 import { createTenant, lookupTenant } from "./registry";
 import { TenantNode } from "./tenant-do";
 import { issueToken, verifyToken } from "./token";
+import { jwks, jwksResponse } from "./jwks";
 export { TenantNode } from "./tenant-do";
 
 export interface Env {
@@ -8,6 +9,8 @@ export interface Env {
   TENANT_DO: DurableObjectNamespace<TenantNode>;
   REGISTRY_ADMIN_KEY: string;
   TOKEN_SIGNING_KEY: string;
+  JWT_PRIVATE_KEY_PEM: string;
+  JWT_KID: string;
 }
 
 function isAuthorized(request: Request, env: Env): boolean {
@@ -26,9 +29,14 @@ function unauthorized(): Response {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (!isAuthorized(request, env)) return unauthorized();
-
     const url = new URL(request.url);
+
+    // Public — no auth. The JWT trust root.
+    if (request.method === "GET" && url.pathname === "/.well-known/jwks.json") {
+      return jwksResponse(await jwks(env));
+    }
+
+    if (!isAuthorized(request, env)) return unauthorized();
 
     if (request.method === "POST" && url.pathname === "/tenants") {
       const body = await request.json<{ kind?: string; displayName?: string; ownerAgentId?: string }>();
