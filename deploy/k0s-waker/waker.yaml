@@ -1,5 +1,6 @@
 # Tailnet control-plane waker — Phase 2.75. Runs on vultr1's k0s (always-on),
-# reachable at http://100.109.101.1:8088 over the tailnet. On any request it
+# reachable at http://100.109.101.1:8088 over the tailnet (hostNetwork — the
+# k0s CNI ignores the container hostPort). On any request it
 # starts the GCP control node (if TERMINATED) then reverse-proxies to
 # dstack-server at the control node's tailnet IP:3000. Replaces the public
 # Cloud Run waker so network_mode="tailnet" (no external IP) is viable.
@@ -37,9 +38,17 @@ metadata: { name: b00t-cp-waker, namespace: b00t-ci, labels: { app: b00t-cp-wake
 spec:
   replicas: 1
   selector: { matchLabels: { app: b00t-cp-waker } }
+  # hostNetwork singleton: a rolling update can't surge a 2nd pod onto the
+  # one node (host :8088 conflict) -> Recreate.
+  strategy: { type: Recreate }
   template:
     metadata: { labels: { app: b00t-cp-waker, b00t.plane: build } }
     spec:
+      # kube-router (k0s default CNI) does not chain the portmap plugin, so
+      # the container `hostPort` directive is a silent no-op here — run on the
+      # node's own netns so :8088 is bound on vultr1 for the tailnet.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: b00t-ci
       containers:
         - name: spiffe-helper
@@ -62,7 +71,7 @@ spec:
             - { name: PORT, value: "8088" }
             - { name: START_DEADLINE_SECONDS, value: "150" }
             - { name: GOOGLE_APPLICATION_CREDENTIALS, value: /cfg/credential-configuration.json }
-          ports: [{ containerPort: 8088, hostPort: 8088 }]
+          ports: [{ containerPort: 8088 }]
           volumeMounts:
             - { name: src, mountPath: /app }
             - { name: svid, mountPath: /svid, readOnly: true }
