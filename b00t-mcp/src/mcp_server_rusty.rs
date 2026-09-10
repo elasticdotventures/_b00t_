@@ -57,6 +57,10 @@ pub struct B00tMcpServerRusty {
     pending_jwt: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// JWKS verifier (from `$B00T_IDENTITY_JWKS` / `$B00T_IDENTITY_URL`).
     identity_verifier: std::sync::Arc<crate::identity::JwksVerifier>,
+    /// SP3-04 — resolves `caller.r0le` → tool allow-list for `list_tools`
+    /// filtering. Default resolves nothing (non-anon callers get the full set
+    /// until SP3-09 wires a real `DatumR0leResolver`).
+    r0le_resolver: std::sync::Arc<dyn crate::r0le_resolver::R0leResolver>,
 }
 
 impl B00tMcpServerRusty {
@@ -108,6 +112,9 @@ impl B00tMcpServerRusty {
                 std::env::var("B00T_AGENT_JWT").ok().filter(|s| !s.is_empty()),
             )),
             identity_verifier: std::sync::Arc::new(crate::identity::JwksVerifier::from_env()),
+            r0le_resolver: std::sync::Arc::new(
+                crate::r0le_resolver::FixtureR0leResolver::new(),
+            ),
         })
     }
 
@@ -144,6 +151,39 @@ impl B00tMcpServerRusty {
         Self {
             identity_verifier: std::sync::Arc::new(verifier),
             ..self
+        }
+    }
+
+    /// Test / SP3-09 hook: install the r0le → allow-list resolver.
+    pub fn with_r0le_resolver(
+        self,
+        resolver: std::sync::Arc<dyn crate::r0le_resolver::R0leResolver>,
+    ) -> Self {
+        Self {
+            r0le_resolver: resolver,
+            ..self
+        }
+    }
+
+    /// SP3-04 — keep only the tools `r0le` is allowed to see. `anon`, or an
+    /// r0le the resolver can't resolve, passes everything through.
+    pub(crate) fn filter_tools_for_r0le(
+        &self,
+        tools: Vec<rmcp::model::Tool>,
+        r0le: &str,
+    ) -> Vec<rmcp::model::Tool> {
+        if r0le == "anon" {
+            return tools;
+        }
+        match self.r0le_resolver.resolve(None, r0le) {
+            Ok(resolved) => {
+                let filter = crate::acl::AllowlistFilter::new(&resolved.tool_allowlist);
+                tools
+                    .into_iter()
+                    .filter(|t| filter.allows(t.name.as_ref()))
+                    .collect()
+            }
+            Err(_) => tools,
         }
     }
 
@@ -240,8 +280,14 @@ impl ServerHandler for B00tMcpServerRusty {
 
         let tools = self.registry.get_tools();
 
+        // SP3-04 — an identified (non-anon) caller sees only the tools its
+        // r0le package allows. Anon callers, and callers whose r0le can't be
+        // resolved, get the full set unchanged (SP3-09 can tighten this).
+        let r0le = self.caller().await.r0le;
+        let tools = self.filter_tools_for_r0le(tools, &r0le);
+
         info!(
-            "🦀 Generated {} compile-time tools from b00t-cli CLAP structures",
+            "🦀 Serving {} compile-time tools from b00t-cli CLAP structures",
             tools.len()
         );
 
@@ -685,5 +731,50 @@ mod tests {
         assert_eq!(id.tenant, "promptexecution");
         assert_eq!(id.r0le, "worker");
         assert!(!id.is_anon());
+    }
+
+    #[test]
+    fn sp3_04_list_tools_filtered_by_r0le() {
+        use crate::r0le_resolver::{FixtureR0leResolver, ResolvedR0le};
+        use b00t_cli::datum_agent_profile::ModelTier;
+
+        with_tokio_runtime(|| {
+            let temp_dir = TempDir::new().unwrap();
+            let all_tools = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+                .unwrap()
+                .registry
+                .get_tools();
+            assert!(all_tools.len() > 2, "need a few tools to prove filtering");
+            let allow: Vec<String> =
+                all_tools.iter().take(2).map(|t| t.name.to_string()).collect();
+
+            let resolver = std::sync::Arc::new(FixtureR0leResolver::new().with(
+                "worker",
+                ResolvedR0le {
+                    tool_allowlist: allow.clone(),
+                    skills: vec![],
+                    budget_ceiling: 0,
+                    model_tier: ModelTier::Ch0nky,
+                },
+            ));
+            let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+                .unwrap()
+                .with_r0le_resolver(resolver);
+
+            // anon → unchanged
+            assert_eq!(
+                server.filter_tools_for_r0le(all_tools.clone(), "anon").len(),
+                all_tools.len()
+            );
+            // worker → exactly the 2 allowed
+            let worker = server.filter_tools_for_r0le(all_tools.clone(), "worker");
+            assert_eq!(worker.len(), 2);
+            assert!(worker.iter().all(|t| allow.contains(&t.name.to_string())));
+            // unknown r0le → resolver errs → fail-open
+            assert_eq!(
+                server.filter_tools_for_r0le(all_tools.clone(), "ghost").len(),
+                all_tools.len()
+            );
+        });
     }
 }

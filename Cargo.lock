@@ -2036,6 +2036,7 @@ dependencies = [
  "clap",
  "dirs",
  "fs2",
+ "glob",
  "jsonwebtoken",
  "lazy_static",
  "notify 7.0.0",
