@@ -309,6 +309,90 @@ pub async fn serve(b00t_path: &str, backend: ServeBackend, port: u16) -> Result<
     Ok(())
 }
 
+/// SP4-10 — `b00t mcp servers`: every declared `McpServer` datum, plus live
+/// warm/cold status when `$B00T_MCP_CONTROL_URL` points at a running
+/// `b00t mcp serve`.
+pub async fn list_servers(b00t_path: &str, json_out: bool) -> Result<()> {
+    let datums = get_all_datums_with_paths(b00t_path, Some(4)).context("scan _b00t_ datums")?;
+    let mut rows: Vec<(String, McpServerSpec)> = datums
+        .into_iter()
+        .filter_map(|(key, (d, _))| {
+            let svc = key
+                .strip_suffix(".mcp_server")
+                .map(str::to_string)
+                .unwrap_or(key);
+            d.mcp_server.map(|s| (svc, s))
+        })
+        .collect();
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // best-effort live status
+    let warm: HashMap<String, Value> = match std::env::var("B00T_MCP_CONTROL_URL") {
+        Ok(base) => {
+            let url = format!("{}/_b00t/status", base.trim_end_matches('/'));
+            match reqwest::get(&url).await {
+                Ok(r) => r
+                    .json::<Value>()
+                    .await
+                    .ok()
+                    .and_then(|v| v.get("warm").cloned())
+                    .and_then(|w| w.as_array().cloned())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|e| {
+                        e.get("svc")
+                            .and_then(|s| s.as_str())
+                            .map(|s| (s.to_string(), e.clone()))
+                    })
+                    .collect(),
+                Err(_) => HashMap::new(),
+            }
+        }
+        Err(_) => HashMap::new(),
+    };
+
+    if json_out {
+        let out: Vec<Value> = rows
+            .iter()
+            .map(|(svc, spec)| {
+                json!({
+                    "svc": svc,
+                    "image": spec.image,
+                    "backend": format!("{:?}", spec.placement.backend).to_lowercase(),
+                    "port": spec.port,
+                    "idle_timeout_seconds": spec.idle_timeout_seconds,
+                    "digest_pinned": spec.is_digest_pinned(),
+                    "endpoint": crate::datum_mcp_server::default_endpoint(svc),
+                    "warm": warm.get(svc).map(|e| e.get("warm").cloned().unwrap_or(Value::Bool(true))),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!("no McpServer datums declared (create _b00t_/<svc>.mcp_server.toml)");
+        return Ok(());
+    }
+    println!("{:<16} {:<10} {:<7} {:<48} {}", "SVC", "BACKEND", "WARM", "IMAGE", "ENDPOINT");
+    for (svc, spec) in &rows {
+        let warm_s = match warm.get(svc) {
+            Some(_) => "yes",
+            None => "-",
+        };
+        println!(
+            "{:<16} {:<10} {:<7} {:<48} {}",
+            svc,
+            format!("{:?}", spec.placement.backend).to_lowercase(),
+            warm_s,
+            spec.image,
+            crate::datum_mcp_server::default_endpoint(svc),
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

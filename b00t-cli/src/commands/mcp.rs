@@ -242,6 +242,14 @@ Examples:\n\
         #[clap(long, default_value_t = 8790, help = "Port to listen on (127.0.0.1)")]
         port: u16,
     },
+    #[clap(
+        about = "List declared McpServer datums + live placement status (SP4-10)",
+        long_about = "List every _b00t_/<svc>.mcp_server.toml datum. When $B00T_MCP_CONTROL_URL\npoints at a running `b00t mcp serve`, the WARM column reflects live state.\n\nExamples:\n  b00t mcp servers\n  b00t mcp servers --json"
+    )]
+    Servers {
+        #[clap(long, help = "Output in JSON format")]
+        json: bool,
+    },
 }
 
 #[derive(Parser)]
@@ -908,6 +916,9 @@ impl McpCommands {
             McpCommands::Serve { backend, port } => {
                 let backend: crate::mcp_serve::ServeBackend = backend.parse()?;
                 crate::mcp_serve::serve(path, backend, *port).await
+            }
+            McpCommands::Servers { json } => {
+                crate::mcp_serve::list_servers(path, *json).await
             }
         }
     }
