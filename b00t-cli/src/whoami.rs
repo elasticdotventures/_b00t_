@@ -184,7 +184,7 @@ enum CapabilityStatus {
     InvalidReference,
 }
 
-fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
+pub fn load_role_datum(role: &str, path: &str) -> Option<RoleDetails> {
     // 🤓 prefer .role.tomllmd / .role.tomllm / .role.toml over other typed datums with same name
     let (config, _) = get_config_with_type_preference(role, &DatumType::Role, path).ok()?;
     let datum = config.b00t;

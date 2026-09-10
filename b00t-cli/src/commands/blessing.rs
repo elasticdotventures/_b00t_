@@ -182,7 +182,42 @@ fn find_role_datum<'a>(datums: &'a HashMap<String, BootDatum>, role: &str) -> Op
 /// than reflecting any real expected depth.
 const MAX_BLESSING_DISCOVERY_DEPTH: usize = 16;
 
-fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
+/// The skill → unlocked-tool-globs graph for a role, as walked from its
+/// `depends_on` chain. `(skill_key, unlocks)` pairs.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RoleManifest {
+    /// Skills transitively required by the role's `depends_on` chain.
+    pub required: Vec<(String, Vec<String>)>,
+    /// Skills that name the role in their own `skills` field.
+    pub optional: Vec<(String, Vec<String>)>,
+}
+
+impl RoleManifest {
+    /// Every tool-glob unlocked by any discovered skill (required ∪ optional),
+    /// de-duplicated, order-stable.
+    pub fn all_unlocks(&self) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for (_, globs) in self.required.iter().chain(self.optional.iter()) {
+            for g in globs {
+                if seen.insert(g.clone()) {
+                    out.push(g.clone());
+                }
+            }
+        }
+        out
+    }
+
+    /// Keys of the required (transitively-discovered) skills.
+    pub fn required_skills(&self) -> Vec<String> {
+        self.required.iter().map(|(k, _)| k.clone()).collect()
+    }
+}
+
+/// Walk a role's `depends_on` chain and collect the tools each discovered skill
+/// `unlocks`. Extracted from `emit_manifest` so `b00t r0le build` (SP2-03) and
+/// the b00t-mcp unlock gate (SP3-05) share exactly one discovery path.
+pub fn collect_role_unlocks(b00t_path: &str, role: &str) -> Result<RoleManifest> {
     let datums = get_all_datums(b00t_path)?;
     let role_datum = find_role_datum(&datums, role);
 
@@ -190,10 +225,9 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
         .and_then(|d| d.depends_on.clone())
         .unwrap_or_default();
 
-    // #898: was single-hop (only role_datum's own depends_on) -- now walks
-    // transitively (a required skill's own depends_on pulls in further
-    // required skills), via the shared lazy-chain walker so this doesn't
-    // hand-roll its own cycle guard / depth cap.
+    // #898: transitive walk (a required skill's own depends_on pulls in further
+    // required skills) via the shared lazy-chain walker — no hand-rolled cycle
+    // guard / depth cap.
     let discovered: Vec<String> = b00t_c0re_gov::discovery::walk_lazy_chain(
         direct_deps.iter().cloned(),
         MAX_BLESSING_DISCOVERY_DEPTH,
@@ -231,6 +265,12 @@ fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
             optional.push((key.clone(), unlocks));
         }
     }
+
+    Ok(RoleManifest { required, optional })
+}
+
+fn emit_manifest(b00t_path: &str, role: &str, fmt: &str) -> Result<()> {
+    let RoleManifest { required, optional } = collect_role_unlocks(b00t_path, role)?;
 
     let forbidden = [
         "pip install *    → use: uv pip install",

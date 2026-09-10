@@ -29,6 +29,7 @@ pub mod focus;
 pub mod gates;
 pub mod grok;
 pub mod guard_manager;
+pub mod r0le;
 pub mod hive;
 pub mod init;
 pub mod install;
