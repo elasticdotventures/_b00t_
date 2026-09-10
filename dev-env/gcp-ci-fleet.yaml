@@ -1,0 +1,23 @@
+# Elastic GCP cloud fleet for the build plane (plan gleaming-jingling-nygaard).
+#
+# dstack 0.21.x assigns every run to a fleet. `ci-build.task.yaml` /
+# `ci-test.task.yaml` (backends: [gcp]) have nowhere to land without this —
+# a bare `dstack apply` falls through to the only other fleet (`k0s`,
+# kubernetes-only) and fails `No offers matching … in fleet 'k0s'`.
+# Verified 2026-09-10: with this fleet, cpu=8/mem=32GB/disk=200GB → 113 GCP
+# offers (e2-standard-8 on-demand @ ~$0.38/hr, australia-southeast1).
+#
+# nodes: 0..2 → zero idle cost; dstack provisions a node sized to each run and
+# tears it down after `idle_duration`. on-demand because australia-southeast1
+# PREEMPTIBLE_CPUS quota = 0 (request that quota to restore Spot pricing).
+#
+# NO `resources:` block — dstack intersects the fleet's resources with each
+# run's, and a disjoint range raises "Cannot combine fleet requirements".
+# Unconstrained combines with both the 8-vCPU build and the 4-vCPU test tasks.
+#
+#   dstack apply -f dev-env/gcp-ci-fleet.yaml -y      # once per run; cheap
+type: fleet
+name: gcp-ci
+nodes: 0..2
+backends: [gcp]
+spot_policy: on-demand
