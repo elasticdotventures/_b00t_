@@ -7,6 +7,7 @@ pub mod chat;
 pub mod clap_reflection;
 pub mod derive_mcp;
 pub mod github_auth;
+pub mod identity;
 pub mod mcp_registry_tools;
 pub mod mcp_tools;
 pub mod oauth_minimal;
