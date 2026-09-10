@@ -31,6 +31,7 @@ pub mod grok;
 pub mod guard_manager;
 pub mod r0le;
 pub mod hive;
+pub mod identity;
 pub mod init;
 pub mod install;
 pub mod is_cmd;

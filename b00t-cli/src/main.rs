@@ -176,6 +176,9 @@ Example:
     #[clap(about = "Build / show / verify r0le packages (DatumType::AgentProfile)")]
     R0le(b00t_cli::commands::r0le::R0leArgs),
 
+    #[clap(about = "Agent identity — obtain / inspect b00t.promptexecution.com JWTs")]
+    Identity(b00t_cli::commands::identity::IdentityArgs),
+
     #[clap(
         about = "Record a lesson learned for a tool (lfmf = Learn From My Failure)",
         alias = "lesson",
@@ -2428,6 +2431,12 @@ async fn main() {
         }
         Some(Commands::R0le(r0le_args)) => {
             if let Err(e) = b00t_cli::commands::r0le::handle_r0le(r0le_args) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Identity(identity_args)) => {
+            if let Err(e) = b00t_cli::commands::identity::handle_identity(identity_args).await {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
