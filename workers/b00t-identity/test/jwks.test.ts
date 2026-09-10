@@ -11,8 +11,8 @@ async function generateTestPem(): Promise<string> {
     },
     true,
     ["sign", "verify"],
-  );
-  const der = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
+  ) as CryptoKeyPair;
+  const der = await crypto.subtle.exportKey("pkcs8", pair.privateKey) as ArrayBuffer;
   const b64 = btoa(String.fromCharCode(...new Uint8Array(der)));
   const lines = b64.match(/.{1,64}/g)!.join("\n");
   return `-----BEGIN PRIVATE KEY-----\n${lines}\n-----END PRIVATE KEY-----\n`;
@@ -32,7 +32,7 @@ describe("jwks", () => {
     expect(k.n.length).toBeGreaterThan(100);
     expect(k.e).toBe("AQAB");
     // no private material leaked
-    expect((k as Record<string, unknown>).d).toBeUndefined();
+    expect(k).not.toHaveProperty("d");
   });
 
   it("loadSigningKey imports the PEM as a usable signing key", async () => {

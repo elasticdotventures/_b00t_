@@ -15,11 +15,11 @@ pub struct UnlockGate {
 }
 
 impl UnlockGate {
-    /// Build from a role's blessing manifest. `required` skills contribute their
+    /// Build from a role's blessing manifest. Required and optional skills contribute their
     /// `unlocks` globs; unparseable globs are dropped.
     pub fn from_manifest(manifest: &RoleManifest) -> Self {
         let mut rules = Vec::new();
-        for (skill, globs) in &manifest.required {
+        for (skill, globs) in manifest.required.iter().chain(&manifest.optional) {
             for g in globs {
                 if let Ok(pat) = glob::Pattern::new(g) {
                     rules.push((pat, skill.clone()));
@@ -37,13 +37,15 @@ impl UnlockGate {
             .map(|(_, skill)| skill.as_str())
     }
 
-    /// A tool is satisfied when it needs no skill, or the needed skill is in
-    /// `learned`.
+    /// Every matching skill must be learned, including optional dependencies.
     pub fn is_satisfied(&self, tool_name: &str, learned: &HashSet<String>) -> bool {
-        match self.required_skill(tool_name) {
-            None => true,
-            Some(skill) => learned.contains(skill),
-        }
+        self.rules
+            .iter()
+            .filter(|(pat, _)| pat.matches(tool_name))
+            .all(|(_, skill)| {
+                learned.contains(skill)
+                    || learned.contains(skill.strip_suffix(".skill").unwrap_or(skill))
+            })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -58,7 +60,10 @@ mod tests {
     fn manifest() -> RoleManifest {
         RoleManifest {
             required: vec![
-                ("rust.skill".to_string(), vec!["cargo.*".to_string(), "rustfmt".to_string()]),
+                (
+                    "rust.skill".to_string(),
+                    vec!["cargo_*".to_string(), "rustfmt".to_string()],
+                ),
                 ("soul.skill".to_string(), vec!["soul_*".to_string()]),
             ],
             optional: vec![],
@@ -92,5 +97,18 @@ mod tests {
         let g = UnlockGate::from_manifest(&RoleManifest::default());
         assert!(g.is_empty());
         assert!(g.is_satisfied("anything", &HashSet::new()));
+    }
+
+    #[test]
+    fn optional_skills_and_overlapping_rules_require_learning() {
+        let mut manifest = manifest();
+        manifest
+            .optional
+            .push(("audit.skill".into(), vec!["cargo_*".into()]));
+        let gate = UnlockGate::from_manifest(&manifest);
+        let mut learned = HashSet::from(["rust.skill".to_string()]);
+        assert!(!gate.is_satisfied("cargo_build", &learned));
+        learned.insert("audit".into());
+        assert!(gate.is_satisfied("cargo_build", &learned));
     }
 }

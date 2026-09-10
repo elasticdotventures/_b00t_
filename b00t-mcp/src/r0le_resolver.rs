@@ -14,6 +14,7 @@ use b00t_cli::datum_utils::get_all_datums_for_tenant;
 pub struct ResolvedR0le {
     pub tool_allowlist: Vec<String>,
     pub skills: Vec<String>,
+    pub skill_unlocks: Vec<(String, Vec<String>)>,
     pub budget_ceiling: u64,
     pub model_tier: ModelTier,
 }
@@ -23,6 +24,7 @@ impl From<AgentProfileSpec> for ResolvedR0le {
         Self {
             tool_allowlist: s.tool_allowlist,
             skills: s.skills,
+            skill_unlocks: Vec::new(),
             budget_ceiling: s.budget_ceiling,
             model_tier: s.model_tier,
         }
@@ -41,7 +43,9 @@ pub struct FixtureR0leResolver {
 
 impl FixtureR0leResolver {
     pub fn new() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     pub fn with(mut self, r0le: impl Into<String>, resolved: ResolvedR0le) -> Self {
@@ -115,7 +119,20 @@ impl R0leResolver for DatumR0leResolver {
                 .map_err(|e| anyhow!("r0le '{r0le}' signature rejected: {e}"))?;
         }
 
-        Ok(ResolvedR0le::from(spec))
+        let mut resolved = ResolvedR0le::from(spec);
+        for skill in &resolved.skills {
+            let datum = datums
+                .get(skill)
+                .or_else(|| datums.get(&format!("{skill}.skill")))
+                .ok_or_else(|| anyhow!("profile skill '{skill}' is missing"))?;
+            let unlocks = datum.0.unlocks.clone().unwrap_or_default();
+            for pattern in &unlocks {
+                glob::Pattern::new(pattern)
+                    .map_err(|e| anyhow!("invalid unlock glob for '{skill}': {e}"))?;
+            }
+            resolved.skill_unlocks.push((skill.clone(), unlocks));
+        }
+        Ok(resolved)
     }
 }
 
@@ -127,6 +144,7 @@ mod tests {
         ResolvedR0le {
             tool_allowlist: vec!["cargo.*".into(), "b00t_status".into()],
             skills: vec!["rust.skill".into()],
+            skill_unlocks: vec![],
             budget_ceiling: 100,
             model_tier: ModelTier::Ch0nky,
         }
@@ -154,14 +172,18 @@ mod tests {
         .unwrap();
 
         let resolver = DatumR0leResolver::new(p.to_str().unwrap());
+        std::fs::write(
+            p.join("rust.skill.toml"),
+            "[b00t]\nname = \"rust\"\ntype = \"skill\"\nunlocks = [\"cargo_*\"]\n",
+        )
+        .unwrap();
         let got = resolver.resolve(None, "worker").unwrap();
         assert_eq!(got.tool_allowlist, ["cargo.*"]);
         assert_eq!(got.budget_ceiling, 42);
         assert_eq!(got.model_tier, ModelTier::Ch0nky);
 
         // same datum, but now demand a signature it doesn't have
-        let strict = DatumR0leResolver::new(p.to_str().unwrap())
-            .require_signature("{\"keys\":[]}");
+        let strict = DatumR0leResolver::new(p.to_str().unwrap()).require_signature("{\"keys\":[]}");
         assert!(strict.resolve(None, "worker").is_err());
     }
 

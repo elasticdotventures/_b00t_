@@ -2,6 +2,13 @@
 
 The SP1 product-identity plane: RS256 JWT issuance + JWKS + tenant registry.
 
+The source directory is `b00t-identity`, but Wrangler intentionally retains the
+deployed Worker name `ledgrrr-tenant-registry`. Its local `TenantNode` binding
+therefore continues using the existing Durable Object namespace and D1
+`root_do_id` values. Do not override `--name` on deploy. Renaming the deployed
+Worker requires a separately planned namespace transfer; changing only `name`
+would provision unrelated storage. See [Cloudflare namespace migrations](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/).
+
 ## 1. Provision secrets (idempotent — reuses `~/.env` values)
 
 ```bash
@@ -46,6 +53,16 @@ Routes (from `wrangler.jsonc`):
 - `b00t.promptexecution.com/identity/*` — `/identity/tenants`, `/identity/tokens`,
   `/identity/verify`, `DELETE /identity/tenants/:id/agents/:id` (the worker
   strips the `/identity` prefix internally)
+
+Clients use the origin as `B00T_IDENTITY_URL` (no `/identity` suffix).
+`HttpTokenSource::with_issuance_credential` and CLI environment variable
+`B00T_IDENTITY_ISSUANCE_TOKEN` supply the `REGISTRY_ADMIN_KEY` bearer required
+by `/identity/tokens`. JWKS remains at `/.well-known/jwks.json` without auth.
+Issuance checks the stored agent grant's role, or the closest membership's
+role for legacy node grants. A requested role must match that authorization.
+Tokens include their node and grant source; `/identity/verify` rechecks that
+authorization, including role and scopes. Older tokens lacking this context
+must be reissued.
 
 ## 4. Seed the first-party tenants
 

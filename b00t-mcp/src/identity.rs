@@ -16,6 +16,7 @@ pub struct CallerIdentity {
     pub r0le: String,
     pub scopes: Vec<String>,
     pub budget_ref: String,
+    pub expires_at: i64,
 }
 
 impl CallerIdentity {
@@ -27,11 +28,20 @@ impl CallerIdentity {
             r0le: "anon".to_string(),
             scopes: Vec::new(),
             budget_ref: String::new(),
+            expires_at: i64::MAX,
         }
     }
 
     pub fn is_anon(&self) -> bool {
         self.r0le == "anon"
+    }
+
+    pub fn ensure_valid(&self) -> Result<()> {
+        anyhow::ensure!(
+            chrono::Utc::now().timestamp() < self.expires_at,
+            "agent JWT expired"
+        );
+        Ok(())
     }
 }
 
@@ -43,6 +53,7 @@ impl From<AgentClaims> for CallerIdentity {
             r0le: c.r0le,
             scopes: c.scopes,
             budget_ref: c.budget_ref,
+            expires_at: c.exp,
         }
     }
 }
@@ -102,7 +113,9 @@ impl JwksVerifier {
     pub async fn verify(&self, jwt: &str) -> Result<CallerIdentity> {
         let jwks = self.jwks_json().await?;
         let claims = verify_jwt(jwt, &jwks).context("verify agent JWT")?;
-        Ok(CallerIdentity::from(claims))
+        let identity = CallerIdentity::from(claims);
+        identity.ensure_valid()?;
+        Ok(identity)
     }
 }
 
@@ -142,7 +155,13 @@ mod tests {
         let jwt = mock.mint(&req()).unwrap();
         let mut parts: Vec<&str> = jwt.split('.').collect();
         let bad_payload = if parts[1].starts_with('a') { "b" } else { "a" };
-        let tampered = format!("{}.{}{}.{}", parts[0], bad_payload, &parts[1][1..], parts[2]);
+        let tampered = format!(
+            "{}.{}{}.{}",
+            parts[0],
+            bad_payload,
+            &parts[1][1..],
+            parts[2]
+        );
         let _ = &mut parts;
         assert!(
             JwksVerifier::pinned(mock.jwks_json())
@@ -157,12 +176,7 @@ mod tests {
         let mock = MockTokenSource::new();
         let jwt = mock.mint(&req()).unwrap();
         let foreign = r#"{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":"mock-kid","n":"AQAB","e":"AQAB"}]}"#;
-        assert!(
-            JwksVerifier::pinned(foreign)
-                .verify(&jwt)
-                .await
-                .is_err()
-        );
+        assert!(JwksVerifier::pinned(foreign).verify(&jwt).await.is_err());
     }
 
     #[test]

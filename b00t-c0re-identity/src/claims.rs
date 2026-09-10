@@ -19,7 +19,7 @@ pub struct AgentClaims {
 }
 
 /// Request body for `POST /tokens` (field names match the worker's JSON).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenRequest {
     #[serde(rename = "tenantId")]
     pub tenant_id: String,
@@ -50,6 +50,7 @@ pub fn verify_jwt(token: &str, jwks_json: &str) -> Result<AgentClaims> {
 
     let key = DecodingKey::from_rsa_components(n, e).context("build decoding key")?;
     let mut validation = Validation::new(Algorithm::RS256);
+    validation.leeway = 0;
     validation.set_issuer(&[ISS]);
     validation.set_required_spec_claims(&["exp"]);
 
@@ -60,14 +61,7 @@ pub fn verify_jwt(token: &str, jwks_json: &str) -> Result<AgentClaims> {
 /// Decode the claims WITHOUT verifying the signature or `exp`. For inspection
 /// only — never trust the result for authz.
 pub fn decode_claims_unverified(token: &str) -> Result<AgentClaims> {
-    use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
-
-    let mut validation = Validation::new(Algorithm::RS256);
-    validation.insecure_disable_signature_validation();
-    validation.validate_exp = false;
-    validation.set_required_spec_claims::<&str>(&[]);
-
-    let key = DecodingKey::from_secret(b"");
-    let data = decode::<AgentClaims>(token, &key, &validation).context("decode claims")?;
+    let data =
+        jsonwebtoken::dangerous::insecure_decode::<AgentClaims>(token).context("decode claims")?;
     Ok(data.claims)
 }

@@ -1,6 +1,6 @@
 // SP1-06: idempotent seed of the first-party tenants. Run against `wrangler dev`
 // or a deploy:  `pnpm exec tsx scripts/seed.ts <base-url> <admin-key>`
-const BASE = process.argv[2] ?? "http://localhost:8787";
+const BASE = (process.argv[2] ?? "http://localhost:8787").replace(/\/$/, "") + "/identity";
 const ADMIN = process.argv[3] ?? process.env.REGISTRY_ADMIN_KEY ?? "";
 
 const SEEDS = [

@@ -1,0 +1,6 @@
+{
+  "request": {"tenantId":"tenant-a","agentId":"agent-security","nodeId":"root","r0le":"worker","requestedShards":["project"]},
+  "profile": {"b00t":{"name":"worker","type":"agent_profile","agent_profile":{"tool_allowlist":["b00t_status","b00t_learn"],"skills":["inspection.skill"],"model_tier":"ch0nky","budget_ceiling":42,"permissions":[]}}},
+  "skill": {"b00t":{"name":"inspection","type":"skill","unlocks":["b00t_status"]}},
+  "badSignature": {"kid":"mock-kid","alg":"RS256","sig_b64":"invalid","signed_fields_hash":"invalid"}
+}

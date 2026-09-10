@@ -104,7 +104,7 @@ describe("issueToken", () => {
     expect(result).toEqual({ error: "tenant not found" });
   });
 
-  it("passes r0le through to the claims and returns budget_remaining", async () => {
+  it("issues the granted r0le and returns budget_remaining", async () => {
     const tenant = await createTenant(env.DB, env.TENANT_DO, {
       kind: "organizational",
       displayName: "AcmeRole",
@@ -118,6 +118,7 @@ describe("issueToken", () => {
       settingsJson: JSON.stringify({ grantedShards: ["project"] }),
     });
     await stub.addMember("agent-1", node.id, "member");
+    await stub.setAgentGrant("agent-1", node.id, "worker", ["project"]);
 
     const result = await issueToken(env, {
       tenantId: tenant.id,

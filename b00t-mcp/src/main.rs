@@ -241,6 +241,10 @@ async fn main() -> Result<()> {
         // Create axum router with CORS, OAuth, and GitHub auth
         let mut app = Router::new()
             .nest_service("/mcp", service)
+            .layer(axum::middleware::from_fn_with_state(
+                b00t_mcp::http_auth::IdentityLayerState::from_env(),
+                b00t_mcp::http_auth::identity_middleware,
+            ))
             .merge(minimal_oauth_router(oauth_state))
             .merge(github_auth_router(github_state));
 
@@ -252,17 +256,8 @@ async fn main() -> Result<()> {
             app = app.merge(server_llm::llm_router(llm_state.clone(), false));
         }
 
-        // SP3-02a — verify `Authorization: Bearer` into a CallerIdentity request
-        // extension (401 when `B00T_MCP_REQUIRE_AUTH=1` and the bearer is absent
-        // or invalid; anon otherwise). CorsLayer::permissive already allows the
-        // Authorization header.
-        let identity_state = b00t_mcp::http_auth::IdentityLayerState::from_env();
-        let app = app
-            .layer(axum::middleware::from_fn_with_state(
-                identity_state,
-                b00t_mcp::http_auth::identity_middleware,
-            ))
-            .layer(CorsLayer::permissive());
+        // CORS wraps both protected services and public authentication bootstrap routes.
+        let app = app.layer(CorsLayer::permissive());
 
         // Start HTTP server
         let listener = TcpListener::bind(addr).await?;

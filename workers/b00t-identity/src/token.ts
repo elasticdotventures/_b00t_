@@ -18,7 +18,7 @@ export interface IssueTokenInput {
   agentId: string;
   nodeId: string;
   requestedShards: string[];
-  r0le?: string; // SP1-04 threads this from the route; defaults to "member"
+  r0le?: string; // If supplied, must match the stored authorization.
 }
 
 export type IssueTokenResult =
@@ -30,6 +30,8 @@ export interface AgentClaims {
   iss: string;
   sub: string; // agent id
   tenant: string;
+  node_id: string;
+  grant_source: string;
   r0le: string;
   scopes: string[];
   budget_ref: string;
@@ -145,17 +147,9 @@ export async function issueToken(
 
   const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
 
-  const hasMembership = await stub.hasMembershipPath(input.agentId, input.nodeId);
-  if (!hasMembership) {
-    return { error: "unauthorized" };
-  }
-
-  const grantsShards = await stub.agentGrantsShards(
-    input.agentId,
-    input.nodeId,
-    input.requestedShards,
-  );
-  if (!grantsShards) {
+  const authorization = await stub.agentAuthorization(input.agentId, input.nodeId);
+  if (!authorization || (input.r0le !== undefined && input.r0le !== authorization.r0le)
+      || !input.requestedShards.every((scope) => authorization.shards.includes(scope))) {
     return { error: "unauthorized" };
   }
 
@@ -176,7 +170,9 @@ export async function issueToken(
     iss: TOKEN_ISS,
     sub: input.agentId,
     tenant: input.tenantId,
-    r0le: input.r0le ?? "member",
+    node_id: input.nodeId,
+    grant_source: authorization.source,
+    r0le: authorization.r0le,
     scopes: input.requestedShards,
     budget_ref: jti,
     iat,

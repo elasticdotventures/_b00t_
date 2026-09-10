@@ -11,10 +11,10 @@ use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
 
+use crate::DatumType;
 use crate::boot_datum::BootDatum;
 use crate::commands::blessing::collect_role_unlocks;
 use crate::config_types::UnifiedConfig;
-use crate::DatumType;
 use crate::datum_agent_profile::{AgentProfileSpec, ModelTier, ShardMode, SoulShardGrant};
 use crate::datum_utils::get_all_datums_for_tenant;
 use crate::soul_scope::ShardKind;
@@ -88,7 +88,9 @@ fn parse_tier(s: &str) -> Result<ModelTier> {
         "sm0l" => Ok(ModelTier::Sm0l),
         "ch0nky" => Ok(ModelTier::Ch0nky),
         "frontier" => Ok(ModelTier::Frontier),
-        other => Err(anyhow!("unknown tier '{other}' (want sm0l | ch0nky | frontier)")),
+        other => Err(anyhow!(
+            "unknown tier '{other}' (want sm0l | ch0nky | frontier)"
+        )),
     }
 }
 
@@ -104,8 +106,18 @@ pub fn compose_agent_profile(
         .ok_or_else(|| anyhow!("no role datum for '{role}' under {b00t_path}"))?;
 
     let manifest = collect_role_unlocks(b00t_path, role)?;
-    let skills = manifest.required_skills();
-    let tool_allowlist = manifest.all_unlocks();
+    let mut skills: Vec<String> = manifest
+        .required
+        .iter()
+        .chain(&manifest.optional)
+        .map(|(skill, _)| skill.clone())
+        .collect();
+    skills.sort();
+    skills.dedup();
+    let mut tool_allowlist = manifest.all_unlocks();
+    if !tool_allowlist.iter().any(|tool| tool == "b00t_learn") {
+        tool_allowlist.push("b00t_learn".into());
+    }
 
     let mut soul_shard_grants: Vec<SoulShardGrant> = skills
         .iter()
@@ -152,11 +164,7 @@ pub fn render_agent_profile_datum(role: &str, spec: AgentProfileSpec) -> Result<
 }
 
 /// Load the `AgentProfileSpec` of the r0le datum keyed `id`.
-fn load_r0le_spec(
-    b00t_path: &str,
-    tenant: Option<&str>,
-    id: &str,
-) -> Result<AgentProfileSpec> {
+fn load_r0le_spec(b00t_path: &str, tenant: Option<&str>, id: &str) -> Result<AgentProfileSpec> {
     let datums = get_all_datums_for_tenant(b00t_path, tenant, Some(6))?;
     // Datum keys are filename-minus-`.toml`, so `worker.agentprofile.toml` keys
     // as `worker.agentprofile` — try the bare id and the suffixed forms.
@@ -254,7 +262,11 @@ pub fn handle_r0le(args: &R0leArgs) -> Result<()> {
             let jwks_json = read_jwks(jwks.as_deref())?;
             match spec.verify(&jwks_json) {
                 Ok(()) => {
-                    let kid = spec.signature.as_ref().map(|s| s.kid.as_str()).unwrap_or("?");
+                    let kid = spec
+                        .signature
+                        .as_ref()
+                        .map(|s| s.kid.as_str())
+                        .unwrap_or("?");
                     println!("✅ signature valid (kid={kid})");
                     Ok(())
                 }
@@ -267,6 +279,26 @@ pub fn handle_r0le(args: &R0leArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compiled_profile_retains_optional_skills_and_learning_bootstrap() {
+        let fixture: std::collections::BTreeMap<String, serde_json::Value> =
+            serde_json::from_str(include_str!("../../tests/fixtures/identity-role.json")).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        for (name, datum) in fixture {
+            std::fs::write(tmp.path().join(name), toml::to_string(&datum).unwrap()).unwrap();
+        }
+        let profile = compose_agent_profile(
+            tmp.path().to_str().unwrap(),
+            "worker",
+            ModelTier::Ch0nky,
+            42,
+        )
+        .unwrap();
+        assert!(profile.skills.contains(&"audit.skill".into()));
+        assert!(profile.tool_allowlist.contains(&"audit_*".into()));
+        assert!(profile.tool_allowlist.contains(&"b00t_learn".into()));
+    }
 
     #[test]
     fn build_composes_allowlist_from_skill_unlocks() {
@@ -290,12 +322,18 @@ mod tests {
         assert!(spec.skills.contains(&"rust.skill".to_string()));
         assert_eq!(spec.model_tier, ModelTier::Ch0nky);
         assert_eq!(spec.budget_ceiling, 42);
-        assert!(spec.soul_shard_grants.iter().any(|g| g.kind == ShardKind::Agent
-            && g.id == "worker"
-            && g.mode == ShardMode::Rw));
-        assert!(spec.soul_shard_grants.iter().any(|g| g.kind == ShardKind::Skill
-            && g.id == "rust.skill"
-            && g.mode == ShardMode::R));
+        assert!(
+            spec.soul_shard_grants
+                .iter()
+                .any(|g| g.kind == ShardKind::Agent && g.id == "worker" && g.mode == ShardMode::Rw)
+        );
+        assert!(
+            spec.soul_shard_grants
+                .iter()
+                .any(|g| g.kind == ShardKind::Skill
+                    && g.id == "rust.skill"
+                    && g.mode == ShardMode::R)
+        );
         assert!(spec.signature.is_none());
 
         // round-trips to valid TOML
@@ -354,7 +392,8 @@ mod tests {
         )
         .unwrap();
 
-        let spec = compose_agent_profile(p.to_str().unwrap(), "worker", ModelTier::Ch0nky, 5).unwrap();
+        let spec =
+            compose_agent_profile(p.to_str().unwrap(), "worker", ModelTier::Ch0nky, 5).unwrap();
         let datum_toml = render_agent_profile_datum("worker", spec).unwrap();
         std::fs::write(p.join("worker.agentprofile.toml"), datum_toml).unwrap();
 

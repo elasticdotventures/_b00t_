@@ -52,8 +52,34 @@ fn identity_url() -> String {
 }
 
 fn jwt_store_path(tenant: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        !tenant.is_empty() && tenant != "." && tenant != ".." && !tenant.contains(['/', '\\']),
+        "invalid tenant id for credential storage"
+    );
     let home = dirs::home_dir().ok_or_else(|| anyhow!("no home dir"))?;
-    Ok(home.join(".b00t").join("identity").join(format!("{tenant}.jwt")))
+    Ok(home
+        .join(".b00t")
+        .join("identity")
+        .join(format!("{tenant}.jwt")))
+}
+
+fn store_token(path: &std::path::Path, jwt: &str) -> Result<()> {
+    use std::io::Write;
+    let dir = path.parent().context("credential path has no parent")?;
+    std::fs::create_dir_all(dir).context("create identity directory")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    // NamedTempFile is owner-only; atomic replacement also secures old files
+    // without following a pre-existing symlink or modifying a shared hardlink.
+    let mut file = tempfile::NamedTempFile::new_in(dir)?;
+    file.write_all(jwt.as_bytes())?;
+    file.as_file().sync_all()?;
+    file.persist(path)
+        .with_context(|| format!("write {}", path.display()))?;
+    Ok(())
 }
 
 /// Build the `POST /tokens` request body.
@@ -89,7 +115,11 @@ pub async fn fetch_token(src: &dyn TokenSource, req: &TokenRequest) -> Result<St
 pub fn render_claims_table(claims: &AgentClaims, verified: bool) -> String {
     format!(
         "identity ({})\n  iss        : {}\n  sub        : {}\n  tenant     : {}\n  r0le       : {}\n  scopes     : {}\n  budget_ref : {}\n  iat/exp    : {} / {}  ({}s)\n  jti        : {}",
-        if verified { "signature VERIFIED" } else { "unverified decode" },
+        if verified {
+            "signature VERIFIED"
+        } else {
+            "unverified decode"
+        },
         claims.iss,
         claims.sub,
         claims.tenant,
@@ -124,7 +154,9 @@ pub async fn handle_identity(args: &IdentityArgs) -> Result<()> {
             shards,
             quiet,
         } => {
-            let src = HttpTokenSource::new(identity_url());
+            let credential = std::env::var("B00T_IDENTITY_ISSUANCE_TOKEN")
+                .context("set B00T_IDENTITY_ISSUANCE_TOKEN to the registry issuance credential")?;
+            let src = HttpTokenSource::new(identity_url()).with_issuance_credential(credential);
             let req = build_token_request(tenant, node, r0le, shards);
             let jwt = fetch_token(&src, &req).await?;
             if *quiet {
@@ -132,10 +164,7 @@ pub async fn handle_identity(args: &IdentityArgs) -> Result<()> {
                 return Ok(());
             }
             let path = jwt_store_path(tenant)?;
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir).ok();
-            }
-            std::fs::write(&path, &jwt).with_context(|| format!("write {}", path.display()))?;
+            store_token(&path, &jwt)?;
             println!("{jwt}");
             eprintln!("saved to {}", path.display());
             Ok(())
@@ -148,7 +177,10 @@ pub async fn handle_identity(args: &IdentityArgs) -> Result<()> {
             };
             let (claims, verified) = match std::env::var("B00T_IDENTITY_JWKS") {
                 Ok(jwks) => (verify_jwt(&token, &jwks).context("verify JWT")?, true),
-                Err(_) => (decode_claims_unverified(&token).context("decode JWT")?, false),
+                Err(_) => (
+                    decode_claims_unverified(&token).context("decode JWT")?,
+                    false,
+                ),
             };
             println!("{}", render_claims_table(&claims, verified));
             Ok(())
@@ -170,8 +202,47 @@ mod tests {
     use b00t_c0re_identity::MockTokenSource;
 
     #[test]
+    #[cfg(unix)]
+    fn credential_storage_restricts_new_and_existing_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("identity/tenant.jwt");
+        store_token(&path, "first").unwrap();
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        store_token(&path, "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            std::fs::metadata(path.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn tenant_cannot_escape_credential_directory() {
+        assert!(jwt_store_path("../escape").is_err());
+        assert!(jwt_store_path("/absolute").is_err());
+    }
+
+    #[test]
     fn build_token_request_shapes_the_body() {
-        let r = build_token_request("promptexecution", "root", "worker", &["project".to_string()]);
+        let r = build_token_request(
+            "promptexecution",
+            "root",
+            "worker",
+            &["project".to_string()],
+        );
         assert_eq!(r.tenant_id, "promptexecution");
         assert_eq!(r.node_id, "root");
         assert_eq!(r.r0le, "worker");
@@ -182,7 +253,12 @@ mod tests {
     #[tokio::test]
     async fn fetch_token_via_mock_then_whoami_decodes_it() {
         let src = MockTokenSource::new();
-        let req = build_token_request("promptexecution", "root", "worker", &["project".to_string()]);
+        let req = build_token_request(
+            "promptexecution",
+            "root",
+            "worker",
+            &["project".to_string()],
+        );
         let jwt = fetch_token(&src, &req).await.unwrap();
         assert_eq!(jwt.split('.').count(), 3);
 
@@ -199,6 +275,9 @@ mod tests {
         let req = build_token_request("promptexecution", "root", "worker", &[]);
         let jwt = fetch_token(&src, &req).await.unwrap();
         let claims = verify_jwt(&jwt, &src.jwks_json()).unwrap();
-        assert_eq!(render_claims_table(&claims, true).contains("VERIFIED"), true);
+        assert_eq!(
+            render_claims_table(&claims, true).contains("VERIFIED"),
+            true
+        );
     }
 }

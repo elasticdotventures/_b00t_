@@ -1,0 +1,8 @@
+{
+  "agent": "agent-security",
+  "role": "worker",
+  "unauthorizedRole": "executive",
+  "scopes": ["project"],
+  "tenant": {"kind": "organizational", "displayName": "Security regression", "ownerAgentId": "owner"},
+  "node": {"parentId": null, "kind": "business_unit", "name": "Scoped node", "settingsJson": "{\"grantedShards\":[\"project\"]}"}
+}

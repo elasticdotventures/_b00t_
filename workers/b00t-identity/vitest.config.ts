@@ -12,6 +12,7 @@ export default defineWorkersConfig({
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: {
+            REGISTRY_ADMIN_KEY: "test-admin-key",
             JWT_KID: "test-kid",
             JWT_PRIVATE_KEY_PEM: TEST_JWT_PRIVATE_KEY_PEM,
           },

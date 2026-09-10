@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "b00t-identity",
+  // Deployment identity owns the existing TenantNode namespace and D1 root_do_id values.
+  // Keep it until an explicit cross-Worker namespace transfer is deployed.
+  "name": "ledgrrr-tenant-registry",
   "main": "src/index.ts",
   "routes": [
     { "pattern": "b00t.promptexecution.com/.well-known/*", "zone_name": "promptexecution.com" },

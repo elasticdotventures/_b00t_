@@ -28,7 +28,7 @@ function unauthorized(): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // F1 routes: /.well-known/* is served as-is; /identity/* is stripped so the
@@ -175,7 +175,8 @@ export default {
         });
       }
       const vstub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
-      if (!(await vstub.checkStillGranted(result.claims.sub))) {
+      if (!(await vstub.checkStillGranted(result.claims.sub, result.claims.node_id,
+        result.claims.r0le, result.claims.scopes, result.claims.grant_source))) {
         return new Response(JSON.stringify({ error: "revoked" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },

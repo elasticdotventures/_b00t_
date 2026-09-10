@@ -3,11 +3,9 @@
 //! Verifies `Authorization: Bearer <jwt>` against the identity worker's JWKS
 //! ([`JwksVerifier`]) and injects a [`CallerIdentity`] into the request
 //! extensions. `B00T_MCP_REQUIRE_AUTH=1` makes a missing/invalid bearer a
-//! `401`; otherwise the request proceeds as `CallerIdentity::anon()`.
-//!
-//! Whether that extension reaches the rmcp tool handlers (`list_tools` /
-//! `call_tool` on `B00tMcpServerRusty`) is SP3-09's integration concern — this
-//! layer's job is to gate and to stash.
+//! `401`. Invalid supplied credentials always fail; only missing credentials
+//! may proceed as `CallerIdentity::anon()` when authentication is optional.
+//! rmcp forwards these extensions inside the HTTP request Parts.
 
 use std::sync::Arc;
 
@@ -58,10 +56,9 @@ pub async fn identity_middleware(
     let identity = match bearer(&req) {
         Some(token) => match state.verifier.verify(&token).await {
             Ok(id) => Some(id),
-            Err(_) if state.require_auth => None,
-            Err(_) => Some(CallerIdentity::anon()),
+            Err(_) => None,
         },
-        None if state.require_auth => None,
+        None if state.require_auth || req.headers().contains_key(AUTHORIZATION) => None,
         None => Some(CallerIdentity::anon()),
     };
 
@@ -100,7 +97,10 @@ mod tests {
                         .unwrap_or_else(|| "no-identity".to_string())
                 }),
             )
-            .layer(axum::middleware::from_fn_with_state(state, identity_middleware))
+            .layer(axum::middleware::from_fn_with_state(
+                state,
+                identity_middleware,
+            ))
     }
 
     fn req() -> TokenRequest {
@@ -136,7 +136,12 @@ mod tests {
     async fn missing_bearer_is_401_when_required() {
         let mock = MockTokenSource::new();
         let res = app(true, mock.jwks_json())
-            .oneshot(Request::builder().uri("/whoami").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/whoami")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
@@ -146,11 +151,76 @@ mod tests {
     async fn anon_when_not_required() {
         let mock = MockTokenSource::new();
         let res = app(false, mock.jwks_json())
-            .oneshot(Request::builder().uri("/whoami").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/whoami")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         let body = to_bytes(res.into_body(), 1024).await.unwrap();
         assert_eq!(&body[..], b"anon");
+    }
+
+    #[tokio::test]
+    async fn invalid_bearer_is_rejected_even_when_auth_is_optional() {
+        let mock = MockTokenSource::new();
+        let response = app(false, mock.jwks_json())
+            .oneshot(
+                Request::builder()
+                    .uri("/whoami")
+                    .header("authorization", "Bearer invalid")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn bootstrap_routes_remain_public_when_mcp_requires_identity() {
+        let mock = MockTokenSource::new();
+        let app = app(true, mock.jwks_json()).merge(
+            Router::new()
+                .route(
+                    "/.well-known/oauth-authorization-server",
+                    get(|| async { "discovery" }),
+                )
+                .route("/oauth/authorize", get(|| async { "authorize" }))
+                .route("/oauth/token", axum::routing::post(|| async { "token" }))
+                .route("/auth/github/callback", get(|| async { "callback" })),
+        );
+        for (path, method) in [
+            ("/.well-known/oauth-authorization-server", "GET"),
+            ("/oauth/authorize", "GET"),
+            ("/oauth/token", "POST"),
+            ("/auth/github/callback", "GET"),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(path)
+                        .method(method)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/whoami")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

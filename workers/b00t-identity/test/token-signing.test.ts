@@ -82,6 +82,8 @@ describe("token signing (RS256)", () => {
       iss: TOKEN_ISS,
       sub: "agent-1",
       tenant: "tenant-1",
+      node_id: "node-1",
+      grant_source: "member:node-1",
       r0le: "member",
       scopes: ["project"],
       budget_ref: "",

@@ -152,21 +152,39 @@ export class TenantNode extends DurableObject {
     return this.nodeGrantsShards(nodeId, requestedShards);
   }
 
-  /**
-   * Coarse revocation check: after JWT verification the caller re-presents.
-   * The agent is still valid iff it retains at least one `agent_grants` row
-   * OR one `members` row in this tenant. `revokeAgent` / the admin DELETE
-   * remove those rows, so a revoked agent fails here.
-   */
-  async checkStillGranted(agentId: string): Promise<boolean> {
-    const g = this.ctx.storage.sql
-      .exec("SELECT 1 FROM agent_grants WHERE agent_id = ? LIMIT 1", agentId)
-      .toArray();
-    if (g.length > 0) return true;
-    const m = this.ctx.storage.sql
-      .exec("SELECT 1 FROM members WHERE agent_id = ? LIMIT 1", agentId)
-      .toArray();
-    return m.length > 0;
+  /** Resolve authorization in one DO turn; the closest membership supplies the legacy role. */
+  async agentAuthorization(agentId: string, nodeId: string): Promise<{
+    r0le: string; shards: string[]; source: string;
+  } | null> {
+    const member = this.ctx.storage.sql.exec(`
+      WITH RECURSIVE ancestors(id, parent_id, depth) AS (
+        SELECT id, parent_id, 0 FROM nodes WHERE id = ?
+        UNION ALL
+        SELECT nodes.id, nodes.parent_id, ancestors.depth + 1
+        FROM nodes JOIN ancestors ON nodes.id = ancestors.parent_id
+      )
+      SELECT members.role, members.node_id FROM ancestors
+      JOIN members ON members.node_id = ancestors.id
+      WHERE members.agent_id = ? ORDER BY ancestors.depth LIMIT 1
+    `, nodeId, agentId).toArray()[0] as { role: string; node_id: string } | undefined;
+    if (!member) return null;
+    const grant = this.ctx.storage.sql.exec(
+      "SELECT r0le, shards_json FROM agent_grants WHERE agent_id = ? AND node_id = ?",
+      agentId, nodeId,
+    ).toArray()[0] as { r0le: string; shards_json: string } | undefined;
+    if (grant) return { r0le: grant.r0le, shards: JSON.parse(grant.shards_json), source: `grant:${nodeId}` };
+    const node = this.ctx.storage.sql.exec("SELECT settings_json FROM nodes WHERE id = ?", nodeId)
+      .toArray()[0] as { settings_json: string };
+    const settings = JSON.parse(node.settings_json) as { grantedShards?: string[] };
+    return { r0le: member.role, shards: settings.grantedShards ?? [], source: `member:${member.node_id}` };
+  }
+
+  /** Revalidate the exact node, role, scopes and grant source used at issuance. */
+  async checkStillGranted(agentId: string, nodeId: string, r0le: string, scopes: string[], source: string): Promise<boolean> {
+    if (!nodeId || !source || !Array.isArray(scopes)) return false;
+    const current = await this.agentAuthorization(agentId, nodeId);
+    return current !== null && current.source === source && current.r0le === r0le
+      && scopes.every((scope) => current.shards.includes(scope));
   }
 
   /**
@@ -213,8 +231,12 @@ export class TenantNode extends DurableObject {
     if (children.length > 0) {
       return { deleted: false, reason: "node has children; delete or reparent them first" };
     }
-    this.ctx.storage.sql.exec("DELETE FROM members WHERE node_id = ?", nodeId);
-    this.ctx.storage.sql.exec("DELETE FROM nodes WHERE id = ?", nodeId);
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec("DELETE FROM agent_grants WHERE node_id = ?", nodeId);
+      this.ctx.storage.sql.exec("DELETE FROM members WHERE node_id = ?", nodeId);
+      this.ctx.storage.sql.exec("DELETE FROM _placeholder_leaf_balances WHERE node_id = ?", nodeId);
+      this.ctx.storage.sql.exec("DELETE FROM nodes WHERE id = ?", nodeId);
+    });
     return { deleted: true };
   }
 
