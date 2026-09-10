@@ -221,6 +221,11 @@ pub struct BootDatum {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_profile: Option<crate::datum_agent_profile::AgentProfileSpec>,
 
+    /// Payload of a `DatumType::McpServer` (`.mcp_server.toml`) — the on-demand
+    /// launch spec for a remote MCP server (SP4). `[b00t.mcp_server]`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_server: Option<crate::datum_mcp_server::McpServerSpec>,
+
     // Classifier hints
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger_words: Option<Vec<String>>,
