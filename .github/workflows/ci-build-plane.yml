@@ -16,9 +16,11 @@
 # therefore CANNOT reach the build plane until it joins the tailnet, which is
 # what the "Join the tailnet" step below does (b00t #196).
 #
-# Repo settings required (Settings -> Secrets and variables -> Actions):
-#   secret   TS_OAUTH_CLIENT_ID  \ Tailscale OAuth client, scope `auth_keys`,
-#   secret   TS_OAUTH_SECRET     / allowed to issue `tag:ci-runner`
+# Repo settings required (Settings -> Secrets and variables -> Actions).
+# Only true credentials are secrets; everything else is a variable:
+#   variable TS_OAUTH_CLIENT_ID  = Tailscale OAuth client id (not sensitive),
+#                                  scope `auth_keys`, may issue `tag:ci-runner`
+#   secret   TS_OAUTH_SECRET     = that client's secret
 #   secret   DSTACK_ADMIN_TOKEN  = the `token:` from ~/.dstack/server/config.yml
 #   variable DSTACK_URL          = the TAILNET waker address:
 #                                  `cd b00t-tf && tofu output -raw gcp_control_node_endpoint`
@@ -71,7 +73,7 @@ jobs:
       - name: Join the tailnet
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-client-id: ${{ vars.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci-runner
           hostname: ci-build-plane-build-${{ github.run_id }}
@@ -114,7 +116,7 @@ jobs:
       - name: Join the tailnet
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-client-id: ${{ vars.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci-runner
           hostname: ci-build-plane-test-${{ github.run_id }}-p${{ strategy.job-index }}
