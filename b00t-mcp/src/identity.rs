@@ -1,123 +1,10 @@
-//! SP3-01 — turn an inbound agent JWT into a [`CallerIdentity`].
+//! SP3-01 — inbound agent JWT → [`CallerIdentity`].
 //!
-//! The b00t-mcp proxy verifies the caller's RS256 JWT (issued by the SP1
-//! identity worker) against a JWKS — pinned inline for tests, or fetched from
-//! `$B00T_IDENTITY_URL/.well-known/jwks.json` in production — and projects the
-//! claims down to the fields the proxy actually gates on.
+//! The implementation moved to `b00t-c0re-identity` in SP4-07 so the proxy and
+//! every backend MCP server share one verifier. This module re-exports it; the
+//! tests below still run here as a regression gate (CP-4 auth parity).
 
-use anyhow::{Context, Result};
-use b00t_c0re_identity::{AgentClaims, verify_jwt};
-
-/// The verified caller. `anon()` is the unauthenticated default.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CallerIdentity {
-    pub tenant: String,
-    pub agent: String,
-    pub r0le: String,
-    pub scopes: Vec<String>,
-    pub budget_ref: String,
-    pub expires_at: i64,
-}
-
-impl CallerIdentity {
-    /// The unauthenticated caller — `r0le == "anon"`, no scopes.
-    pub fn anon() -> Self {
-        Self {
-            tenant: "anon".to_string(),
-            agent: "anon".to_string(),
-            r0le: "anon".to_string(),
-            scopes: Vec::new(),
-            budget_ref: String::new(),
-            expires_at: i64::MAX,
-        }
-    }
-
-    pub fn is_anon(&self) -> bool {
-        self.r0le == "anon"
-    }
-
-    pub fn ensure_valid(&self) -> Result<()> {
-        anyhow::ensure!(
-            chrono::Utc::now().timestamp() < self.expires_at,
-            "agent JWT expired"
-        );
-        Ok(())
-    }
-}
-
-impl From<AgentClaims> for CallerIdentity {
-    fn from(c: AgentClaims) -> Self {
-        Self {
-            tenant: c.tenant,
-            agent: c.sub,
-            r0le: c.r0le,
-            scopes: c.scopes,
-            budget_ref: c.budget_ref,
-            expires_at: c.exp,
-        }
-    }
-}
-
-enum JwksSource {
-    /// JWKS JSON held in memory (tests, or `$B00T_IDENTITY_JWKS`).
-    Pinned(String),
-    /// Fetch on demand from this URL.
-    Url(String),
-}
-
-/// Verifies agent JWTs against a JWKS.
-pub struct JwksVerifier {
-    source: JwksSource,
-}
-
-impl JwksVerifier {
-    /// Verify against a fixed JWKS JSON (no network).
-    pub fn pinned(jwks_json: impl Into<String>) -> Self {
-        Self {
-            source: JwksSource::Pinned(jwks_json.into()),
-        }
-    }
-
-    /// `$B00T_IDENTITY_JWKS` (inline JSON) wins; otherwise fetch
-    /// `$B00T_IDENTITY_URL/.well-known/jwks.json`
-    /// (default base `https://b00t.promptexecution.com`).
-    pub fn from_env() -> Self {
-        if let Ok(inline) = std::env::var("B00T_IDENTITY_JWKS") {
-            return Self::pinned(inline);
-        }
-        let base = std::env::var("B00T_IDENTITY_URL")
-            .unwrap_or_else(|_| "https://b00t.promptexecution.com".to_string());
-        Self {
-            source: JwksSource::Url(format!(
-                "{}/.well-known/jwks.json",
-                base.trim_end_matches('/')
-            )),
-        }
-    }
-
-    async fn jwks_json(&self) -> Result<String> {
-        match &self.source {
-            JwksSource::Pinned(s) => Ok(s.clone()),
-            JwksSource::Url(u) => reqwest::get(u)
-                .await
-                .with_context(|| format!("fetch JWKS from {u}"))?
-                .error_for_status()
-                .context("JWKS endpoint returned an error")?
-                .text()
-                .await
-                .context("read JWKS body"),
-        }
-    }
-
-    /// Verify `jwt` (RS256 + issuer + `exp`) and project to a [`CallerIdentity`].
-    pub async fn verify(&self, jwt: &str) -> Result<CallerIdentity> {
-        let jwks = self.jwks_json().await?;
-        let claims = verify_jwt(jwt, &jwks).context("verify agent JWT")?;
-        let identity = CallerIdentity::from(claims);
-        identity.ensure_valid()?;
-        Ok(identity)
-    }
-}
+pub use b00t_c0re_identity::{CallerIdentity, JwksVerifier};
 
 #[cfg(test)]
 mod tests {
@@ -153,7 +40,7 @@ mod tests {
     async fn tampered_token_is_rejected() {
         let mock = MockTokenSource::new();
         let jwt = mock.mint(&req()).unwrap();
-        let mut parts: Vec<&str> = jwt.split('.').collect();
+        let parts: Vec<&str> = jwt.split('.').collect();
         let bad_payload = if parts[1].starts_with('a') { "b" } else { "a" };
         let tampered = format!(
             "{}.{}{}.{}",
@@ -162,7 +49,6 @@ mod tests {
             &parts[1][1..],
             parts[2]
         );
-        let _ = &mut parts;
         assert!(
             JwksVerifier::pinned(mock.jwks_json())
                 .verify(&tampered)
