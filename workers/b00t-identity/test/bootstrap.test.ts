@@ -4,7 +4,7 @@ import { env } from "cloudflare:test";
 describe("Worker pool bootstrap", () => {
   beforeAll(async () => {
     // Create the tenants table (migration equivalent)
-    await env.DB.exec("CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('personal', 'organizational')), display_name TEXT NOT NULL, root_do_id TEXT NOT NULL, created_at TEXT NOT NULL)");
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('personal', 'organizational')), display_name TEXT NOT NULL, slug TEXT, root_do_id TEXT NOT NULL, created_at TEXT NOT NULL)");
   });
 
   it("D1 binding resolves and the tenants table can be created and queried", async () => {

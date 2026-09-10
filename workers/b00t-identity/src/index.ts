@@ -1,4 +1,4 @@
-import { createTenant, lookupTenant } from "./registry";
+import { createTenant, lookupTenant, SlugTakenError } from "./registry";
 import { TenantNode } from "./tenant-do";
 import { issueToken, verifyToken } from "./token";
 import { jwks, jwksResponse } from "./jwks";
@@ -36,10 +36,17 @@ export default {
       return jwksResponse(await jwks(env));
     }
 
-    if (!isAuthorized(request, env)) return unauthorized();
+    const selfServe =
+      request.method === "POST" && url.pathname === "/tenants";
+    if (!selfServe && !isAuthorized(request, env)) return unauthorized();
 
     if (request.method === "POST" && url.pathname === "/tenants") {
-      const body = await request.json<{ kind?: string; displayName?: string; ownerAgentId?: string }>();
+      const body = await request.json<{
+        kind?: string;
+        displayName?: string;
+        slug?: string;
+        ownerAgentId?: string;
+      }>();
       if (body.kind !== "personal" && body.kind !== "organizational") {
         return new Response(JSON.stringify({ error: "kind must be 'personal' or 'organizational'" }), {
           status: 400,
@@ -58,11 +65,29 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       }
-      const tenant = await createTenant(env.DB, env.TENANT_DO, {
-        kind: body.kind,
-        displayName: body.displayName,
-        ownerAgentId: body.ownerAgentId,
-      });
+      if (typeof body.slug !== "string" || !body.slug.trim()) {
+        return new Response(JSON.stringify({ error: "slug is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      let tenant;
+      try {
+        tenant = await createTenant(env.DB, env.TENANT_DO, {
+          kind: body.kind,
+          displayName: body.displayName,
+          ownerAgentId: body.ownerAgentId,
+          slug: body.slug,
+        });
+      } catch (e) {
+        if (e instanceof SlugTakenError) {
+          return new Response(JSON.stringify({ error: "slug taken" }), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
       return new Response(JSON.stringify(tenant), {
         status: 201,
         headers: { "Content-Type": "application/json" },
