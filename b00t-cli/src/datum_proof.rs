@@ -384,6 +384,7 @@ impl BootDatum {
             Some(DatumType::Cli)         => self.prove_cli(),
             Some(DatumType::Skill)       => self.prove_skill(),
             Some(DatumType::Role)        => self.prove_role(),
+            Some(DatumType::AgentProfile) => self.prove_role(),
             Some(DatumType::Mcp)         => self.prove_mcp(),
             Some(DatumType::Docker)      => self.prove_docker(),
             Some(DatumType::Bash)        => self.prove_bash(),
