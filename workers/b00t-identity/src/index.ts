@@ -114,23 +114,27 @@ export default {
         tenantId?: string;
         agentId?: string;
         nodeId?: string;
+        r0le?: string;
         requestedShards?: string[];
       }>();
       if (!body.tenantId || !body.agentId || !body.nodeId || !Array.isArray(body.requestedShards)) {
         return new Response(
           JSON.stringify({ error: "tenantId, agentId, nodeId, and requestedShards[] are required" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          { status: 400, headers: { "Content-Type": "application/json" } },
         );
       }
       const result = await issueToken(env, {
         tenantId: body.tenantId,
         agentId: body.agentId,
         nodeId: body.nodeId,
+        r0le: body.r0le,
         requestedShards: body.requestedShards,
       });
       if ("error" in result) {
+        const status =
+          result.error === "tenant not found" ? 404 : result.error === "budget_exceeded" ? 402 : 403;
         return new Response(JSON.stringify(result), {
-          status: result.error === "tenant not found" ? 404 : 403,
+          status,
           headers: { "Content-Type": "application/json" },
         });
       }

@@ -41,6 +41,7 @@ describe("issueToken", () => {
       if (verified.valid) {
         expect(verified.claims.sub).toBe("agent-1");
       }
+      expect(result.budget_remaining).toBeGreaterThan(0);
     }
   });
 
@@ -101,5 +102,99 @@ describe("issueToken", () => {
       requestedShards: ["project"],
     });
     expect(result).toEqual({ error: "tenant not found" });
+  });
+
+  it("passes r0le through to the claims and returns budget_remaining", async () => {
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "AcmeRole",
+      ownerAgentId: "agent-owner",
+    });
+    const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+    const node = await stub.createNode({
+      parentId: null,
+      kind: "business_unit",
+      name: "Eng",
+      settingsJson: JSON.stringify({ grantedShards: ["project"] }),
+    });
+    await stub.addMember("agent-1", node.id, "member");
+
+    const result = await issueToken(env, {
+      tenantId: tenant.id,
+      agentId: "agent-1",
+      nodeId: node.id,
+      r0le: "worker",
+      requestedShards: ["project"],
+    });
+    expect("token" in result).toBe(true);
+    if (!("token" in result)) return;
+    expect(result.budget_remaining).toBe(1_000_000);
+    const verified = await verifyToken(env, result.token);
+    if (verified.valid) {
+      expect(verified.claims.r0le).toBe("worker");
+      expect(verified.claims.budget_ref).toBeTruthy();
+    }
+  });
+
+  it("returns budget_exceeded (402 shape) when ledgrrr denies the spend", async () => {
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "AcmeBudget",
+      ownerAgentId: "agent-owner",
+    });
+    const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+    const node = await stub.createNode({
+      parentId: null,
+      kind: "business_unit",
+      name: "Eng",
+      settingsJson: JSON.stringify({ grantedShards: ["project"] }),
+    });
+    await stub.addMember("agent-1", node.id, "member");
+
+    const denyingAuthorize = async () => ({ ok: false, budget_remaining: 0, reason: "over" });
+    const result = await issueToken(
+      env,
+      {
+        tenantId: tenant.id,
+        agentId: "agent-1",
+        nodeId: node.id,
+        requestedShards: ["project"],
+      },
+      { authorizeSpend: denyingAuthorize as never },
+    );
+    expect(result).toEqual({ error: "budget_exceeded" });
+  });
+
+  it("never calls ledgrrr when the agent has no membership path", async () => {
+    const tenant = await createTenant(env.DB, env.TENANT_DO, {
+      kind: "organizational",
+      displayName: "AcmeSpy",
+      ownerAgentId: "agent-owner",
+    });
+    const stub = env.TENANT_DO.get(env.TENANT_DO.idFromString(tenant.rootDoId));
+    const node = await stub.createNode({
+      parentId: null,
+      kind: "business_unit",
+      name: "Eng",
+      settingsJson: JSON.stringify({ grantedShards: ["project"] }),
+    });
+
+    let calls = 0;
+    const spyAuthorize = async () => {
+      calls++;
+      return { ok: true, budget_remaining: 1 };
+    };
+    const result = await issueToken(
+      env,
+      {
+        tenantId: tenant.id,
+        agentId: "agent-nobody",
+        nodeId: node.id,
+        requestedShards: ["project"],
+      },
+      { authorizeSpend: spyAuthorize as never },
+    );
+    expect(result).toEqual({ error: "unauthorized" });
+    expect(calls).toBe(0);
   });
 });

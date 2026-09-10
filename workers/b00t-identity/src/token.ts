@@ -1,12 +1,16 @@
 import { lookupTenant } from "./registry";
 import type { TenantNode } from "./tenant-do";
 import { loadSigningKey, loadVerifyKey } from "./jwks";
+import { authorizeSpend } from "./ledgrrr";
+import type { AuthorizeSpendResult } from "./ledgrrr";
 
 export interface Env {
   DB: D1Database;
   TENANT_DO: DurableObjectNamespace<TenantNode>;
   JWT_PRIVATE_KEY_PEM: string;
   JWT_KID: string;
+  LEDGRRR_MODE?: string;
+  LEDGRRR_BASE_URL?: string;
 }
 
 export interface IssueTokenInput {
@@ -17,7 +21,9 @@ export interface IssueTokenInput {
   r0le?: string; // SP1-04 threads this from the route; defaults to "member"
 }
 
-export type IssueTokenResult = { token: string } | { error: string };
+export type IssueTokenResult =
+  | { token: string; budget_remaining: number }
+  | { error: "tenant not found" | "unauthorized" | "budget_exceeded" };
 
 /** RS256 JWT claims (SP1-02). `exp - iat` is always 900. */
 export interface AgentClaims {
@@ -116,7 +122,22 @@ export async function verifyJwt(env: Env, token: string): Promise<VerifyTokenRes
 /** Back-compat alias used by the /verify route and tests. */
 export const verifyToken = verifyJwt;
 
-export async function issueToken(env: Env, input: IssueTokenInput): Promise<IssueTokenResult> {
+/**
+ * Mint an agent token. Strict order:
+ *   1. tenant must exist            -> `tenant not found`  (route: 404)
+ *   2. agent must have a membership path to the node        (route: 403)
+ *   3. the node/agent must grant every requested shard      (route: 403)
+ *   4. ledgrrr must authorize the spend -> `budget_exceeded` (route: 402)
+ * Only then is the JWT signed. `budget_ref` on the claims is the idempotency
+ * key handed to ledgrrr.
+ */
+export async function issueToken(
+  env: Env,
+  input: IssueTokenInput,
+  deps: { authorizeSpend?: typeof authorizeSpend } = {},
+): Promise<IssueTokenResult> {
+  const authorize = deps.authorizeSpend ?? authorizeSpend;
+
   const tenant = await lookupTenant(env.DB, input.tenantId);
   if (!tenant) {
     return { error: "tenant not found" };
@@ -129,23 +150,39 @@ export async function issueToken(env: Env, input: IssueTokenInput): Promise<Issu
     return { error: "unauthorized" };
   }
 
-  const grantsShards = await stub.nodeGrantsShards(input.nodeId, input.requestedShards);
+  const grantsShards = await stub.agentGrantsShards(
+    input.agentId,
+    input.nodeId,
+    input.requestedShards,
+  );
   if (!grantsShards) {
     return { error: "unauthorized" };
   }
 
   const iat = Math.floor(Date.now() / 1000);
+  const jti = crypto.randomUUID();
+
+  const budget: AuthorizeSpendResult = await authorize(env, {
+    tenant: input.tenantId,
+    agent: input.agentId,
+    cost: 1, // flat per-issuance cost for now
+    ref: jti,
+  });
+  if (!budget.ok) {
+    return { error: "budget_exceeded" };
+  }
+
   const claims: AgentClaims = {
     iss: TOKEN_ISS,
     sub: input.agentId,
     tenant: input.tenantId,
     r0le: input.r0le ?? "member",
     scopes: input.requestedShards,
-    budget_ref: "", // SP1-04: set from the ledgrrr authorize-spend response
+    budget_ref: jti,
     iat,
     exp: iat + TOKEN_TTL_SECONDS,
-    jti: crypto.randomUUID(),
+    jti,
   };
   const token = await signJwt(env, claims);
-  return { token };
+  return { token, budget_remaining: budget.budget_remaining };
 }
