@@ -137,3 +137,44 @@ describe("TenantNode schema", () => {
     });
   });
 });
+
+describe("TenantNode agent_grants", () => {
+  it("set / get / revoke a per-agent grant", async () => {
+    const stub = env.TENANT_DO.get(env.TENANT_DO.newUniqueId());
+    await runInDurableObject(stub, async (instance, state) => {
+      const node = await instance.createNode({ parentId: null, kind: "business_unit", name: "Eng" });
+      await instance.setAgentGrant("agent-1", node.id, "worker", ["project", "skill"]);
+
+      const g = await instance.getAgentGrant("agent-1", node.id);
+      expect(g?.r0le).toBe("worker");
+      expect(g?.shards).toEqual(["project", "skill"]);
+
+      // upsert replaces
+      await instance.setAgentGrant("agent-1", node.id, "reviewer", ["project"]);
+      expect((await instance.getAgentGrant("agent-1", node.id))?.r0le).toBe("reviewer");
+
+      expect(await instance.revokeAgent("agent-1", node.id)).toEqual({ revoked: true });
+      expect(await instance.getAgentGrant("agent-1", node.id)).toBeNull();
+      expect(await instance.revokeAgent("agent-1", node.id)).toEqual({ revoked: false });
+      void state;
+    });
+  });
+
+  it("agentGrantsShards honours the per-agent grant then falls back to the node", async () => {
+    const stub = env.TENANT_DO.get(env.TENANT_DO.newUniqueId());
+    await runInDurableObject(stub, async (instance) => {
+      const node = await instance.createNode({
+        parentId: null, kind: "business_unit", name: "Eng",
+        settingsJson: JSON.stringify({ grantedShards: ["project"] }),
+      });
+      // no agent grant yet -> node fallback
+      expect(await instance.agentGrantsShards("agent-x", node.id, ["project"])).toBe(true);
+      expect(await instance.agentGrantsShards("agent-x", node.id, ["secret"])).toBe(false);
+      // agent grant present -> it decides (subset check)
+      await instance.setAgentGrant("agent-x", node.id, "worker", ["project", "secret"]);
+      expect(await instance.agentGrantsShards("agent-x", node.id, ["project", "secret"])).toBe(true);
+      await instance.setAgentGrant("agent-x", node.id, "worker", ["project"]);
+      expect(await instance.agentGrantsShards("agent-x", node.id, ["secret"])).toBe(false);
+    });
+  });
+});

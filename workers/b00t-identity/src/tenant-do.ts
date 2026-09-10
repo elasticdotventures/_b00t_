@@ -1,5 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 
+export interface AgentGrant {
+  agentId: string;
+  nodeId: string;
+  r0le: string;
+  shards: string[];
+}
+
 export interface TenantNodeRow {
   id: string;
   parentId: string | null;
@@ -25,6 +32,15 @@ export class TenantNode extends DurableObject {
         agent_id TEXT NOT NULL,
         node_id TEXT NOT NULL REFERENCES nodes(id),
         role TEXT NOT NULL,
+        PRIMARY KEY (agent_id, node_id)
+      )
+    `);
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS agent_grants (
+        agent_id TEXT NOT NULL,
+        node_id TEXT NOT NULL REFERENCES nodes(id),
+        r0le TEXT NOT NULL,
+        shards_json TEXT NOT NULL DEFAULT '[]',
         PRIMARY KEY (agent_id, node_id)
       )
     `);
@@ -95,6 +111,45 @@ export class TenantNode extends DurableObject {
     const settings = JSON.parse(row.settings_json) as { grantedShards?: string[] };
     const granted = new Set(settings.grantedShards ?? []);
     return requestedShards.every((shard) => granted.has(shard));
+  }
+
+  async setAgentGrant(agentId: string, nodeId: string, r0le: string, shards: string[]): Promise<void> {
+    this.ctx.storage.sql.exec(
+      `INSERT INTO agent_grants (agent_id, node_id, r0le, shards_json)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(agent_id, node_id)
+       DO UPDATE SET r0le = excluded.r0le, shards_json = excluded.shards_json`,
+      agentId,
+      nodeId,
+      r0le,
+      JSON.stringify(shards)
+    );
+  }
+
+  async getAgentGrant(agentId: string, nodeId: string): Promise<AgentGrant | null> {
+    const row = this.ctx.storage.sql
+      .exec("SELECT r0le, shards_json FROM agent_grants WHERE agent_id = ? AND node_id = ?", agentId, nodeId)
+      .toArray()[0] as { r0le: string; shards_json: string } | undefined;
+    if (!row) return null;
+    return { agentId, nodeId, r0le: row.r0le, shards: JSON.parse(row.shards_json) as string[] };
+  }
+
+  async revokeAgent(agentId: string, nodeId: string): Promise<{ revoked: boolean }> {
+    const existed = this.ctx.storage.sql
+      .exec("SELECT 1 FROM agent_grants WHERE agent_id = ? AND node_id = ?", agentId, nodeId)
+      .toArray().length > 0;
+    this.ctx.storage.sql.exec("DELETE FROM agent_grants WHERE agent_id = ? AND node_id = ?", agentId, nodeId);
+    return { revoked: existed };
+  }
+
+  /** Per-agent grant wins; otherwise fall back to the node's own granted shards. */
+  async agentGrantsShards(agentId: string, nodeId: string, requestedShards: string[]): Promise<boolean> {
+    const grant = await this.getAgentGrant(agentId, nodeId);
+    if (grant) {
+      const granted = new Set(grant.shards);
+      return requestedShards.every((s) => granted.has(s));
+    }
+    return this.nodeGrantsShards(nodeId, requestedShards);
   }
 
   async deleteNode(nodeId: string): Promise<{ deleted: boolean; reason?: string }> {
