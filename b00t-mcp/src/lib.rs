@@ -13,6 +13,7 @@ pub mod mcp_tools;
 pub mod oauth_minimal;
 pub mod params;
 pub mod proxy_mcp_tools;
+pub mod r0le_resolver;
 pub mod rag_mcp_tools;
 pub mod schema_constraint;
 pub mod server_llm;
