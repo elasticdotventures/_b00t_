@@ -37,11 +37,14 @@ if ss -Htn state established '( sport = :3000 )' 2>/dev/null | grep -q .; then
 fi
 
 # --- 3. dstack has active runs -------------------------------------------
-#   `dstack ps -a` on 0.21.5 prints a table; --project comes from
-#   $DSTACK_PROJECT. Fail-safe: a non-zero exit => stay up.
-runs="$("$DSTACK" ps -a 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
-if printf '%s\n' "$runs" | grep -qiE 'provisioning|pending|running|terminating'; then
-  stay "dstack has a non-terminal run"
+#   `dstack ps` (WITHOUT -a) lists only runs dstack still considers
+#   non-terminal, INCLUDING one inside its no-capacity retry window. The
+#   old `-a` + status-word allow-list missed that state and powered the
+#   node off mid-`dstack apply` (2026-09-10 run 34419799571 -> CLI 503).
+#   Any data row here => a run is live. Fail-safe: non-zero exit => stay up.
+runs="$("$DSTACK" ps 2>/dev/null)" || stay "dstack ps failed (fail-safe)"
+if [ "$(printf '%s\n' "$runs" | sed '1d' | grep -cvE '^[[:space:]]*$')" -gt 0 ]; then
+  stay "dstack has a live run"
 fi
 
 # --- 4. dstack fleet has a LIVE instance ----------------------------------
