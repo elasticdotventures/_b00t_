@@ -175,11 +175,20 @@ resource "google_service_account" "build_vm" {
   description  = "Attached to dstack-provisioned build boxes. Read/write on the buildcache bucket (target/, sccache, ZeroFS state)."
 }
 
-# Cloud Run waker. Least privilege: get + start the ONE control instance.
+# Public-mode Cloud Run waker identity. Least privilege: get + start the ONE
+# control instance (role b00tCpWaker below).
+#
+# network_mode="tailnet" (current end state) does NOT use this SA: the tailnet
+# waker is a keyless k0s pod on vultr1 (_b00t_ deploy/k0s-waker) that federates
+# via SPIRE and impersonates `b00t-buildplane-ci` — defined in
+# PromptExecution/infrastructure terraform/google/google-oidc-spire-buildplane.tf,
+# NOT here, and NOT via any issued key. So this SA + its binding are created
+# only in "public" mode.
 resource "google_service_account" "cp_waker" {
+  count        = local.is_public ? 1 : 0
   account_id   = "b00t-cp-waker"
-  display_name = "b00t control-plane waker"
-  description  = "Cloud Run pingap waker. Starts the control node on inbound dstack traffic. Cannot stop it (the VM self-reaps)."
+  display_name = "b00t control-plane waker (public mode)"
+  description  = "Cloud Run pingap waker SA (network_mode=public only). get+start the control node; cannot stop it (the VM self-reaps). Tailnet mode uses b00t-buildplane-ci (infra), not this."
 }
 
 # ---------------------------------------------------------------------------
@@ -208,6 +217,11 @@ resource "google_service_account_iam_member" "dstack_server_actas_build_vm" {
 # ---------------------------------------------------------------------------
 # IAM — waker custom role, bound only to the control instance
 # ---------------------------------------------------------------------------
+# Canonical minimal waker role. Bound to the public-mode Cloud Run SA below;
+# the tailnet-mode waker SA (b00t-buildplane-ci, infra) SHOULD also use this
+# instead of the coarser roles/compute.instanceAdmin.v1 it currently holds —
+# tracked as b00t #199. Role definition stays mode-independent so infra can
+# reference `projects/${var.project_id}/roles/b00tCpWaker`.
 resource "google_project_iam_custom_role" "cp_waker" {
   role_id     = "b00tCpWaker"
   title       = "b00t control-plane waker"
@@ -220,9 +234,10 @@ resource "google_project_iam_custom_role" "cp_waker" {
 }
 
 resource "google_project_iam_member" "cp_waker_start" {
+  count   = local.is_public ? 1 : 0
   project = var.project_id
   role    = google_project_iam_custom_role.cp_waker.id
-  member  = "serviceAccount:${google_service_account.cp_waker.email}"
+  member  = "serviceAccount:${google_service_account.cp_waker[0].email}"
 
   condition {
     title       = "only-the-control-instance"
@@ -470,8 +485,10 @@ resource "google_service_account_iam_member" "ci_wif" {
 
 # ---------------------------------------------------------------------------
 # Scale-to-zero pingap waker (Cloud Run v2) — "public" mode only. In "tailnet"
-# mode the waker is a tailnet service on b00t-node minted from the cp_waker SA
-# (Phase 2.75); the SA + role below stay so that key can be issued.
+# mode the waker is a keyless k0s pod on vultr1 (_b00t_ deploy/k0s-waker),
+# SPIRE-federated as b00t-buildplane-ci (infra google-oidc-spire-buildplane.tf).
+# No key is issued from any SA for it. The cp_waker SA + binding above are
+# created only in "public" mode (see their count guards).
 # ---------------------------------------------------------------------------
 resource "google_cloud_run_v2_service" "cp_waker" {
   count      = local.is_public ? 1 : 0
@@ -486,7 +503,7 @@ resource "google_cloud_run_v2_service" "cp_waker" {
   deletion_protection = false
 
   template {
-    service_account = google_service_account.cp_waker.email
+    service_account = google_service_account.cp_waker[0].email
 
     scaling {
       min_instance_count = 0
