@@ -20,126 +20,126 @@
 
 ## Scope note: NATS
 
-Per operator instruction: do not invest in rebuilding/fixing the NATS layer
-(`b00t-lib-chat`'s `nats_transport.rs`) as part of this work. The only NATS-adjacent
-requirement is that inter-node (cross-machine) pipeline execution stays *feasible* —
-which it already is, via the existing, real `ComputeProvider` (RunPod/HF Jobs dispatch
-to remote compute) — no new transport work is needed to satisfy that. If a future need
-for pub/sub-style cross-node coordination emerges beyond simple job dispatch, revisit
-NATS then; it is out of scope here.
+# Per operator instruction: do not invest in rebuilding/fixing the NATS layer
+# (`b00t-lib-chat`'s `nats_transport.rs`) as part of this work. The only NATS-adjacent
+# requirement is that inter-node (cross-machine) pipeline execution stays *feasible* —
+# which it already is, via the existing, real `ComputeProvider` (RunPod/HF Jobs dispatch
+# to remote compute) — no new transport work is needed to satisfy that. If a future need
+# for pub/sub-style cross-node coordination emerges beyond simple job dispatch, revisit
+# NATS then; it is out of scope here.
 
 ## Decomposition — 3 independent sub-tasks + 2 dependent follow-ons
 
-Tasks 1-3 touch disjoint files and can run in parallel, isolated worktrees. Tasks 4-5
-depend on 1-3 landing first (sequenced after, not parallel with them).
+# Tasks 1-3 touch disjoint files and can run in parallel, isolated worktrees. Tasks 4-5
+# depend on 1-3 landing first (sequenced after, not parallel with them).
 
 ### Task 1 (independent, trivial): fix-forward `ufo-types` module framing
-- `~/.b00t/crates/ufo-types/src/lib.rs`'s module docs say "for the Tax-Lawyer platform"
-  despite `Cargo.toml`'s description already saying "+ b00t governance." The types
-  themselves are domain-generic (confirmed by direct read: nothing tax-specific in
-  `stereotype.rs`/`satisfies.rs`/`capability.rs`). One-line doc fix, not a redesign.
-- Verify `cargo test -p ufo-types` still passes untouched (doc-only change).
+# - `~/.b00t/crates/ufo-types/src/lib.rs`'s module docs say "for the Tax-Lawyer platform"
+#   despite `Cargo.toml`'s description already saying "+ b00t governance." The types
+#   themselves are domain-generic (confirmed by direct read: nothing tax-specific in
+#   `stereotype.rs`/`satisfies.rs`/`capability.rs`). One-line doc fix, not a redesign.
+# - Verify `cargo test -p ufo-types` still passes untouched (doc-only change).
 
 ### Task 2 (independent of 1 and 3): `DatumType::Pipeline`
-- Mirror `DatumType::Justfile` exactly: `datum_type_table!` entry
-  (`Pipeline => ["pipeline"] => ".pipeline"`), `SemanticClass::Skill` arm (alongside
-  `Job | Hook | Gate`).
-- New `datum_pipeline.rs` (mirrors `datum_justfile.rs`'s structure): `PipelineDatum`
-  struct implementing `DatumChecker`/`StatusProvider`/`FilterLogic`/
-  `ConstraintEvaluator`/`DatumProvider` (the same trait set `JustfileDatum` implements —
-  check that file first, match its shape, don't invent a new pattern).
-- This makes `*.pipeline.tomllm` files (already the naming convention `sam.pipeline.tomllm`
-  in app4dog uses, currently unregistered/free-form TOML) real, typed, discoverable
-  datums instead of ad-hoc files nothing validates.
+# - Mirror `DatumType::Justfile` exactly: `datum_type_table!` entry
+#   (`Pipeline => ["pipeline"] => ".pipeline"`), `SemanticClass::Skill` arm (alongside
+#   `Job | Hook | Gate`).
+# - New `datum_pipeline.rs` (mirrors `datum_justfile.rs`'s structure): `PipelineDatum`
+#   struct implementing `DatumChecker`/`StatusProvider`/`FilterLogic`/
+#   `ConstraintEvaluator`/`DatumProvider` (the same trait set `JustfileDatum` implements —
+#   check that file first, match its shape, don't invent a new pattern).
+# - This makes `*.pipeline.tomllm` files (already the naming convention `sam.pipeline.tomllm`
+#   in app4dog uses, currently unregistered/free-form TOML) real, typed, discoverable
+#   datums instead of ad-hoc files nothing validates.
 
 ### Task 3 (independent of 1 and 2, different files in the same crate): `JobExecutor` → `ComputeProvider` bridge
-- `~/.b00t/b00t-cli/src/job_executor.rs` currently only executes `JobTask::Bash`,
-  sequential-mode only (explicitly MVP-scoped per its own code comment). Two additions:
-  1. New `JobTask::Python { script: String, requirements: Vec<String>, ... }` variant in
-     `datum_job.rs`'s `JobTask` enum, executed the same way `Bash` is (shell out), but
-     via `python3 <script>` with a requirements-install step first (keep it simple —
-     don't build a full venv manager, a requirements.txt + pip install is enough for v1).
-  2. Bridge: give `JobExecutor` a path to dispatch a step via
-     `ComputeProvider::submit_batch_job` (from `commands/provider.rs`) instead of only
-     local `duct::cmd` shell-out — this is what lets a `JobDatum`'s steps run on
-     local-GPU/RunPod/HF, not just spawn a bare process. Keep the existing Bash-local
-     path working; add the provider-dispatch path as an alternative, selected per-step
-     (e.g. a step declares `backend: Option<RunnerBackend>` — `None` = today's local
-     shell-out behavior, `Some(backend)` = dispatch via `ComputeProvider`).
-  3. Parallel/fan-out mode: `JobConfig.mode` currently only supports `"sequential"`
-     (hard `bail!` otherwise). Add `"parallel"` mode — run all steps in one "wave"
-     concurrently (tokio join, not a full DAG scheduler — that's more than v1 needs),
-     collect all results before proceeding. This is what a future A/B fan-out
-     (N candidate stage implementations) will build on.
-- Explicit non-goal: do not build a general DAG engine here. `JobConfig.mode` gets
-  exactly two values (`sequential`, `parallel`) — a real DAG scheduler is out of scope
-  until there's a demonstrated need beyond "run these N things and wait for all."
+# - `~/.b00t/b00t-cli/src/job_executor.rs` currently only executes `JobTask::Bash`,
+#   sequential-mode only (explicitly MVP-scoped per its own code comment). Two additions:
+#   1. New `JobTask::Python { script: String, requirements: Vec<String>, ... }` variant in
+#      `datum_job.rs`'s `JobTask` enum, executed the same way `Bash` is (shell out), but
+#      via `python3 <script>` with a requirements-install step first (keep it simple —
+#      don't build a full venv manager, a requirements.txt + pip install is enough for v1).
+#   2. Bridge: give `JobExecutor` a path to dispatch a step via
+#      `ComputeProvider::submit_batch_job` (from `commands/provider.rs`) instead of only
+#      local `duct::cmd` shell-out — this is what lets a `JobDatum`'s steps run on
+#      local-GPU/RunPod/HF, not just spawn a bare process. Keep the existing Bash-local
+#      path working; add the provider-dispatch path as an alternative, selected per-step
+#      (e.g. a step declares `backend: Option<RunnerBackend>` — `None` = today's local
+#      shell-out behavior, `Some(backend)` = dispatch via `ComputeProvider`).
+#   3. Parallel/fan-out mode: `JobConfig.mode` currently only supports `"sequential"`
+#      (hard `bail!` otherwise). Add `"parallel"` mode — run all steps in one "wave"
+#      concurrently (tokio join, not a full DAG scheduler — that's more than v1 needs),
+#      collect all results before proceeding. This is what a future A/B fan-out
+#      (N candidate stage implementations) will build on.
+# - Explicit non-goal: do not build a general DAG engine here. `JobConfig.mode` gets
+#   exactly two values (`sequential`, `parallel`) — a real DAG scheduler is out of scope
+#   until there's a demonstrated need beyond "run these N things and wait for all."
 
 ### Task 4 (depends on 1+2 landing; app4dog repo, not this one): critter-keeper integration
-- Add `ufo-types` as a `git` dependency in `critter-keeper/Cargo.toml` (pinned rev —
-  the exact rev/tag is chosen once Task 1's fix is merged, not before).
-- Define the app4dog-side pipeline types using `ufo-types` directly per the mapping
-  table in `PHOTO-CRITTER-GENERATION-PIPELINE.tomllmd` §5.2 — do not reinvent
-  `Task`/`Attempt`/`ActionRecord`/`ReviewVerdict`/`Solution`, import and use them.
-- Define `PipelineExecutor` (`UfoStereotype::Kind`) +
-  `LocalPipelineExecutor`/`CloudPipelineExecutor` (`SubKind`s), each bridging to
-  `job_dispatch.rs`'s already-real `JobRuntime`/`RunnerBackend`.
-- NOT in scope for this task: the actual SAM runner / characteristic-identification
-  model work (that's Phase 2/3 of the app4dog pipeline doc, separate from this
-  foundation work).
+# - Add `ufo-types` as a `git` dependency in `critter-keeper/Cargo.toml` (pinned rev —
+#   the exact rev/tag is chosen once Task 1's fix is merged, not before).
+# - Define the app4dog-side pipeline types using `ufo-types` directly per the mapping
+#   table in `PHOTO-CRITTER-GENERATION-PIPELINE.tomllmd` §5.2 — do not reinvent
+#   `Task`/`Attempt`/`ActionRecord`/`ReviewVerdict`/`Solution`, import and use them.
+# - Define `PipelineExecutor` (`UfoStereotype::Kind`) +
+#   `LocalPipelineExecutor`/`CloudPipelineExecutor` (`SubKind`s), each bridging to
+#   `job_dispatch.rs`'s already-real `JobRuntime`/`RunnerBackend`.
+# - NOT in scope for this task: the actual SAM runner / characteristic-identification
+#   model work (that's Phase 2/3 of the app4dog pipeline doc, separate from this
+#   foundation work).
 
 ### Task 5 (depends on 2 landing): b00t-mcp exposure
-- ⚠️需 Correction from initial assumption: b00t-mcp's tool generation is **not fully
-  automatic** from `DatumType` variants — `derive_mcp.rs`'s `impl_mcp_tool!` macro must
-  be explicitly invoked per command (see existing calls in `b00t-mcp/src/*.rs` for the
-  pattern: `impl_mcp_tool!(StructName, "tool_name", ["cli","subcommand","path"])`).
-- ⚠️需 Second, deeper correction (found while starting Task 5, post-#656): "discoverable
-  the same way `b00t-cli justfile` commands are" is a **false premise** — there is no
-  `b00t-cli justfile` subcommand. Confirmed by direct search: `DatumType::Justfile` is
-  referenced in exactly one place outside `lib.rs`'s registration macro
-  (`datum_proof.rs`'s `prove_justfile` match arm). `CliExecutor` — implemented by
-  `CliDatum`, `JustfileDatum`, and now `PipelineDatum` — has **zero callers** anywhere in
-  `b00t-cli` or `b00t-mcp`. It is a fully-built trait with no CLI entry point wired to it
-  for any of its three implementors, not just `Pipeline`. This predates this plan; Task 2
-  did not introduce the gap, it just made it visible for a third type.
-- What Task 2's actual Definition-of-Done item 3 ("real, typed, `b00t .`-discoverable
-  datum") already means and already satisfies: the generic `b00t learn`/`b00t .`
-  datum-search path picks up `*.pipeline.tomllm` files the same way it picks up any
-  other typed datum (verified: `b00t learn systematic-debugging` resolves through this
-  path). That is NOT the same claim as "has a runnable CLI subcommand" — the original
-  Task 2 DoD item 2 ("`b00t-cli pipeline` subcommand(s) exist... consistent UX, not a
-  one-off") cannot be satisfied as written because its reference point (`b00t-cli
-  justfile`) does not exist to be consistent with.
-- Building `pipeline list`/`pipeline run` now means designing the **first-ever**
-  CLI dispatch surface for any `CliExecutor` implementor — a real architectural choice
-  (does `justfile`/`cli` get the same subcommand shape at the same time, or does
-  `pipeline` set a precedent alone?), not a "find and match" mirror job. Per this repo's
-  own stated preference (reuse proven patterns, don't invent architecture solo), this is
-  flagged for an operator decision rather than built speculatively. The closest existing
-  *proven* precedent for a multi-verb datum-type subcommand is `StoreCommands` in
-  `b00t-cli/src/commands/store.rs` (`Subcommand` enum + `handle_store_command` match) —
-  if/when this is greenlit, mirror that shape, not an imagined `justfile` one.
-- Verify locally (once built): restart the b00t-mcp process (however it's currently
-  launched — check whether it's spawned by a client config vs. a long-running process;
-  there's no systemd unit for it, confirmed) and confirm the new tool appears via
-  whatever local `b00t-mcp` listing/discovery mechanism exists.
+# - ⚠️需 Correction from initial assumption: b00t-mcp's tool generation is **not fully
+#   automatic** from `DatumType` variants — `derive_mcp.rs`'s `impl_mcp_tool!` macro must
+#   be explicitly invoked per command (see existing calls in `b00t-mcp/src/*.rs` for the
+#   pattern: `impl_mcp_tool!(StructName, "tool_name", ["cli","subcommand","path"])`).
+# - ⚠️需 Second, deeper correction (found while starting Task 5, post-#656): "discoverable
+#   the same way `b00t-cli justfile` commands are" is a **false premise** — there is no
+#   `b00t-cli justfile` subcommand. Confirmed by direct search: `DatumType::Justfile` is
+#   referenced in exactly one place outside `lib.rs`'s registration macro
+#   (`datum_proof.rs`'s `prove_justfile` match arm). `CliExecutor` — implemented by
+#   `CliDatum`, `JustfileDatum`, and now `PipelineDatum` — has **zero callers** anywhere in
+#   `b00t-cli` or `b00t-mcp`. It is a fully-built trait with no CLI entry point wired to it
+#   for any of its three implementors, not just `Pipeline`. This predates this plan; Task 2
+#   did not introduce the gap, it just made it visible for a third type.
+# - What Task 2's actual Definition-of-Done item 3 ("real, typed, `b00t .`-discoverable
+#   datum") already means and already satisfies: the generic `b00t learn`/`b00t .`
+#   datum-search path picks up `*.pipeline.tomllm` files the same way it picks up any
+#   other typed datum (verified: `b00t learn systematic-debugging` resolves through this
+#   path). That is NOT the same claim as "has a runnable CLI subcommand" — the original
+#   Task 2 DoD item 2 ("`b00t-cli pipeline` subcommand(s) exist... consistent UX, not a
+#   one-off") cannot be satisfied as written because its reference point (`b00t-cli
+#   justfile`) does not exist to be consistent with.
+# - Building `pipeline list`/`pipeline run` now means designing the **first-ever**
+#   CLI dispatch surface for any `CliExecutor` implementor — a real architectural choice
+#   (does `justfile`/`cli` get the same subcommand shape at the same time, or does
+#   `pipeline` set a precedent alone?), not a "find and match" mirror job. Per this repo's
+#   own stated preference (reuse proven patterns, don't invent architecture solo), this is
+#   flagged for an operator decision rather than built speculatively. The closest existing
+#   *proven* precedent for a multi-verb datum-type subcommand is `StoreCommands` in
+#   `b00t-cli/src/commands/store.rs` (`Subcommand` enum + `handle_store_command` match) —
+#   if/when this is greenlit, mirror that shape, not an imagined `justfile` one.
+# - Verify locally (once built): restart the b00t-mcp process (however it's currently
+#   launched — check whether it's spawned by a client config vs. a long-running process;
+#   there's no systemd unit for it, confirmed) and confirm the new tool appears via
+#   whatever local `b00t-mcp` listing/discovery mechanism exists.
 
 ## Definition of Done
-1. `cargo test -p ufo-types` and `cargo test -p b00t-cli` (or equivalent per-crate)
-   green, no regressions from baseline
-2. `b00t-cli pipeline` subcommand(s) exist, discoverable the same way `b00t-cli
-   justfile` commands are (consistent UX, not a one-off)
-3. A `*.pipeline.tomllm` file is a real, typed, `b00t .` -discoverable datum, not
-   free-form TOML
-4. `JobExecutor` can dispatch at least one step through `ComputeProvider` (proven with
-   a `local` provider test, mirroring how `job_dispatch.rs`'s existing tests avoid
-   needing a real `b00t` binary)
-5. `JobConfig.mode = "parallel"` runs steps concurrently and collects all results
-6. The new pipeline subcommand(s) are callable via b00t-mcp, verified locally
+# 1. `cargo test -p ufo-types` and `cargo test -p b00t-cli` (or equivalent per-crate)
+#    green, no regressions from baseline
+# 2. `b00t-cli pipeline` subcommand(s) exist, discoverable the same way `b00t-cli
+#    justfile` commands are (consistent UX, not a one-off)
+# 3. A `*.pipeline.tomllm` file is a real, typed, `b00t .` -discoverable datum, not
+#    free-form TOML
+# 4. `JobExecutor` can dispatch at least one step through `ComputeProvider` (proven with
+#    a `local` provider test, mirroring how `job_dispatch.rs`'s existing tests avoid
+#    needing a real `b00t` binary)
+# 5. `JobConfig.mode = "parallel"` runs steps concurrently and collects all results
+# 6. The new pipeline subcommand(s) are callable via b00t-mcp, verified locally
 
 ## Agent dispatch
 
-Tasks 1-3: independent-context sub-agents, isolated worktrees (this repo has active
-concurrent work in other worktrees — `task-517-tax-skills`, `runpod-ci-fix` — confirmed
-present; isolation avoids collision, not just paranoia). Task 4: app4dog repo, after 1+2
-merge. Task 5: after 2 merges.
+# Tasks 1-3: independent-context sub-agents, isolated worktrees (this repo has active
+# concurrent work in other worktrees — `task-517-tax-skills`, `runpod-ci-fix` — confirmed
+# present; isolation avoids collision, not just paranoia). Task 4: app4dog repo, after 1+2
+# merge. Task 5: after 2 merges.

@@ -1,83 +1,79 @@
----
-name: josh
-description: |
-  Josh ("Just One Single History") — a Rust-based git history transformation
-  platform. Fast, reversible git filtering enabling monorepo scaling. Provides
-  on-the-fly repo projections (subfolder → independent repo) with full history
-  preservation, GraphQL APIs for CI/build caching, and workspace composition.
-version: 1.0.0
-tags: [git, monorepo, filtering, history, proxy, workspace, scaling, josh]
-tier: frontier
-complexity: 7
-applies_to:
-  - "monorepo management"
-  - "git history filtering"
-  - "repo splitting"
-  - "CI/build caching"
-  - "distributed development"
-output_types: []
-depends_on: []
-unlocks: []
-metadata:
-  ufo_stereotype: Abstract
-  upstream: "https://github.com/josh-project/josh"
-  license: "MIT"
-  language: "Rust (89.7%), Go (6.2%)"
-  stars: 1900
-  latest_release: "r26.06.11"
----
+# b00t josh datum
+# 🤓 converted from stray YAML-frontmatter .tomllmd (task #115 datum-errors cleanup):
+#    original content preserved, reformatted as valid TOML frontmatter + comment-prose body
+
+[b00t]
+name = "josh"
+type = "reference"
+hint = "Josh (\"Just One Single History\") — a Rust-based git history transformation platform. Fast, reversible git filtering enabling monorepo scaling. Provides on-the-fly repo projections (subfolder → independent repo) with full history preservation, GraphQL APIs for CI/build caching, and workspace composition."
+version = "1.0.0"
+tags = ["git", "monorepo", "filtering", "history", "proxy", "workspace", "scaling", "josh"]
+tier = "frontier"
+complexity = 7
+applies_to = ["monorepo management", "git history filtering", "repo splitting", "CI/build caching", "distributed development"]
+depends_on = []
+unlocks = []
+
+[b00t.metadata]
+ufo_stereotype = "Abstract"
+upstream = "https://github.com/josh-project/josh"
+license = "MIT"
+language = "Rust (89.7%), Go (6.2%)"
+stars = 1900
+latest_release = "r26.06.11"
+
 ## Josh — Git at Scale Platform
 
-Josh (Just One Single History) addresses monorepo scaling: work in any size
-codebase without slowing change velocity. Core insight: repo boundaries are
-tooling limitations, not architectural requirements.
+# Josh (Just One Single History) addresses monorepo scaling: work in any size
+# codebase without slowing change velocity. Core insight: repo boundaries are
+# tooling limitations, not architectural requirements.
 
 ### Use Cases
 
-1. **Repo filtering**: Subfolder of monorepo → independent repo with full
-   history. E.g. `git clone https://git.josh-project.dev/josh.git:/docs.git`
-   clones just the `docs/` subdirectory as a standalone repo.
+# 1. **Repo filtering**: Subfolder of monorepo → independent repo with full
+#    history. E.g. `git clone https://git.josh-project.dev/josh.git:/docs.git`
+#    clones just the `docs/` subdirectory as a standalone repo.
 
-2. **CI/Build caching**: GraphQL API checks if any subproject has already
-   been successfully built — no checkout needed. "Has this code been built
-   before?" for any projection.
+# 2. **CI/Build caching**: GraphQL API checks if any subproject has already
+#    been successfully built — no checkout needed. "Has this code been built
+#    before?" for any projection.
 
-3. **Workspaces**: Persisted, versioned filter definitions. Declarative
-   multi-repo layout within a single history.
+# 3. **Workspaces**: Persisted, versioned filter definitions. Declarative
+#    multi-repo layout within a single history.
 
 ### Components
 
-| Component | Purpose |
-|-----------|---------|
-| josh-cli | Local tool for partial repo projections |
-| josh-proxy | Git HTTP/SSH proxy with on-the-fly history transformation + shared cache |
-| josh-filter | Core history rewriting engine |
-| josh-graphql | GraphQL API for repo state introspection |
-| josh-workspace | Declarative workspace composition (`.josh` files) |
-| josh-compose | Containerized build orchestrator on workspace/filter concepts |
+# | Component | Purpose |
+# |-----------|---------|
+# | josh-cli | Local tool for partial repo projections |
+# | josh-proxy | Git HTTP/SSH proxy with on-the-fly history transformation + shared cache |
+# | josh-filter | Core history rewriting engine |
+# | josh-graphql | GraphQL API for repo state introspection |
+# | josh-workspace | Declarative workspace composition (`.josh` files) |
+# | josh-compose | Containerized build orchestrator on workspace/filter concepts |
 
 ### Relevance to b00t
 
-- **Submodule elimination**: Josh could replace the 12+ vendor submodules
-  with filtered projections from a unified history. Each `vendor/X` becomes
-  a josh filter `::vendor/X/` — clone once, project infinitely.
-  Zero submodule drift, zero `git submodule update --init --recursive`.
-- **GitButler foundation**: GitButler's stacked branches and virtual branch
-  model builds on josh-style history rewriting. A b00t + josh + gitbutler
-  stack gives: josh for submodule/projection backend, gitbutler for agent
-  git UX, b00t for task dispatch across the unified history.
-- **Worktree isolation**: Current worktree-based agent sandboxing (commit
-  a41ebba) could be augmented with josh proxy for zero-clone agent contexts
-- **Evidence graph**: GraphQL introspection of monorepo state maps to
-  NeumannStore fact graphs — "which agents touched what files?"
+# - **Submodule elimination**: Josh could replace the 12+ vendor submodules
+#   with filtered projections from a unified history. Each `vendor/X` becomes
+#   a josh filter `::vendor/X/` — clone once, project infinitely.
+#   Zero submodule drift, zero `git submodule update --init --recursive`.
+# - **GitButler foundation**: GitButler's stacked branches and virtual branch
+#   model builds on josh-style history rewriting. A b00t + josh + gitbutler
+#   stack gives: josh for submodule/projection backend, gitbutler for agent
+#   git UX, b00t for task dispatch across the unified history.
+# - **Worktree isolation**: Current worktree-based agent sandboxing (commit
+#   a41ebba) could be augmented with josh proxy for zero-clone agent contexts
+# - **Evidence graph**: GraphQL introspection of monorepo state maps to
+#   NeumannStore fact graphs — "which agents touched what files?"
 
 ### Filters
 
-Josh filters describe desired transformations. Core types:
-- `::prefix/` — include only paths matching prefix
-- `::*/glob` — glob-based inclusion
-- `::!exclude` — exclusion filters
-- Workspace composition via `workspace.josh` files
+# Josh filters describe desired transformations. Core types:
+# - `::prefix/` — include only paths matching prefix
+# - `::*/glob` — glob-based inclusion
+# - `::!exclude` — exclusion filters
+# - Workspace composition via `workspace.josh` files
 
 # b00t:map v1
 # summary: Josh — git history transformation platform for monorepo scaling (Rust, MIT)

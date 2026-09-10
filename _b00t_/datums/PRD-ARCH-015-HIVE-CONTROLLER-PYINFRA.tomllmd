@@ -10,7 +10,7 @@ id     = "PRD-ARCH-015-HIVE-CONTROLLER-PYINFRA"
 title  = "Persistent hive controller daemon + pyinfra ouroboros operations"
 status = "proposed"
 tier   = "frontier"
-closes_task = null
+closes_task = 0
 
 # ─── Executive Summary ────────────────────────────────────────────────────────
 # b00t currently has agent coordination over Redis but no persistent daemon.

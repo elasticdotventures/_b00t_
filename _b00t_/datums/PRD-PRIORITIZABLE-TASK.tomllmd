@@ -59,54 +59,7 @@ operator_triage    = "b00t task list only — no filtering, grouping, or scoring
 ## Schema Extension
 [task_schema]
 # New fields appended to existing task JSON schema
-new_fields = {
-    "checklist": {
-        "type": "array",
-        "description": "Sub-items when task is decomposed into checklist",
-        "items": {
-            "id": "string (slug)",
-            "label": "string",
-            "status": "pending|done|blocked|skipped",
-            "verification": "string (how to verify this item is done)",
-            "output_ref": "string (path to output artifact)"
-        }
-    },
-    "graph_links": {
-        "type": "array",
-        "description": "Knowledge graph node references for traceability",
-        "items": {
-            "node_type": "Function|File|PR|Issue|Datum|Agent",
-            "qualified_name": "string",
-            "relationship": "produces|modifies|depends_on|reviews|validates",
-            "project": "string (codebase-memory project name)"
-        }
-    },
-    "risk_score": {
-        "type": "float",
-        "description": "0.0-1.0 risk that this task produces hallucinated output",
-        "factors": ["author_experience", "complexity", "dependency_depth", "novelty"]
-    },
-    "review_policy": {
-        "type": "string",
-        "description": "How this task's output should be reviewed",
-        "enum": ["auto-approve", "checklist", "single-reviewer", "multi-framework", "adversarial-bounce"]
-    },
-    "blocked_by": {
-        "type": "array",
-        "description": "Task IDs that block this task (auto-computed from dep graph)",
-        "items": "uint"
-    },
-    "unblock_conditions": {
-        "type": "object",
-        "description": "Conditions that auto-unblock when met",
-        "pattern": {
-            "all_deps_done": "bool",
-            "review_passed": "bool", 
-            "tests_green": "bool",
-            "operator_approval": "bool"
-        }
-    }
-}
+new_fields = { checklist = { type = "array", description = "Sub-items when task is decomposed into checklist", items = { id = "string (slug)", label = "string", status = "pending|done|blocked|skipped", verification = "string (how to verify this item is done)", output_ref = "string (path to output artifact)" } }, graph_links = { type = "array", description = "Knowledge graph node references for traceability", items = { node_type = "Function|File|PR|Issue|Datum|Agent", qualified_name = "string", relationship = "produces|modifies|depends_on|reviews|validates", project = "string (codebase-memory project name)" } }, risk_score = { type = "float", description = "0.0-1.0 risk that this task produces hallucinated output", factors = ["author_experience", "complexity", "dependency_depth", "novelty"] }, review_policy = { type = "string", description = "How this task's output should be reviewed", enum = ["auto-approve", "checklist", "single-reviewer", "multi-framework", "adversarial-bounce"] }, blocked_by = { type = "array", description = "Task IDs that block this task (auto-computed from dep graph)", items = "uint" }, unblock_conditions = { type = "object", description = "Conditions that auto-unblock when met", pattern = { all_deps_done = "bool", review_passed = "bool", tests_green = "bool", operator_approval = "bool" } } }
 
 # ── Knowledge Graph Linkages ─────────────────────────────────────────────────
 
@@ -116,42 +69,12 @@ new_fields = {
 # Edge types connecting tasks to code artifacts:
 
 edges = [
-    {
-        "edge": "TASK_PRODUCES",
-        "from": "PrioritizableTask",
-        "to": "Function|File",
-        "meaning": "This task created this code"
-    },
-    {
-        "edge": "TASK_MODIFIES", 
-        "from": "PrioritizableTask",
-        "to": "Function|File",
-        "meaning": "This task changed this code"
-    },
-    {
-        "edge": "TASK_REVIEWS",
-        "from": "PrioritizableTask",
-        "to": "PR|Commit",
-        "meaning": "This task reviews this artifact"
-    },
-    {
-        "edge": "TASK_DEPENDS_ON",
-        "from": "PrioritizableTask",
-        "to": "PrioritizableTask",
-        "meaning": "Upstream dependency (blocked until done)"
-    },
-    {
-        "edge": "TASK_VALIDATES",
-        "from": "PrioritizableTask", 
-        "to": "PrioritizableTask",
-        "meaning": "This task validates the output of another task"
-    },
-    {
-        "edge": "TASK_REFERENCES",
-        "from": "PrioritizableTask",
-        "to": "Datum|Issue",
-        "meaning": "This task references this datum or issue"
-    }
+    { edge = "TASK_PRODUCES", from = "PrioritizableTask", to = "Function|File", meaning = "This task created this code" },
+    { edge = "TASK_MODIFIES", from = "PrioritizableTask", to = "Function|File", meaning = "This task changed this code" },
+    { edge = "TASK_REVIEWS", from = "PrioritizableTask", to = "PR|Commit", meaning = "This task reviews this artifact" },
+    { edge = "TASK_DEPENDS_ON", from = "PrioritizableTask", to = "PrioritizableTask", meaning = "Upstream dependency (blocked until done)" },
+    { edge = "TASK_VALIDATES", from = "PrioritizableTask", to = "PrioritizableTask", meaning = "This task validates the output of another task" },
+    { edge = "TASK_REFERENCES", from = "PrioritizableTask", to = "Datum|Issue", meaning = "This task references this datum or issue" }
 ]
 
 ## Query Power
@@ -172,41 +95,13 @@ graph_queries = [
 # Tools that make operators more effective at task organization and triage
 
 tools = [
-    {
-        "name": "b00t task graph [--format mermaid|json]",
-        "description": "Render task dependency graph. Shows blocked/unblocked, parallel-ready tasks.",
-        "example": "b00t task graph --format mermaid > .b00t/task-graph.md"
-    },
-    {
-        "name": "b00t task checklist <id>",
-        "description": "Toggle a task into checklist mode. Bulk-add sub-items from template or LLM decomposition.",
-        "example": "b00t task checklist 16 --decompose 'review all datum files for tail-map compliance'"
-    },
-    {
-        "name": "b00t task promote <id>",
-        "description": "Promote a checklist item or finding to its own task. Creates dependency link automatically.",
-        "example": "b00t task promote 16 --item 3  # promotes checklist item 3 to new task"
-    },
-    {
-        "name": "b00t task triage [--risk] [--stale] [--blocked]",
-        "description": "Operator triage view: sort by risk score, flag stale tasks, show blocked chain.",
-        "example": "b00t task triage --risk --blocked  # what needs attention now?"
-    },
-    {
-        "name": "b00t task link <id> --node <qualified_name> --rel produces",
-        "description": "Link task to knowledge graph node. Creates TASK_PRODUCES edge.",
-        "example": "b00t task link 16 --node 'b00t-cli/src/task.rs' --rel modifies"
-    },
-    {
-        "name": "b00t task verify <id> [--checklist]",
-        "description": "Verify task completion: run checklist verifications, check graph linkages, validate output.",
-        "example": "b00t task verify 16 --checklist"
-    },
-    {
-        "name": "b00t task batch <status> [--limit N]",
-        "description": "Batch operations: mark multiple tasks, bulk-link, bulk-triage.",
-        "example": "b00t task batch blocked --mark ready  # unblock all satisfied dependencies"
-    }
+    { name = "b00t task graph [--format mermaid|json]", description = "Render task dependency graph. Shows blocked/unblocked, parallel-ready tasks.", example = "b00t task graph --format mermaid > .b00t/task-graph.md" },
+    { name = "b00t task checklist <id>", description = "Toggle a task into checklist mode. Bulk-add sub-items from template or LLM decomposition.", example = "b00t task checklist 16 --decompose 'review all datum files for tail-map compliance'" },
+    { name = "b00t task promote <id>", description = "Promote a checklist item or finding to its own task. Creates dependency link automatically.", example = "b00t task promote 16 --item 3 # promotes checklist item 3 to new task" },
+    { name = "b00t task triage [--risk] [--stale] [--blocked]", description = "Operator triage view: sort by risk score, flag stale tasks, show blocked chain.", example = "b00t task triage --risk --blocked # what needs attention now?" },
+    { name = "b00t task link <id> --node <qualified_name> --rel produces", description = "Link task to knowledge graph node. Creates TASK_PRODUCES edge.", example = "b00t task link 16 --node 'b00t-cli/src/task.rs' --rel modifies" },
+    { name = "b00t task verify <id> [--checklist]", description = "Verify task completion: run checklist verifications, check graph linkages, validate output.", example = "b00t task verify 16 --checklist" },
+    { name = "b00t task batch <status> [--limit N]", description = "Batch operations: mark multiple tasks, bulk-link, bulk-triage.", example = "b00t task batch blocked --mark ready # unblock all satisfied dependencies" }
 ]
 
 ## Just Recipe Syntax Sugar
@@ -214,31 +109,11 @@ tools = [
 # Just recipes that make common operator workflows one-liners
 
 recipes = [
-    {
-        "recipe": "just task-graph",
-        "desc": "Render current task graph to terminal",
-        "impl": "b00t task graph --format mermaid | mermaid-cli",
-    },
-    {
-        "recipe": "just task-next-batch",
-        "desc": "Show next N parallel-ready tasks",
-        "impl": "b00t task triage --ready --limit 5",
-    },
-    {
-        "recipe": "just task-review-queue",
-        "desc": "Show all review tasks with risk scores",
-        "impl": "b00t task triage --tag reviewer --risk",
-    },
-    {
-        "recipe": "just task-blocked-chain <id>",
-        "desc": "Show what's blocking this task and what it blocks",
-        "impl": "b00t task graph --root <id> --direction both",
-    },
-    {
-        "recipe": "just task-checklist-all",
-        "desc": "Run verification on all active checklist tasks",
-        "impl": "b00t task triage --checklist --verify",
-    }
+    { recipe = "just task-graph", desc = "Render current task graph to terminal", impl = "b00t task graph --format mermaid | mermaid-cli" },
+    { recipe = "just task-next-batch", desc = "Show next N parallel-ready tasks", impl = "b00t task triage --ready --limit 5" },
+    { recipe = "just task-review-queue", desc = "Show all review tasks with risk scores", impl = "b00t task triage --tag reviewer --risk" },
+    { recipe = "just task-blocked-chain <id>", desc = "Show what's blocking this task and what it blocks", impl = "b00t task graph --root <id> --direction both" },
+    { recipe = "just task-checklist-all", desc = "Run verification on all active checklist tasks", impl = "b00t task triage --checklist --verify" }
 ]
 
 # ── Hallucination vs Eureka — The Reviewer's Triage Problem ───────────────────
@@ -278,48 +153,12 @@ eureka_indicators = [
 
 [implementation]
 phases = [
-    {
-        "phase": 1,
-        "name": "Checklist Support",
-        "description": "Add checklist array to task schema. b00t task checklist <id> creates/decomposes.",
-        "effort": "ch0nky",
-        "depends_on": []
-    },
-    {
-        "phase": 2,
-        "name": "Graph Linkages",
-        "description": "Add graph_links array. b00t task link creates edges. trace_path works on tasks.",
-        "effort": "ch0nky",
-        "depends_on": ["phase-1"]
-    },
-    {
-        "phase": 3,
-        "name": "Auto-Unblock",
-        "description": "unblock_conditions evaluated after task done. Auto-transitions blocked→pending.",
-        "effort": "sm0l",
-        "depends_on": ["phase-2"]
-    },
-    {
-        "phase": 4,
-        "name": "Risk Scoring",
-        "description": "risk_score computed from author/hotness/complexity/novelty. review_policy auto-assigned.",
-        "effort": "ch0nky",
-        "depends_on": ["phase-2"]
-    },
-    {
-        "phase": 5,
-        "name": "Operator Triage",
-        "description": "b00t task triage, graph, batch commands. just sugar recipes.",
-        "effort": "sm0l",
-        "depends_on": ["phase-3", "phase-4"]
-    },
-    {
-        "phase": 6,
-        "name": "Signal Detection",
-        "description": "Automated hallucination/eureka indicators. Links to codebase-memory for verification.",
-        "effort": "frontier",
-        "depends_on": ["phase-4"]
-    }
+    { phase = 1, name = "Checklist Support", description = "Add checklist array to task schema. b00t task checklist <id> creates/decomposes.", effort = "ch0nky", depends_on = [] },
+    { phase = 2, name = "Graph Linkages", description = "Add graph_links array. b00t task link creates edges. trace_path works on tasks.", effort = "ch0nky", depends_on = ["phase-1"] },
+    { phase = 3, name = "Auto-Unblock", description = "unblock_conditions evaluated after task done. Auto-transitions blocked→pending.", effort = "sm0l", depends_on = ["phase-2"] },
+    { phase = 4, name = "Risk Scoring", description = "risk_score computed from author/hotness/complexity/novelty. review_policy auto-assigned.", effort = "ch0nky", depends_on = ["phase-2"] },
+    { phase = 5, name = "Operator Triage", description = "b00t task triage, graph, batch commands. just sugar recipes.", effort = "sm0l", depends_on = ["phase-3", "phase-4"] },
+    { phase = 6, name = "Signal Detection", description = "Automated hallucination/eureka indicators. Links to codebase-memory for verification.", effort = "frontier", depends_on = ["phase-4"] }
 ]
 
 # ── Success Metrics ──────────────────────────────────────────────────────────

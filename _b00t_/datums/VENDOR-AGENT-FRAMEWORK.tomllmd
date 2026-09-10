@@ -32,113 +32,113 @@ review_required = false
 
 ## Core Concepts
 
-| Concept    | Role                                                |
-|------------|-----------------------------------------------------|
-| Executors  | Individual processing units — AI agents or functions|
-| Edges      | Define message flow and routing between executors   |
-| Events     | Provide observability into workflow execution       |
+# | Concept    | Role                                                |
+# |------------|-----------------------------------------------------|
+# | Executors  | Individual processing units — AI agents or functions|
+# | Edges      | Define message flow and routing between executors   |
+# | Events     | Provide observability into workflow execution       |
 
 ## Package Architecture (31 packages)
 
-```
-python/packages/
-├── core/              # agent_framework: Agent, Tool, WorkflowBuilder, @executor
-├── orchestrations/    # SequentialBuilder, ConcurrentBuilder, HandoffBuilder,
-│                      #   GroupChatBuilder, MagenticBuilder
-├── declarative/       # YAML-driven agent/workflow factories
-├── openai/            # OpenAI connector
-├── anthropic/         # Anthropic connector
-├── ollama/            # Ollama connector (local models — key for b00t sm0l tier)
-├── gemini/            # Google Gemini connector
-├── foundry/           # Azure Foundry provider
-├── github_copilot/    # GitHub Copilot SDK
-├── bedrock/           # AWS Bedrock connector
-├── tools/             # Shared tool utilities
-├── ag-ui/             # Agent UI components
-├── mem0/              # Memory layer
-├── redis/             # Redis persistence (aligns with b00t-redis)
-└── ...                # 17 more packages (azure-*, durabletask, devui, etc.)
-```
+# ```
+# python/packages/
+# ├── core/              # agent_framework: Agent, Tool, WorkflowBuilder, @executor
+# ├── orchestrations/    # SequentialBuilder, ConcurrentBuilder, HandoffBuilder,
+# │                      #   GroupChatBuilder, MagenticBuilder
+# ├── declarative/       # YAML-driven agent/workflow factories
+# ├── openai/            # OpenAI connector
+# ├── anthropic/         # Anthropic connector
+# ├── ollama/            # Ollama connector (local models — key for b00t sm0l tier)
+# ├── gemini/            # Google Gemini connector
+# ├── foundry/           # Azure Foundry provider
+# ├── github_copilot/    # GitHub Copilot SDK
+# ├── bedrock/           # AWS Bedrock connector
+# ├── tools/             # Shared tool utilities
+# ├── ag-ui/             # Agent UI components
+# ├── mem0/              # Memory layer
+# ├── redis/             # Redis persistence (aligns with b00t-redis)
+# └── ...                # 17 more packages (azure-*, durabletask, devui, etc.)
+# ```
 
 ## Key Interfaces
 
-- **Agent** — Core class: `Agent(client, name, instructions, tools=[...], description=...)`
-  - `agent.run(message)` — invoke agent
-  - `client.as_agent(name, instructions)` — inline agent from LLM client
-- **@tool decorator** — Define skills as typed Python functions: `@tool def my_skill(...) -> str`
-- **WorkflowBuilder** — Low-level typed data-flow graph builder with `add_edge()`, `yield_output()`
-- **Orchestration Builders** (high-level):
-  - `SequentialBuilder` — chain agents A→B→C
-  - `ConcurrentBuilder` — run agents in parallel, optionally compare outputs
-  - `HandoffBuilder` — decentralized routing: agents decide who handles next
-  - `GroupChatBuilder` — round-robin conversation with termination conditions
-  - `MagenticBuilder` — manager-worker: one agent delegates to specialists
-- **MCP Integration** — `MCPStdioTool`, `MCPStreamableHTTPTool`, `MCPWebsocketTool`
-  - Connect any MCP server as an agent tool — key b00t integration point
-- **Declarative Agents** — YAML-driven agent/workflow creation via `AgentFactory`, `WorkflowFactory`
-- **AgentThread** — Persistent conversation thread with history
+# - **Agent** — Core class: `Agent(client, name, instructions, tools=[...], description=...)`
+#   - `agent.run(message)` — invoke agent
+#   - `client.as_agent(name, instructions)` — inline agent from LLM client
+# - **@tool decorator** — Define skills as typed Python functions: `@tool def my_skill(...) -> str`
+# - **WorkflowBuilder** — Low-level typed data-flow graph builder with `add_edge()`, `yield_output()`
+# - **Orchestration Builders** (high-level):
+#   - `SequentialBuilder` — chain agents A→B→C
+#   - `ConcurrentBuilder` — run agents in parallel, optionally compare outputs
+#   - `HandoffBuilder` — decentralized routing: agents decide who handles next
+#   - `GroupChatBuilder` — round-robin conversation with termination conditions
+#   - `MagenticBuilder` — manager-worker: one agent delegates to specialists
+# - **MCP Integration** — `MCPStdioTool`, `MCPStreamableHTTPTool`, `MCPWebsocketTool`
+#   - Connect any MCP server as an agent tool — key b00t integration point
+# - **Declarative Agents** — YAML-driven agent/workflow creation via `AgentFactory`, `WorkflowFactory`
+# - **AgentThread** — Persistent conversation thread with history
 
 ## b00t Integration Strategy
 
 ### Tier Alignment
 
-| b00t Tier   | MAF Pattern                 | LLM Backend     |
-|-------------|-----------------------------|-----------------|
-| sm0l        | Single Agent + @tool        | Ollama (local)  |
-| ch0nky      | Sequential/Concurrent       | Ollama/OpenAI   |
-| frontier    | HandoffBuilder/Magentic     | Claude/OpenAI   |
+# | b00t Tier   | MAF Pattern                 | LLM Backend     |
+# |-------------|-----------------------------|-----------------|
+# | sm0l        | Single Agent + @tool        | Ollama (local)  |
+# | ch0nky      | Sequential/Concurrent       | Ollama/OpenAI   |
+# | frontier    | HandoffBuilder/Magentic     | Claude/OpenAI   |
 
 ### MCP Bridge
 
-MAF's MCP tool classes provide the bridge between b00t's MCP servers and MAF agents:
+# MAF's MCP tool classes provide the bridge between b00t's MCP servers and MAF agents:
 
-```python
-from agent_framework.tools import MCPStdioTool
+# ```python
+# from agent_framework.tools import MCPStdioTool
 # b00t MCP servers exposed as agent tools
-b00t_mcp = MCPStdioTool(command="b00t-cli", args=["mcp", "serve"])
-agent = Agent(client=client, name="b00t-agent", tools=[b00t_mcp])
-```
+# b00t_mcp = MCPStdioTool(command="b00t-cli", args=["mcp", "serve"])
+# agent = Agent(client=client, name="b00t-agent", tools=[b00t_mcp])
+# ```
 
 ### Goal-Driven Development with Review Handoffs
 
-MAF's `MagenticBuilder` + `HandoffBuilder` map directly to the b00t crew hierarchy:
+# MAF's `MagenticBuilder` + `HandoffBuilder` map directly to the b00t crew hierarchy:
 
-```
-Goal → MagenticBuilder (captain)
-  ├── Sequential (implementer → reviewer)  [ch0nky tier]
-  ├── Concurrent (sm0l parallel tests)     [sm0l tier]
-  └── HandoffBuilder (specialist agents)   [frontier tier]
-```
+# ```
+# Goal → MagenticBuilder (captain)
+#   ├── Sequential (implementer → reviewer)  [ch0nky tier]
+#   ├── Concurrent (sm0l parallel tests)     [sm0l tier]
+#   └── HandoffBuilder (specialist agents)   [frontier tier]
+# ```
 
 ## Security Considerations
 
-- MCP tools execute arbitrary commands — validate inputs via b00t bouncer
-- Agent `instructions` are prompt-injection surface — use guard rails
-- Ollama connector runs local models — no data exfiltration risk
-- `@tool` functions have full Python access — sandbox via subprocess/podman if needed
-- Redis persistence package aligns with b00t-redis for shared agent state
+# - MCP tools execute arbitrary commands — validate inputs via b00t bouncer
+# - Agent `instructions` are prompt-injection surface — use guard rails
+# - Ollama connector runs local models — no data exfiltration risk
+# - `@tool` functions have full Python access — sandbox via subprocess/podman if needed
+# - Redis persistence package aligns with b00t-redis for shared agent state
 
 ## Build Notes
 
-Install the Python SDK for development:
-```bash
-cd vendor/agent-framework/python
-uv sync                    # Install all dependencies
-uv pip install -e .        # Editable install of agent-framework
-```
+# Install the Python SDK for development:
+# ```bash
+# cd vendor/agent-framework/python
+# uv sync                    # Install all dependencies
+# uv pip install -e .        # Editable install of agent-framework
+# ```
 
-Run samples:
-```bash
-cd vendor/agent-framework/python/samples
-python basic_agent.py
-```
+# Run samples:
+# ```bash
+# cd vendor/agent-framework/python/samples
+# python basic_agent.py
+# ```
 
 ## Dependencies
 
-- Python ≥ 3.10
-- uv (Python package manager — aligns with b00t's uv requirement)
-- Optional: Ollama (for local sm0l-tier models)
-- Optional: Redis (for persistent agent state — aligns with b00t-redis)
+# - Python ≥ 3.10
+# - uv (Python package manager — aligns with b00t's uv requirement)
+# - Optional: Ollama (for local sm0l-tier models)
+# - Optional: Redis (for persistent agent state — aligns with b00t-redis)
 
 # b00t:map v1
 # summary: Microsoft Agent Framework — vendor datum with architecture, package map, b00t integration strategy, and MCP bridge patterns

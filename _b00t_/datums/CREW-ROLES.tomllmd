@@ -26,113 +26,113 @@ content = "stable"
 
 ## ── Crew Role Definitions ──────────────────────────────────────────────────────
 
-Each crew member has a `role` (authority tier) and optional `captain` flag.
-Only one agent per crew has `captain = true`.
+# Each crew member has a `role` (authority tier) and optional `captain` flag.
+# Only one agent per crew has `captain = true`.
 
-Role names are the four canonical HiveCrew identifiers defined in
-`_b00t_/linkml/schema/hive_role_vocabulary.yaml`, which is the source of truth
-(b00t-c0re-role's `KnownRole` is coherence-tested against it). Descriptions
-below mirror that schema's `enums.HiveRole.permissible_values`.
+# Role names are the four canonical HiveCrew identifiers defined in
+# `_b00t_/linkml/schema/hive_role_vocabulary.yaml`, which is the source of truth
+# (b00t-c0re-role's `KnownRole` is coherence-tested against it). Descriptions
+# below mirror that schema's `enums.HiveRole.permissible_values`.
 
-| Role | Captain? | Authority | Description | Agent Examples |
-|------|----------|-----------|-------------|----------------|
-| executive | true (only one) | Full command | Hive-level decision authority — release gate, tier routing, resource management. Commands the crew, sets mission, delegates tasks, manages lifecycle | executive |
-| worker | false | Task execution | Default hive worker — general-purpose executor with governance safety gates. A single generalized name, no sub-stereotyping (contrast with specialist) | ralph, pi |
-| operator | false | Dispatch + recruitment | Crew dispatch, recruitment, and specialist routing — spins typed crews via k0mmand3r; administrative privileges (recruits, trains, enlists agents). Previously two separate roles across two parallel role systems; unified as one (#905/#909) | operator |
-| specialist | false | Domain expertise | Domain-specific work — an open-ended stereotype family, not a single fixed meaning. The bare "specialist" name covers unspecified domain work; specific stereotypes (e.g. "appprovider", "rust-specialist", "security-auditor") resolve into this same role with their name preserved for role-datum lookup | alpha, beta, experiment-controller |
+# | Role | Captain? | Authority | Description | Agent Examples |
+# |------|----------|-----------|-------------|----------------|
+# | executive | true (only one) | Full command | Hive-level decision authority — release gate, tier routing, resource management. Commands the crew, sets mission, delegates tasks, manages lifecycle | executive |
+# | worker | false | Task execution | Default hive worker — general-purpose executor with governance safety gates. A single generalized name, no sub-stereotyping (contrast with specialist) | ralph, pi |
+# | operator | false | Dispatch + recruitment | Crew dispatch, recruitment, and specialist routing — spins typed crews via k0mmand3r; administrative privileges (recruits, trains, enlists agents). Previously two separate roles across two parallel role systems; unified as one (#905/#909) | operator |
+# | specialist | false | Domain expertise | Domain-specific work — an open-ended stereotype family, not a single fixed meaning. The bare "specialist" name covers unspecified domain work; specific stereotypes (e.g. "appprovider", "rust-specialist", "security-auditor") resolve into this same role with their name preserved for role-datum lookup | alpha, beta, experiment-controller |
 
 ## ── Legacy Role Names ───────────────────────────────────────────────────────────
 
-Pre-unification datums and persisted crew metadata used the older
-`b00t-c0re-hierarchy::Role` names. They are read for backward compatibility and
-mapped as below; write the canonical name in new datums.
+# Pre-unification datums and persisted crew metadata used the older
+# `b00t-c0re-hierarchy::Role` names. They are read for backward compatibility and
+# mapped as below; write the canonical name in new datums.
 
-| Legacy Name | Canonical Name | Note |
-|-------------|----------------|------|
-| captain | executive | Same role; the `captain = true` boolean flag is unchanged |
-| executor | worker | The general task-runner |
-| operator | operator | Unchanged name; see the resolved collision above |
-| specialist | specialist | Unchanged |
-| bouncer | (retired) | No 1:1 replacement — quality gating is embedded per agent datum; falls back to specialist with the name preserved |
+# | Legacy Name | Canonical Name | Note |
+# |-------------|----------------|------|
+# | captain | executive | Same role; the `captain = true` boolean flag is unchanged |
+# | executor | worker | The general task-runner |
+# | operator | operator | Unchanged name; see the resolved collision above |
+# | specialist | specialist | Unchanged |
+# | bouncer | (retired) | No 1:1 replacement — quality gating is embedded per agent datum; falls back to specialist with the name preserved |
 
 ## ── Assignment Rules ────────────────────────────────────────────────────────────
 
-These rules are evaluated by the operator during crew formation:
+# These rules are evaluated by the operator during crew formation:
 
-| Rule | Condition | Action |
-|------|-----------|--------|
-| unique-captain | Only one agent with `captain = true` per crew | Reject duplicate captains |
-| role-unique | No duplicate roles for identical crew scope | Warn on duplicate roles |
-| captain-mandatory | Every crew must have exactly one agent with `captain = true` | The executive-role agent is always the default |
-| operator-optional | Operator is deployed on-demand by the executive | Not part of standing crew |
-| bouncer-default | Quality gates enabled by default for all agents | Embedded in each agent datum |
+# | Rule | Condition | Action |
+# |------|-----------|--------|
+# | unique-captain | Only one agent with `captain = true` per crew | Reject duplicate captains |
+# | role-unique | No duplicate roles for identical crew scope | Warn on duplicate roles |
+# | captain-mandatory | Every crew must have exactly one agent with `captain = true` | The executive-role agent is always the default |
+# | operator-optional | Operator is deployed on-demand by the executive | Not part of standing crew |
+# | bouncer-default | Quality gates enabled by default for all agents | Embedded in each agent datum |
 
 ## ── Crew Lifecycle ──────────────────────────────────────────────────────────────
 
-Every crew member progresses through these lifecycle stages:
+# Every crew member progresses through these lifecycle stages:
 
-| Phase | Trigger | Description | Responsible |
-|-------|---------|-------------|-------------|
-| FORM | Executive initiates crew formation | Define crew mission, identify required roles | Executive |
-| ASSIGN | Operator scouts candidates | Match candidates to roles via capability assessment | Operator |
-| TRAIN | Operator executes training plans | grok learn for role-specific skills, context ingestion | Operator |
-| DEPLOY | Executive activates crew | Register sub-agents, establish IPC channels, enable quality gates | Executive |
-| REVIEW | Executive or Operator evaluates | Performance review, capability score update, rotation decision | Executive/Operator |
-| ROTATE | Executive decides | Reassign roles, cycle agents, archive performance data | Executive |
+# | Phase | Trigger | Description | Responsible |
+# |-------|---------|-------------|-------------|
+# | FORM | Executive initiates crew formation | Define crew mission, identify required roles | Executive |
+# | ASSIGN | Operator scouts candidates | Match candidates to roles via capability assessment | Operator |
+# | TRAIN | Operator executes training plans | grok learn for role-specific skills, context ingestion | Operator |
+# | DEPLOY | Executive activates crew | Register sub-agents, establish IPC channels, enable quality gates | Executive |
+# | REVIEW | Executive or Operator evaluates | Performance review, capability score update, rotation decision | Executive/Operator |
+# | ROTATE | Executive decides | Reassign roles, cycle agents, archive performance data | Executive |
 
 ## ── Agent Datum Crew Section ────────────────────────────────────────────────────
 
-Every agent datum MUST include a `[b00t.agent.crew]` section:
+# Every agent datum MUST include a `[b00t.agent.crew]` section:
 
-```toml
-[b00t.agent.crew]
-role = "worker"     # worker | executive | operator | specialist
-captain = false     # true only for the single crew captain (an executive-role agent)
-```
+# ```toml
+# [b00t.agent.crew]
+# role = "worker"     # worker | executive | operator | specialist
+# captain = false     # true only for the single crew captain (an executive-role agent)
+# ```
 
 ## ── Field Reference ─────────────────────────────────────────────────────────────
 
-| TOML Path | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| b00t.agent.crew.role | string | yes | — | One of: worker, executive, operator, specialist (legacy names in the table above are still read) |
-| b00t.agent.crew.captain | bool | yes | false | True only for the single crew captain |
+# | TOML Path | Type | Required | Default | Description |
+# |-----------|------|----------|---------|-------------|
+# | b00t.agent.crew.role | string | yes | — | One of: worker, executive, operator, specialist (legacy names in the table above are still read) |
+# | b00t.agent.crew.captain | bool | yes | false | True only for the single crew captain |
 
 ## ── Capability Requirements by Role ─────────────────────────────────────────────
 
-| Role | Required Skills | Min Model Tier | Example Skills |
-|------|----------------|----------------|----------------|
-| executive | hive-cmdb, resource-scheduling, agent-delegation | frontier | systemd, vllm, rust, autonomous-loop |
-| worker | autonomous-loop, workflow-execution | ch0nky | todo-backlog, prd-parsing |
-| operator | agent-discovery, agent-recruitment, crew-formation, training-plan-execution | frontier | ontology-query, grok-learn, search |
-| specialist | domain-specific expertise | ch0nky or sm0l | code, refactor, debug (pi); experiment-controller (experiment-controller) |
+# | Role | Required Skills | Min Model Tier | Example Skills |
+# |------|----------------|----------------|----------------|
+# | executive | hive-cmdb, resource-scheduling, agent-delegation | frontier | systemd, vllm, rust, autonomous-loop |
+# | worker | autonomous-loop, workflow-execution | ch0nky | todo-backlog, prd-parsing |
+# | operator | agent-discovery, agent-recruitment, crew-formation, training-plan-execution | frontier | ontology-query, grok-learn, search |
+# | specialist | domain-specific expertise | ch0nky or sm0l | code, refactor, debug (pi); experiment-controller (experiment-controller) |
 
 ## ── Crew Manifest Format ────────────────────────────────────────────────────────
 
-When operator reports to the executive, the crew manifest follows this structure:
+# When operator reports to the executive, the crew manifest follows this structure:
 
-```toml
+# ```toml
 # crew-manifest.toml — generated by operator after FORM→ASSIGN→TRAIN
-[[crew.members]]
-id = "executive-001"
-role = "executive"
-captain = true
-status = "active"
-tier = "frontier"
+# [[crew.members]]
+# id = "executive-001"
+# role = "executive"
+# captain = true
+# status = "active"
+# tier = "frontier"
 
-[[crew.members]]
-id = "ralph-001"
-role = "worker"
-captain = false
-status = "active"
-tier = "ch0nky"
+# [[crew.members]]
+# id = "ralph-001"
+# role = "worker"
+# captain = false
+# status = "active"
+# tier = "ch0nky"
 
-[[crew.members]]
-id = "pi-001"
-role = "specialist"
-captain = false
-status = "active"
-tier = "ch0nky"
-```
+# [[crew.members]]
+# id = "pi-001"
+# role = "specialist"
+# captain = false
+# status = "active"
+# tier = "ch0nky"
+# ```
 
 # b00t:map v1
 # summary: Canonical hive crew role schema — worker, executive, operator, specialist roles with lifecycle FORM→ASSIGN→TRAIN→DEPLOY→REVIEW→ROTATE

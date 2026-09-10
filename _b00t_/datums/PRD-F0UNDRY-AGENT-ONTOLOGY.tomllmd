@@ -384,7 +384,7 @@ what = "Triple-graph walk of the datum type system."
 output_key = "All 22 DatumType variants with BFO/UFO grounding."
 
 [discovery_protocol.step5_skill_discovery]
-cmd  = "fdfind '\.skill\.toml' _b00t_/ | xargs grep 'unlocks\\|depends_on'"
+cmd  = "fdfind '\\.skill\\.toml' _b00t_/ | xargs grep 'unlocks\\|depends_on'"
 what = "Find skill graph: what each skill unlocks (AuthZ) and what it depends on."
 output_key = "Skill → unlocks → MCP tools chain."
 

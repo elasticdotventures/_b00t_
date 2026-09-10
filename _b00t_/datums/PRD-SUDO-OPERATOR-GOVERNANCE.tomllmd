@@ -98,35 +98,11 @@ diagram = """
 
 [ufo_grounding]
 types = [
-    {
-        "type": "SudoGrantVerdict",
-        "ufo_stereotype": "Moment::Mode",
-        "description": "The grant/deny/escalate decision is an intrinsic moment dependent on the review event — mirrors ReviewVerdict's grounding exactly.",
-        "citation": "Guizzardi 2005, §4.3: Mode = intrinsic moment dependent on a single individual"
-    },
-    {
-        "type": "SudoGrantConstraint",
-        "ufo_stereotype": "Abstract",
-        "description": "Constraints (does the justification + cited evidence support this specific command?) are abstract rules governing the moment, independent of any particular grant instance.",
-        "citation": "UFO-B: Abstract category for purely formal entities"
-    },
-    {
-        "type": "SudoReviewEvent",
-        "ufo_stereotype": "Perdurant::Event",
-        "description": "The adversarial review is an event unfolding in time: command received → justification parsed → cited commits inspected → model queried → verdict produced.",
-        "citation": "Guizzardi 2005, §5: Event = perdurant with proper temporal parts"
-    },
-    {
-        "type": "SudoGrantEvidence",
-        "ufo_stereotype": "Endurant::SubKind",
-        "description": "Evidence (the Blake3-hashed record of command+justification+cited-commits+verdict) persists beyond the review event, referenceable by future audits — same subkind as CommandEvidence in the reviewer PRD.",
-        "citation": "Guizzardi 2005, §3.2: SubKind = rigid specialization of a Kind"
-    },
-    {
-        "type": "SystemCheckpoint",
-        "ufo_stereotype": "Endurant::SubKind",
-        "description": "A checkpoint is evidence of pre-command state, sufficient for an operator to manually revert. Rigid specialization of the evidence endurant.",
-    }
+    { type = "SudoGrantVerdict", ufo_stereotype = "Moment::Mode", description = "The grant/deny/escalate decision is an intrinsic moment dependent on the review event — mirrors ReviewVerdict's grounding exactly.", citation = "Guizzardi 2005, §4.3: Mode = intrinsic moment dependent on a single individual" },
+    { type = "SudoGrantConstraint", ufo_stereotype = "Abstract", description = "Constraints (does the justification + cited evidence support this specific command?) are abstract rules governing the moment, independent of any particular grant instance.", citation = "UFO-B: Abstract category for purely formal entities" },
+    { type = "SudoReviewEvent", ufo_stereotype = "Perdurant::Event", description = "The adversarial review is an event unfolding in time: command received → justification parsed → cited commits inspected → model queried → verdict produced.", citation = "Guizzardi 2005, §5: Event = perdurant with proper temporal parts" },
+    { type = "SudoGrantEvidence", ufo_stereotype = "Endurant::SubKind", description = "Evidence (the Blake3-hashed record of command+justification+cited-commits+verdict) persists beyond the review event, referenceable by future audits — same subkind as CommandEvidence in the reviewer PRD.", citation = "Guizzardi 2005, §3.2: SubKind = rigid specialization of a Kind" },
+    { type = "SystemCheckpoint", ufo_stereotype = "Endurant::SubKind", description = "A checkpoint is evidence of pre-command state, sufficient for an operator to manually revert. Rigid specialization of the evidence endurant." }
 ]
 
 # ── Rust Trait Extension ─────────────────────────────────────────────────────
@@ -254,54 +230,12 @@ hook_flow = """
 
 [implementation]
 phases = [
-    {
-        "phase": 1,
-        "name": "Core Traits",
-        "description": "Define SudoGrantConstraint, SudoGrantVerdict, SudoDisposition, SudoCommandTracker in b00t-c0re-lib. Ground in UFO stereotypes. Sibling of the (also unbuilt) reviewer/governance.rs.",
-        "effort": "frontier",
-        "depends_on": [],
-        "deliverable": "b00t-c0re-lib/src/sudo_operator/governance.rs"
-    },
-    {
-        "phase": 2,
-        "name": "Checkpoint",
-        "description": "Generalize job_executor.rs::create_checkpoint's git-tag pattern into checkpoint_system_state(); add systemctl show / kubectl get -o yaml artifact dump for non-git state.",
-        "effort": "ch0nky",
-        "depends_on": ["phase-1"],
-        "deliverable": "b00t-c0re-lib/src/sudo_operator/checkpoint.rs"
-    },
-    {
-        "phase": 3,
-        "name": "Adversarial Verdict",
-        "description": "Build review prompt, call sm0l OpenAI-compat endpoint (:8000), parse structured Grant/Deny/Escalate verdict, shell `git show --stat` for cited commits to ground the review.",
-        "effort": "ch0nky",
-        "depends_on": ["phase-1"],
-        "deliverable": "b00t-c0re-lib/src/sudo_operator/verdict.rs"
-    },
-    {
-        "phase": 4,
-        "name": "exec.rs Integration",
-        "description": "Add --justification/--cites flags to handle_exec. Route Block-tier + justification-present through the new verdict flow; leave the existing 300s-TTL bypass unchanged for the no-flag case.",
-        "effort": "ch0nky",
-        "depends_on": ["phase-2", "phase-3"],
-        "deliverable": "b00t-cli/src/commands/exec.rs (updated)"
-    },
-    {
-        "phase": 5,
-        "name": "Escalation Channel",
-        "description": "Reuse budget_controller.rs::send_alert()'s n8n webhook client for a new SudoEscalation event type. Add notify-send desktop fallback.",
-        "effort": "sm0l",
-        "depends_on": ["phase-4"],
-        "deliverable": "b00t-cli/src/budget_controller.rs (updated)"
-    },
-    {
-        "phase": 6,
-        "name": "Ledgerr MCP Actions (follow-up)",
-        "description": "sudo_grant_record / verify / checkpoint_ref as thin MCP wrappers, mirroring reviewer_evidence_* actions in ledgerr-mcp. NOT in v1 scope.",
-        "effort": "sm0l",
-        "depends_on": ["phase-4"],
-        "deliverable": "ledgerr-mcp/src/actions/sudo_grant.rs"
-    },
+    { phase = 1, name = "Core Traits", description = "Define SudoGrantConstraint, SudoGrantVerdict, SudoDisposition, SudoCommandTracker in b00t-c0re-lib. Ground in UFO stereotypes. Sibling of the (also unbuilt) reviewer/governance.rs.", effort = "frontier", depends_on = [], deliverable = "b00t-c0re-lib/src/sudo_operator/governance.rs" },
+    { phase = 2, name = "Checkpoint", description = "Generalize job_executor.rs::create_checkpoint's git-tag pattern into checkpoint_system_state(); add systemctl show / kubectl get -o yaml artifact dump for non-git state.", effort = "ch0nky", depends_on = ["phase-1"], deliverable = "b00t-c0re-lib/src/sudo_operator/checkpoint.rs" },
+    { phase = 3, name = "Adversarial Verdict", description = "Build review prompt, call sm0l OpenAI-compat endpoint (:8000), parse structured Grant/Deny/Escalate verdict, shell `git show --stat` for cited commits to ground the review.", effort = "ch0nky", depends_on = ["phase-1"], deliverable = "b00t-c0re-lib/src/sudo_operator/verdict.rs" },
+    { phase = 4, name = "exec.rs Integration", description = "Add --justification/--cites flags to handle_exec. Route Block-tier + justification-present through the new verdict flow; leave the existing 300s-TTL bypass unchanged for the no-flag case.", effort = "ch0nky", depends_on = ["phase-2", "phase-3"], deliverable = "b00t-cli/src/commands/exec.rs (updated)" },
+    { phase = 5, name = "Escalation Channel", description = "Reuse budget_controller.rs::send_alert()'s n8n webhook client for a new SudoEscalation event type. Add notify-send desktop fallback.", effort = "sm0l", depends_on = ["phase-4"], deliverable = "b00t-cli/src/budget_controller.rs (updated)" },
+    { phase = 6, name = "Ledgerr MCP Actions (follow-up)", description = "sudo_grant_record / verify / checkpoint_ref as thin MCP wrappers, mirroring reviewer_evidence_* actions in ledgerr-mcp. NOT in v1 scope.", effort = "sm0l", depends_on = ["phase-4"], deliverable = "ledgerr-mcp/src/actions/sudo_grant.rs" },
 ]
 
 # ── Acceptance Criteria ──────────────────────────────────────────────────────

@@ -28,20 +28,20 @@ review_required = false
 
 ## What is it?
 
-Placeholder for the Pi agent integration with the b00t hive. Pi is a personal
-AI assistant. This vendor slot will integrate Pi's capabilities into the b00t
-ecosystem.
+# Placeholder for the Pi agent integration with the b00t hive. Pi is a personal
+# AI assistant. This vendor slot will integrate Pi's capabilities into the b00t
+# ecosystem.
 
 ## Current Status
 
-- Empty directory at vendor/pi-mono
-- Not registered as a git submodule
-- No upstream URL configured
-- Requires manual setup or initialization
+# - Empty directory at vendor/pi-mono
+# - Not registered as a git submodule
+# - No upstream URL configured
+# - Requires manual setup or initialization
 
 ## When Initialized
 
-Once populated, this vendor will likely provide:
-- Pi agent integration as a b00t agent
-- Voice and conversational capabilities
-- Personal assistant features within the hive
+# Once populated, this vendor will likely provide:
+# - Pi agent integration as a b00t agent
+# - Voice and conversational capabilities
+# - Personal assistant features within the hive
