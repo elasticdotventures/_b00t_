@@ -228,6 +228,20 @@ Examples:\n\
         #[clap(long, help = "Output in JSON format")]
         json: bool,
     },
+    #[clap(
+        about = "Run the on-demand MCP hosting control plane (SP4-05)",
+        long_about = "Start the control plane the proxy calls to wake backend MCP servers.\n\nRoutes:\n  GET /_b00t/route/<svc>  load <svc>.mcp_server datum -> budget gate -> ensure() -> {fqdn, warm}\n  GET /_b00t/status       backend in use + every warm service\n\nExamples:\n  b00t mcp serve                          # podman backend, port 8790\n  b00t mcp serve --backend aca --port 8790\n\nEnv:\n  B00T_LEDGRRR_MODE=http|mock   pre-launch budget gate (default: mock)\n  B00T_LEDGRRR_URL              ledgrrr base URL when mode=http\n  B00T_ACA_RESOURCE_GROUP       required for --backend aca"
+    )]
+    Serve {
+        #[clap(
+            long,
+            default_value = "podman",
+            help = "Placement backend: podman (dev) or aca (Azure Container Apps)"
+        )]
+        backend: String,
+        #[clap(long, default_value_t = 8790, help = "Port to listen on (127.0.0.1)")]
+        port: u16,
+    },
 }
 
 #[derive(Parser)]
@@ -890,6 +904,10 @@ impl McpCommands {
                     }
                 }
                 Ok(())
+            }
+            McpCommands::Serve { backend, port } => {
+                let backend: crate::mcp_serve::ServeBackend = backend.parse()?;
+                crate::mcp_serve::serve(path, backend, *port).await
             }
         }
     }

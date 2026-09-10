@@ -49,6 +49,7 @@ pub mod assimilate;
 pub mod commands;
 pub mod datum_agent_profile;
 pub mod datum_mcp_server;
+pub mod mcp_serve;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
