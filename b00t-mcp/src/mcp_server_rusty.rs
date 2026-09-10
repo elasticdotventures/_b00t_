@@ -61,6 +61,9 @@ pub struct B00tMcpServerRusty {
     /// filtering. Default resolves nothing (non-anon callers get the full set
     /// until SP3-09 wires a real `DatumR0leResolver`).
     r0le_resolver: std::sync::Arc<dyn crate::r0le_resolver::R0leResolver>,
+    /// SP3-06 — ledgrrr spend gate for `call_tool`. Default is an always-ok
+    /// mock (SP3-09 wires `HttpSpendAuthorizer` when `B00T_LEDGRRR_MODE=http`).
+    spend_authorizer: std::sync::Arc<dyn b00t_c0re_ledgrrr::SpendAuthorizer>,
 }
 
 impl B00tMcpServerRusty {
@@ -115,6 +118,9 @@ impl B00tMcpServerRusty {
             r0le_resolver: std::sync::Arc::new(
                 crate::r0le_resolver::FixtureR0leResolver::new(),
             ),
+            spend_authorizer: std::sync::Arc::new(
+                b00t_c0re_ledgrrr::MockSpendAuthorizer::always_ok(),
+            ),
         })
     }
 
@@ -163,6 +169,52 @@ impl B00tMcpServerRusty {
             r0le_resolver: resolver,
             ..self
         }
+    }
+
+    /// Test / SP3-09 hook: install the ledgrrr spend authorizer.
+    pub fn with_spend_authorizer(
+        self,
+        authorizer: std::sync::Arc<dyn b00t_c0re_ledgrrr::SpendAuthorizer>,
+    ) -> Self {
+        Self {
+            spend_authorizer: authorizer,
+            ..self
+        }
+    }
+
+    /// SP3-06 — flat per-call spend gate. `anon` callers are not metered.
+    /// Returns `Err` with JSON-RPC code -32004 when ledgrrr denies the spend.
+    async fn authorize_call(
+        &self,
+        caller: &crate::identity::CallerIdentity,
+        tool_name: &str,
+    ) -> Result<(), McpError> {
+        if caller.r0le == "anon" {
+            return Ok(());
+        }
+        let idem = if caller.budget_ref.is_empty() {
+            format!("{}:{}", caller.agent, tool_name)
+        } else {
+            caller.budget_ref.clone()
+        };
+        let resp = self
+            .spend_authorizer
+            .authorize_spend(&caller.tenant, &caller.agent, 1, &idem)
+            .await
+            .map_err(|e| McpError::internal_error(format!("ledgrrr: {e}"), None))?;
+        if !resp.ok {
+            return Err(McpError {
+                code: rmcp::model::ErrorCode(-32004),
+                message: format!(
+                    "budget exceeded for tenant '{}'{}",
+                    caller.tenant,
+                    resp.reason.map(|r| format!(": {r}")).unwrap_or_default()
+                )
+                .into(),
+                data: None,
+            });
+        }
+        Ok(())
     }
 
     /// SP3-04 — keep only the tools `r0le` is allowed to see. `anon`, or an
@@ -329,12 +381,28 @@ impl ServerHandler for B00tMcpServerRusty {
             tool_name, params
         );
 
+        // SP3-06 — ledgrrr spend precheck. On denial the tool is NOT executed.
+        let caller = self.caller().await;
+        self.authorize_call(&caller, tool_name).await?;
+
         let execution_result = self.registry.execute(tool_name, &params);
         let chat_indicator = self.chat_runtime.drain_indicator().await;
 
         match execution_result {
             Ok(output) => {
                 info!("✅ Successfully executed tool: {}", tool_name);
+                // best-effort usage record (never fails the call)
+                if caller.r0le != "anon" {
+                    let _ = self
+                        .spend_authorizer
+                        .record_usage(
+                            &caller.tenant,
+                            &caller.agent,
+                            1,
+                            serde_json::json!({ "tool": tool_name }),
+                        )
+                        .await;
+                }
                 Ok(self.create_success_result(&output, &chat_indicator))
             }
             Err(e) => {
@@ -776,5 +844,43 @@ mod tests {
                 all_tools.len()
             );
         });
+    }
+
+    #[tokio::test]
+    async fn sp3_06_authorize_call_gates_on_ledgrrr() {
+        use crate::identity::CallerIdentity;
+        use b00t_c0re_ledgrrr::MockSpendAuthorizer;
+
+        let temp_dir = TempDir::new().unwrap();
+        let worker = CallerIdentity {
+            tenant: "promptexecution".into(),
+            agent: "agent/x".into(),
+            r0le: "worker".into(),
+            scopes: vec![],
+            budget_ref: "jti-1".into(),
+        };
+
+        // default (always-ok mock) → passes
+        let ok_srv = B00tMcpServerRusty::new_flat(temp_dir.path(), "").unwrap();
+        assert!(ok_srv.authorize_call(&worker, "b00t_status").await.is_ok());
+
+        let deny_srv = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+            .unwrap()
+            .with_spend_authorizer(std::sync::Arc::new(MockSpendAuthorizer::always_deny()));
+
+        // anon is never metered, even with a denying authorizer
+        assert!(
+            deny_srv
+                .authorize_call(&CallerIdentity::anon(), "b00t_status")
+                .await
+                .is_ok()
+        );
+
+        // non-anon + deny → Err with JSON-RPC code -32004
+        let err = deny_srv
+            .authorize_call(&worker, "b00t_status")
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode(-32004));
     }
 }

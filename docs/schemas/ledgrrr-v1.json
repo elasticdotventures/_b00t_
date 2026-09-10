@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://b00t.promptexecution.com/schemas/ledgrrr-v1.json",
+  "title": "b00t <-> ledgrrr v1 (F2)",
+  "description": "The only two calls b00t makes to ledgrrr: authorize a spend before an action, record usage after. cake units throughout. Fail-closed in prod.",
+  "definitions": {
+    "AuthorizeSpendRequest": {
+      "type": "object",
+      "required": ["tenant", "agent", "cost", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "tenant": { "type": "string" },
+        "agent": { "type": "string" },
+        "cost": { "type": "integer", "minimum": 0, "description": "cake units" },
+        "ref": { "type": "string", "description": "caller-supplied idempotency key (also sent as the Idempotency-Key header)" }
+      }
+    },
+    "AuthorizeSpendResponse": {
+      "type": "object",
+      "required": ["ok", "budget_remaining"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "budget_remaining": { "type": "integer", "minimum": 0, "description": "cake units" },
+        "reason": { "type": "string" }
+      }
+    },
+    "RecordUsageRequest": {
+      "type": "object",
+      "required": ["tenant", "agent", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "tenant": { "type": "string" },
+        "agent": { "type": "string" },
+        "units": { "type": "integer", "minimum": 0, "description": "cake units" },
+        "meta": { "type": "object" }
+      }
+    },
+    "RecordUsageResponse": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": { "ok": { "type": "boolean" } }
+    }
+  },
+  "routes": {
+    "POST /v1/authorize-spend": { "request": "#/definitions/AuthorizeSpendRequest", "response": "#/definitions/AuthorizeSpendResponse" },
+    "POST /v1/usage": { "request": "#/definitions/RecordUsageRequest", "response": "#/definitions/RecordUsageResponse" }
+  }
+}

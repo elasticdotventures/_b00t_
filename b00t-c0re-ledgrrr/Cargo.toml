@@ -1,0 +1,18 @@
+[package]
+name = "b00t-c0re-ledgrrr"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "b00t -> ledgrrr spend-authorize / usage-record client (F2 contract)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+tokio = { workspace = true }
