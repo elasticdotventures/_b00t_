@@ -82,3 +82,4 @@ urlencoding = "2.1"
 
 [dev-dependencies]
 tempfile = "3.0"
+tower = { version = "0.5", features = ["util"] }

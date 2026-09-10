@@ -49,6 +49,14 @@ pub struct B00tMcpServerRusty {
     /// Peer handle stored on_initialized; used to send tools/list_changed notifications
     /// when b00t_mcp_stack_load/unload dynamically changes the active tool set.
     notification_peer: std::sync::Arc<tokio::sync::Mutex<Option<Peer<RoleServer>>>>,
+    /// SP3-02b — the verified caller for this (single-identity) stdio process.
+    /// Lazily resolved from `pending_jwt` on first [`Self::caller`] call.
+    caller: std::sync::Arc<std::sync::Mutex<Option<crate::identity::CallerIdentity>>>,
+    /// Raw JWT awaiting verification — `$B00T_AGENT_JWT` at startup, or the
+    /// `initialize.params.meta.b00t_jwt` override.
+    pending_jwt: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// JWKS verifier (from `$B00T_IDENTITY_JWKS` / `$B00T_IDENTITY_URL`).
+    identity_verifier: std::sync::Arc<crate::identity::JwksVerifier>,
 }
 
 impl B00tMcpServerRusty {
@@ -95,7 +103,48 @@ impl B00tMcpServerRusty {
             chat_runtime: ChatRuntime::global(),
             client_info: std::sync::Arc::new(std::sync::Mutex::new(None)),
             notification_peer,
+            caller: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pending_jwt: std::sync::Arc::new(std::sync::Mutex::new(
+                std::env::var("B00T_AGENT_JWT").ok().filter(|s| !s.is_empty()),
+            )),
+            identity_verifier: std::sync::Arc::new(crate::identity::JwksVerifier::from_env()),
         })
+    }
+
+    /// SP3-02b — the verified caller for this process. Lazily verifies
+    /// `pending_jwt` (`$B00T_AGENT_JWT` or an `initialize` override) on first
+    /// call and caches the result; `None` pending → `CallerIdentity::anon()`.
+    pub async fn caller(&self) -> crate::identity::CallerIdentity {
+        if let Some(id) = self.caller.lock().unwrap().clone() {
+            return id;
+        }
+        let pending = self.pending_jwt.lock().unwrap().clone();
+        let resolved = match pending {
+            Some(jwt) => self
+                .identity_verifier
+                .verify(&jwt)
+                .await
+                .unwrap_or_else(|_| crate::identity::CallerIdentity::anon()),
+            None => crate::identity::CallerIdentity::anon(),
+        };
+        *self.caller.lock().unwrap() = Some(resolved.clone());
+        resolved
+    }
+
+    /// SP3-02b — override the pending JWT (from `initialize.params.meta.b00t_jwt`)
+    /// and drop the cached identity so the next [`Self::caller`] re-resolves.
+    pub fn set_pending_jwt(&self, jwt: impl Into<String>) {
+        *self.pending_jwt.lock().unwrap() = Some(jwt.into());
+        *self.caller.lock().unwrap() = None;
+    }
+
+    /// Test hook: swap in a pinned JWKS verifier.
+    #[cfg(test)]
+    pub fn with_test_verifier(self, verifier: crate::identity::JwksVerifier) -> Self {
+        Self {
+            identity_verifier: std::sync::Arc::new(verifier),
+            ..self
+        }
     }
 
     /// Convenience constructor for flat mode (backward compatible)
@@ -604,5 +653,37 @@ mod tests {
             assert_eq!(payload["indicator"], indicator);
             assert!(payload["output"].as_str().unwrap().contains(indicator));
         });
+    }
+
+    #[tokio::test]
+    async fn sp3_02b_caller_resolves_pending_jwt() {
+        use crate::identity::JwksVerifier;
+        use b00t_c0re_identity::{MockTokenSource, TokenRequest};
+
+        let temp_dir = TempDir::new().unwrap();
+        let mock = MockTokenSource::new();
+        let jwt = mock
+            .mint(&TokenRequest {
+                tenant_id: "promptexecution".into(),
+                agent_id: "agent/x".into(),
+                node_id: "root".into(),
+                r0le: "worker".into(),
+                requested_shards: vec![],
+            })
+            .unwrap();
+
+        let server = B00tMcpServerRusty::new_flat(temp_dir.path(), "")
+            .unwrap()
+            .with_test_verifier(JwksVerifier::pinned(mock.jwks_json()));
+
+        // no pending jwt yet -> anon
+        assert!(server.caller().await.is_anon());
+
+        // initialize.meta override (or $B00T_AGENT_JWT) -> resolves + caches
+        server.set_pending_jwt(jwt);
+        let id = server.caller().await;
+        assert_eq!(id.tenant, "promptexecution");
+        assert_eq!(id.r0le, "worker");
+        assert!(!id.is_anon());
     }
 }
