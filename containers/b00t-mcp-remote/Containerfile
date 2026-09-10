@@ -1,0 +1,59 @@
+# b00t-mcp-remote — SP4-08 reference backend image for on-demand MCP hosting.
+#
+# Runs `b00t-mcp --http` with the SP4-07 identity layer enforced
+# (B00T_MCP_REQUIRE_AUTH=1) and an unauthenticated `/health` probe that the
+# placement backends (PodmanPlacement / AcaPlacement) poll for readiness.
+#
+# The first real `<svc>` this image backs is `b00t` itself
+# (`b00t.b00t.promptexecution.com` — the proxy pointing at itself), which is
+# handy for end-to-end tests.
+#
+# Build + push (digest-pinnable — production `McpServer` datums MUST pin
+# `@sha256:`):
+#   podman build -t ghcr.io/promptexecution/b00t-mcp-remote:latest \
+#     -f containers/b00t-mcp-remote/Containerfile .
+#   podman push ghcr.io/promptexecution/b00t-mcp-remote:latest
+#
+# Context is the repo root (the whole workspace is needed to build b00t-mcp).
+
+# ── builder ────────────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      cmake clang lld pkg-config libssl-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+# `--locked` — CI is the version-of-truth; never let a container build drift.
+RUN cargo build --release --locked -p b00t-mcp \
+    && strip target/release/b00t-mcp
+
+# ── runtime ────────────────────────────────────────────────────────────────
+FROM docker.io/library/debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --home /home/b00t --create-home b00t
+
+COPY --from=builder /src/target/release/b00t-mcp /usr/local/bin/b00t-mcp
+
+USER b00t
+WORKDIR /home/b00t
+
+# The SP4-07 auth layer is mandatory for a network-exposed backend: it verifies
+# the forwarded SP1 JWT against the identity worker's JWKS.
+ENV B00T_MCP_REQUIRE_AUTH=1 \
+    B00T_IDENTITY_URL=https://b00t.promptexecution.com \
+    RUST_LOG=info
+
+EXPOSE 8080
+
+# `/health` is public (outside the identity middleware) — see main.rs SP4-08.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+
+ENTRYPOINT ["b00t-mcp"]
+CMD ["--http", "--host", "0.0.0.0", "--port", "8080"]
