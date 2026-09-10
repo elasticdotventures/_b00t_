@@ -1,0 +1,21 @@
+[package]
+name = "b00t-c0re-identity"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Agent identity: RS256 JWT claims + pluggable token source (product plane, SP1)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+jsonwebtoken = { version = "10.4", features = ["rust_crypto"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rsa = { version = "0.9", features = ["pem"] }
+base64 = "0.22"
+
+[dev-dependencies]
+tokio = { workspace = true }

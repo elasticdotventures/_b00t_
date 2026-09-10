@@ -281,3 +281,38 @@ cargo test --workspace
 ## License
 
 MIT License - see LICENSE file for details.
+## Identity & r0le gating (SP3)
+
+b00t-mcp can gate its tools per calling agent. **With none of these env vars set
+it runs exactly as before — fully local, `anon` caller, no filtering.**
+
+| var | effect |
+|---|---|
+| `B00T_MCP_REQUIRE_AUTH=1` | Protect `/mcp` with an identity bearer; OAuth bootstrap routes remain reachable. Invalid supplied tokens always get `401`. |
+| `B00T_AGENT_JWT` | stdio: the JWT for this process (overridable by `initialize._meta.b00t_jwt`) |
+| `B00T_IDENTITY_JWKS` | inline JWKS JSON used to verify JWTs (else fetched) |
+| `B00T_IDENTITY_URL` | base for `GET /.well-known/jwks.json` (default `https://b00t.promptexecution.com`) |
+| `B00T_MCP_REQUIRE_SIGNED_R0LE=1` | reject r0le datums whose `[b00t.agent_profile].signature` doesn't verify |
+| `B00T_LEDGRRR_MODE=http` + `B00T_LEDGRRR_URL` | meter `call_tool` against a real ledgrrr (else an always-ok mock) |
+| `B00T_MCP_ROUTING_DOMAIN` / `B00T_MCP_ROUTING_BASE_URL` | base for `<svc>__<tool>` remote routing |
+| `B00T_MCP_JUDGE=grant` | allow `b00t_r0le_request_escalation` grants (default: deny) |
+
+An identified caller sees only the tools its r0le package (`DatumType::AgentProfile`)
+allows; a gated tool returns JSON-RPC `-32003` until `b00t_learn('<skill>')`;
+`call_tool` is metered and returns `-32004` when ledgrrr denies the spend;
+`b00t_r0le_request_escalation` widens the live allow-list (session-scoped) and
+fires `tools/list_changed`.
+
+The verified HTTP caller is read on every request. Session learning and escalations
+belong to one tenant/agent/role; changing that principal requires a new MCP session.
+Cached stdio identities expire with their JWT. Invalid JWTs never fall back to `anon`.
+Role resolution uses the tenant overlay and fails closed with `-32002`, including
+missing profiles and signature failures. Direct tool calls enforce the same allowlist.
+Learning gates come from the package's declared skills, including optional skills;
+the original `.role` file is not needed. Generated profiles include `b00t_learn`.
+Each executed billable operation receives its own ledger idempotency key.
+
+To obtain a token, set `B00T_IDENTITY_URL` to the origin without `/identity`, and
+`B00T_IDENTITY_ISSUANCE_TOKEN` to the registry issuance credential. The token client
+posts to `/identity/tokens`; public JWKS is still at `/.well-known/jwks.json`.
+`b00t identity token` stores credentials with owner-only file and directory permissions.

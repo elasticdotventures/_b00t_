@@ -241,6 +241,10 @@ async fn main() -> Result<()> {
         // Create axum router with CORS, OAuth, and GitHub auth
         let mut app = Router::new()
             .nest_service("/mcp", service)
+            .layer(axum::middleware::from_fn_with_state(
+                b00t_mcp::http_auth::IdentityLayerState::from_env(),
+                b00t_mcp::http_auth::identity_middleware,
+            ))
             .merge(minimal_oauth_router(oauth_state))
             .merge(github_auth_router(github_state));
 
@@ -252,6 +256,7 @@ async fn main() -> Result<()> {
             app = app.merge(server_llm::llm_router(llm_state.clone(), false));
         }
 
+        // CORS wraps both protected services and public authentication bootstrap routes.
         let app = app.layer(CorsLayer::permissive());
 
         // Start HTTP server

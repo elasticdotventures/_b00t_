@@ -1,6 +1,6 @@
 # ── Cloudflare Workers — secret provisioning + deploy ────────────────────────
 # Shared recipes for every Worker under workers/*/ (b00t-mcp-vault,
-# telnyx-fax-handler, ledgrrr-tenant-registry, ...). Thin command surfaces —
+# telnyx-fax-handler, b00t-identity, ...). Thin command surfaces —
 # stateful logic lives in workers/scripts/*.sh. See `b00t learn cf-workers`.
 
 # Provision (or reuse) a secret in ~/.env and push it to a Worker.

@@ -290,6 +290,70 @@ impl Default for AclConfig {
     }
 }
 
+/// SP3-04 — glob allow-list for r0le-scoped `list_tools` filtering.
+/// `*` anywhere in the list means "allow every tool".
+#[derive(Debug, Clone, Default)]
+pub struct AllowlistFilter {
+    patterns: Vec<glob::Pattern>,
+    allow_all: bool,
+}
+
+impl AllowlistFilter {
+    /// Build from an r0le package's `tool_allowlist` globs. Unparseable globs
+    /// are dropped (they can never match anything anyway).
+    pub fn new(globs: &[String]) -> Self {
+        let allow_all = globs.iter().any(|g| g == "*");
+        let patterns = if allow_all {
+            Vec::new()
+        } else {
+            globs
+                .iter()
+                .filter_map(|g| glob::Pattern::new(g).ok())
+                .collect()
+        };
+        Self {
+            patterns,
+            allow_all,
+        }
+    }
+
+    /// Does `tool_name` match any allow glob?
+    pub fn allows(&self, tool_name: &str) -> bool {
+        self.allow_all || self.patterns.iter().any(|p| p.matches(tool_name))
+    }
+}
+
+#[cfg(test)]
+mod allowlist_tests {
+    use super::AllowlistFilter;
+
+    #[test]
+    fn star_allows_everything() {
+        let f = AllowlistFilter::new(&["b00t_status".to_string(), "*".to_string()]);
+        assert!(f.allows("anything_at_all"));
+        assert!(f.allows("soul_row_insert"));
+    }
+
+    #[test]
+    fn globs_match_only_listed() {
+        let f = AllowlistFilter::new(&[
+            "b00t_status".to_string(),
+            "b00t_learn".to_string(),
+            "soul_*".to_string(),
+        ]);
+        assert!(f.allows("b00t_status"));
+        assert!(f.allows("b00t_learn"));
+        assert!(f.allows("soul_row_insert"));
+        assert!(!f.allows("b00t_exec"));
+        assert!(!f.allows("gh__list_repos"));
+    }
+
+    #[test]
+    fn empty_allows_nothing() {
+        assert!(!AllowlistFilter::new(&[]).allows("b00t_status"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

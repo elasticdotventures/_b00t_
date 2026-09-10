@@ -47,6 +47,8 @@ pub mod budget_controller;
 pub mod cloud_sync;
 pub mod assimilate;
 pub mod commands;
+pub mod datum_agent_profile;
+pub mod datum_mcp_server;
 pub mod datum_ai;
 pub mod datum_ai_model;
 pub mod datum_api;
@@ -432,31 +434,7 @@ hint = "containers"
         BootDatum {
             name: name.to_string(),
             datum_type,
-            hint: String::new(),
-            status: None, enabled: None, status_msg: None, replacement: None,
-            git_attributes: Default::default(), desires: None, auto_install: None,
-            skills: None, compliance: None, install: None, update: None,
-            version: None, version_regex: None, requires_sudo: false,
-            command: None, args: None, vsix_id: None, script: None,
-            image: None, docker_args: None, oci_uri: None, resource_path: None,
-            chart_path: None, namespace: None, values_file: None,
-            keywords: None, package_name: None, ansible: None,
-            env: None, require: None, aliases: None, k0mmand3r: None,
-            knowledge: None, mcp: None, ai_provision: None, gate: None, url: None, branch: None,
-            clone_path: None, entangled_agents: None, entangled_cli: None,
-            entangled_mcp: None, entangled_ai_models: None, entangled_apis: None,
-            entangled_docker: None, entangled_k8s: None, channel_prefix: None,
-            depends_on: None, members: None, orchestration: None,
-            model_hf_id: None, model_size_gb: None, model_size_4bit_gb: None,
-            stack: None, job: None, skill: None, dsn: None, justfile: None, pipeline: None,
-            learn: None, lfmf_category: None, usage: None, provides: None,
-            protocol: None, implements: None, hook_detect: None,
-            hook_install: None, hook_update: None, hook_learn: None,
-            uninstall: None, hook_uninstall: None, unlocks: None,
-            type_tags: None, maintenance: None, required_for_core: None,
-            runtime: None, polyseme: None, trigger_words: None, compose: None,
-            raw_source: None,
-            requires_competency: None,
+            ..Default::default()
         }
     }
 

@@ -22,6 +22,9 @@ pub enum DatumType {
     Stack,
     Repo,
     Role,
+    /// A signed, versioned agent-r0le package (`.agentprofile.toml`) — the
+    /// artifact b00t.promptexecution.com issues and b00t-mcp enforces.
+    AgentProfile,
     Bash,
     Vscode,
     K8s,
@@ -213,7 +216,7 @@ impl DatumType {
             | Self::Overlay
             | Self::Runtime
             | Self::Nix => SemanticClass::Infra,
-            Self::Agent | Self::Role | Self::Ai | Self::Training => SemanticClass::Agent,
+            Self::Agent | Self::Role | Self::AgentProfile | Self::Ai | Self::Training => SemanticClass::Agent,
             Self::Mcp | Self::McpServer | Self::Api | Self::Schema => SemanticClass::Protocol,
             Self::Skill | Self::Job | Self::Hook | Self::Gate | Self::Pipeline => {
                 SemanticClass::Skill
@@ -249,6 +252,7 @@ impl DatumType {
             Self::Agent => &[Self::Runtime],
             Self::Ai => &[Self::Agent],
             Self::Role => &[Self::Agent],
+            Self::AgentProfile => &[Self::Role],
             _ => &[],
         }
     }
@@ -402,6 +406,7 @@ impl DatumType {
         Stack       => ["stack"]                     => ".stack",
         Repo        => ["repo"]                      => ".repo",
         Role        => ["role"]                      => ".role",
+        AgentProfile => ["agent_profile", "agentprofile", "r0le"] => ".agentprofile",
         Bash        => ["bash"]                      => ".bash",
         Vscode      => ["vscode"]                    => ".vscode",
         K8s         => ["k8s"]                       => ".k8s",
@@ -567,6 +572,17 @@ mod ufo_stereotype_tests {
                 parent: "Mcp".into()
             }
         );
+    }
+
+    #[test]
+    fn agent_profile_variant_wired() {
+        assert_eq!(DatumType::from_type_token("r0le"), Some(DatumType::AgentProfile));
+        assert_eq!(DatumType::from_type_token("agentprofile"), Some(DatumType::AgentProfile));
+        assert_eq!(DatumType::AgentProfile.semantic_class(), SemanticClass::Agent);
+        assert_eq!(DatumType::AgentProfile.implies(), &[DatumType::Role]);
+        assert_eq!(DatumType::AgentProfile.base_suffix(), ".agentprofile");
+        assert_eq!(DatumType::AgentProfile.extension(), ".agentprofile.toml");
+        assert!(DatumType::all_variants().contains(&DatumType::AgentProfile));
     }
 
     #[test]

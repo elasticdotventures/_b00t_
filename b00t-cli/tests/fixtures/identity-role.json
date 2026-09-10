@@ -1,0 +1,5 @@
+{
+  "worker.role.toml": {"b00t":{"name":"worker","type":"role","depends_on":["rust.skill"]}},
+  "rust.skill.toml": {"b00t":{"name":"rust","type":"skill","unlocks":["cargo_*"]}},
+  "audit.skill.toml": {"b00t":{"name":"audit","type":"skill","skills":["worker"],"unlocks":["audit_*"]}}
+}

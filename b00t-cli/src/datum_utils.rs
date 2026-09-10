@@ -123,6 +123,43 @@ pub fn get_all_datums_with_paths(
     Ok(datums)
 }
 
+/// Tenant-namespaced datum scan (SP2-06 / F6).
+///
+/// Scans the base `_b00t_` tree, then — when `tenant` is `Some` — overlays
+/// `<b00t_path>/tenants/<tenant>/_b00t_` on top. The overlay always wins on a
+/// key collision; isolation is structural (one tenant per call, disjoint scan
+/// roots). Emitted keys are identical to [`get_all_datums_with_paths`] so
+/// downstream callers stay tenant-agnostic. `tenant == None` is byte-identical
+/// to [`get_all_datums_with_paths`].
+pub fn get_all_datums_for_tenant(
+    b00t_path: &str,
+    tenant: Option<&str>,
+    max_depth: Option<usize>,
+) -> Result<HashMap<String, (BootDatum, String)>> {
+    let mut datums = get_all_datums_with_paths(b00t_path, max_depth)?;
+    if let Some(t) = tenant {
+        if t.is_empty() || t.contains('/') || t.contains('\\') || t == "." || t == ".." {
+            anyhow::bail!("invalid tenant id: {t:?}");
+        }
+        // The overlay lives BESIDE the base `_b00t_` dir (`<parent>/tenants/<t>/_b00t_`),
+        // never inside it — a nested `tenants/` subtree would be double-counted by
+        // the recursive base scan and defeat isolation (F6).
+        let expanded = shellexpand::tilde(b00t_path).into_owned();
+        if let Some(overlay_root) = Path::new(&expanded)
+            .parent()
+            .map(|p| p.join("tenants").join(t).join("_b00t_"))
+        {
+            if overlay_root.is_dir() {
+                let overlay_str = overlay_root.to_string_lossy().into_owned();
+                for (k, v) in get_all_datums_with_paths(&overlay_str, max_depth)? {
+                    datums.insert(k, v); // overlay wins
+                }
+            }
+        }
+    }
+    Ok(datums)
+}
+
 /// Scan-level diagnostics (#163): degraded (lenient-fallback) files + key shadowing.
 /// Postel's Law: the loader is tolerant — nothing vanishes silently.
 #[derive(Debug, Default, Clone)]
@@ -1467,5 +1504,34 @@ output = "Building..."
         let (datum, path) = datums.get("tool.cli").unwrap();
         assert_eq!(datum.name, "tool-tomllm", ".tomllm must win over .toml");
         assert!(path.ends_with(".tomllm"));
+    }
+}
+
+#[cfg(test)]
+mod tenant_overlay_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn tenant_overlay_shadows_base_and_isolates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("_b00t_");
+        fs::create_dir_all(&base).unwrap();
+        fs::write(base.join("acme.toml"),
+            "[b00t]\nname = \"acme\"\ntype = \"role\"\n").unwrap();
+        // overlay is a SIBLING of the base _b00t_ dir, not nested inside it
+        let over = tmp.path().join("tenants/app4dog/_b00t_");
+        fs::create_dir_all(&over).unwrap();
+        fs::write(over.join("acme.toml"),
+            "[b00t]\nname = \"acme-a4d\"\ntype = \"role\"\n").unwrap();
+
+        let bs = base.to_str().unwrap();
+        assert_eq!(get_all_datums_for_tenant(bs, None, Some(3)).unwrap()
+            .get("acme").unwrap().0.name, "acme");
+        assert_eq!(get_all_datums_for_tenant(bs, Some("app4dog"), Some(3)).unwrap()
+            .get("acme").unwrap().0.name, "acme-a4d");
+        assert_eq!(get_all_datums_for_tenant(bs, Some("promptexecution"), Some(3)).unwrap()
+            .get("acme").unwrap().0.name, "acme");
+        assert!(get_all_datums_for_tenant(bs, Some("../evil"), Some(3)).is_err());
     }
 }

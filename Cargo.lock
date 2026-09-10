@@ -1624,6 +1624,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-c0re-identity"
+version = "0.10.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "jsonwebtoken",
+ "reqwest 0.12.28",
+ "rsa",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "b00t-c0re-ledgrrr"
+version = "0.10.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "b00t-c0re-lib"
 version = "0.10.5"
 dependencies = [
@@ -1772,6 +1799,7 @@ dependencies = [
  "b00t-c0re-a2a",
  "b00t-c0re-gov",
  "b00t-c0re-hierarchy",
+ "b00t-c0re-identity",
  "b00t-c0re-lib",
  "b00t-c0re-role",
  "b00t-chat",
@@ -1824,6 +1852,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rhai",
  "rpassword",
+ "rsa",
  "runpod-sdk",
  "rusqlite",
  "scxml",
@@ -2008,16 +2037,20 @@ dependencies = [
  "axum 0.8.9",
  "axum-extra",
  "axum-macros 0.5.1",
+ "b00t-c0re-identity",
+ "b00t-c0re-ledgrrr",
  "b00t-c0re-lib",
  "b00t-chat",
  "b00t-cli",
  "b00t-council",
  "b00t-reflect-types",
  "base64 0.22.1",
+ "capability-forge",
  "chrono",
  "clap",
  "dirs",
  "fs2",
+ "glob",
  "jsonwebtoken",
  "lazy_static",
  "notify 7.0.0",
@@ -11440,6 +11473,7 @@ dependencies = [
  "pkcs1",
  "pkcs8",
  "rand_core 0.6.4",
+ "sha2 0.10.9",
  "signature",
  "spki",
  "subtle",
