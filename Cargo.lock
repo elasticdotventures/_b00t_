@@ -1624,6 +1624,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "b00t-c0re-identity"
+version = "0.10.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "jsonwebtoken",
+ "reqwest 0.12.28",
+ "rsa",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "b00t-c0re-lib"
 version = "0.10.5"
 dependencies = [
@@ -1824,6 +1839,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rhai",
  "rpassword",
+ "rsa",
  "runpod-sdk",
  "rusqlite",
  "scxml",
@@ -11440,6 +11456,7 @@ dependencies = [
  "pkcs1",
  "pkcs8",
  "rand_core 0.6.4",
+ "sha2 0.10.9",
  "signature",
  "spki",
  "subtle",
