@@ -1666,6 +1666,7 @@ dependencies = [
  "base64 0.22.1",
  "cfg-if 1.0.4",
  "chrono",
+ "clap",
  "crepe",
  "dirs",
  "duct",
@@ -14496,14 +14497,16 @@ dependencies = [
 
 [[package]]
 name = "ufo-types"
-version = "0.11.0"
-source = "git+https://github.com/PromptExecution/ufo-types.git?tag=v0.11.0#72f17e7fb4989eebb64858eb4e765d313a1329e4"
+version = "0.14.1"
+source = "git+https://github.com/PromptExecution/ufo-types.git?tag=v0.14.1#37d1350dbad2382118a14f8ba06bf9b6941f6b88"
 dependencies = [
  "anyhow",
  "chrono",
+ "rpassword",
  "schemars 0.8.22",
  "serde",
  "serde_json",
+ "shellexpand",
  "sysml-v2-parser",
  "thiserror 2.0.20",
 ]

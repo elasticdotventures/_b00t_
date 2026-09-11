@@ -71,11 +71,11 @@ name = "kroki-b00t (comic engine) — a downstream leaf consumer, not kr0ki core
 url = "https://github.com/PromptExecution/infrastructure/issues/217"
 
 [[b00t.references]]
-name = "ledgrrr#202 — OPEN decision D1: sysml-derive extend-vs-wrap-vs-re-export (only gates the authoring path)"
+name = "ledgrrr#202 — RESOLVED 2026-09-10 (D1): sysml-derive stays Part-agnostic; UfoStereotype→SysML metadata emission lives in ufo-types (per D3); extraction to standalone crate approved, non-blocking"
 url = "https://github.com/PromptExecution/ledgrrr/issues/202"
 
 [[b00t.references]]
-name = "ledgrrr#203 — OPEN decision D2: holon-viz as a real (non-dev) dependency"
+name = "ledgrrr#203 — RESOLVED 2026-09-10 (D2): real (non-dev) holon-viz dependency accepted, precondition = semver discipline on cytoscape.rs public types; pin by rev until a tagged 0.x; struct-shape copying rejected (PRD §2.2)"
 url = "https://github.com/PromptExecution/ledgrrr/issues/203"
 
 [[b00t.references]]

@@ -208,11 +208,50 @@ impl Default for QueryBus {
 ///
 /// Until the full ontology is loaded, this source returns empty results gracefully.
 #[cfg(feature = "store-oxigraph")]
+const DEFAULT_ADJACENCY_TEMPLATE: &str = r#"
+PREFIX b00t: <http://b00t.promptexecution.com/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?adj ?label WHERE {
+  {SUBJECT} (b00t:dependsOn|b00t:hasPart|b00t:relatedTo)+ ?adj .
+  OPTIONAL { ?adj rdfs:label ?label }
+} LIMIT 40
+"#;
+
+#[cfg(feature = "store-oxigraph")]
 pub struct OxigraphSparqlSource {
-    /// SPARQL property-path query template (subject substituted at query time)
+    store: std::sync::Arc<crate::irontology_bridge::OxigraphStore>,
+    /// SPARQL SELECT with a single `{SUBJECT}` placeholder for the topic IRI.
     pub query_template: String,
-    /// Max graph traversal depth (encoded in SPARQL path length)
+    /// Informational max property-path traversal depth (the template uses `+`).
     pub depth: usize,
+}
+
+#[cfg(feature = "store-oxigraph")]
+impl OxigraphSparqlSource {
+    pub fn new(store: std::sync::Arc<crate::irontology_bridge::OxigraphStore>) -> Self {
+        Self {
+            store,
+            query_template: DEFAULT_ADJACENCY_TEMPLATE.to_string(),
+            depth: 4,
+        }
+    }
+
+    /// Open the store at `~/.b00t/oxigraph/<ns>` where `<ns>` = `$B00T_OXIGRAPH_NS`
+    /// (default `"graph"`).
+    pub fn from_env() -> Result<Self> {
+        use crate::irontology_bridge::{KnowledgeStoreBackend, OxigraphStore, StoreConfig};
+        let ns = std::env::var("B00T_OXIGRAPH_NS").unwrap_or_else(|_| "graph".to_string());
+        let store = OxigraphStore::try_new(StoreConfig {
+            endpoint: String::new(),
+            namespace: ns,
+            data_path: None,
+        })?;
+        Ok(Self::new(std::sync::Arc::new(store)))
+    }
+
+    fn slug(text: &str) -> String {
+        text.trim().to_lowercase().replace([' ', '/'], "-")
+    }
 }
 
 #[cfg(feature = "store-oxigraph")]
@@ -221,12 +260,49 @@ impl QuerySource for OxigraphSparqlSource {
     fn name(&self) -> &'static str { "oxigraph:sparql" }
     fn weight(&self) -> u32 { 2 } // Graph reasoning outweighs keyword search
 
-    async fn query(&self, _ctx: &QueryContext) -> Result<Vec<QueryResult>> {
-        // 🤓 Stub: oxigraph store loading + SPARQL eval goes here.
-        // Blocked on: loading compiled datum triples into oxigraph::MemoryStore,
-        // then running property-path query over b00t: namespace.
-        // See b00t-c0re-lib/src/reasoning/graph_rules.rs for the Horn-rule equivalent.
-        Ok(vec![])
+    async fn query(&self, ctx: &QueryContext) -> Result<Vec<QueryResult>> {
+        use oxigraph::sparql::QueryResults;
+
+        let subject_iri = format!(
+            "<{}datum/{}>",
+            crate::graph_load::B00T_NS,
+            Self::slug(&ctx.text)
+        );
+        let sparql = self.query_template.replace("{SUBJECT}", &subject_iri);
+
+        let results = match self.store.store().query(&sparql) {
+            Ok(r) => r,
+            Err(_) => return Ok(vec![]), // malformed template / empty store — degrade gracefully
+        };
+
+        let mut out = Vec::new();
+        if let QueryResults::Solutions(solutions) = results {
+            for sol in solutions {
+                let sol = match sol {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let adj = match sol.get("adj") {
+                    Some(oxigraph::model::Term::NamedNode(n)) => n.as_str().to_string(),
+                    _ => continue,
+                };
+                let key = adj.rsplit(['#', '/']).next().unwrap_or(&adj).to_string();
+                let label = match sol.get("label") {
+                    Some(oxigraph::model::Term::Literal(l)) => l.value().to_string(),
+                    _ => String::new(),
+                };
+                out.push(QueryResult {
+                    key,
+                    summary: label,
+                    source: "oxigraph:sparql",
+                    trust: TrustGrade::DatumCompiled,
+                    score: 5,
+                    match_reason: Some(format!("graph path from {}", ctx.text)),
+                });
+            }
+        }
+        let _ = self.depth; // reserved for a bounded-length path variant
+        Ok(out)
     }
 }
 
@@ -314,5 +390,59 @@ mod tests {
         assert!(TrustGrade::DatumUser < TrustGrade::DatumCompiled);
         assert!(TrustGrade::DatumCompiled < TrustGrade::Rag);
         assert!(TrustGrade::Rag < TrustGrade::WebUnverified);
+    }
+}
+
+#[cfg(all(test, feature = "store-oxigraph"))]
+mod oxigraph_source_tests {
+    use super::*;
+    use crate::graph_load::load_graph;
+    use crate::irontology_bridge::{KnowledgeStoreBackend, OxigraphStore, StoreConfig};
+    use std::sync::Arc;
+
+    fn store_with(triples: &[(&str, &str, &str)]) -> Arc<OxigraphStore> {
+        let dir = std::env::temp_dir().join(format!(
+            "sp5-src-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let s = OxigraphStore::try_new(StoreConfig {
+            endpoint: String::new(),
+            namespace: "t".into(),
+            data_path: Some(dir),
+        })
+        .unwrap();
+        let owned: Vec<(String, String, String)> = triples
+            .iter()
+            .map(|(a, b, c)| (a.to_string(), b.to_string(), c.to_string()))
+            .collect();
+        load_graph(&s, &owned).unwrap();
+        Arc::new(s)
+    }
+
+    #[tokio::test]
+    async fn empty_store_returns_no_results_gracefully() {
+        let src = OxigraphSparqlSource::new(store_with(&[]));
+        let ctx = QueryContext::new("anything", 10, vec![]);
+        assert!(src.query(&ctx).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn walks_a_dependson_path_from_the_topic_subject() {
+        let src = OxigraphSparqlSource::new(store_with(&[
+            ("b00t:datum/rust.cli", "b00t:dependsOn", "b00t:datum/cargo"),
+            ("b00t:datum/cargo", "b00t:dependsOn", "b00t:datum/rustup"),
+            ("b00t:datum/rustup", "rdfs:label", "Rustup"),
+        ]));
+        let ctx = QueryContext::new("rust.cli", 10, vec![]);
+        let hits = src.query(&ctx).await.unwrap();
+        let keys: Vec<&str> = hits.iter().map(|h| h.key.as_str()).collect();
+        assert!(keys.contains(&"cargo"), "got {keys:?}");
+        assert!(keys.contains(&"rustup"), "got {keys:?}");
+        assert!(hits.iter().all(|h| h.source == "oxigraph:sparql"));
     }
 }

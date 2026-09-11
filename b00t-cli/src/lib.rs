@@ -73,6 +73,7 @@ pub mod datum_repo;
 pub mod datum_skill;
 pub mod datum_stack;
 pub mod datum_triples;
+pub mod identity_triples;
 pub mod datum_proof;
 pub mod datum_store;
 pub mod datum_utils;

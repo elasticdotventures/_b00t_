@@ -473,6 +473,13 @@ pub struct OxigraphStore {
 
 #[cfg(feature = "store-oxigraph")]
 impl OxigraphStore {
+    /// Borrow the underlying oxigraph store for direct SPARQL / quad access
+    /// (SP5 graph substrate: `graph_load`, `graph_shapes`, `graph_kerml`,
+    /// `query_bus::OxigraphSparqlSource`).
+    pub fn store(&self) -> &oxigraph::store::Store {
+        &self.store
+    }
+
     fn fact_to_quad(fact: &FactRecord) -> anyhow::Result<oxigraph::model::Quad> {
         use oxigraph::model::{Literal, NamedNode, Quad, Term};
 

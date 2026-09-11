@@ -20,6 +20,7 @@ pub mod crew;
 pub mod crew_handler;
 pub mod data_cmd;
 pub mod datum;
+pub mod graph;
 pub mod docgen;
 pub mod doctor_cmd;
 pub mod exec;

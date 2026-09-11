@@ -289,6 +289,11 @@ The system will:
         #[clap(subcommand)]
         mcp_command: McpCommands,
     },
+    #[clap(about = "Datum + identity/authz graph (SPARQL/SHACL/KerML substrate, SP5)")]
+    Graph {
+        #[clap(subcommand)]
+        graph_command: b00t_cli::commands::graph::GraphCommands,
+    },
     #[clap(about = "b00t maintenance daemon (exercise reminders, governance boot, research queue)")]
     Maintenance {
         #[command(flatten)]
@@ -2334,6 +2339,12 @@ async fn main() {
         Some(Commands::Mcp { mcp_command }) => {
             if let Err(e) = mcp_command.execute_async(&cli.path).await {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Graph { graph_command }) => {
+            if let Err(e) = b00t_cli::commands::graph::execute(graph_command, &cli.path) {
+                eprintln!("Error: {e:#}");
                 std::process::exit(1);
             }
         }

@@ -119,14 +119,29 @@ pub fn compose_agent_profile(
         tool_allowlist.push("b00t_learn".into());
     }
 
-    let mut soul_shard_grants: Vec<SoulShardGrant> = skills
-        .iter()
-        .map(|s| SoulShardGrant {
-            kind: ShardKind::Skill,
-            id: s.clone(),
-            mode: ShardMode::R,
-        })
-        .collect();
+    // SP5-02b (operator directive 2026-09-11): every r0le gets read/write on
+    // both soulscopes AND datums. Blanket `{kind}:*:rw` for all six ShardKinds.
+    let mut soul_shard_grants: Vec<SoulShardGrant> = [
+        ShardKind::Datum,
+        ShardKind::Project,
+        ShardKind::System,
+        ShardKind::Agent,
+        ShardKind::Skill,
+        ShardKind::Tool,
+    ]
+    .into_iter()
+    .map(|kind| SoulShardGrant {
+        kind,
+        id: "*".to_string(),
+        mode: ShardMode::Rw,
+    })
+    .collect();
+    // narrower per-skill read grants, kept for provenance / discovery
+    soul_shard_grants.extend(skills.iter().map(|s| SoulShardGrant {
+        kind: ShardKind::Skill,
+        id: s.clone(),
+        mode: ShardMode::R,
+    }));
     soul_shard_grants.push(SoulShardGrant {
         kind: ShardKind::Agent,
         id: role.to_string(),
@@ -335,6 +350,23 @@ mod tests {
                     && g.mode == ShardMode::R)
         );
         assert!(spec.signature.is_none());
+
+        // SP5-02b: rw:* on all six soulscope + datum ShardKinds
+        for kind in [
+            ShardKind::Datum,
+            ShardKind::Project,
+            ShardKind::System,
+            ShardKind::Agent,
+            ShardKind::Skill,
+            ShardKind::Tool,
+        ] {
+            assert!(
+                spec.soul_shard_grants.iter().any(|g| {
+                    g.kind == kind && g.id == "*" && g.mode == ShardMode::Rw
+                }),
+                "missing rw:* grant for {kind:?}"
+            );
+        }
 
         // round-trips to valid TOML
         let toml = toml::to_string_pretty(&spec).unwrap();

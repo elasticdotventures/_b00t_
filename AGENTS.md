@@ -339,10 +339,18 @@ coherent architecture and isn't):
 - **`kr0ki`** — `PromptExecution/kr0ki` (created 2026-09-05), datum
   `_b00t_/kr0ki.repo.toml`. The **cut-node** between Kroki and b00t/systhread: the
   SysML/KerML diagram rendering + CDN-cached-artifact *service* layer,
-  `kr0ki.b00t.promptexecution.com`. Foundational stage — `docs/PRD-KR0KI-001` only, no
-  implementation; 5 open decisions block the plan (PRD §5: ledgrrr#202/#203,
-  nem-poweragent-lab#53 follow-up, infra DNS/CDN). Type-entangles with, does not
-  duplicate, `systhread-core`'s isometric renderer.
+  `kr0ki.b00t.promptexecution.com`. **P0 render loop + SysML-v2-Release conformance
+  harness + `kr0ki-sysmlv2-client` (OMG Systems Modeling API client) are shipped on
+  `main`** (`kr0ki-core`/`kr0ki-server`/`kr0ki-sysmlv2-client`); not deployed. The
+  SysML-model ingestion five-box pipeline (FR1/FR3/FR4, `PLAN-KR0KI-002`) is planned,
+  blocked on ufo-types semantic-graph layer + ≥1 pattern recognizer. PRD §5: D1
+  (ledgrrr#202) + D2 (ledgrrr#203) + D3 + D6 **RESOLVED**; **D4 (DNS) + D5 (CDN)
+  remain — infra, kr0ki-deploy = b00t platform SP6**. Type-entangles with, does not
+  duplicate, `systhread-core`'s isometric renderer. **kr0ki MUST NEVER read datums**
+  (PRD-KR0KI-001 §1.1 — b00t owns the model side, kr0ki the render side, cut at
+  `iso_ir`/KerML). b00t platform SP5 = the Oxigraph/SHACL/KerML-view substrate that
+  feeds it; kr0ki functionally rendering that view (via `holon-viz` internally) is
+  the SP6 end state.
 - **`kroki-b00t`** — self-hosted Kroki + MCP server for PromptExecution's comic engine
   (`PromptExecution/infrastructure#217`/PR#208). A **downstream leaf consumer** of
   `kr0ki` by explicit operator direction (2026-09-05) — the comic team renders kr0ki

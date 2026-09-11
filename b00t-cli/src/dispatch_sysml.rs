@@ -20,7 +20,6 @@
 //! satisfied before a type can implement the subtrait — circular.
 
 use ufo_types::iso_ir::{Edge, Node};
-use ufo_types::stereotype::UfoStereotype;
 
 use crate::dispatch::default_dispatch_chain;
 
@@ -72,31 +71,24 @@ pub fn dispatch_chain_iso_ir() -> (Vec<Node>, Vec<Edge>) {
 /// instead of the original two-pass (all-nodes, then separately-named edges)
 /// shape.
 pub fn dispatch_chain_to_sysml_v2() -> String {
-    let chain = default_dispatch_chain();
+    use ufo_types::sysml_model::{emit_kerml, ElementId, ElementKind, Relation};
 
-    let mut out = String::from("package B00tDispatchChain {\n");
+    let (nodes, edges) = dispatch_chain_iso_ir();
+    let elements: Vec<(ElementId, ElementKind)> = nodes
+        .iter()
+        .map(|n| (ElementId::new(n.id.clone()), ElementKind::PartDefinition))
+        .collect();
+    // each `sequence` edge `from -> to` in priority order becomes a KerML
+    // dependency `to` (the specializing step) `on` `from` (its predecessor).
+    let relations: Vec<Relation> = edges
+        .iter()
+        .map(|e| Relation::Dependency {
+            client: ElementId::new(e.to.clone()),
+            supplier: ElementId::new(e.from.clone()),
+        })
+        .collect();
 
-    for (i, mode) in chain.iter().enumerate() {
-        let stereotype = UfoStereotype::Process(mode.name().to_string());
-        if i == 0 {
-            out.push_str(&format!(
-                "    part def {} {{\n        // {stereotype}\n    }}\n",
-                mode.name()
-            ));
-        } else {
-            let prev = chain[i - 1].name();
-            out.push_str(&format!(
-                "    part def {} :> {} {{\n        // {stereotype}\n        // sequence: {} -> {}\n    }}\n",
-                mode.name(),
-                prev,
-                prev,
-                mode.name()
-            ));
-        }
-    }
-
-    out.push_str("}\n");
-    out
+    emit_kerml("B00tDispatchChain", &elements, &relations)
 }
 
 /// Export the dispatch chain as a Mermaid flowchart — the P2 milestone's first
@@ -220,12 +212,17 @@ mod tests {
         let sysml = dispatch_chain_to_sysml_v2();
         for mode in &default_dispatch_chain() {
             assert!(
-                sysml.contains(mode.name()),
-                "missing mode {} in:\n{sysml}",
+                sysml.contains(&format!("part def {};", mode.name())),
+                "missing `part def {};` in:\n{sysml}",
                 mode.name()
             );
         }
-        assert!(sysml.contains("sequence: RuntimeMode -> CliPassthroughMode"));
+        // the RuntimeMode -> CliPassthroughMode priority step becomes a KerML
+        // dependency comment (client = the later step, supplier = predecessor).
+        assert!(
+            sysml.contains("CliPassthroughMode Dependency RuntimeMode"),
+            "missing sequence edge comment in:\n{sysml}"
+        );
     }
 
     #[test]
