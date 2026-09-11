@@ -78,7 +78,7 @@ jobs:
 
       # 3. b00t-cli triple-compiler + subcommand + r0le tests (default build).
       - name: nextest (b00t-cli graph compilers)
-        run: cargo nextest run -p b00t-cli --locked identity_triples commands::graph r0le:: dispatch_sysml
+        run: "cargo nextest run -p b00t-cli --locked -E 'test(identity_triples) | test(graph::) | test(r0le::) | test(dispatch_sysml)'"
 
       # 4. SHACL-lite gate on the real graph. A hard Violation here is a real
       #    datum defect — fix the datum or file `b00t task add` + downgrade
