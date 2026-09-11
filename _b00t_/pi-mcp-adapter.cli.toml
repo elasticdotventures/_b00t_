@@ -1,68 +1,99 @@
 # b00t CLI Datum — pi-mcp-adapter (nicobailon/pi-mcp-adapter)
-# 🤓 MCP proxy for pi-coding-agent: ~200 tokens vs 10k+ for raw MCP tool defs
-# Servers lazy-loaded on demand; metadata cached so search works offline
+# 🤓 CANONICAL datum for the MCP CLIENT extension. Install + mcp.json wiring
+#    live here and nowhere else.
+#
+# pi has NO built-in MCP client — docs/usage.md: "It intentionally does not
+# include built-in MCP". This adapter is what lets pi consume MCP servers
+# through one ~200-token proxy tool instead of hundreds of verbose definitions.
+# Servers are lazy; tool metadata is cached so search works offline.
+#
+# ⚠️需 Install with `pi install`, NOT `npm install -g` — pi owns ~/.pi/agent/npm/
+#    and records the package in ~/.pi/agent/settings.json "packages".
+# ⚠️需 b00t-mcp MUST be launched with args ["--stdio"]. With args [] it takes the
+#    HTTP path: syncs the official MCP registry over the network, spawns npx
+#    bridges for every stdio entry (recursively bridging pi itself), prints
+#    usage, and exits. `just pi-agent::wire-mcp` enforces and repairs this.
+#
+# 🔗参 pi.polyseme.toml          → "pi" branch point
+# 🔗参 pi-agent.justfile.toml    → executable command surface (wire-mcp/check/probe)
+# 🔗参 pi-coding-agent.cli.toml  → the pi binary this extends
+# ⚠️需 pi-mcp-adapter.mcp.toml is DEREGISTERED — this adapter is an MCP *client*,
+#    never an MCP server. See that datum's `replacement` pointer.
 # https://github.com/nicobailon/pi-mcp-adapter
-# Install: pi install npm:pi-mcp-adapter (pi's own package manager, not npm -g)
 
 [b00t]
 name = "pi-mcp-adapter"
 type = "cli"
 desires = "latest"
-hint = "pi MCP proxy — lazy-load MCP servers in pi-coding-agent; saves 10k+ context tokens vs raw MCP"
-install = "pi install npm:pi-mcp-adapter"
-update = "pi install npm:pi-mcp-adapter"
+hint = "pi MCP client adapter — lazy-load MCP servers in pi-coding-agent; ~200 tokens vs 10k+ for raw MCP tool defs"
+# 🤓 Single source of truth for the command line lives in _b00t_/pi-agent.just,
+#    which delegates provisioning to PiAdapter (b00t-cli/src/install/runtimes/pi.rs).
+#    ⚠️需 NOT an npm/SBOM package: `pi install` is pi's OWN package manager and
+#    writes ~/.pi/agent/settings.json + ~/.pi/agent/npm/. `npm install -g` would
+#    leave pi unable to see the extension. Hence type=cli + the runtime adapter,
+#    not an npm datum type.
+install = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-adapter"
+update = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-adapter"
 
 [b00t.learn]
 topic = "pi-mcp-adapter"
 auto_digest = true
 
+# ── Usage: adapter + wiring only. Binary lifecycle lives in pi-coding-agent.cli ─
 [[b00t.usage]]
-description = "Install pi-mcp-adapter into pi runtime"
-command = "pi install npm:pi-mcp-adapter && echo 'restart pi to activate'"
+description = "Install the pi-mcp-adapter extension into the pi runtime"
+command = "just pi-agent::install-adapter"
 
 [[b00t.usage]]
-description = "Wire b00t-mcp server into pi via mcp.json"
-command = """cat > ~/.pi/agent/mcp.json << 'EOF'
-{
-  "mcpServers": {
-    "b00t": {
-      "command": "b00t-mcp",
-      "args": [],
-      "lifecycle": "lazy",
-      "idleTimeout": 30
-    }
-  }
-}
-EOF
-echo 'b00t-mcp wired into pi MCP adapter'"""
+description = "Provision pi's runtime via the registered PiAdapter (packages + settings + mcp.json)"
+command = "just pi-agent::install-runtime"
 
 [[b00t.usage]]
-description = "Search available MCP tools inside pi session"
-command = "pi -p 'mcp({ search: \"b00t\" })'"
+description = "Full install: pi binary + PiAdapter provisioning + verification"
+command = "just pi-agent::install"
 
 [[b00t.usage]]
-description = "Invoke b00t tool via pi MCP adapter"
-command = "pi -p 'mcp({ tool: \"b00t_status\", args: \"{}\" })'"
+description = "Verify the whole pi ⇄ b00t-mcp chain (emits PASS/FAIL evidence line)"
+command = "just pi-agent::check"
 
 [[b00t.usage]]
-description = "Install pi-mcp-adapter as MCP server into Claude Code (exposes pi tools to Claude)"
-command = "b00t mcp install pi-mcp-adapter claudecode"
+description = "Raw MCP stdio handshake — proves a wired server serves tools/list"
+command = "just pi-agent::probe-all"
 
 [[b00t.usage]]
-description = "Install pi-mcp-adapter as MCP server into repo .mcp.json"
-command = "b00t mcp install pi-mcp-adapter dotmcpjson"
+description = "End-to-end: pi → adapter → b00t-mcp → b00t-cli (one cheap LLM call)"
+command = "just pi-agent::e2e"
 
 [[b00t.usage]]
-description = "Self-install: pi agent calls b00t mcp install pi-mcp-adapter via MCP tool"
-command = "pi -p 'bash({ cmd: \"b00t mcp install pi-mcp-adapter claudecode\" })'"
+description = "Discover b00t capabilities from inside a pi session"
+command = "pi -p 'Call b00t_discover with query \"task\"'"
+
+[[b00t.usage]]
+description = "Run any b00t-cli command from inside a pi session"
+command = "pi -p 'Call b00t_exec with argv \"task list\"'"
+
+[[b00t.usage]]
+description = "Inspect pi's MCP wiring and registered packages"
+command = "just pi-agent::status"
+
+[[b00t.usage]]
+description = "Update pi and all installed pi packages/extensions"
+command = "just pi-agent::update"
 
 [validate]
 command = "pi list"
 regex = "pi-mcp-adapter"
 
+# ── Equivalence pointers ─────────────────────────────────────────────────────
+entangled_cli = ["pi-coding-agent.cli"]
+entangled_mcp = ["b00t-mcp.mcp"]
+entangled_agents = ["pi.agent"]
+# 🤓 depends_on, not duplicated install: b00t resolves the binary first.
+depends_on = ["pi-coding-agent.cli", "b00t-mcp.mcp"]
+
 # b00t:map v1
-# summary: pi-mcp-adapter — token-efficient MCP proxy/server bridge for pi-coding-agent
-# tags: pi, mcp, proxy, context-efficiency, b00t-mcp, self-install
+# summary: pi-mcp-adapter CLI datum — canonical install + b00t-mcp wiring for pi's MCP client
+# tags: pi, mcp, adapter, client, context-efficiency, b00t-mcp, canonical
 # tier: sm0l
-# cmds: b00t mcp install pi-mcp-adapter claudecode
+# cmds: just pi-agent::install-adapter, just pi-agent::wire-mcp, just pi-agent::check
 # complexity: 3

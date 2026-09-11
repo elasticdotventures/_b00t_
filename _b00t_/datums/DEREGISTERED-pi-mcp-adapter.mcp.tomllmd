@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ⛔ DEREGISTERED 2026-09-11 — archived here as an audit record, NOT a live datum.
+#
+# WHY: this datum asserted that `pi --mode rpc` is "an MCP-compatible RPC
+#   server" and that pi-mcp-adapter "bridges pi-coding-agent tools → MCP
+#   protocol so other agents can call them". Both are false:
+#     • `pi --mode rpc` speaks pi's OWN JSONL RPC protocol over stdio
+#       (pi docs/rpc.md) — it is not MCP and cannot be consumed by an MCP client.
+#     • pi-mcp-adapter is an MCP *CLIENT* for pi. It lets pi CONSUME MCP
+#       servers. It never exposes pi as an MCP server.
+#     • pi has no built-in MCP at all (pi docs/usage.md): "It intentionally does
+#       not include built-in MCP".
+#   The datum therefore described a capability that does not exist, and its
+#   `[[b00t.mcp.stdio]]` spec would have spawned a non-MCP process.
+#
+# WHY MOVED RATHER THAN TOMBSTONED IN PLACE: DatumType::all_base_suffixes()
+#   orders Mcp BEFORE Cli, so get_config() resolves by filename suffix and any
+#   `pi-mcp-adapter.mcp.toml` left in _b00t_/ would permanently SHADOW the
+#   canonical `pi-mcp-adapter.cli.toml`. load_all_datums_from_dir() does not
+#   recurse, so _b00t_/datums/ is inert — the record stays discoverable without
+#   participating in resolution.
+#
+# CANONICAL REPLACEMENT (equivalence pointers):
+#   pi-mcp-adapter.cli   → _b00t_/pi-mcp-adapter.cli.toml  (install + wiring)
+#   pi (all facets)      → _b00t_/pi.polyseme.toml         (branch point)
+#   agent facet          → _b00t_/pi.agent.toml            (PiAdapter install)
+#   executable surface   → _b00t_/pi-agent.justfile.toml + _b00t_/pi-agent.just
+#   runtime handlers     → b00t-cli/src/install/runtimes/pi.rs (RuntimeId::Pi)
+# ─────────────────────────────────────────────────────────────────────────────
+# ORIGINAL (inverted) CONTENT FOLLOWS — retained verbatim for provenance.
+#
+# b00t MCP Datum — pi-mcp-adapter (nicobailon/pi-mcp-adapter)
+# 🤓 pi-mcp-adapter is a pi extension installed via `pi install npm:pi-mcp-adapter`
+#    It bridges pi-coding-agent tools → MCP protocol so other agents can call them
+#    Key advantage: ~200 token overhead vs 10k+ for raw MCP tool definitions
+#    pi started in --mode rpc exposes tools (read, bash, edit, write, grep, find, ls)
+#    other agents/MCP clients connect to pi as an MCP server
+# https://github.com/nicobailon/pi-mcp-adapter
+#
+# Install pi-mcp-adapter:
+#   pi install npm:pi-mcp-adapter
+# Wire b00t-mcp into pi's MCP config:
+#   cat > ~/.pi/agent/mcp.json << 'EOF'
+#   { "mcpServers": { "b00t": { "command": "b00t-mcp", "args": [], "lifecycle": "lazy", "idleTimeout": 30 } } }
+#   EOF
+
+[b00t]
+# ⚠️需 `name` deliberately renamed so this archived record cannot collide with
+#    the live `pi-mcp-adapter.cli` datum during name resolution. Deregistration
+#    fields are declared INLINE (not only via _b00t_/.gitattributes) because
+#    git-attribute patterns do not match files nested under _b00t_/datums/.
+name = "DEREGISTERED-pi-mcp-adapter"
+type = "mcp"
+status = "sunset"
+enabled = false
+status_msg = "inverted-facet: pi --mode rpc is pi's own JSONL RPC, not MCP; pi-mcp-adapter is an MCP client, never a server"
+replacement = "pi-mcp-adapter.cli"
+hint = "DEREGISTERED — formerly claimed pi acts as an MCP server. Canonical: pi-mcp-adapter.cli"
+
+entangled_cli = ["pi-mcp-adapter.cli"]
+
+# ── stdio transport: pi in RPC mode with adapter ─────────────────────────────
+[[b00t.mcp.stdio]]
+# ⛔ FALSE — retained for provenance. `pi --mode rpc` speaks pi's own JSONL RPC
+#    protocol (pi docs/rpc.md), NOT MCP. An MCP client cannot consume it.
+#    pi-mcp-adapter must be installed first: `pi install npm:pi-mcp-adapter`
+#    --provider openai uses OPENAI_BASE_URL; points directly to vLLM at :8001 (OpenAI-compatible API)
+command = "pi"
+args = ["--mode", "rpc", "--provider", "openai", "--model", "ch0nky", "--no-session"]
+transport = "stdio"
+priority = 0
+requires = ["pi-mcp-adapter", "b00t@inference-gemma4.service"]
+env = { OPENAI_BASE_URL = "http://127.0.0.1:8001/v1", OPENAI_API_KEY = "local-gemma4" }
+
+# ── b00t mcp.json fragment for wiring into Claude Code ───────────────────────
+# Usage: b00t mcp install pi-mcp-adapter claudecode
+# Or:    b00t mcp install pi-mcp-adapter dotmcpjson
+
+# b00t:map v1
+# summary: pi-mcp-adapter MCP datum — pi as MCP server; token-efficient tool bridge for sub-agents
+# tags: pi, mcp, adapter, token-efficient, sub-agent, gemma4, rpc
+# tier: ch0nky
+# cmds: b00t mcp install pi-mcp-adapter claudecode
+# complexity: 3
