@@ -294,6 +294,7 @@ pub struct GraphArtifactManifest {
     pub tag: String,
     pub commit_sha: String,
     pub kerml_digest: String,
+    pub turtle_digest: String,
     pub iso_ir_digest: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<DatumSignature>,
@@ -382,6 +383,7 @@ mod signing_tests {
             tag: "v1.2.0".into(),
             commit_sha: "deadbeef".into(),
             kerml_digest: "abc123".into(),
+            turtle_digest: "turtle789".into(),
             iso_ir_digest: "def456".into(),
             signature: None,
         }

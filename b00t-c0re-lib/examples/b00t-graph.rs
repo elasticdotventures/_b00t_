@@ -44,6 +44,10 @@ enum Cmd {
         #[arg(long, value_parser = ["datum-deps", "r0le-grants", "service-budgets"])]
         view: String,
     },
+    /// Dump the loaded graph as Turtle RDF (for SPARQL indexing/discovery —
+    /// a separate artifact from `kerml`'s concrete-syntax text view, not a
+    /// renamed version of it).
+    Turtle { triples: String },
 }
 
 fn read_triples(path: &str) -> Result<Vec<(String, String, String)>> {
@@ -151,6 +155,16 @@ fn main() -> Result<()> {
                 _ => unreachable!(),
             };
             print!("{}", graph_to_kerml(&store, gv)?);
+        }
+        Cmd::Turtle { triples } => {
+            let store = fresh_store()?;
+            load_graph(&store, &read_triples(&triples)?)?;
+            let bytes = store.store().dump_graph_to_writer(
+                oxigraph::model::GraphNameRef::DefaultGraph,
+                oxigraph::io::RdfFormat::Turtle,
+                Vec::new(),
+            )?;
+            std::io::Write::write_all(&mut std::io::stdout(), &bytes)?;
         }
     }
     Ok(())

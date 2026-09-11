@@ -77,11 +77,24 @@ jobs:
             > "$RUNNER_TEMP/kerml-view.kerml"
           test -s "$RUNNER_TEMP/kerml-view.kerml"
 
+      # 3. Same store-oxigraph load, dumped as Turtle RDF instead of KerML
+      #    text -- for SPARQL indexing/discovery, a separate artifact from
+      #    the KerML view, not the same content under a different name.
+      - name: turtle-dump
+        run: |
+          cargo run -p b00t-c0re-lib --example b00t-graph --no-default-features \
+            --features store-oxigraph --locked -- \
+            turtle "$RUNNER_TEMP/graph.jsonl" \
+            > "$RUNNER_TEMP/kerml-view.ttl"
+          test -s "$RUNNER_TEMP/kerml-view.ttl"
+
       - name: Upload kerml-view artifact
         uses: actions/upload-artifact@v4
         with:
           name: kerml-view-${{ github.ref_name }}
-          path: ${{ runner.temp }}/kerml-view.kerml
+          path: |
+            ${{ runner.temp }}/kerml-view.kerml
+            ${{ runner.temp }}/kerml-view.ttl
           retention-days: 30
 
       # Sign + publish to S3 + best-effort NATS reindex hint. Requires two
@@ -99,6 +112,7 @@ jobs:
         run: >-
           cargo run -p b00t-cli --bin b00t-cli --locked -- graph publish
           --kerml-view "$RUNNER_TEMP/kerml-view.kerml"
+          --turtle-view "$RUNNER_TEMP/kerml-view.ttl"
           --tag "${{ github.ref_name }}"
           --commit-sha "${{ github.sha }}"
           --kid "sp1-jwt-signing"

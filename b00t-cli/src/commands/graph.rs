@@ -36,6 +36,11 @@ pub enum GraphCommands {
         /// Path to the KerML view file to publish.
         #[arg(long)]
         kerml_view: String,
+        /// Path to the Turtle (RDF) dump of the same graph, for SPARQL
+        /// indexing/discovery — a separate artifact from kerml_view, not a
+        /// re-encoding of it.
+        #[arg(long)]
+        turtle_view: String,
         /// Git tag this artifact corresponds to.
         #[arg(long)]
         tag: String,
@@ -114,6 +119,7 @@ fn sha256_hex_file(path: &Path) -> Result<String> {
 #[allow(clippy::too_many_arguments)]
 pub async fn publish(
     kerml_view: &Path,
+    turtle_view: &Path,
     tag: &str,
     commit_sha: &str,
     kid: &str,
@@ -128,10 +134,12 @@ pub async fn publish(
     let nats_url = nats_url.unwrap_or("nats://localhost:4222");
 
     let kerml_digest = sha256_hex_file(kerml_view)?;
+    let turtle_digest = sha256_hex_file(turtle_view)?;
     let mut manifest = GraphArtifactManifest {
         tag: tag.to_string(),
         commit_sha: commit_sha.to_string(),
         kerml_digest,
+        turtle_digest,
         iso_ir_digest: String::new(), // no iso_ir export exists yet (see workflow note)
         signature: None,
     };
@@ -146,10 +154,12 @@ pub async fn publish(
     .with_context(|| format!("write {}", manifest_path.display()))?;
 
     let kerml_key = format!("graph/tags/{tag}/kerml-view.kerml");
+    let turtle_key = format!("graph/tags/{tag}/kerml-view.ttl");
     let manifest_key = format!("graph/tags/{tag}/manifest.json");
     let latest_key = "graph/latest/manifest.json".to_string();
 
     push_to_s3(kerml_view, bucket, &kerml_key, profile, region, mock)?;
+    push_to_s3(turtle_view, bucket, &turtle_key, profile, region, mock)?;
     push_to_s3(&manifest_path, bucket, &manifest_key, profile, region, mock)?;
     // Only after both per-tag objects succeed: update the latest pointer.
     push_to_s3(&manifest_path, bucket, &latest_key, profile, region, mock)?;
@@ -194,6 +204,7 @@ pub async fn execute_async(cmd: GraphCommands, b00t_path: &str) -> Result<()> {
     match cmd {
         GraphCommands::Publish {
             kerml_view,
+            turtle_view,
             tag,
             commit_sha,
             kid,
@@ -206,6 +217,7 @@ pub async fn execute_async(cmd: GraphCommands, b00t_path: &str) -> Result<()> {
             let _ = b00t_path; // publish() doesn't need the datum tree
             publish(
                 Path::new(&kerml_view),
+                Path::new(&turtle_view),
                 &tag,
                 &commit_sha,
                 &kid,
