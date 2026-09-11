@@ -103,6 +103,10 @@ b00t-bouncer = { path = "../b00t-bouncer" }
 tokio-test = "0.4"
 tracing-subscriber = "0.3"
 clap = { version = "4", features = ["derive"] }
+# b00t-graph's `watch` subcommand only (SP5 continuation) -- example-scoped,
+# not a runtime dependency of the library itself. Same version already used
+# by b00t-cli's chat.rs.
+async-nats = "0.45.0"
 
 [[example]]
 name = "b00t-graph"
