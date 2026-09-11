@@ -84,7 +84,7 @@ jobs:
       #    under store-oxigraph would just require duplicating every one of
       #    those unrelated system dependencies for zero additional coverage.
       - name: nextest (store-oxigraph, SP5 modules)
-        run: "cargo nextest run -p b00t-c0re-lib --no-default-features --features store-oxigraph --locked -E 'test(graph_load::) | test(graph_shapes::) | test(graph_kerml::) | test(oxigraph_source_tests::)'"
+        run: "cargo nextest run -p b00t-c0re-lib --no-default-features --features store-oxigraph --locked -E 'test(graph_load::) | test(graph_shapes::) | test(graph_kerml::) | test(oxigraph_source_tests::) | test(watch_tests::)'"
 
       # 3. b00t-cli triple-compiler + subcommand + r0le tests (default build).
       - name: nextest (b00t-cli graph compilers)
