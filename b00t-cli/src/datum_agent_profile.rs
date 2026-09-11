@@ -184,27 +184,37 @@ pub fn datum_signing_key_pem() -> Result<String> {
         .map_err(|_| anyhow!("B00T_DATUM_SIGNING_KEY_PEM is not set"))
 }
 
-impl AgentProfileSpec {
-    /// The deterministic byte string that gets signed: this spec as canonical
-    /// JSON with the `signature` field removed, object keys sorted and arrays
-    /// order-normalised. NEVER sign the raw TOML — the datum loader re-serialises
-    /// files (`.tomllmd` > `.tomllm` > `.toml` rank rule).
-    pub fn canonical_bytes(&self) -> Result<Vec<u8>> {
-        let mut v = serde_json::to_value(self).context("serialize AgentProfileSpec")?;
+/// Generalizes SP2-04's canonical-projection RS256 signing (originally
+/// `AgentProfileSpec`-only) to any signable payload. Added for SP5's
+/// `GraphArtifactManifest` (see
+/// docs/superpowers/specs/2026-09-11-sp5-graph-artifact-publish-design.md).
+/// `AgentProfileSpec`'s own `canonical_bytes`/`sign`/`verify` below now
+/// delegate to this trait's default implementations — public API and
+/// behavior are unchanged.
+pub trait Signable: serde::Serialize {
+    fn signature(&self) -> &Option<DatumSignature>;
+    fn set_signature(&mut self, sig: DatumSignature);
+
+    /// The deterministic byte string that gets signed: this payload as
+    /// canonical JSON with the `signature` field removed, object keys
+    /// sorted and arrays order-normalised. NEVER sign raw TOML — the datum
+    /// loader re-serialises files (`.tomllmd` > `.tomllm` > `.toml` rank rule).
+    fn canonical_bytes(&self) -> Result<Vec<u8>> {
+        let mut v = serde_json::to_value(self).context("serialize signable payload")?;
         if let Some(obj) = v.as_object_mut() {
             obj.remove("signature");
         }
         serde_json::to_vec(&canonicalize(&v)).context("serialize canonical projection")
     }
 
-    /// Sign in place with a PKCS#8 RSA private key PEM; sets `self.signature`.
-    pub fn sign(&mut self, kid: &str, pkcs8_pem: &str) -> Result<()> {
+    /// Sign in place with a PKCS#8 RSA private key PEM.
+    fn sign(&mut self, kid: &str, pkcs8_pem: &str) -> Result<()> {
         let bytes = self.canonical_bytes()?;
         let priv_key =
             RsaPrivateKey::from_pkcs8_pem(pkcs8_pem).context("parse PKCS#8 signing key")?;
         let signing_key = SigningKey::<Sha256>::new(priv_key);
         let sig = signing_key.sign(&bytes);
-        self.signature = Some(DatumSignature {
+        self.set_signature(DatumSignature {
             kid: kid.to_string(),
             alg: "RS256".to_string(),
             sig_b64: B64STD.encode(sig.to_bytes()),
@@ -213,16 +223,18 @@ impl AgentProfileSpec {
         Ok(())
     }
 
-    /// Verify `self.signature` against a JWKS JSON (`{keys:[{kid,n,e,...}]}`).
-    /// Errors: unsigned, unknown kid, hash mismatch (spec mutated), bad signature.
-    pub fn verify(&self, jwks_json: &str) -> Result<()> {
+    /// Verify the signature against a JWKS JSON (`{keys:[{kid,n,e,...}]}`).
+    /// Errors: unsigned, unknown kid, hash mismatch (payload mutated), bad signature.
+    fn verify(&self, jwks_json: &str) -> Result<()> {
         let sig = self
-            .signature
+            .signature()
             .as_ref()
-            .ok_or_else(|| anyhow!("AgentProfileSpec is unsigned"))?;
+            .ok_or_else(|| anyhow!("payload is unsigned"))?;
         let bytes = self.canonical_bytes()?;
         if sha256_hex(&bytes) != sig.signed_fields_hash {
-            return Err(anyhow!("signed_fields_hash mismatch — spec mutated after signing"));
+            return Err(anyhow!(
+                "signed_fields_hash mismatch — payload mutated after signing"
+            ));
         }
         let jwks: serde_json::Value = serde_json::from_str(jwks_json).context("parse JWKS")?;
         let jwk = jwks["keys"]
@@ -242,6 +254,58 @@ impl AgentProfileSpec {
             .verify(&bytes, &signature)
             .context("RS256 signature verification failed")?;
         Ok(())
+    }
+}
+
+impl Signable for AgentProfileSpec {
+    fn signature(&self) -> &Option<DatumSignature> {
+        &self.signature
+    }
+
+    fn set_signature(&mut self, sig: DatumSignature) {
+        self.signature = Some(sig);
+    }
+}
+
+impl AgentProfileSpec {
+    /// Delegates to `Signable::canonical_bytes` — kept as an inherent method
+    /// for API stability; see that trait for the shared implementation.
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>> {
+        Signable::canonical_bytes(self)
+    }
+
+    /// Delegates to `Signable::sign`.
+    pub fn sign(&mut self, kid: &str, pkcs8_pem: &str) -> Result<()> {
+        Signable::sign(self, kid, pkcs8_pem)
+    }
+
+    /// Delegates to `Signable::verify`.
+    pub fn verify(&self, jwks_json: &str) -> Result<()> {
+        Signable::verify(self, jwks_json)
+    }
+}
+
+/// The signed manifest published alongside a tagged graph artifact (KerML
+/// view + `iso_ir` JSON). See SP5 continuation:
+/// docs/superpowers/specs/2026-09-11-sp5-graph-artifact-publish-design.md.
+/// Signing reuses the generalized `Signable` primitive above.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphArtifactManifest {
+    pub tag: String,
+    pub commit_sha: String,
+    pub kerml_digest: String,
+    pub iso_ir_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<DatumSignature>,
+}
+
+impl Signable for GraphArtifactManifest {
+    fn signature(&self) -> &Option<DatumSignature> {
+        &self.signature
+    }
+
+    fn set_signature(&mut self, sig: DatumSignature) {
+        self.signature = Some(sig);
     }
 }
 
@@ -311,5 +375,39 @@ mod signing_tests {
     #[test]
     fn unsigned_errors() {
         assert!(sample().verify(&test_jwks("k")).is_err());
+    }
+
+    fn sample_manifest() -> GraphArtifactManifest {
+        GraphArtifactManifest {
+            tag: "v1.2.0".into(),
+            commit_sha: "deadbeef".into(),
+            kerml_digest: "abc123".into(),
+            iso_ir_digest: "def456".into(),
+            signature: None,
+        }
+    }
+
+    #[test]
+    fn graph_artifact_manifest_sign_then_verify_roundtrips() {
+        let mut m = sample_manifest();
+        m.sign("graph-kid", TEST_PEM).unwrap();
+        assert!(m.signature.is_some());
+        m.verify(&test_jwks("graph-kid")).unwrap();
+    }
+
+    #[test]
+    fn graph_artifact_manifest_tampering_breaks_verification() {
+        let mut m = sample_manifest();
+        m.sign("graph-kid", TEST_PEM).unwrap();
+        m.tag = "v1.2.1-tampered".into();
+        let err = m.verify(&test_jwks("graph-kid")).unwrap_err();
+        assert!(err.to_string().contains("mutated"));
+    }
+
+    #[test]
+    fn graph_artifact_manifest_unknown_kid_errors() {
+        let mut m = sample_manifest();
+        m.sign("graph-kid", TEST_PEM).unwrap();
+        assert!(m.verify(&test_jwks("other-kid")).is_err());
     }
 }
