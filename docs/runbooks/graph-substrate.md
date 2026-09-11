@@ -20,7 +20,7 @@ generated KerML view projection.
 
 ```sh
 # emit (normal b00t-cli build)
-cargo run -p b00t-cli -- graph emit-triples --out /tmp/g.jsonl
+cargo run -p b00t-cli --bin b00t-cli -- graph emit-triples --out /tmp/g.jsonl
 # optionally overlay a tenant: --tenant app4dog
 
 # everything below: the store-oxigraph example bin
