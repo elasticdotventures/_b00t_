@@ -84,10 +84,23 @@ jobs:
           path: ${{ runner.temp }}/kerml-view.ttl
           retention-days: 30
 
-      # TODO(sp5-continuation): sign (GraphArtifactManifest, b00t-cli/src/
-      # datum_agent_profile.rs's Signable trait) + publish to S3/ZeroFS
-      # (StorageKind::{S3,Zerofs}, b00t-cli/src/commands/finetune_job.rs) +
-      # NATS reindex publish. Tracked on PR #1301's checklist — placeholder
-      # until those land.
-      - name: sign + publish (placeholder)
-        run: echo "TODO: sign + publish to S3/ZeroFS — see docs/superpowers/specs/2026-09-11-sp5-graph-artifact-publish-design.md"
+      # Sign + publish to S3 + best-effort NATS reindex hint. Requires two
+      # repo-level configuration values that are NOT yet provisioned as of
+      # this commit -- this step will fail until an operator sets them:
+      #   - secrets.B00T_DATUM_SIGNING_KEY_PEM (same key/kid as SP1's JWT
+      #     signing key; see b00t-cli/src/datum_agent_profile.rs)
+      #   - vars.GRAPH_ARTIFACT_S3_BUCKET (target S3 bucket name)
+      # The aws CLI + 'spire-agent' profile (infrastructure#189) are also
+      # required on the runner for a non-mock push; --mock is used here
+      # until that's confirmed available in this container image.
+      - name: sign + publish
+        env:
+          B00T_DATUM_SIGNING_KEY_PEM: ${{ secrets.B00T_DATUM_SIGNING_KEY_PEM }}
+        run: >-
+          cargo run -p b00t-cli --bin b00t-cli --locked -- graph publish
+          --kerml-view "$RUNNER_TEMP/kerml-view.ttl"
+          --tag "${{ github.ref_name }}"
+          --commit-sha "${{ github.sha }}"
+          --kid "sp1-jwt-signing"
+          --bucket "${{ vars.GRAPH_ARTIFACT_S3_BUCKET }}"
+          --mock

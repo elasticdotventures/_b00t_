@@ -2343,7 +2343,9 @@ async fn main() {
             }
         }
         Some(Commands::Graph { graph_command }) => {
-            if let Err(e) = b00t_cli::commands::graph::execute(graph_command, &cli.path) {
+            if let Err(e) =
+                b00t_cli::commands::graph::execute_async(graph_command, &cli.path).await
+            {
                 eprintln!("Error: {e:#}");
                 std::process::exit(1);
             }
