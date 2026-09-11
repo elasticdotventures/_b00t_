@@ -145,7 +145,7 @@ pub async fn publish(
     )
     .with_context(|| format!("write {}", manifest_path.display()))?;
 
-    let kerml_key = format!("graph/tags/{tag}/kerml-view.ttl");
+    let kerml_key = format!("graph/tags/{tag}/kerml-view.kerml");
     let manifest_key = format!("graph/tags/{tag}/manifest.json");
     let latest_key = "graph/latest/manifest.json".to_string();
 

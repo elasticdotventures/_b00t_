@@ -74,14 +74,14 @@ jobs:
           cargo run -p b00t-c0re-lib --example b00t-graph --no-default-features \
             --features store-oxigraph --locked -- \
             kerml "$RUNNER_TEMP/graph.jsonl" --view datum-deps \
-            > "$RUNNER_TEMP/kerml-view.ttl"
-          test -s "$RUNNER_TEMP/kerml-view.ttl"
+            > "$RUNNER_TEMP/kerml-view.kerml"
+          test -s "$RUNNER_TEMP/kerml-view.kerml"
 
       - name: Upload kerml-view artifact
         uses: actions/upload-artifact@v4
         with:
           name: kerml-view-${{ github.ref_name }}
-          path: ${{ runner.temp }}/kerml-view.ttl
+          path: ${{ runner.temp }}/kerml-view.kerml
           retention-days: 30
 
       # Sign + publish to S3 + best-effort NATS reindex hint. Requires two
@@ -98,7 +98,7 @@ jobs:
           B00T_DATUM_SIGNING_KEY_PEM: ${{ secrets.B00T_DATUM_SIGNING_KEY_PEM }}
         run: >-
           cargo run -p b00t-cli --bin b00t-cli --locked -- graph publish
-          --kerml-view "$RUNNER_TEMP/kerml-view.ttl"
+          --kerml-view "$RUNNER_TEMP/kerml-view.kerml"
           --tag "${{ github.ref_name }}"
           --commit-sha "${{ github.sha }}"
           --kid "sp1-jwt-signing"
