@@ -202,21 +202,35 @@ fn main() -> Result<()> {
 /// `b00t-cli/src/commands/finetune_job.rs`'s `push_to_s3` pattern for the
 /// opposite direction — not imported directly, since b00t-c0re-lib cannot
 /// depend on b00t-cli, which depends on it).
+/// Pure argv builder for `aws s3 cp` (pull direction) — unit-testable
+/// without the `aws` CLI installed. Mirrors
+/// `b00t-cli/src/commands/finetune_job.rs`'s `aws_s3_cp_args` convention.
+fn aws_s3_cp_pull_args(
+    bucket: &str,
+    key: &str,
+    local_path: &std::path::Path,
+    profile: &str,
+    region: &str,
+) -> Vec<String> {
+    vec![
+        "s3".to_string(),
+        "cp".to_string(),
+        format!("s3://{bucket}/{key}"),
+        local_path.display().to_string(),
+        "--profile".to_string(),
+        profile.to_string(),
+        "--region".to_string(),
+        region.to_string(),
+    ]
+}
+
 fn pull_from_s3(bucket: &str, key: &str, local_path: &std::path::Path, profile: &str, region: &str) -> Result<()> {
+    let args = aws_s3_cp_pull_args(bucket, key, local_path, profile, region);
     let out = std::process::Command::new("aws")
-        .args([
-            "s3",
-            "cp",
-            &format!("s3://{bucket}/{key}"),
-            &local_path.display().to_string(),
-            "--profile",
-            profile,
-            "--region",
-            region,
-        ])
+        .args(&args)
         .output()
         .context(
-            "aws CLI not found — install awscli and configure the 'spire-agent' profile              (credential_process wrapper; see infrastructure repo issues #179/#181)",
+            "aws CLI not found — install awscli and configure the 'spire-agent' profile (credential_process wrapper; see infrastructure repo issues #179/#181)",
         )?;
     if !out.status.success() {
         anyhow::bail!("aws s3 cp failed: {}", String::from_utf8_lossy(&out.stderr));
@@ -224,19 +238,34 @@ fn pull_from_s3(bucket: &str, key: &str, local_path: &std::path::Path, profile: 
     Ok(())
 }
 
+/// The S3 key a tagged artifact's Turtle file lives at. Pure, testable.
+fn s3_key_for_tag(tag: &str) -> String {
+    format!("graph/tags/{tag}/kerml-view.ttl")
+}
+
+/// Extracts the `tag` field from a reindex-event JSON payload. Pure,
+/// testable without any I/O — the actual fetch/store side effects live in
+/// `handle_reindex_event` below.
+fn parse_reindex_tag(payload: &[u8]) -> Result<String> {
+    let event: serde_json::Value =
+        serde_json::from_slice(payload).context("parse reindex event JSON")?;
+    Ok(event["tag"]
+        .as_str()
+        .context("event missing 'tag'")?
+        .to_string())
+}
+
 /// One reindex cycle: fetch the tagged Turtle artifact, replace (not
 /// accumulate into) the persistent local store's contents.
 fn handle_reindex_event(payload: &[u8], bucket: &str, region: &str, profile: &str) -> Result<()> {
-    let event: serde_json::Value =
-        serde_json::from_slice(payload).context("parse reindex event JSON")?;
-    let tag = event["tag"].as_str().context("event missing 'tag'")?;
+    let tag = parse_reindex_tag(payload)?;
 
     let tmp_dir = std::env::temp_dir().join(format!("graph-reindex-{tag}"));
     std::fs::create_dir_all(&tmp_dir).context("create scratch dir")?;
     let turtle_path = tmp_dir.join("kerml-view.ttl");
     pull_from_s3(
         bucket,
-        &format!("graph/tags/{tag}/kerml-view.ttl"),
+        &s3_key_for_tag(&tag),
         &turtle_path,
         profile,
         region,
@@ -279,4 +308,58 @@ async fn watch(nats_url: &str, bucket: &str, region: &str, profile: &str) -> Res
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod watch_tests {
+    use super::*;
+
+    #[test]
+    fn s3_key_for_tag_matches_publish_side_layout() {
+        // Must match graph.rs's own kerml_key format!() exactly — this is
+        // the contract between `b00t graph publish` and `b00t-graph watch`.
+        assert_eq!(s3_key_for_tag("v1.2.0"), "graph/tags/v1.2.0/kerml-view.ttl");
+    }
+
+    #[test]
+    fn aws_s3_cp_pull_args_builds_expected_argv() {
+        let args = aws_s3_cp_pull_args(
+            "my-bucket",
+            "graph/tags/v1.2.0/kerml-view.ttl",
+            std::path::Path::new("/tmp/out.ttl"),
+            "spire-agent",
+            "ap-southeast-4",
+        );
+        assert_eq!(
+            args,
+            vec![
+                "s3",
+                "cp",
+                "s3://my-bucket/graph/tags/v1.2.0/kerml-view.ttl",
+                "/tmp/out.ttl",
+                "--profile",
+                "spire-agent",
+                "--region",
+                "ap-southeast-4",
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_reindex_tag_extracts_tag_field() {
+        let payload = br#"{"tag":"v1.2.0","commit_sha":"deadbeef","content_hash":"abc","s3_prefix":"s3://x/y/"}"#;
+        assert_eq!(parse_reindex_tag(payload).unwrap(), "v1.2.0");
+    }
+
+    #[test]
+    fn parse_reindex_tag_errors_on_missing_tag() {
+        let payload = br#"{"commit_sha":"deadbeef"}"#;
+        assert!(parse_reindex_tag(payload).is_err());
+    }
+
+    #[test]
+    fn parse_reindex_tag_errors_on_invalid_json() {
+        let payload = b"not json";
+        assert!(parse_reindex_tag(payload).is_err());
+    }
 }
