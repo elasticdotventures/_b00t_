@@ -112,3 +112,9 @@ async-nats = "0.45.0"
 name = "b00t-graph"
 path = "examples/b00t-graph.rs"
 required-features = ["store-oxigraph"]
+# Examples default to test = false in Cargo -- without this, nextest never
+# considers watch_tests as candidates at all, regardless of -E filters
+# (found the hard way: graph-oxigraph.yml went green twice with the
+# filter fixed, but its own summary line still showed 0 of the 5 new
+# tests running).
+test = true
