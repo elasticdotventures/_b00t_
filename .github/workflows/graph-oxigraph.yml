@@ -77,9 +77,14 @@ jobs:
           python3 -c "import json,sys; [json.loads(l) for l in open('$RUNNER_TEMP/graph.jsonl') if l.strip()]"
           echo "lines: $(wc -l < "$RUNNER_TEMP/graph.jsonl")"
 
-      # 2. b00t-c0re-lib graph unit tests (store-oxigraph only).
-      - name: nextest (store-oxigraph)
-        run: cargo nextest run -p b00t-c0re-lib --no-default-features --features store-oxigraph --locked
+      # 2. b00t-c0re-lib graph unit tests (store-oxigraph only). Scoped to the
+      #    SP5 modules deliberately — the rest of b00t-c0re-lib's suite (z3,
+      #    just, etc. system deps) is already covered by the main CI workflow
+      #    under the default store-helixdb build; re-running all of it here
+      #    under store-oxigraph would just require duplicating every one of
+      #    those unrelated system dependencies for zero additional coverage.
+      - name: nextest (store-oxigraph, SP5 modules)
+        run: "cargo nextest run -p b00t-c0re-lib --no-default-features --features store-oxigraph --locked -E 'test(graph_load::) | test(graph_shapes::) | test(graph_kerml::) | test(oxigraph_source_tests::)'"
 
       # 3. b00t-cli triple-compiler + subcommand + r0le tests (default build).
       - name: nextest (b00t-cli graph compilers)
