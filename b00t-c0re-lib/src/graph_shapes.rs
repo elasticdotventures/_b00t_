@@ -66,14 +66,14 @@ const SHAPES: &[Shape] = &[
         name: "r0le-rw-datum",
         kind: ShapeKind::SelectAny,
         severity: Severity::Violation,
-        sparql: "SELECT ?focus WHERE { ?t b00t:hasR0le ?focus . FILTER NOT EXISTS { ?focus b00t:grantsShard ?sh . ?sh b00t:shardMode \"rw\" . FILTER(CONTAINS(STR(?sh), \"/shard/datum/\")) } }",
+        sparql: "SELECT ?focus WHERE { ?t b00t:hasR0le ?focus . FILTER NOT EXISTS { ?focus b00t:grantsShard ?sh . ?sh b00t:shardMode \"rw\" . FILTER(CONTAINS(STR(?sh), \"shard/datum/\")) } }",
         message: "r0le has no rw grant on a datum shard",
     },
     Shape {
         name: "r0le-rw-soulscope",
         kind: ShapeKind::SelectAny,
         severity: Severity::Violation,
-        sparql: "SELECT ?focus WHERE { ?t b00t:hasR0le ?focus . FILTER NOT EXISTS { ?focus b00t:grantsShard ?sh . ?sh b00t:shardMode \"rw\" . FILTER(REGEX(STR(?sh), \"/shard/(project|system|agent|skill|tool)/\")) } }",
+        sparql: "SELECT ?focus WHERE { ?t b00t:hasR0le ?focus . FILTER NOT EXISTS { ?focus b00t:grantsShard ?sh . ?sh b00t:shardMode \"rw\" . FILTER(REGEX(STR(?sh), \"shard/(project|system|agent|skill|tool)/\")) } }",
         message: "r0le has no rw grant on any soulscope shard",
     },
     Shape {
