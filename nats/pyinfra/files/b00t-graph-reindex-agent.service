@@ -1,0 +1,38 @@
+# TEMPLATE — the binary this unit runs does not exist yet.
+#
+# Modeled on b00t-historian.service's shape (this same directory). Intended
+# purpose: subscribe to the best-effort b00t.graph.reindex hint (published
+# by graph-artifact-publish.yml, see docs/superpowers/specs/
+# 2026-09-11-sp5-graph-artifact-publish-design.md) and rebuild a local
+# graph store on receipt.
+#
+# Two real open questions block turning this into a real deploy target
+# (tracked in PR #1301's checklist, NOT resolved here — don't assume answers):
+#   1. No persistent Oxigraph store exists anywhere in this codebase yet —
+#      b00t-c0re-lib/examples/b00t-graph.rs only ever builds a fresh,
+#      ephemeral, temp-dir store per invocation (fresh_store()). "Rebuild
+#      the local store" has no persistent target to write to until that's
+#      designed.
+#   2. NATS_URL below is a placeholder. b00t-historian.service's own
+#      NATS_URL=nats://127.0.0.1:4222 assumes NATS runs locally on the same
+#      node it archives from — unconfirmed whether sm3lly/fung1 (plain
+#      worker nodes, not the control node) run their own NATS server or
+#      need to reach a remote/central one. Requires=b00t-nats.service is
+#      deliberately OMITTED below (unlike b00t-historian.service) rather
+#      than guessed.
+
+[Unit]
+Description=b00t-graph-reindex-agent — pulls signed graph artifacts on b00t.graph.reindex hint (TEMPLATE, binary not yet built)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/b00t-graph-reindex-agent run
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/b00t-graph-reindex-agent.env
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target
