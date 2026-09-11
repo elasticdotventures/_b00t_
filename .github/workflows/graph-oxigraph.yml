@@ -58,6 +58,11 @@ jobs:
       - name: Set up Rust workspace
         uses: ./.github/actions/setup-rust-workspace
 
+      # oxigraph's RocksDB backend (oxrocksdb-sys) build.rs shells out to
+      # bindgen, which needs libclang.so — not present on the ci-occt image.
+      - name: Install libclang (required by oxigraph's oxrocksdb-sys via bindgen)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
