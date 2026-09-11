@@ -12,18 +12,54 @@ use oxigraph::model::{GraphName, Literal, NamedNode, Quad, Term};
 pub const B00T_NS: &str = "http://b00t.promptexecution.com/ontology#";
 pub const RDFS_NS: &str = "http://www.w3.org/2000/01/rdf-schema#";
 
+/// Percent-encode the bytes of an IRI path segment that aren't otherwise
+/// valid there — ASCII control chars, space, and the small set of
+/// characters RFC 3987 never allows raw in an IRI (`<>"{}|\^\``). `/` is
+/// preserved (these local names are path-shaped, e.g. `datum/rust.cli`), as
+/// are the usual unreserved/sub-delim characters and any non-ASCII byte
+/// (IRIs allow Unicode natively; datum hints/keys may carry it).
+///
+/// Datum keys are user-authored filenames and occasionally carry raw
+/// spaces (`codex mcp orchestration.skill`) — `oxigraph::model::NamedNode`
+/// rejects those outright, so this must run before every IRI is built,
+/// never skip a datum on encountering one.
+fn percent_encode_iri_path(s: &str) -> String {
+    // Byte-level, not char-level: a non-ASCII byte here is one octet of a
+    // multi-byte UTF-8 sequence, not a standalone codepoint — `byte as char`
+    // would silently mis-decode it. Pass every high byte through unchanged
+    // (in its original position, so multi-byte sequences stay intact) and
+    // only touch ASCII; the result is always valid UTF-8 because we never
+    // split or reorder a sequence, only substitute whole ASCII bytes.
+    let mut out: Vec<u8> = Vec::with_capacity(s.len());
+    for &b in s.as_bytes() {
+        let safe = matches!(b,
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
+            | b'-' | b'.' | b'_' | b'~' | b'/' | b':' | b'@'
+            | b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b',' | b';' | b'=' | b'%'
+        ) || b >= 0x80;
+        if safe {
+            out.push(b);
+        } else {
+            out.extend(format!("%{b:02X}").into_bytes());
+        }
+    }
+    String::from_utf8(out).expect("percent-encoding only substitutes ASCII bytes; multi-byte UTF-8 sequences pass through untouched")
+}
+
 /// Expand a CURIE-ish term to a full IRI. `b00t:foo` and `rdfs:foo` map to
 /// the b00t / RDFS namespaces; anything already `http(s)://…` is returned
-/// unchanged; a bare token is treated as a b00t-namespace local name.
+/// unchanged; a bare token is treated as a b00t-namespace local name. The
+/// local-name portion is percent-encoded (see [`percent_encode_iri_path`])
+/// so an untidy datum key can never produce an invalid IRI.
 pub fn expand_iri(term: &str) -> String {
     if let Some(rest) = term.strip_prefix("b00t:") {
-        format!("{B00T_NS}{rest}")
+        format!("{B00T_NS}{}", percent_encode_iri_path(rest))
     } else if let Some(rest) = term.strip_prefix("rdfs:") {
-        format!("{RDFS_NS}{rest}")
+        format!("{RDFS_NS}{}", percent_encode_iri_path(rest))
     } else if term.starts_with("http://") || term.starts_with("https://") {
         term.to_string()
     } else {
-        format!("{B00T_NS}{term}")
+        format!("{B00T_NS}{}", percent_encode_iri_path(term))
     }
 }
 
@@ -84,6 +120,19 @@ mod tests {
             data_path: Some(dir),
         })
         .unwrap()
+    }
+
+    #[test]
+    fn expand_iri_percent_encodes_a_space_in_the_local_name() {
+        // Real failure: a datum key with a raw space in it (e.g. a
+        // "codex mcp orchestration.skill" datum) must not crash NamedNode::new.
+        let iri = expand_iri("b00t:datum/codex mcp orchestration.skill");
+        assert!(!iri.contains(' '), "{iri}");
+        assert_eq!(
+            iri,
+            "http://b00t.promptexecution.com/ontology#datum/codex%20mcp%20orchestration.skill"
+        );
+        assert!(oxigraph::model::NamedNode::new(&iri).is_ok(), "{iri}");
     }
 
     #[test]
