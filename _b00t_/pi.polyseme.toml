@@ -1,0 +1,88 @@
+[b00t]
+# 🤓 POLYSEME — the name "pi" resolves to several distinct concrete datums.
+#    A polyseme holds NO install/run logic of its own; it is a knowledge-graph
+#    branch point. This is the canonical anti-duplication pointer: every pi
+#    facet is described exactly once, in its own typed datum, and referenced
+#    from here. `b00t install pi` still resolves to pi.agent because
+#    install_datum() prefers an installable datum over a non-installable one.
+#
+# 🔗参 pi.agent.toml               → agent facet (b00t install pi entry point)
+# 🔗参 pi-coding-agent.cli.toml    → the `pi` npm binary (ONLY place install lives)
+# 🔗参 pi-mcp-adapter.cli.toml     → the MCP client extension (ONLY place)
+# 🔗参 pi-agent.justfile.toml      → the executable command surface
+# 🔗参 pi-gemma4-hive.stack.toml   → local ch0nky inference composition
+# ⚠️需 pi-mcp-adapter.mcp.toml is DEREGISTERED — pi --mode rpc is pi's own JSONL
+#    protocol, not MCP, and pi-mcp-adapter is an MCP *client*, never a server.
+#    See its `replacement` pointer.
+name    = "pi"
+type    = "polyseme"
+hint    = "pi — branch point: coding-agent CLI, hive agent facet, MCP adapter, command surface, local inference stack"
+
+[b00t.polyseme]
+sources = [
+    "https://github.com/earendil-works/pi-mono",
+    "https://www.npmjs.com/package/@earendil-works/pi-coding-agent",
+    "https://github.com/nicobailon/pi-mcp-adapter",
+    "https://pi.dev/docs/latest/extensions",
+]
+
+# ── Each ref resolves one meaning of "pi" to exactly one concrete datum ──────
+[[b00t.polyseme.refs]]
+name        = "cli"
+canonical   = "npm:@earendil-works/pi-coding-agent"
+datum       = "pi-coding-agent.cli"
+description = "the `pi` binary — AI coding agent with read/bash/edit/write tools"
+
+[[b00t.polyseme.refs]]
+name        = "agent"
+canonical   = "b00t:pi.agent"
+datum       = "pi.agent"
+description = "pi as a first-class hive sub-agent (b00t@pi-agent.service, ch0nky tier)"
+
+[[b00t.polyseme.refs]]
+name        = "mcp-client"
+canonical   = "npm:pi-mcp-adapter"
+datum       = "pi-mcp-adapter.cli"
+description = "pi extension that consumes MCP servers through one ~200-token proxy tool"
+
+[[b00t.polyseme.refs]]
+name        = "commands"
+canonical   = "just:pi-agent"
+datum       = "pi-agent.justfile"
+description = "the executable command surface: install / wire-mcp / check / probe / delegate"
+
+[[b00t.polyseme.refs]]
+name        = "local-stack"
+canonical   = "b00t:pi-gemma4-hive.stack"
+datum       = "pi-gemma4-hive.stack"
+description = "pi + local Gemma4 vLLM on :8001 — autonomous ch0nky inference composition"
+
+[b00t.learn]
+topic = "pi"
+inline = """
+"pi" is polysemous — resolve to the facet you actually mean:
+  pi.cli          the binary            → b00t datum show pi-coding-agent.cli
+  pi.agent        the hive sub-agent    → b00t datum show pi.agent
+  pi.mcp-client   the MCP adapter       → b00t datum show pi-mcp-adapter.cli
+  pi.commands     the just surface      → b00t justfile query pi-agent
+  pi.local-stack  local inference       → b00t datum show pi-gemma4-hive
+
+Provision everything:  b00t install pi
+  → resolves 6 datums in dependency order and finishes by running the
+    registered pi runtime adapter (RuntimeId::Pi), which installs pi packages
+    via `pi install` and merges ~/.pi/agent/{settings,mcp}.json additively.
+Preview it first:      b00t install pi --dry-run
+Verify:                just pi-agent::check
+"""
+
+# ── Equivalence pointers only — no install, no version, no usage duplication ──
+entangled_agents = ["pi.agent"]
+entangled_cli    = ["pi-coding-agent.cli", "pi-mcp-adapter.cli"]
+entangled_mcp    = ["b00t-mcp.mcp"]
+
+# b00t:map v1
+# summary: pi polyseme — canonical branch point resolving "pi" to its five concrete datums without duplicating any of them
+# tags: pi, polyseme, canonical, discovery, anti-duplication, coding-agent, mcp-adapter, justfile
+# tier: sm0l
+# cmds: b00t datum show pi, b00t datum search pi, b00t install pi
+# complexity: 2

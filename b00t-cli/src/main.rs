@@ -95,6 +95,7 @@ use b00t_cli::commands::{
     BouncerArgs, BouncerCommands, BootstrapCommands, BudgetCommands,
     ChatCommands, CliCommands, ConfigCommands, ContextCommands, CrewCommand,
     DataCommands, DatumCommands, DoctorCommands,
+    JustfileCommands,
     GhRunnerCommands,
     FocusCommands, GatesCommands, GuardCommands,
     ServerCommands,
@@ -529,6 +530,16 @@ The system will:
         #[clap(subcommand)]
         datum_command: DatumCommands,
     },
+    // 🤓 Registered justfile datums — list/query/validate/ast/registry/run.
+    //    JustfileCommands + handle_justfile_command existed and were exported
+    //    from commands/mod.rs but never reachable from the CLI, so every
+    //    `[b00t.justfile]` datum was invisible to `b00t`. Wiring it here is what
+    //    makes justfile datums discoverable (e.g. `b00t justfile query pi-agent`).
+    #[clap(about = "Registered justfile datums — list, query, validate, AST, registry, run")]
+    Justfile {
+        #[clap(subcommand)]
+        justfile_command: JustfileCommands,
+    },
     #[clap(about = "Grok knowledgebase RAG system")]
     Grok {
         #[clap(subcommand)]
@@ -549,7 +560,7 @@ The system will:
         dry_run: bool,
         #[clap(long, help = "Interactive TUI installer for agent runtimes")]
         interactive: bool,
-        /// Non-interactive: comma-separated runtime IDs (claude,gemini,codex,opencode,copilot)
+        /// Non-interactive: comma-separated runtime IDs (claude,gemini,codex,opencode,copilot,pi)
         #[clap(long, value_delimiter = ',')]
         runtimes: Vec<String>,
         /// Non-interactive: install scope (global or local)
@@ -565,12 +576,20 @@ The system will:
     },
     #[clap(about = "Uninstall a datum by name (use --purge to remove from _b00t_.toml)")]
     Uninstall {
+        /// Datum name or key. Optional when --runtimes is given.
         #[clap(help = "Datum name or key, e.g. 'ripgrep' or 'ripgrep.cli'")]
-        name: String,
+        name: Option<String>,
         #[clap(long, help = "Also remove datum entry from _b00t_.toml")]
         purge: bool,
         #[clap(long, short = 'y', help = "Skip confirmation prompt")]
         yes: bool,
+        /// Inverse of `install --runtimes`: remove b00t-managed runtime content
+        /// using the install manifest (claude,gemini,codex,opencode,copilot,pi).
+        #[clap(long, value_delimiter = ',', conflicts_with = "name")]
+        runtimes: Vec<String>,
+        /// Scope for --runtimes uninstall (global or local)
+        #[clap(long, default_value = "global", requires = "runtimes")]
+        scope: String,
     },
     #[clap(about = "Bootstrap self-configuring b00t installation (Phase 0: Foundation)")]
     Bootstrap {
@@ -2614,6 +2633,13 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Justfile { justfile_command }) => {
+            use b00t_cli::commands::justfile::handle_justfile_command;
+            if let Err(e) = handle_justfile_command(justfile_command, &cli.path) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Grok { grok_command }) => {
             use b00t_cli::commands::grok::handle_grok_command;
             if let Err(e) = handle_grok_command(grok_command.clone()).await {
@@ -2628,9 +2654,65 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-        Some(Commands::Uninstall { name, purge, yes }) => {
-            if let Err(e) = uninstall_datum(&cli.path, &name, *yes, *purge) {
-                eprintln!("Uninstall Error: {}", e);
+        Some(Commands::Uninstall {
+            name,
+            purge,
+            yes,
+            runtimes,
+            scope,
+        }) => {
+            // 🤓 Two distinct uninstalls:
+            //    --runtimes → manifest-aware removal of b00t-managed runtime
+            //                 content (RuntimeAdapter::uninstall).
+            //    <name>     → the datum's own `uninstall` shell script.
+            if !runtimes.is_empty() {
+                let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
+                let mut parse_error = false;
+                for r in runtimes.iter() {
+                    // DRY: same single source of truth as `install --runtimes`.
+                    match b00t_cli::install::RuntimeId::from_token(r) {
+                        Some(id) => runtime_ids_vec.push(id),
+                        None => {
+                            eprintln!(
+                                "Uninstall Error: unknown runtime '{}'. Valid: {}",
+                                r,
+                                b00t_cli::install::RuntimeId::all_tokens_joined()
+                            );
+                            parse_error = true;
+                        }
+                    }
+                }
+                if parse_error {
+                    std::process::exit(1);
+                }
+                let scope_val = match scope.as_str() {
+                    "local" => match std::env::current_dir() {
+                        Ok(dir) => b00t_cli::install::InstallScope::Local(dir),
+                        Err(e) => {
+                            eprintln!("Uninstall Error: cannot determine current directory: {}", e);
+                            std::process::exit(1);
+                        }
+                    },
+                    _ => b00t_cli::install::InstallScope::Global,
+                };
+                if let Err(e) = b00t_cli::install::handle_uninstall_command(
+                    Some(runtime_ids_vec),
+                    Some(scope_val),
+                    *yes,
+                ) {
+                    eprintln!("Uninstall Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else if let Some(name) = name {
+                if let Err(e) = uninstall_datum(&cli.path, name, *yes, *purge) {
+                    eprintln!("Uninstall Error: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                eprintln!(
+                    "Uninstall Error: provide a datum name, or --runtimes <{}>",
+                    b00t_cli::install::RuntimeId::all_tokens_joined()
+                );
                 std::process::exit(1);
             }
         }
@@ -2758,16 +2840,15 @@ async fn main() {
                 let mut runtime_ids_vec: Vec<b00t_cli::install::RuntimeId> = Vec::new();
                 let mut parse_error = false;
                 for r in runtimes.iter() {
-                    match r.as_str() {
-                        "claude" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Claude),
-                        "gemini" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Gemini),
-                        "codex" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Codex),
-                        "opencode" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::OpenCode),
-                        "copilot" => runtime_ids_vec.push(b00t_cli::install::RuntimeId::Copilot),
-                        _ => {
+                    // 🤓 DRY: RuntimeId::from_token is the single source of truth
+                    //    for valid runtime IDs — no per-variant match arm here.
+                    match b00t_cli::install::RuntimeId::from_token(r) {
+                        Some(id) => runtime_ids_vec.push(id),
+                        None => {
                             eprintln!(
-                                "Install Error: unknown runtime '{}'. Valid: claude,gemini,codex,opencode,copilot",
-                                r
+                                "Install Error: unknown runtime '{}'. Valid: {}",
+                                r,
+                                b00t_cli::install::RuntimeId::all_tokens_joined()
                             );
                             parse_error = true;
                         }
@@ -3556,10 +3637,19 @@ mod k0mmand3r_dispatch_tests {
 
         assert_eq!(cli.path, "/tmp/demo");
         match cli.command {
-            Some(Commands::Uninstall { name, yes, purge }) => {
-                assert_eq!(name, "demo-datum");
+            Some(Commands::Uninstall {
+                name,
+                yes,
+                purge,
+                runtimes,
+                scope,
+            }) => {
+                assert_eq!(name.as_deref(), Some("demo-datum"));
                 assert!(yes);
                 assert!(!purge);
+                // Datum-name uninstalls must not silently become runtime uninstalls.
+                assert!(runtimes.is_empty());
+                assert_eq!(scope, "global");
             }
             _ => panic!("expected uninstall command"),
         }

@@ -1,0 +1,86 @@
+[b00t]
+# 🤓 Justfile datum for the pi coding-agent ⇄ b00t-mcp integration surface.
+# 🤓 Only registered justfiles are in agent scope — unregistered = absent from agent view.
+#    This datum is what makes `b00t_just({ just: "pi-agent::check" })` resolvable
+#    and what `b00t install pi` shells into, so the datum graph and the real
+#    command surface cannot drift apart.
+# 💡例 b00t justfile list pi-agent        → registered recipe groups
+# 💡例 b00t justfile query pi-agent       → recipes + docs
+# 💡例 just pi-agent::install             → full idempotent install
+# 💡例 just pi-agent::check               → PASS/FAIL evidence line
+# ⚠️需 b00t-mcp must be launched with --stdio; `wire-mcp` enforces and repairs this.
+# 🔗参 pi.polyseme.toml                   → "pi" name branch point (all facets)
+# 🔗参 pi.agent.toml                      → agent facet that depends_on this datum
+name    = "pi-agent"
+type    = "justfile"
+hint    = "pi coding-agent ⇄ b00t-mcp integration — install, wire, verify, probe, delegate"
+
+[b00t.justfile]
+# ⚠️需 path resolves relative to the REPO ROOT (~/.dotfiles), not to _b00t_/.
+#    datum_project_base_dir() maps a `_b00t_` config path to its parent, so a
+#    bare "pi-agent.just" silently falls back to the root justfile and reports
+#    the wrong recipe count. Keep the _b00t_/ prefix.
+path        = "_b00t_/pi-agent.just"
+mcp_server  = "b00t-mcp"
+recipe_groups = ["install", "verify", "mcp", "service", "delegate", "learn"]
+allowed_sandboxes = ["none"]
+allow_side_effects = true
+# ⚠️需 runtime deps for the recipes themselves (pi/b00t-mcp are installed BY these recipes)
+require     = ["just", "python3", "npm", "b00t-cli"]
+
+[b00t.justfile.capabilities]
+# 🤓 Declared contract, not a request. Undeclared paths are absent from the agent view.
+network     = true                      # npm install -g, pi install, pi update
+filesystem  = [
+    "~/.pi/agent",                      # pi config, mcp.json, settings.json, extensions, npm store
+    "~/.dotfiles",                      # datum + justfile + runtime fragments source of truth
+]
+env_vars    = ["PI_*", "B00T_*", "OPENAI_API_URL", "GOOGLE_API_KEY", "GEMINI_API_KEY"]
+secrets     = ["OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"]
+
+[b00t.learn]
+topic = "pi-agent"
+inline = """
+pi-agent justfile — command surface for pi ⇄ b00t.
+Provisioning is delegated to PiAdapter (RuntimeId::Pi); this file owns the pi
+binary, verification, service lifecycle, and delegation.
+
+  install:  just pi-agent::install         (install-pi → install-runtime → check)
+            just pi-agent::install-pi      (@earendil-works/pi-coding-agent@latest)
+            just pi-agent::install-runtime (b00t-cli install --runtimes pi → PiAdapter)
+            just pi-agent::install-adapter (thin alias for install-runtime)
+  verify:   just pi-agent::check           (PASS/FAIL pi-agent check)
+            just pi-agent::probe [server]  (PASS <server> stdio: N tools)
+            just pi-agent::probe-all       (b00t-mcp + codebase-memory)
+            just pi-agent::e2e             (pi → adapter → b00t-mcp → b00t-cli)
+  inspect:  just pi-agent::status | datum [name]
+  run:      just pi-agent::delegate task="..." [provider= model=]
+  service:  just pi-agent::service-start | service-stop | service-status
+  upkeep:   just pi-agent::update | uninstall | learn
+
+PiAdapter (b00t-cli/src/install/runtimes/pi.rs) is the provisioning authority:
+  • installs pi packages via `pi install` — never `npm install -g`
+  • merges ~/.pi/agent/settings.json additively (packages[] append, no clobber)
+  • merges ~/.pi/agent/mcp.json additively (b00t-mcp + codebase-memory)
+  • enforces the b00t-mcp --stdio invariant, repairing args:[] violations
+  • writes ~/.pi/agent/b00t-manifest.json for manifest-aware uninstall
+  Fragments: _b00t_/runtimes/pi/{settings,mcp}_fragment.json
+
+In pi, the same b00t surface is reachable as MCP tools:
+  b00t_discover({ query: "task" })   → find the right b00t subcommand
+  b00t_exec({ argv: "task list" })   → run it
+  b00t_just({ just: "pi-agent::check" })
+"""
+
+# ── Equivalence pointers (no duplicated logic — this datum only registers) ───
+entangled_agents = ["pi.agent"]
+entangled_cli    = ["pi-coding-agent.cli", "pi-mcp-adapter.cli", "just.cli"]
+entangled_mcp    = ["b00t-mcp.mcp", "codebase-memory.mcp"]
+depends_on       = ["just.cli"]
+
+# b00t:map v1
+# summary: pi-agent justfile datum — registers the pi ⇄ b00t command surface; provisioning delegated to PiAdapter
+# tags: pi, pi-agent, agent-harness, justfile, mcp, b00t-mcp, codebase-memory, runtime-adapter, integration
+# tier: sm0l
+# cmds: just pi-agent::install, just pi-agent::check, b00t justfile query pi-agent
+# complexity: 4

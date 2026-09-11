@@ -436,19 +436,58 @@ pub fn find_datum_by_pattern(b00t_path: &str, pattern: &str) -> Result<Option<Bo
         return Ok(Some(datum.clone()));
     }
 
-    // Try name or lfmf_category match in single pass
-    for (_, datum) in datums.iter() {
+    // 🤓 Several datums may share a `name` — that is exactly what a polyseme is
+    //    for (e.g. pi.agent + pi.polyseme both carry name = "pi"). Returning the
+    //    first HashMap hit made `b00t datum show <name>` nondeterministic across
+    //    runs (observed: Polyseme/Agent/Polyseme on three consecutive calls).
+    //    Rank instead, mirroring install_datum()'s "prefer installable" rule.
+    let mut name_matches: Vec<(String, BootDatum)> = Vec::new();
+    let mut category_matches: Vec<(String, BootDatum)> = Vec::new();
+    for (key, datum) in datums.into_iter() {
         if datum.name == pattern {
-            return Ok(Some(datum.clone()));
-        }
-        if let Some(category) = &datum.lfmf_category {
-            if category == pattern {
-                return Ok(Some(datum.clone()));
-            }
+            name_matches.push((key, datum));
+        } else if datum.lfmf_category.as_deref() == Some(pattern) {
+            category_matches.push((key, datum));
         }
     }
 
-    Ok(None)
+    // A name is more specific than an lfmf_category, so name matches win.
+    let mut matches = if name_matches.is_empty() {
+        category_matches
+    } else {
+        name_matches
+    };
+    if matches.is_empty() {
+        return Ok(None);
+    }
+
+    // Rank so the pick is deterministic and meaningful. Lower sorts first:
+    //   1. live datums before deregistered ones — `enabled = false` or
+    //      `status = "sunset"` (set inline or via _b00t_/.gitattributes) must
+    //      actually affect resolution, otherwise deregistration is decorative
+    //      and a sunset datum can shadow its own live replacement.
+    //   2. polyseme before a concrete facet — a polyseme is the disambiguation
+    //      index for a shared name, so it is the right discovery answer.
+    //   3. key, so any remaining tie is reproducible instead of HashMap-ordered.
+    fn rank(datum: &BootDatum) -> (u8, u8) {
+        let deregistered = if datum.enabled == Some(false)
+            || datum.status.as_deref() == Some("sunset")
+            || datum.status.as_deref() == Some("deprecated")
+        {
+            1
+        } else {
+            0
+        };
+        let facet = if matches!(datum.datum_type, Some(crate::DatumType::Polyseme)) {
+            0
+        } else {
+            1
+        };
+        (deregistered, facet)
+    }
+    matches.sort_by(|a, b| rank(&a.1).cmp(&rank(&b.1)).then_with(|| a.0.cmp(&b.0)));
+
+    Ok(matches.into_iter().next().map(|(_, datum)| datum))
 }
 
 /// Get all datums that have a specific LFMF category

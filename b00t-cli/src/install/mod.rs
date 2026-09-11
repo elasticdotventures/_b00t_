@@ -14,7 +14,7 @@ use crate::install::runtimes::*;
 use anyhow::Result;
 use std::path::PathBuf;
 
-/// Build the default adapter registry with all 5 runtimes
+/// Build the default adapter registry with all 6 runtimes
 pub fn default_registry() -> AdapterRegistry {
     AdapterRegistry::new(vec![
         Box::new(ClaudeAdapter),
@@ -22,6 +22,7 @@ pub fn default_registry() -> AdapterRegistry {
         Box::new(CodexAdapter),
         Box::new(OpenCodeAdapter),
         Box::new(CopilotAdapter),
+        Box::new(PiAdapter),
     ])
 }
 
@@ -122,6 +123,113 @@ pub fn handle_install_command(
     Ok(())
 }
 
+/// Main entry: remove b00t-managed runtime content using the install manifest.
+///
+/// Inverse of [`handle_install_command`]. This is what makes
+/// `RuntimeAdapter::uninstall()` reachable from the CLI — previously the trait
+/// method existed but nothing ever called it, so b00t-managed runtime files
+/// (copied skills/extensions, injected settings.json keys, wired MCP servers)
+/// could be installed but never cleanly removed.
+///
+/// Removal is manifest-scoped and therefore safe: adapters delete only files
+/// whose SHA256 still matches the manifest, back up anything the user modified,
+/// and strip only b00t-injected JSON keys rather than deleting whole configs.
+pub fn handle_uninstall_command(
+    runtimes_arg: Option<Vec<RuntimeId>>,
+    scope_arg: Option<InstallScope>,
+    yes: bool,
+) -> Result<()> {
+    let registry = default_registry();
+
+    // Mirror handle_install_command: explicit --runtimes wins, else detected.
+    let runtimes = runtimes_arg.unwrap_or_else(|| {
+        registry
+            .detected()
+            .iter()
+            .map(|adapter| adapter.id())
+            .collect::<Vec<_>>()
+    });
+    if runtimes.is_empty() {
+        anyhow::bail!(
+            "no runtimes given and none detected — pass --runtimes <{}>",
+            RuntimeId::all_tokens_joined()
+        );
+    }
+    let scope = scope_arg.unwrap_or(InstallScope::Global);
+
+    if !yes {
+        let names: Vec<&str> = runtimes.iter().map(RuntimeId::display_name).collect();
+        let scope_str = match &scope {
+            InstallScope::Global => "globally".to_string(),
+            InstallScope::Local(p) => format!("locally in {}", p.display()),
+        };
+        let confirmed = inquire::Confirm::new(&format!(
+            "Uninstall b00t from [{}] {}? (pass --yes to skip this prompt)",
+            names.join(", "),
+            scope_str
+        ))
+        .with_default(false)
+        .prompt()
+        .map_err(|e| anyhow::anyhow!("Confirmation prompt failed (no TTY available?). Pass --yes to skip confirmation in non-interactive environments. Details: {}", e))?;
+        if !confirmed {
+            anyhow::bail!("Uninstall cancelled.");
+        }
+    }
+
+    let mut uninstalled = 0usize;
+    for runtime_id in &runtimes {
+        let adapter = registry
+            .get(runtime_id)
+            .ok_or_else(|| anyhow::anyhow!("No adapter for {:?}", runtime_id))?;
+        let target = adapter.target_dir(&scope)?;
+        let manifest_path = target.join(manifest::MANIFEST_FILENAME);
+
+        if !manifest_path.exists() {
+            eprintln!(
+                "⚠️  no {} for {} at {} — nothing b00t-managed to remove",
+                manifest::MANIFEST_FILENAME,
+                runtime_id.display_name(),
+                target.display()
+            );
+            continue;
+        }
+
+        let loaded = manifest::B00tInstallManifest::load(&target).map_err(|e| {
+            anyhow::anyhow!(
+                "failed to read {}: {} — refusing to guess what b00t owns",
+                manifest_path.display(),
+                e
+            )
+        })?;
+
+        println!(
+            "Uninstalling b00t from {} ({} managed files, {} managed blocks)...",
+            runtime_id.display_name(),
+            loaded.files.len(),
+            loaded.managed_blocks.len()
+        );
+        adapter.uninstall(&loaded)?;
+        // The manifest describes state that no longer exists; drop it so a
+        // later uninstall cannot act on stale SHA256 records.
+        std::fs::remove_file(&manifest_path).ok();
+        println!("✅ {} uninstalled", runtime_id.display_name());
+        uninstalled += 1;
+    }
+
+    if uninstalled == 0 {
+        anyhow::bail!(
+            "nothing to uninstall — no b00t install manifest found for: {}",
+            runtimes
+                .iter()
+                .map(RuntimeId::display_name)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    println!("\nb00t runtime uninstall complete!");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,9 +248,118 @@ mod tests {
     }
 
     #[test]
-    fn test_default_registry_has_five_adapters() {
+    fn test_default_registry_covers_every_runtime_variant() {
+        // 🤓 Derived from RuntimeId::all_variants() rather than a hardcoded count
+        //    so adding a runtime cannot silently leave it unregistered.
         let registry = default_registry();
-        assert_eq!(registry.all_adapters().len(), 5);
+        let registered: Vec<RuntimeId> =
+            registry.all_adapters().iter().map(|a| a.id()).collect();
+        assert_eq!(
+            registered.len(),
+            RuntimeId::all_variants().len(),
+            "default_registry must register exactly one adapter per RuntimeId"
+        );
+        for id in RuntimeId::all_variants() {
+            assert!(
+                registered.contains(&id),
+                "runtime {:?} is missing from default_registry",
+                id
+            );
+            assert!(
+                registry.get(&id).is_some(),
+                "registry.get({:?}) must resolve",
+                id
+            );
+        }
+    }
+
+    #[test]
+    fn test_runtime_token_roundtrip() {
+        // `--runtimes <token>` parsing must accept every registered runtime and
+        // reject unknown tokens, so main.rs never needs a per-variant match arm.
+        for id in RuntimeId::all_variants() {
+            let token = id.token();
+            assert_eq!(
+                RuntimeId::from_token(token),
+                Some(id),
+                "token {:?} must roundtrip",
+                token
+            );
+        }
+        assert_eq!(RuntimeId::from_token("PI"), Some(RuntimeId::Pi), "case-insensitive");
+        assert_eq!(RuntimeId::from_token(" pi "), Some(RuntimeId::Pi), "whitespace-trimmed");
+        assert_eq!(RuntimeId::from_token("cursor"), None, "unknown token rejected");
+        assert!(
+            RuntimeId::all_tokens_joined().contains("pi"),
+            "help/error text must list pi"
+        );
+    }
+
+    // ── handle_uninstall_command: the inverse of handle_install_command ────────
+    // 🤓 PiAdapter honours PI_CODING_AGENT_DIR, so these tests exercise the real
+    //    manifest-aware uninstall path against a throwaway agent dir.
+
+    #[test]
+    fn test_handle_uninstall_command_strips_wired_servers_and_keeps_user_ones() {
+        let _mutex = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::TempDir::new().unwrap();
+        let agent_dir = tmp.path().join("agent");
+        std::fs::create_dir_all(&agent_dir).unwrap();
+        let _env = EnvVarRestoreGuard::set("PI_CODING_AGENT_DIR", agent_dir.to_str().unwrap());
+
+        // Simulate a prior install: wired servers alongside a user-added one.
+        std::fs::write(
+            agent_dir.join("mcp.json"),
+            r#"{"mcpServers":{"b00t-mcp":{"command":"b00t-mcp","args":["--stdio"]},"codebase-memory":{"command":"codebase-memory-mcp"},"context7":{"command":"bunx"}},"settings":{"outputGuard":true}}"#,
+        )
+        .unwrap();
+        let mut m = manifest::B00tInstallManifest::new(RuntimeId::Pi, InstallScope::Global);
+        m.managed_blocks.push(agent_dir.join("mcp.json"));
+        m.save(&agent_dir).unwrap();
+
+        handle_uninstall_command(Some(vec![RuntimeId::Pi]), Some(InstallScope::Global), true)
+            .expect("uninstall must succeed against a valid manifest");
+
+        let after: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(agent_dir.join("mcp.json")).unwrap())
+                .unwrap();
+        for wired in WIRED_MCP_SERVERS {
+            assert!(
+                after["mcpServers"].get(*wired).is_none(),
+                "b00t-wired server {} must be removed",
+                wired
+            );
+        }
+        assert!(
+            after["mcpServers"].get("context7").is_some(),
+            "a server the operator added must survive uninstall"
+        );
+        assert_eq!(
+            after["settings"]["outputGuard"],
+            serde_json::json!(true),
+            "unrelated settings must not be touched"
+        );
+        assert!(
+            !agent_dir.join(manifest::MANIFEST_FILENAME).exists(),
+            "manifest must be consumed so a second uninstall cannot act on stale SHA256 records"
+        );
+    }
+
+    #[test]
+    fn test_handle_uninstall_command_errors_when_no_manifest() {
+        let _mutex = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let tmp = tempfile::TempDir::new().unwrap();
+        let agent_dir = tmp.path().join("agent-empty");
+        std::fs::create_dir_all(&agent_dir).unwrap();
+        let _env = EnvVarRestoreGuard::set("PI_CODING_AGENT_DIR", agent_dir.to_str().unwrap());
+
+        let err = handle_uninstall_command(Some(vec![RuntimeId::Pi]), Some(InstallScope::Global), true)
+            .expect_err("uninstall without a manifest must fail rather than guess");
+        assert!(
+            err.to_string().contains("nothing to uninstall"),
+            "expected an explicit nothing-to-uninstall error, got: {}",
+            err
+        );
     }
 
     #[test]
@@ -169,6 +386,14 @@ mod tests {
             let original = std::env::var(name).ok();
             unsafe {
                 std::env::remove_var(name);
+            }
+            Self { name, original }
+        }
+
+        fn set(name: &'static str, value: &str) -> Self {
+            let original = std::env::var(name).ok();
+            unsafe {
+                std::env::set_var(name, value);
             }
             Self { name, original }
         }

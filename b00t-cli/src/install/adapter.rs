@@ -17,6 +17,10 @@ pub enum RuntimeId {
     Codex,
     OpenCode,
     Copilot,
+    /// pi coding agent — an agent harness whose extension points are TypeScript
+    /// extensions, skills, prompt templates, and pi-managed packages installed
+    /// via `pi install` (never `npm install -g`).
+    Pi,
 }
 
 impl RuntimeId {
@@ -27,6 +31,7 @@ impl RuntimeId {
             RuntimeId::Codex => "Codex",
             RuntimeId::OpenCode => "OpenCode",
             RuntimeId::Copilot => "Copilot",
+            RuntimeId::Pi => "pi",
         }
     }
 
@@ -37,7 +42,44 @@ impl RuntimeId {
             RuntimeId::Codex => "codex",
             RuntimeId::OpenCode => "opencode",
             RuntimeId::Copilot => "copilot",
+            RuntimeId::Pi => "pi",
         }
+    }
+
+    /// All runtime variants, in canonical order.
+    pub fn all_variants() -> Vec<RuntimeId> {
+        vec![
+            RuntimeId::Claude,
+            RuntimeId::Gemini,
+            RuntimeId::Codex,
+            RuntimeId::OpenCode,
+            RuntimeId::Copilot,
+            RuntimeId::Pi,
+        ]
+    }
+
+    /// CLI token for this runtime (same as `source_dir_name`).
+    pub fn token(&self) -> &'static str {
+        self.source_dir_name()
+    }
+
+    /// Parse a CLI token such as `"pi"` into a RuntimeId.
+    /// 🤓 Single source of truth for `--runtimes` parsing and error messages —
+    ///    adding a variant to `all_variants()` is the only change needed.
+    pub fn from_token(s: &str) -> Option<RuntimeId> {
+        let needle = s.trim().to_ascii_lowercase();
+        Self::all_variants()
+            .into_iter()
+            .find(|id| id.token() == needle)
+    }
+
+    /// Comma-separated list of every valid CLI token, for help/error text.
+    pub fn all_tokens_joined() -> String {
+        Self::all_variants()
+            .iter()
+            .map(|id| id.token())
+            .collect::<Vec<_>>()
+            .join(",")
     }
 }
 

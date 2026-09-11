@@ -1,23 +1,57 @@
-# b00t Agent Datum — pi-coding-agent as first-class hive sub-agent
-# 🤓 pi is managed as a systemd --user service (b00t hive pattern)
-#    pi --mode rpc runs as a persistent RPC/stdio server; b00t generates the unit
-#    Activate: systemctl --user start b00t@pi-agent.service
-#    Swap:     systemctl --user stop b00t@pi-agent && systemctl --user start b00t@opencode-agent
-#    MCP tools available via pi-mcp-adapter (b00t-mcp lazy-loaded)
-# https://shittycodingagent.ai/ / https://github.com/badlogic/pi-mono
+# b00t Agent Datum — pi coding agent as a first-class hive sub-agent
+# 🤓 pi is an AGENT HARNESS, not a conventional CLI. This datum is the hive-agent
+#    FACET only: identity, executor, IPC, bouncer, systemd unit, crew role.
+#
+# ⚠️需 ANTI-DUPLICATION INVARIANT — this datum deliberately declares NO
+#    install / update / version / version_regex. Those live in exactly one place:
+#      • pi binary lifecycle  → pi-coding-agent.cli.toml   (type_tags: agent-harness)
+#      • pi extension runtime → PiAdapter (b00t-cli/src/install/runtimes/pi.rs)
+#      • executable commands  → _b00t_/pi-agent.just (pi-agent.justfile datum)
+#    `install` below delegates to the registered pi runtime adapter, so
+#    `b00t install pi` provisions the harness AND every extension/MCP server it
+#    needs, in dependency order, with a manifest for clean uninstall.
+#
+# ⚠️需 CORRECTION: `pi --mode rpc` is pi's own JSONL RPC protocol over stdio —
+#    it is NOT MCP. pi has no built-in MCP client or server (docs/usage.md).
+#    MCP reaches pi through the pi-mcp-adapter *client* extension, which consumes
+#    b00t-mcp; nothing here exposes pi as an MCP server. The former
+#    pi-mcp-adapter.mcp datum asserted otherwise and is deregistered.
+#
+# 🔗参 pi.polyseme.toml            → "pi" branch point (all facets)
+# 🔗参 pi-coding-agent.cli.toml    → canonical binary install/version
+# 🔗参 pi-mcp-adapter.cli.toml     → canonical MCP client extension
+# 🔗参 pi-agent.justfile.toml      → executable command surface
+# 🔗参 _b00t_/runtimes/pi/         → PiAdapter settings + mcp fragments
+# https://pi.dev/docs/latest/extensions / https://github.com/earendil-works/pi-mono
 
 [b00t]
 name = "pi"
 type = "agent"
 desires = "latest"
-hint = "pi coding agent — systemd-managed RPC server; ch0nky tier; swap with opencode via hive stop/start"
+hint = "pi coding agent — agent harness and hive sub-agent; provisions extensions + MCP via the registered pi runtime adapter"
+type_tags = ["agent-harness", "coding-agent", "sub-agent", "mcp-client", "extension-host"]
 
-entangled_mcp = ["pi-mcp-adapter.mcp", "b00t-mcp.mcp"]
+# 🤓 Registered runtime handler set (RuntimeId::Pi) — installs pi packages via
+#    `pi install`, merges ~/.pi/agent/settings.json + mcp.json additively,
+#    enforces the b00t-mcp --stdio invariant, and writes b00t-manifest.json.
+install = "b00t-cli install --runtimes pi --scope global -y"
+update = "b00t-cli install --runtimes pi --scope global -y"
 
-install = "npm install -g @mariozechner/pi-coding-agent@latest"
-update = "npm install -g @mariozechner/pi-coding-agent@latest"
-version = "pi --version"
-version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
+# ── Install ordering. depends_on = what must exist BEFORE install runs. ──────
+# 🤓 pi-coding-agent.cli first: PiAdapter shells out to `pi install`, so the
+#    binary must be on PATH. b00t-mcp + codebase-memory are the servers the
+#    adapter wires into mcp.json. entangled_* below is the knowledge-graph link
+#    (not install ordering) — the two are deliberately different relations.
+depends_on = [
+  "pi-coding-agent.cli",
+  "b00t-mcp.mcp",
+  "codebase-memory.mcp",
+  "just.cli",
+]
+
+# ── Equivalence pointers (no logic duplication) ──────────────────────────────
+entangled_cli = ["pi-coding-agent.cli", "pi-mcp-adapter.cli"]
+entangled_mcp = ["b00t-mcp.mcp", "codebase-memory.mcp"]
 
 [[b00t.agent.inherits]]
 from = "++abstract.agent"
@@ -25,7 +59,7 @@ from = "++abstract.agent"
 [b00t.agent]
 pid = "pi-001"
 branch = "main"
-# 🤓 ch0nky is a logical local big-model slot on :8001. As of 2026-04-30 the verified path is qwen36-local/ch0nky via llama.cpp.
+# 🤓 ch0nky is the logical local big-model slot on :8001 (see pi-gemma4-hive.stack).
 model = "ch0nky"
 skills = ["code", "refactor", "debug", "edit", "bash", "read", "write", "grep", "find", "ls"]
 personality = "pragmatic"
@@ -33,17 +67,18 @@ humor = "low"
 role = "specialist"
 
 [b00t.agent.executor]
-# 🤓 cli_path must be on PATH; pi --mode rpc is the persistent path; this is one-shot fallback via handle_invoke
+# 🤓 cli_path must be on PATH. `pi --mode rpc` is the persistent JSONL-RPC path
+#    (pi's own protocol, not MCP); cli_args is the one-shot fallback.
 cli_path = "pi"
 cli_args = ["-p", "--provider", "llama-cpp", "--model", "ch0nky"]
 supports_tools = ["read", "write", "bash", "grep", "ls"]
 max_iterations = 10
 requires = ["b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
-# hive_profile activates the currently preferred ch0nky local model before invocation
 hive_profile = "inference-qwen36-35b-a3b-llamacpp"
 
 [b00t.agent.ipc]
-# 🤓 pi --mode rpc exposes stdio RPC; pi-mcp-adapter bridges to MCP clients
+# 🤓 pi --mode rpc speaks pi's JSONL RPC over stdio — NOT MCP. An MCP client
+#    reaching pi needs a bridge; conversely pi reaches b00t via pi-mcp-adapter.
 socket = "/tmp/b00t/agents/pi.sock"
 pubsub = false
 protocol = "rpc+stdio"
@@ -51,7 +86,6 @@ protocol = "rpc+stdio"
 [b00t.agent.crew]
 role = "specialist"
 captain = false
-
 
 [b00t.agent.bouncer]
 enabled = true
@@ -69,25 +103,28 @@ security_scan = { enabled = true, check_secrets = true }
 quality_check = { enabled = true, min_quality_score = 0.8 }
 
 [b00t.agent.mcp]
-# 🤓 pi-mcp-adapter bridges pi RPC → MCP; servers defined in ~/.pi/agent/mcp.json
+# 🤓 pi CONSUMES MCP through pi-mcp-adapter. Servers are declared in
+#    ~/.pi/agent/mcp.json, written additively by PiAdapter from
+#    _b00t_/runtimes/pi/mcp_fragment.json. pi is never an MCP server.
 enabled = true
 
 # ── Inline service spec — b00t generates this unit dynamically ───────────────
-# 🤓 b00t@pi-agent.service → `pi --mode rpc` persistent RPC daemon
-#    pi-mcp-adapter must be installed: `pi install npm:pi-mcp-adapter`
-#    Swap pattern: stop this unit, start b00t@opencode-agent.service — same ch0nky slot
+# 🤓 b00t@pi-agent.service → `pi --mode rpc` persistent RPC daemon.
+#    Swap pattern: stop this unit, start b00t@opencode-agent — same ch0nky slot.
 [b00t.hive.service]
-description = "pi coding agent RPC server — ch0nky tier (pi-mcp-adapter)"
+description = "pi coding agent RPC server — ch0nky tier (agent harness)"
 service_type = "simple"
 restart = "on-failure"
 restart_sec = "10s"
 timeout_start_sec = "60"
 after = ["network.target", "b00t-hive-inference-qwen36-35b-a3b-llamacpp.service"]
 environment = [
-  "PATH=/home/brianh/.nvm/versions/node/v22.15.1/bin:/usr/local/bin:/usr/bin:/bin",
+  # ⚠️需 node path was pinned to v22.15.1; the active nvm node is v24.19.0.
+  #    A stale pin silently makes `pi` unresolvable inside the unit.
+  "PATH=/home/brianh/.nvm/versions/node/v24.19.0/bin:/usr/local/bin:/usr/bin:/bin",
   "LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1",
-  # 🤓 OPENAI_API_KEY sourced from .env / CMDB; local llama.cpp proxy accepts any non-empty string
   "OPENAI_API_KEY=${OPENAI_API_KEY:-local-b00t}",
+  "PI_CODING_AGENT_DIR=/home/brianh/.pi/agent",
 ]
 exec_start = "pi --mode rpc --provider llama-cpp --model ch0nky"
 
@@ -101,7 +138,8 @@ ram_free_gb = 1
 gpu_free_mb = 0
 
 [b00t.hive.exclusion]
-# 🤓 only one ch0nky coding-agent service active at a time; pi and opencode are mutually exclusive
+# 🤓 only one ch0nky coding-agent service active at a time; pi and opencode are
+#    mutually exclusive (agent-harness swap, not concurrent).
 group = "ch0nky-coding-agent"
 priority = 50
 
@@ -111,48 +149,47 @@ AGENT_SKILLS = "code,refactor,debug,edit,bash"
 PI_CODING_AGENT_DIR = "~/.pi/agent"
 PI_MODEL = "ch0nky"
 LLAMA_CPP_BASE_URL = "http://127.0.0.1:8001/v1"
-# 🤓 OPENAI_API_KEY falls back to "local-b00t"; override via .env / CMDB for non-local deployments
 OPENAI_API_KEY = "${OPENAI_API_KEY:-local-b00t}"
 
+# ── Usage: AGENT-FACET ONLY ──────────────────────────────────────────────────
+# 🤓 Binary lifecycle usage lives in pi-coding-agent.cli; adapter/wiring usage
+#    lives in pi-mcp-adapter.cli; the executable surface lives in
+#    pi-agent.justfile. Nothing here repeats them.
 [[b00t.usage]]
-description = "Start pi agent service (b00t hive)"
+description = "Provision the pi runtime: extensions, packages, MCP wiring (PiAdapter)"
+command = "b00t install pi"
+
+[[b00t.usage]]
+description = "Preview the resolved install order for the pi dependency chain"
+command = "b00t install pi --dry-run"
+
+[[b00t.usage]]
+description = "Verify the whole pi ⇄ b00t-mcp chain (emits PASS/FAIL evidence line)"
+command = "just pi-agent::check"
+
+[[b00t.usage]]
+description = "Start the pi agent hive service"
 command = "systemctl --user start b00t@pi-agent.service"
 
 [[b00t.usage]]
-description = "Install or update pi to latest published version"
-command = "npm install -g @mariozechner/pi-coding-agent@latest"
-
-[[b00t.usage]]
-description = "Verify the installed pi version"
-command = "pi --version"
-
-[[b00t.usage]]
-description = "Verify the local ch0nky model is registered in pi"
-command = "pi --list-models ch0nky"
-
-[[b00t.usage]]
-description = "Repair ~/.pi/agent/models.json for the current local qwen36 API key"
-command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
-
-[[b00t.usage]]
-description = "Probe the local ch0nky model through pi (verified 2026-04-30)"
-command = "pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'"
-
-[[b00t.usage]]
-description = "Stop pi agent service"
+description = "Stop the pi agent hive service"
 command = "systemctl --user stop b00t@pi-agent.service"
 
 [[b00t.usage]]
-description = "Swap from opencode to pi (same ch0nky slot)"
+description = "Swap agent harness from opencode to pi (same ch0nky slot)"
 command = "systemctl --user stop b00t@opencode-agent.service && systemctl --user start b00t@pi-agent.service"
 
 [[b00t.usage]]
-description = "Connect to pi RPC server via pi-mcp-adapter (from another agent)"
-command = "b00t mcp install pi-mcp-adapter claudecode"
+description = "Delegate a task to the pi sub-agent (one-shot)"
+command = "just pi-agent::delegate task='implement X in Y'"
+
+[[b00t.usage]]
+description = "Remove b00t-managed pi runtime files using the install manifest"
+command = "b00t uninstall pi"
 
 # b00t:map v1
-# summary: pi coding agent — systemd-managed RPC server; ch0nky slot; swap with opencode via hive stop/start
-# tags: pi, agent, gemma4, ch0nky, systemd, rpc, hive, swap, mcp-adapter
+# summary: pi agent datum — hive-agent facet of the pi harness; delegates install to the registered PiAdapter runtime; zero duplicated install/version logic
+# tags: pi, agent, agent-harness, ch0nky, systemd, rpc, hive, swap, runtime-adapter
 # tier: ch0nky
-# cmds: systemctl --user start b00t@pi-agent.service
+# cmds: b00t install pi, systemctl --user start b00t@pi-agent.service, just pi-agent::check
 # complexity: 5

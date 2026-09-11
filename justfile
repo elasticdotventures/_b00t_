@@ -63,6 +63,8 @@ mod b00t-embed '_b00t_/justfile-b00t-embed.just'
 mod autolearn '_b00t_/justfile-autolearn.just'
 mod ralph '_b00t_/justfile-ralph.just'
 mod dstack-sdd '_b00t_/justfile-dstack-sdd.just'
+# 🥧 pi coding agent ⇄ b00t-mcp integration (canonical command surface for pi.agent datum)
+mod pi-agent '_b00t_/pi-agent.just'
 
 # ── Module guide — `just modules` or `just --list <module>` ──────────────────
 # Lists all submodule justfiles registered in this repo.
@@ -82,6 +84,7 @@ mod dstack-sdd '_b00t_/justfile-dstack-sdd.just'
     @echo "  b00t          Core b00t CLI wrappers"
     @echo "  embed         Embedding pipeline"
     @echo "  qwen-code     Qwen code agent"
+    @echo "  pi-agent      pi coding agent ⇄ b00t-mcp (just pi-agent::install|check|probe)"
     @echo "  irontology    Ontology + semantic RAG"
     @echo ""
     @echo "  Usage: just <module>::<recipe>"

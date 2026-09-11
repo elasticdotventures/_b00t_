@@ -1,17 +1,41 @@
-# b00t CLI Datum — pi coding agent (@mariozechner/pi-coding-agent)
-# 🤓 Lightweight AI coding assistant; supports local models via openai-completions API
-# Wired as b00t hive sub-agent for sm0l/ch0nky tier tasks
-# https://github.com/badlogic/pi-mono/
+# b00t CLI Datum — pi coding agent (@earendil-works/pi-coding-agent)
+# 🤓 CANONICAL datum for the `pi` BINARY ONLY: install / update / version.
+#    Nothing else may duplicate these fields. The agent facet (pi.agent.toml)
+#    depends_on this datum instead of re-declaring it.
+#
+# ⚠️需 package renamed: @mariozechner/pi-coding-agent is STALE (frozen at 0.73.1).
+#    The maintained package is @earendil-works/pi-coding-agent (0.85.1 verified).
+#    Every install/update path routes through just pi-agent::install-pi so the
+#    package name exists in exactly one place (_b00t_/pi-agent.just:PI_PKG).
+#
+# 🔗参 pi.polyseme.toml          → "pi" branch point (all five facets)
+# 🔗参 pi-agent.justfile.toml    → executable command surface
+# 🔗参 pi-mcp-adapter.cli.toml   → MCP client extension (separate concern)
+# https://github.com/earendil-works/pi-mono / https://pi.dev/docs/latest/extensions
 
 [b00t]
 name = "pi-coding-agent"
 type = "cli"
 desires = "latest"
 hint = "pi — lightweight AI coding agent; local model support via openai-completions; MCP via pi-mcp-adapter"
-install = "npm install -g @mariozechner/pi-coding-agent"
-update = "npm install -g @mariozechner/pi-coding-agent"
+# 🤓 Single source of truth for the command line lives in _b00t_/pi-agent.just.
+#    --justfile keeps this cwd-independent (b00t install runs bash -c from anywhere).
+install = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-pi"
+update = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-pi"
+# 🤓 version/version_regex are canonical HERE — pi.agent must not re-declare them.
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
+aliases = ["pi"]
+# 🤓 pi IS installable as a cli — but it is an agent HARNESS, not a conventional
+#    CLI. `type_tags` is the queryable trait mechanism (b00t whoami --tag-count,
+#    datum_proof trait resolution), so tag the harness rather than inventing a
+#    DatumType. Same convention as datums/openharness.tomllmd.
+#    "The model is the agent. The code is the harness."
+type_tags = ["agent-harness", "coding-agent", "mcp-client", "sub-agent", "extension-host"]
+# ⚠️需 INVARIANT: exactly ONE cli datum for pi. pi.agent is the hive-agent facet
+#    and must never re-declare install/update/version — it depends_on this datum.
+#    Two installable datums sharing name="pi" would make `b00t install pi`
+#    nondeterministic (install_datum picks the first installable HashMap match).
 
 [b00t.env]
 PI_CODING_AGENT_DIR = "~/.pi/agent"
@@ -20,52 +44,49 @@ PI_CODING_AGENT_DIR = "~/.pi/agent"
 topic = "pi-coding-agent"
 auto_digest = true
 
-# ── Local ch0nky via custom llama-cpp provider in ~/.pi/agent/models.json ───
-# 🤓 verified 2026-04-30: ~/.pi/agent/models.json MUST use apiKey=local-b00t for the qwen36 ch0nky slot
+# ── Usage: binary-lifecycle only. Integration/wiring usage lives in ──────────
+# ── pi-mcp-adapter.cli and pi-agent.justfile — never duplicated here. ────────
 [[b00t.usage]]
-description = "Install or update pi to latest published version"
-command = "npm install -g @mariozechner/pi-coding-agent@latest"
-
-# ── Non-interactive (sub-agent usage) ────────────────────────────────────────
-[[b00t.usage]]
-description = "Repair ~/.pi/agent/models.json for the current local qwen36 API key"
-command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
+description = "Install or update the pi binary (canonical, via justfile)"
+command = "just pi-agent::install-pi"
 
 [[b00t.usage]]
-description = "List the local ch0nky model from pi's model registry"
+description = "Verify the installed pi version"
+command = "pi --version"
+
+[[b00t.usage]]
+description = "List pi's model registry (optionally fuzzy-filtered)"
 command = "pi --list-models ch0nky"
 
 [[b00t.usage]]
-description = "Delegate a coding task to pi sub-agent (non-interactive, verified local path)"
-command = "pi -p --provider llama-cpp --model ch0nky 'implement X in Y'"
+description = "Repair ~/.pi/agent/models.json for the current local ch0nky API key"
+command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
 
 [[b00t.usage]]
-description = "Install pi-mcp-adapter (enables MCP access from pi)"
-command = "pi install npm:pi-mcp-adapter"
+description = "Delegate a one-shot coding task to pi (non-interactive)"
+command = "just pi-agent::delegate task='implement X in Y'"
 
 [[b00t.usage]]
-description = "Probe available models from local OpenAI-compatible endpoint on :8001"
+description = "Probe the local OpenAI-compatible endpoint on :8001"
 command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
-
-[[b00t.usage]]
-description = "Interactive pi with the current local ch0nky slot"
-command = "pi --provider llama-cpp --model ch0nky"
-
-[[b00t.usage]]
-description = "Probe the local ch0nky model through pi (verified 2026-04-30)"
-command = "pi -p --provider llama-cpp --model ch0nky 'Reply with READY and the model alias only.'"
 
 [validate]
 command = "pi --version"
 regex = "[0-9]+"
+
+# ── Equivalence pointers ─────────────────────────────────────────────────────
+entangled_agents = ["pi.agent"]
+entangled_cli = ["pi-mcp-adapter.cli", "just.cli"]
+entangled_mcp = ["b00t-mcp.mcp"]
+depends_on = ["just.cli"]
 
 [roles]
 required_for = ["local-inference", "sub-agent"]
 optional_for = ["developer", "hive"]
 
 # b00t:map v1
-# summary: pi-coding-agent CLI datum — local LLM sub-agent with MCP via pi-mcp-adapter
-# tags: pi, coding-agent, sub-agent, local-llm, qwen36, ch0nky, mcp
+# summary: pi-coding-agent CLI datum — canonical install/version for the pi binary (@earendil-works package)
+# tags: pi, coding-agent, sub-agent, local-llm, ch0nky, cli, canonical
 # tier: ch0nky
-# cmds: LLAMA_CPP_BASE_URL=http://127.0.0.1:8001/v1 pi --provider llama-cpp --model ch0nky -p "task"
-# complexity: 4
+# cmds: just pi-agent::install-pi, pi --version, pi --list-models ch0nky
+# complexity: 3
