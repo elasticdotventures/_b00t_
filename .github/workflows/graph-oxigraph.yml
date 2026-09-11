@@ -63,7 +63,7 @@ jobs:
 
       # 1. Emit the graph from the repo's own _b00t_/ (default b00t-cli build).
       - name: emit-triples
-        run: cargo run -p b00t-cli --locked -- graph emit-triples --out "$RUNNER_TEMP/graph.jsonl"
+        run: cargo run -p b00t-cli --bin b00t-cli --locked -- graph emit-triples --out "$RUNNER_TEMP/graph.jsonl"
 
       - name: triple sanity
         run: |
