@@ -1,0 +1,93 @@
+# 🤓 SP5 continuation — CI-driven signed graph-artifact publish (Phase 1).
+#    See docs/superpowers/specs/2026-09-11-sp5-graph-artifact-publish-design.md.
+#    Two-step build, same as graph-oxigraph.yml's own split: `b00t-cli graph
+#    emit-triples` runs in the normal (store-helixdb) build; the KerML view
+#    export only compiles under `--features store-oxigraph`, which is
+#    mutually exclusive with the default feature set.
+#
+#    Note: the b00t-c0re-lib `b00t-graph` example currently only has a
+#    `kerml` command (no `iso_ir` export subcommand exists yet) — this
+#    workflow only emits the KerML view for now. Signing + S3/ZeroFS publish
+#    are still TODO (tracked on spec/sp5-sysml-coherence's PR #1301
+#    checklist) — this is the build step only.
+
+name: graph-artifact-publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: graph-artifact-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: graph-artifact-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container:
+      image: ghcr.io/elasticdotventures/ci-occt:latest
+    env:
+      OCCT_ROOT: /opt/occt
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout 🥾
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Set up Rust workspace
+        uses: ./.github/actions/setup-rust-workspace
+
+      # oxigraph's RocksDB backend (oxrocksdb-sys) build.rs shells out to
+      # bindgen, which needs libclang.so — not present on the ci-occt image.
+      - name: Install libclang (required by oxigraph's oxrocksdb-sys via bindgen)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+
+      # 1. Emit the composed datum + identity/authz graph as JSONL triples
+      #    (default b00t-cli build, same command graph-oxigraph.yml's own
+      #    emit-triples step uses).
+      - name: emit-triples
+        run: cargo run -p b00t-cli --bin b00t-cli --locked -- graph emit-triples --out "$RUNNER_TEMP/graph.jsonl"
+
+      - name: triple sanity
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/graph.jsonl"
+          python3 -c "import json,sys; [json.loads(l) for l in open('$RUNNER_TEMP/graph.jsonl') if l.strip()]"
+          echo "lines: $(wc -l < "$RUNNER_TEMP/graph.jsonl")"
+
+      # 2. Load those triples into an Oxigraph store and export the KerML
+      #    view (store-oxigraph feature, separate cargo invocation — can't
+      #    ride the default --workspace build, same constraint as
+      #    graph-oxigraph.yml).
+      - name: kerml-view
+        run: |
+          cargo run -p b00t-c0re-lib --example b00t-graph --no-default-features \
+            --features store-oxigraph --locked -- \
+            kerml "$RUNNER_TEMP/graph.jsonl" --view datum-deps \
+            > "$RUNNER_TEMP/kerml-view.ttl"
+          test -s "$RUNNER_TEMP/kerml-view.ttl"
+
+      - name: Upload kerml-view artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kerml-view-${{ github.ref_name }}
+          path: ${{ runner.temp }}/kerml-view.ttl
+          retention-days: 30
+
+      # TODO(sp5-continuation): sign (GraphArtifactManifest, b00t-cli/src/
+      # datum_agent_profile.rs's Signable trait) + publish to S3/ZeroFS
+      # (StorageKind::{S3,Zerofs}, b00t-cli/src/commands/finetune_job.rs) +
+      # NATS reindex publish. Tracked on PR #1301's checklist — placeholder
+      # until those land.
+      - name: sign + publish (placeholder)
+        run: echo "TODO: sign + publish to S3/ZeroFS — see docs/superpowers/specs/2026-09-11-sp5-graph-artifact-publish-design.md"
