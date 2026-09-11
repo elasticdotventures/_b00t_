@@ -200,7 +200,7 @@ pub async fn publish(
 /// Async dispatch entry point — `Publish` needs real async I/O (S3 push via
 /// a blocking subprocess is fine sync, but the NATS publish is async); every
 /// other variant delegates to the sync `execute()` unchanged.
-pub async fn execute_async(cmd: GraphCommands, b00t_path: &str) -> Result<()> {
+pub async fn execute_async(cmd: &GraphCommands, b00t_path: &str) -> Result<()> {
     match cmd {
         GraphCommands::Publish {
             kerml_view,
@@ -216,20 +216,20 @@ pub async fn execute_async(cmd: GraphCommands, b00t_path: &str) -> Result<()> {
         } => {
             let _ = b00t_path; // publish() doesn't need the datum tree
             publish(
-                Path::new(&kerml_view),
-                Path::new(&turtle_view),
-                &tag,
-                &commit_sha,
-                &kid,
-                &bucket,
+                Path::new(kerml_view),
+                Path::new(turtle_view),
+                tag,
+                commit_sha,
+                kid,
+                bucket,
                 region.as_deref(),
                 profile.as_deref(),
                 nats_url.as_deref(),
-                mock,
+                *mock,
             )
             .await
         }
-        other => execute(&other, b00t_path),
+        other => execute(other, b00t_path),
     }
 }
 
