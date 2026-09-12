@@ -4,7 +4,7 @@
 //! and Kubernetes Deployment manifest generation for the pipeline engine's
 //! CapsuleDefinition custom resource (GH #731).
 
-use crate::pipeline_secrets::SecretRef;
+use b00t_pipeline_types::SecretRef;
 use crate::pipeline_types::{ResourceRequirements, StageSpec};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

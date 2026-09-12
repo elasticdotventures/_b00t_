@@ -37,6 +37,7 @@ members = [
     "b00t-embed-serve",
     "b00t-stt-serve",
     "b00t-council",
+    "b00t-pipeline-types",
     # 🤓 uses version.workspace=true / edition.workspace=true — was absent from
     # both members and exclude, so `cargo check -p b00t-c0re` failed with
     # Cargo's "package believes it's in a workspace" error. Restoring
@@ -77,6 +78,7 @@ ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
+b00t-pipeline-types = { path = "b00t-pipeline-types" }
 k0mmand3r = { path = "k0mmand3r" }
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }

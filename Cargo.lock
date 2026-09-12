@@ -1672,6 +1672,7 @@ dependencies = [
  "b00t-grok",
  "b00t-ipc",
  "b00t-l3dg3rr-viz",
+ "b00t-pipeline-types",
  "b00t-reflect-types",
  "base64 0.22.1",
  "blessed",
@@ -1946,6 +1947,17 @@ version = "0.10.5"
 dependencies = [
  "mermaid-rs-renderer",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "b00t-pipeline-types"
+version = "0.10.5"
+dependencies = [
+ "anyhow",
+ "b00t-c0re-lib",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
