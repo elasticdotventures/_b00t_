@@ -102,9 +102,19 @@ b00t-bouncer = { path = "../b00t-bouncer" }
 [dev-dependencies]
 tokio-test = "0.4"
 tracing-subscriber = "0.3"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
+# b00t-graph's `watch` subcommand only (SP5 continuation) -- example-scoped,
+# not a runtime dependency of the library itself. Same version already used
+# by b00t-cli's chat.rs.
+async-nats = "0.45.0"
 
 [[example]]
 name = "b00t-graph"
 path = "examples/b00t-graph.rs"
 required-features = ["store-oxigraph"]
+# Examples default to test = false in Cargo -- without this, nextest never
+# considers watch_tests as candidates at all, regardless of -E filters
+# (found the hard way: graph-oxigraph.yml went green twice with the
+# filter fixed, but its own summary line still showed 0 of the 5 new
+# tests running).
+test = true

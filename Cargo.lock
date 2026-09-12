@@ -1660,6 +1660,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "ascent",
+ "async-nats",
  "async-trait",
  "b00t-bouncer",
  "b00t-ipc",
