@@ -1,0 +1,22 @@
+name: ARC cpu-builds smoke test
+
+# Manual-dispatch-only proof that the GKE Autopilot `arc-runners` cluster's `cpu-builds`
+# AutoscalingRunnerSet (see infrastructure/terraform/google/gke-arc-runners.tf and
+# _b00t_/k8s/gke-arc-runners/) can actually pick up and run a real job. Not wired into any
+# push/PR trigger — this is a one-off verification workflow, not part of normal CI.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: cpu-builds
+    steps:
+      - name: Prove the runner is alive
+        run: |
+          echo "hostname: $(hostname)"
+          echo "kernel: $(uname -a)"
+          echo "ARC cpu-builds runner on GKE Autopilot arc-runners cluster is working"
+      - uses: actions/checkout@v4
+      - name: List repo root
+        run: ls -la
