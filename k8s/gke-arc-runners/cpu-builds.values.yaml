@@ -64,8 +64,14 @@ template:
           requests:
             cpu: "4"
             memory: 16Gi
-            ephemeral-storage: 20Gi
+            ephemeral-storage: 10Gi # GKE Autopilot's hard per-pod ceiling — confirmed live via the
+                                     # admission webhook rejecting 20Gi outright ("higher than the
+                                     # Autopilot maximum of '10Gi'"); this is the most headroom
+                                     # obtainable without a different compute class.
           limits:
             cpu: "4"
             memory: 16Gi
-            ephemeral-storage: 20Gi
+            ephemeral-storage: 10Gi # GKE Autopilot's hard per-pod ceiling — confirmed live via the
+                                     # admission webhook rejecting 20Gi outright ("higher than the
+                                     # Autopilot maximum of '10Gi'"); this is the most headroom
+                                     # obtainable without a different compute class.
