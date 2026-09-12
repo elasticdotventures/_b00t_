@@ -20,6 +20,10 @@ name = "b00t-rpa"
 path = "src/bin/rpa.rs"
 required-features = ["rpa"]
 
+[[bin]]
+name = "b00t-comms"
+path = "src/bin/b00t-comms.rs"
+
 [lib]
 name = "b00t_cli"
 path = "src/lib.rs"
