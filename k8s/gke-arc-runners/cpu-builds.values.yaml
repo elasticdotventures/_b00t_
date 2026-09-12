@@ -55,9 +55,17 @@ template:
           # Bumped from 2/4Gi (smoke-test sizing) to fit a real `cargo build --release` of the
           # b00t workspace — native deps (openssl-sys, esaxx-rs via embed-anything) plus rustc
           # codegen units are memory-hungry enough that 2 vCPU/4Gi is not expected to be sufficient.
+          #
+          # ephemeral-storage is NOT optional here: confirmed live 2026-09-12 that omitting it lets
+          # Autopilot silently default the pod to ~1Gi of scratch disk, which a cold cargo build
+          # exhausts almost immediately (crates.io registry checkout + target/release build
+          # artifacts for a multi-crate workspace), causing the kubelet to evict the pod mid-build
+          # ("Pod ephemeral local storage usage exceeds the total limit of containers 1Gi").
           requests:
             cpu: "4"
             memory: 16Gi
+            ephemeral-storage: 20Gi
           limits:
             cpu: "4"
             memory: 16Gi
+            ephemeral-storage: 20Gi
