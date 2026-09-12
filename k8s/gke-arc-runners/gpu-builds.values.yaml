@@ -30,12 +30,13 @@ maxRunners: 1
 
 template:
   spec:
-    # Spot GPU capacity is less reliably available than Spot CPU, but still meaningfully cheaper
-    # than on-demand — same ephemeral/retry-safe reasoning as cpu-builds.values.yaml.
+    # Spot GPU (cloud.google.com/gke-spot: "true") is intentionally NOT set here — this project's
+    # PREEMPTIBLE_CPUS quota in australia-southeast2 is only 1 vCPU, confirmed live 2026-09-12
+    # while testing the same thing on cpu-builds.values.yaml. Add it back once that quota (a GCP
+    # console request, not scriptable) has been increased.
     nodeSelector:
       cloud.google.com/gke-accelerator: "nvidia-l4"
       cloud.google.com/gke-accelerator-count: "1"
-      cloud.google.com/gke-spot: "true"
 
     containers:
       - name: runner
