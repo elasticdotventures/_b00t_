@@ -13,51 +13,9 @@
 //! - Secrets are never printed in logs or Debug output
 
 use anyhow::{Context, Result, anyhow};
-use serde::{Deserialize, Serialize};
+use b00t_pipeline_types::{SecretRef, SecretSource};
 use std::collections::HashMap;
 use std::fmt;
-
-// ── SecretSource ──────────────────────────────────────────────────────────
-
-/// Where a secret originates.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SecretSource {
-    /// Read from a file on disk (whitespace-trimmed).
-    File { path: String },
-    /// Read from a process environment variable.
-    EnvVar { name: String },
-    /// Read from the OS keyring / credential store.
-    Keyring { service: String, account: String },
-    /// Read interactively from stdin (no echo).
-    Prompt {
-        /// Human-readable prompt shown to the user.
-        description: String,
-    },
-    /// Read a secret's value from an Azure Key Vault, via the `az` CLI using
-    /// whatever `az login`/service-principal session is already active on
-    /// this host. Prototype/backup path — see `b00t-azure-cp`'s
-    /// `azure.keyvault_get_secret` MCP tool for the server-side counterpart
-    /// used by agents with no local `az` session.
-    AzureKeyVault {
-        /// Key Vault name (the `xyz` in `https://xyz.vault.azure.net`).
-        vault: String,
-        /// Secret name within the vault.
-        name: String,
-    },
-}
-
-// ── SecretRef ─────────────────────────────────────────────────────────────
-
-/// A reference to a single secret: how to resolve it and where to inject it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SecretRef {
-    /// Logical key used to retrieve the resolved value from `SecretStore::get()`.
-    pub key: String,
-    /// Environment variable name into which the resolved value is injected.
-    pub env_var: String,
-    /// Where to resolve the secret from.
-    pub source: SecretSource,
-}
 
 // ── SecretStore ───────────────────────────────────────────────────────────
 

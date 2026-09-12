@@ -10,37 +10,10 @@
 //    stages (or the executor) can share state without a direct reference.
 
 use crate::pipeline_types::{CapsuleProfile, StageSpec};
-use serde::{Deserialize, Serialize};
+use b00t_pipeline_types::FlowStrategy;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-// ── FlowStrategy ──────────────────────────────────────────────────────────────
-
-/// Back-pressure strategy for a pipeline stage.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum FlowStrategy {
-    /// No back-pressure — data flows as fast as produced.
-    Unbounded,
-    /// Fixed-capacity buffer.  Blocks when the buffer is full.
-    Buffered {
-        capacity: usize,
-    },
-    /// Rate-limited: max bytes per second.
-    Throttled {
-        max_bytes_per_sec: u64,
-    },
-    /// Sliding window: limits how many items are in-flight downstream.
-    Windowed {
-        max_in_flight: usize,
-    },
-}
-
-impl Default for FlowStrategy {
-    fn default() -> Self {
-        Self::Unbounded
-    }
-}
 
 // ── FlowControl ──────────────────────────────────────────────────────────────
 
@@ -211,33 +184,6 @@ impl FlowGate {
     /// Access the inner shared controller.
     pub fn controller(&self) -> &Arc<Mutex<FlowControl>> {
         &self.controller
-    }
-}
-
-// ── StageFlowConfig ───────────────────────────────────────────────────────────
-
-/// Flow-control configuration attached to a stage spec.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct StageFlowConfig {
-    pub stage_name: String,
-    pub strategy: FlowStrategy,
-    pub max_retries: u32,
-}
-
-impl StageFlowConfig {
-    /// Create a new flow-control config for a stage.
-    pub fn new(stage_name: &str, strategy: FlowStrategy) -> Self {
-        Self {
-            stage_name: stage_name.to_string(),
-            strategy,
-            max_retries: 3,
-        }
-    }
-
-    /// Set the max retries for back-pressure waits.
-    pub fn with_max_retries(mut self, retries: u32) -> Self {
-        self.max_retries = retries;
-        self
     }
 }
 

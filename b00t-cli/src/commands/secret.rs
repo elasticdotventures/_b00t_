@@ -5,7 +5,8 @@
 //    deliberately excluded here: Keyring is a broken placeholder (feature
 //    flag exists, no keyring crate dependency), Prompt defeats the purpose
 //    of a script-invoked, non-interactive call.
-use crate::pipeline_secrets::{SecretRef, SecretSource, list_azure_secret_names, load_secret};
+use b00t_pipeline_types::{SecretRef, SecretSource};
+use crate::pipeline_secrets::{list_azure_secret_names, load_secret};
 use anyhow::{Result, bail};
 use clap::Subcommand;
 use std::collections::BTreeMap;
