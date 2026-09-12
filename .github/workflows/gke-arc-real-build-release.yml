@@ -1,0 +1,112 @@
+name: GKE+ARC real build — b00t-cli release proof
+
+# Push-trigger scoped to this verification branch only (see arc-cpu-builds-smoke-test.yml for why:
+# workflow_dispatch requires the file on the default branch before GitHub will register it, but a
+# push-triggered workflow runs immediately off whatever ref it's pushed on).
+#
+# Proves the GKE Autopilot `arc-runners` cluster's `cpu-builds` ARC scale set can do a REAL cargo
+# build (not just echo a hostname) and publish a real OCI artifact to GHCR, tagged with the
+# workspace version. GKE Autopilot forbids privileged containers, so Docker-in-Docker is not an
+# option here — this uses `buildah` with the `vfs` storage driver and `chroot` isolation, which
+# needs no elevated capabilities at all, to build and push the image daemonlessly.
+on:
+  push:
+    branches:
+      - verify/gke-arc-real-build-release
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: elasticdotventures/b00t-cli
+
+jobs:
+  build-and-publish:
+    runs-on: cpu-builds
+    steps:
+      - uses: actions/checkout@v7 # node24-native
+        with:
+          fetch-depth: 0
+
+      - name: Init required vendor submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+
+      - name: Install native build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev ca-certificates \
+            python3 python3-dev perl curl buildah
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: cargo build --release -p b00t-cli
+        run: cargo build --release -p b00t-cli
+
+      - name: Verify the freshly built binary reports the expected version
+        run: |
+          set -euo pipefail
+          ACTUAL=$(./target/release/b00t-cli --version)
+          echo "binary reports: ${ACTUAL}"
+          echo "${ACTUAL}" | grep -q "${{ steps.version.outputs.version }}"
+
+      - name: Write minimal runtime Dockerfile
+        run: |
+          cat > Dockerfile.gke-arc-proof <<'DOCKERFILE'
+          FROM ubuntu:24.04
+          ARG BUILD_VERSION=0.0.0
+          ARG BUILD_COMMIT=unknown
+          LABEL org.opencontainers.image.title=b00t-cli
+          LABEL org.opencontainers.image.description="b00t-cli, built on GKE Autopilot + ARC (cpu-builds)"
+          LABEL org.opencontainers.image.version=${BUILD_VERSION}
+          LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
+          LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/_b00t_
+          RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+          COPY target/release/b00t-cli /usr/local/bin/b00t-cli
+          ENV B00T_CLI_VERSION=${BUILD_VERSION}
+          ENTRYPOINT ["/usr/local/bin/b00t-cli"]
+          CMD ["--version"]
+          DOCKERFILE
+
+      - name: Build OCI image with buildah (daemonless, no privileged containers needed)
+        run: |
+          set -euo pipefail
+          buildah bud --storage-driver vfs --isolation chroot \
+            -f Dockerfile.gke-arc-proof \
+            --build-arg BUILD_VERSION="${{ steps.version.outputs.version }}" \
+            --build-arg BUILD_COMMIT="${{ github.sha }}" \
+            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" \
+            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:gke-arc-proof" \
+            .
+
+      - name: Push OCI image to GHCR
+        run: |
+          set -euo pipefail
+          buildah login --storage-driver vfs -u "${{ github.actor }}" --password-stdin "${{ env.REGISTRY }}" <<< "${{ secrets.GITHUB_TOKEN }}"
+          buildah push --storage-driver vfs "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+          buildah push --storage-driver vfs "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:gke-arc-proof"
+
+      - name: Tag the release commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists, skipping"
+          else
+            git tag -a "${TAG}" -m "Release ${TAG} (built + published via GKE Autopilot + ARC cpu-builds)"
+            git push origin "${TAG}"
+          fi
