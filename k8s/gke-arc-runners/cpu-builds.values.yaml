@@ -45,9 +45,12 @@ template:
         image: ghcr.io/actions/actions-runner:latest
         command: ["/home/runner/run.sh"]
         resources:
+          # Bumped from 2/4Gi (smoke-test sizing) to fit a real `cargo build --release` of the
+          # b00t workspace — native deps (openssl-sys, esaxx-rs via embed-anything) plus rustc
+          # codegen units are memory-hungry enough that 2 vCPU/4Gi is not expected to be sufficient.
           requests:
-            cpu: "2"
-            memory: 4Gi
+            cpu: "4"
+            memory: 16Gi
           limits:
             cpu: "4"
-            memory: 8Gi
+            memory: 16Gi
