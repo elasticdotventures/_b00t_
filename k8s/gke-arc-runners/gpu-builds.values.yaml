@@ -1,0 +1,49 @@
+# Helm values for the `gha-runner-scale-set` chart — GPU-capable scale set on the GKE Autopilot
+# cluster `arc-runners`. Renamed from ../gh-runner-gpu/'s `gpu-sm3lly` since it is no longer tied to
+# that physical box: Autopilot autoprovisions a GPU node on demand from this pod spec's resource
+# request and scales it back to 0 when idle (see the design doc's Architecture section — GKE never
+# "runs" the runner itself, it provisions the compute class a pending pod asks for).
+#
+# NOT YET APPLIED. Install command (after cpu-builds.values.yaml's cluster/context setup):
+#   helm install gpu-builds \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+#     --version 0.14.2 \
+#     --namespace arc-runners \
+#     -f k8s/gke-arc-runners/gpu-builds.values.yaml
+#
+# OPEN QUESTION (tracked in the design doc): the exact Autopilot GPU compute-class selector
+# key/values below (`cloud.google.com/gke-accelerator*`) reflect Autopilot's GPU-autoprovisioning
+# contract as documented at design time — confirm against current GKE docs before applying, since
+# this is a fast-evolving Autopilot feature area and the accelerator type/name may need adjusting.
+
+githubConfigUrl: "https://github.com/elasticdotventures/_b00t_"
+
+githubConfigSecret: gh-runner-creds
+
+runnerScaleSetName: gpu-builds
+
+# Matches the original sm3lly PoC's own concurrency cap ("cap at 1 concurrent runner pod ... so we
+# don't have multiple CI jobs fighting over the same warm build cache directories") — still a
+# reasonable default even though the hostPath cache itself doesn't carry over to Autopilot.
+minRunners: 0
+maxRunners: 1
+
+template:
+  spec:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: "nvidia-l4"
+      cloud.google.com/gke-accelerator-count: "1"
+
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: 1
