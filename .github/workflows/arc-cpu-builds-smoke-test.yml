@@ -24,6 +24,6 @@ jobs:
           echo "hostname: $(hostname)"
           echo "kernel: $(uname -a)"
           echo "ARC cpu-builds runner on GKE Autopilot arc-runners cluster is working"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7 # node24-native (v5+); avoids the "forced to run on Node.js 24" warning v4 (node20) triggers
       - name: List repo root
         run: ls -la
