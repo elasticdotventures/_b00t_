@@ -63,12 +63,67 @@ mod nats_impl {
         }
     }
 
+    impl NatsHiveTransport {
+    /// Best-effort `user:password@` extraction from a `nats://...` URL.
+    ///
+    /// `async_nats::connect(url)` does not reliably apply userinfo embedded in
+    /// the URL as connection auth (confirmed live against a credentialed
+    /// broker: connecting with a userinfo-bearing URL alone still yields
+    /// `authorization violation`) — so credentials must be passed explicitly
+    /// via `ConnectOptions::user_and_password`, with the userinfo stripped
+    /// from the URL handed to `connect()` to avoid ambiguity between the two.
+    fn extract_credentials(url: &str) -> (String, Option<(String, String)>) {
+        if let Some(scheme_end) = url.find("://") {
+            let (scheme, rest) = url.split_at(scheme_end + 3);
+            if let Some(at) = rest.find('@') {
+                let (userinfo, host) = rest.split_at(at);
+                let host = &host[1..]; // drop '@'
+                let stripped = format!("{scheme}{host}");
+                return match userinfo.split_once(':') {
+                    Some((u, p)) if !u.is_empty() && !p.is_empty() => {
+                        (stripped, Some((u.to_string(), p.to_string())))
+                    }
+                    _ => (stripped, None),
+                };
+            }
+        }
+        (url.to_string(), None)
+    }
+
+    /// Credentials from the hive-wide convention (`~/.b00t/secrets/hive-nats.env`
+    /// sourced into the environment as `HIVE_NATS_USER`/`HIVE_NATS_PASSWORD`).
+    /// `B00T_HIVE_NATS_USER`/`B00T_HIVE_NATS_PASSWORD` are checked too, for
+    /// back-compat with the naming used elsewhere in this codebase (`chat.rs`,
+    /// `b00t-historian.rs`) even though the real secrets file uses the
+    /// unprefixed names.
+    fn env_credentials() -> Option<(String, String)> {
+        let user = std::env::var("HIVE_NATS_USER")
+            .or_else(|_| std::env::var("B00T_HIVE_NATS_USER"))
+            .ok()?;
+        let password = std::env::var("HIVE_NATS_PASSWORD")
+            .or_else(|_| std::env::var("B00T_HIVE_NATS_PASSWORD"))
+            .ok()?;
+        Some((user, password))
+    }
+
+    }
+
     #[async_trait]
     impl HiveTransport for NatsHiveTransport {
         async fn connect(&self, url: &str) -> ChatResult<()> {
-            let client = async_nats::connect(url)
-                .await
-                .map_err(|e| ChatError::Nats(e.to_string()))?;
+            let (connect_url, url_creds) = Self::extract_credentials(url);
+            let creds = url_creds.or_else(Self::env_credentials);
+
+            let client = match creds {
+                Some((user, password)) => async_nats::ConnectOptions::new()
+                    .user_and_password(user, password)
+                    .connect(&connect_url)
+                    .await
+                    .map_err(|e| ChatError::Nats(e.to_string()))?,
+                None => async_nats::connect(&connect_url)
+                    .await
+                    .map_err(|e| ChatError::Nats(e.to_string()))?,
+            };
             *self.client.write().await = Some(client);
             Ok(())
         }
