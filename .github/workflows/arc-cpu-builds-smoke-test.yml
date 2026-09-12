@@ -7,6 +7,13 @@ name: ARC cpu-builds smoke test
 
 on:
   workflow_dispatch:
+  # push-trigger scoped to this verification branch only: workflow_dispatch requires the file to
+  # exist on the default branch before GitHub will register it as dispatchable via API/UI, but a
+  # push-triggered workflow runs immediately off whatever ref it's pushed on. Using this to prove
+  # the cpu-builds runner works without needing to merge to main first.
+  push:
+    branches:
+      - verify/gke-arc-cpu-builds-smoke-test
 
 jobs:
   smoke-test:
