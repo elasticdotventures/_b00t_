@@ -37,9 +37,14 @@ maxRunners: 2
 
 template:
   spec:
-    # Deliberately NO nodeSelector/runtimeClassName here: omitting them is what makes Autopilot
-    # schedule this pod onto its default (CPU-only, cheapest) compute class. Do not add a GPU
-    # resource request to this values file — that belongs only in gpu-builds.values.yaml.
+    # No GPU nodeSelector/runtimeClassName here — that belongs only in gpu-builds.values.yaml.
+    # `cloud.google.com/gke-spot: "true"` IS deliberate: this asks Autopilot to provision a Spot
+    # (preemptible) node for this pod instead of standard on-demand — Spot is meaningfully cheaper
+    # and safe here because ARC runner pods are ephemeral/single-job already; a preemption just
+    # means ARC spins up a fresh runner and GitHub Actions retries the job, same as any other
+    # transient CI infra failure.
+    nodeSelector:
+      cloud.google.com/gke-spot: "true"
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:latest

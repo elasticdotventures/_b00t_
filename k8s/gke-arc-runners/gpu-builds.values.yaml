@@ -30,9 +30,12 @@ maxRunners: 1
 
 template:
   spec:
+    # Spot GPU capacity is less reliably available than Spot CPU, but still meaningfully cheaper
+    # than on-demand — same ephemeral/retry-safe reasoning as cpu-builds.values.yaml.
     nodeSelector:
       cloud.google.com/gke-accelerator: "nvidia-l4"
       cloud.google.com/gke-accelerator-count: "1"
+      cloud.google.com/gke-spot: "true"
 
     containers:
       - name: runner
