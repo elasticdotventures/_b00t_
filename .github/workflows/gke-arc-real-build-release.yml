@@ -6,9 +6,12 @@ name: GKE+ARC real build — b00t-cli release proof
 #
 # Proves the GKE Autopilot `arc-runners` cluster's `cpu-builds` ARC scale set can do a REAL cargo
 # build (not just echo a hostname) and publish a real OCI artifact to GHCR, tagged with the
-# workspace version. GKE Autopilot forbids privileged containers, so Docker-in-Docker is not an
-# option here — this uses `buildah` with the `vfs` storage driver and `chroot` isolation, which
-# needs no elevated capabilities at all, to build and push the image daemonlessly.
+# workspace version. GKE Autopilot forbids privileged containers AND blocks unshare(CLONE_NEWUSER)
+# via its mandatory seccomp profile (confirmed live: buildah's rootless graph-driver bootstrap
+# fails with "Operation not permitted" even run as real root via sudo with --userns=host — the
+# syscall itself is blocked node-wide, not a capability/UID issue flags can work around). So this
+# uses `crane` (google/go-containerregistry) instead: it builds/pushes OCI images via pure
+# userspace tar + registry-HTTP manipulation, needing no namespaces, chroot, or daemon at all.
 on:
   push:
     branches:
@@ -39,7 +42,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config libssl-dev ca-certificates \
-            python3 python3-dev perl curl buildah
+            python3 python3-dev perl curl
+
+      - name: Install crane
+        run: |
+          set -euo pipefail
+          CRANE_VERSION=v0.20.2
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+          crane version
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -62,50 +73,33 @@ jobs:
           echo "binary reports: ${ACTUAL}"
           echo "${ACTUAL}" | grep -q "${{ steps.version.outputs.version }}"
 
-      - name: Write minimal runtime Dockerfile
-        run: |
-          cat > Dockerfile.gke-arc-proof <<'DOCKERFILE'
-          FROM ubuntu:24.04
-          ARG BUILD_VERSION=0.0.0
-          ARG BUILD_COMMIT=unknown
-          LABEL org.opencontainers.image.title=b00t-cli
-          LABEL org.opencontainers.image.description="b00t-cli, built on GKE Autopilot + ARC (cpu-builds)"
-          LABEL org.opencontainers.image.version=${BUILD_VERSION}
-          LABEL org.opencontainers.image.revision=${BUILD_COMMIT}
-          LABEL org.opencontainers.image.source=https://github.com/elasticdotventures/_b00t_
-          RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-          COPY target/release/b00t-cli /usr/local/bin/b00t-cli
-          ENV B00T_CLI_VERSION=${BUILD_VERSION}
-          ENTRYPOINT ["/usr/local/bin/b00t-cli"]
-          CMD ["--version"]
-          DOCKERFILE
-
-      - name: Build OCI image with buildah (daemonless, no privileged containers needed)
-        # `sudo` (rootful) + `--userns=host`, not plain rootless buildah: confirmed live that
-        # rootless buildah's default unshare(CLONE_NEWUSER) is rejected on GKE Autopilot nodes
-        # ("Operation not permitted") — unprivileged user-namespace creation is disabled by the
-        # node's hardening. Running as real root within the pod's existing namespace (the
-        # standard daemonless-build pattern for restricted Kubernetes environments) needs no
-        # namespace creation and no elevated pod-level capabilities beyond what `sudo` already
-        # grants the runner user. Every buildah invocation from here on must consistently use
-        # `sudo`, since rootful storage lives at /var/lib/containers, separate from the rootless
-        # ~/.local/share/containers a non-sudo call would use instead.
+      - name: Package the binary into a minimal OCI image layer tarball
         run: |
           set -euo pipefail
-          sudo buildah bud --storage-driver vfs --isolation chroot --userns=host \
-            -f Dockerfile.gke-arc-proof \
-            --build-arg BUILD_VERSION="${{ steps.version.outputs.version }}" \
-            --build-arg BUILD_COMMIT="${{ github.sha }}" \
-            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" \
-            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:gke-arc-proof" \
-            .
+          mkdir -p layer-root/usr/local/bin
+          cp target/release/b00t-cli layer-root/usr/local/bin/b00t-cli
+          chmod +x layer-root/usr/local/bin/b00t-cli
+          tar -C layer-root -cf layer.tar usr
 
-      - name: Push OCI image to GHCR
+      - name: Build and push OCI image with crane
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
-          sudo buildah login --storage-driver vfs -u "${{ github.actor }}" --password-stdin "${{ env.REGISTRY }}" <<< "${{ secrets.GITHUB_TOKEN }}"
-          sudo buildah push --storage-driver vfs "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
-          sudo buildah push --storage-driver vfs "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:gke-arc-proof"
+          echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+          crane append -b ubuntu:24.04 -f layer.tar -t "${IMAGE_REF}:${VERSION}"
+          crane mutate "${IMAGE_REF}:${VERSION}" \
+            --entrypoint '["/usr/local/bin/b00t-cli"]' \
+            --cmd '["--version"]' \
+            --env "B00T_CLI_VERSION=${VERSION}" \
+            --label "org.opencontainers.image.title=b00t-cli" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.source=https://github.com/elasticdotventures/_b00t_" \
+            -t "${IMAGE_REF}:${VERSION}"
+          crane tag "${IMAGE_REF}:${VERSION}" gke-arc-proof
+          crane digest "${IMAGE_REF}:${VERSION}"
 
       - name: Tag the release commit
         run: |
