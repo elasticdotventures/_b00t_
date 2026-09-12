@@ -74,9 +74,21 @@ acceleration.
    `backend_hint`/`region_hint` pair, following the TRIZ "no free lunch" rule: locality match beats
    cheaper-cross-cloud, always.
 7. `JobUtilizationEvent` emission from `job_executor.rs` (job_id, backend, cold_start_duration,
-   run_duration, estimated_cost) into a small outbox ledgrrr's `ledger-core` ingests as a new
-   ledger-entry kind — keeps the existing split (b00t-cli = execution mechanism, ledgrrr = ledger of
-   record) rather than a second cost-accounting system.
+   run_duration, estimated_cost) into a small outbox ledgrrr's `ledger-core` ingests — keeps the
+   existing split (b00t-cli = execution mechanism, ledgrrr = ledger of record) rather than a second
+   cost-accounting system.
+
+   **Decided 2026-09-12** (resolving this design's original "new ledger-entry kind" framing, per the
+   sibling `h00k` cost-prediction spec's dependency on this event and this session's brainstorming):
+   `JobUtilizationEvent` lands as a **FOCUS-schema extension**, not a bespoke ledger-entry kind —
+   ledgrrr already natively consumes and virtualizes FOCUS records (via the existing
+   `billing-focus-ingest.tf` / `ledgrrr/crates/ledgerr-gcp-billing/` path), even though that capability
+   is lightly tested today. This keeps a single cost corpus (`b00t focus`) for both real GCP billing
+   data and b00t's own job-execution cost/time records, which `h00k`
+   (`docs/superpowers/specs/2026-09-12-h00k-cost-time-prediction-design.md`) queries directly rather
+   than juggling two schemas. Adapting FOCUS's real-world-invoice-shaped fields to a synthetic
+   per-job-execution record is expected to need field-mapping work (FOCUS was not designed for this),
+   not a clean drop-in — scope that adaptation when this item is actually implemented.
 
 **Out of scope (this design):**
 - Per-job backend selection beyond the locality-driven hint above (dstack's own ad hoc `-b`/`-r` CLI
@@ -119,7 +131,9 @@ b00t-cli/src/job_executor.rs
   JobUtilizationEvent              ← new: emitted per completed job (cold_start_duration separate
                                       from run_duration)
 
-ledgrrr/crates/ledger-core/       ← new ledger-entry kind ingesting JobUtilizationEvent
+ledgrrr/crates/ledgerr-gcp-billing/ (or wherever FOCUS ingestion lands)
+                                    ← JobUtilizationEvent ingested as a FOCUS-schema extension,
+                                      not a bespoke ledger-entry kind (decided 2026-09-12)
 ```
 
 ### Data flow
@@ -135,9 +149,9 @@ ledgrrr/crates/ledger-core/       ← new ledger-entry kind ingesting JobUtiliza
 4. `job_executor.rs` records wall-clock from submission to `provisioning`→`running` transition as
    `cold_start_duration`, and `running`→terminal as `run_duration`, emitting both in a
    `JobUtilizationEvent` regardless of success/failure.
-5. ledgrrr ingests the event as a new ledger-entry kind, attributing cost to both phases distinctly —
-   a job that's cheap to run but slow to cold-start is visible as such, not hidden inside a single
-   "runtime" number.
+5. ledgrrr ingests the event as a FOCUS-schema record (decided 2026-09-12 — see item 7 above),
+   attributing cost to both phases distinctly — a job that's cheap to run but slow to cold-start is
+   visible as such, not hidden inside a single "runtime" number.
 
 ---
 
