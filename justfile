@@ -676,6 +676,17 @@ version:
 commit-hook:
     #!/bin/bash
     set -euo pipefail
+    # Block direct commits to main — always work on a branch + PR (task #211).
+    CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ "${CURRENT_BRANCH}" == "main" ]]; then
+        if [[ -f ".b00t/allow-main-commit" ]]; then
+            echo "⚠️  Committing directly to main (allow-main-commit present) — confirm intentional."
+        else
+            echo "❌ Direct commits to main are blocked. Create a branch: git checkout -b <name>"
+            echo "   To bypass once: touch .b00t/allow-main-commit (not recommended, remove after)"
+            exit 1
+        fi
+    fi
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."
