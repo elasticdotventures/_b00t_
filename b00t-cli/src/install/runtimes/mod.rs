@@ -3,12 +3,14 @@ pub mod codex;
 pub mod copilot;
 pub mod gemini;
 pub mod opencode;
+pub mod pi;
 
 pub use claude::ClaudeAdapter;
 pub use codex::CodexAdapter;
 pub use copilot::CopilotAdapter;
 pub use gemini::GeminiAdapter;
 pub use opencode::OpenCodeAdapter;
+pub use pi::{PiAdapter, WIRED_MCP_SERVERS};
 
 use anyhow::Result;
 use std::path::PathBuf;

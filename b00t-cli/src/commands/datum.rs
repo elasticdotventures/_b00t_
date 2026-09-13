@@ -940,9 +940,16 @@ fn parse_datum_type(s: &str) -> Option<crate::DatumType> {
     crate::DatumType::from_type_token(s)
 }
 
-/// Known TOML keys in [b00t] section, derived from BootDatum struct fields.
-/// 🤓 single source of truth: update this when BootDatum adds/removes fields.
-///    `type` maps to BootDatum::datum_type (serde rename).
+/// Known TOML keys in the [b00t] section.
+/// 🤓 TWO sources, both authoritative:
+///    1. BootDatum struct fields (b00t-cli/src/boot_datum.rs) — `type` maps to
+///       BootDatum::datum_type via serde rename.
+///    2. Sibling raw-TOML structs that parse [b00t.X] sections BootDatum does
+///       not carry (see the block at the end of this list).
+///    Update this when either changes, or `datum validate` emits false
+///    "unknown field" warnings. Free-form knowledge sections in .datum.toml /
+///    .tomllmd files are intentionally NOT listed — those are documentation
+///    payloads, not parsed config, and still warn by design.
 const KNOWN_B00T_KEYS: &[&str] = &[
     "name",
     "type",
@@ -1016,6 +1023,32 @@ const KNOWN_B00T_KEYS: &[&str] = &[
     "usage",
     "dsn",
     "protocol",
+    // 🤓 drift repair — these BootDatum fields were missing, so every datum using
+    //    them emitted a false "unknown field" WARN. Keep in sync with BootDatum.
+    "ai_provision",
+    "compose",
+    "maintenance",
+    "model_hf_id",
+    "model_size_4bit_gb",
+    "model_size_gb",
+    "pipeline",
+    "polyseme",
+    "required_for_core",
+    "requires_competency",
+    "runtime",
+    "trigger_words",
+    // 🤓 Sibling parse targets — these [b00t.X] sections are real and read by
+    //    b00t, but by dedicated raw-TOML structs rather than BootDatum, so the
+    //    "derived from BootDatum" framing is only half the schema.
+    //    Without them the validator emits a false "unknown field" WARN on every
+    //    datum that uses them (34 datums declare [b00t.hive.*], 20 [b00t.agent],
+    //    16 [b00t.schema], 8 [b00t.cli]).
+    "hive",            // hive.rs::HiveToml — [b00t.hive.service|resources|exclusion]
+    "agent",           // agent datum facet — [b00t.agent.executor|ipc|crew|bouncer|mcp]
+    "cli",             // cli datum facet
+    "schema",          // reference/schema datums — [b00t.schema]
+    "daily_routine",   // maintenance daemon
+    "remediation",     // health-check remediation steps
 ];
 
 /// Validate a datum file against BootDatum schema.
