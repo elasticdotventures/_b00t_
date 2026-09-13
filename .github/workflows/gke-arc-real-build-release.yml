@@ -55,6 +55,19 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry + target dir
+        uses: Swatinem/rust-cache@v2
+        with:
+          # First real build on this runner took ~20min cold (registry fetch +
+          # native-dep compile: openssl-sys, esaxx-rs via embed-anything).
+          # cpu-builds pods are capped at Autopilot's 10Gi ephemeral-storage
+          # ceiling (k8s/gke-arc-runners/cpu-builds.values.yaml) — the fresh
+          # build already fit comfortably under that, so a compressed cache
+          # archive coexisting with it during extract+build should too, but
+          # watch for eviction if that assumption breaks on a bigger crate.
+          workspaces: ". -> target"
+          shared-key: "b00t-cli-release"
+
       - name: Resolve release version
         id: version
         shell: bash
