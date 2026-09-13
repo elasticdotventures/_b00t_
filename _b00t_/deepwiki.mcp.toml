@@ -1,0 +1,12 @@
+[b00t]
+name = "deepwiki"
+type = "mcp"
+hint = "DeepWiki: auto-generated wiki pages for OSS repos"
+requires_sudo = false
+
+[[b00t.mcp.stdio]]
+transport = "stdio"
+args = ["-y", "deepwiki-mcp"]
+command = "npx"
+priority = 0
+requires = ["node"]
