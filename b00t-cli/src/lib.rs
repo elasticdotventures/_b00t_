@@ -110,6 +110,7 @@ pub mod traits;
 pub mod utils;
 pub mod variant;
 pub mod viz;
+pub mod disposition_pipeline;
 pub mod whoami;
 pub mod wow;
 pub mod calorie_tracker;

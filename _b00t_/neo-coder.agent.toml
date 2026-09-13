@@ -1,0 +1,123 @@
+# b00t:map v1
+# summary: NEO-CODER agent — containerized qwen38 with banner-exchange init
+# tags: agent, neo-coder, qwen38, sandbox, banner, handshake, lazy-load
+# tier: frontier
+# cmds: b00t agent invoke neo-coder "task", b00t agent start neo-coder.agent.toml
+# complexity: 8
+
+[b00t]
+name = "neo-coder"
+type = "agent"
+hint = "Containerized coding agent with decomposed banner-exchange initialization and lazy context loading"
+
+[[b00t.agent.inherits]]
+from = "++abstract.agent"
+
+[b00t.agent]
+pid = "neo-coder-001"
+model = "ch0nky"
+model_endpoint = "http://sm3lly:8001/v1"
+skills = ["rust", "disposition-pipeline", "b00t-cli", "k0mmand3r"]
+personality = "precise"
+humor = "none"
+role = "worker"
+context_budget = 32768
+
+# Banner exchange: agent init is a SEQUENCE, not a single prompt.
+# Each banner reveals state the agent can act on; missing banners
+# mean the capability isn't available (lazy — don't load what you don't need).
+[b00t.agent.init]
+sequence = [
+    "identity",      # who am I? role, skills, model
+    "environment",   # where am I? host, cwd, available tools
+    "disposition",   # is the system normal? run disposition pipeline
+    "task",          # what should I do? objective from caller
+    "execute",       # do it
+]
+
+[b00t.agent.init.identity]
+# Banner 1: agent self-discovery
+prompt = """
+You are NEO-CODER, a containerized coding agent.
+Model: {model} ({model_endpoint})
+Role: {role}
+Skills: {skills}
+Context budget: {context_budget} tokens
+
+Respond with: NEO-CODER ONLINE | role={role} | skills={skills}
+"""
+
+[b00t.agent.init.environment]
+# Banner 2: environment discovery (lazy — only loads what's observable)
+prompt = """
+Discover your environment. Run these commands and report:
+1. `hostname && whoami` — where are you?
+2. `ls _b00t_/` — what datums are available?
+3. `b00t mcp status --json` — what MCP tools do you have?
+4. `git branch --show-current && git log --oneline -3` — what repo/state?
+
+Report as: ENV | host={host} | branch={branch} | datums={count} | mcp={count}
+"""
+
+[b00t.agent.init.disposition]
+# Banner 3: system-normal check (uses the disposition pipeline)
+prompt = """
+Run the disposition pipeline:
+1. Check: `which cargo && which git && which just` — toolchain present?
+2. Check: `b00t mcp status` — MCP operational?
+3. Check: `git status --short` — clean working tree?
+
+Report as: DISPOSITION | {Satisfied|Violated|Unknown} | {details}
+If Violated: STOP and report. Do not proceed with broken prerequisites.
+"""
+
+[b00t.agent.init.task]
+# Banner 4: receive objective
+prompt = """
+Your objective is:
+{objective}
+
+Analyze it. Decompose into sub-tasks if needed.
+Report as: TASK | {objective} | subtasks={count} | estimated_complexity={1-10}
+"""
+
+[b00t.agent.init.execute]
+# Banner 5: execute
+prompt = """
+Execute. Follow TDD: write failing test first, implement, verify.
+Report progress as: EXECUTE | {subtask} | {status}
+Final report as: COMPLETE | {summary} | evidence={test_output}
+"""
+
+# Sandbox configuration
+[b00t.agent.sandbox]
+kind = "podman"
+image = "b00t-neo-coder:latest"
+memory_limit = "4g"
+memory_swap = "4g"
+cpu_shares = 1024
+gpu_access = false  # CPU-only inference via remote model
+
+[b00t.agent.sandbox.volumes]
+# Mount b00t workspace read-only, agent writes to ephemeral layer
+"_b00t_" = { host = "~/.dotfiles/_b00t_", container = "/workspace/_b00t_", readonly = true }
+"secrets" = { host = "~/.dotfiles/secrets", container = "/workspace/secrets", readonly = true }
+
+# IPC for banner exchange with orchestrator
+[b00t.agent.ipc]
+socket = "/tmp/b00t/agents/neo-coder.sock"
+pubsub = true
+protocol = "msgpack"
+
+# Bouncer gates — same pattern as ralph/executive
+[b00t.agent.bouncer]
+enabled = true
+audit_log = ".b00t/bouncer-audit.jsonl"
+
+[b00t.agent.bouncer.input_gates]
+sanitize = { enabled = true, rules = ["no-shell-injection", "no-credential-exposure"] }
+credential_check = { enabled = true, check_env = true }
+
+[b00t.agent.bouncer.output_gates]
+contract_validation = { enabled = true, validate_schema = true }
+security_scan = { enabled = true, check_secrets = true }
