@@ -89,9 +89,12 @@ jobs:
           set -euo pipefail
           echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
           crane append -b ubuntu:24.04 -f layer.tar -t "${IMAGE_REF}:${VERSION}"
+          # crane's --entrypoint/--cmd flags are plain (comma-separated for multiple values)
+          # strings, NOT JSON arrays — confirmed live: passing '["/usr/local/bin/b00t-cli"]'
+          # fails with "bare \" in non-quoted-field" (crane parses the value as CSV).
           crane mutate "${IMAGE_REF}:${VERSION}" \
-            --entrypoint '["/usr/local/bin/b00t-cli"]' \
-            --cmd '["--version"]' \
+            --entrypoint /usr/local/bin/b00t-cli \
+            --cmd="--version" \
             --env "B00T_CLI_VERSION=${VERSION}" \
             --label "org.opencontainers.image.title=b00t-cli" \
             --label "org.opencontainers.image.version=${VERSION}" \
