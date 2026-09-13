@@ -1,0 +1,63 @@
+# Helm values for the `gha-runner-scale-set` chart, targeting the GKE Autopilot cluster
+# `arc-runners` (infrastructure/terraform/google/gke-arc-runners.tf) instead of
+# sm3llsl1k3s0ld3r's local k0s cluster.
+#
+# See ../../docs/superpowers/specs/2026-09-12-gke-arc-runner-migration-design.md for the full design.
+# Adapted from ../gh-runner-gpu/values.yaml (the never-applied sm3lly PoC) — same chart/version,
+# same GitHub App auth story, same repo-scoped-not-org-wide posture. What changed: no nodeSelector/
+# runtimeClassName/GPU resources (Autopilot's *default* compute class handles plain CPU pods with no
+# special pod-spec annotation needed), and no hostPath caching (Autopilot forbids hostPath volumes —
+# see the design doc's Caching section for why this is an accepted v1 regression, mitigated by the
+# sccache work already landed in PR #1227).
+#
+# NOT YET APPLIED. Install command (after gke-arc-runners.tf is applied and
+# `gcloud container clusters get-credentials arc-runners --zone <zone> --project promptexecution`
+# has been run):
+#   helm install cpu-builds \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+#     --version 0.14.2 \
+#     --namespace arc-runners --create-namespace \
+#     -f k8s/gke-arc-runners/cpu-builds.values.yaml
+
+githubConfigUrl: "https://github.com/elasticdotventures/_b00t_"
+
+# Same secret as gpu-builds — one GitHub App credential backs both scale sets. See
+# create-secret-from-vault.sh in ../gh-runner-gpu/ (reused, re-targeted at this cluster's kubeconfig
+# context per the design doc's Migration Steps §3) for how this gets created.
+githubConfigSecret: gh-runner-creds
+
+# The exact string a workflow's `runs-on:` must match (ARC's gha-runner-scale-set architecture
+# matches by this name, not a `[self-hosted, ...]` label array).
+runnerScaleSetName: cpu-builds
+
+# Start conservative per the original PoC's own guidance ("raise once real concurrency behavior has
+# been observed") — this is a fresh cluster with zero observed load yet.
+minRunners: 0
+maxRunners: 2
+
+template:
+  spec:
+    # Deliberately NO nodeSelector/runtimeClassName here: omitting them is what makes Autopilot
+    # schedule this pod onto its default (CPU-only, cheapest) compute class. Do not add a GPU
+    # resource request to this values file — that belongs only in gpu-builds.values.yaml.
+    #
+    # Spot (cloud.google.com/gke-spot: "true") was tried and reverted 2026-09-12: this project's
+    # PREEMPTIBLE_CPUS quota in australia-southeast2 is 1 vCPU (default for a project that has
+    # never used Spot before), which can never satisfy this pod's 4 vCPU request — confirmed live
+    # via the cluster-autoscaler-status configmap showing QUOTA_EXCEEDED backoff. Re-enable once a
+    # quota increase for PREEMPTIBLE_CPUS (and headroom on SSD_TOTAL_GB, currently 320/500 used in
+    # the region) has been requested and approved in the GCP console.
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        resources:
+          # Bumped from 2/4Gi (smoke-test sizing) to fit a real `cargo build --release` of the
+          # b00t workspace — native deps (openssl-sys, esaxx-rs via embed-anything) plus rustc
+          # codegen units are memory-hungry enough that 2 vCPU/4Gi is not expected to be sufficient.
+          requests:
+            cpu: "4"
+            memory: 16Gi
+          limits:
+            cpu: "4"
+            memory: 16Gi
