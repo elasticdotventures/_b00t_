@@ -1,0 +1,118 @@
+name: GKE+ARC real build — b00t-cli release proof
+
+# Push-trigger scoped to this verification branch only (see arc-cpu-builds-smoke-test.yml for why:
+# workflow_dispatch requires the file on the default branch before GitHub will register it, but a
+# push-triggered workflow runs immediately off whatever ref it's pushed on).
+#
+# Proves the GKE Autopilot `arc-runners` cluster's `cpu-builds` ARC scale set can do a REAL cargo
+# build (not just echo a hostname) and publish a real OCI artifact to GHCR, tagged with the
+# workspace version. GKE Autopilot forbids privileged containers AND blocks unshare(CLONE_NEWUSER)
+# via its mandatory seccomp profile (confirmed live: buildah's rootless graph-driver bootstrap
+# fails with "Operation not permitted" even run as real root via sudo with --userns=host — the
+# syscall itself is blocked node-wide, not a capability/UID issue flags can work around). So this
+# uses `crane` (google/go-containerregistry) instead: it builds/pushes OCI images via pure
+# userspace tar + registry-HTTP manipulation, needing no namespaces, chroot, or daemon at all.
+on:
+  push:
+    branches:
+      - verify/gke-arc-real-build-release
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: elasticdotventures/b00t-cli
+
+jobs:
+  build-and-publish:
+    runs-on: cpu-builds
+    steps:
+      - uses: actions/checkout@v7 # node24-native
+        with:
+          fetch-depth: 0
+
+      - name: Init required vendor submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+
+      - name: Install native build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev ca-certificates \
+            python3 python3-dev perl curl
+
+      - name: Install crane
+        run: |
+          set -euo pipefail
+          CRANE_VERSION=v0.20.2
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin crane
+          crane version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: cargo build --release -p b00t-cli
+        run: cargo build --release -p b00t-cli
+
+      - name: Verify the freshly built binary reports the expected version
+        run: |
+          set -euo pipefail
+          ACTUAL=$(./target/release/b00t-cli --version)
+          echo "binary reports: ${ACTUAL}"
+          echo "${ACTUAL}" | grep -q "${{ steps.version.outputs.version }}"
+
+      - name: Package the binary into a minimal OCI image layer tarball
+        run: |
+          set -euo pipefail
+          mkdir -p layer-root/usr/local/bin
+          cp target/release/b00t-cli layer-root/usr/local/bin/b00t-cli
+          chmod +x layer-root/usr/local/bin/b00t-cli
+          tar -C layer-root -cf layer.tar usr
+
+      - name: Build and push OCI image with crane
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login "${{ env.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+          crane append -b ubuntu:24.04 -f layer.tar -t "${IMAGE_REF}:${VERSION}"
+          # crane's --entrypoint/--cmd flags are plain (comma-separated for multiple values)
+          # strings, NOT JSON arrays — confirmed live: passing '["/usr/local/bin/b00t-cli"]'
+          # fails with "bare \" in non-quoted-field" (crane parses the value as CSV).
+          crane mutate "${IMAGE_REF}:${VERSION}" \
+            --entrypoint /usr/local/bin/b00t-cli \
+            --cmd="--version" \
+            --env "B00T_CLI_VERSION=${VERSION}" \
+            --label "org.opencontainers.image.title=b00t-cli" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.source=https://github.com/elasticdotventures/_b00t_" \
+            -t "${IMAGE_REF}:${VERSION}"
+          crane tag "${IMAGE_REF}:${VERSION}" gke-arc-proof
+          crane digest "${IMAGE_REF}:${VERSION}"
+
+      - name: Tag the release commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists, skipping"
+          else
+            git tag -a "${TAG}" -m "Release ${TAG} (built + published via GKE Autopilot + ARC cpu-builds)"
+            git push origin "${TAG}"
+          fi
