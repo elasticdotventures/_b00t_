@@ -1,0 +1,44 @@
+name: GKE+ARC build — b00t-mcp binary artifact
+
+# Push-trigger scoped to this branch (same reasoning as
+# arc-cpu-builds-smoke-test.yml / gke-arc-real-build-release.yml).
+#
+# Builds just b00t-mcp and uploads the binary as a workflow artifact — no
+# OCI packaging, no release tag. For shipping a hotfixed binary straight to
+# a node (e.g. fung1) without going through a full container release.
+on:
+  push:
+    branches:
+      - verify/build-b00t-mcp-fix
+
+jobs:
+  build:
+    runs-on: cpu-builds
+    steps:
+      - uses: actions/checkout@v7 # node24-native
+        with:
+          fetch-depth: 0
+
+      - name: Init required vendor submodules
+        run: git submodule update --init --depth 1 vendor/ledgrrr vendor/runpod-sdk vendor/embed-anything-b00t
+
+      - name: Install native build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev ca-certificates \
+            python3 python3-dev perl curl
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo build --release -p b00t-mcp
+        run: cargo build --release -p b00t-mcp
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: b00t-mcp-binary
+          path: target/release/b00t-mcp
+          retention-days: 3
