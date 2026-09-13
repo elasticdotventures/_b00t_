@@ -60,9 +60,25 @@ commands:
   - tar -I zstd -xf /data/src.tar.zst -C /data/src
   - du -sh /data/src /data/nextest.tar.zst
 
+  # --- validate the archive before running (gh #1304) ---
+  # If listing fails here, the archive is bad or the remap is wrong — no
+  # point running partitions. If it succeeds, we know the archive format,
+  # test discovery, and workspace structure are all correct; a subsequent
+  # run failure is then isolated to binary execution (linking, resources,
+  # file-descriptor limits, etc.).
+  - echo "=== test listing (partition ${NEXTEST_PARTITION}) ==="
+  - cargo nextest list
+      --archive-file /data/nextest.tar.zst
+      --workspace-remap /data/src
+      --partition "count:${NEXTEST_PARTITION}"
+      -T human-verbose 2>&1 | tail -5
+
   # Run the partition from the archive, remapped onto the downloaded source
   # tree (tests that read workspace-relative fixture files need it).
+  # --failure-output final ensures per-test failure detail reaches dstack
+  # logs even if nextest own stdout buffering drops it mid-stream.
   - cargo nextest run
       --archive-file /data/nextest.tar.zst
       --workspace-remap /data/src
       --partition "count:${NEXTEST_PARTITION}"
+      --failure-output final
