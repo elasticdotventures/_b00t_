@@ -10,7 +10,7 @@
 //    stages (or the executor) can share state without a direct reference.
 
 use crate::pipeline_types::{CapsuleProfile, StageSpec};
-use b00t_pipeline_types::FlowStrategy;
+use b00t_pipeline_types::{FlowStrategy, StageFlowConfig};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

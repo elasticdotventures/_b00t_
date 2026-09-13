@@ -13,7 +13,9 @@
 //! - Secrets are never printed in logs or Debug output
 
 use anyhow::{Context, Result, anyhow};
-use b00t_pipeline_types::{SecretRef, SecretSource};
+// 🤓 SecretSource/SecretRef moved to b00t-pipeline-types (#1251); re-exported
+//    here so existing `crate::pipeline_secrets::SecretSource` paths keep working.
+pub use b00t_pipeline_types::{SecretRef, SecretSource};
 use std::collections::HashMap;
 use std::fmt;
 
