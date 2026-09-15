@@ -140,9 +140,10 @@ llama_cpp_sys = { version = "0.2", optional = true }
 ndarray = "0.15"
 # 🤓 async-trait: Syntactic sugar for trait methods with async fn (Task 2: LLMInference trait definition)
 async-trait = "0.1"
-# RunPod GPU cloud client — serverless endpoints + on-demand pods; reqwest-based async
+# RunPod GPU cloud client — serverless endpoints + on-demand pods; reqwest-based async.
+# This is a provider integration, not b00t c0re: keep its vendor checkout opt-in.
 # 🤓 vendor/runpod-sdk: upstream missing required fields fixed locally; PR pending ernestas-poskus/runpod
-runpod-sdk = { path = "../vendor/runpod-sdk" }
+runpod-sdk = { path = "../vendor/runpod-sdk", optional = true }
 gix-attributes = "0.33"
 bstr = "1.12"
 
@@ -162,6 +163,9 @@ capability-forge = { version = "0.10.3", path = "../capability-forge" }
 
 [features]
 default = []
+# 🤓 RunPod is an external service provider. Core/local workflows must build
+# without selecting or authenticating this SDK.
+runpod = ["dep:runpod-sdk"]
 # 🤓 rpa: Browser RPA via CDP + ratatui TUI (heavy deps — chromiumoxide, ratatui)
 rpa = ["chromiumoxide", "ratatui", "crossterm", "nucleo", "atty"]
 rpa-playwright = []  # Playwright subprocess backend (no extra Rust deps)

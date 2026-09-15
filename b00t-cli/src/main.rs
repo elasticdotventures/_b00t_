@@ -115,13 +115,14 @@ use b00t_cli::commands::{
     LifecycleCommands, McpCommands, ModelCommands,
     ObservabilityCommands, OntologyCommands, PythonCommands, SchedulerCommands, SessionCommands, SkillCommands, SoulCommands, StackCommands,
     OodaCommands,
-    runpod::RunpodCommands,
     TaskCommands,
     PatchCommands,
     TutorialCommands, VersionCommands, VizCommands, WhatismyCommands, ZellijCommand
 
 
 };
+#[cfg(feature = "runpod")]
+use b00t_cli::commands::runpod::RunpodCommands;
 use b00t_cli::commands::install::{install_datum, run_just_install};
 use b00t_cli::commands::uninstall::uninstall_datum;
 
@@ -744,6 +745,7 @@ The system will:
         #[clap(subcommand)]
         gh_runner_command: GhRunnerCommands,
     },
+    #[cfg(feature = "runpod")]
     #[clap(about = "RunPod GPU cloud — pods, endpoints, training")]
     Runpod {
         #[clap(subcommand)]
@@ -3361,6 +3363,7 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        #[cfg(feature = "runpod")]
         Some(Commands::Runpod { runpod_command }) => {
             if let Err(e) = b00t_cli::commands::runpod::handle_runpod(runpod_command.clone()).await
             {
