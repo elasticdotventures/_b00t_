@@ -1480,15 +1480,7 @@ pub fn dotmcpjson_install_mcp(
     let repo_root = get_workspace_root();
     let mcp_json_path = std::path::Path::new(&repo_root).join(".mcp.json");
 
-    if !mcp_json_path.exists() {
-        anyhow::bail!("No .mcp.json file found in repo root: {}", repo_root);
-    }
-
-    let existing_content =
-        std::fs::read_to_string(&mcp_json_path).context("Failed to read .mcp.json file")?;
-
-    let mut mcp_config: serde_json::Value =
-        serde_json::from_str(&existing_content).context("Failed to parse .mcp.json file")?;
+    let mut mcp_config = load_or_initialize_dotmcpjson(&mcp_json_path)?;
 
     if !mcp_config.is_object() {
         mcp_config = serde_json::json!({});
@@ -1537,6 +1529,22 @@ pub fn dotmcpjson_install_mcp(
 
     println!("📁 Updated: {}", mcp_json_path.display());
     Ok(())
+}
+
+/// Read an existing project MCP manifest or return its minimal valid shape.
+///
+/// A project-level install is the first writer in many repositories; requiring
+/// callers to create an otherwise-empty JSON file defeats the install command's
+/// purpose. Existing malformed files still fail closed rather than being
+/// replaced.
+fn load_or_initialize_dotmcpjson(path: &std::path::Path) -> Result<serde_json::Value> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str(&content).context("Failed to parse .mcp.json file"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(serde_json::json!({ "mcpServers": {} }))
+        }
+        Err(error) => Err(error).context("Failed to read .mcp.json file"),
+    }
 }
 
 /// Install an MCP server to opencode's config (~/.config/opencode/opencode.json).
@@ -1773,6 +1781,14 @@ pub fn mcp_sync_bidirectional(
 #[cfg(test)]
 mod dispatch_mode_tests {
     use super::*;
+
+    #[test]
+    fn missing_dotmcpjson_is_initialized_with_an_empty_server_map() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = load_or_initialize_dotmcpjson(&directory.path().join(".mcp.json")).unwrap();
+
+        assert_eq!(config, serde_json::json!({ "mcpServers": {} }));
+    }
 
     /// Proves the chain is extensible: a brand-new mode, defined entirely
     /// in this test, participates in resolution without touching any of

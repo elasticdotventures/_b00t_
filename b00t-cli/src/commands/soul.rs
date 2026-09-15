@@ -330,6 +330,27 @@ pub enum SoulCommands {
     },
 }
 
+fn block_on_soul_future<T>(
+    future: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
+        Err(_) => tokio::runtime::Runtime::new()?.block_on(future),
+    }
+}
+
+#[cfg(test)]
+mod runtime_tests {
+    use super::block_on_soul_future;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn reuses_the_active_runtime_without_panicking() {
+        let result = block_on_soul_future(async { Ok::<_, anyhow::Error>(42_u8) }).unwrap();
+
+        assert_eq!(result, 42);
+    }
+}
+
 pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
     let path = soul_path();
     let mem = FileMemory::new(path.clone());
@@ -414,8 +435,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         }
 
         SoulCommands::Serve { port, host } => {
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(serve_soul_kv(host, *port))
+            block_on_soul_future(serve_soul_kv(host, *port))
         }
 
         #[cfg(feature = "dbus")]
@@ -433,8 +453,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             base_url,
             dry_run,
         } => {
-            let rt = tokio::runtime::Runtime::new()?;
-            rt.block_on(distill_soul(model, base_url.as_deref(), *dry_run))
+            block_on_soul_future(distill_soul(model, base_url.as_deref(), *dry_run))
         }
 
         SoulCommands::Init { path: init_path } => {

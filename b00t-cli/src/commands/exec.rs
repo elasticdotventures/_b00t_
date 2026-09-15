@@ -25,6 +25,56 @@ const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
 const AUDIT_LOG_FILE: &str = "~/.b00t/exec-log.jsonl";
 const BLOCK_TTL_SECS: u64 = 300; // 5 min re-submission window
 
+/// The executable head used for command guards.
+///
+/// Exec receives already-tokenized arguments, so matching a guard against the
+/// complete joined vector makes descriptive data (for example a GH body value)
+/// indistinguishable from an executable command. Direct commands only need
+/// their program and leading subcommand/flag tokens. Shell -c remains a
+/// special case because its script argument is the executable program.
+fn guard_subject(command: &[String]) -> String {
+    let invokes_shell_script = matches!(
+        command.first().map(String::as_str),
+        Some("sh" | "bash" | "zsh" | "fish")
+    ) && command.iter().any(|argument| argument == "-c");
+
+    if invokes_shell_script {
+        command.join(" ")
+    } else {
+        command
+            .iter()
+            .take(3)
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+#[cfg(test)]
+mod guard_subject_tests {
+    use super::guard_subject;
+
+    #[test]
+    fn excludes_descriptive_pr_body_from_direct_command_matching() {
+        let command = vec![
+            "gh".into(),
+            "pr".into(),
+            "create".into(),
+            "--body".into(),
+            "validation text mentions just test".into(),
+        ];
+
+        assert_eq!(guard_subject(&command), "gh pr create");
+    }
+
+    #[test]
+    fn keeps_shell_script_for_guard_matching() {
+        let command = vec!["bash".into(), "-c".into(), "just test".into()];
+
+        assert_eq!(guard_subject(&command), "bash -c just test");
+    }
+}
+
 #[derive(Parser)]
 #[clap(
     about = "Execute command with guard enforcement and audit log",
@@ -204,17 +254,18 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     }
 
     let cmd_str = args.command.join(" ");
+    let guard_command = guard_subject(&args.command);
 
     // Guard evaluation
     let snapshot = SystemSnapshot::capture()?;
     let (all_guards, rhai_macros) = load_all_guard_context(&datum_dir, &snapshot);
     let guard_ctx = GuardContext {
-        command: cmd_str.clone(),
+        command: guard_command.clone(),
         violation_count: 0,
         repeat_threshold: None,
         rhai_macros,
     };
-    let guard_result = check_guards(&cmd_str, &all_guards, &guard_ctx);
+    let guard_result = check_guards(&guard_command, &all_guards, &guard_ctx);
 
     // In dry-run mode, evaluate guards but avoid any cache/log side effects.
     if args.dry_run {
