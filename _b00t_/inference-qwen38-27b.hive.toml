@@ -58,7 +58,7 @@ exec_start = """/usr/bin/podman run --rm \
   --host 0.0.0.0 --port 8080 \
   --alias ch0nky \
   -m /models/Qwen3.8-27B-UD-Q4_K_XL.gguf \
-  -c 262144 \
+  -c 196608 \
   -b 4096 \
   -ub 1024 \
   -ngl 99 \
@@ -77,11 +77,11 @@ exec_start = """/usr/bin/podman run --rm \
 # 🤓 --alias ch0nky: /v1/models reports "ch0nky" so opencode `qwen36-local/ch0nky`
 #    and pi `--model ch0nky` keep working unchanged — only the weights behind :8001 change.
 # 🤓 no --spec-type: Qwen3.8-27B dense, no MTP draft head.
-# 🤓 --memory=12g (was 6g): -c 262144's host-side prompt cache alone is ~8GB
+# 🤓 --memory=12g (was 6g): -c 196608's host-side prompt cache alone is ~8GB
 #    (llama.cpp scales it with n_ctx); 6g got the container SIGKILLed by the
 #    cgroup OOM-killer at 13:02 (status=137) under real load — NOT a VRAM OOM,
 #    VRAM held at ~1.8GB free. Host has 31GB / ~23GB avail, 12g is safe.
-# 🤓 -np 2 + -c 262144: two 131072-token (128K) slots — Qwen3.8-27B's FULL
+# 🤓 -np 2 + -c 196608: two 131072-token (128K) slots — Qwen3.8-27B's FULL
 #    native context, per slot, with pi + opencode co-resident on :8001. KV q4_0
 #    (~18 MiB / 1K tok on this box) → ~4.8GB KV, total ~22.4GB / 24GB, ~2GB margin.
 #    This is the practical ceiling for a 24GB 3090 with this quant; a batch spike
