@@ -1,0 +1,89 @@
+# Build and deploy b00t container images (kr0ki-server, kr0ki-mcp) to GKE.
+# Uses b00t ARC ephemeral runners (cpu-builds scale set).
+#
+# Triggers:
+#   - workflow_dispatch (manual)
+#   - called from other workflows
+#
+# Requires GitHub secrets:
+#   GCP_SA_KEY — b00t-host service account JSON key
+#   GCP_PROJECT — promptexecution
+
+name: b00t-container-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build (kr0ki-server, kr0ki-mcp, all)"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - kr0ki-server
+          - kr0ki-mcp
+      kr0ki_ref:
+        description: "Git ref for PromptExecution/kr0ki"
+        required: false
+        default: main
+
+env:
+  REGISTRY: australia-southeast1-docker.pkg.dev/promptexecution/b00t
+  KR0KI_REPO: https://github.com/PromptExecution/kr0ki.git
+
+jobs:
+  build:
+    runs-on: [self-hosted, cpu-builds]
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        service: ${{ github.event.inputs.service == 'all' && fromJSON('["kr0ki-server", "kr0ki-mcp"]') || fromJSON(format('["{0}"]', github.event.inputs.service)) }}
+    steps:
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker australia-southeast1-docker.pkg.dev --quiet
+
+      - name: Clone kr0ki
+        run: |
+          git clone --depth 1 --branch ${{ github.event.inputs.kr0ki_ref || 'main' }} \
+            --recurse-submodules --shallow-submodules \
+            $KR0KI_REPO /tmp/kr0ki
+
+      - name: Build image
+        run: |
+          SERVICE=${{ matrix.service }}
+          if [ "$SERVICE" = "kr0ki-server" ]; then
+            CONTAINERFILE=containers/kr0ki-server/Containerfile
+          else
+            CONTAINERFILE=containers/kr0ki-mcp/Containerfile
+          fi
+          IMAGE=$REGISTRY/$SERVICE:latest
+          docker build -f /tmp/kr0ki/$CONTAINERFILE -t $IMAGE /tmp/kr0ki
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Push image
+        run: docker push $IMAGE
+
+      - name: Deploy to GKE
+        run: |
+          gcloud container clusters get-credentials arc-runners \
+            --region australia-southeast2 --project promptexecution
+          SERVICE=${{ matrix.service }}
+          kubectl set env deployment/$SERVICE -n b00t \
+            DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          kubectl rollout status deployment/$SERVICE -n b00t --timeout=120s
+
+      - name: Verify
+        run: |
+          SERVICE=${{ matrix.service }}
+          kubectl get pods -n b00t -l app.kubernetes.io/name=$SERVICE
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf /tmp/kr0ki
