@@ -173,13 +173,17 @@ fn encode_row_data(
 fn get_params(portal: &Portal<String>) -> Vec<Box<dyn ToSql>> {
     let mut results = Vec::with_capacity(portal.parameter_len());
     for i in 0..portal.parameter_len() {
+        // PostgreSQL clients commonly omit parameter OIDs in Parse and let
+        // the server infer them. pgwire still preserves the bound values in
+        // the Portal, so retain those values when the stored statement has no
+        // corresponding type entry. Text is the safe default for DuckDB's
+        // binder and matches lib/pq's text encoding for Forgejo metadata SQL.
         let param_type = portal
             .statement
             .parameter_types
             .get(i)
-            .unwrap()
-            .as_ref()
-            .unwrap_or(&Type::UNKNOWN);
+            .and_then(|t| t.as_ref())
+            .unwrap_or(&Type::TEXT);
         match param_type {
             &Type::BOOL => {
                 results.push(Box::new(portal.parameter::<bool>(i, param_type).unwrap()) as Box<dyn ToSql>);
