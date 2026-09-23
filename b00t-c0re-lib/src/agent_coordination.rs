@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, mpsc, oneshot};
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 use tracing::{debug, error, info};
 
 /// Agent metadata for discovery and capabilities
@@ -200,29 +200,38 @@ pub enum RequestUrgency {
 pub struct AgentCoordinator {
     redis: RedisComms,
     agent_metadata: AgentMetadata,
-    _message_handlers: HashMap<String, mpsc::UnboundedSender<CoordinationMessage>>,
-    pending_tasks: HashMap<String, oneshot::Sender<TaskCompletion>>,
-    pending_votes: HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>,
+    inbox_tx: mpsc::UnboundedSender<CoordinationMessage>,
+    inbox_rx: Arc<Mutex<mpsc::UnboundedReceiver<CoordinationMessage>>>,
+    pending_tasks: Arc<Mutex<HashMap<String, oneshot::Sender<TaskCompletion>>>>,
+    pending_votes: Arc<Mutex<HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>>>,
     /// Worker-side store of received TaskDelegation messages awaiting approval.
     /// Keyed by task_id; value is a brief description for resumption logging.
-    pending_delegations: HashMap<String, String>,
+    pending_delegations: Arc<Mutex<HashMap<String, String>>>,
+    listener_started: bool,
 }
 
 impl AgentCoordinator {
     /// Create new agent coordinator
     pub fn new(redis: RedisComms, agent_metadata: AgentMetadata) -> Self {
+        let (inbox_tx, inbox_rx) = mpsc::unbounded_channel();
         Self {
             redis,
             agent_metadata,
-            _message_handlers: HashMap::new(),
-            pending_tasks: HashMap::new(),
-            pending_votes: HashMap::new(),
-            pending_delegations: HashMap::new(),
+            inbox_tx,
+            inbox_rx: Arc::new(Mutex::new(inbox_rx)),
+            pending_tasks: Arc::new(Mutex::new(HashMap::new())),
+            pending_votes: Arc::new(Mutex::new(HashMap::new())),
+            pending_delegations: Arc::new(Mutex::new(HashMap::new())),
+            listener_started: false,
         }
     }
 
     /// Start agent coordination (announce presence, start listening)
     pub async fn start(&mut self) -> B00tResult<()> {
+        if self.listener_started {
+            return Ok(());
+        }
+
         // Announce presence
         self.announce_presence().await?;
 
@@ -231,6 +240,7 @@ impl AgentCoordinator {
 
         // Set up periodic presence updates
         self.start_presence_heartbeat().await?;
+        self.listener_started = true;
 
         Ok(())
     }
@@ -369,7 +379,7 @@ impl AgentCoordinator {
         // Set up completion listener if blocking
         let completion_receiver = if blocking {
             let (tx, rx) = oneshot::channel();
-            self.pending_tasks.insert(task_id.to_string(), tx);
+            self.pending_tasks.lock().await.insert(task_id.to_string(), tx);
             Some(rx)
         } else {
             None
@@ -510,7 +520,7 @@ impl AgentCoordinator {
 
         // Set up vote collection
         let (tx, rx) = oneshot::channel();
-        self.pending_votes.insert(proposal_id.clone(), tx);
+        self.pending_votes.lock().await.insert(proposal_id.clone(), tx);
 
         // Send proposal to eligible voters
         for voter in &eligible_voters {
@@ -570,19 +580,28 @@ impl AgentCoordinator {
 
     /// Wait for specific message (blocking MCP command support)
     pub async fn wait_for_message(
-        &self,
+        &mut self,
         timeout_duration: Duration,
-        _filter: MessageFilter,
+        filter: MessageFilter,
     ) -> B00tResult<CoordinationMessage> {
-        let (_tx, rx) = oneshot::channel();
+        self.start().await?;
+        let deadline = Instant::now() + timeout_duration;
+        let mut inbox = self.inbox_rx.lock().await;
 
-        // TODO: Set up filtered message listener
-        // This would require extending the message handling system
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                anyhow::bail!("Message wait timed out");
+            }
 
-        match timeout(timeout_duration, rx).await {
-            Ok(Ok(message)) => Ok(message),
-            Ok(Err(_)) => anyhow::bail!("Message wait channel closed"),
-            Err(_) => anyhow::bail!("Message wait timed out"),
+            match timeout(remaining, inbox.recv()).await {
+                Ok(Some(message)) if message_matches_filter(&message, &self.agent_metadata.agent_id, &filter) => {
+                    return Ok(message);
+                }
+                Ok(Some(_)) => continue,
+                Ok(None) => anyhow::bail!("Message inbox closed"),
+                Err(_) => anyhow::bail!("Message wait timed out"),
+            }
         }
     }
 
@@ -644,10 +663,10 @@ impl AgentCoordinator {
 
         subscriber.subscribe(&channels).await?;
 
-        let pending_tasks = Arc::new(Mutex::new(std::mem::take(&mut self.pending_tasks)));
-        let pending_votes = Arc::new(Mutex::new(std::mem::take(&mut self.pending_votes)));
-        let pending_delegations =
-            Arc::new(Mutex::new(std::mem::take(&mut self.pending_delegations)));
+        let pending_tasks = Arc::clone(&self.pending_tasks);
+        let pending_votes = Arc::clone(&self.pending_votes);
+        let pending_delegations = Arc::clone(&self.pending_delegations);
+        let inbox_tx = self.inbox_tx.clone();
         let agent_id = self.agent_metadata.agent_id.clone();
 
         tokio::spawn(async move {
@@ -658,6 +677,7 @@ impl AgentCoordinator {
                     &pending_tasks,
                     &pending_votes,
                     &pending_delegations,
+                    &inbox_tx,
                 )
                 .await
                 {
@@ -676,6 +696,7 @@ impl AgentCoordinator {
         pending_tasks: &Arc<Mutex<HashMap<String, oneshot::Sender<TaskCompletion>>>>,
         _pending_votes: &Arc<Mutex<HashMap<String, oneshot::Sender<HashMap<String, VoteChoice>>>>>,
         pending_delegations: &Arc<Mutex<HashMap<String, String>>>,
+        inbox_tx: &mpsc::UnboundedSender<CoordinationMessage>,
     ) -> B00tResult<()> {
         // Parse the AgentMessage envelope
         let agent_msg: crate::redis::AgentMessage = serde_json::from_str(&msg.payload)?;
@@ -684,6 +705,7 @@ impl AgentCoordinator {
         if let crate::redis::AgentMessage::Session { data, .. } = agent_msg {
             if let Some(coord_value) = data.get("coordination_message") {
                 let coord_msg: CoordinationMessage = serde_json::from_value(coord_value.clone())?;
+                let _ = inbox_tx.send(coord_msg.clone());
 
                 match coord_msg {
                     CoordinationMessage::TaskCompletion {
@@ -906,6 +928,90 @@ pub struct MessageFilter {
     pub from_agents: Option<Vec<String>>,
     pub task_ids: Option<Vec<String>>,
     pub subjects: Option<Vec<String>>,
+}
+
+fn message_matches_filter(
+    message: &CoordinationMessage,
+    recipient: &str,
+    filter: &MessageFilter,
+) -> bool {
+    let message_type = match message {
+        CoordinationMessage::Presence { .. } => "Presence",
+        CoordinationMessage::DirectMessage { .. } => "DirectMessage",
+        CoordinationMessage::TaskDelegation { .. } => "TaskDelegation",
+        CoordinationMessage::TaskApproval { .. } => "TaskApproval",
+        CoordinationMessage::TaskRejection { .. } => "TaskRejection",
+        CoordinationMessage::TaskCompletion { .. } => "TaskCompletion",
+        CoordinationMessage::ProgressUpdate { .. } => "ProgressUpdate",
+        CoordinationMessage::VotingProposal { .. } => "VotingProposal",
+        CoordinationMessage::Vote { .. } => "Vote",
+        CoordinationMessage::EventNotification { .. } => "EventNotification",
+        CoordinationMessage::CapabilityRequest { .. } => "CapabilityRequest",
+        CoordinationMessage::CapabilityResponse { .. } => "CapabilityResponse",
+    };
+
+    if let Some(types) = &filter.message_types {
+        if !types.iter().any(|value| value == message_type) {
+            return false;
+        }
+    }
+
+    let from_agent = match message {
+        CoordinationMessage::Presence { metadata } => Some(metadata.agent_id.as_str()),
+        CoordinationMessage::DirectMessage { from_agent, .. } => Some(from_agent.as_str()),
+        CoordinationMessage::TaskDelegation { captain_id, .. }
+        | CoordinationMessage::TaskApproval { captain_id, .. }
+        | CoordinationMessage::TaskRejection { captain_id, .. } => Some(captain_id.as_str()),
+        CoordinationMessage::TaskCompletion { worker_id, .. } => Some(worker_id.as_str()),
+        CoordinationMessage::ProgressUpdate { agent_id, .. } => Some(agent_id.as_str()),
+        CoordinationMessage::VotingProposal { captain_id, .. } => Some(captain_id.as_str()),
+        CoordinationMessage::Vote { voter_id, .. } => Some(voter_id.as_str()),
+        CoordinationMessage::EventNotification { source, .. } => Some(source.as_str()),
+        CoordinationMessage::CapabilityRequest { requesting_agent, .. } => {
+            Some(requesting_agent.as_str())
+        }
+        CoordinationMessage::CapabilityResponse { responding_agent, .. } => {
+            Some(responding_agent.as_str())
+        }
+    };
+    if let Some(agents) = &filter.from_agents {
+        if !from_agent.is_some_and(|value| agents.iter().any(|agent| agent == value)) {
+            return false;
+        }
+    }
+
+    let task_id = match message {
+        CoordinationMessage::TaskDelegation { task_id, .. }
+        | CoordinationMessage::TaskApproval { task_id, .. }
+        | CoordinationMessage::TaskRejection { task_id, .. }
+        | CoordinationMessage::TaskCompletion { task_id, .. }
+        | CoordinationMessage::ProgressUpdate { task_id, .. } => Some(task_id.as_str()),
+        _ => None,
+    };
+    if let Some(task_ids) = &filter.task_ids {
+        if !task_id.is_some_and(|value| task_ids.iter().any(|task| task == value)) {
+            return false;
+        }
+    }
+
+    let subject = match message {
+        CoordinationMessage::DirectMessage { subject, .. } => Some(subject.as_str()),
+        CoordinationMessage::VotingProposal { subject, .. } => Some(subject.as_str()),
+        _ => None,
+    };
+    if let Some(subjects) = &filter.subjects {
+        if !subject.is_some_and(|value| subjects.iter().any(|expected| expected == value)) {
+            return false;
+        }
+    }
+
+    match message {
+        CoordinationMessage::DirectMessage { to_agent, .. }
+        | CoordinationMessage::TaskDelegation { worker_id: to_agent, .. }
+        | CoordinationMessage::TaskApproval { worker_id: to_agent, .. }
+        | CoordinationMessage::TaskRejection { worker_id: to_agent, .. } => to_agent == recipient,
+        _ => true,
+    }
 }
 
 /// Task completion result
@@ -1186,5 +1292,48 @@ mod tests {
             .await
             .unwrap();
         assert!(!available, "Worker should not be available");
+    }
+
+    #[test]
+    fn test_message_filter_matches_direct_message_for_recipient() {
+        let message = CoordinationMessage::DirectMessage {
+            from_agent: "sm3lly".to_string(),
+            to_agent: "fung1".to_string(),
+            subject: "kr0ki-handshake".to_string(),
+            content: "hello".to_string(),
+            message_id: "message-1".to_string(),
+            reply_to: None,
+            requires_ack: true,
+        };
+        let filter = MessageFilter {
+            message_types: Some(vec!["DirectMessage".to_string()]),
+            from_agents: Some(vec!["sm3lly".to_string()]),
+            task_ids: None,
+            subjects: Some(vec!["kr0ki-handshake".to_string()]),
+        };
+
+        assert!(message_matches_filter(&message, "fung1", &filter));
+        assert!(!message_matches_filter(&message, "other-agent", &filter));
+    }
+
+    #[test]
+    fn test_message_filter_rejects_non_matching_sender() {
+        let message = CoordinationMessage::DirectMessage {
+            from_agent: "other-agent".to_string(),
+            to_agent: "fung1".to_string(),
+            subject: "kr0ki-handshake".to_string(),
+            content: "hello".to_string(),
+            message_id: "message-2".to_string(),
+            reply_to: None,
+            requires_ack: false,
+        };
+        let filter = MessageFilter {
+            message_types: None,
+            from_agents: Some(vec!["sm3lly".to_string()]),
+            task_ids: None,
+            subjects: None,
+        };
+
+        assert!(!message_matches_filter(&message, "fung1", &filter));
     }
 }
