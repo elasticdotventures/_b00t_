@@ -1121,7 +1121,11 @@ fn dispatch_cmd(
             .api_base
             .as_deref()
             .ok_or_else(|| anyhow!("model '{name}' has no api_base"))?;
-        (base.to_string(), datum.litellm_model.clone())
+        let model_id = datum
+            .litellm_model
+            .clone()
+            .ok_or_else(|| anyhow!("model '{name}' has no litellm_model (routable model id)"))?;
+        (base.to_string(), model_id)
     } else if let Some(t) = tier {
         crate::model_registry::resolve_tier_endpoint(t)
             .ok_or_else(|| anyhow!("no enabled model with tier='{t}' in registry"))?

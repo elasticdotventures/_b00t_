@@ -204,8 +204,13 @@ pub struct ModelDatum {
     #[serde(default)]
     pub capabilities: Vec<ModelCapability>,
 
-    /// Provider-specific model identifier for litellm
-    pub litellm_model: String,
+    /// Provider-specific model identifier for litellm. `None` for models with
+    /// no litellm-compatible route -- e.g. a native CLI binary (stdin/stdout
+    /// generation, no HTTP server) rather than an OpenAI-compatible endpoint.
+    /// Such models are excluded from litellm proxy export (see
+    /// `ModelRegistry::to_litellm_yaml`) since there's no route to emit.
+    #[serde(default)]
+    pub litellm_model: Option<String>,
 
     /// Optional API endpoint override
     pub api_base: Option<String>,
@@ -272,12 +277,17 @@ where
 }
 
 impl ModelDatum {
-    /// Generate litellm model list entry for proxy configuration
+    /// Generate litellm model list entry for proxy configuration.
+    ///
+    /// Callers should check `self.litellm_model.is_some()` first (or filter via
+    /// `ModelRegistry::to_litellm_yaml`, which already does) -- a model with no
+    /// litellm route still produces an entry here, just with an empty `model`
+    /// string, since this method has no way to signal "skip me" on its own.
     pub fn to_litellm_config(&self, model_name: &str) -> serde_json::Value {
         let mut config = serde_json::json!({
             "model_name": model_name,
             "litellm_params": {
-                "model": self.litellm_model,
+                "model": self.litellm_model.clone().unwrap_or_default(),
             }
         });
 
@@ -359,7 +369,7 @@ impl ModelDatum {
     }
 
     /// Generate full litellm model identifier
-    pub fn full_litellm_id(&self) -> String {
+    pub fn full_litellm_id(&self) -> Option<String> {
         self.litellm_model.clone()
     }
 }
@@ -430,11 +440,14 @@ impl ModelRegistry {
             "model_list": []
         });
 
-        // Generate model list from enabled models
+        // Generate model list from enabled models that actually have a litellm
+        // route -- a model with `litellm_model: None` (e.g. a native CLI binary
+        // with no HTTP server) has nothing to proxy, so it's excluded here
+        // rather than emitted as a broken entry with an empty `model` string.
         let model_list: Vec<serde_json::Value> = self
             .models
             .iter()
-            .filter(|(_, datum)| datum.enabled)
+            .filter(|(_, datum)| datum.enabled && datum.litellm_model.is_some())
             .map(|(name, datum)| datum.to_litellm_config(name))
             .collect();
 
@@ -520,7 +533,7 @@ mod tests {
                 ModelCapability::Vision,
                 ModelCapability::Tools,
             ],
-            litellm_model: "openai/gpt-4o".to_string(),
+            litellm_model: Some("openai/gpt-4o".to_string()),
             api_base: None,
             api_key_env: Some("OPENAI_API_KEY".to_string()),
             parameters: HashMap::new(),
@@ -534,7 +547,7 @@ mod tests {
         assert!(datum.has_capability(&ModelCapability::Vision));
         assert!(datum.is_size(&ModelSize::Large));
         assert!(datum.is_provider(&ModelProvider::OpenAI));
-        assert_eq!(datum.full_litellm_id(), "openai/gpt-4o");
+        assert_eq!(datum.full_litellm_id(), Some("openai/gpt-4o".to_string()));
     }
 
     #[test]
@@ -543,7 +556,7 @@ mod tests {
             provider: ModelProvider::Anthropic,
             size: ModelSize::Large,
             capabilities: vec![ModelCapability::Chat, ModelCapability::Code],
-            litellm_model: "anthropic/claude-3-5-sonnet".to_string(),
+            litellm_model: Some("anthropic/claude-3-5-sonnet".to_string()),
             api_base: None,
             api_key_env: Some("ANTHROPIC_API_KEY".to_string()),
             parameters: {
@@ -587,7 +600,7 @@ mod tests {
             provider: ModelProvider::OpenAI,
             size: ModelSize::Small,
             capabilities: vec![ModelCapability::Chat],
-            litellm_model: "openai/gpt-3.5-turbo".to_string(),
+            litellm_model: Some("openai/gpt-3.5-turbo".to_string()),
             api_base: None,
             api_key_env: Some("OPENAI_API_KEY".to_string()),
             parameters: HashMap::new(),
@@ -616,7 +629,7 @@ mod tests {
             provider: ModelProvider::FireworksAI,
             size: ModelSize::Small,
             capabilities: vec![ModelCapability::Chat, ModelCapability::Code],
-            litellm_model: "fireworks_ai/llama-v3-8b-instruct".to_string(),
+            litellm_model: Some("fireworks_ai/llama-v3-8b-instruct".to_string()),
             api_base: Some("https://api.fireworks.ai/inference/v1".to_string()),
             api_key_env: Some("FIREWORKS_API_KEY".to_string()),
             parameters: HashMap::new(),
