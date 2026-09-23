@@ -11,7 +11,10 @@ aliases = ["qwen3-vl", "qwen-vl", "qwen3-vision"]
 [model]
 provider       = "openai_compatible"
 size           = "large"
-capabilities   = ["chat", "vision", "image-to-text", "video-understanding", "reasoning", "tool_use"]
+# "image-to-text"/"video-understanding" aren't ModelCapability variants -- "vision" is
+# the closest existing tag covering image+video input ("multimodal" is just a
+# deserialization alias for the same Vision variant, so not added separately).
+capabilities   = ["chat", "vision", "reasoning", "tool_use"]
 input_modalities  = ["text", "image", "video"]
 output_modalities = ["text"]
 
