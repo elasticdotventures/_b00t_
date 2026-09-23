@@ -143,6 +143,14 @@ return cjson.encode({ok = results})
 #[derive(Serialize)]
 struct LuaOp {
     op: &'static str,
+    // 🤓 must be omitted (not serialized as JSON `null`) when None: cjson.decode
+    // turns JSON null into the `cjson.null` sentinel, not real Lua `nil` -- the
+    // Lua script's `if op.expect_gen ~= nil then` guard (TRANSACTION_SCRIPT
+    // above) would otherwise always take the CAS-check branch even when the
+    // caller passed expect_gen: None ("no CAS enforcement"), comparing a real
+    // generation number against cjson.null and always failing with a bogus
+    // "CAS mismatch ... expected generation None, found Some(0)".
+    #[serde(skip_serializing_if = "Option::is_none")]
     expect_gen: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<Value>,
@@ -286,8 +294,15 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
-        s.set_raw("k", Value::String("v".into())).unwrap();
-        assert_eq!(s.get_raw("k").unwrap(), Some(Value::String("v".into())));
+        // 🤓 distinct key from the "k" used by the transaction_* tests below --
+        // set_raw/get_raw write a bare (unenveloped) JSON value, whereas
+        // transaction() expects the {v,gen,expires_at} envelope shape. Sharing
+        // "k" let this test poison the transaction tests' key (or vice versa,
+        // depending on run order), producing a real Lua "attempt to perform
+        // arithmetic on a nil value" EVAL error when the reader found a bare
+        // string instead of an envelope.
+        s.set_raw("raw-k", Value::String("v".into())).unwrap();
+        assert_eq!(s.get_raw("raw-k").unwrap(), Some(Value::String("v".into())));
     }
 
     #[test]
