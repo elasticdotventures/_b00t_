@@ -127,6 +127,7 @@ pub mod task;
 pub use task::TaskCommands;
 
 pub mod ooda;
+#[cfg(feature = "runpod")]
 pub mod runpod;
 pub use ooda::OodaCommands;
 pub mod patch;

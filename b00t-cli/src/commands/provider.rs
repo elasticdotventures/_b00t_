@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::process::Command;
 
+#[cfg(feature = "runpod")]
 use runpod_sdk::model::{
     CloudType, Endpoint, EndpointCreateInput, GetEndpointQuery, GetPodQuery, GpuTypeId,
     ListEndpointsQuery, ListPodsQuery, Pod, PodCreateInput, PodStatus,
@@ -119,6 +120,7 @@ pub struct BatchJobSpec {
 
 fn default_gpu_count() -> u32 { 1 }
 
+#[cfg(feature = "runpod")]
 fn fmt_cost(cost: Option<f64>) -> String {
     cost.map(|c| format!("${c:.2}")).unwrap_or_else(|| "-".to_string())
 }
@@ -149,7 +151,12 @@ pub trait ComputeProvider: Send + Sync {
 
 pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
     match name {
+        #[cfg(feature = "runpod")]
         "runpod" => Ok(Box::new(RunpodProvider::new()?)),
+        #[cfg(not(feature = "runpod"))]
+        "runpod" => bail!(
+            "RunPod support is disabled; rebuild b00t-cli with --features runpod"
+        ),
         "hf" => Ok(Box::new(HfProvider::new())),
         "local" => Ok(Box::new(LocalProvider::new())),
         "dstack" => Ok(Box::new(DstackProvider::new())),
@@ -167,6 +174,7 @@ pub fn get_provider(name: &str) -> Result<Box<dyn ComputeProvider>> {
 /// lifecycle can be unit-tested with a mock. Mirrors exactly the methods
 /// `ComputeProvider for RunpodProvider` calls; implemented for the real
 /// `runpod_sdk::RunpodClient` via its `PodsService`/`EndpointsService` traits.
+#[cfg(feature = "runpod")]
 #[async_trait]
 pub trait RunpodApi: Send + Sync {
     async fn create_endpoint(&self, input: EndpointCreateInput) -> Result<Endpoint>;
@@ -179,6 +187,7 @@ pub trait RunpodApi: Send + Sync {
     async fn list_pods(&self, query: ListPodsQuery) -> Result<Vec<Pod>>;
 }
 
+#[cfg(feature = "runpod")]
 #[async_trait]
 impl RunpodApi for runpod_sdk::RunpodClient {
     // UFCS with an explicit service trait keeps these unambiguous even though
@@ -218,10 +227,12 @@ impl RunpodApi for runpod_sdk::RunpodClient {
     }
 }
 
+#[cfg(feature = "runpod")]
 pub struct RunpodProvider<C: RunpodApi = runpod_sdk::RunpodClient> {
     client: C,
 }
 
+#[cfg(feature = "runpod")]
 impl RunpodProvider<runpod_sdk::RunpodClient> {
     pub fn new() -> Result<Self> {
         let config = runpod_sdk::RunpodConfig::from_env()
@@ -233,7 +244,7 @@ impl RunpodProvider<runpod_sdk::RunpodClient> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "runpod"))]
 impl<C: RunpodApi> RunpodProvider<C> {
     /// Test-only constructor: inject a mock transport.
     fn with_client(client: C) -> Self {
@@ -241,6 +252,7 @@ impl<C: RunpodApi> RunpodProvider<C> {
     }
 }
 
+#[cfg(feature = "runpod")]
 #[async_trait]
 impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
     fn name(&self) -> &str {
@@ -332,6 +344,7 @@ impl<C: RunpodApi> ComputeProvider for RunpodProvider<C> {
     }
 }
 
+#[cfg(feature = "runpod")]
 fn hf_flavor_to_runpod_gpu(flavor: &str) -> &str {
     match flavor {
         "a100-large" | "a100" => "NVIDIA A100 80GB PCIe",
@@ -343,6 +356,7 @@ fn hf_flavor_to_runpod_gpu(flavor: &str) -> &str {
 
 /// Parses a RunPod GPU type string into the SDK enum, with an error that names
 /// the offending string. Pure — split out for unit-testing the error path.
+#[cfg(feature = "runpod")]
 fn parse_gpu_type_id(gpu_str: &str) -> Result<GpuTypeId> {
     serde_json::from_value(serde_json::Value::String(gpu_str.to_string()))
         .with_context(|| format!("unknown GPU type '{gpu_str}'"))
@@ -350,6 +364,7 @@ fn parse_gpu_type_id(gpu_str: &str) -> Result<GpuTypeId> {
 
 /// Env vars injected into training pods: the config path the runner reads and
 /// the unsloth compiled-cache mount.
+#[cfg(feature = "runpod")]
 fn training_pod_env(config_path: &str) -> std::collections::HashMap<String, String> {
     [
         ("TRAINING_CONFIG".to_string(), config_path.to_string()),
@@ -360,6 +375,7 @@ fn training_pod_env(config_path: &str) -> std::collections::HashMap<String, Stri
 
 /// Pure decision helper for batch pods: empty or `/dev/null` config paths mean
 /// the image carries its own entrypoint and must not be overridden.
+#[cfg(feature = "runpod")]
 fn docker_start_cmd_for(config_path: &str) -> Option<Vec<String>> {
     let cp = config_path.trim();
     if cp.is_empty() || cp == "/dev/null" {
@@ -371,6 +387,7 @@ fn docker_start_cmd_for(config_path: &str) -> Option<Vec<String>> {
 
 /// Builds the PodCreateInput for a fine-tuning pod. Split out so request
 /// construction is unit-testable without a live RunPod connection.
+#[cfg(feature = "runpod")]
 fn training_pod_request(spec: &TrainingJobSpec) -> Result<PodCreateInput> {
     let gpu_id = parse_gpu_type_id(hf_flavor_to_runpod_gpu(&spec.flavor))?;
     Ok(PodCreateInput {
@@ -387,6 +404,7 @@ fn training_pod_request(spec: &TrainingJobSpec) -> Result<PodCreateInput> {
 }
 
 /// Builds the PodCreateInput for a generic containerized batch job.
+#[cfg(feature = "runpod")]
 fn batch_pod_request(spec: &BatchJobSpec) -> Result<PodCreateInput> {
     let gpu_id = parse_gpu_type_id(hf_flavor_to_runpod_gpu(&spec.flavor))?;
     Ok(PodCreateInput {
@@ -405,6 +423,7 @@ fn batch_pod_request(spec: &BatchJobSpec) -> Result<PodCreateInput> {
 
 /// Builds the EndpointCreateInput for a serverless inference endpoint.
 /// 🤓 EndpointCreateInput requires template_id; env is baked into the template
+#[cfg(feature = "runpod")]
 fn endpoint_create_request(cfg: &EndpointConfig) -> EndpointCreateInput {
     let template_id = cfg
         .env
@@ -424,6 +443,7 @@ fn endpoint_create_request(cfg: &EndpointConfig) -> EndpointCreateInput {
 }
 
 /// Formats the one-line pod status used by `b00t provider runpod status`.
+#[cfg(feature = "runpod")]
 fn fmt_pod_status_line(id: &str, status: Option<PodStatus>, cost_per_hr: Option<f64>) -> String {
     let st = status.map(|s| format!("{s:?}")).unwrap_or_default();
     format!("pod={id}  status={st}  cost_per_hr={}", fmt_cost(cost_per_hr))
@@ -1418,6 +1438,7 @@ pub enum ProviderCommands {
         #[clap(subcommand)]
         cmd: ProviderJobCommands,
     },
+    #[cfg(feature = "runpod")]
     #[clap(about = "RunPod GPU cloud — submit, status, list, stop, wait")]
     Runpod {
         #[clap(subcommand)]
@@ -1430,6 +1451,7 @@ pub enum ProviderCommands {
     },
 }
 
+#[cfg(feature = "runpod")]
 #[derive(Parser, Clone)]
 pub enum RunpodSubCommands {
     #[clap(about = "Submit a GPU pod from an image")]
@@ -1486,7 +1508,7 @@ pub enum DstackSubCommands {
 pub enum EndpointCommands {
     #[clap(about = "Deploy serverless inference endpoint")]
     Deploy {
-        #[clap(long, default_value = "runpod")]
+        #[clap(long)]
         provider: String,
         #[clap(long, default_value = "b00t-ch0nky")]
         name: String,
@@ -1499,19 +1521,19 @@ pub enum EndpointCommands {
     },
     #[clap(about = "Show endpoint status")]
     Status {
-        #[clap(long, default_value = "runpod")]
+        #[clap(long)]
         provider: String,
         id: String,
     },
     #[clap(about = "Tear down endpoint")]
     Teardown {
-        #[clap(long, default_value = "runpod")]
+        #[clap(long)]
         provider: String,
         id: String,
     },
     #[clap(about = "List all endpoints")]
     List {
-        #[clap(long, default_value = "runpod")]
+        #[clap(long)]
         provider: String,
     },
 }
@@ -1569,6 +1591,7 @@ pub async fn handle_provider_command(cmd: ProviderCommands) -> Result<()> {
     match cmd {
         ProviderCommands::Endpoint { cmd } => handle_endpoint(cmd).await,
         ProviderCommands::Job { cmd } => handle_job(cmd).await,
+        #[cfg(feature = "runpod")]
         ProviderCommands::Runpod { cmd } => handle_runpod(cmd).await,
         ProviderCommands::Dstack { cmd } => handle_dstack(cmd).await,
     }
@@ -1694,6 +1717,7 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "runpod")]
 async fn handle_runpod(cmd: RunpodSubCommands) -> Result<()> {
     use runpod_sdk::RunpodConfig;
     let config = RunpodConfig::from_env().context("RUNPOD_API_KEY not set")?;
@@ -1760,6 +1784,42 @@ async fn handle_dstack(cmd: DstackSubCommands) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod provider_selection_tests {
+    use super::*;
+
+    #[test]
+    fn endpoint_commands_require_an_explicit_provider() {
+        for args in [
+            vec!["endpoint", "deploy"],
+            vec!["endpoint", "status", "endpoint-id"],
+            vec!["endpoint", "teardown", "endpoint-id"],
+            vec!["endpoint", "list"],
+        ] {
+            let error = match EndpointCommands::try_parse_from(args) {
+                Ok(_) => panic!("endpoint command must require --provider"),
+                Err(error) => error,
+            };
+            assert!(error.to_string().contains("--provider"));
+        }
+    }
+
+    #[cfg(not(feature = "runpod"))]
+    #[test]
+    fn runpod_provider_requires_the_opt_in_feature() {
+        let error = match get_provider("runpod") {
+            Ok(_) => panic!("RunPod must not be available without its feature"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("rebuild b00t-cli with --features runpod")
+        );
+    }
 }
 
 #[cfg(test)]
@@ -2198,7 +2258,7 @@ mod vultr_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "runpod"))]
 mod runpod_tests {
     use super::*;
     use std::sync::Mutex;

@@ -25,6 +25,63 @@ const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
 const AUDIT_LOG_FILE: &str = "~/.b00t/exec-log.jsonl";
 const BLOCK_TTL_SECS: u64 = 300; // 5 min re-submission window
 
+/// The executable head used for command guards.
+///
+/// Exec receives already-tokenized arguments. Preserve every command token so
+/// guards can inspect destinations and values (for example `git push origin
+/// main`). GitHub title/body values are descriptive data, so omit those flag
+/// values from the guard subject while retaining the operation itself.
+fn guard_subject(command: &[String]) -> String {
+    if command.first().map(String::as_str) != Some("gh") {
+        return command.join(" ");
+    }
+
+    let mut subject = Vec::with_capacity(command.len());
+    let mut tokens = command.iter();
+    while let Some(token) = tokens.next() {
+        match token.as_str() {
+            "--body" | "--title" => {
+                tokens.next();
+            }
+            value if value.starts_with("--body=") || value.starts_with("--title=") => {}
+            value => subject.push(value),
+        }
+    }
+    subject.join(" ")
+}
+
+#[cfg(test)]
+mod guard_subject_tests {
+    use super::guard_subject;
+
+    #[test]
+    fn excludes_descriptive_pr_body_from_direct_command_matching() {
+        let command = vec![
+            "gh".into(),
+            "pr".into(),
+            "create".into(),
+            "--body".into(),
+            "validation text mentions just test".into(),
+        ];
+
+        assert_eq!(guard_subject(&command), "gh pr create");
+    }
+
+    #[test]
+    fn keeps_shell_script_for_guard_matching() {
+        let command = vec!["bash".into(), "-c".into(), "just test".into()];
+
+        assert_eq!(guard_subject(&command), "bash -c just test");
+    }
+
+    #[test]
+    fn keeps_all_direct_command_tokens_for_guard_matching() {
+        let command = vec!["git".into(), "push".into(), "origin".into(), "main".into()];
+
+        assert_eq!(guard_subject(&command), "git push origin main");
+    }
+}
+
 #[derive(Parser)]
 #[clap(
     about = "Execute command with guard enforcement and audit log",
@@ -204,17 +261,18 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     }
 
     let cmd_str = args.command.join(" ");
+    let guard_command = guard_subject(&args.command);
 
     // Guard evaluation
     let snapshot = SystemSnapshot::capture()?;
     let (all_guards, rhai_macros) = load_all_guard_context(&datum_dir, &snapshot);
     let guard_ctx = GuardContext {
-        command: cmd_str.clone(),
+        command: guard_command.clone(),
         violation_count: 0,
         repeat_threshold: None,
         rhai_macros,
     };
-    let guard_result = check_guards(&cmd_str, &all_guards, &guard_ctx);
+    let guard_result = check_guards(&guard_command, &all_guards, &guard_ctx);
 
     // In dry-run mode, evaluate guards but avoid any cache/log side effects.
     if args.dry_run {
