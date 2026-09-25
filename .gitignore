@@ -380,3 +380,4 @@ ralph-loop.nohup
 dl*.log
 curl-dl.log
 .b00t/gpu-heater-backlog.txt
+.cargo/config.toml

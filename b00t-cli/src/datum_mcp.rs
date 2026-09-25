@@ -189,6 +189,11 @@ pub struct McpHttpStreamMethod {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env_http_headers: Option<std::collections::HashMap<String, String>>,
 
+    /// Client transport type for `.mcp.json` / Claude Code / VS Code
+    /// (default: "http", alternative: "sse")
+    #[serde(default = "default_httpstream_client_type")]
+    pub client_type: String,
+
     // Vendor capabilities - timeout controls
     /// Server startup timeout in seconds (default: 10)
     /// (Codex: startup_timeout_sec)
@@ -227,6 +232,10 @@ fn default_stdio_transport() -> String {
 
 fn default_httpstream_transport() -> String {
     "httpstream".to_string()
+}
+
+fn default_httpstream_client_type() -> String {
+    "http".to_string()
 }
 
 /// Multi-method MCP server configuration datum

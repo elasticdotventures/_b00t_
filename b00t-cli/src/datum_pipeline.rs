@@ -29,7 +29,9 @@ impl PipelineDatum {
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
         let (config, filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
         let datum = config.b00t;
-        let pipeline_path = Self::resolve_pipeline_path(&datum, path, &filename)?;
+        // #1308: resolve symlinked datums against the real file's directory
+        let base = crate::datum_utils::resolve_datum_base_dir(path, &filename);
+        let pipeline_path = Self::resolve_pipeline_path(&datum, &base.display().to_string(), &filename)?;
         let stages = Self::stage_names(&datum);
         Ok(PipelineDatum {
             datum,

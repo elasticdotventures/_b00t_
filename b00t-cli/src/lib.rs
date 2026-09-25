@@ -42,6 +42,7 @@ pub mod blessing;
 pub mod virtfs;
 pub mod vultr_delegate;
 pub mod datum_schema;
+pub mod external_refs;
 pub mod bootstrap;
 pub mod budget_controller;
 pub mod cloud_sync;

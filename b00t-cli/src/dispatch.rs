@@ -1468,6 +1468,75 @@ pub fn codex_install_mcp(
     Ok(())
 }
 
+/// #1344: Build a `.mcp.json` server config for an httpstream MCP method.
+fn build_httpstream_server_config(
+    url: &str,
+    httpstream_data: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> serde_json::Value {
+    let mut config = serde_json::json!({ "url": url });
+
+    let Some(data) = httpstream_data else {
+        config["type"] = serde_json::json!("http");
+        return config;
+    };
+
+    // client_type: "http" (default) or "sse"
+    let client_type = data
+        .get("client_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("http");
+    config["type"] = serde_json::json!(client_type);
+
+    // Build headers from all three sources
+    let has_auth = data
+        .get("bearer_token_env_var")
+        .and_then(|v| v.as_str())
+        .is_some()
+        || data
+            .get("http_headers")
+            .and_then(|v| v.as_object())
+            .is_some()
+        || data
+            .get("env_http_headers")
+            .and_then(|v| v.as_object())
+            .is_some();
+
+    if has_auth {
+        let mut headers = serde_json::Map::new();
+
+        // http_headers → literal passthrough (highest priority — explicit wins)
+        if let Some(hh) = data.get("http_headers").and_then(|v| v.as_object()) {
+            for (k, v) in hh {
+                headers.insert(k.clone(), v.clone());
+            }
+        }
+
+        // env_http_headers → interpolation: ${VAR} (second priority)
+        if let Some(ehh) = data.get("env_http_headers").and_then(|v| v.as_object()) {
+            for (k, v) in ehh {
+                if let Some(var_name) = v.as_str() {
+                    headers
+                        .entry(k.clone())
+                        .or_insert(serde_json::json!(format!("${{{}}}", var_name)));
+                }
+            }
+        }
+
+        // bearer_token_env_var → Authorization: Bearer ${VAR} (fallback)
+        if let Some(var_name) = data.get("bearer_token_env_var").and_then(|v| v.as_str()) {
+            headers
+                .entry("Authorization".to_string())
+                .or_insert(serde_json::json!(format!("Bearer ${{{}}}", var_name)));
+        }
+
+        if !headers.is_empty() {
+            config["headers"] = serde_json::Value::Object(headers);
+        }
+    }
+
+    config
+}
+
 pub fn dotmcpjson_install_mcp(
     name: &str,
     path: &str,
@@ -1493,7 +1562,12 @@ pub fn dotmcpjson_install_mcp(
         select_mcp_method(&datum, stdio_command, use_httpstream)?;
 
     let server_config = if method_type == "httpstream" {
-        serde_json::json!({ "url": command })
+        // #1344: emit type/headers from bearer_token_env_var, http_headers, env_http_headers
+        let httpstream_data = datum
+            .mcp
+            .as_ref()
+            .and_then(|m| m.httpstream.as_ref());
+        build_httpstream_server_config(&command, httpstream_data)
     } else {
         serde_json::json!({ "command": command, "args": args })
     };
@@ -1855,5 +1929,84 @@ mod dispatch_mode_tests {
             other => panic!("expected CliPassthrough, got {:?}", other.is_some()),
         }
         assert!(RuntimeMode.try_resolve("c", path).is_none());
+    }
+}
+
+// ── #1344: httpstream server config builder tests ─────────────────────
+#[cfg(test)]
+mod httpstream_config_tests {
+    use super::*;
+
+    #[test]
+    fn no_headers_defaults_to_type_http() {
+        let config = build_httpstream_server_config("http://example.com/mcp", None);
+        assert_eq!(config["url"], "http://example.com/mcp");
+        assert_eq!(config["type"], "http");
+        assert!(config.get("headers").is_none());
+    }
+
+    #[test]
+    fn client_type_sse_emitted() {
+        let mut data = std::collections::HashMap::new();
+        data.insert("client_type".to_string(), serde_json::json!("sse"));
+        let config = build_httpstream_server_config("http://example.com/mcp", Some(&data));
+        assert_eq!(config["type"], "sse");
+    }
+
+    #[test]
+    fn bearer_token_env_var_emits_authorization_header() {
+        let mut data = std::collections::HashMap::new();
+        data.insert(
+            "bearer_token_env_var".to_string(),
+            serde_json::json!("MY_API_TOKEN"),
+        );
+        let config = build_httpstream_server_config("http://example.com/mcp", Some(&data));
+        assert_eq!(
+            config["headers"]["Authorization"],
+            "Bearer ${MY_API_TOKEN}"
+        );
+    }
+
+    #[test]
+    fn http_headers_passthrough_literally() {
+        let mut data = std::collections::HashMap::new();
+        let mut hh = serde_json::Map::new();
+        hh.insert("X-API-Version".to_string(), serde_json::json!("2024-01"));
+        data.insert("http_headers".to_string(), serde_json::Value::Object(hh));
+        let config = build_httpstream_server_config("http://example.com/mcp", Some(&data));
+        assert_eq!(config["headers"]["X-API-Version"], "2024-01");
+    }
+
+    #[test]
+    fn env_http_headers_emit_interpolation() {
+        let mut data = std::collections::HashMap::new();
+        let mut ehh = serde_json::Map::new();
+        ehh.insert("X-Token".to_string(), serde_json::json!("MY_VAR"));
+        data.insert(
+            "env_http_headers".to_string(),
+            serde_json::Value::Object(ehh),
+        );
+        let config = build_httpstream_server_config("http://example.com/mcp", Some(&data));
+        assert_eq!(config["headers"]["X-Token"], "${MY_VAR}");
+    }
+
+    #[test]
+    fn explicit_authorization_wins_over_bearer_token() {
+        let mut data = std::collections::HashMap::new();
+        let mut hh = serde_json::Map::new();
+        hh.insert(
+            "Authorization".to_string(),
+            serde_json::json!("Basic dXNlcjpwYXNz"),
+        );
+        data.insert("http_headers".to_string(), serde_json::Value::Object(hh));
+        data.insert(
+            "bearer_token_env_var".to_string(),
+            serde_json::json!("SHOULD_BE_IGNORED"),
+        );
+        let config = build_httpstream_server_config("http://example.com/mcp", Some(&data));
+        assert_eq!(
+            config["headers"]["Authorization"],
+            "Basic dXNlcjpwYXNz"
+        );
     }
 }

@@ -11,7 +11,28 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// #1308: Resolve the real base directory for relative paths inside a datum.
+///
+/// When a datum file is a symlink (e.g. `_b00t_/foo.just.toml` →
+/// `../vendor/_b00t_/foo.just.toml`), relative paths declared inside
+/// the datum should resolve against the **real** file's parent directory,
+/// not the symlink's directory.
+///
+/// Returns the canonical parent directory of `store_dir/filename`
+/// when the file is a symlink, otherwise returns `store_dir` as-is.
+pub fn resolve_datum_base_dir(store_dir: &str, filename: &str) -> PathBuf {
+    let datum_path = Path::new(store_dir).join(filename);
+    if datum_path.is_symlink() {
+        if let Ok(canonical) = std::fs::canonicalize(&datum_path) {
+            if let Some(parent) = canonical.parent() {
+                return parent.to_path_buf();
+            }
+        }
+    }
+    PathBuf::from(store_dir)
+}
 
 /// Maximum recursion depth for datum discovery
 const DEFAULT_MAX_DEPTH: usize = 10;

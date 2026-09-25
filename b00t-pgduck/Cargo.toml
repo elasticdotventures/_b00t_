@@ -1,8 +1,9 @@
 [package]
 name = "b00t-pgduck"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
+version = "0.10.6"
+edition = "2024"
+authors = ["Brian Horakh <brian@promptexecution.com>"]
+license = "MIT"
 description = "Postgres-wire-protocol OLAP server backed by DuckDB - drop-in replacement for the pods/postgres service, no Postgres binary required"
 
 [lib]
@@ -16,8 +17,8 @@ path = "src/main.rs"
 [dependencies]
 pgwire = { version = "0.36", default-features = false, features = ["server-api-aws-lc-rs"] }
 duckdb = { version = "1.1", features = ["bundled"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "macros"] }
-async-trait.workspace = true
+tokio = { version = "1.44", features = ["rt-multi-thread", "net", "macros"] }
+async-trait = "0.1"
 futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -26,5 +27,13 @@ opentelemetry = { version = "0.30", features = ["trace"] }
 opentelemetry_sdk = { version = "0.30", features = ["rt-tokio", "trace"] }
 opentelemetry-otlp = { version = "0.30", features = ["trace", "grpc-tonic"] }
 
-[lints]
-workspace = true
+[lints.rust]
+unused_must_use = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+pedantic = "warn"
+cargo = "warn"
+module_name_repetitions = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+too_many_lines = { level = "allow", priority = 1 }
