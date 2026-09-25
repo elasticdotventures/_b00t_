@@ -3,7 +3,10 @@ members = [
     "b00t-crate",
     "b00t-cad",
     "b00t-cli",
-    "b00t-pgduck",
+    # 🤓 #1252: b00t-pgduck externalized — standalone crate, no longer a workspace member.
+    # Its bundled DuckDB C++ build was crashing CI and blocking release speed.
+    # Build independently: `cd b00t-pgduck && cargo build`
+    # "b00t-pgduck",
     "b00t-mcp",
     "b00t-c0re-lib",
     "b00t-c0re-gov",
@@ -50,7 +53,8 @@ members = [
 ]
 exclude = ["vendor/embed-anything-b00t",
     "vendor/rust-docs-mcp-b00t",
-    "vendor/runpod-sdk"]
+    "vendor/runpod-sdk",
+    "b00t-pgduck"]
 # 🤓 "vendor/gemm-common" removed from this list (2026-08-24) — the
 # .gitmodules entry it corresponded to was a stale declaration with no
 # actual gitlink or directory on disk; removed in the same housekeeping
