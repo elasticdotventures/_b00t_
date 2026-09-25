@@ -64,6 +64,8 @@ mod b00t-embed '_b00t_/justfile-b00t-embed.just'
 mod autolearn '_b00t_/justfile-autolearn.just'
 mod ralph '_b00t_/justfile-ralph.just'
 mod dstack-sdd '_b00t_/justfile-dstack-sdd.just'
+# 🥧 pi coding agent ⇄ b00t-mcp integration (canonical command surface for pi.agent datum)
+mod pi-agent '_b00t_/pi-agent.just'
 
 # ── Module guide — `just modules` or `just --list <module>` ──────────────────
 # Lists all submodule justfiles registered in this repo.
@@ -83,6 +85,7 @@ mod dstack-sdd '_b00t_/justfile-dstack-sdd.just'
     @echo "  b00t          Core b00t CLI wrappers"
     @echo "  embed         Embedding pipeline"
     @echo "  qwen-code     Qwen code agent"
+    @echo "  pi-agent      pi coding agent ⇄ b00t-mcp (just pi-agent::install|check|probe)"
     @echo "  irontology    Ontology + semantic RAG"
     @echo ""
     @echo "  Usage: just <module>::<recipe>"
@@ -676,6 +679,17 @@ version:
 commit-hook:
     #!/bin/bash
     set -euo pipefail
+    # Block direct commits to main — always work on a branch + PR (task #211).
+    CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ "${CURRENT_BRANCH}" == "main" ]]; then
+        if [[ -f ".b00t/allow-main-commit" ]]; then
+            echo "⚠️  Committing directly to main (allow-main-commit present) — confirm intentional."
+        else
+            echo "❌ Direct commits to main are blocked. Create a branch: git checkout -b <name>"
+            echo "   To bypass once: touch .b00t/allow-main-commit (not recommended, remove after)"
+            exit 1
+        fi
+    fi
     # If strict-review flag exists, run the blocking reviewer gate
     if [[ -f ".b00t/strict-review" ]]; then
         echo "🛡️  strict-review gate active — validating staged changes..."

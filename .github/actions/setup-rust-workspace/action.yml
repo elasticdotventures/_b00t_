@@ -35,14 +35,16 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        # 🤓 Exactly the two carrying *active* path deps via a real git
+        # 🤓 These carry the active path deps via real git
         # submodule. tomllm and irontology-mcp are commented out in
         # Cargo.toml and are NOT required -- do not re-add them by reflex.
         #   vendor/embed-anything-b00t -> embed_anything (b00t-embed)
         #   vendor/runpod-sdk          -> runpod-sdk     (b00t-cli)
         git submodule update --init --depth 1 \
           vendor/embed-anything-b00t \
-          vendor/runpod-sdk
+          vendor/runpod-sdk \
+          vendor/b00tyverse
+        git -C vendor/b00tyverse submodule update --init --depth 1 ledgrrr
 
     - name: Clone vendor/ledgrrr
       shell: bash
@@ -65,17 +67,19 @@ runs:
         # What this catches is the init silently under-delivering: a
         # submodule left uninitialized ('-') or landing off-commit ('+'),
         # which otherwise surfaces later as a confusing cargo path error.
-        bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk | grep -E '^[-+]' || true)"
-        if [ -n "$bad" ]; then
+        bad="$(git submodule status vendor/embed-anything-b00t vendor/runpod-sdk vendor/b00tyverse | grep -E '^[-+]' || true)"
+        nested_bad="$(git -C vendor/b00tyverse submodule status ledgrrr | grep -E '^[-+]' || true)"
+        if [ -n "$bad" ] || [ -n "$nested_bad" ]; then
           echo "FAIL: submodule(s) uninitialized or off-commit:"
           echo "$bad"
+          echo "$nested_bad"
           exit 1
         fi
         # The path deps must actually resolve to crates.
-        for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/ledgrrr/crates/b00t-reflect-types; do
+        for p in vendor/embed-anything-b00t/rust vendor/runpod-sdk vendor/b00tyverse/ledgrrr/crates/b00t-reflect-types; do
           test -f "$p/Cargo.toml" || { echo "FAIL: $p/Cargo.toml missing"; exit 1; }
         done
-        echo "PASS: 2 submodules + ledgrrr clone initialized, in-sync, path deps resolve"
+        echo "PASS: 3 submodules + nested ledgrrr clone initialized, in-sync, path deps resolve"
 
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable

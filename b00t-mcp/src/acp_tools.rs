@@ -410,9 +410,32 @@ pub async fn acp_hive_leave(params: HiveShowParams) -> Result<String> {
     }
 }
 
-/// Helper to get NATS URL from environment or default
+/// Helper to get NATS URL from environment, then this node's own SPIRE-fetched
+/// hive credential file, then a hardcoded default.
+///
+/// The env-var path stays first for backwards compat and explicit overrides.
+/// The file fallback matters for processes launched by something that
+/// doesn't (or can't be made to) pass through env vars — e.g. a long-lived
+/// gateway service whose own startup environment isn't something every
+/// caller can safely edit. `~/.b00t/secrets/hive-nats.env` is the same file
+/// `infrastructure/spire-agent/sync-hive-nats-secret.sh` populates per-node
+/// from Key Vault via that node's own SPIRE-federated Entra identity — see
+/// `infrastructure/docs/nats-topology.md`.
 pub fn get_nats_url() -> String {
-    std::env::var("NATS_URL").unwrap_or_else(|_| "nats://c010.promptexecution.com:4222".to_string())
+    if let Ok(url) = std::env::var("NATS_URL") {
+        return url;
+    }
+    if let Some(home) = dirs::home_dir() {
+        let path = home.join(".b00t").join("secrets").join("hive-nats.env");
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            for line in contents.lines() {
+                if let Some(value) = line.strip_prefix("NATS_URL=") {
+                    return value.trim().to_string();
+                }
+            }
+        }
+    }
+    "nats://c010.promptexecution.com:4222".to_string()
 }
 
 /// Helper to get current hive namespace for a given role

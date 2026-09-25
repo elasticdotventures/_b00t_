@@ -18,13 +18,6 @@ pid = "hermes-001"
 skills = ["chat", "tools", "mcp", "gateway"]
 role = "specialist"
 
-[b00t.agent.inference]
-endpoint = "http://127.0.0.1:8001/v1"   # OpenAI-compatible base
-health   = "http://127.0.0.1:8001/health"
-model    = "qwen36-local/ch0nky"
-protocol = "openai"                      # openai | acp | rpc
-required = true                          # false ⇒ Claude-backed / stub ⇒ doctor SKIPs
-
 [b00t.agent.ipc]
 # 🤓 hermes MCP server is stdio-transport only (no port flags) — see hermes.mcp.toml
 protocol = "mcp+stdio"
@@ -59,6 +52,25 @@ command = "hermes -z 'your task here'"
 [[b00t.usage]]
 description = "Run hermes as an ACP agent"
 command = "hermes acp"
+
+[[b00t.usage]]
+description = "Teams gateway status (messaging bridge)"
+command = "systemctl --user status hermes-gateway"
+
+# ── Teams gateway h00k ───────────────────────────────────────────────────────
+# 🤓 the Teams bot (bfe4282b-79f5-4eaa-87f0-8d92986f7f2a) is the LIVE ingress
+#    for b00t chat — messages from brianh@promptexecution.com in Teams route
+#    directly into this hermes instance on fung1.
+#    App changes require: teams app manifest upload → dev portal publish →
+#    TAC approve (see msft-corp/RUNBOOK-hermes-teams.md in infrastructure).
+
+[b00t.hook.teams_gateway]
+trigger   = "on_teams_message"
+endpoint  = "https://fung1.tail66c8ec.ts.net:8443/api/messages"
+service   = "hermes-gateway.service"
+runbook   = "https://github.com/PromptExecution/infrastructure/blob/main/msft-corp/RUNBOOK-hermes-teams.md"
+app_id    = "bfe4282b-79f5-4eaa-87f0-8d92986f7f2a"
+manifest  = "msft-corp/hermes-teams-manifest.json"
 
 # b00t:map v1
 # summary: hermes agent — MCP client/server + ACP + messaging gateway; stdio MCP surface; one-shot via -z

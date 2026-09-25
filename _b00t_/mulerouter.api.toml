@@ -1,0 +1,177 @@
+# b00t API Datum — MuleRouter (mulerouter.ai) multi-provider AI gateway
+# 🤓 One API key → many vendors' models behind an OpenAI-compatible facade.
+#    Aggregated purchasing for higher provider tiers. Strong LLM catalog:
+#    gpt-5.5 / gpt-5.6-{luna,sol,terra} / deepseek-v4-pro / kimi-k2.6 /
+#    grok-4.3 / glm-5.1 / qwen3.7-max, plus image + video + music generation.
+#
+# ⚠️需 THE DOCUMENTED ALIAS IS NOT DEPLOYED. MuleRouter's own docs
+#    (get-started/endpoints.md, api-reference/introduction.md) state that
+#    `/v1/chat/completions` and `/v1/models` are aliases of
+#    `/vendors/openai/v1/...`. They are NOT: both return HTTP 404 with an empty
+#    body, reproducibly (7/7 attempts, 2026-09-11), while the canonical
+#    `/vendors/openai/v1/*` path returns 200. Consequently
+#    `MULEROUTER_OPENAI_API_URL=https://api.mulerouter.ai/v1/chat/completions`
+#    in ~/.env is UNUSABLE as written. Use the canonical base:
+#        https://api.mulerouter.ai/vendors/openai/v1
+#
+# ⚠️需 UPSTREAM ERRORS ARE MASKED AS HTTP 200. A failed request can come back
+#    `HTTP/2 200` with the failure embedded in the SSE stream:
+#        data: {"error":{"type":"api_error","message":"API request failed with status 400"}}
+#        data: [DONE]
+#    So a 200 status does NOT mean success — the stream body must be inspected.
+#    pi surfaces these as "API request failed with status NNN".
+#
+# ⚠️需 TRANSIENT/NONDETERMINISTIC. The byte-identical request failed once then
+#    succeeded 6/6 on immediate retry. This is an aggregator routing to multiple
+#    upstreams; retry rather than treating a single failure as a config error.
+#
+# 🔗参 https://mulerouter.ai/docs/llms.txt        → machine-readable docs index
+# 🔗参 ~/.pi/agent/models.json                    → provider "mulerouter" (pi wiring)
+# 🔗参 pi-coding-agent.cli.toml                   → the harness consuming it
+
+[b00t]
+name = "mulerouter"
+type = "api"
+hint = "MuleRouter — one-key multi-vendor AI gateway (OpenAI-compatible); gpt-5.5/deepseek-v4-pro/kimi-k2.6/grok-4.3/glm-5.1/qwen3.7-max + image/video/music"
+desires = "latest"
+
+# Protocol specification
+protocol = "openai-chat-completions-v1"
+implements = ["openai-compat-base"]
+url = "https://api.mulerouter.ai"
+
+# No infrastructure dependency — remote API.
+# depends_on = []
+
+# ── Capability provision ─────────────────────────────────────────────────────
+[b00t.provides]
+capability = "llm-gateway"
+# 🤓 Canonical vendor paths. The documented /v1 aliases 404 — see header.
+endpoints = [
+  "/vendors/openai/v1/chat/completions",
+  "/vendors/openai/v1/models",
+  "/v1/responses",
+]
+operations = ["create_chat_completion", "list_models", "create_response"]
+
+# ── Model catalog ────────────────────────────────────────────────────────────
+# 🤓 `supported` is the live GET /vendors/openai/v1/models response (32 entries,
+#    captured 2026-09-11). `preferred` are those VERIFIED end-to-end through pi.
+[b00t.provides.models]
+preferred = ["gpt-5.5", "glm-5.1", "deepseek-v4-pro"]
+supported = [
+  "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
+  "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra",
+  "deepseek-v4-pro", "deepseek-v4-flash",
+  "kimi-k2.6", "grok-4", "grok-4.3", "grok-4-20-non-reasoning", "grok-code-fast-1",
+  "glm-5.1",
+  "qwen3.7-max", "qwen3.7-plus", "qwen3.6-plus", "qwen3.6-flash", "qwen3.6-max-preview",
+  "qwen3.5-plus", "qwen3.5-flash", "qwen3.5-omni-plus", "qwen3.5-omni-flash",
+  "qwen3-max", "qwen3-max-2026-01-23", "qwen-plus", "qwen-flash",
+  "qwen-vl-max", "qwen3-vl-plus", "qwen3-vl-flash", "qwen3-omni-flash",
+]
+# Multimodal (separate vendor paths, async task_id + webhook pattern):
+#   image: openai/gpt-image-2, google/nano-banana-pro, google/nano-banana-2,
+#          alibaba/wan2.6-t2i, alibaba/qwen-image-max, midjourney/diffusion
+#   video: alibaba/wan2.6-t2v, klingai/kling-v3, mulerouter/wan2.6-t2v-spark
+features = ["tool_calling", "streaming_sse", "reasoning_content", "cached_input", "multimodal_image", "multimodal_video"]
+
+# ── Pricing (per 1M tokens, from mulerouter.ai model pages, 2026-09-11) ──────
+# 🤓 Only these three publish pricing on their model page; the rest are unknown,
+#    so ~/.pi/agent/models.json records cost 0 for them — that means UNPRICED,
+#    not free. Do not trust /cost totals for unpriced models.
+[b00t.provides.pricing]
+"gpt-5.5"          = { input = 5.0, cached_input = 0.5, output = 30.0, note = "tiered: >272K ctx input 10.0 / output 45.0" }
+"qwen3.7-max"      = { input = 2.5, cached_input = 0.25, output = 7.5 }
+"grok-code-fast-1" = { input = 0.2, output = 1.5 }
+
+# ── Environment ──────────────────────────────────────────────────────────────
+[b00t.env]
+# ⚠️需 canonical base, NOT the /v1 alias from ~/.env (which 404s).
+MULEROUTER_OPENAI_API_BASE = "https://api.mulerouter.ai/vendors/openai/v1"
+MULEROUTER_OPENAI_API_KEY = "${MULEROUTER_OPENAI_API_KEY}"
+MULEROUTER_MODEL = "gpt-5.5"
+
+[b00t.learn]
+topic = "mulerouter"
+auto_digest = true
+inline = """
+MuleRouter — one key, many vendors, OpenAI-compatible.
+
+BASE URL (canonical, verified 200):
+  https://api.mulerouter.ai/vendors/openai/v1
+  ⚠️需 the documented /v1 alias 404s reproducibly — never use it.
+
+AUTH: `Authorization: Bearer $MULEROUTER_OPENAI_API_KEY`
+  Inference key for model endpoints; a separate Account key for billing.
+  ~/.env declares MULEROUTER_OPENAI_API_KEY *without* `export`, so load it with
+  `set -a; . ~/.env; set +a` (the pattern ~/pi.sh already uses).
+
+DISCOVER MODELS:
+  curl -sS -H "Authorization: Bearer $MULEROUTER_OPENAI_API_KEY" \\
+    https://api.mulerouter.ai/vendors/openai/v1/models | jq -r '.data[].id'
+
+CHAT (non-streaming):
+  curl -sS -X POST https://api.mulerouter.ai/vendors/openai/v1/chat/completions \\
+    -H "Authorization: Bearer $MULEROUTER_OPENAI_API_KEY" -H "Content-Type: application/json" \\
+    -d '{"model":"gpt-5.5","messages":[{"role":"user","content":"hi"}]}'
+
+THREE OPERATIONAL TRAPS (all verified 2026-09-11):
+  1. HTTP 200 can carry a failure inside the SSE stream:
+       data: {"error":{"type":"api_error","message":"API request failed with status 400"}}
+     Inspect the body, not just the status code.
+  2. Transient upstream failures: an identical request failed once then passed
+     6/6 on retry. Retry before debugging your config.
+  3. `GET /v1/models` 404s, so client-side model auto-discovery (pi's
+     registerProvider-from-/models pattern) must target the vendor path.
+
+PI WIRING (~/.pi/agent/models.json, provider "mulerouter", api openai-completions):
+  set -a; . ~/.env; set +a
+  pi --provider mulerouter --model gpt-5.5
+  Verified through pi incl. tool calls: gpt-5.5, glm-5.1, deepseek-v4-pro.
+  Flaky in pi (transient 400/422/404, work via curl): qwen3.7-max,
+  grok-code-fast-1, kimi-k2.6.
+
+PI PAYLOAD SHAPE (captured via the before_provider_request extension hook):
+  {model, messages, stream:true, stream_options:{include_usage:true},
+   store:false, max_completion_tokens:<model maxTokens>, tools:[...],
+   reasoning_effort:"medium"}
+  All of these return 200 via curl in isolation — failures are upstream-side.
+"""
+
+# ── Usage examples (all verified) ────────────────────────────────────────────
+[[b00t.usage]]
+description = "List every model MuleRouter currently serves"
+command = "set -a; . ~/.env; set +a; curl -sS -H \"Authorization: Bearer $MULEROUTER_OPENAI_API_KEY\" https://api.mulerouter.ai/vendors/openai/v1/models | python3 -c 'import json,sys; [print(m[\"id\"]) for m in json.load(sys.stdin)[\"data\"]]'"
+
+[[b00t.usage]]
+description = "One-shot chat completion against gpt-5.5"
+command = "set -a; . ~/.env; set +a; curl -sS -X POST https://api.mulerouter.ai/vendors/openai/v1/chat/completions -H \"Authorization: Bearer $MULEROUTER_OPENAI_API_KEY\" -H 'Content-Type: application/json' -d '{\"model\":\"gpt-5.5\",\"messages\":[{\"role\":\"user\",\"content\":\"say OK\"}]}'"
+
+[[b00t.usage]]
+description = "Drive MuleRouter from pi (strong model, tool-calling verified)"
+command = "set -a; . ~/.env; set +a; pi -p --provider mulerouter --model gpt-5.5 'task'"
+
+[[b00t.usage]]
+description = "Cheap bulk coding model via pi"
+command = "set -a; . ~/.env; set +a; pi -p --provider mulerouter --model grok-code-fast-1 'task'"
+
+[[b00t.usage]]
+description = "Check account balance (requires the Account key, not the Inference key)"
+command = "curl -sS -H \"Authorization: Bearer $MULEROUTER_ACCOUNT_KEY\" https://api.mulerouter.ai/v1/user/billing/balance"
+
+[validate]
+command = "curl -sS -o /dev/null -w '%{http_code}' -H \"Authorization: Bearer ${MULEROUTER_OPENAI_API_KEY}\" https://api.mulerouter.ai/vendors/openai/v1/models"
+regex = "200"
+
+# ── Equivalence pointers ─────────────────────────────────────────────────────
+entangled_cli = ["pi-coding-agent.cli"]
+entangled_apis = ["openai-embeddings.api"]
+entangled_ai_models = []
+
+# b00t:map v1
+# summary: MuleRouter API datum — one-key multi-vendor OpenAI-compatible gateway; canonical /vendors/openai/v1 base (documented /v1 alias 404s); errors can arrive as HTTP 200 in-stream
+# tags: mulerouter, api, llm-gateway, openai-compat, gpt-5.5, deepseek, kimi, grok, glm, qwen, multimodal, pi-provider
+# tier: sm0l
+# cmds: curl https://api.mulerouter.ai/vendors/openai/v1/models, pi --provider mulerouter --model gpt-5.5
+# complexity: 4

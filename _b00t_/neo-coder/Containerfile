@@ -1,0 +1,25 @@
+# b00t NEO-CODER container — minimal agent sandbox
+# Build: podman build -t b00t-neo-coder:latest -f Containerfile .
+# Run:   podman run --rm -it b00t-neo-coder:latest
+
+FROM docker.io/library/ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl jq python3 python3-pip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install b00t-cli (pre-built binary — copy from host during build)
+# In production: `COPY --from=builder /build/target/release/b00t-cli /usr/local/bin/b00t`
+# For now: placeholder that expects b00t on PATH via volume mount
+RUN echo '#!/bin/sh\necho "b00t placeholder — mount real binary via volume"' > /usr/local/bin/b00t \
+    && chmod +x /usr/local/bin/b00t
+
+# Install nats CLI for inter-agent messaging
+RUN curl -fsSL https://nats-io.github.io/nats-tools/install.sh | sh
+
+WORKDIR /workspace
+
+# The init sequence is injected by b00t agent invoke via stdin
+# This container just provides the execution environment
+ENTRYPOINT ["/bin/bash"]
+CMD ["-c", "echo 'NEO-CODER sandbox ready. Inject init sequence via stdin.'"]

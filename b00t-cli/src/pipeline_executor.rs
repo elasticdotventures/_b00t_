@@ -12,7 +12,8 @@
 
 use crate::pipeline_cache::TimeoutPredictor;
 use crate::pipeline_checkpoint::{CheckpointStore, PipelineCheckpoint, compute_dag_hash};
-use crate::pipeline_flowctl::{FlowControl, FlowGate, StageFlowConfig};
+use b00t_pipeline_types::StageFlowConfig;
+use crate::pipeline_flowctl::{FlowControl, FlowGate};
 use crate::pipeline_logs::{LogLevel, LogStore, PipelineLogEntry};
 use crate::pipeline_nats::{NatsClientAdapter, NatsStageRouter};
 use crate::pipeline_remote_exec::RemoteExecutor;

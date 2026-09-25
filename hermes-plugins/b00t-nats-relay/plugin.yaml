@@ -1,0 +1,6 @@
+name: b00t-nats-relay
+version: 0.1.0
+description: Read-only lookup of recent b00t hive NATS mesh (backend/infra bus) activity — no autonomous sending, answers only when asked.
+provides_tools:
+  - nats_relay_recent
+provides_hooks: []

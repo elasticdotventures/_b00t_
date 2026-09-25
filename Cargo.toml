@@ -38,6 +38,7 @@ members = [
     "b00t-embed-serve",
     "b00t-stt-serve",
     "b00t-council",
+    "b00t-pipeline-types",
     # 🤓 uses version.workspace=true / edition.workspace=true — was absent from
     # both members and exclude, so `cargo check -p b00t-c0re` failed with
     # Cargo's "package believes it's in a workspace" error. Restoring
@@ -70,7 +71,7 @@ codegen-units = 256
 [workspace.package]
 # 🤓 Version management centralized in b00t-c0re-lib
 # All workspace crates inherit from the single source of truth
-version = "0.10.5"
+version = "0.10.6"
 edition = "2024"
 authors = ["Brian Horakh <brian@promptexecution.com>"]
 license = "MIT"
@@ -91,6 +92,7 @@ ufo-types = { git = "https://github.com/PromptExecution/ufo-types.git", tag = "v
 # Workspace members
 b00t-cli = { path = "b00t-cli" }
 b00t-c0re-lib = { path = "b00t-c0re-lib" }
+b00t-pipeline-types = { path = "b00t-pipeline-types" }
 k0mmand3r = { path = "k0mmand3r" }
 b00t-grok = { path = "b00t-grok", default-features = false }
 b00t-chat = { path = "b00t-lib-chat" }
@@ -124,7 +126,7 @@ b00t-c0re-identity = { path = "b00t-c0re-identity" }
 b00t-c0re-ledgrrr = { path = "b00t-c0re-ledgrrr" }
 b00t-zellij = { path = "b00t-zellij" }
 b00t-admin = { path = "b00t-admin" }
-b00t-reflect-types = { path = "vendor/ledgrrr/crates/b00t-reflect-types" }
+b00t-reflect-types = { path = "vendor/b00tyverse/ledgrrr/crates/b00t-reflect-types" }
 # #1104: NOT taking a Cargo dependency on vendor/ledgrrr's `ledger-core` here
 # -- its optional arc-kit-au -> msft-agent-gov-ledgrrr -> agentmesh chain
 # hard-pins serde =1.0.228, which conflicts with the rest of this workspace's

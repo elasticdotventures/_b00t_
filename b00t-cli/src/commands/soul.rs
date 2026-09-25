@@ -336,7 +336,9 @@ pub enum SoulCommands {
     },
 }
 
-fn block_on_soul_future<T>(future: impl std::future::Future<Output = Result<T>>) -> Result<T> {
+fn block_on_soul_future<T>(
+    future: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
         Err(_) => tokio::runtime::Runtime::new()?.block_on(future),
@@ -438,7 +440,9 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             Ok(())
         }
 
-        SoulCommands::Serve { port, host } => block_on_soul_future(serve_soul_kv(host, *port)),
+        SoulCommands::Serve { port, host } => {
+            block_on_soul_future(serve_soul_kv(host, *port))
+        }
 
         #[cfg(feature = "dbus")]
         SoulCommands::Dbus { session } => {
@@ -454,7 +458,9 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             model,
             base_url,
             dry_run,
-        } => block_on_soul_future(distill_soul(model, base_url.as_deref(), *dry_run)),
+        } => {
+            block_on_soul_future(distill_soul(model, base_url.as_deref(), *dry_run))
+        }
 
         SoulCommands::Init { path: init_path } => {
             let target = init_path

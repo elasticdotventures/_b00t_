@@ -182,6 +182,46 @@ Agent-to-agent messaging uses b00t MCP tools (no raw sockets):
 - `mcp__b00t-mcp__b00t_agent_vote_create` / `b00t_agent_vote_submit` — consensus
 Output to executive: compressed summaries ONLY. Raw sub-agent output MUST NOT enter executive context.
 
+### Establishing a b00t agent connection
+
+Use the typed b00t MCP surface when it is available. The Redis/NATS transport is
+an implementation detail; a successful publish is not an agent-level
+acknowledgement.
+
+1. Identify the local harness and host with `b00t whoami --json`.
+2. Discover the peer with `b00t agent discover --json`, recording its stable
+   `agent_id`, host, and advertised capabilities.
+3. Ensure the receiving harness uses the same identity for both Redis
+   subscription and message metadata. Set `B00T_AGENT_ID` explicitly when the
+   host name is not the agent identity.
+4. Send a nonce-bearing probe and request an acknowledgement:
+
+   ```text
+   b00t agent message <peer-agent-id> <subject> "<nonce>: identity=<sender> host=<host>; reply with identity, host, and A2A health" --ack
+   ```
+
+5. In a second process, poll as the receiving identity:
+
+   ```text
+   B00T_AGENT_ID=<receiver-agent-id> b00t agent wait --from-agent <sender-agent-id> --subject <subject> --timeout 60
+   ```
+
+6. Treat the connection as established only after the receiver consumes the
+   message and returns an acknowledgement containing the nonce. Record the
+   transport result and the agent-level result separately.
+7. Use a shared GitHub issue as the coordination mailbox when hosts cannot
+   reliably consume live notifications. Post the nonce, exact ACK, host
+   identities, and capability CSV there; never post credentials or tokens.
+8. For NATS diagnostics, report only endpoint reachability and authorized
+   JetStream facts. If inspection returns `Authorization Violation`, report
+   streams and durable consumers as **unconfirmed** rather than inferring that
+   JetStream is disabled.
+
+The standards boundary is A2A: external peers SHOULD use an A2A Agent Card and
+standard JSON-RPC/HTTP methods. Redis/NATS and b00t-native envelopes MAY remain
+inside the adapter for local coordination and emergence experiments, but they
+MUST NOT be described as A2A wire compatibility.
+
 ---
 <!-- ── SESSION (variable suffix — NOT KV-cached, compiled per instantiation) ──────── -->
 

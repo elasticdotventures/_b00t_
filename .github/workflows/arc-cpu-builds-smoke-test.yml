@@ -1,0 +1,29 @@
+name: ARC cpu-builds smoke test
+
+# Manual-dispatch-only proof that the GKE Autopilot `arc-runners` cluster's `cpu-builds`
+# AutoscalingRunnerSet (see infrastructure/terraform/google/gke-arc-runners.tf and
+# _b00t_/k8s/gke-arc-runners/) can actually pick up and run a real job. Not wired into any
+# push/PR trigger — this is a one-off verification workflow, not part of normal CI.
+
+on:
+  workflow_dispatch:
+  # push-trigger scoped to this verification branch only: workflow_dispatch requires the file to
+  # exist on the default branch before GitHub will register it as dispatchable via API/UI, but a
+  # push-triggered workflow runs immediately off whatever ref it's pushed on. Using this to prove
+  # the cpu-builds runner works without needing to merge to main first.
+  push:
+    branches:
+      - verify/gke-arc-cpu-builds-smoke-test
+
+jobs:
+  smoke-test:
+    runs-on: cpu-builds
+    steps:
+      - name: Prove the runner is alive
+        run: |
+          echo "hostname: $(hostname)"
+          echo "kernel: $(uname -a)"
+          echo "ARC cpu-builds runner on GKE Autopilot arc-runners cluster is working"
+      - uses: actions/checkout@v7 # node24-native (v5+); avoids the "forced to run on Node.js 24" warning v4 (node20) triggers
+      - name: List repo root
+        run: ls -la

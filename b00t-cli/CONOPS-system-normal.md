@@ -1,6 +1,6 @@
 # CONOPS: `b00t is <checklist>` — stateful system-normal checks
 
-> **Status (2026-08-24): Phase 1 shipped in #1143.** `is` is now its own
+> **Status (2026-09-13): Phase 1 shipped.** `b00t is` is a standalone command (`Commands::Is` in `main.rs`, backed by `commands/is_cmd.rs` + `checklist.rs`), NOT a `whatismy` alias. For k0mmand3r integration design, see `docs/architecture/CONOPS-is-k0mmand3r.md`. `is` is now its own
 > top-level `Commands::Is` verb (`b00t is [name] [--json] [--explain]`),
 > backed by real `<name>.checklist.toml` datums (`checklist.rs`:
 > `ChecklistFile`/`ChecklistCheck`, flattening `GateSpec` verbatim) and a
