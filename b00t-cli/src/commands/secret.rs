@@ -5,7 +5,8 @@
 //    deliberately excluded here: Keyring is a broken placeholder (feature
 //    flag exists, no keyring crate dependency), Prompt defeats the purpose
 //    of a script-invoked, non-interactive call.
-use crate::pipeline_secrets::{SecretRef, SecretSource, list_azure_secret_names, load_secret};
+use b00t_pipeline_types::{SecretRef, SecretSource};
+use crate::pipeline_secrets::{list_azure_secret_names, load_secret};
 use anyhow::{Result, bail};
 use clap::Subcommand;
 use std::collections::BTreeMap;
@@ -13,30 +14,55 @@ use std::io::Write;
 
 #[derive(Debug, Subcommand)]
 pub enum SecretCommands {
-    #[clap(about = "Resolve a single secret from a file, environment variable, or Azure Key Vault, and print it to stdout")]
+    #[clap(
+        about = "Resolve a single secret from a file, environment variable, or Azure Key Vault, and print it to stdout"
+    )]
     Resolve {
         #[clap(long, help = "Resolve from this file path (whitespace-trimmed)")]
         file: Option<String>,
         #[clap(long, help = "Resolve from this environment variable name")]
         env: Option<String>,
-        #[clap(long, help = "Resolve from this Azure Key Vault name (requires --azure-secret; uses the active `az login` session)", requires = "azure_secret")]
+        #[clap(
+            long,
+            help = "Resolve from this Azure Key Vault name (requires --azure-secret; uses the active `az login` session)",
+            requires = "azure_secret"
+        )]
         azure_vault: Option<String>,
-        #[clap(long, help = "Secret name within --azure-vault", requires = "azure_vault")]
+        #[clap(
+            long,
+            help = "Secret name within --azure-vault",
+            requires = "azure_vault"
+        )]
         azure_secret: Option<String>,
     },
-    #[clap(about = "Bulk-export all secrets for a base/zone/org from a cloud secret store, for consumption by Terraform's `data external` (see infrastructure repo's secretEnvy module)")]
+    #[clap(
+        about = "Bulk-export all secrets for a base/zone/org from a cloud secret store, for consumption by Terraform's `data external` (see infrastructure repo's secretEnvy module)"
+    )]
     ExportZone {
-        #[clap(long, help = "Secret store provider — only 'azure' is currently supported")]
+        #[clap(
+            long,
+            help = "Secret store provider — only 'azure' is currently supported"
+        )]
         provider: String,
         #[clap(long, help = "Azure Key Vault name")]
         vault: String,
-        #[clap(long, default_value = "config", help = "Base path segment for the name prefix")]
+        #[clap(
+            long,
+            default_value = "config",
+            help = "Base path segment for the name prefix"
+        )]
         base: String,
-        #[clap(long, help = "Zone path segment for the name prefix (e.g. 'global', 'test', 'live')")]
+        #[clap(
+            long,
+            help = "Zone path segment for the name prefix (e.g. 'global', 'test', 'live')"
+        )]
         zone: String,
         #[clap(long, help = "Optional org path segment for the name prefix")]
         org: Option<String>,
-        #[clap(long, help = "Output as a flat JSON object of ENV_VAR: value, for Terraform's `data external` contract")]
+        #[clap(
+            long,
+            help = "Output as a flat JSON object of ENV_VAR: value, for Terraform's `data external` contract"
+        )]
         tf: bool,
     },
 }
@@ -67,8 +93,7 @@ fn azure_secret_name_to_env_var(name: &str) -> String {
 /// the command interactively a visible heads-up. It is written to
 /// **stderr only** — see [`write_export_zone_output`] — so it never mixes
 /// into the JSON stream Terraform parses from stdout.
-const EXPORT_ZONE_STDOUT_WARNING: &str =
-    "⚠️  secret values follow on stdout — ensure this isn't captured by shell tracing (set -x), TF_LOG=DEBUG, or CI log capture";
+const EXPORT_ZONE_STDOUT_WARNING: &str = "⚠️  secret values follow on stdout — ensure this isn't captured by shell tracing (set -x), TF_LOG=DEBUG, or CI log capture";
 
 /// Write `export-zone`'s output: the human warning to `warn_writer`
 /// (production: stderr) and the JSON secret map to `json_writer`
@@ -101,7 +126,9 @@ pub fn handle_secret_command(cmd: &SecretCommands) -> Result<()> {
                     name: name.clone(),
                 },
                 (None, None, None, None) => {
-                    bail!("pass one of --file <path>, --env <name>, or --azure-vault <vault> --azure-secret <name>")
+                    bail!(
+                        "pass one of --file <path>, --env <name>, or --azure-vault <vault> --azure-secret <name>"
+                    )
                 }
                 _ => bail!(
                     "pass exactly one of --file, --env, or --azure-vault/--azure-secret together, not a mix"
@@ -155,7 +182,10 @@ mod export_zone_tests {
 
     #[test]
     fn prefix_without_org() {
-        assert_eq!(azure_export_prefix("config", "global", None), "config-global-");
+        assert_eq!(
+            azure_export_prefix("config", "global", None),
+            "config-global-"
+        );
     }
 
     #[test]
@@ -168,9 +198,18 @@ mod export_zone_tests {
 
     #[test]
     fn env_var_derivation() {
-        assert_eq!(azure_secret_name_to_env_var("vultr-api-key"), "VULTR_API_KEY");
-        assert_eq!(azure_secret_name_to_env_var("cloudflare-api-token"), "CLOUDFLARE_API_TOKEN");
-        assert_eq!(azure_secret_name_to_env_var("already-upper-ISH"), "ALREADY_UPPER_ISH");
+        assert_eq!(
+            azure_secret_name_to_env_var("vultr-api-key"),
+            "VULTR_API_KEY"
+        );
+        assert_eq!(
+            azure_secret_name_to_env_var("cloudflare-api-token"),
+            "CLOUDFLARE_API_TOKEN"
+        );
+        assert_eq!(
+            azure_secret_name_to_env_var("already-upper-ISH"),
+            "ALREADY_UPPER_ISH"
+        );
     }
 
     // ── stdout/stderr separation for export-zone output ──────────────────
@@ -201,7 +240,10 @@ mod export_zone_tests {
     fn json_stream_is_uncorrupted_by_warning() {
         let mut out = BTreeMap::new();
         out.insert("VULTR_API_KEY".to_string(), "s3cr3t".to_string());
-        out.insert("CLOUDFLARE_API_TOKEN".to_string(), "another-value".to_string());
+        out.insert(
+            "CLOUDFLARE_API_TOKEN".to_string(),
+            "another-value".to_string(),
+        );
 
         let mut warn_buf: Vec<u8> = Vec::new();
         let mut json_buf: Vec<u8> = Vec::new();
@@ -223,7 +265,9 @@ mod export_zone_tests {
     fn warning_text_is_human_visible_and_actionable() {
         assert!(EXPORT_ZONE_STDOUT_WARNING.contains("stdout"));
         assert!(
-            EXPORT_ZONE_STDOUT_WARNING.to_lowercase().contains("shell tracing")
+            EXPORT_ZONE_STDOUT_WARNING
+                .to_lowercase()
+                .contains("shell tracing")
                 || EXPORT_ZONE_STDOUT_WARNING.contains("set -x")
         );
         assert!(EXPORT_ZONE_STDOUT_WARNING.contains("TF_LOG"));

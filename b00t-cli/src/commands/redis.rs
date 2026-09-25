@@ -187,7 +187,10 @@ pub mod session_kv {
         if !existed {
             return Ok(0);
         }
-        store.transaction(vec![ScopeOp::Delete { key, expect_gen: None }])?;
+        store.transaction(vec![ScopeOp::Delete {
+            key,
+            expect_gen: None,
+        }])?;
         Ok(1)
     }
 }
@@ -243,6 +246,9 @@ mod tests {
 
         let deleted = session_kv::clear_session("parity-test-session").unwrap();
         assert_eq!(deleted, 1);
-        assert_eq!(session_kv::get_session("parity-test-session").unwrap(), None);
+        assert_eq!(
+            session_kv::get_session("parity-test-session").unwrap(),
+            None
+        );
     }
 }

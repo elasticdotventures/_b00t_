@@ -211,10 +211,7 @@ fn parse_vendor_table(content: &str) -> std::collections::HashMap<String, String
             continue;
         }
         if let Some((k, v)) = trimmed.split_once('=') {
-            fields.insert(
-                k.trim().to_string(),
-                v.trim().trim_matches('"').to_string(),
-            );
+            fields.insert(k.trim().to_string(), v.trim().trim_matches('"').to_string());
         }
     }
     fields
@@ -424,8 +421,7 @@ fn check_wsl_warp_mtu(fix: bool) -> Value {
     ));
     let local_mtu_str = std::fs::read_to_string("/sys/class/net/eth0/mtu").unwrap_or_default();
 
-    let (Some(warp_mtu), Some(local_mtu)) =
-        (parse_mtu(&warp_mtu_out.1), parse_mtu(&local_mtu_str))
+    let (Some(warp_mtu), Some(local_mtu)) = (parse_mtu(&warp_mtu_out.1), parse_mtu(&local_mtu_str))
     else {
         return json!({
             "id": id, "pass": true,
@@ -458,7 +454,8 @@ fn check_wsl_warp_mtu(fix: bool) -> Value {
                 pass = true;
                 detail = format!("eth0 MTU lowered to {warp_mtu} to match WARP tunnel");
             }
-            _ => detail.push_str(" (--fix attempted without root; run the sudo command above manually)"),
+            _ => detail
+                .push_str(" (--fix attempted without root; run the sudo command above manually)"),
         }
     }
 
@@ -796,7 +793,9 @@ pub enum DoctorCommands {
     },
     #[clap(hide = true)]
     HealthJson,
-    #[clap(about = "Repair gutted submodule gitdir(s) (#924) — safe: gutted state has no recoverable data")]
+    #[clap(
+        about = "Repair gutted submodule gitdir(s) (#924) — safe: gutted state has no recoverable data"
+    )]
     FixSubmodule {
         #[clap(help = "Submodule path from .gitmodules; omit to repair all detected")]
         path: Option<String>,
@@ -1366,7 +1365,12 @@ mod vendor_binary_tests {
     /// valid TOML on its own — regression coverage for the reason
     /// `parse_vendor_table` scans just the one table instead of doing a
     /// whole-file `toml::from_str`.
-    fn write_vendor_datum(repo_root: &std::path::Path, key: &str, binary_rel: &str, build_cmd: &str) {
+    fn write_vendor_datum(
+        repo_root: &std::path::Path,
+        key: &str,
+        binary_rel: &str,
+        build_cmd: &str,
+    ) {
         let content = format!(
             "# b00t Vendor Datum — {key} (fixture)\n\n\
              [b00t]\n\
@@ -1416,7 +1420,12 @@ mod vendor_binary_tests {
     #[test]
     fn passes_when_binary_built_and_executable() {
         let dir = TempDir::new().unwrap();
-        write_vendor_datum(dir.path(), "FOO", "vendor/foo/target/release/foo", "cargo build --release");
+        write_vendor_datum(
+            dir.path(),
+            "FOO",
+            "vendor/foo/target/release/foo",
+            "cargo build --release",
+        );
         let bin_path = dir.path().join("vendor/foo/target/release/foo");
         fs::create_dir_all(bin_path.parent().unwrap()).unwrap();
         fs::write(&bin_path, "#!/bin/sh\necho hi\n").unwrap();
@@ -1434,7 +1443,12 @@ mod vendor_binary_tests {
     #[test]
     fn present_but_non_executable_file_still_fails() {
         let dir = TempDir::new().unwrap();
-        write_vendor_datum(dir.path(), "FOO", "vendor/foo/target/release/foo", "cargo build --release");
+        write_vendor_datum(
+            dir.path(),
+            "FOO",
+            "vendor/foo/target/release/foo",
+            "cargo build --release",
+        );
         let bin_path = dir.path().join("vendor/foo/target/release/foo");
         fs::create_dir_all(bin_path.parent().unwrap()).unwrap();
         fs::write(&bin_path, "not a binary").unwrap();
@@ -1477,8 +1491,18 @@ mod vendor_binary_tests {
         // Mirrors real VENDOR-LEDGRRR.tomllmd / VENDOR-L3DG3RR.tomllmd, both
         // of which point at vendor/ledgrrr/target/release/ledgerr-mcp.
         let dir = TempDir::new().unwrap();
-        write_vendor_datum(dir.path(), "A", "vendor/shared/target/release/shared", "cargo build --release");
-        write_vendor_datum(dir.path(), "B", "vendor/shared/target/release/shared", "cargo build --release");
+        write_vendor_datum(
+            dir.path(),
+            "A",
+            "vendor/shared/target/release/shared",
+            "cargo build --release",
+        );
+        write_vendor_datum(
+            dir.path(),
+            "B",
+            "vendor/shared/target/release/shared",
+            "cargo build --release",
+        );
 
         let result = check_vendor_binaries(dir.path(), false);
 

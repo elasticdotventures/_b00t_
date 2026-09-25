@@ -1,5 +1,5 @@
-use crate::load_all_datums;
 use crate::dependency_resolver::DependencyResolver;
+use crate::load_all_datums;
 use crate::{BootDatum, evaluate_gates};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
@@ -395,7 +395,6 @@ pub fn update_hermes_mcp_config(config_path: &std::path::Path) -> Result<()> {
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -987,7 +986,7 @@ hint = "Test stack"
                 env: None,
                 rhai: None,
                 knowledge_backend: None,
-            justfile: None,
+                justfile: None,
                 hint: Some("file gate".to_string()),
             },
             GateSpec {
@@ -996,7 +995,7 @@ hint = "Test stack"
                 env: Some("PATH".to_string()),
                 rhai: None,
                 knowledge_backend: None,
-            justfile: None,
+                justfile: None,
                 hint: Some("env gate".to_string()),
             },
         ];

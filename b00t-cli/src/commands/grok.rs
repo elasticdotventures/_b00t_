@@ -162,9 +162,7 @@ pub async fn handle_grok_command(command: GrokCommands) -> Result<()> {
         } => {
             let backend = GrokBackend::from_flag(rag.as_deref())?;
             match backend {
-                GrokBackend::Both
-                | GrokBackend::Irontology
-                | GrokBackend::Raglite => {
+                GrokBackend::Both | GrokBackend::Irontology | GrokBackend::Raglite => {
                     handle_dual_digest(&topic, &content, backend).await
                 }
                 GrokBackend::CodebaseMemory => Err(anyhow::anyhow!(
@@ -470,7 +468,10 @@ async fn handle_assimilate(
     // ── Type-detect: GitHub repo URL → polyseme handler ────────────────────
     if let Some(url) = source_url {
         if let Some(parsed) = parse_github_repo_url(url) {
-            eprintln!("  🔍 detected GitHub repo: {}/{}", parsed.owner, parsed.repo);
+            eprintln!(
+                "  🔍 detected GitHub repo: {}/{}",
+                parsed.owner, parsed.repo
+            );
             assimilate_github_repo(&parsed, topic, tags).unwrap_or_else(|e| {
                 eprintln!("  ⚠️  polyseme scaffold failed: {e}");
             });
@@ -502,7 +503,9 @@ async fn handle_assimilate(
             .or_else(|| content_inline.map(|s| s.to_string()))
             .or_else(|| file.map(|f| f.display().to_string()))
             .ok_or_else(|| {
-                anyhow::anyhow!("--enhanced requires a source: use --source-url, content, or --file")
+                anyhow::anyhow!(
+                    "--enhanced requires a source: use --source-url, content, or --file"
+                )
             })?;
 
         let config = crate::assimilate::EnhancedConfig {
@@ -996,11 +999,10 @@ fn detect_cli_defaults(owner: &str, repo: &str) -> (String, String) {
     (lang.install_cmd(repo, owner), lang.version_cmd(repo))
 }
 fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
-    let stripped = url
-        .trim_end_matches('/')
-        .trim_end_matches(".git");
+    let stripped = url.trim_end_matches('/').trim_end_matches(".git");
     // Match: https://github.com/OWNER/REPO with nothing after
-    if let Some(rest) = stripped.strip_prefix("https://github.com/")
+    if let Some(rest) = stripped
+        .strip_prefix("https://github.com/")
         .or_else(|| stripped.strip_prefix("http://github.com/"))
     {
         let parts: Vec<&str> = rest.split('/').collect();
@@ -1019,7 +1021,11 @@ fn parse_github_repo_url(url: &str) -> Option<ParsedRepo> {
 /// `.polyseme.tomllmd` when multiple artifacts claim the same name from
 /// different canonical sources (e.g. "bubblewrap" = sandbox container + Android app).
 /// Non-fatal: errors are returned but the caller continues with content assimilation.
-fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) -> anyhow::Result<()> {
+fn assimilate_github_repo(
+    parsed: &ParsedRepo,
+    topic: &str,
+    _tags: &[String],
+) -> anyhow::Result<()> {
     use crate::{PolysemeRef, UnifiedConfig};
 
     let canonical = format!("github:{}/{}", parsed.owner, parsed.repo);
@@ -1034,20 +1040,22 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
     // this name is already claimed by another artifact. If no .cli.toml exists
     // at all, or the existing one is from the same source, it's unambiguous.
     let existing_source = if cli_path.exists() {
-        std::fs::read_to_string(&cli_path).ok()
-            .and_then(|c| {
-                c.lines()
-                    .find(|l| l.contains("Assimilated from:"))
-                    .or_else(|| c.lines().find(|l| l.contains("# source_url")))
-                    .map(|l| l.to_string())
-            })
+        std::fs::read_to_string(&cli_path).ok().and_then(|c| {
+            c.lines()
+                .find(|l| l.contains("Assimilated from:"))
+                .or_else(|| c.lines().find(|l| l.contains("# source_url")))
+                .map(|l| l.to_string())
+        })
     } else {
         None
     };
 
     let is_ambiguous = poly_path.exists()
-        || existing_source.as_ref()
-            .map(|s| !s.contains(&canonical) && !s.contains(&format!("{}/{}", parsed.owner, parsed.repo)))
+        || existing_source
+            .as_ref()
+            .map(|s| {
+                !s.contains(&canonical) && !s.contains(&format!("{}/{}", parsed.owner, parsed.repo))
+            })
             .unwrap_or(false);
 
     let (detected_install, detected_version) = detect_cli_defaults(&parsed.owner, &parsed.repo);
@@ -1088,8 +1096,16 @@ fn assimilate_github_repo(parsed: &ParsedRepo, topic: &str, _tags: &[String]) ->
         poly_cfg.sources = Some(sources);
         polyseme_datum.polyseme = Some(poly_cfg);
 
-        let unified = UnifiedConfig { b00t: polyseme_datum, service_contract: vec![], env: None, sections: None };
-        std::fs::write(&poly_path, format!("{}\n", toml::to_string_pretty(&unified)?))?;
+        let unified = UnifiedConfig {
+            b00t: polyseme_datum,
+            service_contract: vec![],
+            env: None,
+            sections: None,
+        };
+        std::fs::write(
+            &poly_path,
+            format!("{}\n", toml::to_string_pretty(&unified)?),
+        )?;
         eprintln!("  ✅ polyseme: {}", poly_path.display());
 
         // Scaffold concrete CLI datum under polyseme

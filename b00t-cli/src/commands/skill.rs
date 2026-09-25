@@ -291,8 +291,7 @@ fn count_skill_md_dirs(dir: &std::path::Path) -> usize {
 /// contributes to `b00t skill list`. Read-only: b00t doesn't install or
 /// manage these, only harmonizes their bundled skills into the resolver.
 fn handle_plugins(json: bool) -> Result<()> {
-    let home =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot resolve home directory"))?;
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot resolve home directory"))?;
     let claude_dir = home.join(".claude");
     let entries = crate::datum_claude_plugin::read_installed_plugins(&claude_dir);
 
@@ -319,7 +318,10 @@ fn handle_plugins(json: bool) -> Result<()> {
     } else if entries.is_empty() {
         println!(
             "No Claude Code plugins found (checked {}).",
-            claude_dir.join("plugins").join("installed_plugins.json").display()
+            claude_dir
+                .join("plugins")
+                .join("installed_plugins.json")
+                .display()
         );
     } else {
         for (key, entry) in &entries {

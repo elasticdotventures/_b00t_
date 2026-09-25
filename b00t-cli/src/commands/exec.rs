@@ -10,7 +10,7 @@
 //!
 //! `--sleep=<duration>` → spawn background detached process; returns immediately
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::hive::{check_guards, load_profile, GuardContext, GuardResult, SystemSnapshot};
+use crate::hive::{GuardContext, GuardResult, SystemSnapshot, check_guards, load_profile};
 use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SystemdRunSandbox};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
@@ -27,27 +27,27 @@ const BLOCK_TTL_SECS: u64 = 300; // 5 min re-submission window
 
 /// The executable head used for command guards.
 ///
-/// Exec receives already-tokenized arguments, so matching a guard against the
-/// complete joined vector makes descriptive data (for example a GH body value)
-/// indistinguishable from an executable command. Direct commands only need
-/// their program and leading subcommand/flag tokens. Shell -c remains a
-/// special case because its script argument is the executable program.
+/// Exec receives already-tokenized arguments. Preserve every command token so
+/// guards can inspect destinations and values (for example `git push origin
+/// main`). GitHub title/body values are descriptive data, so omit those flag
+/// values from the guard subject while retaining the operation itself.
 fn guard_subject(command: &[String]) -> String {
-    let invokes_shell_script = matches!(
-        command.first().map(String::as_str),
-        Some("sh" | "bash" | "zsh" | "fish")
-    ) && command.iter().any(|argument| argument == "-c");
-
-    if invokes_shell_script {
-        command.join(" ")
-    } else {
-        command
-            .iter()
-            .take(3)
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(" ")
+    if command.first().map(String::as_str) != Some("gh") {
+        return command.join(" ");
     }
+
+    let mut subject = Vec::with_capacity(command.len());
+    let mut tokens = command.iter();
+    while let Some(token) = tokens.next() {
+        match token.as_str() {
+            "--body" | "--title" => {
+                tokens.next();
+            }
+            value if value.starts_with("--body=") || value.starts_with("--title=") => {}
+            value => subject.push(value),
+        }
+    }
+    subject.join(" ")
 }
 
 #[cfg(test)]
@@ -72,6 +72,13 @@ mod guard_subject_tests {
         let command = vec!["bash".into(), "-c".into(), "just test".into()];
 
         assert_eq!(guard_subject(&command), "bash -c just test");
+    }
+
+    #[test]
+    fn keeps_all_direct_command_tokens_for_guard_matching() {
+        let command = vec!["git".into(), "push".into(), "origin".into(), "main".into()];
+
+        assert_eq!(guard_subject(&command), "git push origin main");
     }
 }
 
@@ -303,7 +310,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     let mut vetted_exec_path: Option<PathBuf> = None;
 
     if args.vetted {
-        use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
+        use b00t_c0re_lib::sudo_operator::{SudoGrantEvidence, VettedResult, check_vetted};
 
         // The `systemd-run` sandbox provider runs `cmd_str` through `sh -c`
         // using the process's own cwd, entirely bypassing `vetted_exec_path`
@@ -320,7 +327,9 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         }
 
         if args.command.len() != 1 {
-            eprintln!("🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args");
+            eprintln!(
+                "🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args"
+            );
             append_audit_log(
                 &log_path,
                 &AuditLogEntry {
@@ -346,7 +355,9 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 // I3: the execution-readiness invariant Task 2 built must
                 // actually gate execution, not just exist unused.
                 if !evidence.verify() || !evidence.grant_is_execution_ready() {
-                    eprintln!("🚫 SUDO-VETTED-DENY: evidence failed execution-readiness check (internal invariant violation)");
+                    eprintln!(
+                        "🚫 SUDO-VETTED-DENY: evidence failed execution-readiness check (internal invariant violation)"
+                    );
                     append_audit_log(
                         &log_path,
                         &AuditLogEntry {
@@ -433,8 +444,8 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                     // is supplied. Justification-less Block behavior (the `else`
                     // branch) is completely unchanged.
                     use b00t_c0re_lib::sudo_operator::{
-                        adversarial_review, checkpoint_system_state, AdversarialVerdict,
-                        SudoDisposition, SudoGrantEvidence,
+                        AdversarialVerdict, SudoDisposition, SudoGrantEvidence, adversarial_review,
+                        checkpoint_system_state,
                     };
 
                     let project_root =

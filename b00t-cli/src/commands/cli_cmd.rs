@@ -1,10 +1,10 @@
+use crate::BootDatum;
 use crate::datum_cli::CliDatum;
 use crate::dependency_resolver::DependencyResolver;
 use crate::hook_engine::{HookResult, run_hook};
 use crate::load_all_datums;
 use crate::load_datum_providers;
 use crate::traits::*;
-use crate::BootDatum;
 use anyhow::{Context, Result};
 use clap::Parser;
 use duct::cmd;

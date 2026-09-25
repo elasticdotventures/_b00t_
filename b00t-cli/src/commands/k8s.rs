@@ -184,7 +184,11 @@ pub enum K8sCommands {
 /// today (that's the only resource type the existing wrapper supports). Reject anything
 /// else with a clear message instead of silently no-op'ing, and require an explicit
 /// `--all` or a `resource_name` so a bare `k8s delete pod` can't nuke a namespace by accident.
-fn validate_delete_request(resource_type: &str, resource_name: Option<&str>, all: bool) -> Result<()> {
+fn validate_delete_request(
+    resource_type: &str,
+    resource_name: Option<&str>,
+    all: bool,
+) -> Result<()> {
     if resource_type != "pod" {
         anyhow::bail!(
             "k8s delete: resource type '{resource_type}' is not wired yet (only 'pod' uses crate::k8s::K8sClient::delete_pod, see issue #83)"
@@ -328,7 +332,10 @@ mod tests {
     #[test]
     fn test_validate_delete_request_requires_name_or_all() {
         let err = validate_delete_request("pod", None, false).unwrap_err();
-        assert!(err.to_string().contains("provide a resource name or pass --all"));
+        assert!(
+            err.to_string()
+                .contains("provide a resource name or pass --all")
+        );
     }
 
     #[test]

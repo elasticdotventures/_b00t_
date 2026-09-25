@@ -361,9 +361,9 @@ mod tests {
             ShardKind::Tool,
         ] {
             assert!(
-                spec.soul_shard_grants.iter().any(|g| {
-                    g.kind == kind && g.id == "*" && g.mode == ShardMode::Rw
-                }),
+                spec.soul_shard_grants
+                    .iter()
+                    .any(|g| { g.kind == kind && g.id == "*" && g.mode == ShardMode::Rw }),
                 "missing rw:* grant for {kind:?}"
             );
         }

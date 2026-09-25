@@ -317,22 +317,26 @@ pub enum SoulCommands {
     )]
     ShardList,
 
-    #[clap(name = "shard-export", about = "Print a shard's full TOML document to stdout")]
+    #[clap(
+        name = "shard-export",
+        about = "Print a shard's full TOML document to stdout"
+    )]
     ShardExport {
         #[clap(help = "'<kind>:<id>', e.g. 'agent:pi'")]
         scope: String,
     },
 
-    #[clap(name = "shard-delete", about = "Delete a shard's on-disk data (irreversible)")]
+    #[clap(
+        name = "shard-delete",
+        about = "Delete a shard's on-disk data (irreversible)"
+    )]
     ShardDelete {
         #[clap(help = "'<kind>:<id>', e.g. 'agent:pi'")]
         scope: String,
     },
 }
 
-fn block_on_soul_future<T>(
-    future: impl std::future::Future<Output = Result<T>>,
-) -> Result<T> {
+fn block_on_soul_future<T>(future: impl std::future::Future<Output = Result<T>>) -> Result<T> {
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
         Err(_) => tokio::runtime::Runtime::new()?.block_on(future),
@@ -434,9 +438,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             Ok(())
         }
 
-        SoulCommands::Serve { port, host } => {
-            block_on_soul_future(serve_soul_kv(host, *port))
-        }
+        SoulCommands::Serve { port, host } => block_on_soul_future(serve_soul_kv(host, *port)),
 
         #[cfg(feature = "dbus")]
         SoulCommands::Dbus { session } => {
@@ -452,9 +454,7 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             model,
             base_url,
             dry_run,
-        } => {
-            block_on_soul_future(distill_soul(model, base_url.as_deref(), *dry_run))
-        }
+        } => block_on_soul_future(distill_soul(model, base_url.as_deref(), *dry_run)),
 
         SoulCommands::Init { path: init_path } => {
             let target = init_path
@@ -485,16 +485,30 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
         ),
 
         // ── DataFramerr ───────────────────────────────────────────────────────
-        SoulCommands::TableCreate { name, columns, scope } => df_table_create(name, columns, parse_scope(scope)?),
+        SoulCommands::TableCreate {
+            name,
+            columns,
+            scope,
+        } => df_table_create(name, columns, parse_scope(scope)?),
         SoulCommands::TableList { scope } => df_table_list(parse_scope(scope)?),
         SoulCommands::TableShow { name } => df_table_show(name),
         SoulCommands::TableDrop { name } => df_table_drop(name),
 
-        SoulCommands::FrameInsert { table, fields, scope } => df_frame_insert(table, fields, parse_scope(scope)?),
-        SoulCommands::FrameGet { table, id, scope } => df_frame_get(table, *id, parse_scope(scope)?),
-        SoulCommands::FrameDump { table, last, scope } => df_frame_dump(table, *last, parse_scope(scope)?),
+        SoulCommands::FrameInsert {
+            table,
+            fields,
+            scope,
+        } => df_frame_insert(table, fields, parse_scope(scope)?),
+        SoulCommands::FrameGet { table, id, scope } => {
+            df_frame_get(table, *id, parse_scope(scope)?)
+        }
+        SoulCommands::FrameDump { table, last, scope } => {
+            df_frame_dump(table, *last, parse_scope(scope)?)
+        }
 
-        SoulCommands::CursorCreate { name, table, scope } => df_cursor_create(name, table, parse_scope(scope)?),
+        SoulCommands::CursorCreate { name, table, scope } => {
+            df_cursor_create(name, table, parse_scope(scope)?)
+        }
         SoulCommands::CursorNext { name, scope } => df_cursor_next(name, parse_scope(scope)?),
         SoulCommands::CursorReset { name, scope } => df_cursor_reset(name, parse_scope(scope)?),
         SoulCommands::CursorList => df_cursor_list(),
@@ -507,7 +521,15 @@ pub fn handle_soul_command(cmd: &SoulCommands) -> Result<()> {
             aggregate,
             emit,
             scope,
-        } => df_alarm_set(name, table, column, condition, aggregate, emit, parse_scope(scope)?),
+        } => df_alarm_set(
+            name,
+            table,
+            column,
+            condition,
+            aggregate,
+            emit,
+            parse_scope(scope)?,
+        ),
         SoulCommands::AlarmCheck { table, scope } => df_alarm_check(table, parse_scope(scope)?),
         SoulCommands::AlarmList => df_alarm_list(),
         SoulCommands::AlarmRm { name } => df_alarm_rm(name),
@@ -1606,11 +1628,7 @@ fn df_shard_list() -> Result<()> {
             continue;
         };
         for kind_entry in kind_entries.flatten() {
-            let Some(kind) = kind_entry
-                .file_name()
-                .to_str()
-                .and_then(ShardKind::parse)
-            else {
+            let Some(kind) = kind_entry.file_name().to_str().and_then(ShardKind::parse) else {
                 continue;
             };
             let Ok(id_entries) = std::fs::read_dir(kind_entry.path()) else {
@@ -1649,9 +1667,9 @@ fn df_shard_delete(scope: &SoulScope) -> Result<()> {
         println!("shard '{scope}' has no on-disk data — nothing to delete");
         return Ok(());
     }
-    let shard_dir = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("shard path '{}' has no parent directory", path.display()))?;
+    let shard_dir = path.parent().ok_or_else(|| {
+        anyhow::anyhow!("shard path '{}' has no parent directory", path.display())
+    })?;
     std::fs::remove_dir_all(shard_dir)
         .with_context(|| format!("delete shard directory {}", shard_dir.display()))?;
     println!("shard '{scope}' deleted ({})", shard_dir.display());
@@ -1684,14 +1702,20 @@ mod shard_tests {
 
     impl TempHome {
         fn new() -> Self {
-            let guard = HOME_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let guard = HOME_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let old_home = std::env::var("HOME").ok();
             let temp_dir = tempfile::tempdir().unwrap();
             // SAFETY: guarded by HOME_LOCK above.
             unsafe {
                 std::env::set_var("HOME", temp_dir.path());
             }
-            Self { _guard: guard, old_home, _temp_dir: temp_dir }
+            Self {
+                _guard: guard,
+                old_home,
+                _temp_dir: temp_dir,
+            }
         }
     }
 
@@ -1777,7 +1801,10 @@ mod shard_tests {
         ];
         df_table_create(
             "provider_task_rank",
-            &column_specs.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &column_specs
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
             Some(scope.clone()),
         )
         .unwrap();
@@ -1795,7 +1822,15 @@ mod shard_tests {
         let names: Vec<&str> = table.columns.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(
             names,
-            vec!["task", "provider", "model", "rank", "status", "evidence", "recorded_at"]
+            vec![
+                "task",
+                "provider",
+                "model",
+                "rank",
+                "status",
+                "evidence",
+                "recorded_at"
+            ]
         );
 
         // Insert 5 rows, mirroring the original bug report's repro shape.
@@ -1833,15 +1868,27 @@ mod shard_tests {
 
         let row = &table.rows[0];
         assert_eq!(row.id, 1);
-        assert_eq!(row.fields.get("task"), Some(&SoulValue::Text("rust_codegen".into())));
-        assert_eq!(row.fields.get("provider"), Some(&SoulValue::Text("bedrock".into())));
+        assert_eq!(
+            row.fields.get("task"),
+            Some(&SoulValue::Text("rust_codegen".into()))
+        );
+        assert_eq!(
+            row.fields.get("provider"),
+            Some(&SoulValue::Text("bedrock".into()))
+        );
         assert_eq!(
             row.fields.get("model"),
             Some(&SoulValue::Text("apac.amazon.nova-pro-v1:0".into()))
         );
         assert_eq!(row.fields.get("rank"), Some(&SoulValue::Int(0)));
-        assert_eq!(row.fields.get("status"), Some(&SoulValue::Text("flopped".into())));
-        assert_eq!(row.fields.get("evidence"), Some(&SoulValue::Text("run-0".into())));
+        assert_eq!(
+            row.fields.get("status"),
+            Some(&SoulValue::Text("flopped".into()))
+        );
+        assert_eq!(
+            row.fields.get("evidence"),
+            Some(&SoulValue::Text("run-0".into()))
+        );
         assert_eq!(
             row.fields.get("recorded_at"),
             Some(&SoulValue::Text("2026-09-05T12:46:00Z".into()))

@@ -68,7 +68,10 @@ fn create_key_locked(keys_path: &std::path::Path, key: &str, entry: Value) -> an
     if let Some(parent) = keys_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let lock_file = std::fs::OpenOptions::new().create(true).write(true).open(keys_path)?;
+    let lock_file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(keys_path)?;
     lock_file.lock_exclusive()?;
 
     let mut data: Value =
@@ -220,8 +223,13 @@ fn spotlight_query(consumer_filter: Option<&str>, since: Option<&str>) -> anyhow
         std::collections::BTreeMap::new();
 
     for line in content.lines() {
-        let Ok(event) = serde_json::from_str::<Value>(line) else { continue };
-        let consumer = event.get("consumer").and_then(|c| c.as_str()).unwrap_or("unknown");
+        let Ok(event) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let consumer = event
+            .get("consumer")
+            .and_then(|c| c.as_str())
+            .unwrap_or("unknown");
         if let Some(filter) = consumer_filter {
             if consumer != filter {
                 continue;
@@ -238,13 +246,22 @@ fn spotlight_query(consumer_filter: Option<&str>, since: Option<&str>) -> anyhow
                 continue;
             }
         }
-        let model = event.get("model").and_then(|m| m.as_str()).unwrap_or("unknown");
+        let model = event
+            .get("model")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown");
         let entry = by_consumer_model
             .entry((consumer.to_string(), model.to_string()))
             .or_default();
         entry.requests += 1;
-        entry.prompt_tokens += event.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-        entry.completion_tokens += event.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        entry.prompt_tokens += event
+            .get("prompt_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        entry.completion_tokens += event
+            .get("completion_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
     }
 
     if by_consumer_model.is_empty() {
@@ -252,7 +269,10 @@ fn spotlight_query(consumer_filter: Option<&str>, since: Option<&str>) -> anyhow
         return Ok(());
     }
 
-    println!("{:<20} {:<20} {:>10} {:>15} {:>15}", "consumer", "model", "requests", "prompt_tok", "completion_tok");
+    println!(
+        "{:<20} {:<20} {:>10} {:>15} {:>15}",
+        "consumer", "model", "requests", "prompt_tok", "completion_tok"
+    );
     for ((consumer, model), agg) in &by_consumer_model {
         println!(
             "{:<20} {:<20} {:>10} {:>15} {:>15}",

@@ -113,3 +113,6 @@ CDI GPU injection breaks after reboot when /dev/dri renumbers (card1→card0): /
 
 ---
 restart=unless-stopped hides registration conflicts: A self-hosted CI runner container with --restart unless-stopped will silently crash-loop forever if its entrypoint re-runs the registration step (config.sh) on every start and that registration collides with a stale entry still held by the CI service (GitHub: TaskAgentExistsException 'a runner exists with the same name'). The container's own writable layer can also degrade under a fast crash-loop (thousands of restarts), producing a second, misleading symptom (missing runtime binaries) that looks like image corruption but isn't. Fix: delete the stale registration server-side first, then recreate the container fresh — don't just keep restarting or re-pulling the image.
+
+---
+Podman kube play for kr0ki-local creates containers but b00t-limits-hook exits 1 at crun: Podman kube play for kr0ki-local creates containers but b00t-limits-hook exits 1 at crun start; diagnose the hook before treating the Podman-kube lifecycle as operational. <!-- salvaged:no_colon -->

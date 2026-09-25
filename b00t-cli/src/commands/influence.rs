@@ -94,9 +94,7 @@ pub fn compute_stats() -> Result<InfluenceStats> {
         }
         if let Some(weights) = &r.influence {
             for w in weights {
-                let entry = source_stats
-                    .entry(w.source_key.clone())
-                    .or_insert((0, 0.0));
+                let entry = source_stats.entry(w.source_key.clone()).or_insert((0, 0.0));
                 entry.0 += 1;
                 entry.1 += w.ratio;
             }
@@ -135,7 +133,10 @@ pub fn compute_stats() -> Result<InfluenceStats> {
 pub enum InfluenceCommands {
     #[clap(about = "Query recent influence-attributed evidence events")]
     Log {
-        #[clap(long, help = "RFC3339 timestamp — only show records at/after this time")]
+        #[clap(
+            long,
+            help = "RFC3339 timestamp — only show records at/after this time"
+        )]
         since: Option<String>,
         #[clap(long, help = "Filter to a specific agent_id")]
         agent: Option<String>,
@@ -261,7 +262,11 @@ mod tests {
         ];
         let by_agent = filter_log(&records, None, Some("agent-1")).unwrap();
         assert_eq!(by_agent.len(), 2);
-        assert!(by_agent.iter().all(|r| r.agent_id.as_deref() == Some("agent-1")));
+        assert!(
+            by_agent
+                .iter()
+                .all(|r| r.agent_id.as_deref() == Some("agent-1"))
+        );
 
         let by_since = filter_log(&records, Some("2026-02-01T00:00:00Z"), None).unwrap();
         assert_eq!(by_since.len(), 2);

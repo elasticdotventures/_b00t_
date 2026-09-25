@@ -166,7 +166,14 @@ impl FinetuneManifest {
                 if self.target.image.as_deref().unwrap_or("").trim().is_empty() {
                     bail!("[target].image is required when kind = \"cloud\"");
                 }
-                if self.target.flavor.as_deref().unwrap_or("").trim().is_empty() {
+                if self
+                    .target
+                    .flavor
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .is_empty()
+                {
                     bail!("[target].flavor is required when kind = \"cloud\"");
                 }
             }
@@ -175,7 +182,13 @@ impl FinetuneManifest {
             bail!("[output].datum must not be empty");
         }
         if self.output.storage == StorageKind::S3
-            && self.output.s3_bucket.as_deref().unwrap_or("").trim().is_empty()
+            && self
+                .output
+                .s3_bucket
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
         {
             bail!("[output].s3_bucket is required when storage = \"s3\"");
         }
@@ -444,8 +457,11 @@ pub fn pack_adapter_as_oci_layer(
 
     // 4. oci-layout marker + index.json (OCI Image Layout spec) so the
     //    directory is a valid, tool-inspectable OCI layout on its own.
-    fs::write(out_dir.join("oci-layout"), br#"{"imageLayoutVersion":"1.0.0"}"#)
-        .context("writing oci-layout")?;
+    fs::write(
+        out_dir.join("oci-layout"),
+        br#"{"imageLayoutVersion":"1.0.0"}"#,
+    )
+    .context("writing oci-layout")?;
     let index = serde_json::json!({
         "schemaVersion": 2,
         "manifests": [{
@@ -502,8 +518,8 @@ fn build_deterministic_tar_gz(dir: &Path) -> Result<Vec<u8>> {
             let rel = path
                 .strip_prefix(dir)
                 .context("computing relative path for tar entry")?;
-            let metadata = fs::metadata(path)
-                .with_context(|| format!("stat-ing {path:?} for tar entry"))?;
+            let metadata =
+                fs::metadata(path).with_context(|| format!("stat-ing {path:?} for tar entry"))?;
             let mut header = tar::Header::new_gnu();
             header.set_size(metadata.len());
             header.set_mode(0o644);
@@ -708,7 +724,11 @@ pub fn write_ai_datum(
                 manifest.job.base_model,
                 manifest.job.id,
                 storage_str,
-                if push.mocked { ", MOCKED push (no real credentials in this environment)" } else { "" }
+                if push.mocked {
+                    ", MOCKED push (no real credentials in this environment)"
+                } else {
+                    ""
+                }
             ),
             ai: Ai {
                 provider: "oci-artifact",
@@ -904,7 +924,13 @@ pub async fn run_job(
             println!(
                 "     once the adapter is pulled locally (just ai-finetune::hf-adapter-pull <hub_model_id> <dir>),"
             );
-            println!("     then: b00t-cli finetune pack --adapter-dir <dir> --out .b00t-oci/{} --job-id {} --base-model {} --framework {}", manifest.output.datum, manifest.job.id, manifest.job.base_model, manifest.job.framework);
+            println!(
+                "     then: b00t-cli finetune pack --adapter-dir <dir> --out .b00t-oci/{} --job-id {} --base-model {} --framework {}",
+                manifest.output.datum,
+                manifest.job.id,
+                manifest.job.base_model,
+                manifest.job.framework
+            );
             return Ok(());
         }
     }
@@ -994,7 +1020,10 @@ pub enum FinetuneCommands {
     Run {
         #[clap(help = "Path to the job manifest TOML file")]
         manifest: PathBuf,
-        #[clap(long, help = "Print the commands that would run without executing them")]
+        #[clap(
+            long,
+            help = "Print the commands that would run without executing them"
+        )]
         dry_run: bool,
         #[clap(
             long,
@@ -1010,11 +1039,20 @@ pub enum FinetuneCommands {
         manifest_a: PathBuf,
         #[clap(help = "Path to competitor B's job manifest TOML")]
         manifest_b: PathBuf,
-        #[clap(long, help = "Human-readable label for competitor A (default: competitor-a)")]
+        #[clap(
+            long,
+            help = "Human-readable label for competitor A (default: competitor-a)"
+        )]
         label_a: Option<String>,
-        #[clap(long, help = "Human-readable label for competitor B (default: competitor-b)")]
+        #[clap(
+            long,
+            help = "Human-readable label for competitor B (default: competitor-b)"
+        )]
         label_b: Option<String>,
-        #[clap(long, help = "Print the commands that would run without executing them")]
+        #[clap(
+            long,
+            help = "Print the commands that would run without executing them"
+        )]
         dry_run: bool,
         #[clap(long, help = "Actually push to S3 instead of mocking")]
         live_push: bool,
@@ -1025,21 +1063,36 @@ pub enum FinetuneCommands {
     RaceFinalize {
         #[clap(long, help = "Path to competitor A's job manifest TOML")]
         manifest_a: PathBuf,
-        #[clap(long, help = "Human-readable label for competitor A (default: competitor-a)")]
+        #[clap(
+            long,
+            help = "Human-readable label for competitor A (default: competitor-a)"
+        )]
         label_a: Option<String>,
-        #[clap(long, help = "Path to competitor A's training log (stdout capture or trainer_state.json)")]
+        #[clap(
+            long,
+            help = "Path to competitor A's training log (stdout capture or trainer_state.json)"
+        )]
         log_a: PathBuf,
         #[clap(long, help = "Path to competitor A's trained LoRA adapter directory")]
         adapter_dir_a: PathBuf,
         #[clap(long, help = "Path to competitor B's job manifest TOML")]
         manifest_b: PathBuf,
-        #[clap(long, help = "Human-readable label for competitor B (default: competitor-b)")]
+        #[clap(
+            long,
+            help = "Human-readable label for competitor B (default: competitor-b)"
+        )]
         label_b: Option<String>,
-        #[clap(long, help = "Path to competitor B's training log (stdout capture or trainer_state.json)")]
+        #[clap(
+            long,
+            help = "Path to competitor B's training log (stdout capture or trainer_state.json)"
+        )]
         log_b: PathBuf,
         #[clap(long, help = "Path to competitor B's trained LoRA adapter directory")]
         adapter_dir_b: PathBuf,
-        #[clap(long, help = "Directory to write the OCI layer + race report into (default: .b00t-race)")]
+        #[clap(
+            long,
+            help = "Directory to write the OCI layer + race report into (default: .b00t-race)"
+        )]
         race_out_dir: Option<PathBuf>,
         #[clap(long, help = "Actually push the winner to S3 instead of mocking")]
         live_push: bool,
@@ -1071,7 +1124,8 @@ pub async fn handle_finetune_command(cmd: &FinetuneCommands, path: &str) -> Resu
                     "ℹ oras not found on PATH — using the custom OCI packer (see module docs for why oras doesn't apply to S3 transport anyway)"
                 );
             }
-            let result = pack_adapter_as_oci_layer(adapter_dir, out, job_id, base_model, framework)?;
+            let result =
+                pack_adapter_as_oci_layer(adapter_dir, out, job_id, base_model, framework)?;
             println!("layer digest:    {}", result.layer_digest);
             println!("layer size:      {} bytes", result.layer_size);
             println!("manifest digest: {}", result.manifest_digest);
@@ -1203,7 +1257,10 @@ s3_bucket = "b00t-finetune-artifacts"
         let m = FinetuneManifest::from_toml_str(sample_cloud_toml()).expect("valid manifest");
         assert_eq!(m.target.kind, TargetKind::Cloud);
         assert!(m.dataset.generate);
-        assert_eq!(m.target.image.as_deref(), Some("ghcr.io/elasticdotventures/b00t-training-image:latest"));
+        assert_eq!(
+            m.target.image.as_deref(),
+            Some("ghcr.io/elasticdotventures/b00t-training-image:latest")
+        );
         // mirror_to_hf omitted → defaults true
         assert!(m.output.mirror_to_hf);
     }
@@ -1290,15 +1347,22 @@ s3_bucket = "b00t-finetune-artifacts"
     #[test]
     fn generates_training_config_with_expected_fields() {
         let m = FinetuneManifest::from_toml_str(sample_local_toml()).unwrap();
-        let yaml = generate_training_config_yaml(&m, "fine-tune/train.jsonl", "fine-tune/output-x").unwrap();
+        let yaml = generate_training_config_yaml(&m, "fine-tune/train.jsonl", "fine-tune/output-x")
+            .unwrap();
         let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(
             parsed["base_model"].as_str().unwrap(),
             "unsloth/Qwen3.8-27B-unsloth-bnb-4bit"
         );
-        assert_eq!(parsed["adapter_name"].as_str().unwrap(), "qwen38-peer-2026-09-01");
+        assert_eq!(
+            parsed["adapter_name"].as_str().unwrap(),
+            "qwen38-peer-2026-09-01"
+        );
         assert_eq!(parsed["dataset"].as_str().unwrap(), "fine-tune/train.jsonl");
-        assert_eq!(parsed["hub_model_id"].as_str().unwrap(), "elasticdotventures/qwen38-peer");
+        assert_eq!(
+            parsed["hub_model_id"].as_str().unwrap(),
+            "elasticdotventures/qwen38-peer"
+        );
         assert!(parsed["push_to_hub"].as_bool().unwrap());
         assert_eq!(parsed["lora_r"].as_u64().unwrap(), 16);
     }
@@ -1320,7 +1384,12 @@ s3_bucket = "b00t-finetune-artifacts"
         let args = local_train_args("_b00t_/ai-finetune.just", "fine-tune/config-x.yaml");
         assert_eq!(
             args,
-            vec!["-f", "_b00t_/ai-finetune.just", "ai-finetune::train", "fine-tune/config-x.yaml"]
+            vec![
+                "-f",
+                "_b00t_/ai-finetune.just",
+                "ai-finetune::train",
+                "fine-tune/config-x.yaml"
+            ]
         );
     }
 
@@ -1330,17 +1399,28 @@ s3_bucket = "b00t-finetune-artifacts"
         let args = hf_jobs_run_args(&m, "config-qwen38-coder-2026-09-01.yaml").unwrap();
         assert_eq!(args[0], "jobs");
         assert_eq!(args[1], "run");
-        assert_eq!(args[2], "ghcr.io/elasticdotventures/b00t-training-image:latest");
+        assert_eq!(
+            args[2],
+            "ghcr.io/elasticdotventures/b00t-training-image:latest"
+        );
         assert!(args.contains(&"--flavor".to_string()));
         assert!(args.contains(&"a100-large".to_string()));
         assert!(args.contains(&"--timeout".to_string()));
         assert!(args.contains(&"10h".to_string()));
         assert!(args.contains(&"--secrets".to_string()));
         assert!(args.contains(&"HF_TOKEN".to_string()));
-        assert!(args.iter().any(|a| a.contains("hf://datasets/elasticdotventures/b00t-training:/data:ro")));
-        assert!(args.iter().any(|a| a.contains("hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw")));
+        assert!(
+            args.iter()
+                .any(|a| a.contains("hf://datasets/elasticdotventures/b00t-training:/data:ro"))
+        );
+        assert!(
+            args.iter()
+                .any(|a| a.contains("hf://buckets/elasticdotventures/b00t-adapters:/adapters:rw"))
+        );
         let sh_cmd = args.last().unwrap();
-        assert!(sh_cmd.contains("ai-finetune.just train /data/config-qwen38-coder-2026-09-01.yaml"));
+        assert!(
+            sh_cmd.contains("ai-finetune.just train /data/config-qwen38-coder-2026-09-01.yaml")
+        );
     }
 
     #[test]
@@ -1361,7 +1441,10 @@ s3_bucket = "b00t-finetune-artifacts"
         );
         assert_eq!(args[0], "s3");
         assert_eq!(args[1], "cp");
-        assert_eq!(args[3], "s3://b00t-finetune-artifacts/qwen38-peer/abc123.tar.gz");
+        assert_eq!(
+            args[3],
+            "s3://b00t-finetune-artifacts/qwen38-peer/abc123.tar.gz"
+        );
         assert_eq!(args[4], "--profile");
         assert_eq!(args[5], "spire-agent");
         assert_eq!(args[6], "--region");
@@ -1404,7 +1487,11 @@ s3_bucket = "b00t-finetune-artifacts"
 
     fn make_fake_adapter_dir() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("adapter_model.safetensors"), b"fake-safetensors-bytes").unwrap();
+        fs::write(
+            dir.path().join("adapter_model.safetensors"),
+            b"fake-safetensors-bytes",
+        )
+        .unwrap();
         fs::write(
             dir.path().join("adapter_config.json"),
             br#"{"r":16,"lora_alpha":32}"#,
@@ -1454,12 +1541,14 @@ s3_bucket = "b00t-finetune-artifacts"
         let out1 = tempfile::tempdir().unwrap();
         let out2 = tempfile::tempdir().unwrap();
 
-        let r1 = pack_adapter_as_oci_layer(adapter.path(), out1.path(), "job-a", "base-a", "unsloth")
-            .unwrap();
+        let r1 =
+            pack_adapter_as_oci_layer(adapter.path(), out1.path(), "job-a", "base-a", "unsloth")
+                .unwrap();
         // Sleep is unnecessary — determinism must not depend on wall-clock
         // gaps between the two packing calls.
-        let r2 = pack_adapter_as_oci_layer(adapter.path(), out2.path(), "job-a", "base-a", "unsloth")
-            .unwrap();
+        let r2 =
+            pack_adapter_as_oci_layer(adapter.path(), out2.path(), "job-a", "base-a", "unsloth")
+                .unwrap();
 
         assert_eq!(
             r1.layer_digest, r2.layer_digest,
@@ -1471,8 +1560,9 @@ s3_bucket = "b00t-finetune-artifacts"
     fn oci_layer_digest_changes_when_adapter_content_changes() {
         let adapter = make_fake_adapter_dir();
         let out1 = tempfile::tempdir().unwrap();
-        let r1 = pack_adapter_as_oci_layer(adapter.path(), out1.path(), "job-a", "base-a", "unsloth")
-            .unwrap();
+        let r1 =
+            pack_adapter_as_oci_layer(adapter.path(), out1.path(), "job-a", "base-a", "unsloth")
+                .unwrap();
 
         fs::write(
             adapter.path().join("adapter_model.safetensors"),
@@ -1480,8 +1570,9 @@ s3_bucket = "b00t-finetune-artifacts"
         )
         .unwrap();
         let out2 = tempfile::tempdir().unwrap();
-        let r2 = pack_adapter_as_oci_layer(adapter.path(), out2.path(), "job-a", "base-a", "unsloth")
-            .unwrap();
+        let r2 =
+            pack_adapter_as_oci_layer(adapter.path(), out2.path(), "job-a", "base-a", "unsloth")
+                .unwrap();
 
         assert_ne!(r1.layer_digest, r2.layer_digest);
     }
@@ -1503,7 +1594,8 @@ s3_bucket = "b00t-finetune-artifacts"
     fn pack_rejects_empty_adapter_dir() {
         let adapter = tempfile::tempdir().unwrap();
         let out = tempfile::tempdir().unwrap();
-        let result = pack_adapter_as_oci_layer(adapter.path(), out.path(), "job-a", "base-a", "unsloth");
+        let result =
+            pack_adapter_as_oci_layer(adapter.path(), out.path(), "job-a", "base-a", "unsloth");
         assert!(result.is_err());
     }
 

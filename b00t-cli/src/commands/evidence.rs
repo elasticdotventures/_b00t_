@@ -190,10 +190,9 @@ fn parse_influence_arg(spec: &str) -> Result<Vec<(String, f64)>> {
             let (key, score) = pair.split_once('=').ok_or_else(|| {
                 anyhow::anyhow!("invalid --influence entry '{pair}', expected source=score")
             })?;
-            let score: f64 = score
-                .trim()
-                .parse()
-                .map_err(|_| anyhow::anyhow!("invalid score '{score}' in --influence entry '{pair}'"))?;
+            let score: f64 = score.trim().parse().map_err(|_| {
+                anyhow::anyhow!("invalid score '{score}' in --influence entry '{pair}'")
+            })?;
             Ok((key.trim().to_string(), score))
         })
         .collect()
@@ -359,7 +358,13 @@ pub fn handle_evidence(args: &EvidenceArgs) -> Result<()> {
         } => {
             if let Some(spec) = influence {
                 let scored_sources = parse_influence_arg(spec)?;
-                record_satisfies_with_influence(skill, constraint, &scored_sources, agent_id.as_deref(), None)?;
+                record_satisfies_with_influence(
+                    skill,
+                    constraint,
+                    &scored_sources,
+                    agent_id.as_deref(),
+                    None,
+                )?;
             } else {
                 let mut rec = EvidenceRecord::satisfies(skill, constraint);
                 rec.agent_id = agent_id.clone();
@@ -559,10 +564,16 @@ mod tests {
             assert_eq!(record.predicate, "satisfies");
             assert_eq!(record.agent_id.as_deref(), Some("agent-1"));
 
-            let weights = record.influence.as_ref().expect("influence weights present");
+            let weights = record
+                .influence
+                .as_ref()
+                .expect("influence weights present");
             assert_eq!(weights.len(), 2);
             let total_ratio: f64 = weights.iter().map(|w| w.ratio).sum();
-            assert!((total_ratio - 1.0).abs() < 1e-9, "ratios should normalize to 1.0, got {total_ratio}");
+            assert!(
+                (total_ratio - 1.0).abs() < 1e-9,
+                "ratios should normalize to 1.0, got {total_ratio}"
+            );
 
             let a = weights.iter().find(|w| w.source_key == "source-a").unwrap();
             assert!((a.ratio - 0.75).abs() < 1e-9);
@@ -573,10 +584,10 @@ mod tests {
     #[test]
     fn parse_influence_arg_parses_multiple_pairs() {
         let parsed = parse_influence_arg("src-a=2.5,src-b=1.5").unwrap();
-        assert_eq!(parsed, vec![
-            ("src-a".to_string(), 2.5),
-            ("src-b".to_string(), 1.5),
-        ]);
+        assert_eq!(
+            parsed,
+            vec![("src-a".to_string(), 2.5), ("src-b".to_string(), 1.5),]
+        );
     }
 
     #[test]

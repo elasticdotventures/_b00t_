@@ -96,8 +96,10 @@ impl OntologyCommands {
                             &datum.ufo_stereotype().to_string(),
                         );
                         for iso_id in constraint.iso_standard_ids() {
-                            let _ =
-                                crate::commands::evidence::record_audited_by(&datum.b00t.name, &iso_id);
+                            let _ = crate::commands::evidence::record_audited_by(
+                                &datum.b00t.name,
+                                &iso_id,
+                            );
                         }
                     }
                 }
@@ -383,8 +385,14 @@ pub fn sparql_query(
                 if !datum.validate.command.is_empty() {
                     triples.push(emit("b00t:validateCmd", &datum.validate.command));
                     let result = datum.satisfies(&DatumValidateConstraint);
-                    triples.push(emit("b00t:validateDisposition", &result.disposition.to_string()));
-                    triples.push(emit("b00t:validateConfidence", &result.confidence.to_string()));
+                    triples.push(emit(
+                        "b00t:validateDisposition",
+                        &result.disposition.to_string(),
+                    ));
+                    triples.push(emit(
+                        "b00t:validateConfidence",
+                        &result.confidence.to_string(),
+                    ));
                 }
             }
             _ => {

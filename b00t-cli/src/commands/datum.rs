@@ -4,7 +4,9 @@ use crate::datum_utils::{self, DatumFilter};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use ufo_types::{Disposition, IsoAuditable, Satisfies, SatisfiesResult, Stereotyped, UfoStereotype};
+use ufo_types::{
+    Disposition, IsoAuditable, Satisfies, SatisfiesResult, Stereotyped, UfoStereotype,
+};
 
 #[derive(Parser, Debug)]
 pub enum DatumCommands {
@@ -202,7 +204,9 @@ pub enum DatumCommands {
         all: bool,
     },
 
-    #[clap(about = "Aggregate pass/warn/fail health report across all datums + store status (#694)")]
+    #[clap(
+        about = "Aggregate pass/warn/fail health report across all datums + store status (#694)"
+    )]
     HealthReport {
         #[clap(long, help = "Output format: table|json", default_value = "table")]
         format: String,
@@ -223,9 +227,10 @@ pub enum DatumCommands {
 
 pub async fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> Result<()> {
     match datum_command {
-        DatumCommands::Show { name, as_agent_token } => {
-            handle_show(path, name, as_agent_token.as_deref()).await
-        }
+        DatumCommands::Show {
+            name,
+            as_agent_token,
+        } => handle_show(path, name, as_agent_token.as_deref()).await,
         DatumCommands::Tree {
             output,
             group_by_type,
@@ -291,7 +296,11 @@ pub async fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> 
             .join()
             .map_err(|_| anyhow::anyhow!("semantic-search thread panicked"))?
         }
-        DatumCommands::Validate { target, strict, graph } => {
+        DatumCommands::Validate {
+            target,
+            strict,
+            graph,
+        } => {
             if *graph {
                 handle_validate_graph(path, *strict)
             } else {
@@ -334,12 +343,17 @@ pub async fn handle_datum_command(path: &str, datum_command: &DatumCommands) -> 
     }
 }
 
-async fn handle_show(b00t_path: &str, datum_name: &str, as_agent_token: Option<&str>) -> Result<()> {
+async fn handle_show(
+    b00t_path: &str,
+    datum_name: &str,
+    as_agent_token: Option<&str>,
+) -> Result<()> {
     // #1104: when --as-agent-token is given, gate the read path on a k8s
     // TokenReview + role-shard-access RoleBinding check (scoped to
     // datum:<datum_name>) rather than ambient trust.
     if let Some(token) = as_agent_token {
-        let scope = crate::soul_scope::SoulScope::new(crate::soul_scope::ShardKind::Datum, datum_name);
+        let scope =
+            crate::soul_scope::SoulScope::new(crate::soul_scope::ShardKind::Datum, datum_name);
         crate::agent_token::authorize_shard_token(token, &scope)
             .await
             .context("datum show --as-agent-token")?;
@@ -940,9 +954,16 @@ fn parse_datum_type(s: &str) -> Option<crate::DatumType> {
     crate::DatumType::from_type_token(s)
 }
 
-/// Known TOML keys in [b00t] section, derived from BootDatum struct fields.
-/// 🤓 single source of truth: update this when BootDatum adds/removes fields.
-///    `type` maps to BootDatum::datum_type (serde rename).
+/// Known TOML keys in the [b00t] section.
+/// 🤓 TWO sources, both authoritative:
+///    1. BootDatum struct fields (b00t-cli/src/boot_datum.rs) — `type` maps to
+///       BootDatum::datum_type via serde rename.
+///    2. Sibling raw-TOML structs that parse [b00t.X] sections BootDatum does
+///       not carry (see the block at the end of this list).
+///    Update this when either changes, or `datum validate` emits false
+///    "unknown field" warnings. Free-form knowledge sections in .datum.toml /
+///    .tomllmd files are intentionally NOT listed — those are documentation
+///    payloads, not parsed config, and still warn by design.
 const KNOWN_B00T_KEYS: &[&str] = &[
     "name",
     "type",
@@ -1016,6 +1037,32 @@ const KNOWN_B00T_KEYS: &[&str] = &[
     "usage",
     "dsn",
     "protocol",
+    // 🤓 drift repair — these BootDatum fields were missing, so every datum using
+    //    them emitted a false "unknown field" WARN. Keep in sync with BootDatum.
+    "ai_provision",
+    "compose",
+    "maintenance",
+    "model_hf_id",
+    "model_size_4bit_gb",
+    "model_size_gb",
+    "pipeline",
+    "polyseme",
+    "required_for_core",
+    "requires_competency",
+    "runtime",
+    "trigger_words",
+    // 🤓 Sibling parse targets — these [b00t.X] sections are real and read by
+    //    b00t, but by dedicated raw-TOML structs rather than BootDatum, so the
+    //    "derived from BootDatum" framing is only half the schema.
+    //    Without them the validator emits a false "unknown field" WARN on every
+    //    datum that uses them (34 datums declare [b00t.hive.*], 20 [b00t.agent],
+    //    16 [b00t.schema], 8 [b00t.cli]).
+    "hive",            // hive.rs::HiveToml — [b00t.hive.service|resources|exclusion]
+    "agent",           // agent datum facet — [b00t.agent.executor|ipc|crew|bouncer|mcp]
+    "cli",             // cli datum facet
+    "schema",          // reference/schema datums — [b00t.schema]
+    "daily_routine",   // maintenance daemon
+    "remediation",     // health-check remediation steps
 ];
 
 /// Validate a datum file against BootDatum schema.
@@ -1239,7 +1286,10 @@ fn handle_validate_graph(datum_path: &str, strict: bool) -> Result<()> {
     let diagnostics = store.diagnose_references();
 
     if diagnostics.is_empty() {
-        println!("datum graph: valid ({} datums loaded from {datum_path})", store.len());
+        println!(
+            "datum graph: valid ({} datums loaded from {datum_path})",
+            store.len()
+        );
         let scan = store.scan_diagnostics();
         if !scan.degraded.is_empty() {
             eprintln!(
@@ -1827,7 +1877,11 @@ fn govern_one(datum: &crate::BootDatum, path: &str) -> GovernReport {
 }
 
 fn print_govern_report_table(report: &GovernReport) {
-    let overall = if report.healthy { "✅ healthy" } else { "❌ unhealthy" };
+    let overall = if report.healthy {
+        "✅ healthy"
+    } else {
+        "❌ unhealthy"
+    };
     println!("# {} — {}", report.datum, overall);
     println!(
         "  proved: {} — {}",
@@ -2350,11 +2404,25 @@ mod govern_tests {
 
         let report = govern_one(&datum, path);
 
-        assert!(report.proved.passed, "proof should pass: {}", report.proved.detail);
+        assert!(
+            report.proved.passed,
+            "proof should pass: {}",
+            report.proved.detail
+        );
         assert_eq!(report.gated.len(), 1);
-        assert!(report.gated[0].passed, "gate should pass: {}", report.gated[0].reason);
-        assert!(report.hooked.passed, "no hook_detect should default to passed");
-        assert!(report.healthy, "datum with passing proof/gate/hook should be healthy");
+        assert!(
+            report.gated[0].passed,
+            "gate should pass: {}",
+            report.gated[0].reason
+        );
+        assert!(
+            report.hooked.passed,
+            "no hook_detect should default to passed"
+        );
+        assert!(
+            report.healthy,
+            "datum with passing proof/gate/hook should be healthy"
+        );
     }
 
     #[test]
@@ -2382,13 +2450,21 @@ mod govern_tests {
             !report.gated[0].passed,
             "gate on a missing env var should fail"
         );
-        assert!(!report.healthy, "unhealthy gate should make the datum unhealthy");
+        assert!(
+            !report.healthy,
+            "unhealthy gate should make the datum unhealthy"
+        );
     }
 
     #[test]
     fn govern_all_skips_disabled_datums() {
         let temp_dir = TempDir::new().unwrap();
-        write_fixture(&temp_dir, "active-cli", "cli", "version = \"active-cli --version\"\n");
+        write_fixture(
+            &temp_dir,
+            "active-cli",
+            "cli",
+            "version = \"active-cli --version\"\n",
+        );
         write_fixture(
             &temp_dir,
             "disabled-cli",
@@ -2436,7 +2512,11 @@ hint = "a clean datum"
             filename: "clean-cli.cli.toml",
         };
         let result = subject.satisfies(&BootDatumSchemaConstraint { strict: true });
-        assert!(result.is_satisfied(), "expected Satisfied, got {:?}", result.disposition);
+        assert!(
+            result.is_satisfied(),
+            "expected Satisfied, got {:?}",
+            result.disposition
+        );
     }
 
     #[test]
@@ -2517,10 +2597,7 @@ hint = "t"
             raw: &table,
             filename: "docker-thing.docker.toml",
         };
-        assert_eq!(
-            subject.ufo_stereotype(),
-            DatumType::Docker.ufo_stereotype()
-        );
+        assert_eq!(subject.ufo_stereotype(), DatumType::Docker.ufo_stereotype());
     }
 
     #[test]
@@ -2589,17 +2666,14 @@ hint = "exercises the evidence sink"
 
             let records = read_evidence().unwrap();
             assert!(
-                records
-                    .iter()
-                    .any(|r| r.subject == target
-                        && r.object.as_str().map_or(false, |o| o.starts_with("isA:"))),
+                records.iter().any(|r| r.subject == target
+                    && r.object.as_str().map_or(false, |o| o.starts_with("isA:"))),
                 "expected an isA: evidence record, got: {:?}",
                 records
             );
             assert!(
                 records.iter().any(|r| r.subject == target
-                    && r
-                        .object
+                    && r.object
                         .as_str()
                         .map_or(false, |o| o.starts_with("audited_by:"))),
                 "expected an audited_by: evidence record, got: {:?}",
