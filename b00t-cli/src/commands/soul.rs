@@ -1314,9 +1314,27 @@ fn df_table_show(name: &str) -> Result<()> {
     println!("table: {name}");
     println!("rows:  {}", df.rows.len());
     println!("columns:");
-    for c in &df.columns {
-        let nullable = if c.nullable { "?" } else { "" };
-        println!("  {}{}: {:?}", c.name, nullable, c.col_type);
+    if df.columns.is_empty() {
+        // #1273: Schemaless table — derive column set from row fields
+        let mut seen = std::collections::HashSet::new();
+        let mut derived: Vec<&str> = Vec::new();
+        for row in &df.rows {
+            for key in row.fields.keys() {
+                if seen.insert(key.as_str()) {
+                    derived.push(key.as_str());
+                }
+            }
+        }
+        if derived.is_empty() {
+            println!("  (schemaless, no rows yet)");
+        } else {
+            println!("  (schemaless — derived from rows: {})", derived.join(", "));
+        }
+    } else {
+        for c in &df.columns {
+            let nullable = if c.nullable { "?" } else { "" };
+            println!("  {}{}: {:?}", c.name, nullable, c.col_type);
+        }
     }
     let alarms: Vec<_> = reg.alarms.iter().filter(|a| a.table == name).collect();
     if !alarms.is_empty() {
@@ -1398,8 +1416,22 @@ fn df_frame_dump(table: &str, last: Option<usize>, scope: Option<SoulScope>) -> 
         println!("(no rows in '{table}')");
         return Ok(());
     }
-    // collect all column keys in order
-    let cols: Vec<&str> = df.columns.iter().map(|c| c.name.as_str()).collect();
+    // collect all column keys — use declared schema, or derive from row fields
+    let cols: Vec<&str> = if df.columns.is_empty() {
+        // #1273: Schemaless table — derive column set from union of row field keys
+        let mut seen = std::collections::HashSet::new();
+        let mut derived = Vec::new();
+        for row in &rows {
+            for key in row.fields.keys() {
+                if seen.insert(key.as_str()) {
+                    derived.push(key.as_str());
+                }
+            }
+        }
+        derived
+    } else {
+        df.columns.iter().map(|c| c.name.as_str()).collect()
+    };
     print!("{:>4}  {:19}", "id", "created_at");
     for c in &cols {
         print!("  {:<16}", c);

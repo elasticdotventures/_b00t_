@@ -21,9 +21,11 @@ pub struct JustfileDatum {
 
 impl JustfileDatum {
     pub fn from_config(name: &str, path: &str) -> Result<Self> {
-        let (config, _filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
+        let (config, filename) = get_config(name, path).map_err(|e| anyhow!("{}", e))?;
         let datum = config.b00t;
-        let justfile_path = Self::resolve_justfile_path(&datum, path)?;
+        // #1308: resolve symlinked datums against the real file's directory
+        let base = crate::datum_utils::resolve_datum_base_dir(path, &filename);
+        let justfile_path = Self::resolve_justfile_path(&datum, &base.display().to_string())?;
         Ok(JustfileDatum {
             datum,
             justfile_path,

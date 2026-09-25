@@ -34,6 +34,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # #1333: libgit2's submodule handling flakes inside the CI container when
+  # fetching zvec-rust's large nested submodule tree. System git is reliable.
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   check:

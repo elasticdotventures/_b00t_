@@ -1133,10 +1133,13 @@ fn resolve_recursive(
     visited.insert(name.to_string());
 
     // Load datum to get dependencies
+    // #1206: check .mcp.toml, .cli.toml, and bare .toml (datum type suffixes
+    // like .job.toml, .runtime.toml, etc. are encoded in the filename)
     let config_path = path.join(format!("{}.mcp.toml", name));
     let cli_config_path = path.join(format!("{}.cli.toml", name));
+    let bare_config_path = path.join(format!("{}.toml", name));
 
-    if !config_path.exists() && !cli_config_path.exists() {
+    if !config_path.exists() && !cli_config_path.exists() && !bare_config_path.exists() {
         anyhow::bail!("Datum not found: {}", name);
     }
 
