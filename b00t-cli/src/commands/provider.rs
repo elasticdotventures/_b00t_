@@ -116,6 +116,22 @@ pub struct BatchJobSpec {
     /// is a path relative to CWD.
     #[serde(default)]
     pub inputs: Vec<String>,
+    /// Dataset/resource URIs this job needs — consumed by placement.rs to pick
+    /// a backend_hint/region_hint with matching data residency. Deliberately a
+    /// plain string list (see the design doc's forward-compatibility note —
+    /// not a generic typed Dependency<C: Constraint>; that belongs in the
+    /// deferred ufo-types DAG work).
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    /// Hint that this job tolerates spot/preemptible compute.
+    #[serde(default)]
+    pub interruptible: bool,
+    /// Resolved by placement.rs; None means "let dstack pick from whatever
+    /// backends the operator's config.yml has configured" (today's behavior).
+    #[serde(default)]
+    pub backend_hint: Option<String>,
+    #[serde(default)]
+    pub region_hint: Option<String>,
 }
 
 fn default_gpu_count() -> u32 { 1 }
@@ -831,6 +847,10 @@ impl ComputeProvider for DstackProvider {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml(&name, &batch_spec);
         submit_dstack_yaml(self, &name, &yaml, batch_spec.gpu_count, &batch_spec.inputs)
@@ -1686,6 +1706,10 @@ async fn handle_job(cmd: ProviderJobCommands) -> Result<()> {
                 gpu_count: 1,
                 volumes: vec![],
                 inputs: vec![],
+                dependencies: vec![],
+                interruptible: false,
+                backend_hint: None,
+                region_hint: None,
             };
             let handle = p.submit_batch_job(&spec).await?;
             println!("{}", serde_json::to_string_pretty(&handle)?);
@@ -1838,6 +1862,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         }
     }
 
@@ -1959,6 +1987,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-abc123", &spec);
         assert!(yaml.contains("type: task"));
@@ -2052,6 +2084,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![VolumeMount { name: "b00t-mesh-cache".into(), path: "/cache".into() }],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-abc", &spec);
         assert!(yaml.contains("volumes:"));
@@ -2070,6 +2106,10 @@ mod batch_job_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         };
         let yaml = dstack_task_yaml("b00t-job-def", &spec);
         assert!(!yaml.contains("volumes:"));
@@ -2186,6 +2226,28 @@ mod batch_job_tests {
         let copied = dest_dir.path().join("photo.png");
         assert!(copied.exists());
         assert_eq!(std::fs::read(&copied).unwrap(), b"fake-image-bytes");
+    }
+
+    #[test]
+    fn batch_job_spec_new_fields_default_to_empty_and_false() {
+        let spec = BatchJobSpec {
+            image: "test:latest".into(),
+            config_path: "/tmp/config.json".into(),
+            env: Default::default(),
+            flavor: "cpu".into(),
+            timeout_hours: 1.0,
+            gpu_count: 1,
+            volumes: vec![],
+            inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
+        };
+        assert!(spec.dependencies.is_empty());
+        assert!(!spec.interruptible);
+        assert_eq!(spec.backend_hint, None);
+        assert_eq!(spec.region_hint, None);
     }
 }
 
@@ -2443,6 +2505,10 @@ mod runpod_tests {
             gpu_count: 1,
             volumes: vec![],
             inputs: vec![],
+            dependencies: vec![],
+            interruptible: false,
+            backend_hint: None,
+            region_hint: None,
         }
     }
 
@@ -2802,5 +2868,76 @@ mod runpod_tests {
             provider.client.call_log(),
             ["create_pod", "get_pod:mock-pod", "delete_pod:mock-pod"]
         );
+    }
+}
+
+#[cfg(test)]
+mod batch_job_spec_tests {
+    use super::*;
+
+    /// Verifies backward compatibility: jobs serialized before the
+    /// dependencies/interruptible/backend_hint/region_hint fields were added
+    /// deserialize correctly with default values.
+    #[test]
+    fn batch_job_spec_deserializes_old_format_without_new_fields() {
+        // Simulates a job spec as it existed before the 4 new fields were added
+        let old_json = r#"{
+            "image": "fake:latest",
+            "config_path": "/tmp/request.json",
+            "env": {},
+            "flavor": "gpu-1",
+            "timeout_hours": 2.0,
+            "gpu_count": 1,
+            "volumes": [],
+            "inputs": []
+        }"#;
+
+        let spec: BatchJobSpec = serde_json::from_str(old_json).expect(
+            "Old format without dependencies/interruptible/backend_hint/region_hint should deserialize"
+        );
+
+        assert_eq!(spec.image, "fake:latest");
+        assert_eq!(spec.config_path, "/tmp/request.json");
+        assert_eq!(spec.flavor, "gpu-1");
+        assert_eq!(spec.timeout_hours, 2.0);
+        assert_eq!(spec.gpu_count, 1);
+        assert!(spec.volumes.is_empty());
+        assert!(spec.inputs.is_empty());
+
+        // New fields should default correctly
+        assert!(spec.dependencies.is_empty());
+        assert!(!spec.interruptible);
+        assert!(spec.backend_hint.is_none());
+        assert!(spec.region_hint.is_none());
+    }
+
+    /// Verifies the new format with all fields serializes and deserializes correctly.
+    #[test]
+    fn batch_job_spec_deserializes_new_format_with_all_fields() {
+        let new_json = r#"{
+            "image": "fake:latest",
+            "config_path": "/tmp/request.json",
+            "env": {},
+            "flavor": "gpu-1",
+            "timeout_hours": 2.0,
+            "gpu_count": 1,
+            "volumes": [],
+            "inputs": ["dataset-1", "model-2"],
+            "dependencies": ["preprocessing-job-id", "data-prep-job-id"],
+            "interruptible": true,
+            "backend_hint": "runpod",
+            "region_hint": "us-east"
+        }"#;
+
+        let spec: BatchJobSpec = serde_json::from_str(new_json).expect(
+            "New format with all fields should deserialize"
+        );
+
+        assert_eq!(spec.image, "fake:latest");
+        assert_eq!(spec.inputs, vec!["dataset-1", "model-2"]);
+        assert_eq!(spec.dependencies, vec!["preprocessing-job-id", "data-prep-job-id"]);
+        assert!(spec.interruptible);
+        assert_eq!(spec.backend_hint, Some("runpod".to_string()));
+        assert_eq!(spec.region_hint, Some("us-east".to_string()));
     }
 }
