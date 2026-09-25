@@ -791,6 +791,59 @@ mod tests {
         assert_eq!(scene.nodes.len(), 0);
         assert_eq!(scene.edges.len(), 0);
     }
+
+    fn small_scene() -> SceneGraph {
+        let mut scene = SceneGraph::new(1.0);
+        scene.add_node(SceneNode {
+            id: "a".into(),
+            label: "Alpha Node".into(),
+            position: Point3D::new(0.0, 0.0, 0.0),
+            role: SemanticRole::Ingest,
+            arm_index: Some(0),
+            is_default: true,
+        });
+        scene.add_node(SceneNode {
+            id: "b".into(),
+            label: "Beta Node".into(),
+            position: Point3D::new(1.0, 0.0, 0.0),
+            role: SemanticRole::Commit,
+            arm_index: Some(1),
+            is_default: false,
+        });
+        scene.add_edge(SceneEdge {
+            from: "a".into(),
+            to: "b".into(),
+            label: Some("feeds".into()),
+            is_bezier: false,
+        });
+        scene
+    }
+
+    #[test]
+    fn scene_to_sysmlv2_contains_a_part_def_per_node() {
+        let scene = small_scene();
+        let sysml = scene_to_sysmlv2(&scene);
+        assert!(
+            sysml.contains("part def 'Alpha Node';"),
+            "missing Alpha Node part def in:\n{sysml}"
+        );
+        assert!(
+            sysml.contains("part def 'Beta Node';"),
+            "missing Beta Node part def in:\n{sysml}"
+        );
+    }
+
+    #[test]
+    fn sysml_v2_export_round_trips_through_the_real_parser() {
+        let scene = small_scene();
+        let sysml = scene_to_sysmlv2(&scene);
+        let result = ufo_types::sysml::validate_sysml_v2(&sysml);
+        assert!(
+            result.disposition.is_satisfied(),
+            "scene_to_sysmlv2() output failed to parse as SysML v2: {:?}\n---\n{sysml}",
+            result.disposition
+        );
+    }
 }
 
 // ── New format emitters: Cytoscape.js JSON, SysMLv2 textual, OWL2 Turtle ────
@@ -826,27 +879,86 @@ pub fn scene_to_cytoscape(scene: &SceneGraph) -> String {
     .unwrap_or_default()
 }
 
-/// SysMLv2 textual notation — minimal `package` / `part def` / `connection def` blocks.
+/// Wrap an arbitrary `SceneGraph` string (a node label, or a raw node id used
+/// as an edge endpoint) as a SysML v2 *restricted name* — single-quoted, with
+/// embedded `'`/`\` escaped — so it is always a syntactically valid KerML
+/// name regardless of what characters the scene data happens to contain
+/// (spaces, `#`, `.`, digits-first, …).
+fn quote_sysml_name(raw: &str) -> String {
+    format!("'{}'", raw.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+/// SysMLv2 textual notation, routed through `ufo_types::sysml_model::emit_kerml()`
+/// — the same validated emitter `dispatch_sysml.rs`'s
+/// `dispatch_chain_to_sysml_v2()` uses — instead of hand-building the string.
+///
+/// Mapping notes (see
+/// `docs/superpowers/specs/2026-09-25-project-scope-and-ontology-pipeline-design.md`
+/// §D for the design rationale):
+///
+/// - Each [`SceneNode`] becomes a `part def` ([`ufo_types::sysml_model::ElementKind::PartDefinition`]),
+///   named after the node's `label` (quoted via [`quote_sysml_name`]), matching
+///   the previous hand-rolled emitter's part-naming convention.
+/// - `emit_kerml()` only emits a bare `part def '<name>';` — it has no
+///   supported way to attach a `doc` comment body to a `PartDefinition`
+///   without forking/duplicating its rendering logic (which the design intends to avoid: "do not
+///   fork/duplicate the emitter logic itself"). So each node's `role` is
+///   **no longer rendered** as a doc comment the way the previous hand-rolled
+///   version did (`doc /* role: ... */` inside the part body) — this is a
+///   real, intentional loss of that one piece of human-readable text, traded
+///   for routing through the validated emitter. `role` is still present on
+///   `SceneNode` itself for any other consumer of the scene (svg, cytoscape,
+///   ascii, …).
+/// - Each [`SceneEdge`] becomes a [`ufo_types::sysml_model::Relation::Domain`]
+///   (source = quoted `edge.from`, target = quoted `edge.to`, `kind` = the
+///   edge's own label, or `"connects"`), matching (bug-for-bug, deliberately)
+///   the previous emitter's behavior of referencing edge endpoints by their
+///   raw `SceneEdge::from`/`to` id strings rather than resolving them to the
+///   matching node's part-def name. `Relation::Domain` is documented as the
+///   escape hatch for exactly this shape of edge: a `SceneEdge` is a
+///   general-purpose visualization edge (a task dependency, a blessing
+///   delegation, a datum entanglement, …), not guaranteed to be a formal
+///   KerML/SysML v2 physical `Connection`. `emit_kerml()`'s relation-comment
+///   renderer prints only the relation's fixed KerML name (`Domain`) and its
+///   two endpoints, not the free-form `kind` field, so (as with `role` above)
+///   the edge's label text itself does not appear in the emitted text either
+///   — same tradeoff, same cause.
 pub fn scene_to_sysmlv2(scene: &SceneGraph) -> String {
-    let mut out = String::from("package B00tGraph {\n");
-    for node in &scene.nodes {
-        out.push_str(&format!(
-            "    part def '{}' {{\n        doc /* role: {} */\n    }}\n",
-            node.label, node.role
-        ));
-    }
-    for edge in &scene.edges {
-        let label = edge.label.as_deref().unwrap_or("connects");
-        out.push_str(&format!(
-            "    connection def '{label}' connect '{}' to '{}';\n",
-            edge.from, edge.to
-        ));
-    }
-    out.push_str("}\n");
-    out
+    use ufo_types::sysml_model::{ElementId, ElementKind, Relation, emit_kerml};
+
+    let elements: Vec<(ElementId, ElementKind)> = scene
+        .nodes
+        .iter()
+        .map(|n| {
+            (
+                ElementId::new(quote_sysml_name(&n.label)),
+                ElementKind::PartDefinition,
+            )
+        })
+        .collect();
+
+    let relations: Vec<Relation> = scene
+        .edges
+        .iter()
+        .map(|e| Relation::Domain {
+            source: ElementId::new(quote_sysml_name(&e.from)),
+            target: ElementId::new(quote_sysml_name(&e.to)),
+            kind: e.label.clone().unwrap_or_else(|| "connects".to_string()),
+        })
+        .collect();
+
+    emit_kerml("B00tGraph", &elements, &relations)
 }
 
 /// OWL2 Turtle serialisation — each node is an `owl:Class`, each edge is an `owl:ObjectProperty`.
+///
+/// Left as the pre-existing hand-rolled emitter, deliberately not migrated
+/// alongside [`scene_to_sysmlv2`]: `ufo_types` (checked in
+/// `~/.cargo/git/checkouts/ufo-types-*/*/src/`, no `owl`/`turtle` module or
+/// function anywhere in the crate) exposes no OWL2/Turtle emitter to route
+/// through, so there is no validated pattern here to migrate to — forcing
+/// this into `sysml_model::emit_kerml()`'s KerML-only shape would be a
+/// mismatched fit, not a DRY win.
 pub fn scene_to_owl2(scene: &SceneGraph) -> String {
     let mut out = String::from(
         "@prefix ex: <https://b00t.promptexecution.com/ontology#> .\n\
