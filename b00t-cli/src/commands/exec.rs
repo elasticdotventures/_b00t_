@@ -27,27 +27,27 @@ const BLOCK_TTL_SECS: u64 = 300; // 5 min re-submission window
 
 /// The executable head used for command guards.
 ///
-/// Exec receives already-tokenized arguments, so matching a guard against the
-/// complete joined vector makes descriptive data (for example a GH body value)
-/// indistinguishable from an executable command. Direct commands only need
-/// their program and leading subcommand/flag tokens. Shell -c remains a
-/// special case because its script argument is the executable program.
+/// Exec receives already-tokenized arguments. Preserve every command token so
+/// guards can inspect destinations and values (for example `git push origin
+/// main`). GitHub title/body values are descriptive data, so omit those flag
+/// values from the guard subject while retaining the operation itself.
 fn guard_subject(command: &[String]) -> String {
-    let invokes_shell_script = matches!(
-        command.first().map(String::as_str),
-        Some("sh" | "bash" | "zsh" | "fish")
-    ) && command.iter().any(|argument| argument == "-c");
-
-    if invokes_shell_script {
-        command.join(" ")
-    } else {
-        command
-            .iter()
-            .take(3)
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(" ")
+    if command.first().map(String::as_str) != Some("gh") {
+        return command.join(" ");
     }
+
+    let mut subject = Vec::with_capacity(command.len());
+    let mut tokens = command.iter();
+    while let Some(token) = tokens.next() {
+        match token.as_str() {
+            "--body" | "--title" => {
+                tokens.next();
+            }
+            value if value.starts_with("--body=") || value.starts_with("--title=") => {}
+            value => subject.push(value),
+        }
+    }
+    subject.join(" ")
 }
 
 #[cfg(test)]
@@ -72,6 +72,13 @@ mod guard_subject_tests {
         let command = vec!["bash".into(), "-c".into(), "just test".into()];
 
         assert_eq!(guard_subject(&command), "bash -c just test");
+    }
+
+    #[test]
+    fn keeps_all_direct_command_tokens_for_guard_matching() {
+        let command = vec!["git".into(), "push".into(), "origin".into(), "main".into()];
+
+        assert_eq!(guard_subject(&command), "git push origin main");
     }
 }
 

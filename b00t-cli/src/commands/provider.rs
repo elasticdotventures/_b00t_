@@ -1508,7 +1508,7 @@ pub enum DstackSubCommands {
 pub enum EndpointCommands {
     #[clap(about = "Deploy serverless inference endpoint")]
     Deploy {
-        #[clap(long, default_value = "hf")]
+        #[clap(long)]
         provider: String,
         #[clap(long, default_value = "b00t-ch0nky")]
         name: String,
@@ -1521,19 +1521,19 @@ pub enum EndpointCommands {
     },
     #[clap(about = "Show endpoint status")]
     Status {
-        #[clap(long, default_value = "hf")]
+        #[clap(long)]
         provider: String,
         id: String,
     },
     #[clap(about = "Tear down endpoint")]
     Teardown {
-        #[clap(long, default_value = "hf")]
+        #[clap(long)]
         provider: String,
         id: String,
     },
     #[clap(about = "List all endpoints")]
     List {
-        #[clap(long, default_value = "hf")]
+        #[clap(long)]
         provider: String,
     },
 }
@@ -1789,6 +1789,22 @@ async fn handle_dstack(cmd: DstackSubCommands) -> Result<()> {
 #[cfg(test)]
 mod provider_selection_tests {
     use super::*;
+
+    #[test]
+    fn endpoint_commands_require_an_explicit_provider() {
+        for args in [
+            vec!["endpoint", "deploy"],
+            vec!["endpoint", "status", "endpoint-id"],
+            vec!["endpoint", "teardown", "endpoint-id"],
+            vec!["endpoint", "list"],
+        ] {
+            let error = match EndpointCommands::try_parse_from(args) {
+                Ok(_) => panic!("endpoint command must require --provider"),
+                Err(error) => error,
+            };
+            assert!(error.to_string().contains("--provider"));
+        }
+    }
 
     #[cfg(not(feature = "runpod"))]
     #[test]
