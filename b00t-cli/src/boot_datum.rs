@@ -216,6 +216,18 @@ pub struct BootDatum {
     pub depends_on: Option<Vec<String>>,
     pub members: Option<Vec<String>>,
 
+    // #1345: External references (ReqIF requirements, specs, standards).
+    // TOML: `[b00t] satisfies = ["reqif://...#REQ-001"]`
+    // Relationship verbs are fixed and enumerable (ufo_types::RefRelationship).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub satisfies: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constrains: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts_with: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verifies: Vec<String>,
+
     /// Payload of a `DatumType::AgentProfile` (`.agentprofile.toml`) — the
     /// signed r0le package. `[b00t.agent_profile]` in the datum file.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -302,6 +314,37 @@ pub struct BootDatum {
 use crate::ApiProvides;
 
 impl BootDatum {
+    /// Collect all external references (ReqIF requirements, specs, standards).
+    ///
+    /// Returns `Vec<ExternalRef>` by mapping each relationship verb's URI list
+    /// through `ufo_types::Uri::parse`. Relationship verbs are fixed and
+    /// enumerable per `ufo_types::RefRelationship`.
+    pub fn external_refs(&self) -> Vec<crate::external_refs::ExternalRef> {
+        use crate::external_refs::{ExternalRef, RefRelationship, Uri};
+
+        let mut refs = Vec::new();
+        for (verb, uris) in [
+            (RefRelationship::Satisfies, &self.satisfies),
+            (RefRelationship::Constrains, &self.constrains),
+            (RefRelationship::ConflictsWith, &self.conflicts_with),
+            (RefRelationship::Verifies, &self.verifies),
+        ] {
+            for uri_str in uris.iter() {
+                refs.push(ExternalRef::new(verb, Uri::parse(uri_str)));
+            }
+        }
+        // depends_on already exists as a separate field — include it as DependsOn refs
+        if let Some(ref deps) = self.depends_on {
+            for dep in deps {
+                refs.push(ExternalRef::new(
+                    RefRelationship::DependsOn,
+                    Uri::parse(dep),
+                ));
+            }
+        }
+        refs
+    }
+
     /// Type identity string: `{type_prefix}_{name}`.
     ///
     /// Deterministic — same name + same DatumType always produces the same ID.
