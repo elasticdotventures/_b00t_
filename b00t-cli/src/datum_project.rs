@@ -691,7 +691,7 @@ mod tests {
         std::fs::create_dir_all(&b00t_dir).unwrap();
 
         write_provider_selection(&b00t_dir, "jira").unwrap();
-        let err = select_provider(&b00t_dir).unwrap_err();
+        let err = select_provider(&b00t_dir).err().expect("should error for jira without config");
         assert!(err.to_string().contains("[b00t.project.jira]"));
     }
 
@@ -702,7 +702,7 @@ mod tests {
         std::fs::create_dir_all(&b00t_dir).unwrap();
 
         write_provider_selection(&b00t_dir, "carrier-pigeon").unwrap();
-        let err = select_provider(&b00t_dir).unwrap_err();
+        let err = select_provider(&b00t_dir).err().expect("should error for unknown provider");
         assert!(err.to_string().contains("unknown"));
     }
 
@@ -755,7 +755,8 @@ mod tests {
                 requirement_id: "REQ-1".into(),
                 note: None,
             })
-            .unwrap_err();
+            .err()
+            .expect("should error for nonexistent task");
         assert!(err.to_string().contains("no local task"));
     }
 
