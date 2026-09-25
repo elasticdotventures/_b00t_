@@ -784,6 +784,30 @@ The system will:
         project_command: b00t_cli::commands::ProjectCommands,
     },
     #[clap(
+        about = "The literal filesystem anchor: create/discover ./_b00t_/ walking up from cwd",
+        long_about = "rep0 fills the walk-up-discovery gap in --path/_B00T_Path resolution: `rep0 init`\ncreates ./_b00t_/ (idempotent), `rep0 where` walks up from cwd looking for the\nnearest _b00t_/ (git-.git-style ancestor search) and reports it, plus what the\nglobal fallback would be. The nearest hit is also wired into --path's implicit\ndefault resolution (see resolve_datum_dir) when --path/_B00T_Path isn't given\nexplicitly."
+    )]
+    Rep0 {
+        #[clap(subcommand)]
+        rep0_command: b00t_cli::commands::Rep0Commands,
+    },
+    #[clap(
+        about = "Same _b00t_/ anchor primitive as rep0, one tier further out",
+        long_about = "r00t is rep0's own primitive applied one directory level further up the tree —\nreal example: /home/brianh/promptexecution/_b00t_, shared by sibling project\nrepos underneath it. Deliberately its own explicit subcommand rather than\nfolded into --path's silent default chain (reaching two directories up by\ndefault would be more surprising than useful)."
+    )]
+    R00t {
+        #[clap(subcommand)]
+        r00t_command: b00t_cli::commands::R00tCommands,
+    },
+    #[clap(
+        about = "Onboard this directory as a b00t project (rep0 init + soul init + ProjectProvider)",
+        long_about = "Not a plain alias of `soul` — pr0ject init composes rep0 init (./_b00t_/) +\nsoul init (./._b00t_/) + ProjectProvider backend selection/registration as one\nonboarding command. pr0ject task/reqif dispatch to the active ProjectProvider\n(mise/jira/bl/local, selected via [b00t.project] in ./_b00t_/project.toml)."
+    )]
+    Pr0ject {
+        #[clap(subcommand)]
+        pr0ject_command: b00t_cli::commands::Pr0jectCommands,
+    },
+    #[clap(
         about = "Agent context snapshots — save/restore reasoning state for eureka moments",
         long_about = "Save and restore agent reasoning context. Used for:\n  - Eureka moment capture (snapshot insight before context loss)\n  - Context window compaction (/compact integration)\n  - Cross-session state resumption\n\nExamples:\n  b00t context save --message \"found the bug: race condition in session_memory.rs:227\"\n  b00t context list\n  b00t context compact --message \"refactoring datum_type macro, mid-way\"\n  b00t context resume <uuid> --delete"
     )]
@@ -2090,18 +2114,30 @@ fn path_was_explicit(raw_args: &[String]) -> bool {
 /// even when running inside a git repo with its own `_b00t_/`, so
 /// project-local datums were invisible unless `--path` was passed on every
 /// single invocation. An explicit override still always wins (Postel's
-/// law) -- auto-detection only fires for the implicit/default case, by
-/// walking up from cwd for a git root the same way `_b00t_.toml` config
-/// resolution already does (`B00tConfig::find_git_root`), so this doesn't
-/// introduce a second, divergent notion of "repo root."
+/// law) -- auto-detection only fires for the implicit/default case.
+///
+/// 🤓 (rep0/r00t design, docs/superpowers/specs/2026-09-25-...): step 2 of
+/// the 3-tier precedence -- (1) explicit --path/_B00T_Path, (2) nearest
+/// _b00t_/ walking up from cwd, (3) this fn's `fallback_path` argument --
+/// now delegates to the same general ancestor walk-up `b00t rep0 where`
+/// uses (`commands::rep0::find_b00t_ancestors`), rather than the narrower
+/// git-root-specific check this originally shipped with. Strictly more
+/// permissive: any git-root-anchored `_b00t_/` the old check found is still
+/// found (the git root is just one ancestor among the ones now walked), and
+/// it additionally finds project-local `_b00t_/` dirs that aren't at the
+/// git root, or that exist without a `.git` at all. `r00t`'s *further*
+/// ancestor hit is deliberately NOT wired in here -- see `Commands::R00t`'s
+/// long_about for why.
 fn resolve_datum_dir(fallback_path: &str, explicit: bool) -> String {
     if explicit {
         return fallback_path.to_string();
     }
-    if let Ok(repo_root) = b00t_cli::datum_config::B00tConfig::find_git_root() {
-        let candidate = repo_root.join("_b00t_");
-        if candidate.is_dir() {
-            return candidate.to_string_lossy().to_string();
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(nearest) = b00t_cli::commands::rep0::find_b00t_ancestors(&cwd)
+            .into_iter()
+            .next()
+        {
+            return nearest.to_string_lossy().to_string();
         }
     }
     fallback_path.to_string()
@@ -3393,6 +3429,30 @@ async fn main() {
         }
         Some(Commands::Project { project_command }) => {
             if let Err(e) = project_command.execute() {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Rep0 { rep0_command }) => {
+            // 🤓 literal kept in sync with `Cli::path`'s own `default_value`
+            //    below (a pre-existing inconsistency already documented near
+            //    resolve_datum_dir's other historical-fallback literal --
+            //    left as-is rather than silently unified).
+            if let Err(e) =
+                b00t_cli::commands::rep0::handle_rep0_command(rep0_command, "~/.dotfiles/_b00t_")
+            {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::R00t { r00t_command }) => {
+            if let Err(e) = b00t_cli::commands::r00t::handle_r00t_command(r00t_command) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some(Commands::Pr0ject { pr0ject_command }) => {
+            if let Err(e) = b00t_cli::commands::pr0ject::handle_pr0ject_command(pr0ject_command) {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }

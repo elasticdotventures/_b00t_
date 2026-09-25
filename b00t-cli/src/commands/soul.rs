@@ -743,7 +743,11 @@ async fn serve_dbus(session: bool, datum_dir: std::path::PathBuf) -> Result<()> 
 // ─── soul init ────────────────────────────────────────────────────────────────
 
 /// Create `._b00t_/` workspace soul directory with skeleton files.
-fn soul_init(target: &std::path::Path) -> Result<()> {
+///
+/// `pub` so `b00t pr0ject init` (sub-project A) can compose it directly
+/// alongside `rep0 init` + provider selection rather than shelling back out
+/// to `b00t soul init` as a subprocess.
+pub fn soul_init(target: &std::path::Path) -> Result<()> {
     let soul_dir = target.join("._b00t_");
     std::fs::create_dir_all(&soul_dir).with_context(|| format!("create {}", soul_dir.display()))?;
 
