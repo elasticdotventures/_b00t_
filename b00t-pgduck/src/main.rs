@@ -94,11 +94,12 @@ impl SimpleQueryHandler for DuckDbBackend {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
+        let query = normalize_postgres_query(query);
         tracing::info!(query, "simple_query");
         let conn = self.conn.lock().unwrap();
         if query.to_uppercase().starts_with("SELECT") {
             let mut stmt = conn
-                .prepare(query)
+                .prepare(&query)
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
             // DuckDB (unlike SQLite) only exposes column metadata AFTER
             // the statement has executed - query() first, then read the
@@ -108,7 +109,7 @@ impl SimpleQueryHandler for DuckDbBackend {
             let s = encode_row_data(rows, header.clone());
             Ok(vec![Response::Query(QueryResponse::new(header, s))])
         } else {
-            conn.execute(query, duckdb::params![])
+            conn.execute(&query, duckdb::params![])
                 .map(|affected_rows| {
                     vec![Response::Execution(Tag::new("OK").with_rows(affected_rows))]
                 })
@@ -173,13 +174,17 @@ fn encode_row_data(
 fn get_params(portal: &Portal<String>) -> Vec<Box<dyn ToSql>> {
     let mut results = Vec::with_capacity(portal.parameter_len());
     for i in 0..portal.parameter_len() {
+        // PostgreSQL clients commonly omit parameter OIDs in Parse and let
+        // the server infer them. pgwire still preserves the bound values in
+        // the Portal, so retain those values when the stored statement has no
+        // corresponding type entry. Text is the safe default for DuckDB's
+        // binder and matches lib/pq's text encoding for Forgejo metadata SQL.
         let param_type = portal
             .statement
             .parameter_types
             .get(i)
-            .unwrap()
-            .as_ref()
-            .unwrap_or(&Type::UNKNOWN);
+            .and_then(|t| t.as_ref())
+            .unwrap_or(&Type::TEXT);
         match param_type {
             &Type::BOOL => {
                 results.push(Box::new(portal.parameter::<bool>(i, param_type).unwrap()) as Box<dyn ToSql>);
@@ -230,9 +235,17 @@ impl ExtendedQueryHandler for DuckDbBackend {
         let conn = self.conn.lock().unwrap();
         let query = &portal.statement.statement;
         tracing::info!(query = query.as_str(), "extended_query");
-        let mut stmt = conn.prepare(query).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        let execution_query = normalize_postgres_query(&query_with_bound_params(query, portal));
+        tracing::info!(execution_query = execution_query.as_str(), parameters = portal.parameter_len(), "extended_query_plan");
+        let mut stmt = conn
+            .prepare(&execution_query)
+            .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
         let params = get_params(portal);
-        let params_ref: Vec<&dyn ToSql> = params.iter().map(|f| f.as_ref()).collect();
+        let params_ref: Vec<&dyn ToSql> = if execution_query == *query {
+            params.iter().map(|f| f.as_ref()).collect()
+        } else {
+            Vec::new()
+        };
 
         if query.to_uppercase().starts_with("SELECT") {
             let rows = stmt.query(params_ref.as_slice()).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
@@ -272,10 +285,17 @@ impl ExtendedQueryHandler for DuckDbBackend {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let conn = self.conn.lock().unwrap();
-        let param_types = stmt
+        let param_count = stmt
             .parameter_types
-            .iter()
-            .map(|t| t.clone().unwrap_or(Type::UNKNOWN))
+            .len()
+            .max(positional_parameter_count(&stmt.statement));
+        let param_types = (0..param_count)
+            .map(|i| {
+                stmt.parameter_types
+                    .get(i)
+                    .and_then(|t| t.clone())
+                    .unwrap_or(Type::TEXT)
+            })
             .collect();
         let fields = describe_query_fields(&conn, &stmt.statement)?;
         Ok(DescribeStatementResponse::new(param_types, fields))
@@ -295,6 +315,15 @@ impl ExtendedQueryHandler for DuckDbBackend {
     }
 }
 
+/// DuckDB accepts most PostgreSQL DDL, but does not implement PostgreSQL's
+/// serial pseudo-types. Forgejo uses BIGSERIAL for its migration version table;
+/// BIGINT preserves the column shape while avoiding a startup failure.
+fn normalize_postgres_query(query: &str) -> String {
+    query
+        .replace("BIGSERIAL", "BIGINT")
+        .replace("bigserial", "bigint")
+}
+
 // See do_describe_statement's comment above for why this exists instead
 // of preparing+describing the real statement directly. `DESCRIBE <query>`
 // is itself a real, executable DuckDB statement (returns column_name,
@@ -309,11 +338,20 @@ fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<Fie
     // some DDL) - no result columns is a valid, non-error Describe
     // response for those, matching what Postgres itself returns for an
     // INSERT/DDL statement with no RETURNING clause.
-    let mut stmt = match conn.prepare(&format!("DESCRIBE {query}")) {
+    let describe_query = query_for_describe(query);
+    let mut stmt = match conn.prepare(&format!("DESCRIBE {describe_query}")) {
         Ok(s) => s,
         Err(_) => return Ok(Vec::new()),
     };
-    let mut rows = stmt.query(duckdb::params![]).map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+    // Describe is called before Bind/Execute. A query may therefore contain
+    // `$n` placeholders with no values yet; DuckDB rejects executing the
+    // metadata statement with an empty parameter list. Returning an empty
+    // schema lets pgwire complete Describe and the real Execute path bind the
+    // values normally.
+    let mut rows = match stmt.query(duckdb::params![]) {
+        Ok(rows) => rows,
+        Err(_) => return Ok(Vec::new()),
+    };
     let mut fields = Vec::new();
     let mut idx = 0usize;
     while let Ok(Some(row)) = rows.next() {
@@ -331,6 +369,84 @@ fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<Fie
     Ok(fields)
 }
 
+/// Replace PostgreSQL positional parameters with NULL literals for DuckDB's
+/// metadata-only DESCRIBE query. The real query is still executed later with
+/// the bound values; this substitution only supplies a type-compatible value
+/// while pgwire is answering Describe before Bind/Execute.
+fn query_for_describe(query: &str) -> String {
+    let bytes = query.as_bytes();
+    let mut out = String::with_capacity(query.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            out.push_str("NULL");
+            i += 2;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+fn positional_parameter_count(query: &str) -> usize {
+    let bytes = query.as_bytes();
+    let mut max_index = 0;
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'$' && bytes[i + 1].is_ascii_digit() {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_digit() { end += 1; }
+            if let Ok(index) = std::str::from_utf8(&bytes[start..end]).unwrap_or("0").parse::<usize>() {
+                max_index = max_index.max(index);
+            }
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    max_index
+}
+
+fn query_with_bound_params(query: &str, portal: &Portal<String>) -> String {
+    if portal.parameter_len() == 0 {
+        return query.to_owned();
+    }
+    let mut out = String::with_capacity(query.len());
+    let bytes = query.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+            let start = i + 1;
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_digit() { end += 1; }
+            let idx = std::str::from_utf8(&bytes[start..end]).ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+            if idx == 0 || idx > portal.parameter_len() {
+                out.push_str("NULL");
+            } else {
+                let value = portal.parameter::<String>(idx - 1, &Type::TEXT).ok().flatten();
+                match value {
+                    Some(value) => {
+                        out.push('\'');
+                        out.push_str(&value.replace('\'', "''"));
+                        out.push('\'');
+                    }
+                    None => out.push_str("NULL"),
+                }
+            }
+            i = end;
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
 impl DuckDbBackend {
     fn new() -> DuckDbBackend {
         let conn = match env::var("DUCKDB_PATH") {
@@ -341,6 +457,8 @@ impl DuckDbBackend {
                 .unwrap_or_else(|e| panic!("failed to open DuckDB at {path}: {e}")),
             Err(_) => Connection::open_in_memory().unwrap(),
         };
+        conn.execute_batch("CREATE SCHEMA IF NOT EXISTS public;")
+            .expect("failed to create PostgreSQL-compatible public schema");
         // Opt-in cap on DuckDB's buffer pool, e.g. "128MB" - matters when
         // running under a container memory limit (Kubernetes `resources.
         // limits.memory`, podman --memory): DuckDB isn't guaranteed to see
