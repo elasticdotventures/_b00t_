@@ -125,7 +125,7 @@ pub fn register_model(
         provider,
         size,
         capabilities,
-        litellm_model: model.to_string(),
+        litellm_model: Some(model.to_string()),
         api_base: Some(endpoint.to_string()),
         api_key_env: api_key_env.map(|s| s.to_string()),
         parameters: HashMap::new(),
@@ -254,7 +254,7 @@ fn datum_to_entry(name: &str, d: &AiModelDatum, source: EntrySource) -> Registry
     RegistryEntry {
         name: name.to_string(),
         endpoint: d.api_base.clone().unwrap_or_default(),
-        model: d.litellm_model.clone(),
+        model: d.litellm_model.clone().unwrap_or_default(),
         provider: format!("{:?}", d.provider).to_lowercase(),
         size: format!("{:?}", d.size).to_lowercase(),
         cost: d.metadata.get("cost").cloned().unwrap_or_default(),
@@ -283,8 +283,8 @@ pub fn resolve_tier_endpoint(tier: &str) -> Option<(String, String)> {
     let registry = load_registry();
     for (_, d) in &registry.models {
         if d.enabled && d.metadata.get("tier").map(|t| t.as_str()) == Some(tier) {
-            if let Some(base) = &d.api_base {
-                return Some((base.clone(), d.litellm_model.clone()));
+            if let (Some(base), Some(model)) = (&d.api_base, &d.litellm_model) {
+                return Some((base.clone(), model.clone()));
             }
         }
     }

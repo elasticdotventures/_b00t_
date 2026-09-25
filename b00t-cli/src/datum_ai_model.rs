@@ -134,11 +134,12 @@ impl ModelDatumEntry {
             return Some(repo.clone());
         }
         if let ModelProvider::HuggingFace = self.model.provider {
-            let id = self.model.litellm_model.trim();
-            if let Some(stripped) = id.strip_prefix("huggingface/") {
-                return Some(stripped.to_string());
+            if let Some(id) = self.model.litellm_model.as_deref().map(str::trim) {
+                if let Some(stripped) = id.strip_prefix("huggingface/") {
+                    return Some(stripped.to_string());
+                }
+                return Some(id.to_string());
             }
-            return Some(id.to_string());
         }
         None
     }
