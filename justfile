@@ -1639,3 +1639,74 @@ remote-down:
     ZONE="$(cd b00t-tf && tofu output -raw gcp_control_zone 2>/dev/null || echo australia-southeast1-a)"
     gcloud compute instances stop b00t-dstack-control --zone "$ZONE" -q
     @echo "💤 control node stopped (the waker will restart it on next request)"
+
+# ── #1226: Tribal build routing ──────────────────────────────────────
+# Convention: TRY remote (if it happens to be up), fall back to local
+# with sccache + mold + nextest. NEVER auto-spin infrastructure.
+# If you want remote, run `just remote-provision` FIRST, then ci-build.
+#
+# The remote builder uses dstack (GCP control node + fleet). It self-reaps
+# when idle, but a running control node costs ~$0.10/hr. The $150 surprise
+# bill came from leaving it running — don't do that.
+#
+# Local fallback: mold linker + sccache + nextest with 4-partition
+# parallelism. First run is cold (~10-15 min); subsequent runs are warm.
+ci-build branch="dev":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    RUN="b00t-build-{{branch}}"
+
+    # ── TRIAGE: is the remote builder reachable? ──
+    REMOTE_OK=false
+    if ssh -o ConnectTimeout=5 -o BatchMode=yes "$RUN" true 2>/dev/null; then
+        REMOTE_OK=true
+        echo "🟢 remote builder '$RUN' is UP — routing build there"
+    else
+        echo "🟡 remote builder '$RUN' not reachable — falling back to local"
+        echo "   (to use remote: just remote-provision {{branch}})"
+    fi
+
+    if [ "$REMOTE_OK" = true ]; then
+        # ── REMOTE PATH ──
+        echo "📤 pushing to scratch/{{branch}}..."
+        git push -f origin HEAD:refs/heads/scratch/{{branch}}
+
+        echo "🔨 remote build..."
+        ssh "$RUN" "sccache --start-server 2>/dev/null; \
+            cd {{_CHECKOUT}} && git fetch origin && git checkout scratch/{{branch}} \
+            && cargo build 2>&1 \
+            && sccache --show-stats | grep -E 'Cache hits rate|Compile requests'"
+
+        echo "🧪 remote test..."
+        ssh "$RUN" "sccache --start-server 2>/dev/null; \
+            cd {{_CHECKOUT}} && cargo nextest run 2>&1"
+
+        echo "🛑 stopping remote builder to save cost..."
+        dstack stop "$RUN" -y 2>/dev/null || true
+        echo "✅ remote build+test complete, builder stopped"
+    else
+        # ── LOCAL PATH ──
+        echo "🔨 local build (sccache + mold + nextest)..."
+        export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/b00t-cargo-target}"
+        sccache --start-server 2>/dev/null || true
+
+        cargo build --workspace 2>&1
+        echo ""
+        echo "🧪 local test (nextest, all partitions)..."
+        cargo nextest run --workspace 2>&1
+        echo ""
+
+        sccache --show-stats 2>/dev/null | grep -E "Cache hits rate|Compile requests" || true
+        echo "✅ local build+test complete"
+    fi
+
+# Show current build cache stats (sccache hit rate, target dir size).
+ci-stats:
+    @echo "── sccache ──"
+    @sccache --show-stats 2>/dev/null | grep -E "Cache hits rate|Compile requests|Cache size" || echo "sccache not running"
+    @echo ""
+    @echo "── target dir ──"
+    @du -sh "${CARGO_TARGET_DIR:-$HOME/.cache/b00t-cargo-target}" 2>/dev/null || echo "no target dir"
+    @echo ""
+    @echo "── remote builder ──"
+    @ssh -o ConnectTimeout=3 -o BatchMode=yes b00t-build-dev true 2>/dev/null && echo "🟢 b00t-build-dev UP" || echo "🟡 b00t-build-dev DOWN (expected — spin up with: just remote-provision)"
