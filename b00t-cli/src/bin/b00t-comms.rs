@@ -285,11 +285,11 @@ mod tests {
     #[test]
     fn datum_path_defaults_to_dotfiles_b00t_path() {
         let saved = std::env::var("_B00T_Path").ok();
-        std::env::remove_var("_B00T_Path");
+        unsafe { std::env::remove_var("_B00T_Path") };
         let resolved = resolve_datum_path(&None);
         assert!(resolved.ends_with("_b00t_/b00t-comms.agent.toml"));
         if let Some(v) = saved {
-            std::env::set_var("_B00T_Path", v);
+            unsafe { std::env::set_var("_B00T_Path", v) };
         }
     }
 
