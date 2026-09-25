@@ -235,8 +235,13 @@ impl ExtendedQueryHandler for DuckDbBackend {
         let conn = self.conn.lock().unwrap();
         let query = &portal.statement.statement;
         tracing::info!(query = query.as_str(), "extended_query");
-        let execution_query = normalize_postgres_query(&query_with_bound_params(query, portal));
-        tracing::info!(execution_query = execution_query.as_str(), parameters = portal.parameter_len(), "extended_query_plan");
+        // SECURITY: Do NOT log `execution_query` — it contains substituted parameter
+        // values which may include sensitive data (passwords, tokens, PII). Log the
+        // parameterized query shape and parameter count instead.
+        // Also returns errors on invalid parameter indices or decode failures rather
+        // than silently substituting NULL (which would corrupt query results).
+        let execution_query = normalize_postgres_query(&query_with_bound_params(query, portal)?);
+        tracing::debug!(query = query.as_str(), param_count = portal.parameter_len(), "extended_query_plan");
         let mut stmt = conn
             .prepare(&execution_query)
             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
@@ -373,20 +378,22 @@ fn describe_query_fields(conn: &Connection, query: &str) -> PgWireResult<Vec<Fie
 /// metadata-only DESCRIBE query. The real query is still executed later with
 /// the bound values; this substitution only supplies a type-compatible value
 /// while pgwire is answering Describe before Bind/Execute.
+///
+/// SECURITY: Iterates over Unicode chars, not raw bytes, to preserve non-ASCII
+/// characters (UTF-8 multi-byte sequences would be corrupted by byte iteration).
 fn query_for_describe(query: &str) -> String {
-    let bytes = query.as_bytes();
     let mut out = String::with_capacity(query.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+    let mut chars = query.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '$' && chars.peek().map_or(false, |p| p.is_ascii_digit()) {
             out.push_str("NULL");
-            i += 2;
-            while i < bytes.len() && bytes[i].is_ascii_digit() {
-                i += 1;
+            // Skip the rest of the parameter number
+            while chars.peek().map_or(false, |p| p.is_ascii_digit()) {
+                chars.next();
             }
         } else {
-            out.push(bytes[i] as char);
-            i += 1;
+            out.push(c);
         }
     }
     out
@@ -412,39 +419,72 @@ fn positional_parameter_count(query: &str) -> usize {
     max_index
 }
 
-fn query_with_bound_params(query: &str, portal: &Portal<String>) -> String {
+/// Substitutes PostgreSQL positional parameters ($1, $2, etc.) with their actual
+/// values for DuckDB query execution.
+///
+/// SECURITY: Returns an error instead of silently substituting NULL when a
+/// parameter cannot be decoded — silently dropping parameter values would corrupt
+/// query results and potentially bypass security checks.
+///
+/// SECURITY: Iterates over Unicode chars, not raw bytes, to preserve non-ASCII
+/// characters (UTF-8 multi-byte sequences would be corrupted by byte iteration).
+fn query_with_bound_params(query: &str, portal: &Portal<String>) -> Result<String, PgWireError> {
     if portal.parameter_len() == 0 {
-        return query.to_owned();
+        return Ok(query.to_owned());
     }
+
     let mut out = String::with_capacity(query.len());
-    let bytes = query.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
-            let start = i + 1;
-            let mut end = start;
-            while end < bytes.len() && bytes[end].is_ascii_digit() { end += 1; }
-            let idx = std::str::from_utf8(&bytes[start..end]).ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-            if idx == 0 || idx > portal.parameter_len() {
-                out.push_str("NULL");
-            } else {
-                let value = portal.parameter::<String>(idx - 1, &Type::TEXT).ok().flatten();
-                match value {
-                    Some(value) => {
-                        out.push('\'');
-                        out.push_str(&value.replace('\'', "''"));
-                        out.push('\'');
-                    }
-                    None => out.push_str("NULL"),
+    let mut chars = query.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '$' && chars.peek().map_or(false, |p| p.is_ascii_digit()) {
+            // Parse the parameter index
+            let mut idx_str = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_ascii_digit() {
+                    idx_str.push(c);
+                    chars.next();
+                } else {
+                    break;
                 }
             }
-            i = end;
+
+            let idx: usize = idx_str.parse().unwrap_or(0);
+            if idx == 0 || idx > portal.parameter_len() {
+                return Err(PgWireError::ApiError(
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("Invalid parameter index ${idx} (only {} parameters available)", portal.parameter_len())
+                    ))
+                ));
+            }
+
+            // Fetch the parameter value — return an error if decode fails instead
+            // of silently substituting NULL (which would corrupt query results).
+            let value = portal.parameter::<String>(idx - 1, &Type::TEXT)
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+            match value {
+                Some(value) => {
+                    out.push('\'');
+                    out.push_str(&value.replace('\'', "''"));
+                    out.push('\'');
+                }
+                None => {
+                    return Err(PgWireError::ApiError(
+                        Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("Parameter ${idx} could not be decoded as text — query requires valid text parameters")
+                        ))
+                    ));
+                }
+            }
         } else {
-            out.push(bytes[i] as char);
-            i += 1;
+            out.push(c);
         }
     }
-    out
+
+    Ok(out)
 }
 
 impl DuckDbBackend {
