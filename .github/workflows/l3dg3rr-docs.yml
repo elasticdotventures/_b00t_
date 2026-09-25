@@ -42,9 +42,8 @@ jobs:
 
       - name: Initialize workspace submodule deps
         run: |
-          git submodule update --init --depth 1 vendor/embed-anything-b00t vendor/runpod-sdk
-          # vendor/ledgrrr is a shared worktree on developer machines, not a submodule.
-          git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
+          git submodule update --init --depth 1 vendor/embed-anything-b00t vendor/runpod-sdk vendor/b00tyverse
+          git -C vendor/b00tyverse submodule update --init --depth 1 ledgrrr
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
