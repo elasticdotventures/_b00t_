@@ -650,10 +650,11 @@ async fn handle_discover(
 
 async fn handle_message(to_agent: &str, subject: &str, content: &str, ack: bool) -> Result<()> {
     let config = RedisConfig::default();
-    let redis = RedisComms::new(config, "cli-message".into())?;
+    let agent_id = cli_agent_id();
+    let redis = RedisComms::new(config, agent_id.clone())?;
 
     let metadata = AgentMetadata {
-        agent_id: "cli-sender".to_string(),
+        agent_id,
         agent_role: "cli".to_string(),
         capabilities: vec![],
         crew: None,
@@ -1094,10 +1095,11 @@ async fn handle_wait(
     subject: Option<String>,
 ) -> Result<()> {
     let config = RedisConfig::default();
-    let redis = RedisComms::new(config, "cli-wait".into())?;
+    let agent_id = cli_agent_id();
+    let redis = RedisComms::new(config, agent_id.clone())?;
 
     let metadata = AgentMetadata {
-        agent_id: "cli-wait".to_string(),
+        agent_id,
         agent_role: "cli".to_string(),
         capabilities: vec![],
         crew: None,
@@ -1108,7 +1110,7 @@ async fn handle_wait(
         subtype: Default::default(),
     };
 
-    let coordinator = AgentCoordinator::new(redis, metadata);
+    let mut coordinator = AgentCoordinator::new(redis, metadata);
 
     let filter = MessageFilter {
         message_types: message_type.map(|t| vec![t]),
@@ -1131,6 +1133,18 @@ async fn handle_wait(
     }
 
     Ok(())
+}
+
+/// Resolve the identity used by CLI notification consumers and senders.
+///
+/// The transport subject is keyed by this value, so synthetic identities such
+/// as `cli-wait` silently disconnect a harness from the agent it is running on.
+fn cli_agent_id() -> String {
+    std::env::var("B00T_AGENT_ID")
+        .or_else(|_| std::env::var("_B00T_Agent"))
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "agent/local".to_string())
 }
 
 async fn handle_start(config_path: &PathBuf) -> Result<()> {
