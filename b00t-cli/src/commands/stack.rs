@@ -3,10 +3,10 @@ use clap::Parser;
 use regex::Regex;
 use std::collections::HashMap;
 
-use crate::load_all_datums_from_dir;
 use crate::datum_stack::StackDatum;
 use crate::dependency_resolver::DependencyResolver;
 use crate::hive::{SystemSnapshot, activate_profile, load_profile};
+use crate::load_all_datums_from_dir;
 use crate::traits::DatumCrdDisplay;
 use crate::{
     BootDatum, ansible::AnsibleConfig, ansible::run_playbook, get_config, get_expanded_path,

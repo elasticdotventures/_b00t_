@@ -819,8 +819,7 @@ fn self_up_heal(is_doctor: bool) -> Result<()> {
             match datum_name_for_check(label) {
                 Some(name) => {
                     println!("── {} (datum: {}) ──", label, name);
-                    if let Err(e) =
-                        crate::commands::install::install_datum(&datum_dir, name, false)
+                    if let Err(e) = crate::commands::install::install_datum(&datum_dir, name, false)
                     {
                         eprintln!("  ⚠️  {} install failed (non-fatal): {}", name, e);
                     }
@@ -836,9 +835,7 @@ fn self_up_heal(is_doctor: bool) -> Result<()> {
     }
 
     if is_doctor {
-        println!(
-            "\n🩺 running 'b00t doctor check --fix' (submodule drift + vendor binaries)...\n"
-        );
+        println!("\n🩺 running 'b00t doctor check --fix' (submodule drift + vendor binaries)...\n");
         let doctor_args = crate::commands::doctor_cmd::DoctorCommands::Check {
             json: false,
             probe: None,
@@ -853,14 +850,19 @@ fn self_up_heal(is_doctor: bool) -> Result<()> {
     println!("\n🔁 re-checking system state...\n");
     let still_missing = self_up_check()?;
     if still_missing.is_empty() {
-        println!("\n✅ b00t up --{}: all checks now pass", if is_doctor { "doctor" } else { "install" });
+        println!(
+            "\n✅ b00t up --{}: all checks now pass",
+            if is_doctor { "doctor" } else { "install" }
+        );
     } else {
         println!(
             "\n⚠️  b00t up --{}: still missing: {}",
             if is_doctor { "doctor" } else { "install" },
             still_missing.join(", ")
         );
-        println!("   No b00t-memoized installer for these — install manually per each tool's docs.");
+        println!(
+            "   No b00t-memoized installer for these — install manually per each tool's docs."
+        );
     }
     Ok(())
 }
@@ -1006,7 +1008,9 @@ fn self_up_check() -> Result<Vec<String>> {
             missing.len(),
             missing.join(", ")
         );
-        println!("   Run 'b00t up --install' to auto-install using b00t's memoized datum installers.");
+        println!(
+            "   Run 'b00t up --install' to auto-install using b00t's memoized datum installers."
+        );
     }
     Ok(missing)
 }

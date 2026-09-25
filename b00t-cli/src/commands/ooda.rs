@@ -60,19 +60,31 @@ pub enum OodaCommands {
         root: Option<PathBuf>,
         #[arg(long, help = "Emit JSON verdict")]
         json: bool,
-        #[arg(long, help = "Skip interactive prompts — auto-PASS heuristic checks only")]
+        #[arg(
+            long,
+            help = "Skip interactive prompts — auto-PASS heuristic checks only"
+        )]
         auto: bool,
     },
 }
 
 pub async fn handle_ooda(cmd: OodaCommands) -> Result<()> {
     match cmd {
-        OodaCommands::Run { agent, max_iter, task, root, dry_run } => {
-            run_ooda_loop(&agent, max_iter, task.as_deref(), root, dry_run)
-        }
+        OodaCommands::Run {
+            agent,
+            max_iter,
+            task,
+            root,
+            dry_run,
+        } => run_ooda_loop(&agent, max_iter, task.as_deref(), root, dry_run),
         OodaCommands::Status { root } => ooda_status(root),
         OodaCommands::Phase { json } => ooda_phase(json),
-        OodaCommands::Review { task, root, json, auto } => ooda_review(task.as_deref(), root, json, auto),
+        OodaCommands::Review {
+            task,
+            root,
+            json,
+            auto,
+        } => ooda_review(task.as_deref(), root, json, auto),
     }
 }
 
@@ -158,7 +170,10 @@ fn ooda_status(root: Option<PathBuf>) -> Result<()> {
     let tasks = load_b00t_tasks(&project_root)?;
     let total = tasks.len();
     let pending = tasks.iter().filter(|t| task_status(t) == "pending").count();
-    let in_progress = tasks.iter().filter(|t| task_status(t) == "in-progress").count();
+    let in_progress = tasks
+        .iter()
+        .filter(|t| task_status(t) == "in-progress")
+        .count();
     let done = tasks.iter().filter(|t| task_status(t) == "done").count();
     println!("tasks: total={total} pending={pending} in-progress={in_progress} done={done}");
     Ok(())
@@ -199,7 +214,12 @@ fn ooda_phase(json: bool) -> Result<()> {
 /// the output into `b00t-cli advice`.
 ///
 /// Output contract (sm0l tier): `PASS` or `FAIL: <≤5 lines>`
-fn ooda_review(task_id: Option<&str>, root: Option<PathBuf>, as_json: bool, auto: bool) -> Result<()> {
+fn ooda_review(
+    task_id: Option<&str>,
+    root: Option<PathBuf>,
+    as_json: bool,
+    auto: bool,
+) -> Result<()> {
     let project_root = find_project_root(root);
     let tasks = load_b00t_tasks(&project_root)?;
     let task_desc = select_task_for_review(&tasks, task_id)?;
@@ -222,15 +242,23 @@ fn ooda_review(task_id: Option<&str>, root: Option<PathBuf>, as_json: bool, auto
     }
 
     // P3: Surgical Changes — flag if no bounded scope (no file/module/function mentioned)
-    let has_scope = lower.contains(".rs") || lower.contains(".toml") || lower.contains("fn ")
-        || lower.contains("mod ") || lower.contains("struct ") || lower.contains("::");
+    let has_scope = lower.contains(".rs")
+        || lower.contains(".toml")
+        || lower.contains("fn ")
+        || lower.contains("mod ")
+        || lower.contains("struct ")
+        || lower.contains("::");
     if !has_scope && lower.len() > 60 {
         issues.push("P3: no file/symbol scope — bound the change surface first");
     }
 
     // P4: Goal-Driven TDD — flag if no test signal
-    let has_test_signal = lower.contains("test") || lower.contains("tdd") || lower.contains("failing")
-        || lower.contains("assert") || lower.contains("verify") || lower.contains("pass");
+    let has_test_signal = lower.contains("test")
+        || lower.contains("tdd")
+        || lower.contains("failing")
+        || lower.contains("assert")
+        || lower.contains("verify")
+        || lower.contains("pass");
     if !has_test_signal && !auto {
         issues.push("P4: no test strategy — write the failing test first");
     }
@@ -267,8 +295,8 @@ fn load_b00t_tasks(project_root: &std::path::Path) -> Result<Vec<serde_json::Val
     }
     let raw = std::fs::read_to_string(&tasks_path)
         .with_context(|| format!("read {}", tasks_path.display()))?;
-    let parsed: serde_json::Value = serde_json::from_str(&raw)
-        .with_context(|| format!("parse {}", tasks_path.display()))?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", tasks_path.display()))?;
     Ok(parsed
         .get("tasks")
         .and_then(|tasks| tasks.as_array())
@@ -278,18 +306,28 @@ fn load_b00t_tasks(project_root: &std::path::Path) -> Result<Vec<serde_json::Val
 }
 
 fn task_status(task: &serde_json::Value) -> &str {
-    task.get("status").and_then(|s| s.as_str()).unwrap_or("pending")
+    task.get("status")
+        .and_then(|s| s.as_str())
+        .unwrap_or("pending")
 }
 
 fn task_id_matches(task: &serde_json::Value, id: &str) -> bool {
-    task.get("id").and_then(|v| {
-        v.as_str().map(|s| s.to_string()).or_else(|| v.as_u64().map(|n| n.to_string()))
-    }).as_deref() == Some(id)
+    task.get("id")
+        .and_then(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+        })
+        .as_deref()
+        == Some(id)
 }
 
 fn task_text(task: &serde_json::Value) -> Option<String> {
     let title = task.get("title").and_then(|v| v.as_str()).unwrap_or("");
-    let description = task.get("description").and_then(|v| v.as_str()).unwrap_or("");
+    let description = task
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let text = match (title.is_empty(), description.is_empty()) {
         (true, true) => return None,
         (false, true) => title.to_string(),
@@ -301,10 +339,14 @@ fn task_text(task: &serde_json::Value) -> Option<String> {
 
 fn select_task_for_review(tasks: &[serde_json::Value], task_id: Option<&str>) -> Result<String> {
     let task = if let Some(id) = task_id {
-        tasks.iter().find(|t| task_id_matches(t, id))
+        tasks
+            .iter()
+            .find(|t| task_id_matches(t, id))
             .ok_or_else(|| anyhow::anyhow!("task {id} not found"))?
     } else {
-        tasks.iter().find(|t| task_status(t) == "pending")
+        tasks
+            .iter()
+            .find(|t| task_status(t) == "pending")
             .ok_or_else(|| anyhow::anyhow!("no pending tasks"))?
     };
     task_text(task).ok_or_else(|| anyhow::anyhow!("selected task has no title or description"))
@@ -347,12 +389,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let tasks_dir = tmp.path().join(".b00t");
         std::fs::create_dir_all(&tasks_dir).unwrap();
-        std::fs::write(tasks_dir.join("tasks.json"), r#"{"tasks":[{
+        std::fs::write(
+            tasks_dir.join("tasks.json"),
+            r#"{"tasks":[{
             "id": 42,
             "title": "Fix ooda.rs task lookup",
             "description": "Add test coverage and verify PASS output",
             "status": "pending"
-        }]}"#).unwrap();
+        }]}"#,
+        )
+        .unwrap();
 
         let result = ooda_review(Some("42"), Some(tmp.path().to_path_buf()), true, true);
 
@@ -364,10 +410,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let tasks_dir = tmp.path().join(".b00t");
         std::fs::create_dir_all(&tasks_dir).unwrap();
-        std::fs::write(tasks_dir.join("tasks.json"), r#"{"tasks":[
+        std::fs::write(
+            tasks_dir.join("tasks.json"),
+            r#"{"tasks":[
             {"id":155,"title":"Fix OODA","description":"Use .b00t/tasks.json","status":"pending"},
             {"id":156,"title":"Done","status":"done"}
-        ]}"#).unwrap();
+        ]}"#,
+        )
+        .unwrap();
 
         let tasks = load_b00t_tasks(tmp.path()).unwrap();
 

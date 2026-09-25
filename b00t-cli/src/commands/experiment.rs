@@ -1201,21 +1201,21 @@ pub fn calculate_and_issue_cake(cmp: &ExperimentComparison) -> b00t_c0re_a2a::ta
 /// no-op, which makes asserting on emitted attributes impossible upstream).
 pub fn experiment_otel_attributes(cmp: &ExperimentComparison) -> Vec<(String, String)> {
     let control_claim_score = cmp.control.scores.get("accuracy").copied().unwrap_or(0.0);
-    let treatment_claim_score = cmp
-        .treatment
-        .scores
-        .get("accuracy")
-        .copied()
-        .unwrap_or(0.0);
+    let treatment_claim_score = cmp.treatment.scores.get("accuracy").copied().unwrap_or(0.0);
 
     vec![
         ("task_id".to_string(), cmp.experiment_id.clone()),
         ("vote".to_string(), cmp.recommendation.clone()),
         (
             "tie_breaker".to_string(),
-            cmp.tie_breaker.clone().unwrap_or_else(|| "none".to_string()),
+            cmp.tie_breaker
+                .clone()
+                .unwrap_or_else(|| "none".to_string()),
         ),
-        ("control.agent_tier".to_string(), cmp.control.variant.clone()),
+        (
+            "control.agent_tier".to_string(),
+            cmp.control.variant.clone(),
+        ),
         (
             "control.claim_score".to_string(),
             format!("{:.4}", control_claim_score),
@@ -1339,24 +1339,21 @@ mod tests {
         );
         assert!(
             (get("treatment.claim_score").parse::<f64>().unwrap()
-                - cmp.treatment
-                    .scores
-                    .get("accuracy")
-                    .copied()
-                    .unwrap_or(0.0))
+                - cmp.treatment.scores.get("accuracy").copied().unwrap_or(0.0))
             .abs()
                 < 1e-4
         );
-        assert!(
-            (get("focus_delta").parse::<f64>().unwrap() - cmp.focus_delta).abs() < 1e-4
-        );
+        assert!((get("focus_delta").parse::<f64>().unwrap() - cmp.focus_delta).abs() < 1e-4);
     }
 
     #[test]
     fn test_experiment_otel_attributes_defaults_tie_breaker_to_none() {
         let config = make_config("test-otel-002", TEST_PROMPTS[1]);
         let cmp = dispatch_experiment(&config).unwrap();
-        assert!(cmp.tie_breaker.is_none(), "dispatch_experiment never sets tie_breaker directly");
+        assert!(
+            cmp.tie_breaker.is_none(),
+            "dispatch_experiment never sets tie_breaker directly"
+        );
 
         let attrs = experiment_otel_attributes(&cmp);
         let tie_breaker = attrs

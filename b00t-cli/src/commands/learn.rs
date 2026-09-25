@@ -491,7 +491,13 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     Ok(())
 }
 
-async fn handle_record(path: &str, topic: Option<&str>, lesson: &str, global: bool, force: bool) -> Result<()> {
+async fn handle_record(
+    path: &str,
+    topic: Option<&str>,
+    lesson: &str,
+    global: bool,
+    force: bool,
+) -> Result<()> {
     let topic = topic.ok_or_else(|| anyhow::anyhow!("Topic required for recording lesson"))?;
 
     // Parse "<topic>: <body>" format

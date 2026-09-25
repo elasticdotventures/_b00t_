@@ -10,7 +10,7 @@
 //!
 //! `--sleep=<duration>` → spawn background detached process; returns immediately
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::hive::{check_guards, load_profile, GuardContext, GuardResult, SystemSnapshot};
+use crate::hive::{GuardContext, GuardResult, SystemSnapshot, check_guards, load_profile};
 use crate::traits::{ExecPlan, IoMethod, NoSandbox, Sandbox, SandboxKind, SystemdRunSandbox};
 
 const AUDIT_CACHE_FILE: &str = "~/.b00t/exec-audit.json";
@@ -310,7 +310,7 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
     let mut vetted_exec_path: Option<PathBuf> = None;
 
     if args.vetted {
-        use b00t_c0re_lib::sudo_operator::{check_vetted, SudoGrantEvidence, VettedResult};
+        use b00t_c0re_lib::sudo_operator::{SudoGrantEvidence, VettedResult, check_vetted};
 
         // The `systemd-run` sandbox provider runs `cmd_str` through `sh -c`
         // using the process's own cwd, entirely bypassing `vetted_exec_path`
@@ -327,7 +327,9 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
         }
 
         if args.command.len() != 1 {
-            eprintln!("🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args");
+            eprintln!(
+                "🚫 SUDO-VETTED-DENY: --vetted takes exactly one argument (the script path), no extra args"
+            );
             append_audit_log(
                 &log_path,
                 &AuditLogEntry {
@@ -353,7 +355,9 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                 // I3: the execution-readiness invariant Task 2 built must
                 // actually gate execution, not just exist unused.
                 if !evidence.verify() || !evidence.grant_is_execution_ready() {
-                    eprintln!("🚫 SUDO-VETTED-DENY: evidence failed execution-readiness check (internal invariant violation)");
+                    eprintln!(
+                        "🚫 SUDO-VETTED-DENY: evidence failed execution-readiness check (internal invariant violation)"
+                    );
                     append_audit_log(
                         &log_path,
                         &AuditLogEntry {
@@ -440,8 +444,8 @@ pub fn handle_exec(args: &ExecArgs, path: &str) -> Result<()> {
                     // is supplied. Justification-less Block behavior (the `else`
                     // branch) is completely unchanged.
                     use b00t_c0re_lib::sudo_operator::{
-                        adversarial_review, checkpoint_system_state, AdversarialVerdict,
-                        SudoDisposition, SudoGrantEvidence,
+                        AdversarialVerdict, SudoDisposition, SudoGrantEvidence, adversarial_review,
+                        checkpoint_system_state,
                     };
 
                     let project_root =

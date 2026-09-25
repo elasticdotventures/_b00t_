@@ -244,7 +244,9 @@ fn extract_dict_key_f64(line: &str, key: &str) -> Option<f64> {
 /// non-finite loss is a failed run, not a comparable score that silently wins.
 fn ensure_finite_loss(loss: f64) -> Result<f64> {
     if !loss.is_finite() {
-        bail!("training run diverged: final loss is {loss} (not finite) \u{2014} no comparable score");
+        bail!(
+            "training run diverged: final loss is {loss} (not finite) \u{2014} no comparable score"
+        );
     }
     Ok(loss)
 }
@@ -270,7 +272,11 @@ pub struct RaceResult {
 /// The only "impure" thing here is `Utc::now()` for `completed_at`;
 /// everything else is `parse_final_train_loss` plus copying manifest
 /// fields.
-pub fn build_race_result(label: &str, manifest: &FinetuneManifest, log_text: &str) -> Result<RaceResult> {
+pub fn build_race_result(
+    label: &str,
+    manifest: &FinetuneManifest,
+    log_text: &str,
+) -> Result<RaceResult> {
     let final_train_loss = parse_final_train_loss(log_text)
         .with_context(|| format!("parsing training log for competitor '{label}'"))?;
     Ok(RaceResult {
@@ -480,8 +486,8 @@ pub fn finalize_race(
 
     let datum_path = finetune_job::write_ai_datum(datum_dir, winner_manifest, &oci, &push)
         .context("registering winning adapter as the canonical AI datum")?;
-    let report_path = write_race_report(&report, &race_out_dir.join("reports"))
-        .context("writing race report")?;
+    let report_path =
+        write_race_report(&report, &race_out_dir.join("reports")).context("writing race report")?;
 
     Ok((report, datum_path, report_path))
 }
@@ -506,7 +512,11 @@ pub async fn handle_race_dispatch(
 ) -> Result<()> {
     let label_a = label_a.unwrap_or_else(|| "competitor-a".to_string());
     let label_b = label_b.unwrap_or_else(|| "competitor-b".to_string());
-    println!("→ race: '{label_a}' ({}) vs '{label_b}' ({})", manifest_a.display(), manifest_b.display());
+    println!(
+        "→ race: '{label_a}' ({}) vs '{label_b}' ({})",
+        manifest_a.display(),
+        manifest_b.display()
+    );
 
     let entries = vec![
         RaceEntry {
@@ -600,7 +610,10 @@ pub fn handle_race_finalize(
         report.entry_b.label,
         report.entry_b.final_train_loss
     );
-    println!("  winner: {} (margin {:.6})", report.winner_label, report.margin);
+    println!(
+        "  winner: {} (margin {:.6})",
+        report.winner_label, report.margin
+    );
     println!("  reasoning: {}", report.reasoning);
     println!("  caveat: {}", report.caveat);
     println!("  ai datum written: {}", datum_path.display());
@@ -816,7 +829,8 @@ mirror_to_hf = true
 
     #[test]
     fn build_race_result_extracts_loss_and_copies_manifest_fields() {
-        let manifest = FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
+        let manifest =
+            FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
         let log = "{'train_runtime': 1.0, 'train_loss': 0.321, 'epoch': 1.0}\n";
         let result = build_race_result("sm3lly-local", &manifest, log).unwrap();
         assert_eq!(result.label, "sm3lly-local");
@@ -828,7 +842,8 @@ mirror_to_hf = true
 
     #[test]
     fn build_race_result_propagates_log_parse_error_with_label_context() {
-        let manifest = FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
+        let manifest =
+            FinetuneManifest::from_toml_str(&local_manifest_toml("qwen38-peer-race")).unwrap();
         let err = build_race_result("sm3lly-local", &manifest, "no loss here").unwrap_err();
         assert!(err.to_string().contains("sm3lly-local"));
     }
@@ -1001,9 +1016,15 @@ mirror_to_hf = true
         // cloud branch returns Ok(()) before touching any live tool (see
         // finetune_job::run_job's dry-run early-return), so this exercises
         // real concurrent dispatch without needing the `hf` CLI installed.
-        let outcomes = dispatch_race(entries, dir.path().to_path_buf(), dir.path().to_path_buf(), true, false)
-            .await
-            .expect("dispatch_race should not error at the orchestration level");
+        let outcomes = dispatch_race(
+            entries,
+            dir.path().to_path_buf(),
+            dir.path().to_path_buf(),
+            true,
+            false,
+        )
+        .await
+        .expect("dispatch_race should not error at the orchestration level");
 
         assert_eq!(outcomes.len(), 2);
         let labels: Vec<&str> = outcomes.iter().map(|o| o.label.as_str()).collect();

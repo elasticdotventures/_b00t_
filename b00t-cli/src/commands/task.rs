@@ -729,7 +729,10 @@ const FUZZY_THRESHOLD: f64 = 0.7;
 fn score_task(t: &Task, query_lower: &str) -> Option<f64> {
     let title_l = t.title.to_lowercase();
     let desc_l = t.description.as_deref().unwrap_or("").to_lowercase();
-    let tag_hit = t.tags.iter().any(|tg| tg.to_lowercase().contains(query_lower));
+    let tag_hit = t
+        .tags
+        .iter()
+        .any(|tg| tg.to_lowercase().contains(query_lower));
     if title_l.contains(query_lower) || desc_l.contains(query_lower) || tag_hit {
         return Some(0.0);
     }

@@ -13,9 +13,7 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
 
-use crate::commands::finetune_job::{
-    DEFAULT_S3_REGION, SPIRE_AGENT_PROFILE, push_to_s3,
-};
+use crate::commands::finetune_job::{DEFAULT_S3_REGION, SPIRE_AGENT_PROFILE, push_to_s3};
 use crate::datum_agent_profile::{GraphArtifactManifest, Signable, datum_signing_key_pem};
 
 #[derive(Subcommand, Debug)]
@@ -186,7 +184,9 @@ pub async fn publish(
                 )
                 .await
             {
-                eprintln!("⚠️  NATS reindex publish failed (non-fatal, S3 objects already durable): {e}");
+                eprintln!(
+                    "⚠️  NATS reindex publish failed (non-fatal, S3 objects already durable): {e}"
+                );
             }
         }
         Err(e) => {

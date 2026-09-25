@@ -185,7 +185,13 @@ pub async fn handle_lfmf_advice(path: &str, tool: &str, query: Option<&str>) -> 
 
 /// Handle LFMF (Lessons From My Failures) recording
 /// Uses shared LFMF system from b00t-c0re-lib for consistency
-pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str, force: bool) -> Result<()> {
+pub async fn handle_lfmf(
+    path: &str,
+    tool: &str,
+    lesson: &str,
+    scope: &str,
+    force: bool,
+) -> Result<()> {
     // Ensure lessons write into the provided path unless explicitly overridden
     ensure_learn_dir(path)?;
 
@@ -238,7 +244,10 @@ pub async fn handle_lfmf(path: &str, tool: &str, lesson: &str, scope: &str, forc
         None => format!("{}: {}", safe_topic, parsed.body),
     };
 
-    if let Err(e) = lfmf_system.record_lesson_scoped(tool, &stored, is_global, force).await {
+    if let Err(e) = lfmf_system
+        .record_lesson_scoped(tool, &stored, is_global, force)
+        .await
+    {
         log_event(&LfmfTelemetryEvent::now(
             LfmfAction::Record,
             tool,

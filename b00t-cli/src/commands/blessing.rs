@@ -153,7 +153,10 @@ fn list_roles(b00t_path: &str) -> Result<()> {
 /// lookup that finds no match for `role` returns `None`, not an
 /// unrelated role's manifest. Returning the wrong role's tool-
 /// authorization manifest is worse than returning none.
-fn find_role_datum<'a>(datums: &'a HashMap<String, BootDatum>, role: &str) -> Option<&'a BootDatum> {
+fn find_role_datum<'a>(
+    datums: &'a HashMap<String, BootDatum>,
+    role: &str,
+) -> Option<&'a BootDatum> {
     if let Some(d) = datums.get(&format!("{role}.role")) {
         return Some(d);
     }
@@ -161,8 +164,10 @@ fn find_role_datum<'a>(datums: &'a HashMap<String, BootDatum>, role: &str) -> Op
         return Some(d);
     }
     let prefix = format!("{role}.");
-    let mut candidates: Vec<(&String, &BootDatum)> =
-        datums.iter().filter(|(k, _)| k.starts_with(&prefix)).collect();
+    let mut candidates: Vec<(&String, &BootDatum)> = datums
+        .iter()
+        .filter(|(k, _)| k.starts_with(&prefix))
+        .collect();
     candidates.sort_by(|(a, _), (b, _)| a.cmp(b));
     candidates
         .iter()
@@ -451,7 +456,10 @@ mod tests {
 
         let datums = get_all_datums(&path).unwrap();
         let found = find_role_datum(&datums, "operator").expect("operator role must resolve");
-        assert_eq!(found.depends_on.as_deref(), Some(["git.cli".to_string()].as_slice()));
+        assert_eq!(
+            found.depends_on.as_deref(),
+            Some(["git.cli".to_string()].as_slice())
+        );
     }
 
     /// Regression test: with multiple Role-typed datums in the store,
@@ -475,9 +483,15 @@ mod tests {
 
         let datums = get_all_datums(&path).unwrap();
         let frontend = find_role_datum(&datums, "frontend").expect("frontend role must resolve");
-        assert_eq!(frontend.depends_on.as_deref(), Some(["npm.cli".to_string()].as_slice()));
+        assert_eq!(
+            frontend.depends_on.as_deref(),
+            Some(["npm.cli".to_string()].as_slice())
+        );
         let backend = find_role_datum(&datums, "backend").expect("backend role must resolve");
-        assert_eq!(backend.depends_on.as_deref(), Some(["cargo.cli".to_string()].as_slice()));
+        assert_eq!(
+            backend.depends_on.as_deref(),
+            Some(["cargo.cli".to_string()].as_slice())
+        );
     }
 
     #[test]

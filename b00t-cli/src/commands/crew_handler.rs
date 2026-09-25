@@ -27,7 +27,9 @@ fn live_cake_balance(ledger: Option<&CakeLedger>, agent: &Agent) -> i64 {
         return agent.cake_balance as i64;
     };
     match ledger.has_record(&agent.id) {
-        Ok(true) => ledger.balance(&agent.id).unwrap_or(agent.cake_balance as i64),
+        Ok(true) => ledger
+            .balance(&agent.id)
+            .unwrap_or(agent.cake_balance as i64),
         _ => agent.cake_balance as i64,
     }
 }
@@ -383,7 +385,11 @@ fn handle_roster(store: &AgentStore) {
         println!("    you");
     } else {
         for a in &executives {
-            println!("    {} (cake: {})", a.id, live_cake_balance(ledger.as_ref(), a));
+            println!(
+                "    {} (cake: {})",
+                a.id,
+                live_cake_balance(ledger.as_ref(), a)
+            );
         }
     }
 
@@ -395,7 +401,9 @@ fn handle_roster(store: &AgentStore) {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
                 "    {} (manager: {}, cake: {})",
-                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
+                a.id,
+                mgr,
+                live_cake_balance(ledger.as_ref(), a)
             );
         }
     }
@@ -408,7 +416,9 @@ fn handle_roster(store: &AgentStore) {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
                 "    {} (manager: {}, cake: {})",
-                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
+                a.id,
+                mgr,
+                live_cake_balance(ledger.as_ref(), a)
             );
         }
     }
@@ -421,7 +431,9 @@ fn handle_roster(store: &AgentStore) {
             let mgr = a.manager_id.as_deref().unwrap_or("none");
             println!(
                 "    {} (manager: {}, cake: {})",
-                a.id, mgr, live_cake_balance(ledger.as_ref(), a)
+                a.id,
+                mgr,
+                live_cake_balance(ledger.as_ref(), a)
             );
         }
     }

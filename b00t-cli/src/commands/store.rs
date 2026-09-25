@@ -51,7 +51,10 @@ pub enum StoreCommands {
     Validate,
     #[clap(about = "Serve store.status over a NATS request-reply subject (#716 proof-of-concept)")]
     Serve {
-        #[clap(long, help = "NATS server URL (defaults to NATS_URL env or nats://localhost:4222)")]
+        #[clap(
+            long,
+            help = "NATS server URL (defaults to NATS_URL env or nats://localhost:4222)"
+        )]
         nats_url: Option<String>,
     },
 }
@@ -108,9 +111,7 @@ fn parse_key_val(s: &str) -> Result<(String, String), String> {
 ///    This is the first (store status) of several call sites; see #707 for
 ///    the remaining pipeline/viz/install scope, deliberately deferred here.
 fn active_role() -> Option<String> {
-    std::env::var("_B00T_ROLE")
-        .ok()
-        .filter(|r| !r.is_empty())
+    std::env::var("_B00T_ROLE").ok().filter(|r| !r.is_empty())
 }
 
 pub async fn handle_store_command(cmd: &StoreCommands) -> anyhow::Result<()> {

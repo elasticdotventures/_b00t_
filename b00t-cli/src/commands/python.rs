@@ -51,10 +51,12 @@ impl PythonCommands {
                     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
                     format!("{home}/.b00t/_b00t_/datums/PYTHON-MINIMUM.tomllmd")
                 });
-                let raw = std::fs::read_to_string(&path)
-                    .map_err(|e| anyhow::anyhow!("Cannot read PYTHON-MINIMUM datum at {path}: {e}"))?;
+                let raw = std::fs::read_to_string(&path).map_err(|e| {
+                    anyhow::anyhow!("Cannot read PYTHON-MINIMUM datum at {path}: {e}")
+                })?;
                 // Strip comment lines (#) before TOML parsing — .tomllmd has leading comments.
-                let toml_src: String = raw.lines()
+                let toml_src: String = raw
+                    .lines()
                     .filter(|l| !l.trim_start().starts_with('#'))
                     .collect::<Vec<_>>()
                     .join("\n");
@@ -68,9 +70,11 @@ impl PythonCommands {
                 let dir = project.clone().unwrap_or_else(|| ".".to_string());
                 let mut path = PathBuf::from(&dir);
                 path.push(".python-version");
-                let content = std::fs::read_to_string(&path)
-                    .map_err(|e| anyhow::anyhow!(
-                        "No .python-version found at {dir} (run 'uv python pin 3.14'): {e}"))?;
+                let content = std::fs::read_to_string(&path).map_err(|e| {
+                    anyhow::anyhow!(
+                        "No .python-version found at {dir} (run 'uv python pin 3.14'): {e}"
+                    )
+                })?;
                 print!("{content}");
                 Ok(())
             }

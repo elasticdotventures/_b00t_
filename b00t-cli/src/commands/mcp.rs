@@ -917,9 +917,7 @@ impl McpCommands {
                 let backend: crate::mcp_serve::ServeBackend = backend.parse()?;
                 crate::mcp_serve::serve(path, backend, *port).await
             }
-            McpCommands::Servers { json } => {
-                crate::mcp_serve::list_servers(path, *json).await
-            }
+            McpCommands::Servers { json } => crate::mcp_serve::list_servers(path, *json).await,
         }
     }
 }

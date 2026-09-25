@@ -11,7 +11,7 @@
 //!    background daemon or distributed tick loop exists yet (see DESIGN-SCHEDULER.md
 //!    for the target distributed-claim model this is a single-shot subset of).
 
-use crate::scheduler::{try_claim, ClaimResult};
+use crate::scheduler::{ClaimResult, try_claim};
 use anyhow::{Context, Result};
 use clap::Subcommand;
 use rusqlite::{Connection, params};
@@ -826,8 +826,7 @@ fn cmd_run(agent_id: Option<&str>, capabilities: Option<&str>, json: bool) -> Re
             Ok(())
         }
         ClaimResult::Claimed { schedule, run_id } => {
-            db.set_run_running(&run_id)
-                .context("mark run as running")?;
+            db.set_run_running(&run_id).context("mark run as running")?;
 
             if schedule.agent_type == "shell" {
                 run_shell_job(&db, &schedule, &run_id, json)
@@ -908,8 +907,14 @@ fn run_shell_job(
         Some(summary.clone())
     };
 
-    db.update_run(run_id, status, Some(exit_code), Some(&summary), error.as_deref())
-        .context("close out shell run")?;
+    db.update_run(
+        run_id,
+        status,
+        Some(exit_code),
+        Some(&summary),
+        error.as_deref(),
+    )
+    .context("close out shell run")?;
 
     if json {
         println!(
