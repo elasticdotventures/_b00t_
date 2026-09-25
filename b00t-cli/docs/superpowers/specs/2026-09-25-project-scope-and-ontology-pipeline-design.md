@@ -150,41 +150,59 @@ provider backend (mise/jira/bl) *and* a local datum-schema record for
 traceability, so requirement/task state is queryable locally even when the
 backend is unreachable.
 
-### D. Ontology → SysML v2 validation + kr0ki bridge
+### D. Ontology → SysML v2 validation (narrowed after investigation — see below)
 
-The exporter (`scene_to_sysmlv2`) already exists; the actual new work:
+**Superseded plan.** The original plan here (evaluate 3rd-party SysML v2
+LSPs, build a kroki bridge, add a live-serving endpoint) turned out to
+duplicate work that's already been done and closed out. Investigation
+findings (verified by reading actual code/commits/tests, not just docs):
 
-1. **Validate** its output against a real SysML v2 grammar/LSP. Which of the
-   three named tools (Open-MBEE/sysml-toolkit, daltskin/sysml-v2-lsp,
-   elan8/spec42, and whatever `cargo install sysmlv2-lsp` really resolves to)
-   is usable headless — pending the research fork's findings (maturity,
-   install method, whether it exposes anything beyond an editor extension).
-2. Fix whatever non-compliance the validator finds in the current minimal
-   `part def` / `connection def` output.
-3. **kr0ki bridge** — shape depends on research findings: kroki natively
-   supports a fixed set of text DSLs (Mermaid, PlantUML, GraphViz, etc., not
-   SysML natively per current understanding, to be confirmed) — so this is
-   either (a) a transform step from `scene_to_sysmlv2` output into one of
-   kroki's native formats, most likely PlantUML given PlantUML's own SysML/UML
-   support, or (b) standing up a custom kroki "companion" service that accepts
-   SysML v2 directly, if kroki's plugin architecture supports adding one
-   cleanly. Do not assume (b) is straightforward until the research confirms
-   kroki's companion-service extension model actually supports it.
-4. **"b00t as a live source dataset for kr0ki"** — reuse the existing `b00t
-   soul serve` HTTP server precedent (`src/soul_writer.rs`/soul CLI, serves
-   K/V over HTTP on port 7700) rather than inventing a new serving mechanism:
-   add a small `/viz/<format>` HTTP endpoint alongside it that returns
-   freshly-rendered graph output on each call. Whether kroki itself can treat
-   this as a "live" pull source, versus this just being "b00t is the
-   always-current producer that something else polls," depends entirely on
-   whether kroki's architecture has any live-fetch concept at all — the
-   research fork was asked to report the truth here rather than assume a
-   feature exists. If kroki is purely stateless request/response with no
-   fetch-from-URL concept, "b00t as a kr0ki source dataset" means: a thin
-   glue script/service periodically re-renders and re-POSTs to kroki, not a
-   kroki-native pull integration — say so plainly in the follow-up report
-   rather than describing the glue script as if it were kroki doing the
-   pulling.
+- `b00t-cli/src/dispatch_sysml.rs` already exports SysML v2/KerML via the
+  shared `ufo_types::sysml_model::emit_kerml()`, validated by
+  `ufo_types::sysml::validate_sysml_v2()`, with a passing round-trip test
+  (`sysml_v2_export_round_trips_through_the_real_parser`). This was the
+  deliverable of closed epic `elasticdotventures/_b00t_#1177` ("b00t SysML v2
+  spine epic", closed 2026-08-31, P0–P3 shipped, P4/Oxigraph-graph explicitly
+  deferred with two documented real blockers — do not revisit P4 here).
+  `ufo-types` (with the `sysml` feature) is **already a b00t-cli dependency**
+  (`Cargo.toml:70`) — no new dependency needed.
+- `src/viz/mod.rs::scene_to_sysmlv2` (and `scene_to_owl2`) predates that epic
+  (commit `e5b21039`) and was **never migrated** to the validated pattern —
+  it's a leftover hand-rolled, unvalidated emitter, reachable via `b00t viz
+  entangle --format sysml-v2`.
+- Empirical check (a scratch crate built against the real `sysml-v2-parser`
+  crate `ufo-types` itself depends on) found `scene_to_sysmlv2`'s current
+  output already parses as syntactically valid SysML v2 — it does not share
+  the specific bug class (`block def` instead of `part def`; comment
+  swallowing the closing brace) that a sibling project's hand-rolled emitter
+  had. So this is not an urgent correctness bug — it's a consistency/DRY gap:
+  two emitters for the same thing, one validated, one not.
+- **No kroki-bridge code belongs in b00t-cli.** The `kr0ki` project
+  (`promptexecution/kr0ki`) is a separate, already-working consumer (its P0
+  Kroki-family render loop is built, tested, and verified live against
+  kroki.io) whose own design is to consume whatever validated SysML
+  v2/KerML text b00t-cli/ufo-types produce — it does not vendor or depend on
+  b00t-cli code today, and does not need b00t-cli to build a bridge or a
+  live-serving endpoint for it. b00t-cli's job ends at "produce correct,
+  validated SysML v2."
+
+**Actual remaining work for D**, narrowed accordingly:
+
+1. Rewrite `scene_to_sysmlv2` (and `scene_to_owl2` if the same emitter
+   pattern applies to OWL2/`ufo_types`) to route through
+   `ufo_types::sysml_model::emit_kerml()` instead of hand-building strings,
+   matching `dispatch_sysml.rs`'s already-proven pattern. If `SceneGraph`'s
+   shape doesn't map cleanly onto whatever input `emit_kerml()` expects,
+   write the smallest adapter needed — do not fork/duplicate the emitter
+   logic itself.
+2. Add a round-trip test for `scene_to_sysmlv2` mirroring
+   `dispatch_sysml.rs`'s `sysml_v2_export_round_trips_through_the_real_parser`
+   (i.e. render a small scene, feed the output to
+   `ufo_types::sysml::validate_sysml_v2()`, assert it's clean).
+3. Leave `kr0ki` and the LSP-tool evaluation alone entirely — both are
+   already someone else's correctly-scoped, already-decided territory
+   (ledgrrr's tooling survey already chose `daltskin/sysml-v2-lsp` for
+   editor/LSP use; that choice isn't b00t-cli's to revisit).
 
 ## Explicitly out of scope for this pass
 
