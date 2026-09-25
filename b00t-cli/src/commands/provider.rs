@@ -2870,3 +2870,74 @@ mod runpod_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod batch_job_spec_tests {
+    use super::*;
+
+    /// Verifies backward compatibility: jobs serialized before the
+    /// dependencies/interruptible/backend_hint/region_hint fields were added
+    /// deserialize correctly with default values.
+    #[test]
+    fn batch_job_spec_deserializes_old_format_without_new_fields() {
+        // Simulates a job spec as it existed before the 4 new fields were added
+        let old_json = r#"{
+            "image": "fake:latest",
+            "config_path": "/tmp/request.json",
+            "env": {},
+            "flavor": "gpu-1",
+            "timeout_hours": 2.0,
+            "gpu_count": 1,
+            "volumes": [],
+            "inputs": []
+        }"#;
+
+        let spec: BatchJobSpec = serde_json::from_str(old_json).expect(
+            "Old format without dependencies/interruptible/backend_hint/region_hint should deserialize"
+        );
+
+        assert_eq!(spec.image, "fake:latest");
+        assert_eq!(spec.config_path, "/tmp/request.json");
+        assert_eq!(spec.flavor, "gpu-1");
+        assert_eq!(spec.timeout_hours, 2.0);
+        assert_eq!(spec.gpu_count, 1);
+        assert!(spec.volumes.is_empty());
+        assert!(spec.inputs.is_empty());
+
+        // New fields should default correctly
+        assert!(spec.dependencies.is_empty());
+        assert!(!spec.interruptible);
+        assert!(spec.backend_hint.is_none());
+        assert!(spec.region_hint.is_none());
+    }
+
+    /// Verifies the new format with all fields serializes and deserializes correctly.
+    #[test]
+    fn batch_job_spec_deserializes_new_format_with_all_fields() {
+        let new_json = r#"{
+            "image": "fake:latest",
+            "config_path": "/tmp/request.json",
+            "env": {},
+            "flavor": "gpu-1",
+            "timeout_hours": 2.0,
+            "gpu_count": 1,
+            "volumes": [],
+            "inputs": ["dataset-1", "model-2"],
+            "dependencies": ["preprocessing-job-id", "data-prep-job-id"],
+            "interruptible": true,
+            "backend_hint": "runpod",
+            "region_hint": "us-east"
+        }"#;
+
+        let spec: BatchJobSpec = serde_json::from_str(new_json).expect(
+            "New format with all fields should deserialize"
+        );
+
+        assert_eq!(spec.image, "fake:latest");
+        assert_eq!(spec.inputs, vec!["dataset-1", "model-2"]);
+        assert_eq!(spec.dependencies, vec!["preprocessing-job-id", "data-prep-job-id"]);
+        assert!(spec.interruptible);
+        assert_eq!(spec.backend_hint, Some("runpod".to_string()));
+        assert_eq!(spec.region_hint, Some("us-east".to_string()));
+    }
+}
