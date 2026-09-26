@@ -69,6 +69,37 @@ pub struct Task {
     pub status: String,
     #[serde(default)]
     pub url: Option<String>,
+    /// External requirements this task satisfies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub satisfies: Vec<String>,
+    /// External requirements constraining this task.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constrains: Vec<String>,
+    /// External requirements this task conflicts with.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflicts_with: Vec<String>,
+    /// External requirements this task provides verification evidence for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verifies: Vec<String>,
+}
+
+impl Task {
+    /// Collect all external refs from relationship fields.
+    pub fn external_refs(&self) -> Vec<crate::external_refs::ExternalRef> {
+        use crate::external_refs::{ExternalRef, RefRelationship, Uri};
+        let mut refs = Vec::new();
+        for (verb, uris) in [
+            (RefRelationship::Satisfies, &self.satisfies),
+            (RefRelationship::Constrains, &self.constrains),
+            (RefRelationship::ConflictsWith, &self.conflicts_with),
+            (RefRelationship::Verifies, &self.verifies),
+        ] {
+            for s in uris.iter() {
+                refs.push(ExternalRef::new(verb, Uri::parse(s)));
+            }
+        }
+        refs
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -77,11 +108,35 @@ pub struct NewTask {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequirementRef {
     pub task_id: String,
-    pub requirement_id: String,
+    /// URI of the external requirement (e.g. "reqif://docs/focus.reqif#REQ-001").
+    pub requirement_uri: String,
+    /// Relationship verb: satisfies, constrains, depends_on, conflicts_with, verifies.
+    #[serde(default = "default_req_relationship")]
+    pub relationship: String,
     pub note: Option<String>,
+}
+
+fn default_req_relationship() -> String {
+    "satisfies".to_string()
+}
+
+/// A local traceability record — written to `_b00t_/project/requirements.json`
+/// so requirement/task links are queryable even when the provider backend is
+/// unreachable.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LocalRequirementLink {
+    pub task_id: String,
+    pub requirement_uri: String,
+    pub relationship: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub linked_at: String,
+    #[serde(default)]
+    pub provider: String,
 }
 
 // ── provider config (`_b00t_/project.toml`) ────────────────────────────
@@ -266,6 +321,10 @@ impl ProjectProvider for MiseProvider {
                 description: t.description,
                 status: if t.hide { "hidden".into() } else { "active".into() },
                 url: None,
+                satisfies: Vec::new(),
+                constrains: Vec::new(),
+                conflicts_with: Vec::new(),
+                verifies: Vec::new(),
             })
             .collect())
     }
@@ -289,6 +348,10 @@ impl ProjectProvider for MiseProvider {
             description: task.description,
             status: "active".into(),
             url: None,
+            satisfies: Vec::new(),
+            constrains: Vec::new(),
+            conflicts_with: Vec::new(),
+            verifies: Vec::new(),
         })
     }
 
@@ -302,7 +365,7 @@ impl ProjectProvider for MiseProvider {
         }
         eprintln!(
             "mise: requirement '{}' noted against task '{}' — mise itself has no requirement-tracking API; durable linkage is sub-project C's native-schema record",
-            req.requirement_id, req.task_id
+            req.requirement_uri, req.task_id
         );
         Ok(())
     }
@@ -428,6 +491,10 @@ impl ProjectProvider for JiraProvider {
                     description: None,
                     status,
                     url: Some(format!("{}/browse/{}", self.base_url, key)),
+                    satisfies: Vec::new(),
+                    constrains: Vec::new(),
+                    conflicts_with: Vec::new(),
+                    verifies: Vec::new(),
                 }
             })
             .collect())
@@ -462,14 +529,18 @@ impl ProjectProvider for JiraProvider {
             description: task.description,
             status: "open".into(),
             url: Some(format!("{}/browse/{}", self.base_url, key)),
+            satisfies: Vec::new(),
+            constrains: Vec::new(),
+            conflicts_with: Vec::new(),
+            verifies: Vec::new(),
         })
     }
 
     fn link_requirement(&self, req: RequirementRef) -> Result<()> {
         let url = format!("{}/rest/api/2/issue/{}/comment", self.base_url, req.task_id);
         let body_text = match &req.note {
-            Some(note) => format!("b00t requirement link: {} — {note}", req.requirement_id),
-            None => format!("b00t requirement link: {}", req.requirement_id),
+            Some(note) => format!("b00t requirement link: {} — {note}", req.requirement_uri),
+            None => format!("b00t requirement link: {}", req.requirement_uri),
         };
         let payload = serde_json::json!({ "body": body_text });
         let client = self.client()?;
@@ -559,13 +630,6 @@ struct LocalStore {
     requirement_links: Vec<LocalRequirementLink>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct LocalRequirementLink {
-    task_id: String,
-    requirement_id: String,
-    note: Option<String>,
-}
-
 impl NoopProvider {
     pub fn new(b00t_dir: impl Into<PathBuf>) -> Self {
         Self {
@@ -621,6 +685,10 @@ impl ProjectProvider for NoopProvider {
             description: task.description,
             status: "open".into(),
             url: None,
+            satisfies: Vec::new(),
+            constrains: Vec::new(),
+            conflicts_with: Vec::new(),
+            verifies: Vec::new(),
         };
         store.tasks.push(created.clone());
         self.save(&store)?;
@@ -637,8 +705,11 @@ impl ProjectProvider for NoopProvider {
         }
         store.requirement_links.push(LocalRequirementLink {
             task_id: req.task_id,
-            requirement_id: req.requirement_id,
+            requirement_uri: req.requirement_uri,
+            relationship: req.relationship,
             note: req.note,
+            linked_at: chrono::Utc::now().to_rfc3339(),
+            provider: "none".into(),
         });
         self.save(&store)
     }
@@ -731,7 +802,8 @@ mod tests {
         provider
             .link_requirement(RequirementRef {
                 task_id: created.id.clone(),
-                requirement_id: "REQ-1".into(),
+                requirement_uri: "reqif://test#REQ-1".into(),
+                relationship: "satisfies".into(),
                 note: Some("traceability".into()),
             })
             .unwrap();
@@ -752,7 +824,8 @@ mod tests {
         let err = provider
             .link_requirement(RequirementRef {
                 task_id: "does-not-exist".into(),
-                requirement_id: "REQ-1".into(),
+                requirement_uri: "reqif://test#REQ-1".into(),
+                relationship: "satisfies".into(),
                 note: None,
             })
             .err()
@@ -768,5 +841,62 @@ mod tests {
         // check_command_available("bl").
         let status = provider.status().unwrap();
         assert_eq!(status.available, check_command_available("bl"));
+    }
+
+    #[test]
+    fn task_external_refs_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let b00t_dir = tmp.path().join("_b00t_");
+        std::fs::create_dir_all(&b00t_dir).unwrap();
+
+        let provider = NoopProvider::new(&b00t_dir);
+        let task = provider
+            .create_task(NewTask {
+                title: "implement-cost-allocation".into(),
+                description: Some("FOCUS spec compliance".into()),
+            })
+            .unwrap();
+
+        // Link a requirement
+        provider
+            .link_requirement(RequirementRef {
+                task_id: task.id.clone(),
+                requirement_uri: "reqif://docs/focus.reqif#REQ-001".into(),
+                relationship: "satisfies".into(),
+                note: Some("FOCUS cost allocation".into()),
+            })
+            .unwrap();
+
+        // Reload and verify the link persisted
+        let reloaded = NoopProvider::new(&b00t_dir);
+        let links = reloaded.load().unwrap().requirement_links;
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].requirement_uri, "reqif://docs/focus.reqif#REQ-001");
+        assert_eq!(links[0].relationship, "satisfies");
+        assert_eq!(links[0].provider, "none");
+        assert!(!links[0].linked_at.is_empty());
+    }
+
+    #[test]
+    fn task_struct_external_refs_from_fields() {
+        use crate::external_refs::RefRelationship;
+
+        let task = Task {
+            id: "1".into(),
+            title: "test".into(),
+            description: None,
+            status: "open".into(),
+            url: None,
+            satisfies: vec!["reqif://spec#REQ-001".into()],
+            constrains: vec!["https://example.com/budget#cap".into()],
+            conflicts_with: vec![],
+            verifies: vec!["reqif://spec#REQ-002".into()],
+        };
+        let refs = task.external_refs();
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].relationship, RefRelationship::Satisfies);
+        assert_eq!(refs[1].relationship, RefRelationship::Constrains);
+        assert_eq!(refs[2].relationship, RefRelationship::Verifies);
+        assert_eq!(refs[0].uri.fragment.as_deref(), Some("REQ-001"));
     }
 }

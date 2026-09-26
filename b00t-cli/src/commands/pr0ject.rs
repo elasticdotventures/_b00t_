@@ -192,7 +192,8 @@ fn pr0ject_reqif_link(task_id: &str, requirement_id: &str, note: Option<String>)
     let provider = datum_project::select_provider(&b00t_dir)?;
     provider.link_requirement(RequirementRef {
         task_id: task_id.to_string(),
-        requirement_id: requirement_id.to_string(),
+        requirement_uri: requirement_id.to_string(),
+        relationship: "satisfies".into(),
         note,
     })?;
     println!("linked requirement {requirement_id} -> task {task_id}");
