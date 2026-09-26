@@ -151,6 +151,7 @@ pub struct McpStdioMethod {
 /// requires_auth = true
 /// bearer_token_env_var = "API_TOKEN"
 /// transport = "httpstream"
+/// client_type = "sse"
 /// startup_timeout_sec = 15
 /// tool_timeout_sec = 90
 /// enabled_tools = ["search", "analyze"]
