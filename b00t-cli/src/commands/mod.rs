@@ -46,6 +46,7 @@ pub mod lfmf;
 pub mod lifecycle_cmd;
 pub mod maintenance;
 pub mod mcp;
+pub mod mise;
 pub mod model;
 pub mod observability;
 pub mod ontology;

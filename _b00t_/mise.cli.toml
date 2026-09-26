@@ -1,0 +1,49 @@
+[b00t]
+name = "mise"
+type = "cli"
+desires = "2025.9.0"
+install = '''
+curl https://mise.run | sh
+'''
+update = '''
+# mise self-updates via `mise self-update`
+mise self-update
+'''
+version = "mise --version"
+version_regex = '\\d{4}\\.\\d+\\.\\d+'
+hint = "mise is a polyglot tool version manager and task runner. Use `b00t mise` for passthrough, `b00t mise --register` to integrate with b00t datums."
+unlocks = ["mise *"]
+
+[b00t.maintenance]
+check_interval_days = 7
+check_command = "curl -sL https://api.github.com/repos/jdx/mise/releases/latest | jq -r '.tag_name // empty' | sed 's/^v//'"
+version_source = "github:jdx/mise"
+check_regex = "(\\\\d{4}\\\\.\\\\d+\\\\.\\\\d+)"
+
+[b00t.learn]
+topic = "mise"
+auto_digest = true
+
+[[b00t.usage]]
+description = "List installed tools"
+command = "mise ls"
+
+[[b00t.usage]]
+description = "Install tools defined in mise.toml"
+command = "mise install"
+
+[[b00t.usage]]
+description = "Run a task defined in mise.toml"
+command = "mise run <task>"
+
+[[b00t.usage]]
+description = "Show current tool versions"
+command = "mise current"
+
+[validate]
+command = "mise --version"
+regex = "\\d{4}\\.\\d+\\.\\d+"
+
+[roles]
+required_for = ["developer"]
+optional_for = ["orchestrator", "analyst"]

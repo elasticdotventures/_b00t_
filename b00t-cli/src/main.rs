@@ -856,6 +856,15 @@ The system will:
         args: Vec<String>,
     },
 
+    #[clap(
+        hide = true,
+        about = "🔧 mise bridge — passthrough to mise.cli datum + b00t-owned --register"
+    )]
+    Mise {
+        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+
     /// 🔴 die — shortcut: process-icide for the current agent
     #[clap(hide = true, about = "🔴 DWIW shortcut → quit (kill agent)")]
     Die {
@@ -3600,6 +3609,54 @@ async fn main() {
                 None => {
                     eprintln!("[b00t] datum '{name}' not found");
                     std::process::exit(1);
+                }
+            }
+        }
+
+        Some(Commands::Mise { args }) => {
+            // Check for --register flag
+            if args.iter().any(|a| a == "--register") {
+                let dry_run = args.iter().any(|a| a == "--dry-run");
+                let global = args.iter().any(|a| a == "--global");
+                let config = b00t_cli::commands::mise::RegisterConfig {
+                    dry_run,
+                    global,
+                    b00t_datum_dir: std::path::PathBuf::from(&cli.path),
+                };
+                if let Err(e) = b00t_cli::commands::mise::handle_register(&config) {
+                    eprintln!("[b00t] mise register: {e}");
+                    std::process::exit(1);
+                }
+            } else {
+                // Passthrough to mise.cli datum
+                let expanded = shellexpand::tilde(&cli.path).to_string();
+                let name = "mise.cli";
+                let passthrough: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+                match b00t_cli::resolve_datum_dispatch(name, &expanded) {
+                    Some(b00t_cli::DatumDispatch::CliPassthrough {
+                        command,
+                        args: cmd_args,
+                    }) => {
+                        let mut all_args = cmd_args;
+                        all_args.extend(passthrough);
+                        let status = std::process::Command::new(&command)
+                            .args(&all_args)
+                            .status()
+                            .unwrap_or_else(|err| {
+                                eprintln!("[b00t] {command}: {err}");
+                                std::process::exit(1);
+                            });
+                        std::process::exit(status.code().unwrap_or(1));
+                    }
+                    Some(_other) => {
+                        eprintln!("[b00t] mise.cli resolved to unexpected dispatch type");
+                        std::process::exit(1);
+                    }
+                    None => {
+                        eprintln!("[b00t] mise.cli datum not found");
+                        eprintln!("       Install mise: b00t cli install mise.cli");
+                        std::process::exit(1);
+                    }
                 }
             }
         }
