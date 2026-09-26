@@ -189,13 +189,16 @@ fn pr0ject_task_create(title: &str, description: Option<String>) -> Result<()> {
 
 fn pr0ject_reqif_link(task_id: &str, requirement_id: &str, note: Option<String>) -> Result<()> {
     let b00t_dir = current_b00t_dir()?;
-    let provider = datum_project::select_provider(&b00t_dir)?;
-    provider.link_requirement(RequirementRef {
+    let req = RequirementRef {
         task_id: task_id.to_string(),
         requirement_uri: requirement_id.to_string(),
         relationship: "satisfies".into(),
         note,
-    })?;
+    };
+    let provider = datum_project::select_provider(&b00t_dir)?;
+    provider.link_requirement(req.clone())?;
+    // Also write to local traceability store so state is queryable offline
+    datum_project::save_local_requirement_link(&b00t_dir, &req, provider.name())?;
     println!("linked requirement {requirement_id} -> task {task_id}");
     Ok(())
 }

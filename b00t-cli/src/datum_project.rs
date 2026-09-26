@@ -139,6 +139,41 @@ pub struct LocalRequirementLink {
     pub provider: String,
 }
 
+// ── shared local traceability store ────────────────────────────────────
+
+/// Save a requirement link to the local traceability store at
+/// `_b00t_/project/requirements.json`. Every provider calls this so
+/// requirement/task state is queryable even when the backend is unreachable.
+pub fn save_local_requirement_link(
+    b00t_dir: &Path,
+    req: &RequirementRef,
+    provider_name: &str,
+) -> Result<()> {
+    let store_path = b00t_dir.join("project").join("requirements.json");
+    let mut links: Vec<LocalRequirementLink> = if store_path.exists() {
+        let raw = std::fs::read_to_string(&store_path)
+            .with_context(|| format!("read {}", store_path.display()))?;
+        serde_json::from_str(&raw).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    links.push(LocalRequirementLink {
+        task_id: req.task_id.clone(),
+        requirement_uri: req.requirement_uri.clone(),
+        relationship: req.relationship.clone(),
+        note: req.note.clone(),
+        linked_at: chrono::Utc::now().to_rfc3339(),
+        provider: provider_name.into(),
+    });
+    if let Some(parent) = store_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create {}", parent.display()))?;
+    }
+    std::fs::write(&store_path, serde_json::to_string_pretty(&links)?)
+        .with_context(|| format!("write {}", store_path.display()))?;
+    Ok(())
+}
+
 // ── provider config (`_b00t_/project.toml`) ────────────────────────────
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -898,5 +933,44 @@ mod tests {
         assert_eq!(refs[1].relationship, RefRelationship::Constrains);
         assert_eq!(refs[2].relationship, RefRelationship::Verifies);
         assert_eq!(refs[0].uri.fragment.as_deref(), Some("REQ-001"));
+    }
+
+    #[test]
+    fn save_local_requirement_link_writes_to_shared_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let b00t_dir = tmp.path().join("_b00t_");
+
+        let req = RequirementRef {
+            task_id: "42".into(),
+            requirement_uri: "reqif://spec#REQ-007".into(),
+            relationship: "verifies".into(),
+            note: Some("test evidence".into()),
+        };
+        save_local_requirement_link(&b00t_dir, &req, "mise").unwrap();
+
+        // Read back the store
+        let store_path = b00t_dir.join("project").join("requirements.json");
+        assert!(store_path.exists());
+        let raw = std::fs::read_to_string(&store_path).unwrap();
+        let links: Vec<LocalRequirementLink> = serde_json::from_str(&raw).unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].task_id, "42");
+        assert_eq!(links[0].requirement_uri, "reqif://spec#REQ-007");
+        assert_eq!(links[0].relationship, "verifies");
+        assert_eq!(links[0].provider, "mise");
+        assert!(!links[0].linked_at.is_empty());
+
+        // Second link appends, not overwrites
+        let req2 = RequirementRef {
+            task_id: "43".into(),
+            requirement_uri: "reqif://spec#REQ-008".into(),
+            relationship: "satisfies".into(),
+            note: None,
+        };
+        save_local_requirement_link(&b00t_dir, &req2, "jira").unwrap();
+        let raw2 = std::fs::read_to_string(&store_path).unwrap();
+        let links2: Vec<LocalRequirementLink> = serde_json::from_str(&raw2).unwrap();
+        assert_eq!(links2.len(), 2);
+        assert_eq!(links2[1].provider, "jira");
     }
 }
