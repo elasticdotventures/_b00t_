@@ -8,6 +8,7 @@
 
 use anyhow::{Result, bail};
 use clap::Parser;
+use futures::StreamExt;
 use std::path::{Path, PathBuf};
 
 use crate::hive::{
@@ -134,8 +135,38 @@ pub enum HiveCommands {
         dry_run: bool,
     },
 
-    #[clap(
-        about = "List and manage hive peer nodes across trust zones",
+    #[clap(about = "Send a message to an agent via NATS hive-relay",
+        long_about = "Publish a message to a target agent through the NATS hive-relay.\n\
+            Drop-in NATS-native replacement for `b00t agent message`.\n\
+            Subject convention: hive.<agent_id>\n\n\
+            Examples:\n  b00t hive send sm3lly-acp \"hello from pi\"\n  b00t hive send pi \"deploy status\" --subject deploy.query"
+    )]
+    Send {
+        #[arg(help = "Target agent ID")]
+        to_agent: String,
+        #[arg(help = "Message content")]
+        message: String,
+        #[arg(long, help = "Message subject (default: hive.msg)")]
+        subject: Option<String>,
+        #[arg(long, help = "NATS URL (default: NATS_URL env or nats://localhost:4222)")]
+        nats_url: Option<String>,
+    },
+
+    #[clap(about = "Subscribe to messages for an agent via NATS hive-relay",
+        long_about = "Listen for incoming messages on the NATS hive-relay.\n\
+            Subject convention: hive.<agent_id>\n\n\
+            Examples:\n  b00t hive listen pi\n  b00t hive listen pi --timeout 60\n  b00t hive listen pi --nats-url nats://rock-5c:4222"
+    )]
+    Listen {
+        #[arg(help = "Agent ID to listen for")]
+        agent_id: String,
+        #[arg(long, help = "Timeout in seconds (0 = indefinite)", default_value = "0")]
+        timeout: u64,
+        #[arg(long, help = "NATS URL (default: NATS_URL env or nats://localhost:4222)")]
+        nats_url: Option<String>,
+    },
+
+    #[clap(about = "List and manage hive peer nodes across trust zones",
         long_about = "Hive peers are discovered b00t nodes across trust zones (local, LAN, VPN, internet)."
     )]
     Peers {
@@ -491,6 +522,60 @@ pub fn handle_hive_command(cmd: &HiveCommands, path: &str) -> Result<()> {
             }
         }
 
+        HiveCommands::Send {
+            to_agent,
+            message,
+            subject,
+            nats_url,
+        } => {
+            let url = hive_resolve_nats_url(nats_url.as_deref());
+            let subj = subject
+                .clone()
+                .unwrap_or_else(|| format!("hive.{}", to_agent));
+            let sender = std::env::var("B00T_AGENT_ID")
+                .or_else(|_| std::env::var("HOSTNAME"))
+                .or_else(|_| std::env::var("USER"))
+                .unwrap_or_else(|_| "cli".to_string());
+            let payload = serde_json::json!({
+                "from": sender,
+                "to": to_agent,
+                "subject": &subj,
+                "body": message,
+                "ts": chrono::Utc::now().to_rfc3339(),
+            });
+            match block_on_nats_send(&url, &subj, &payload.to_string()) {
+                Ok(()) => {
+                    println!("✅ sent → {} ({})", to_agent, subj);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("⚠️  NATS send failed ({}); message not delivered", e);
+                    bail!("hive send failed: {}", e);
+                }
+            }
+        }
+
+        HiveCommands::Listen {
+            agent_id,
+            timeout,
+            nats_url,
+        } => {
+            let url = hive_resolve_nats_url(nats_url.as_deref());
+            let subject = format!("hive.{}", agent_id);
+            println!(
+                "🎧 listening on {} (nats={}, timeout={}s)",
+                subject,
+                url,
+                if *timeout == 0 {
+                    "∞".to_string()
+                } else {
+                    timeout.to_string()
+                }
+            );
+            block_on_nats_listen(&url, &subject, *timeout)?;
+            Ok(())
+        }
+
         HiveCommands::Cyber(cyber_cmd) => handle_cyber_command(cyber_cmd),
         HiveCommands::Peers { peer_command } => handle_peer_command(peer_command),
         HiveCommands::Run {
@@ -735,4 +820,129 @@ fn load_all_guards(datum_dir: &Path, snapshot: &SystemSnapshot) -> Vec<crate::hi
     guards.extend(crate::hive::load_session_guards());
 
     guards
+}
+
+// ── NATS hive-relay helpers (#1347) ────────────────────────────────────
+
+/// Resolve NATS URL: explicit arg > NATS_URL env > default localhost.
+fn hive_resolve_nats_url(explicit: Option<&str>) -> String {
+    explicit
+        .map(String::from)
+        .or_else(|| std::env::var("NATS_URL").ok())
+        .unwrap_or_else(|| "nats://localhost:4222".to_string())
+}
+
+/// Synchronous bridge: publish one message via async_nats.
+fn block_on_nats_send(url: &str, subject: &str, payload: &str) -> anyhow::Result<()> {
+    let url = url.to_string();
+    let subject = subject.to_string();
+    let payload = payload.to_string();
+    std::thread::spawn(move || -> anyhow::Result<()> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                let client = async_nats::connect(&url)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS connect: {}", e))?;
+                client
+                    .publish(subject, payload.into())
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS publish: {}", e))?;
+                client
+                    .flush()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS flush: {}", e))?;
+                Ok(())
+            })
+    })
+    .join()
+    .map_err(|_| anyhow::anyhow!("NATS send thread panicked"))?
+}
+
+/// Synchronous bridge: subscribe and print messages until timeout or Ctrl-C.
+fn block_on_nats_listen(url: &str, subject: &str, timeout_secs: u64) -> anyhow::Result<()> {
+    let url = url.to_string();
+    let subject = subject.to_string();
+    std::thread::spawn(move || -> anyhow::Result<()> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                let client = async_nats::connect(&url)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS connect: {}", e))?;
+                let mut sub = client
+                    .subscribe(subject.clone())
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS subscribe: {}", e))?;
+                client
+                    .flush()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("NATS flush: {}", e))?;
+                println!("✅ subscribed to {}", subject);
+
+                let deadline = if timeout_secs > 0 {
+                    Some(tokio::time::Instant::now()
+                        + tokio::time::Duration::from_secs(timeout_secs))
+                } else {
+                    None
+                };
+
+                loop {
+                    let msg = if let Some(dl) = deadline {
+                        match tokio::time::timeout_at(dl, sub.next()).await {
+                            Ok(Some(msg)) => Some(msg),
+                            Ok(None) => None,
+                            Err(_) => {
+                                println!("⏰ timeout ({}s)", timeout_secs);
+                                break;
+                            }
+                        }
+                    } else {
+                        sub.next().await
+                    };
+
+                    match msg {
+                        Some(msg) => {
+                            let payload = String::from_utf8_lossy(&msg.payload);
+                            let subject = &msg.subject;
+                            println!("── {} ──", subject);
+                            println!("{}", payload);
+                        }
+                        None => break,
+                    }
+                }
+                Ok(())
+            })
+    })
+    .join()
+    .map_err(|_| anyhow::anyhow!("NATS listen thread panicked"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hive_resolve_nats_url_explicit_wins() {
+        unsafe { std::env::remove_var("NATS_URL") };
+        assert_eq!(
+            hive_resolve_nats_url(Some("nats://rock-5c:4222")),
+            "nats://rock-5c:4222"
+        );
+    }
+
+    #[test]
+    fn hive_resolve_nats_url_env_fallback() {
+        unsafe { std::env::set_var("NATS_URL", "nats://env-host:4222") };
+        assert_eq!(hive_resolve_nats_url(None), "nats://env-host:4222");
+        unsafe { std::env::remove_var("NATS_URL") };
+    }
+
+    #[test]
+    fn hive_resolve_nats_url_default() {
+        unsafe { std::env::remove_var("NATS_URL") };
+        assert_eq!(hive_resolve_nats_url(None), "nats://localhost:4222");
+    }
 }
