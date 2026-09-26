@@ -865,6 +865,15 @@ The system will:
         args: Vec<String>,
     },
 
+    #[clap(
+        hide = true,
+        about = "📋 usage bridge — passthrough to usage.cli datum (KDL CLI spec)"
+    )]
+    Usage {
+        #[clap(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+
     /// 🔴 die — shortcut: process-icide for the current agent
     #[clap(hide = true, about = "🔴 DWIW shortcut → quit (kill agent)")]
     Die {
@@ -3657,6 +3666,38 @@ async fn main() {
                         eprintln!("       Install mise: b00t cli install mise.cli");
                         std::process::exit(1);
                     }
+                }
+            }
+        }
+
+        Some(Commands::Usage { args }) => {
+            let expanded = shellexpand::tilde(&cli.path).to_string();
+            let name = "usage.cli";
+            let passthrough: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            match b00t_cli::resolve_datum_dispatch(name, &expanded) {
+                Some(b00t_cli::DatumDispatch::CliPassthrough {
+                    command,
+                    args: cmd_args,
+                }) => {
+                    let mut all_args = cmd_args;
+                    all_args.extend(passthrough);
+                    let status = std::process::Command::new(&command)
+                        .args(&all_args)
+                        .status()
+                        .unwrap_or_else(|err| {
+                            eprintln!("[b00t] {command}: {err}");
+                            std::process::exit(1);
+                        });
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+                Some(_other) => {
+                    eprintln!("[b00t] usage.cli resolved to unexpected dispatch type");
+                    std::process::exit(1);
+                }
+                None => {
+                    eprintln!("[b00t] usage.cli datum not found");
+                    eprintln!("       Install usage: b00t cli install usage.cli");
+                    std::process::exit(1);
                 }
             }
         }

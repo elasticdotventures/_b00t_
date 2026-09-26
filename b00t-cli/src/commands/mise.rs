@@ -42,6 +42,14 @@ run = "b00t bootstrap"
 [tasks.b00t-status]
 description = "Show b00t hive status"
 run = "b00t hive status"
+
+[tasks.b00t-usage-validate]
+description = "Validate b00t Usage specifications"
+run = "b00t usage lint --help"
+
+[tasks.b00t-usage-generate]
+description = "Generate Usage-derived b00t artifacts"
+run = "b00t usage generate markdown --help"
 "#
     .trim_start()
     .to_string()
@@ -174,6 +182,8 @@ run = "echo hello"
         assert!(block.contains("b00t-list"));
         assert!(block.contains("b00t-bootstrap"));
         assert!(block.contains("b00t-status"));
+        assert!(block.contains("b00t-usage-validate"));
+        assert!(block.contains("b00t-usage-generate"));
         assert!(block.contains(BLOCK_START));
     }
 
