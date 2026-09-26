@@ -174,6 +174,49 @@ pub fn save_local_requirement_link(
     Ok(())
 }
 
+/// Save a task record to the local traceability store at
+/// `_b00t_/project/tasks.json`. Called from `b00t pr0ject task create` so
+/// tasks are queryable even when the provider backend is unreachable.
+pub fn save_local_task(b00t_dir: &Path, task: &Task, provider_name: &str) -> Result<()> {
+    #[derive(Serialize, Deserialize)]
+    struct LocalTaskRecord {
+        id: String,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        status: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+        provider: String,
+        created_at: String,
+    }
+
+    let store_path = b00t_dir.join("project").join("tasks.json");
+    let mut records: Vec<LocalTaskRecord> = if store_path.exists() {
+        let raw = std::fs::read_to_string(&store_path)
+            .with_context(|| format!("read {}", store_path.display()))?;
+        serde_json::from_str(&raw).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    records.push(LocalTaskRecord {
+        id: task.id.clone(),
+        title: task.title.clone(),
+        description: task.description.clone(),
+        status: task.status.clone(),
+        url: task.url.clone(),
+        provider: provider_name.into(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    });
+    if let Some(parent) = store_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create {}", parent.display()))?;
+    }
+    std::fs::write(&store_path, serde_json::to_string_pretty(&records)?)
+        .with_context(|| format!("write {}", store_path.display()))?;
+    Ok(())
+}
+
 // ── provider config (`_b00t_/project.toml`) ────────────────────────────
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -972,5 +1015,33 @@ mod tests {
         let links2: Vec<LocalRequirementLink> = serde_json::from_str(&raw2).unwrap();
         assert_eq!(links2.len(), 2);
         assert_eq!(links2[1].provider, "jira");
+    }
+
+    #[test]
+    fn save_local_task_writes_to_shared_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let b00t_dir = tmp.path().join("_b00t_");
+
+        let task = Task {
+            id: "7".into(),
+            title: "fix-billing".into(),
+            description: Some("FOCUS compliance".into()),
+            status: "open".into(),
+            url: Some("https://jira.example.com/browse/PROJ-7".into()),
+            satisfies: Vec::new(),
+            constrains: Vec::new(),
+            conflicts_with: Vec::new(),
+            verifies: Vec::new(),
+        };
+        save_local_task(&b00t_dir, &task, "jira").unwrap();
+
+        let store_path = b00t_dir.join("project").join("tasks.json");
+        assert!(store_path.exists());
+        let raw = std::fs::read_to_string(&store_path).unwrap();
+        let records: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["id"], "7");
+        assert_eq!(records[0]["provider"], "jira");
+        assert!(!records[0]["created_at"].as_str().unwrap().is_empty());
     }
 }

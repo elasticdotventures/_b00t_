@@ -480,12 +480,14 @@ mod tests {
                 statement: "Every record MUST have a BillingAccountId".into(),
                 header: "BillingAccountId".into(),
                 constraint: "required".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-002".into(),
                 statement: "Every record MUST have a non-null BilledCost".into(),
                 header: "BilledCost".into(),
                 constraint: "required".into(),
+                project_ref: None,
             },
         ]
     }

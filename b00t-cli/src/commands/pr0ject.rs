@@ -183,6 +183,8 @@ fn pr0ject_task_create(title: &str, description: Option<String>) -> Result<()> {
         title: title.to_string(),
         description,
     })?;
+    // Also write to local traceability store so tasks are queryable offline
+    datum_project::save_local_task(&b00t_dir, &task, provider.name())?;
     println!("created task {} — {}", task.id, task.title);
     Ok(())
 }

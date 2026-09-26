@@ -342,6 +342,10 @@ pub struct AbDataRequirement {
     pub statement: String,
     pub header: String,
     pub constraint: String,
+    /// Optional reference to a project-scoped task (e.g. "jira:PROJ-123" or "none:3").
+    /// Links this requirement to a ProjectProvider task for traceability (#1345).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_ref: Option<String>,
 }
 
 impl FocusSchema {
@@ -607,24 +611,28 @@ impl FocusSchema {
                 statement: "Every record MUST have a BillingAccountId".into(),
                 header: "BillingAccountId".into(),
                 constraint: "required".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-002".into(),
                 statement: "Every record MUST have a non-null BilledCost".into(),
                 header: "BilledCost".into(),
                 constraint: "required".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-003".into(),
                 statement: "Control/treatment variants MUST have matching experiment_id".into(),
                 header: "x_ExperimentId".into(),
                 constraint: "pairwise_match".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-004".into(),
                 statement: "EffectiveCost MUST be <= BilledCost".into(),
                 header: "EffectiveCost".into(),
                 constraint: "lte:BilledCost".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-005".into(),
@@ -632,12 +640,14 @@ impl FocusSchema {
                     .into(),
                 header: "ChargeCategory".into(),
                 constraint: "enum".into(),
+                project_ref: None,
             },
             AbDataRequirement {
                 id: "REQ-FOCUS-006".into(),
                 statement: "A recommendation MUST be present when focus_delta is computed".into(),
                 header: "recommendation".into(),
                 constraint: "required".into(),
+                project_ref: None,
             },
         ]
     }
