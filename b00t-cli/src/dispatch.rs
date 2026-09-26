@@ -1534,7 +1534,7 @@ fn build_httpstream_server_config(
         }
     }
 
-    config (wip(cli): ProjectProvider + rep0/r00t/pr0ject scope discovery (unbuilt, untested))
+    config
 }
 
 pub fn dotmcpjson_install_mcp(
@@ -1567,7 +1567,7 @@ pub fn dotmcpjson_install_mcp(
             .mcp
             .as_ref()
             .and_then(|m| m.httpstream.as_ref());
-        build_httpstream_server_config(&command, httpstream_data) (wip(cli): ProjectProvider + rep0/r00t/pr0ject scope discovery (unbuilt, untested))
+        build_httpstream_server_config(&command, httpstream_data)
     } else {
         serde_json::json!({ "command": command, "args": args })
     };

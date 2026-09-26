@@ -174,14 +174,6 @@ pub struct McpHttpStreamMethod {
     #[serde(default = "default_httpstream_transport")]
     pub transport: String,
 
-    /// Client-facing MCP wire transport for generated manifests (e.g.
-    /// Claude Code's `.mcp.json` `"type"` field): `"http"` or `"sse"`.
-    /// Distinct from `transport` above, which is an internal b00t datum
-    /// discriminator (always `"httpstream"`) and never surfaced to clients.
-    /// Defaults to `"http"` when unset.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_type: Option<String>,
-
     // Vendor capabilities - authentication
     /// Environment variable name containing bearer token
     /// (Codex: bearer_token_env_var)
