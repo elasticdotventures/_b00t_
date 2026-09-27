@@ -197,6 +197,37 @@ fn next_id(store: &TaskStore) -> u32 {
     store.tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1
 }
 
+/// 🤓 #66: every read-modify-write of the task store MUST go through this
+/// flock guard. Parallel `b00t task add` calls raced on the unlocked
+/// load→push→save cycle — observed live 2026-09-27: 2 of 4 concurrent adds
+/// silently lost, both survivors printing duplicate IDs. Lock file:
+/// `<tasks.json>.lock` (fs2 flock, exclusive, held across load+save, released
+/// on drop). Read-only commands (list/show/next) intentionally do NOT lock.
+pub(crate) fn with_locked_store<F, R>(f: F) -> Result<R>
+where
+    F: FnOnce(&mut TaskStore) -> Result<R>,
+{
+    use fs2::FileExt;
+    let path = tasks_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let lock_path = path.with_extension("json.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("open lock {}", lock_path.display()))?;
+    lock_file
+        .lock_exclusive()
+        .with_context(|| format!("flock {}", lock_path.display()))?;
+    let mut store = load_store()?;
+    let out = f(&mut store)?;
+    save_store(&store)?;
+    Ok(out)
+    // flock released on lock_file drop
+}
+
 // ── taskmaster compat import ───────────────────────────────────────────────────
 
 fn import_from_legacy(path: &Path) -> Result<TaskStore> {
@@ -484,26 +515,28 @@ fn cmd_add(
         priority >= 1 && priority <= 4,
         "priority must be 1–4 (got {priority})"
     );
-    let mut store = load_store()?;
-    let id = next_id(&store);
-    let tags = tags_raw
-        .map(|t| t.split(',').map(str::trim).map(str::to_string).collect())
-        .unwrap_or_default();
-    let task = Task {
-        id,
-        title: title.clone(),
-        description,
-        status: TaskStatus::Pending,
-        priority,
-        tags,
-        dependencies: vec![],
-        acceptance_criteria: criteria,
-        notes: None,
-        created_at: now_iso(),
-        updated_at: None,
-    };
-    store.tasks.push(task);
-    save_store(&store)?;
+    // #66: id assignment + push under exclusive flock
+    let id = with_locked_store(|store| {
+        let id = next_id(store);
+        let tags = tags_raw
+            .map(|t| t.split(',').map(str::trim).map(str::to_string).collect())
+            .unwrap_or_default();
+        let task = Task {
+            id,
+            title: title.clone(),
+            description: description.clone(),
+            status: TaskStatus::Pending,
+            priority,
+            tags,
+            dependencies: vec![],
+            acceptance_criteria: criteria.clone(),
+            notes: None,
+            created_at: now_iso(),
+            updated_at: None,
+        };
+        store.tasks.push(task);
+        Ok(id)
+    })?;
     println!("added #{id}: {title}");
     Ok(())
 }
@@ -552,35 +585,41 @@ fn cmd_next(json: bool) -> Result<()> {
 /// lock needed — `load_store`/`save_store` already read-then-write the whole
 /// file, matching every other mutating command in this module).
 fn cmd_pop(json: bool) -> Result<()> {
-    let mut store = load_store()?;
-    let done_ids: std::collections::HashSet<u32> = store
-        .tasks
-        .iter()
-        .filter(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Deferred))
-        .map(|t| t.id)
-        .collect();
-    let next_id = store
-        .tasks
-        .iter()
-        .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress))
-        .filter(|t| t.dependencies.iter().all(|dep| done_ids.contains(dep)))
-        .min_by_key(|t| (t.priority, t.dependencies.len(), t.id))
-        .map(|t| t.id);
+    // #66: claim (status flip) under exclusive flock — two parallel pops
+    //    must never claim the same task or lose each other's write.
+    let claimed_opt = with_locked_store(|store| {
+        let done_ids: std::collections::HashSet<u32> = store
+            .tasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Deferred))
+            .map(|t| t.id)
+            .collect();
+        let next_id = store
+            .tasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::InProgress))
+            .filter(|t| t.dependencies.iter().all(|dep| done_ids.contains(dep)))
+            .min_by_key(|t| (t.priority, t.dependencies.len(), t.id))
+            .map(|t| t.id);
 
-    let Some(id) = next_id else {
+        let Some(id) = next_id else {
+            return Ok(None);
+        };
+
+        let task = store
+            .tasks
+            .iter_mut()
+            .find(|t| t.id == id)
+            .expect("id came from the same store snapshot");
+        task.status = TaskStatus::InProgress;
+        task.updated_at = Some(now_iso());
+        Ok(Some(task.clone()))
+    })?;
+
+    let Some(claimed) = claimed_opt else {
         println!("no actionable tasks");
         return Ok(());
     };
-
-    let task = store
-        .tasks
-        .iter_mut()
-        .find(|t| t.id == id)
-        .expect("id came from the same store snapshot");
-    task.status = TaskStatus::InProgress;
-    task.updated_at = Some(now_iso());
-    let claimed = task.clone();
-    save_store(&store)?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&claimed)?);
@@ -600,71 +639,73 @@ fn cmd_pop(json: bool) -> Result<()> {
 }
 
 fn cmd_rm(id: u32) -> Result<()> {
-    let mut store = load_store()?;
-    let pos = store
-        .tasks
-        .iter()
-        .position(|t| t.id == id)
-        .with_context(|| format!("task #{id} not found"))?;
-    let title = store.tasks[pos].title.clone();
-    store.tasks.remove(pos);
-    // Remove references from other tasks' dependency lists
-    for t in &mut store.tasks {
-        t.dependencies.retain(|&dep| dep != id);
-    }
-    save_store(&store)?;
+    let title = with_locked_store(|store| {
+        let pos = store
+            .tasks
+            .iter()
+            .position(|t| t.id == id)
+            .with_context(|| format!("task #{id} not found"))?;
+        let title = store.tasks[pos].title.clone();
+        store.tasks.remove(pos);
+        // Remove references from other tasks' dependency lists
+        for t in &mut store.tasks {
+            t.dependencies.retain(|&dep| dep != id);
+        }
+        Ok(title)
+    })?;
     println!("removed #{id}: {title}");
     Ok(())
 }
 
 fn cmd_dep(id: u32, op: DepOp) -> Result<()> {
-    let mut store = load_store()?;
-    let task_exists = store.tasks.iter().any(|t| t.id == id);
-    ensure!(task_exists, "task #{id} not found");
+    with_locked_store(|store| {
+        let task_exists = store.tasks.iter().any(|t| t.id == id);
+        ensure!(task_exists, "task #{id} not found");
 
-    match op {
-        DepOp::Add { dep } => {
-            ensure!(id != dep, "task #{id} cannot depend on itself");
-            let dep_exists = store.tasks.iter().any(|t| t.id == dep);
-            ensure!(dep_exists, "dependency task #{dep} not found");
+        match op {
+            DepOp::Add { dep } => {
+                ensure!(id != dep, "task #{id} cannot depend on itself");
+                let dep_exists = store.tasks.iter().any(|t| t.id == dep);
+                ensure!(dep_exists, "dependency task #{dep} not found");
 
-            let task = store
-                .tasks
-                .iter_mut()
-                .find(|t| t.id == id)
-                .with_context(|| format!("task #{id} not found"))?;
-            if !task.dependencies.contains(&dep) {
-                task.dependencies.push(dep);
-                task.dependencies.sort();
+                let task = store
+                    .tasks
+                    .iter_mut()
+                    .find(|t| t.id == id)
+                    .with_context(|| format!("task #{id} not found"))?;
+                if !task.dependencies.contains(&dep) {
+                    task.dependencies.push(dep);
+                    task.dependencies.sort();
+                }
+                task.updated_at = Some(now_iso());
+                println!("#{id} now depends on #{dep}");
             }
-            task.updated_at = Some(now_iso());
-            println!("#{id} now depends on #{dep}");
+            DepOp::Rm { dep } => {
+                let task = store
+                    .tasks
+                    .iter_mut()
+                    .find(|t| t.id == id)
+                    .with_context(|| format!("task #{id} not found"))?;
+                task.dependencies.retain(|&d| d != dep);
+                task.updated_at = Some(now_iso());
+                println!("#{id}: removed dep #{dep}");
+            }
         }
-        DepOp::Rm { dep } => {
-            let task = store
-                .tasks
-                .iter_mut()
-                .find(|t| t.id == id)
-                .with_context(|| format!("task #{id} not found"))?;
-            task.dependencies.retain(|&d| d != dep);
-            task.updated_at = Some(now_iso());
-            println!("#{id}: removed dep #{dep}");
-        }
-    }
-    save_store(&store)
+        Ok(())
+    })
 }
 
 fn cmd_done(id: u32) -> Result<()> {
-    let mut store = load_store()?;
-    let task = store
-        .tasks
-        .iter_mut()
-        .find(|t| t.id == id)
-        .with_context(|| format!("task #{id} not found"))?;
-    task.status = TaskStatus::Done;
-    task.updated_at = Some(now_iso());
-    let title = task.title.clone();
-    save_store(&store)?;
+    let title = with_locked_store(|store| {
+        let task = store
+            .tasks
+            .iter_mut()
+            .find(|t| t.id == id)
+            .with_context(|| format!("task #{id} not found"))?;
+        task.status = TaskStatus::Done;
+        task.updated_at = Some(now_iso());
+        Ok(task.title.clone())
+    })?;
     println!("done #{id}: {title}");
     Ok(())
 }
@@ -679,30 +720,30 @@ fn cmd_update(
     if let Some(p) = priority {
         anyhow::ensure!(p >= 1 && p <= 4, "priority must be 1–4 (got {p})");
     }
-    let mut store = load_store()?;
-    let task = store
-        .tasks
-        .iter_mut()
-        .find(|t| t.id == id)
-        .with_context(|| format!("task #{id} not found"))?;
-    if let Some(s) = status {
-        task.status = s.parse()?;
-    }
-    if let Some(t) = title {
-        task.title = t;
-    }
-    if let Some(p) = priority {
-        task.priority = p;
-    }
-    if let Some(n) = note {
-        task.notes = Some(match &task.notes {
-            None => n,
-            Some(e) => format!("{e}\n{n}"),
-        });
-    }
-    task.updated_at = Some(now_iso());
-    let title = task.title.clone();
-    save_store(&store)?;
+    let title = with_locked_store(|store| {
+        let task = store
+            .tasks
+            .iter_mut()
+            .find(|t| t.id == id)
+            .with_context(|| format!("task #{id} not found"))?;
+        if let Some(s) = status {
+            task.status = s.parse()?;
+        }
+        if let Some(t) = title {
+            task.title = t;
+        }
+        if let Some(p) = priority {
+            task.priority = p;
+        }
+        if let Some(n) = note {
+            task.notes = Some(match &task.notes {
+                None => n,
+                Some(e) => format!("{e}\n{n}"),
+            });
+        }
+        task.updated_at = Some(now_iso());
+        Ok(task.title.clone())
+    })?;
     println!("updated #{id}: {title}");
     Ok(())
 }
@@ -1040,5 +1081,55 @@ mod tests {
         let s = r#"{"id":2,"title":"b","status":"pending","created_at":"2026-07-01T15:01:57Z"}"#;
         let t: Task = serde_json::from_str(s).unwrap();
         assert_eq!(t.updated_at, None);
+    }
+
+    #[test]
+    fn concurrent_adds_never_lose_writes() {
+        // 🚩 live repro (2026-09-27): 4 parallel `b00t task add` → 2 lost,
+        //    duplicate ids displayed. Under the with_locked_store flock guard,
+        //    N threads × M adds must all land with unique contiguous ids.
+        //    with_tmp_store holds TASK_ENV_LOCK — env stays stable while the
+        //    scoped threads run.
+        with_tmp_store(|_| {
+            const THREADS: usize = 8;
+            const PER: usize = 5;
+            std::thread::scope(|s| {
+                for t in 0..THREADS {
+                    s.spawn(move || {
+                        for i in 0..PER {
+                            with_locked_store(|store| {
+                                let id = next_id(store);
+                                store.tasks.push(Task {
+                                    id,
+                                    title: format!("t{t}-{i}"),
+                                    description: None,
+                                    status: TaskStatus::Pending,
+                                    priority: 3,
+                                    tags: vec![],
+                                    dependencies: vec![],
+                                    acceptance_criteria: vec![],
+                                    notes: None,
+                                    created_at: now_iso(),
+                                    updated_at: None,
+                                });
+                                Ok(())
+                            })
+                            .expect("locked add must succeed");
+                        }
+                    });
+                }
+            });
+
+            let store = load_store().unwrap();
+            assert_eq!(store.tasks.len(), THREADS * PER, "no lost writes");
+            let mut ids: Vec<u32> = store.tasks.iter().map(|t| t.id).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            assert_eq!(
+                ids,
+                (1..=(THREADS * PER) as u32).collect::<Vec<_>>(),
+                "ids must be unique and contiguous 1..=N"
+            );
+        });
     }
 }
