@@ -402,7 +402,17 @@ impl LfmfSystem {
                 .get_vector_advice(client, &category, query, max_results)
                 .await
             {
-                Ok(advice) => return Ok(advice),
+                Ok(advice) => {
+                    // 🤓 #65: blank vector rows are misses, not answers —
+                    //    filter and fall through to the durable filesystem.
+                    let usable = usable_vector_results(advice);
+                    if !usable.is_empty() {
+                        return Ok(usable);
+                    }
+                    eprintln!(
+                        "🔄 Vector database returned blank results, using filesystem fallback"
+                    );
+                }
                 Err(e) => {
                     eprintln!(
                         "🔄 Vector database query failed: {}, using filesystem fallback",
@@ -545,10 +555,13 @@ impl LfmfSystem {
                         .take(max_results)
                         .map(|r| r.content)
                         .collect();
+                    // 🤓 #65: blank-content rows are misses, not answers —
+                    //    only short-circuit when usable text came back.
+                    let items = usable_vector_results(items);
                     if !items.is_empty() {
                         return Ok(items);
                     }
-                    // Vector DB returned nothing — fall through to filesystem
+                    // Vector DB returned nothing usable — fall through to filesystem
                 }
                 Err(_) => {} // Fall through to filesystem
             }
@@ -652,6 +665,19 @@ pub fn classify_init_failure(e: &anyhow::Error) -> (&'static str, String) {
             ),
         )
     }
+}
+
+/// 🤓 #65: the vector backend has a silent failure mode — rows with empty or
+/// whitespace-only `content` (observed live: `learn --search list` rendered
+/// '2 total' blank lessons while the durable filesystem store held the text;
+/// see also AGENTS.md known-broken note on lfmf vector persistence). Blank
+/// rows are misses, not answers: filter them so callers fall through to the
+/// filesystem (durable-first doctrine, record_lesson_scoped).
+fn usable_vector_results(items: Vec<String>) -> Vec<String> {
+    items
+        .into_iter()
+        .filter(|s| !s.trim().is_empty())
+        .collect()
 }
 
 #[cfg(test)]
@@ -759,4 +785,40 @@ learn_dir = "custom_learn"
     }
 
 
+}
+
+// ── usable_vector_results tests (task #65) ────────────────────────────────────
+
+#[cfg(test)]
+mod blank_vector_tests {
+    use super::usable_vector_results;
+
+    #[test]
+    fn filters_blank_and_whitespace_rows() {
+        let rows = vec![
+            "".to_string(),
+            "   ".to_string(),
+            "\n\t".to_string(),
+            "real lesson".to_string(),
+        ];
+        assert_eq!(usable_vector_results(rows), vec!["real lesson".to_string()]);
+    }
+
+    #[test]
+    fn all_blank_yields_empty_so_callers_fall_through() {
+        // 🚩 live repro shape: vector backend returned 2 rows, both blank —
+        //    must yield empty vec so list_lessons/get_advice use filesystem.
+        let rows = vec!["".to_string(), "".to_string()];
+        assert!(usable_vector_results(rows).is_empty());
+    }
+
+    #[test]
+    fn preserves_non_blank_content_verbatim() {
+        let rows = vec!["  padded but real  ".to_string()];
+        assert_eq!(
+            usable_vector_results(rows),
+            vec!["  padded but real  ".to_string()],
+            "content must not be trimmed/rewritten, only filtered"
+        );
+    }
 }
