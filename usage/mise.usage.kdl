@@ -1,0 +1,58 @@
+// usage KDL grammar for mise — FLAT-TOPIC pair of _b00t_/mise.cli.toml
+// 🤓 ADR-001: usage owns the CLI grammar; b00t datum stays authoritative for
+//    install/version/policy. Digest recorded in [b00t.usage_spec].sha256 —
+//    editing this file without refreshing the digest fails `b00t datum
+//    validate mise.cli.toml` (fail-closed, ADR-001 §6).
+// Ref: https://usage.jdx.dev / github://jdx-mise
+"$schema" "https://usage.jdx.dev/usage.kdl"
+description "mise — polyglot dev-tool version manager, env vars, and task runner"
+
+flag "--verbose" {
+    description "Show extra output (use -vv for even more; never short -v in b00t surfaces)"
+}
+flag "--yes" {
+    description "Answer yes to all confirmation prompts"
+}
+flag "--cd" {
+    description "Change directory before command"
+}
+
+command "install" {
+    description "Install a tool version"
+    arg "tool" {
+        description "Tool request (e.g. node@20, cargo:ripgrep)"
+    }
+}
+
+command "run" {
+    description "Run tasks and their dependencies"
+    arg "task" {
+        description "Task name from mise.toml [tasks]"
+    }
+}
+
+command "tasks" {
+    description "Manage tasks"
+}
+
+command "ls" {
+    description "List installed and active tool versions"
+}
+
+command "use" {
+    description "Install a tool and add it to configuration"
+    arg "tool" {
+        description "Tool request (e.g. node@20)"
+    }
+}
+
+command "daemons" {
+    description "[experimental] Manage project daemons with pitchfork"
+}
+
+command "x" {
+    description "Execute a command with tool(s) set"
+    arg "command" {
+        description "Command to execute"
+    }
+}

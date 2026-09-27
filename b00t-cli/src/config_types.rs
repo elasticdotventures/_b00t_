@@ -52,6 +52,29 @@ pub struct UsageExample {
     pub output: Option<String>,
 }
 
+/// Machine-readable CLI grammar reference (task #60, ADR-001 phase 1).
+///
+/// 🤓 FLAT-TOPIC pattern: a .cli datum MAY reference a jdx/usage KDL spec that
+///    owns the CLI grammar (flags/args/subcommands → docs, completions, man,
+///    SDKs). The KDL file NEVER replaces typed datum fields (install/desires/
+///    version/depends_on — ADR-001 rule 1); it is structured metadata with
+///    recorded provenance. `sha256` makes drift fail-closed (ADR-001 rule 6):
+///    if the KDL changes, validate errors until the digest is refreshed.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
+pub struct UsageSpec {
+    /// Path to the .usage.kdl file (resolved: datum dir, then workspace root)
+    pub path: String,
+    /// Upstream source of the spec (ur1 form preferred: github://owner-repo)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Generator that produced/validates the spec (e.g. "usage")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generator: Option<String>,
+    /// Digest of the KDL file — "sha256:<hex>" or bare hex; fail-closed lint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct LearnMeta {
     pub topic: Option<String>,
