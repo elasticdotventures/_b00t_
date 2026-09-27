@@ -680,6 +680,37 @@ fn get_icon_for_type_group(type_name: &str) -> String {
 
 // ── #198: datum search ────────────────────────────────────────────────────────
 
+// ── type_label: TYPE column resolution (task #64) ───────────────────────────
+
+/// Resolve the display label for a datum's TYPE column.
+///
+/// 🤓 #64: content-tag datums (.reference.toml, .datum.toml, .prd.tomllmd…)
+///    have no typed DatumType variant, so the column showed '?'. Fall back to
+///    the content tag parsed from the key/filename (validated against
+///    is_known_content_tag) before giving up.
+fn type_label(datum_type: Option<&crate::DatumType>, key_or_path: &str) -> String {
+    if let Some(t) = datum_type {
+        return format!("{:?}", t);
+    }
+    let file = std::path::Path::new(key_or_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(key_or_path);
+    let mut base = file;
+    for ext in [".tomllmd", ".tomllm", ".toml"] {
+        if let Some(stripped) = base.strip_suffix(ext) {
+            base = stripped;
+            break;
+        }
+    }
+    if let Some((_, tag)) = base.rsplit_once('.') {
+        if crate::boot_datum::is_known_content_tag(tag) {
+            return tag.to_string();
+        }
+    }
+    "?".to_string()
+}
+
 fn handle_search(
     b00t_path: &str,
     pattern: &str,
@@ -701,11 +732,7 @@ fn handle_search(
         println!("{:<30} {:<12} {:<14} {}", "KEY", "TYPE", "MATCH", "HINT");
         println!("{}", "-".repeat(80));
         for r in &results {
-            let type_str = r
-                .datum_type
-                .as_ref()
-                .map(|t| format!("{:?}", t))
-                .unwrap_or_else(|| "?".to_string());
+            let type_str = type_label(r.datum_type.as_ref(), &r.key);
             let match_str = r.match_reason.as_deref().unwrap_or("-");
             println!(
                 "{:<30} {:<12} {:<14} {}",
@@ -785,11 +812,7 @@ fn handle_filter(
         );
         println!("{}", "-".repeat(72));
         for (key, datum, reason) in &results {
-            let type_str = datum
-                .datum_type
-                .as_ref()
-                .map(|t| format!("{:?}", t))
-                .unwrap_or_else(|| "?".to_string());
+            let type_str = type_label(datum.datum_type.as_ref(), key);
             let info = reason.as_deref().unwrap_or(&datum.hint);
             println!(
                 "{:<30} {:<12} {}",
@@ -2771,5 +2794,56 @@ mod resolve_target_tests {
         // dir here is the PARENT of _b00t_ to exercise './_b00t_/y.toml'
         let resolved = resolve_datum_target(dir.path(), "./_b00t_/t63-dot.toml");
         assert_eq!(resolved, f);
+    }
+}
+
+// ── type_label tests (task #64) ───────────────────────────────────────────────
+
+#[cfg(test)]
+mod type_label_tests {
+    use super::type_label;
+    use crate::DatumType;
+
+    #[test]
+    fn typed_datum_uses_variant_name() {
+        assert_eq!(type_label(Some(&DatumType::Cli), "mise.cli.toml"), "Cli");
+    }
+
+    #[test]
+    fn content_tag_reference_resolved_from_key() {
+        // live repro: 'dgx-pers0nal-jdx-b00t-harm0n…' showed '?' pre-fix
+        assert_eq!(
+            type_label(None, "dgx-pers0nal-jdx-b00t-harm0nies.reference"),
+            "reference"
+        );
+        assert_eq!(
+            type_label(None, "dgx-pers0nal.reference.toml"),
+            "reference"
+        );
+    }
+
+    #[test]
+    fn content_tag_datum_resolved() {
+        assert_eq!(type_label(None, "mise-c4b77116.datum.toml"), "datum");
+        assert_eq!(type_label(None, "mise-c4b77116.datum"), "datum");
+    }
+
+    #[test]
+    fn tomllmd_suffix_resolved() {
+        assert_eq!(type_label(None, "PRD-DATAFRAMERR.prd.tomllmd"), "prd");
+    }
+
+    #[test]
+    fn unknown_suffix_falls_back_to_question_mark() {
+        assert_eq!(type_label(None, "mystery.zzz.toml"), "?");
+        assert_eq!(type_label(None, "noext"), "?");
+    }
+
+    #[test]
+    fn full_path_input_uses_file_name() {
+        assert_eq!(
+            type_label(None, "/home/x/.b00t/_b00t_/tasks.reference.toml"),
+            "reference"
+        );
     }
 }

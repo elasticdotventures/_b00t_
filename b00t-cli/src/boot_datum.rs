@@ -14,7 +14,7 @@ use crate::{
 static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock::new();
 
 /// Returns true if the value is a well-known content tag (not a typed datum).
-fn is_known_content_tag(s: &str) -> bool {
+pub(crate) fn is_known_content_tag(s: &str) -> bool {
     matches!(
         s,
         "okr"
