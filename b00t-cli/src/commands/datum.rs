@@ -1066,6 +1066,42 @@ const KNOWN_B00T_KEYS: &[&str] = &[
 ];
 
 /// Validate a datum file against BootDatum schema.
+/// Resolve a validate target (relative file path form) against the datum dir.
+///
+/// 🤓 #63: `b00t datum validate _b00t_/x.toml` used to double-join into
+///    `<dir>/_b00t_/x.toml` and report 'file not found'. Resolution cascade:
+///    absolute → cwd-relative (exists) → dir-joined (exists) → strip a
+///    leading `_b00t_/`/`./` component and re-join under dir. Last candidate
+///    is returned even if missing so the error message shows a canonical path.
+fn resolve_datum_target(dir: &std::path::Path, target: &str) -> std::path::PathBuf {
+    let p = std::path::Path::new(target);
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    if p.exists() {
+        // cwd-relative wins when the file is right there
+        return p.to_path_buf();
+    }
+    let joined = dir.join(target);
+    if joined.exists() {
+        return joined;
+    }
+    // Strip leading _b00t_/ (and ./) — users naturally type the path they see
+    // in `ls ~/.b00t`, but dir ALREADY is the _b00t_ directory.
+    let mut cur = p;
+    loop {
+        let stripped = cur
+            .strip_prefix("_b00t_")
+            .or_else(|_| cur.strip_prefix("."))
+            .ok();
+        match stripped {
+            Some(s) if s != cur => cur = s,
+            _ => break,
+        }
+    }
+    dir.join(cur)
+}
+
 fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let expanded = shellexpand::tilde(datum_path);
     let dir = std::path::Path::new(expanded.as_ref());
@@ -1074,13 +1110,7 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let file_path =
         if target.ends_with(".toml") || target.ends_with(".tomllm") || target.ends_with(".tomllmd")
         {
-            // Direct file path
-            let p = std::path::Path::new(target);
-            if p.is_absolute() {
-                p.to_path_buf()
-            } else {
-                dir.join(target)
-            }
+            resolve_datum_target(dir, target)
         } else if target.contains('.') {
             // datum key like "mold.cli" — resolve via get_config
             let config_result = crate::get_config(target, datum_path);
@@ -2680,5 +2710,66 @@ hint = "exercises the evidence sink"
                 records
             );
         });
+    }
+}
+
+// ── resolve_datum_target tests (task #63) ───────────────────────────────────
+
+#[cfg(test)]
+mod resolve_target_tests {
+    use super::resolve_datum_target;
+    use std::path::Path;
+
+    #[test]
+    fn strips_leading_b00t_dir_component() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("t63-unique.cli.toml");
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        // 🚩 the #63 repro: user types the path as seen from b00t home.
+        //    Unique name: must NOT exist relative to the test-process cwd,
+        //    so the cwd-relative branch can't shadow the strip branch.
+        let resolved = resolve_datum_target(dir.path(), "_b00t_/t63-unique.cli.toml");
+        assert_eq!(resolved, f, "must not double-join _b00t_/_b00t_/");
+        assert!(resolved.exists());
+    }
+
+    #[test]
+    fn bare_name_resolves_under_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("x.datum.toml");
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        assert_eq!(resolve_datum_target(dir.path(), "x.datum.toml"), f);
+    }
+
+    #[test]
+    fn absolute_path_passes_through() {
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("abs.toml");
+        std::fs::write(&abs, "[b00t]\n").unwrap();
+        assert_eq!(
+            resolve_datum_target(Path::new("/elsewhere"), abs.to_str().unwrap()),
+            abs
+        );
+    }
+
+    #[test]
+    fn missing_target_returns_canonical_candidate() {
+        // Error path: last candidate is dir-joined stripped form, so the
+        // 'file not found' message shows a sensible canonical location.
+        let dir = tempfile::tempdir().unwrap();
+        let resolved = resolve_datum_target(dir.path(), "_b00t_/nope.toml");
+        assert_eq!(resolved, dir.path().join("nope.toml"));
+        assert!(!resolved.exists());
+    }
+
+    #[test]
+    fn dot_slash_prefix_stripped() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("_b00t_").join("t63-dot.toml");
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        // dir here is the PARENT of _b00t_ to exercise './_b00t_/y.toml'
+        let resolved = resolve_datum_target(dir.path(), "./_b00t_/t63-dot.toml");
+        assert_eq!(resolved, f);
     }
 }
