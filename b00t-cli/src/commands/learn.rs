@@ -19,9 +19,10 @@ use crate::get_expanded_path;
 /// Supports recording lessons, searching, displaying knowledge, and RAG operations.
 #[derive(Parser, Debug, Clone)]
 pub struct LearnArgs {
-    /// Topic to learn about (e.g., git, rust, just)
-    #[arg(help = "Topic to learn about")]
-    pub topic: Option<String>,
+    /// Topic to learn about (e.g., git, rust, just) — variadic: multiple words are
+    /// joined into one DWIW phrase and waterfall-searched per token (task #58).
+    #[arg(help = "Topic to learn about (variadic — words joined for DWIW search)")]
+    pub topic: Vec<String>,
 
     // 🤓 --topic=<value> alias: MCP tools pass named flags; positional is for CLI users.
     //    Both are accepted; --topic wins if both somehow provided (MCP compat).
@@ -94,8 +95,9 @@ pub async fn handle_learn(path: &str, args: LearnArgs) -> Result<()> {
         }
     }
 
-    // 🤓 merge positional topic + --topic flag; --topic wins (MCP compat: passes named flags)
-    let topic_val = args.topic_flag.or(args.topic);
+    // 🤓 merge positional topics + --topic flag; --topic wins (MCP compat: passes named flags).
+    //    Variadic positionals are space-joined into one DWIW phrase (task #58).
+    let topic_val = resolve_topic(args.topic_flag, &args.topic);
 
     // Record lesson
     if let Some(ref lesson) = args.record {
@@ -375,13 +377,27 @@ async fn handle_dwiw(path: &str, topic: &str, mcp_ctx: bool, limit: usize) -> Re
     let triples = compile_datum_triples(path).unwrap_or_default();
     let triple_count = triples.len();
 
-    let ctx = QueryContext::new(topic, limit, triples);
-
     let bus = QueryBus::new()
         .with_source(DatumSearchSource::new(path))
         .with_source(GraphAdjacencySource::new(path, limit * 4));
 
-    let ranked = bus.fanout(&ctx).await;
+    // 🤓 Waterfall search (task #58): try the full phrase first, then each token
+    //    in order; stop at the first non-empty fanout. A multi-word topic never
+    //    hard-fails while any single token still matches the datum graph.
+    let mut ranked = Vec::new();
+    let mut matched_query = topic.to_string();
+    for q in waterfall_queries(topic) {
+        let ctx = QueryContext::new(&q, limit, triples.clone());
+        ranked = bus.fanout(&ctx).await;
+        if !ranked.is_empty() {
+            matched_query = q;
+            break;
+        }
+    }
+    if matched_query != topic {
+        println!("[learn:waterfall] '{topic}' → matched on '{matched_query}'");
+        println!();
+    }
 
     if ranked.is_empty() {
         let exe = std::env::current_exe().ok();
@@ -651,6 +667,37 @@ async fn handle_ask(_path: &str, topic: Option<&str>, query: &str, limit: usize)
     Ok(())
 }
 
+/// Merge positional topics with the hidden --topic flag (MCP compat).
+/// 🤓 --topic wins if both provided; variadic positionals are space-joined so
+/// multi-word invocations (`b00t learn typesafe systemone`) become one DWIW
+/// phrase instead of a clap "unexpected argument" hard-fail (task #58).
+fn resolve_topic(topic_flag: Option<String>, positionals: &[String]) -> Option<String> {
+    topic_flag.or_else(|| {
+        if positionals.is_empty() {
+            None
+        } else {
+            Some(positionals.join(" "))
+        }
+    })
+}
+
+/// Waterfall search plan: full phrase first, then each whitespace token in
+/// order (deduped, order-preserving). Callers try queries sequentially and
+/// stop at the first non-empty result set (task #58).
+fn waterfall_queries(topic: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let phrase = topic.trim();
+    if !phrase.is_empty() {
+        out.push(phrase.to_string());
+    }
+    for tok in phrase.split_whitespace() {
+        if !out.iter().any(|q| q == tok) {
+            out.push(tok.to_string());
+        }
+    }
+    out
+}
+
 /// Check if datum exists for topic
 fn datum_exists(path: &str, topic: &str) -> Result<bool> {
     let datum_path = datum_path(path, topic)?;
@@ -679,5 +726,71 @@ mod tests {
         let path = datum_path("~/.b00t/_b00t_", "git").expect("expected expanded datum path");
 
         assert_eq!(path, home.join(".b00t/_b00t_/git.cli.toml"));
+    }
+
+    // ── Task #58: variadic positional topics + waterfall search ──────────────
+
+    #[test]
+    fn learn_args_parses_variadic_positional_topics() {
+        // `b00t learn typesafe systemone` MUST parse — positionals are variadic.
+        let args = LearnArgs::try_parse_from(["learn", "typesafe", "systemone"])
+            .expect("variadic positional topics must parse");
+        assert_eq!(args.topic, vec!["typesafe".to_string(), "systemone".to_string()]);
+    }
+
+    #[test]
+    fn learn_args_single_positional_topic_still_parses() {
+        let args = LearnArgs::try_parse_from(["learn", "worktree"])
+            .expect("single positional topic must still parse");
+        assert_eq!(args.topic, vec!["worktree".to_string()]);
+    }
+
+    #[test]
+    fn learn_args_positionals_coexist_with_flags() {
+        // Variadic positional must not swallow named flags.
+        let args = LearnArgs::try_parse_from(["learn", "typesafe", "systemone", "--limit", "10"])
+            .expect("positionals + flags must coexist");
+        assert_eq!(args.topic, vec!["typesafe".to_string(), "systemone".to_string()]);
+        assert_eq!(args.limit, 10);
+    }
+
+    #[test]
+    fn resolve_topic_joins_positionals_flag_wins() {
+        // 🤓 MCP compat: --topic flag wins over positionals (pre-existing contract).
+        let joined = resolve_topic(None, &["typesafe".into(), "systemone".into()]);
+        assert_eq!(joined.as_deref(), Some("typesafe systemone"));
+
+        let flag = resolve_topic(Some("jev-systemone.ai".into()), &["ignored".into()]);
+        assert_eq!(flag.as_deref(), Some("jev-systemone.ai"));
+
+        let none = resolve_topic(None, &[]);
+        assert_eq!(none, None);
+    }
+
+    #[test]
+    fn waterfall_queries_full_phrase_then_tokens() {
+        // Waterfall: try the full phrase first, then each token in order.
+        assert_eq!(
+            waterfall_queries("typesafe systemone"),
+            vec![
+                "typesafe systemone".to_string(),
+                "typesafe".to_string(),
+                "systemone".to_string()
+            ]
+        );
+        // Single word: just itself, no duplication.
+        assert_eq!(
+            waterfall_queries("worktree"),
+            vec!["worktree".to_string()]
+        );
+        // Duplicate tokens deduped, order preserved.
+        assert_eq!(
+            waterfall_queries("rust rust crate"),
+            vec![
+                "rust rust crate".to_string(),
+                "rust".to_string(),
+                "crate".to_string()
+            ]
+        );
     }
 }
