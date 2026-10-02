@@ -1235,11 +1235,15 @@ async fn handle_invoke(
         )
     })?;
 
-    // Merge agent env into process env
-    let mut env: std::collections::HashMap<String, String> = std::env::vars().collect();
-    if let Some(agent_env) = &config.b00t.env {
-        env.extend(agent_env.clone());
+    // Child env: inherited process env < the local .env (the project's own settings) < the agent datum's [b00t.env].
+    // Only key names are reported, never values.
+    let dotenv = crate::dotenv_file::load_dotenv(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    if !dotenv.is_empty() {
+        let mut keys: Vec<&str> = dotenv.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        println!("   🔧 .env: {} setting(s) applied ({})", keys.len(), keys.join(", "));
     }
+    let env = crate::dotenv_file::merged_env(std::env::vars().collect(), &dotenv, config.b00t.env.as_ref());
 
     // ── Skill + Role provisioning (Redis-free delegation context injection) ──
     let enriched_prompt = if skill.is_some() || role.is_some() {

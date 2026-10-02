@@ -90,6 +90,7 @@ pub mod errors;
 pub mod governance;
 pub mod guards;
 pub mod hive;
+pub mod dotenv_file;
 pub mod hook_engine;
 pub mod install;
 pub mod inventory;
