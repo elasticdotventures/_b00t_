@@ -68,13 +68,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && yes | unminimize \
     && rm -rf /var/lib/apt/lists/*
 
-# Pinned to the exact release cadrum 0.8.13's build.rs requests
-# (OCCT_VERSION=V8_0_0, BUILD_REVISION=rev3 — see cadrum's build.rs). Bump
-# OCCT_TAG/OCCT_SHA256 together if/when b00t-cad's cadrum dependency moves
-# to a newer revision.
-ARG OCCT_TAG=occt-8_0_0_rev3
-ARG OCCT_ASSET=occt-8_0_0_rev3-x86_64_unknown_linux_gnu.tar.gz
-ARG OCCT_SHA256=586cfb0f9053df463b3f85beb247ae645741e8ee7622f2eb84bbb96f758213f5
+# Pinned to the exact release cadrum 0.8.20's build.rs requests
+# (OCCT_VERSION=V8_0_1, BUILD_REVISION=rev2 — see cadrum's build.rs).
+# NOTE: b00t-cad/Cargo.toml pins cadrum="0.8.13" (^0.8 semver), which resolves
+# to 0.8.20 in Cargo.lock. Keep this in sync with the actual resolved version.
+# Bump OCCT_TAG/OCCT_SHA256 together if/when cadrum's OCCT version changes.
+ARG OCCT_TAG=occt-8_0_1_rev2
+ARG OCCT_ASSET=occt-8_0_1_rev2-x86_64_unknown_linux_gnu.tar.gz
+ARG OCCT_SHA256=95e068936c0cb4ba2668707c0dca209d3396103dfc1db85eb72d192badfb4143
 
 RUN curl -fsSL "https://github.com/lzpel/cadrum/releases/download/${OCCT_TAG}/${OCCT_ASSET}" -o /tmp/occt.tar.gz \
     && echo "${OCCT_SHA256}  /tmp/occt.tar.gz" | sha256sum -c - \
