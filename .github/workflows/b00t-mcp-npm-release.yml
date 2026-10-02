@@ -52,7 +52,8 @@ jobs:
         run: git submodule update --init --depth 1 vendor/runpod-sdk vendor/embed-anything-b00t
 
       - name: 🔧 Clone vendor/ledgrrr (shared worktree checkout, not a submodule)
-        run: git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/ledgrrr
+        # Clone into the path expected by Cargo.toml: vendor/b00tyverse/ledgrrr
+        run: mkdir -p vendor/b00tyverse && git clone --depth 1 --branch main https://github.com/PromptExecution/ledgrrr.git vendor/b00tyverse/ledgrrr
 
       - name: 🦀 Setup Rust
         uses: dtolnay/rust-toolchain@stable
