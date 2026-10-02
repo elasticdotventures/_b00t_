@@ -3899,6 +3899,47 @@ mod k0mmand3r_dispatch_tests {
     }
 
     #[test]
+    fn crate_source_bans_short_v_flags() {
+        // 🤓 #62: the main.rs-only guard above left every commands/*.rs and
+        //    module surface unwatched — a new subcommand could smuggle -v/-V
+        //    back in. Scan the WHOLE crate src tree. Same concat trick so
+        //    this test's own source doesn't self-trigger.
+        let banned_v = ["short = '", "v'"].concat();
+        let banned_vv = ["short = '", "V'"].concat();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![root];
+        let mut scanned = 0usize;
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("guard must read src dir") {
+                let p = entry.expect("dir entry").path();
+                if p.is_dir() {
+                    stack.push(p);
+                    continue;
+                }
+                if p.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let src = std::fs::read_to_string(&p).unwrap_or_default();
+                assert!(
+                    !src.contains(&banned_v),
+                    "short -v is banned in {} — use an unambiguous long flag (--verbose)",
+                    p.display()
+                );
+                assert!(
+                    !src.contains(&banned_vv),
+                    "short -V is banned in {} — use an unambiguous long flag (--version)",
+                    p.display()
+                );
+                scanned += 1;
+            }
+        }
+        assert!(
+            scanned > 50,
+            "guard must actually scan the crate tree; only saw {scanned} .rs files"
+        );
+    }
+
+    #[test]
     fn cli_parse_lfmf_accepts_positional_tool_and_lesson() {
         let cli = Cli::parse_from(args(&[
             "b00t-cli",
