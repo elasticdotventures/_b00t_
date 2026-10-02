@@ -7,14 +7,14 @@ use ufo_types::{Stereotyped, UfoStereotype};
 use crate::{
     AiProvisionConfig, ComposeConfig, DatumType, GateSpec, InstallSpec, JustfileConfig,
     K0mmand3rDatumConfig, KnowledgeConfig, LearnMeta, MaintenanceConfig, McpMethods,
-    OrchestrationConfig, PipelineConfig, PolysemeConfig, RuntimeConfig, UsageExample,
+    OrchestrationConfig, PipelineConfig, PolysemeConfig, RuntimeConfig, UsageExample, UsageSpec,
 };
 
 // warn-once registry — one warning per unknown datum type string per process
 static DATUM_TYPE_WARNED: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock::new();
 
 /// Returns true if the value is a well-known content tag (not a typed datum).
-fn is_known_content_tag(s: &str) -> bool {
+pub(crate) fn is_known_content_tag(s: &str) -> bool {
     matches!(
         s,
         "okr"
@@ -271,6 +271,10 @@ pub struct BootDatum {
     pub learn: Option<LearnMeta>,
     pub lfmf_category: Option<String>,
     pub usage: Option<Vec<UsageExample>>,
+    // 🤓 #60/ADR-001: machine-readable usage/KDL grammar reference (optional;
+    //    never replaces typed datum fields — see UsageSpec doc).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage_spec: Option<UsageSpec>,
 
     // API metadata
     pub provides: Option<ApiProvides>,

@@ -680,6 +680,37 @@ fn get_icon_for_type_group(type_name: &str) -> String {
 
 // ── #198: datum search ────────────────────────────────────────────────────────
 
+// ── type_label: TYPE column resolution (task #64) ───────────────────────────
+
+/// Resolve the display label for a datum's TYPE column.
+///
+/// 🤓 #64: content-tag datums (.reference.toml, .datum.toml, .prd.tomllmd…)
+///    have no typed DatumType variant, so the column showed '?'. Fall back to
+///    the content tag parsed from the key/filename (validated against
+///    is_known_content_tag) before giving up.
+fn type_label(datum_type: Option<&crate::DatumType>, key_or_path: &str) -> String {
+    if let Some(t) = datum_type {
+        return format!("{:?}", t);
+    }
+    let file = std::path::Path::new(key_or_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(key_or_path);
+    let mut base = file;
+    for ext in [".tomllmd", ".tomllm", ".toml"] {
+        if let Some(stripped) = base.strip_suffix(ext) {
+            base = stripped;
+            break;
+        }
+    }
+    if let Some((_, tag)) = base.rsplit_once('.') {
+        if crate::boot_datum::is_known_content_tag(tag) {
+            return tag.to_string();
+        }
+    }
+    "?".to_string()
+}
+
 fn handle_search(
     b00t_path: &str,
     pattern: &str,
@@ -701,11 +732,7 @@ fn handle_search(
         println!("{:<30} {:<12} {:<14} {}", "KEY", "TYPE", "MATCH", "HINT");
         println!("{}", "-".repeat(80));
         for r in &results {
-            let type_str = r
-                .datum_type
-                .as_ref()
-                .map(|t| format!("{:?}", t))
-                .unwrap_or_else(|| "?".to_string());
+            let type_str = type_label(r.datum_type.as_ref(), &r.key);
             let match_str = r.match_reason.as_deref().unwrap_or("-");
             println!(
                 "{:<30} {:<12} {:<14} {}",
@@ -785,11 +812,7 @@ fn handle_filter(
         );
         println!("{}", "-".repeat(72));
         for (key, datum, reason) in &results {
-            let type_str = datum
-                .datum_type
-                .as_ref()
-                .map(|t| format!("{:?}", t))
-                .unwrap_or_else(|| "?".to_string());
+            let type_str = type_label(datum.datum_type.as_ref(), key);
             let info = reason.as_deref().unwrap_or(&datum.hint);
             println!(
                 "{:<30} {:<12} {}",
@@ -1035,6 +1058,8 @@ const KNOWN_B00T_KEYS: &[&str] = &[
     "members",
     "type_tags",
     "usage",
+    "usage_spec",
+    "usage_artifacts",
     "dsn",
     "protocol",
     // 🤓 drift repair — these BootDatum fields were missing, so every datum using
@@ -1066,6 +1091,42 @@ const KNOWN_B00T_KEYS: &[&str] = &[
 ];
 
 /// Validate a datum file against BootDatum schema.
+/// Resolve a validate target (relative file path form) against the datum dir.
+///
+/// 🤓 #63: `b00t datum validate _b00t_/x.toml` used to double-join into
+///    `<dir>/_b00t_/x.toml` and report 'file not found'. Resolution cascade:
+///    absolute → cwd-relative (exists) → dir-joined (exists) → strip a
+///    leading `_b00t_/`/`./` component and re-join under dir. Last candidate
+///    is returned even if missing so the error message shows a canonical path.
+fn resolve_datum_target(dir: &std::path::Path, target: &str) -> std::path::PathBuf {
+    let p = std::path::Path::new(target);
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    if p.exists() {
+        // cwd-relative wins when the file is right there
+        return p.to_path_buf();
+    }
+    let joined = dir.join(target);
+    if joined.exists() {
+        return joined;
+    }
+    // Strip leading _b00t_/ (and ./) — users naturally type the path they see
+    // in `ls ~/.b00t`, but dir ALREADY is the _b00t_ directory.
+    let mut cur = p;
+    loop {
+        let stripped = cur
+            .strip_prefix("_b00t_")
+            .or_else(|_| cur.strip_prefix("."))
+            .ok();
+        match stripped {
+            Some(s) if s != cur => cur = s,
+            _ => break,
+        }
+    }
+    dir.join(cur)
+}
+
 fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let expanded = shellexpand::tilde(datum_path);
     let dir = std::path::Path::new(expanded.as_ref());
@@ -1074,13 +1135,7 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
     let file_path =
         if target.ends_with(".toml") || target.ends_with(".tomllm") || target.ends_with(".tomllmd")
         {
-            // Direct file path
-            let p = std::path::Path::new(target);
-            if p.is_absolute() {
-                p.to_path_buf()
-            } else {
-                dir.join(target)
-            }
+            resolve_datum_target(dir, target)
         } else if target.contains('.') {
             // datum key like "mold.cli" — resolve via get_config
             let config_result = crate::get_config(target, datum_path);
@@ -1118,7 +1173,7 @@ fn handle_validate(datum_path: &str, target: &str, strict: bool) -> Result<()> {
         }
     };
 
-    let outcome = compute_datum_validation(&b00t_table, filename, strict);
+    let outcome = compute_datum_validation(&b00t_table, filename, strict, file_path.parent());
     print_validation_result(&outcome.errors, &outcome.warnings)?;
 
     // Route through the real Satisfies<C> / evidence-sink path (#927) —
@@ -1173,6 +1228,7 @@ fn compute_datum_validation(
     b00t_table: &toml::value::Table,
     filename: &str,
     strict: bool,
+    datum_dir: Option<&std::path::Path>,
 ) -> DatumValidationOutcome {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
@@ -1224,6 +1280,59 @@ fn compute_datum_validation(
         }
     }
 
+    // 🤓 #60/ADR-001 phase 1: [b00t.usage_spec] — fail-closed provenance lint.
+    //    path MUST resolve (datum dir, then workspace root); sha256, when
+    //    present, MUST match the file digest (rule 6: KDL drift invalidates
+    //    until revalidated). Filesystem checks only run when datum_dir is
+    //    known (Satisfies path passes None — schema-only evaluation).
+    if let Some(spec) = b00t_table.get("usage_spec") {
+        let spec_table = spec.as_table();
+        match spec_table.and_then(|t| t.get("path")).and_then(|v| v.as_str()) {
+            None => errors.push("usage_spec.path is required (string)".into()),
+            Some(rel) => {
+                if let Some(dir) = datum_dir {
+                    let primary = dir.join(rel);
+                    let resolved = if primary.exists() {
+                        Some(primary)
+                    } else {
+                        dir.parent()
+                            .map(|root| root.join(rel))
+                            .filter(|p| p.exists())
+                    };
+                    match resolved {
+                        None => errors.push(format!(
+                            "usage_spec.path not found: '{rel}' (tried datum dir + workspace root)"
+                        )),
+                        Some(file) => {
+                            if let Some(sha) =
+                                spec_table.and_then(|t| t.get("sha256")).and_then(|v| v.as_str())
+                            {
+                                let want = sha
+                                    .strip_prefix("sha256:")
+                                    .unwrap_or(sha)
+                                    .to_lowercase();
+                                match std::fs::read(&file) {
+                                    Ok(bytes) => {
+                                        use sha2::{Digest, Sha256};
+                                        let got = hex::encode(Sha256::digest(&bytes));
+                                        if got != want {
+                                            errors.push(format!(
+                                                "usage_spec.sha256 mismatch for '{rel}': KDL spec drifted — regenerate/revalidate (fail-closed, ADR-001 §6)"
+                                            ));
+                                        }
+                                    }
+                                    Err(e) => errors.push(format!(
+                                        "usage_spec.path unreadable '{rel}': {e}"
+                                    )),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     DatumValidationOutcome {
         errors,
         warnings,
@@ -1270,7 +1379,7 @@ impl Stereotyped for DatumTomlSubject<'_> {
 
 impl Satisfies<BootDatumSchemaConstraint> for DatumTomlSubject<'_> {
     fn satisfies(&self, c: &BootDatumSchemaConstraint) -> SatisfiesResult {
-        let outcome = compute_datum_validation(self.raw, self.filename, c.strict);
+        let outcome = compute_datum_validation(self.raw, self.filename, c.strict, None);
         if !outcome.errors.is_empty() {
             return SatisfiesResult::violated(outcome.errors.join("; "));
         }
@@ -2680,5 +2789,225 @@ hint = "exercises the evidence sink"
                 records
             );
         });
+    }
+}
+
+// ── resolve_datum_target tests (task #63) ───────────────────────────────────
+
+#[cfg(test)]
+mod resolve_target_tests {
+    use super::resolve_datum_target;
+    use std::path::Path;
+
+    #[test]
+    fn strips_leading_b00t_dir_component() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("t63-unique.cli.toml");
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        // 🚩 the #63 repro: user types the path as seen from b00t home.
+        //    Unique name: must NOT exist relative to the test-process cwd,
+        //    so the cwd-relative branch can't shadow the strip branch.
+        let resolved = resolve_datum_target(dir.path(), "_b00t_/t63-unique.cli.toml");
+        assert_eq!(resolved, f, "must not double-join _b00t_/_b00t_/");
+        assert!(resolved.exists());
+    }
+
+    #[test]
+    fn bare_name_resolves_under_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("x.datum.toml");
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        assert_eq!(resolve_datum_target(dir.path(), "x.datum.toml"), f);
+    }
+
+    #[test]
+    fn absolute_path_passes_through() {
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("abs.toml");
+        std::fs::write(&abs, "[b00t]\n").unwrap();
+        assert_eq!(
+            resolve_datum_target(Path::new("/elsewhere"), abs.to_str().unwrap()),
+            abs
+        );
+    }
+
+    #[test]
+    fn missing_target_returns_canonical_candidate() {
+        // Error path: last candidate is dir-joined stripped form, so the
+        // 'file not found' message shows a sensible canonical location.
+        let dir = tempfile::tempdir().unwrap();
+        let resolved = resolve_datum_target(dir.path(), "_b00t_/nope.toml");
+        assert_eq!(resolved, dir.path().join("nope.toml"));
+        assert!(!resolved.exists());
+    }
+
+    #[test]
+    fn dot_slash_prefix_stripped() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("_b00t_").join("t63-dot.toml");
+        std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+        std::fs::write(&f, "[b00t]\n").unwrap();
+        // dir here is the PARENT of _b00t_ to exercise './_b00t_/y.toml'
+        let resolved = resolve_datum_target(dir.path(), "./_b00t_/t63-dot.toml");
+        assert_eq!(resolved, f);
+    }
+}
+
+// ── type_label tests (task #64) ───────────────────────────────────────────────
+
+#[cfg(test)]
+mod type_label_tests {
+    use super::type_label;
+    use crate::DatumType;
+
+    #[test]
+    fn typed_datum_uses_variant_name() {
+        assert_eq!(type_label(Some(&DatumType::Cli), "mise.cli.toml"), "Cli");
+    }
+
+    #[test]
+    fn content_tag_reference_resolved_from_key() {
+        // live repro: 'dgx-pers0nal-jdx-b00t-harm0n…' showed '?' pre-fix
+        assert_eq!(
+            type_label(None, "dgx-pers0nal-jdx-b00t-harm0nies.reference"),
+            "reference"
+        );
+        assert_eq!(
+            type_label(None, "dgx-pers0nal.reference.toml"),
+            "reference"
+        );
+    }
+
+    #[test]
+    fn content_tag_datum_resolved() {
+        assert_eq!(type_label(None, "mise-c4b77116.datum.toml"), "datum");
+        assert_eq!(type_label(None, "mise-c4b77116.datum"), "datum");
+    }
+
+    #[test]
+    fn tomllmd_suffix_resolved() {
+        assert_eq!(type_label(None, "PRD-DATAFRAMERR.prd.tomllmd"), "prd");
+    }
+
+    #[test]
+    fn unknown_suffix_falls_back_to_question_mark() {
+        assert_eq!(type_label(None, "mystery.zzz.toml"), "?");
+        assert_eq!(type_label(None, "noext"), "?");
+    }
+
+    #[test]
+    fn full_path_input_uses_file_name() {
+        assert_eq!(
+            type_label(None, "/home/x/.b00t/_b00t_/tasks.reference.toml"),
+            "reference"
+        );
+    }
+}
+
+// ── usage_spec lint tests (task #60, ADR-001 phase 1) ────────────────────────
+
+#[cfg(test)]
+mod usage_spec_tests {
+    use super::compute_datum_validation;
+    use sha2::{Digest, Sha256};
+    use std::path::Path;
+
+    fn b00t_table(extra: &str) -> toml::value::Table {
+        toml::from_str::<toml::Value>(&format!("name = \"x\"\nhint = \"h\"\n{extra}"))
+            .expect("test TOML must parse")
+            .as_table()
+            .unwrap()
+            .clone()
+    }
+
+    fn sha_of(bytes: &[u8]) -> String {
+        hex::encode(Sha256::digest(bytes))
+    }
+
+    #[test]
+    fn no_usage_spec_is_unchanged() {
+        let t = b00t_table("");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, None);
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+    }
+
+    #[test]
+    fn usage_spec_requires_path() {
+        let t = b00t_table("[usage_spec]\ngenerator = \"usage\"\n");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, None);
+        assert!(
+            out.errors.iter().any(|e| e.contains("usage_spec.path is required")),
+            "{:?}", out.errors
+        );
+    }
+
+    #[test]
+    fn missing_kdl_file_is_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let t = b00t_table("[usage_spec]\npath = \"usage/nope.kdl\"\n");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, Some(dir.path()));
+        assert!(
+            out.errors.iter().any(|e| e.contains("usage_spec.path not found")),
+            "{:?}", out.errors
+        );
+    }
+
+    #[test]
+    fn existing_kdl_without_sha_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("usage")).unwrap();
+        std::fs::write(dir.path().join("usage/x.kdl"), "flag --verbose\n").unwrap();
+        let t = b00t_table("[usage_spec]\npath = \"usage/x.kdl\"\n");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, Some(dir.path()));
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+    }
+
+    #[test]
+    fn matching_sha256_passes_prefixed_and_bare() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = b"flag --verbose\n";
+        std::fs::write(dir.path().join("x.kdl"), content).unwrap();
+        let sha = sha_of(content);
+        for form in [format!("sha256:{sha}"), sha.clone()] {
+            let t = b00t_table(&format!("[usage_spec]\npath = \"x.kdl\"\nsha256 = \"{form}\"\n"));
+            let out = compute_datum_validation(&t, "x.cli.toml", false, Some(dir.path()));
+            assert!(out.errors.is_empty(), "form {form}: {:?}", out.errors);
+        }
+    }
+
+    #[test]
+    fn sha256_drift_fails_closed() {
+        // ADR-001 §6: KDL changed ⇒ validate errors until digest refreshed.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("x.kdl"), b"original\n").unwrap();
+        let stale = sha_of(b"something else\n");
+        let t = b00t_table(&format!("[usage_spec]\npath = \"x.kdl\"\nsha256 = \"{stale}\"\n"));
+        let out = compute_datum_validation(&t, "x.cli.toml", false, Some(dir.path()));
+        assert!(
+            out.errors.iter().any(|e| e.contains("sha256 mismatch")),
+            "{:?}", out.errors
+        );
+    }
+
+    #[test]
+    fn workspace_root_fallback_resolution() {
+        // datum dir = <root>/_b00t_; spec path relative to <root>
+        let root = tempfile::tempdir().unwrap();
+        let datum_dir = root.path().join("_b00t_");
+        std::fs::create_dir_all(&datum_dir).unwrap();
+        std::fs::create_dir_all(root.path().join("usage")).unwrap();
+        std::fs::write(root.path().join("usage/x.kdl"), b"kdl\n").unwrap();
+        let t = b00t_table("[usage_spec]\npath = \"usage/x.kdl\"\n");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, Some(&datum_dir));
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+    }
+
+    #[test]
+    fn satisfies_path_skips_filesystem_checks() {
+        // datum_dir=None (DatumTomlSubject) ⇒ schema-only, no path probing
+        let t = b00t_table("[usage_spec]\npath = \"usage/whatever.kdl\"\n");
+        let out = compute_datum_validation(&t, "x.cli.toml", false, None);
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert!(Path::new("usage/whatever.kdl").exists() == false);
     }
 }

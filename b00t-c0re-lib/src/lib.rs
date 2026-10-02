@@ -85,6 +85,7 @@ pub mod sm0l_dispatch;
 pub mod state_introspection;
 pub mod sudo_operator;
 pub mod soul_dataframerr;
+pub mod systemone;
 pub mod template;
 pub mod utils;
 

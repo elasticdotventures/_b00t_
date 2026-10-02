@@ -555,6 +555,39 @@ async fn handle_record(
         println!("⚠️  Consider using positive, affirmative style (e.g., 'Do X for Y benefit').\n");
     }
 
+    // 🤓 #61: system0ne (jev ch0ice) s0ul-scope classification — only fills
+    //    the UNSPECIFIED case. An explicit --global always wins (operator
+    //    intent is never classifier-overridden). Without TYPESAFE_API_* creds
+    //    the classifier is inert and behavior is identical to pre-#61 (repo).
+    //    Promotion to global still passes the #1101 disclosure gate.
+    let mut effective_global = global;
+    if !global {
+        use b00t_c0re_lib::systemone::{DecisionSource, SoulScope, classify_soul_scope};
+        let decision = classify_soul_scope(lesson_topic, body).await;
+        match decision.scope {
+            SoulScope::Global => {
+                effective_global = true;
+                println!(
+                    "[scope:systemone] global (conf={:.2}) — disclosure gate applies",
+                    decision.confidence.unwrap_or(0.0)
+                );
+            }
+            SoulScope::Repo if decision.degraded_from_global => {
+                println!(
+                    "[scope:systemone] repo — classifier wanted global at conf={:.2} (below floor); pass --global to override",
+                    decision.confidence.unwrap_or(0.0)
+                );
+            }
+            SoulScope::Repo if decision.source == DecisionSource::SystemOne => {
+                println!(
+                    "[scope:systemone] repo (conf={:.2})",
+                    decision.confidence.unwrap_or(0.0)
+                );
+            }
+            SoulScope::Repo => {} // Default path — silent, pre-#61 behavior
+        }
+    }
+
     // Use LFMF system for recording
     let config = LfmfSystem::load_config(path)?;
     let mut lfmf_system = LfmfSystem::new(config);
@@ -569,11 +602,11 @@ async fn handle_record(
         println!("{}", msg);
     }
 
-    let scope = if global { "global" } else { "repo" };
+    let scope = if effective_global { "global" } else { "repo" };
     println!("Scope: {}", scope);
 
     lfmf_system
-        .record_lesson_scoped(topic, lesson, global, force)
+        .record_lesson_scoped(topic, lesson, effective_global, force)
         .await
         .context("Failed to record lesson")?;
 
