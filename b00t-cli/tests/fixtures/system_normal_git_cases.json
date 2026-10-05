@@ -1,0 +1,301 @@
+[
+  {
+    "name": "clean-feature",
+    "check": "git-no-conflicts",
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "main-branch",
+    "check": "git-task-branch",
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=main"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "feature-branch",
+    "check": "git-task-branch",
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "outside-repository",
+    "check": "git-no-conflicts",
+    "setup": [],
+    "exit_code": 2
+  },
+  {
+    "name": "empty-stash",
+    "check": "git-stash-reviewed",
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "no-submodules",
+    "check": "git-submodule-pins",
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "unsupported-check",
+    "check": "future-check",
+    "setup": [],
+    "exit_code": 2
+  },
+  {
+    "name": "detached-head",
+    "check": "git-task-branch",
+    "files": {
+      "file.txt": "base\n"
+    },
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "add",
+          "file.txt"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-am",
+          "fixture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "checkout",
+          "--detach"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "retained-stash",
+    "check": "git-stash-reviewed",
+    "files": {
+      "file.txt": "base\n"
+    },
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "add",
+          "file.txt"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-am",
+          "fixture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "-c",
+          "from pathlib import Path; Path(\"file.txt\").write_text('changed\\n')"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "stash",
+          "push"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "unresolved-conflict",
+    "check": "git-no-conflicts",
+    "files": {
+      "file.txt": "base\n"
+    },
+    "setup": [
+      {
+        "argv": [
+          "git",
+          "init",
+          "--initial-branch=feature/test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "add",
+          "file.txt"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-am",
+          "fixture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "checkout",
+          "-b",
+          "feature/other"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "-c",
+          "from pathlib import Path; Path(\"file.txt\").write_text('other\\n')"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-am",
+          "fixture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "checkout",
+          "feature/test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "python3",
+          "-c",
+          "from pathlib import Path; Path(\"file.txt\").write_text('ours\\n')"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-am",
+          "fixture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "merge",
+          "feature/other"
+        ],
+        "exit_code": 1
+      }
+    ],
+    "exit_code": 1
+  }
+]

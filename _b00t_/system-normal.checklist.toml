@@ -1,0 +1,70 @@
+# Read-only dependency and Git baseline. Live service health uses additional
+# project-specific probes; presence of a CLI does not prove service health.
+[b00t]
+name = "system-normal"
+type = "checklist"
+hint = "Every baseline check must be Satisfied; unavailable evidence is Unknown"
+
+[[b00t.check]]
+id = "probe-evaluator"
+rhai = "probe_gates_supported()"
+hint = "Upgrade the evaluator before treating bounded probes as measured evidence"
+
+[[b00t.check]]
+id = "git"
+command = "git"
+
+[[b00t.check]]
+id = "just"
+command = "just"
+
+[[b00t.check]]
+id = "rustc"
+command = "rustc"
+
+[[b00t.check]]
+id = "cargo"
+command = "cargo"
+
+[[b00t.check]]
+id = "uv"
+command = "uv"
+
+[[b00t.check]]
+id = "python3"
+command = "python3"
+
+[[b00t.check]]
+id = "git-no-conflicts"
+hint = "Resolve unmerged entries before mutating the repository"
+[b00t.check.probe]
+argv = ["python3", "scripts/system-normal-probe.py", "git-no-conflicts"]
+timeout_ms = 3000
+
+[[b00t.check]]
+id = "git-task-branch"
+hint = "Use a task or feature branch before making changes"
+[b00t.check.probe]
+argv = ["python3", "scripts/system-normal-probe.py", "git-task-branch"]
+timeout_ms = 3000
+
+[[b00t.check]]
+id = "git-stash-reviewed"
+hint = "Review retained stashes; never drop them automatically"
+[b00t.check.probe]
+argv = ["python3", "scripts/system-normal-probe.py", "git-stash-reviewed"]
+timeout_ms = 3000
+
+[[b00t.check]]
+id = "git-submodule-pins"
+hint = "Check pin drift; uninitialized modules remain Unknown"
+[b00t.check.probe]
+argv = ["python3", "scripts/system-normal-probe.py", "git-submodule-pins"]
+timeout_ms = 3000
+
+# b00t:map v1
+# summary: read-only baseline checklist with bounded three-valued Git probes
+# tags: system-normal, checklist, git, health
+# tier: sm0l
+# cmds: b00t is system-normal --json
+# complexity: 2

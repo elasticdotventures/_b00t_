@@ -883,6 +883,7 @@ hint = "Test stack"
     fn test_gate_command_fails() {
         // A gate requiring a non-existent command should fail
         let gates = vec![GateSpec {
+            probe: None,
             command: Some("this-command-definitely-does-not-exist-xyzzy".to_string()),
             file: None,
             env: None,
@@ -904,6 +905,7 @@ hint = "Test stack"
         fs::write(&file_path, "test content").unwrap();
 
         let gates = vec![GateSpec {
+            probe: None,
             command: None,
             file: Some(file_path.to_str().unwrap().to_string()),
             env: None,
@@ -920,6 +922,7 @@ hint = "Test stack"
     fn test_gate_env_fails() {
         // A gate requiring a non-existent env var should fail
         let gates = vec![GateSpec {
+            probe: None,
             command: None,
             file: None,
             env: Some("THIS_ENV_VAR_DOES_NOT_EXIST_12345".to_string()),
@@ -936,6 +939,7 @@ hint = "Test stack"
     #[test]
     fn test_gate_knowledge_backend_passes_for_compiled_backend() {
         let gates = vec![GateSpec {
+            probe: None,
             command: None,
             file: None,
             env: None,
@@ -958,6 +962,7 @@ hint = "Test stack"
             _ => "helixdb",
         };
         let gates = vec![GateSpec {
+            probe: None,
             command: None,
             file: None,
             env: None,
@@ -981,6 +986,7 @@ hint = "Test stack"
         // PATH is always set
         let gates = vec![
             GateSpec {
+                probe: None,
                 command: None,
                 file: Some(file_path.to_str().unwrap().to_string()),
                 env: None,
@@ -990,6 +996,7 @@ hint = "Test stack"
                 hint: Some("file gate".to_string()),
             },
             GateSpec {
+                probe: None,
                 command: None,
                 file: None,
                 env: Some("PATH".to_string()),

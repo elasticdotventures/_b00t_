@@ -1710,3 +1710,7 @@ ci-stats:
     @echo ""
     @echo "── remote builder ──"
     @ssh -o ConnectTimeout=3 -o BatchMode=yes b00t-build-dev true 2>/dev/null && echo "🟢 b00t-build-dev UP" || echo "🟡 b00t-build-dev DOWN (expected — spin up with: just remote-provision)"
+
+# Verify the restored baseline health datum and all three CLI dispositions.
+system-normal-test:
+    bash scripts/test-system-normal.sh

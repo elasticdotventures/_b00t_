@@ -389,6 +389,14 @@ fn create_mcp_datum_from_json(
                 arr.iter()
                     .filter_map(|g| {
                         let cmd = g.get("command").and_then(|v| v.as_str());
+                        let probe = g.get("probe").filter(|v| !v.is_null()).map(|v| {
+                            serde_json::from_value::<crate::gates::ProbeSpec>(v.clone()).unwrap_or(
+                                crate::gates::ProbeSpec {
+                                    argv: Vec::new(),
+                                    timeout_ms: 0,
+                                },
+                            )
+                        });
                         let file = g.get("file").and_then(|v| v.as_str());
                         let env = g.get("env").and_then(|v| v.as_str());
                         let rhai = g.get("rhai").and_then(|v| v.as_str());
@@ -398,6 +406,7 @@ fn create_mcp_datum_from_json(
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string());
                         if cmd.is_none()
+                            && probe.is_none()
                             && file.is_none()
                             && env.is_none()
                             && rhai.is_none()
@@ -406,6 +415,7 @@ fn create_mcp_datum_from_json(
                             return None;
                         }
                         Some(GateSpec {
+                            probe,
                             command: cmd.map(|s| s.to_string()),
                             file: file.map(|s| s.to_string()),
                             env: env.map(|s| s.to_string()),

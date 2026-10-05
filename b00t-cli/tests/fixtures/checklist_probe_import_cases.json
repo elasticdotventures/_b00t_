@@ -1,0 +1,5 @@
+[
+  {"input":{"name":"fixture","command":"echo","gate":[{"probe":{"argv":["sh","-c","exit 0"]}}]},"status":"satisfied"},
+  {"input":{"name":"fixture","command":"echo","gate":[{"probe":{"argv":"invalid"}}]},"status":"unknown"},
+  {"input":{"name":"fixture","command":"echo","gate":[{"probe":{"argv":["sh","-c","exit 0"],"future_option":true}}]},"status":"unknown"}
+]

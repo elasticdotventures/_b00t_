@@ -1787,6 +1787,7 @@ dependencies = [
  "ufo-types",
  "url",
  "uuid",
+ "wait-timeout",
  "walkdir",
  "which 7.0.3",
  "whoami 1.6.1",
