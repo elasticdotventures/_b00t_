@@ -1,0 +1,24 @@
+[b00t]
+# 🤓 POLYSEME — "redis" resolves to valkey. b00t runs Valkey (BSD, Redis-wire-
+#    compatible) instead of Redis; every redis:// client, REDIS_URL consumer and
+#    `redis-cli` works unchanged. This holds NO install/run logic of its own.
+#    Replaces redis.docker.toml (docker-typed, redis:7-alpine, volume redis_data).
+name = "redis"
+type = "polyseme"
+hint = "redis — redirects to valkey (Redis-compatible, podman Quadlet)"
+
+[b00t.polyseme]
+sources = ["https://valkey.io/", "https://github.com/valkey-io/valkey"]
+
+[[b00t.polyseme.refs]]
+name        = "server"
+canonical   = "b00t:valkey.podman"
+datum       = "valkey.podman"
+description = "the Redis-compatible server on redis://127.0.0.1:6379 (Valkey 8)"
+
+# b00t:map v1
+# summary: redis → valkey redirect (polyseme)
+# tags: redis, valkey, polyseme, redirect
+# tier: sm0l
+# cmds: b00t status valkey
+# complexity: 1

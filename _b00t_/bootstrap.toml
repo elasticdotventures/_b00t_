@@ -43,7 +43,7 @@ secrets = "~/.b00t/secrets"
 [bootstrap.services]
 # Services that should be started/configured
 qdrant = { enabled = true, auto_start = true, datum = "_b00t_/qdrant.docker.toml" }
-redis = { enabled = false, auto_start = false, datum = "_b00t_/redis.docker.toml" }
+redis = { enabled = false, auto_start = false, datum = "_b00t_/redis.polyseme.toml" }  # → valkey.podman
 
 [bootstrap.mcp_servers]
 # MCP servers to enable by default

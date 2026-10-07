@@ -8,7 +8,7 @@ members = [
     "postgres-enhanced.docker",
     # <|🦨: aspirational — pgadmin.docker container datum never authored; author to complete stack; _b00t_#850, #163 |>
     "pgadmin.docker",
-    "redis.docker",
+    "valkey.podman",  # redis → valkey (podman Quadlet)
 ]
 
 # Environment variables shared across all stack members
