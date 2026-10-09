@@ -1,0 +1,57 @@
+[b00t]
+name        = "llama-swap"
+type        = "docker"
+hint        = "llama-swap OpenAI-compat proxy on GB10 (podman, :8080) — Qwen3.8-Flash-Next GGUF + MTP spec-decode, 64K ctx, tools"
+
+[b00t.container]
+image    = "localhost/llama-swap-qwen38:latest"
+runtime  = "podman"
+port     = 8080
+bind     = "127.0.0.1"
+api      = "openai-compat"
+name     = "llama-swap"
+includes = ["llama.cpp v262 (079c35a)", "llama-swap container entry"]
+
+# Config + models live on the host; container binds them read-write.
+[[b00t.container.volumes]]
+host      = "~/.config/llama-swap/config.yaml"
+container = "/etc/llama-swap/config/config.yaml"
+
+[[b00t.container.volumes]]
+host      = "~/.local/share/llama-swap/models"
+container = "/models"
+
+# Runtime flags baked into image entrypoint:
+#   llama-swap -config /etc/llama-swap/config/config.yaml -listen 0.0.0.0:8080
+
+[b00t.container.server]
+start_port       = 10001
+health_timeout   = 900
+unload_timeout   = 60
+log              = "stdout"
+
+# --- Active model definitions (source: ~/.config/llama-swap/config.yaml) ---
+
+[[b00t.container.model]]
+id           = "qwen3.8-flash-next"
+huggingface  = "UD-IQ4_XS/Qwen3.8-Flash-Next"
+file         = "/models/UD-IQ4_XS/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00003.gguf"
+shards       = 3
+draft        = "/models/MTP/mtp-Qwen3.8-Flash-Next-shared-Q4_K_M.gguf"
+params       = "80B-A3B"
+ctx          = 65536
+capabilities = ["tools", "tool_choice"]
+sampling     = "temp=1.0 top-p=0.95 top-k=20 min-p=0.0"
+spec_decode  = "draft-mtp, draft-n-max=5"
+perf         = "~69 tok/s prefill, ~51 tok/s generate (MTP accepted 5/5)"
+
+[b00t.hardware]
+gpu  = "NVIDIA GB10"
+mem  = "121GB unified"
+
+# b00t:map v1
+# summary: llama-swap model proxy — podman container, OpenAI-compat :8080, Qwen3.8-Flash-Next GGUF with MTP spec-decode on GB10
+# tags: container, inference, llama-cpp, llama-swap, local, openai-compat
+# tier: sm0l
+# cmds: podman start llama-swap, curl -s localhost:8080/models, curl -s localhost:8080/health
+# complexity: 3
