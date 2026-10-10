@@ -1,12 +1,12 @@
 [b00t]
 name        = "llama-swap"
 type        = "docker"
-hint        = "llama-swap OpenAI-compat proxy on GB10 (podman, :8080) — Qwen3.8-Flash-Next GGUF + MTP spec-decode, 64K ctx, tools"
+hint        = "llama-swap OpenAI-compat proxy on GB10 (podman, :8000) — swap between Qwen3.8-Flash-Next, Nex-N2.5-mini (MoE+vision), Qwen3.8-27B-Uncensored (dense)"
 
 [b00t.container]
 image    = "localhost/llama-swap-qwen38:latest"
 runtime  = "podman"
-port     = 8080
+port     = 8000
 bind     = "127.0.0.1"
 api      = "openai-compat"
 name     = "llama-swap"
@@ -45,13 +45,38 @@ sampling     = "temp=1.0 top-p=0.95 top-k=20 min-p=0.0"
 spec_decode  = "draft-mtp, draft-n-max=5"
 perf         = "~69 tok/s prefill, ~51 tok/s generate (MTP accepted 5/5)"
 
+[[b00t.container.model]]
+id           = "nex-n2.5-mini"
+huggingface  = "orcarouter/Nex-N2.5-mini-Uncensored-GGUF"
+file         = "/models/nex-n2.5-mini/Nex-N2.5-mini-Uncensored-Q8_0.gguf"
+mmproj       = "/models/nex-n2.5-mini/mmproj-Nex-N2.5-mini-Uncensored-F16.gguf"
+params       = "35B-A3B MoE, hybrid gated-delta-net attn"
+ctx          = 131072
+capabilities = ["tools", "vision"]
+sampling     = "temp=0.6 top-p=0.95 top-k=20 min-p=0.0"
+kv_cache     = "q8_0 + flash-attn"
+perf         = "~55 tok/s generate, verified tool-calling"
+notes        = "uncensored/abliterated, agentic; gated HF repo (browser accept)"
+
+[[b00t.container.model]]
+id           = "qwen3.8-27b-uncensored"
+huggingface  = "orcarouter/Qwen3.8-27B-Uncensored-GGUF"
+file         = "/models/27B-uncensored/Qwen3.8-27B-Uncensored-Q8_0.gguf"
+params       = "27B dense (arch qwen4exp)"
+ctx          = 131072
+capabilities = ["tools"]
+sampling     = "temp=0.6 top-p=0.95 top-k=20 min-p=0.0"
+kv_cache     = "q8_0 + flash-attn"
+perf         = "~8 tok/s generate — dense decode is GB10 bandwidth-capped; batch use only"
+notes        = "built-in nextn MTP tensors ignored by llama.cpp v262; gated HF repo"
+
 [b00t.hardware]
 gpu  = "NVIDIA GB10"
 mem  = "121GB unified"
 
 # b00t:map v1
-# summary: llama-swap model proxy — podman container, OpenAI-compat :8080, Qwen3.8-Flash-Next GGUF with MTP spec-decode on GB10
+# summary: llama-swap model proxy — podman container, OpenAI-compat :8000, swappable GGUF models (flash-next / nex-n2.5-mini / qwen3.8-27b-uncensored) on GB10
 # tags: container, inference, llama-cpp, llama-swap, local, openai-compat
 # tier: sm0l
-# cmds: podman start llama-swap, curl -s localhost:8080/models, curl -s localhost:8080/health
+# cmds: podman start llama-swap, curl -s localhost:8000/models, curl -s localhost:8000/health
 # complexity: 3
