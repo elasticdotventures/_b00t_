@@ -1,0 +1,22 @@
+[b00t]
+name = "valkey"
+type = "podman"
+depends_on = ["podman.cli"]
+hint = "Valkey 8 — open-source Redis-compatible store (BSD) for b00t session state + agent pub/sub. Podman Quadlet container, persistent volume valkey_data, all interfaces, no auth."
+desires = "8-alpine"
+oci_uri = "docker.io/valkey/valkey:8-alpine"
+# Quadlet unit (symlinked into ~/.config/containers/systemd/). Note: the podman
+# datum checks `podman pod exists`; valkey is a plain container (a pod's infra
+# container cannot satisfy the b00t-limits OCI hook), so status may read "unknown".
+resource_path = "_b00t_/podman/quadlet/valkey.container"
+
+[b00t.env]
+REDIS_URL = "redis://127.0.0.1:6379"
+VALKEY_PORT = "6379"
+
+# b00t:map v1
+# summary: Valkey 8 via podman Quadlet — Redis-compatible, AOF+RDB persistent on volume valkey_data
+# tags: valkey, redis, session, message-passing, pubsub, podman, quadlet
+# tier: sm0l
+# cmds: systemctl --user start valkey.service
+# complexity: 2

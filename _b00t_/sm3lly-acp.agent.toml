@@ -29,7 +29,8 @@ protocol = "nats+acp"
 pubsub = true
 subject_prefix = "hive.sm3lly.acp"
 nats_url_env = "NATS_URL"
-default_nats_url = "nats://vultr1-1.ts.promptexecution.com:4222"
+# vultr1 decommissioned 2026-10-07 (free credits expired); NATS is hosted locally
+default_nats_url = "nats://127.0.0.1:4222"
 
 [b00t.agent.crew]
 role = "specialist"

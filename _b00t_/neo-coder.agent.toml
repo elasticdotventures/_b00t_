@@ -89,6 +89,10 @@ Report progress as: EXECUTE | {subtask} | {status}
 Final report as: COMPLETE | {summary} | evidence={test_output}
 """
 
+[b00t.agent.crew]
+role = "worker"
+captain = false
+
 # Sandbox configuration
 [b00t.agent.sandbox]
 kind = "podman"
