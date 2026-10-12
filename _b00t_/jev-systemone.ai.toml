@@ -1,0 +1,34 @@
+[b00t]
+name = "jev-systemone"
+type = "ai"
+hint = "TypeSafe AI's System One Model (Jev) -- typed probabilistic decisions (Noul/Choice/Score), NOT a text-generation LLM. Use for fast bounded semantic judgements ('smart if-statements'), not for drafting, reasoning chains, or code generation. Full reference: https://gist.github.com/pjburnhill/adf8d28efcad9df037bfdece178ef965"
+
+entangled_cli = ["b00t.cli"]
+
+# Jev's interface is: state + typed questions -> typed probabilistic decisions.
+# It is not one interchangeable "model" among many chat models -- these three
+# entries are its three current decision primitives, not model variants.
+[models.noul]
+capabilities = "binary_semantic_judgement"
+description = "Is this true? Returns a single probability (0-1) that a yes/no proposition holds. No separate confidence field -- the probability itself is the answer."
+
+[models.choice]
+capabilities = "classification,routing,intent_recognition"
+description = "Which of these predefined options? Up to 255 options. Returns the winning choice, a probability per option, and a confidence score. Include an 'other'/'none of the above' option when the taxonomy may not be exhaustive."
+
+[models.score]
+capabilities = "semantic_scoring,severity,relevance,quality"
+description = "Where does this sit on an ordered scale (2-10 concrete levels, not vague adjectives like low/medium/high)? Returns a probability-weighted score (may fall between levels), the level legend, and confidence."
+
+[env]
+# TypeSafe's actual API base URL and auth scheme were not present in the
+# source reference above -- fill these in from TypeSafe's own API docs
+# before treating this datum as connection-ready. Placeholder names only.
+TYPESAFE_API_BASE = "${TYPESAFE_API_BASE}"
+TYPESAFE_API_KEY = "${TYPESAFE_API_KEY}"
+
+[relations]
+# Nomenclature membership (UFO-aligned). Formal subset assertion lives in
+# decision-model-subset-of-typesafe-model.relation.toml.
+member_of = ["nomenclature:decision.model", "nomenclature:typesafe.model"]
+assertion = "decision.model ⊊ typesafe.model"

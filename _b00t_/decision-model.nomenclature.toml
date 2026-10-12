@@ -1,0 +1,15 @@
+# Nomenclature datum: decision.model
+# UFO-aligned concept definition (consumer of promptexecution/ufo-types).
+# The formal relationship to typesafe.model lives in
+# decision-model-subset-of-typesafe-model.relation.toml (single source of truth).
+
+[b00t]
+name = "decision-model"
+type = "nomenclature"
+hint = "Concept: a model whose interface is typed probabilistic DECISIONS (Noul/Choice/Score), not text generation. Member concept of the typesafe.model family -- see the relation datum for the formal subset assertion."
+
+[concept]
+term = "decision.model"
+stereotype = "category"
+definition = "A model that answers typed questions with typed probabilistic decisions (e.g. Jev: Noul/Choice/Score)."
+aligns_to = "promptexecution/ufo-types:UfoStereotype"
