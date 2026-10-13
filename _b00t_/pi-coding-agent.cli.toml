@@ -3,10 +3,9 @@
 #    Nothing else may duplicate these fields. The agent facet (pi.agent.toml)
 #    depends_on this datum instead of re-declaring it.
 #
-# ⚠️需 package renamed: @mariozechner/pi-coding-agent is STALE (frozen at 0.73.1).
-#    The maintained package is @earendil-works/pi-coding-agent (0.85.1 verified).
-#    Every install/update path routes through just pi-agent::install-pi so the
-#    package name exists in exactly one place (_b00t_/pi-agent.just:PI_PKG).
+# 🤓 package: @earendil-works/pi-coding-agent (0.85.1+ verified; 1.1.0 installed 2026-10-13).
+#    install/update are self-contained npm commands — no justfile delegation.
+#    (~/.dotfiles is a bare repo; _b00t_/pi-agent.just does NOT exist on disk.)
 #
 # 🔗参 pi.polyseme.toml          → "pi" branch point (all five facets)
 # 🔗参 pi-agent.justfile.toml    → executable command surface
@@ -16,12 +15,12 @@
 [b00t]
 name = "pi-coding-agent"
 type = "cli"
-desires = "latest"
+desires = "stable"
+version_min = "0.85.0"
 hint = "pi — lightweight AI coding agent; local model support via openai-completions; MCP via pi-mcp-adapter"
-# 🤓 Single source of truth for the command line lives in _b00t_/pi-agent.just.
-#    --justfile keeps this cwd-independent (b00t install runs bash -c from anywhere).
-install = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-pi"
-update = "just --justfile ~/.dotfiles/_b00t_/pi-agent.just install-pi"
+# 🤓 Self-contained: npm install is cwd-independent and doesn't require a justfile on disk.
+install = "npm install -g @earendil-works/pi-coding-agent@latest"
+update = "npm install -g @earendil-works/pi-coding-agent@latest"
 # 🤓 version/version_regex are canonical HERE — pi.agent must not re-declare them.
 version = "pi --version"
 version_regex = "([0-9]+\\.[0-9]+\\.[0-9]+)"
@@ -47,8 +46,8 @@ auto_digest = true
 # ── Usage: binary-lifecycle only. Integration/wiring usage lives in ──────────
 # ── pi-mcp-adapter.cli and pi-agent.justfile — never duplicated here. ────────
 [[b00t.usage]]
-description = "Install or update the pi binary (canonical, via justfile)"
-command = "just pi-agent::install-pi"
+description = "Install or update the pi binary"
+command = "npm install -g @earendil-works/pi-coding-agent@latest"
 
 [[b00t.usage]]
 description = "Verify the installed pi version"
@@ -56,19 +55,15 @@ command = "pi --version"
 
 [[b00t.usage]]
 description = "List pi's model registry (optionally fuzzy-filtered)"
-command = "pi --list-models ch0nky"
+command = "pi list-models neo-coder"
 
 [[b00t.usage]]
-description = "Repair ~/.pi/agent/models.json for the current local ch0nky API key"
-command = "sed -i 's/local-gemma4/local-b00t/g' ~/.pi/agent/models.json && sed -n '1,120p' ~/.pi/agent/models.json"
+description = "Probe the sm3lly OpenAI-compatible endpoint"
+command = "curl -s http://sm3lly.lan:8002/v1/models | python3 -m json.tool"
 
 [[b00t.usage]]
 description = "Delegate a one-shot coding task to pi (non-interactive)"
 command = "just pi-agent::delegate task='implement X in Y'"
-
-[[b00t.usage]]
-description = "Probe the local OpenAI-compatible endpoint on :8001"
-command = "curl -s http://127.0.0.1:8001/v1/models | python3 -m json.tool"
 
 [validate]
 command = "pi --version"
@@ -78,7 +73,7 @@ regex = "[0-9]+"
 entangled_agents = ["pi.agent"]
 entangled_cli = ["pi-mcp-adapter.cli", "just.cli"]
 entangled_mcp = ["b00t-mcp.mcp"]
-depends_on = ["just.cli"]
+depends_on = ["node.cli"]
 
 [roles]
 required_for = ["local-inference", "sub-agent"]
@@ -86,7 +81,7 @@ optional_for = ["developer", "hive"]
 
 # b00t:map v1
 # summary: pi-coding-agent CLI datum — canonical install/version for the pi binary (@earendil-works package)
-# tags: pi, coding-agent, sub-agent, local-llm, ch0nky, cli, canonical
+# tags: pi, coding-agent, sub-agent, local-llm, neo-coder, sm3lly, cli, canonical
 # tier: ch0nky
-# cmds: just pi-agent::install-pi, pi --version, pi --list-models ch0nky
+# cmds: npm install -g @earendil-works/pi-coding-agent@latest, pi --version, pi list-models neo-coder
 # complexity: 3
