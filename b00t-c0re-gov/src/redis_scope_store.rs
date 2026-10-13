@@ -290,8 +290,9 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
-        s.set_raw("k", Value::String("v".into())).unwrap();
-        assert_eq!(s.get_raw("k").unwrap(), Some(Value::String("v".into())));
+        // Use a distinct key to avoid poisoning the transaction tests.
+        s.set_raw("raw-parity-k", Value::String("v".into())).unwrap();
+        assert_eq!(s.get_raw("raw-parity-k").unwrap(), Some(Value::String("v".into())));
     }
 
     #[test]
@@ -301,6 +302,8 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        // Clear any stale state (raw or envelope format) from a prior run.
+        let _ = s.transaction(vec![ScopeOp::Delete { key: "k".into(), expect_gen: None }]);
         let results = s
             .transaction(vec![ScopeOp::Put {
                 key: "k".into(),
@@ -325,6 +328,7 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        let _ = s.transaction(vec![ScopeOp::Delete { key: "cas-test".into(), expect_gen: None }]);
         s.transaction(vec![ScopeOp::Put {
             key: "cas-test".into(),
             value: Value::String("v1".into()),
