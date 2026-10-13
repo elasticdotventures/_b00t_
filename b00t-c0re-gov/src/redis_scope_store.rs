@@ -301,8 +301,8 @@ mod tests {
         // depending on run order), producing a real Lua "attempt to perform
         // arithmetic on a nil value" EVAL error when the reader found a bare
         // string instead of an envelope.
-        s.set_raw("raw-k", Value::String("v".into())).unwrap();
-        assert_eq!(s.get_raw("raw-k").unwrap(), Some(Value::String("v".into())));
+        s.set_raw("raw-parity-k", Value::String("v".into())).unwrap();
+        assert_eq!(s.get_raw("raw-parity-k").unwrap(), Some(Value::String("v".into())));
     }
 
     #[test]
@@ -312,6 +312,8 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        // Clear any stale state (raw or envelope format) from a prior run.
+        let _ = s.transaction(vec![ScopeOp::Delete { key: "k".into(), expect_gen: None }]);
         let results = s
             .transaction(vec![ScopeOp::Put {
                 key: "k".into(),
@@ -336,6 +338,7 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        let _ = s.transaction(vec![ScopeOp::Delete { key: "cas-test".into(), expect_gen: None }]);
         s.transaction(vec![ScopeOp::Put {
             key: "cas-test".into(),
             value: Value::String("v1".into()),
