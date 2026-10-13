@@ -4,13 +4,14 @@ type        = "docker"
 hint        = "llama-swap OpenAI-compat proxy on GB10 (podman, :8000) — swap between Qwen3.8-Flash-Next, Nex-N2.5-mini (MoE+vision), Qwen3.8-27B-Uncensored (dense)"
 
 [b00t.container]
-image    = "localhost/llama-swap-qwen38:latest"
-runtime  = "podman"
-port     = 8000
-bind     = "127.0.0.1"
-api      = "openai-compat"
-name     = "llama-swap"
-includes = ["llama.cpp v262 (079c35a)", "llama-swap container entry"]
+image          = "localhost/llama-swap-qwen38:latest"
+runtime        = "podman"
+port           = 8000
+container_port = 8080
+bind           = "127.0.0.1"
+api            = "openai-compat"
+name           = "llama-swap"
+includes       = ["llama.cpp v262 (079c35a)", "llama-swap container entry"]
 
 # Config + models live on the host; container binds them read-write.
 [[b00t.container.volumes]]
