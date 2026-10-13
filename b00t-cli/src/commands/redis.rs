@@ -119,6 +119,18 @@ pub mod agent_kv {
         }
     }
 
+    /// Clear agent registration. Returns 1 if deleted, 0 if absent.
+    pub fn clear_agent(agent_id: &str) -> Result<usize> {
+        let key = format!("b00t:agents:{}", agent_id);
+        let mut store = global_scope_store();
+        let existed = store.get_raw(&key)?.is_some();
+        if !existed {
+            return Ok(0);
+        }
+        store.transaction(vec![ScopeOp::Delete { key, expect_gen: None }])?;
+        Ok(1)
+    }
+
     /// List all registered agents
     pub fn list_agents() -> Result<Vec<String>> {
         // File backend doesn't support SCAN, so this is limited
@@ -223,6 +235,8 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        // Clear any stale state from a prior run before inserting.
+        let _ = agent_kv::clear_agent("parity-test-agent");
         agent_kv::register_agent("parity-test-agent", "online").unwrap();
         let status = agent_kv::get_agent_status("parity-test-agent").unwrap();
         assert_eq!(status, Some("online".to_string()));
@@ -235,6 +249,8 @@ mod tests {
             eprintln!("skipping: no Redis reachable in this environment");
             return;
         }
+        // Clear any stale state from a prior run before inserting.
+        let _ = session_kv::clear_session("parity-test-session");
         let mut data = HashMap::new();
         data.insert("k".to_string(), serde_json::json!("v"));
         session_kv::store_session("parity-test-session", &data).unwrap();

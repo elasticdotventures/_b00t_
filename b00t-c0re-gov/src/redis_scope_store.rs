@@ -143,6 +143,10 @@ return cjson.encode({ok = results})
 #[derive(Serialize)]
 struct LuaOp {
     op: &'static str,
+    // 🤓 Must skip None: Lua's cjson.null ~= nil is true, so a JSON null would
+    //    trigger a false CAS mismatch. Omitting the field keeps op.expect_gen as
+    //    Lua nil, which the script treats as "no CAS check required".
+    #[serde(skip_serializing_if = "Option::is_none")]
     expect_gen: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<Value>,
