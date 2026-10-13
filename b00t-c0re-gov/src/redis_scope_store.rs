@@ -249,6 +249,29 @@ mod tests {
     use super::*;
     use crate::scope_store::{ScopeOp, ScopeOpResult, TransactionalScopeStore};
 
+    /// Regression test for the Lua cjson.null CAS bug (PR #1360).
+    /// `LuaOp { expect_gen: None }` must serialize WITHOUT the field — if it
+    /// serialized as JSON `null`, Lua's `cjson.null ~= nil` is TRUE and every
+    /// unconditional Put/Delete would trigger a false CAS mismatch.
+    #[test]
+    fn lua_op_expect_gen_none_omits_field_from_json() {
+        let op = LuaOp { op: "put", expect_gen: None, value: None, expires_at: None };
+        let json = serde_json::to_string(&op).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(
+            parsed.get("expect_gen").is_none(),
+            "expect_gen must be absent when None; got: {json}"
+        );
+    }
+
+    #[test]
+    fn lua_op_expect_gen_some_includes_field_in_json() {
+        let op = LuaOp { op: "put", expect_gen: Some(3), value: None, expires_at: None };
+        let json = serde_json::to_string(&op).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["expect_gen"], 3, "expect_gen must be present when Some; got: {json}");
+    }
+
     fn store() -> RedisScopeStore {
         RedisScopeStore::open(
             RedisConfig::default(),
