@@ -21,10 +21,9 @@ capabilities = "semantic_scoring,severity,relevance,quality"
 description = "Where does this sit on an ordered scale (2-10 concrete levels, not vague adjectives like low/medium/high)? Returns a probability-weighted score (may fall between levels), the level legend, and confidence."
 
 [env]
-# TypeSafe's actual API base URL and auth scheme were not present in the
-# source reference above -- fill these in from TypeSafe's own API docs
-# before treating this datum as connection-ready. Placeholder names only.
-TYPESAFE_API_BASE = "${TYPESAFE_API_BASE}"
+# 🤓 API base is not yet confirmed from source docs; leave empty so b00t
+# does not expand this as a literal URL. Override via TYPESAFE_API_BASE env.
+TYPESAFE_API_BASE = ""
 TYPESAFE_API_KEY = "${TYPESAFE_API_KEY}"
 
 [relations]
