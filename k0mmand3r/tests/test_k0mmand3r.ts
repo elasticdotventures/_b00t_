@@ -7,7 +7,8 @@ describe('Wasm Tests', () => {
     it('should correctly parse KmdLine with verb and parameter', () => {
         const result = KmdLineWasm.parse('/verb --param1=value1');
         assert.strictEqual(result.verb(), 'verb');
-        assert.strictEqual(result.params(), '{"param1":"value1"}');
+        // Parse JSON to compare objects — HashMap ordering is non-deterministic in Rust/Wasm
+        assert.deepStrictEqual(JSON.parse(result.params()!), { param1: 'value1' });
       });
 
       it('should correctly parse content without a command', () => {
@@ -19,7 +20,8 @@ describe('Wasm Tests', () => {
       it('should correctly parse multiple parameters', () => {
         const result = KmdLineWasm.parse('/multiverb --param1=value1 --param2=value2');
         assert.strictEqual(result.verb(), 'multiverb');
-        assert.strictEqual(result.params(), '{"param1":"value1","param2":"value2"}');
+        // Parse JSON to compare objects — HashMap ordering is non-deterministic in Rust/Wasm
+        assert.deepStrictEqual(JSON.parse(result.params()!), { param1: 'value1', param2: 'value2' });
       });
 
       it('should handle only verb without parameters', () => {
