@@ -1,0 +1,33 @@
+[Unit]
+Description=Valkey (Redis-compatible) for b00t agent coordination
+After=network-online.target
+
+[Container]
+ContainerName=valkey
+Image=docker.io/valkey/valkey:8-alpine
+# LAN-reachable (all interfaces) per operator choice 2026-10-07.
+# Auth via podman secret — create before first start:
+#   printf '<password>' | podman secret create valkey-requirepass -
+# REDIS_URL consumers must include :password@ (see valkey.podman.toml).
+PublishPort=0.0.0.0:6379:6379
+# Persistence: pre-existing named volume valkey_data (survives container
+# replacement and `systemctl --user restart`). AOF everysec + RDB snapshots.
+Volume=valkey_data:/data
+# Required by the b00t-limits OCI hook (shared node). A plain container has no
+# uncapped infra container, so no b00t.unlimited opt-out is needed.
+Memory=512m
+# Secret mount: /run/secrets/valkey-requirepass (one-line password, no newline).
+Secret=valkey-requirepass
+# noeviction: coordination state must never be silently evicted; maxmemory sits
+# below the cap so valkey returns errors before the kernel OOM-kills it.
+Exec=valkey-server --appendonly yes --appendfsync everysec --save "60 1" --save "300 100" --maxmemory 384mb --maxmemory-policy noeviction --protected-mode no --dir /data --requirepassfile /run/secrets/valkey-requirepass
+HealthCmd=valkey-cli ping
+HealthInterval=10s
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

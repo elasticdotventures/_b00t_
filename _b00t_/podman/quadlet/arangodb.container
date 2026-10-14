@@ -1,0 +1,29 @@
+[Unit]
+Description=ArangoDB multi-model (document + graph + key-value + vector) database
+After=network-online.target
+
+[Container]
+ContainerName=arangodb
+Image=docker.io/arangodb/arangodb:3.12
+# LAN-reachable (all interfaces) per operator choice 2026-10-07; root password required.
+PublishPort=0.0.0.0:8529:8529
+# Root password comes from a podman secret, never from the unit/datum file:
+#   printf '<pw>' | podman secret create arangodb-root-password -
+Secret=arangodb-root-password,type=env,target=ARANGO_ROOT_PASSWORD
+# Persistence: named volumes (survive container replacement).
+Volume=arangodb_data:/var/lib/arangodb3
+Volume=arangodb_apps:/var/lib/arangodb3-apps
+# Required by the b00t-limits OCI hook (shared node).
+Memory=2g
+# Vector indexes are experimental in 3.12.x and must be switched on explicitly.
+Exec=arangod --experimental-vector-index true
+HealthCmd=wget -qO- http://127.0.0.1:8529/_api/version
+HealthInterval=30s
+HealthStartPeriod=60s
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=300
+
+# No [Install]: registered but not auto-started on login.
+# Start on demand: systemctl --user start arangodb.service

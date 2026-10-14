@@ -1,0 +1,43 @@
+[b00t]
+name = "arangodb"
+datum_type = "db"
+description = "ArangoDB — multi-model database: document store, graph, key-value and vector index (HNSW-style, experimental in 3.12) behind one AQL query language"
+version = "3.12"
+node_status = "secondary"
+
+[b00t.schema]
+spec = "datum/db/v1"
+
+[roles]
+required_for = ["graph", "document-db"]
+optional_for = ["vector-search", "key-value", "irontology"]
+
+[metadata]
+models = ["document", "graph", "key-value", "vector"]
+repo = "https://github.com/arangodb/arangodb"
+image = "docker.io/arangodb/arangodb:3.12"
+runtime = "podman"
+orchestrator = "quadlet"
+quadlet = "podman/quadlet/arangodb.container"
+unit = "arangodb.service"
+endpoint = "http://sm3llsl1k3s0ld3r:8529"
+bind = "0.0.0.0"
+port = 8529
+auth_user = "root"
+# Password is a podman secret, never stored in this file.
+auth_secret = "arangodb-root-password"
+volumes = ["arangodb_data", "arangodb_apps"]
+vector_index = "experimental — enabled via --experimental-vector-index true (3.12.4+)"
+persistence = "RocksDB on named volume arangodb_data"
+
+[notes]
+# 🤓 Registered, NOT auto-started (no [Install]). `systemctl --user start arangodb.service`.
+# Replaces the ad-hoc `docker run -d -e ARANGO_ROOT_PASSWORD=... -p 8529:8529 arangodb`
+# — that form published 0.0.0.0, kept the password in shell history, and had no volume.
+
+# b00t:map v1
+# summary: ArangoDB multi-model DB (document/graph/kv/vector), podman Quadlet, loopback-only
+# tags: arangodb, graph, document-db, vector, key-value, multi-model, aql, podman, quadlet
+# tier: ch0nky
+# cmds: systemctl --user start arangodb.service
+# complexity: 5
