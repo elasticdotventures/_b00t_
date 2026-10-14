@@ -1,0 +1,32 @@
+[b00t]
+name = "jev"
+type = "ai_model"
+hint = "TypeSafe's Jev -- System One Model (typed Noul/Choice/Score decisions, not text generation). Provider-level registration: jev-systemone.ai.toml. Dev docs: https://docs.typesafe.ai/"
+
+[model]
+architecture = "system_one"
+provider = "typesafe"
+# Jev doesn't map cleanly to parameter-count size classes -- "small" here means
+# latency/cost class (fast, cheap per-decision), not literal model size.
+size = "small"
+# json_mode is the closest existing ModelCapability to what Jev actually does
+# (typed structured output); none of chat/code/vision/etc. apply. See
+# metadata.primitives below for Jev's real decision shapes (Noul/Choice/Score).
+capabilities = ["json_mode"]
+# Not a real litellm-recognized route -- TypeSafe isn't a litellm provider.
+# Placeholder following the provider/model naming convention.
+litellm_model = "typesafe/jev"
+api_key_env = "TYPESAFE_API_KEY"
+
+[model.metadata]
+paradigm = "system_one"
+primitives = "noul,choice,score"
+docs_url = "https://docs.typesafe.ai/"
+console_url = "https://console.typesafe.ai/"
+provider_datum = "jev-systemone"
+
+[relations]
+# Nomenclature membership (UFO-aligned). Formal subset assertion lives in
+# decision-model-subset-of-typesafe-model.relation.toml.
+member_of = ["nomenclature:decision.model", "nomenclature:typesafe.model"]
+assertion = "decision.model ⊊ typesafe.model"

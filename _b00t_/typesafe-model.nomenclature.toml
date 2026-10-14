@@ -1,0 +1,13 @@
+# Nomenclature datum: typesafe.model
+# UFO-aligned concept definition (consumer of promptexecution/ufo-types).
+
+[b00t]
+name = "typesafe-model"
+type = "nomenclature"
+hint = "Concept: a model whose outputs are typed values with declared structure (TypeSafe AI family). SUPERCONCEPT of decision.model -- not conversely."
+
+[concept]
+term = "typesafe.model"
+stereotype = "category"
+definition = "A model whose outputs are typed values with declared structure (incl. chat, code, and decision models)."
+aligns_to = "promptexecution/ufo-types:UfoStereotype"

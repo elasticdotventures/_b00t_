@@ -1,0 +1,29 @@
+# Relation datum: decision.model proper-subset-of typesafe.model
+# Formal assertion linking the two nomenclature concepts. Asymmetric:
+# every decision model is a typesafe model; NOT every typesafe model is a
+# decision model. Semantics align to promptexecution/ufo-types
+# (UfoRelation / OntologicalEdge); witnesses are member datums.
+
+[b00t]
+name = "decision-model-subset-of-typesafe-model"
+type = "relation"
+hint = "Formal assertion: decision.model < typesafe.model (proper subset). Witness: jev."
+
+[assert]
+notation = "decision.model \u228a typesafe.model"
+predicate = "proper_subset"
+ufo_relation = "specialization"
+subject = "nomenclature:decision.model"
+object = "nomenclature:typesafe.model"
+qualifier = "proper"
+converse_holds = false
+converse_note = "typesafe.model is NOT a subset of decision.model: chat/code models are typesafe but not decision models."
+
+[assert.provenance]
+asserted_by = "operator"
+asserted_at = "2026-10-11"
+anchor = "~/.b00t/jev-systemone.ai.toml"
+witness = "jev"
+
+[links]
+entangled_ai_models = ["jev", "jev-systemone"]
