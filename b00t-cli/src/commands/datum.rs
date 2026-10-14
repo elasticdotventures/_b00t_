@@ -2405,6 +2405,7 @@ mod tests {
     fn health_check_one_failing_gate_yields_fail_with_gate_reason() {
         let mut datum = make_health_datum("gated-cli");
         datum.gate = Some(vec![crate::GateSpec {
+            probe: None,
             command: Some("definitely-not-a-real-command-xyz".to_string()),
             file: None,
             env: None,
@@ -2445,6 +2446,7 @@ mod tests {
 
         let mut fail_datum = make_health_datum("fail-datum");
         fail_datum.gate = Some(vec![crate::GateSpec {
+            probe: None,
             command: Some("definitely-not-a-real-command-xyz".to_string()),
             file: None,
             env: None,

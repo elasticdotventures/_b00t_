@@ -2,12 +2,17 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use ufo_types::{Disposition, IsoAuditable, Satisfies, SatisfiesResult};
 
+mod probe;
+pub use probe::ProbeSpec;
+
 /// A single gate precondition — late-binding condition evaluated at install time.
 /// All fields are optional; any present field must pass for the gate to open.
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct GateSpec {
     /// Command that must exist on PATH for this gate to pass
     pub command: Option<String>,
+    /// Explicit bounded health observation, distinct from command availability.
+    pub probe: Option<ProbeSpec>,
     /// File path (supports ~) that must exist
     pub file: Option<String>,
     /// Environment variable (or .env key) that must be set to a non-empty value
@@ -133,6 +138,12 @@ impl GateSpec {
     /// instead of collapsing both into "not passed".
     fn eval_fields(&self, path: &str) -> Vec<FieldOutcome> {
         let mut outcomes = Vec::new();
+
+        if let Some(probe) = &self.probe
+            && let Some(outcome) = probe.evaluate(path)
+        {
+            outcomes.push(outcome);
+        }
 
         // Command gate: check if command exists on PATH
         if let Some(ref cmd) = self.command {
@@ -370,8 +381,7 @@ pub fn evaluate_gates(gates: &[GateSpec], path: &str) -> Vec<GateResult> {
 /// (syntax error, unknown symbol, …) — used by `eval_fields()` to reproduce
 /// today's exact legacy reason text.
 fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
-    use rhai::Engine;
-    let engine = Engine::new();
+    let engine = gate_rhai_engine();
     match engine.eval::<bool>(expr) {
         Ok(true) => (true, None),
         Ok(false) => (false, None),
@@ -385,8 +395,7 @@ fn evaluate_rhai_gate(expr: &str) -> (bool, Option<String>) {
 /// #927 bug where `evaluate_rhai_gate`'s bool-collapsing treated a rhai eval
 /// error as an outright `false` (i.e. a violation).
 fn rhai_gate_disposition(expr: &str) -> Disposition {
-    use rhai::Engine;
-    let engine = Engine::new();
+    let engine = gate_rhai_engine();
     match engine.eval::<bool>(expr) {
         Ok(true) => Disposition::Satisfied,
         Ok(false) => Disposition::Violated {
@@ -394,6 +403,14 @@ fn rhai_gate_disposition(expr: &str) -> Disposition {
         },
         Err(_) => Disposition::Unknown,
     }
+}
+
+fn gate_rhai_engine() -> rhai::Engine {
+    let mut engine = rhai::Engine::new();
+    // Old evaluators report Unknown for this call instead of ignoring a new probe field
+    // and accidentally reporting the entire baseline Satisfied.
+    engine.register_fn("probe_gates_supported", || true);
+    engine
 }
 
 /// Constraint: `path`'s datum must satisfy every gate in `gates`.

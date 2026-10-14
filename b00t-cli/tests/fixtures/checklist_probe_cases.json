@@ -1,0 +1,13 @@
+[
+  {"id":"satisfied","gate":{"probe":{"argv":["sh","-c","exit 0"],"timeout_ms":1000}},"status":"satisfied","exit_code":0},
+  {"id":"violated","gate":{"probe":{"argv":["sh","-c","exit 1"],"timeout_ms":1000}},"status":"violated","exit_code":1},
+  {"id":"unknown","gate":{"probe":{"argv":["sh","-c","exit 2"],"timeout_ms":1000}},"status":"unknown","exit_code":2},
+  {"id":"unexpected-exit","gate":{"probe":{"argv":["sh","-c","exit 17"],"timeout_ms":1000}},"status":"unknown","exit_code":2},
+  {"id":"missing-program","gate":{"probe":{"argv":["b00t-fixture-program-that-does-not-exist"],"timeout_ms":1000}},"status":"unknown","exit_code":2},
+  {"id":"timeout","gate":{"probe":{"argv":["sh","-c","exec sleep 2"],"timeout_ms":20}},"status":"unknown","exit_code":2},
+  {"id":"empty-argv","gate":{"probe":{"argv":[],"timeout_ms":1000}},"status":"unknown","exit_code":2},
+  {"id":"zero-timeout","gate":{"probe":{"argv":["sh","-c","exit 0"],"timeout_ms":0}},"status":"unknown","exit_code":2},
+  {"id":"unbounded-timeout","gate":{"probe":{"argv":["sh","-c","exit 0"],"timeout_ms":60001}},"status":"unknown","exit_code":2},
+  {"id":"violation-over-unknown","gate":{"probe":{"argv":["sh","-c","exit 2"],"timeout_ms":1000},"rhai":"false"},"status":"violated","exit_code":1},
+  {"id":"literal-arguments","gate":{"probe":{"argv":["printf","; exit 1"],"timeout_ms":1000}},"status":"satisfied","exit_code":0}
+]

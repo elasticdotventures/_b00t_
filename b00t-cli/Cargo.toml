@@ -29,6 +29,7 @@ name = "b00t_cli"
 path = "src/lib.rs"
 
 [dependencies]
+wait-timeout = "0.2.1"
 # Pinned to an exact version, matching b00t-c0re-lib's own scxml pin
 # (elasticdotventures/_b00t_#1177 P5b/P6): small bus factor (2 contributors,
 # 0.x semver). Needed directly (not just via b00t-c0re-lib) so tests here
