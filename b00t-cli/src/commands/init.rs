@@ -844,23 +844,17 @@ mod tests {
 
     #[test]
     fn rejects_bare_repo() {
-        // Create a real git repo, then set core.bare=true to trigger the guard.
+        // Construct a minimal git repo with core.bare=true without spawning git
+        // subprocesses (subprocess-based setup races with set_current_dir in
+        // concurrent tests, causing git to write .git into the wrong directory).
         let dir = tempfile::tempdir().unwrap();
-        let ok = std::process::Command::new("git")
-            .args(["init", "-q"])
-            .current_dir(dir.path())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if !ok {
-            // git not available in this test environment — skip gracefully
-            return;
-        }
-        std::process::Command::new("git")
-            .args(["config", "core.bare", "true"])
-            .current_dir(dir.path())
-            .status()
-            .unwrap();
+        let git_dir = dir.path().join(".git");
+        std::fs::create_dir_all(&git_dir).unwrap();
+        std::fs::write(
+            git_dir.join("config"),
+            "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n",
+        )
+        .unwrap();
         let result =
             handle_project_init_at(None, None, false, true, "test", Some(dir.path().to_path_buf()));
         assert!(result.is_err());
