@@ -1232,9 +1232,6 @@ mod tests {
         assert!(results.is_empty());
     }
 
-    // Serialize CWD-mutating tests within this module — set_current_dir is process-global.
-    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-
     struct RestoreCwd(std::path::PathBuf);
     impl Drop for RestoreCwd {
         fn drop(&mut self) {
@@ -1244,10 +1241,7 @@ mod tests {
 
     #[test]
     fn test_find_b00t_dir_project_local() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
+        let _guard = crate::test_env::CWD_LOCK.lock().unwrap();
         let _restore = RestoreCwd(std::env::current_dir().expect("failed to get current dir"));
         // Use a temporary project-local _b00t_ directory so the test is hermetic
         let original_cwd = std::env::current_dir().expect("failed to get current dir");

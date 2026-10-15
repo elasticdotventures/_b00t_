@@ -222,15 +222,20 @@ pub fn sweep_backup_files(root: &std::path::Path) -> usize {
 
 // ── Crate-wide test env lock ────────────────────────────────────────────
 
-/// Crate-wide lock for tests that mutate process-wide environment variables.
+/// Crate-wide locks for tests that mutate process-wide state.
 /// A per-module lock cannot prevent concurrent mutations from tests in *other*
-/// modules; this single static is the authoritative guard for all env-var
-/// manipulation across the entire `b00t_cli` test suite.
+/// modules; these statics are the authoritative guards across the entire
+/// `b00t_cli` test suite.
 #[cfg(test)]
 pub mod test_env {
     use once_cell::sync::Lazy;
     use std::sync::Mutex;
+    /// Serialize env-var mutations (`set_var` / `remove_var`).
     pub static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+    /// Serialize cwd mutations (`set_current_dir`). Held alongside ENV_LOCK
+    /// when a test mutates both, but always acquired in the order CWD → ENV
+    /// to avoid dead-lock.
+    pub static CWD_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 }
 
 #[cfg(test)]

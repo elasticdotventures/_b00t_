@@ -739,9 +739,6 @@ impl InitCommands {
 mod tests {
     use super::*;
 
-    // Serialize CWD-mutating tests — set_current_dir is process-global.
-    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-
     struct RestoreCwd(std::path::PathBuf);
     impl Drop for RestoreCwd {
         fn drop(&mut self) {
@@ -751,10 +748,7 @@ mod tests {
 
     #[test]
     fn project_init_creates_directory_and_files() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
+        let _guard = crate::test_env::CWD_LOCK.lock().unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
@@ -803,10 +797,7 @@ mod tests {
 
     #[test]
     fn env_file_contains_project_vars() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
+        let _guard = crate::test_env::CWD_LOCK.lock().unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
@@ -828,10 +819,7 @@ mod tests {
 
     #[test]
     fn rejects_non_git_directory() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
+        let _guard = crate::test_env::CWD_LOCK.lock().unwrap();
         let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
