@@ -48,6 +48,21 @@ fn handle_project_init(
             cwd.display()
         );
     }
+    // Guard: bare repo over a live working tree causes silent datum drift (#1358).
+    // core.bare=true disables git status/add/commit; repair with:
+    //   git config core.bare false
+    let git_config_path = cwd.join(".git").join("config");
+    if git_config_path.exists() {
+        let git_config = std::fs::read_to_string(&git_config_path).unwrap_or_default();
+        if git_config.contains("bare = true") {
+            anyhow::bail!(
+                "bare repo detected at {} (core.bare=true) — git status/commit are broken.\n\
+                 Repair: cd {} && git config core.bare false",
+                cwd.display(),
+                cwd.display()
+            );
+        }
+    }
     let project_name = name.unwrap_or_else(|| {
         cwd.file_name()
             .and_then(|n| n.to_str())
