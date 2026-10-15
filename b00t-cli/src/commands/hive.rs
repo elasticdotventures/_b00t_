@@ -923,9 +923,14 @@ fn block_on_nats_listen(url: &str, subject: &str, timeout_secs: u64) -> anyhow::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Serialize env var mutations across tests to prevent race conditions.
+    static NATS_URL_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn hive_resolve_nats_url_explicit_wins() {
+        let _guard = NATS_URL_LOCK.lock().unwrap();
         unsafe { std::env::remove_var("NATS_URL") };
         assert_eq!(
             hive_resolve_nats_url(Some("nats://rock-5c:4222")),
@@ -935,13 +940,16 @@ mod tests {
 
     #[test]
     fn hive_resolve_nats_url_env_fallback() {
+        let _guard = NATS_URL_LOCK.lock().unwrap();
         unsafe { std::env::set_var("NATS_URL", "nats://env-host:4222") };
-        assert_eq!(hive_resolve_nats_url(None), "nats://env-host:4222");
+        let result = hive_resolve_nats_url(None);
         unsafe { std::env::remove_var("NATS_URL") };
+        assert_eq!(result, "nats://env-host:4222");
     }
 
     #[test]
     fn hive_resolve_nats_url_default() {
+        let _guard = NATS_URL_LOCK.lock().unwrap();
         unsafe { std::env::remove_var("NATS_URL") };
         assert_eq!(hive_resolve_nats_url(None), "nats://localhost:4222");
     }
