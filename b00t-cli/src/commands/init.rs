@@ -39,7 +39,20 @@ fn handle_project_init(
     no_setup: bool,
     path: &str,
 ) -> Result<()> {
-    let cwd = std::env::current_dir().context("current dir")?;
+    handle_project_init_at(name, stack, force_setup, no_setup, path, None)
+}
+
+fn handle_project_init_at(
+    name: Option<String>,
+    stack: Option<String>,
+    force_setup: bool,
+    no_setup: bool,
+    path: &str,
+    explicit_cwd: Option<std::path::PathBuf>,
+) -> Result<()> {
+    let cwd = explicit_cwd
+        .map(Ok)
+        .unwrap_or_else(|| std::env::current_dir().context("current dir"))?;
 
     // Must be at the root of a git repo
     if !cwd.join(".git").exists() {
@@ -47,6 +60,33 @@ fn handle_project_init(
             "not a git repository root ({}). Run 'git init' first.",
             cwd.display()
         );
+    }
+    // Guard: bare repo over a live working tree causes silent datum drift (#1358).
+    // Read .git/config directly — no subprocess, so concurrent tests that mutate
+    // HOME or GIT_DIR cannot produce false positives.  Handles both `bare = true`
+    // and `bare=true` (no spaces).  Missing .git/config (hand-crafted dir) → skip.
+    let git_config_path = cwd.join(".git").join("config");
+    if let Ok(content) = std::fs::read_to_string(&git_config_path) {
+        let mut in_core = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_core = trimmed.eq_ignore_ascii_case("[core]");
+            } else if in_core {
+                if let Some(rest) = trimmed.strip_prefix("bare") {
+                    if let Some(val) = rest.trim_start().strip_prefix('=') {
+                        if val.trim().eq_ignore_ascii_case("true") {
+                            anyhow::bail!(
+                                "bare repo detected at {} (core.bare=true) — git status/commit are broken.\n\
+                                 Repair: cd {} && git config core.bare false",
+                                cwd.display(),
+                                cwd.display()
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
     let project_name = name.unwrap_or_else(|| {
         cwd.file_name()
@@ -721,32 +761,17 @@ impl InitCommands {
 mod tests {
     use super::*;
 
-    // Serialize CWD-mutating tests — set_current_dir is process-global.
-    static CWD_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-
-    struct RestoreCwd(std::path::PathBuf);
-    impl Drop for RestoreCwd {
-        fn drop(&mut self) {
-            let _ = std::env::set_current_dir(&self.0);
-        }
-    }
-
     #[test]
     fn project_init_creates_directory_and_files() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
-        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
-        handle_project_init(
+        handle_project_init_at(
             Some("test-proj".into()),
             Some("rust".into()),
             false,
             true,
             "test",
+            Some(dir.path().to_path_buf()),
         )
         .unwrap();
 
@@ -785,20 +810,15 @@ mod tests {
 
     #[test]
     fn env_file_contains_project_vars() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
-        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join(".git")).unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
-        handle_project_init(
+        handle_project_init_at(
             Some("demo".into()),
             Some("nodejs".into()),
             false,
             true,
             "test",
+            Some(dir.path().to_path_buf()),
         )
         .unwrap();
 
@@ -810,20 +830,38 @@ mod tests {
 
     #[test]
     fn rejects_non_git_directory() {
-        let _guard = CWD_LOCK
-            .get_or_init(|| std::sync::Mutex::new(()))
-            .lock()
-            .unwrap();
-        let _restore = RestoreCwd(std::env::current_dir().unwrap());
         let dir = tempfile::tempdir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
-        let result = handle_project_init(None, None, false, true, "test");
+        let result =
+            handle_project_init_at(None, None, false, true, "test", Some(dir.path().to_path_buf()));
         assert!(result.is_err());
         assert!(
             result
                 .unwrap_err()
                 .to_string()
                 .contains("not a git repository")
+        );
+    }
+
+    #[test]
+    fn rejects_bare_repo() {
+        // Construct a minimal git repo with core.bare=true without spawning git
+        // subprocesses (subprocess-based setup races with set_current_dir in
+        // concurrent tests, causing git to write .git into the wrong directory).
+        let dir = tempfile::tempdir().unwrap();
+        let git_dir = dir.path().join(".git");
+        std::fs::create_dir_all(&git_dir).unwrap();
+        std::fs::write(
+            git_dir.join("config"),
+            "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n",
+        )
+        .unwrap();
+        let result =
+            handle_project_init_at(None, None, false, true, "test", Some(dir.path().to_path_buf()));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("bare repo detected") || msg.contains("core.bare"),
+            "expected bare-repo error, got: {msg}"
         );
     }
 }
