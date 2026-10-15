@@ -62,21 +62,30 @@ fn handle_project_init_at(
         );
     }
     // Guard: bare repo over a live working tree causes silent datum drift (#1358).
-    // Use `git config --get core.bare` — the canonical, spacing/case-safe way to
-    // read the resolved value (local + global + system config layers). String-matching
-    // .git/config directly misses `bare=true` (no spaces) and hits comment lines.
-    let bare_check = std::process::Command::new("git")
-        .args(["config", "--get", "core.bare"])
-        .current_dir(&cwd)
-        .output();
-    if let Ok(out) = bare_check {
-        if String::from_utf8_lossy(&out.stdout).trim().eq_ignore_ascii_case("true") {
-            anyhow::bail!(
-                "bare repo detected at {} (core.bare=true) — git status/commit are broken.\n\
-                 Repair: cd {} && git config core.bare false",
-                cwd.display(),
-                cwd.display()
-            );
+    // Read .git/config directly — no subprocess, so concurrent tests that mutate
+    // HOME or GIT_DIR cannot produce false positives.  Handles both `bare = true`
+    // and `bare=true` (no spaces).  Missing .git/config (hand-crafted dir) → skip.
+    let git_config_path = cwd.join(".git").join("config");
+    if let Ok(content) = std::fs::read_to_string(&git_config_path) {
+        let mut in_core = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_core = trimmed.eq_ignore_ascii_case("[core]");
+            } else if in_core {
+                if let Some(rest) = trimmed.strip_prefix("bare") {
+                    if let Some(val) = rest.trim_start().strip_prefix('=') {
+                        if val.trim().eq_ignore_ascii_case("true") {
+                            anyhow::bail!(
+                                "bare repo detected at {} (core.bare=true) — git status/commit are broken.\n\
+                                 Repair: cd {} && git config core.bare false",
+                                cwd.display(),
+                                cwd.display()
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
     let project_name = name.unwrap_or_else(|| {
