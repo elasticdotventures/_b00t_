@@ -41,10 +41,17 @@ tidy-tilde:
 # across the b00t workspace root AND every independent sub-repo under
 # vendor/ (each has its own Cargo.toml/target/, not part of the root
 # [workspace] members list, so a plain workspace-root sweep would miss them).
+# Note: module recipes run in this file's directory (_b00t_/), so the script is
+# addressed via {{justfile_directory()}} (the repo root) — elasticdotventures/_b00t_#1365.
+# Runs cargo-sweep in a container (no host install); see scripts/cargo-sweep/README.md
 tidy-cargo:
     @echo "🧹 Sweeping cargo build artifacts older than 7 days (workspace + vendor sub-repos)..."
-    @cargo sweep --recursive --time 7 . 2>&1 | tail -20
+    @bash {{justfile_directory()}}/scripts/cargo-sweep/sweep.sh --days 7 --apply
     @echo "✅ Cargo sweep complete"
+
+# Same as tidy-cargo but report-only: shows what a 7-day sweep would delete.
+tidy-cargo-dry:
+    @bash {{justfile_directory()}}/scripts/cargo-sweep/sweep.sh --days 7
 
 # Full workspace tidy: branches + stashes + tilde files + cargo build cache
 tidy: tidy-branches tidy-stashes tidy-tilde tidy-cargo
