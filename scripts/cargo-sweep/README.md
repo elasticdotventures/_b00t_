@@ -1,7 +1,7 @@
 # cargo-sweep (containerised)
 
-Prunes stale Cargo build artifacts so `target/` directories stop growing without bound. On one
-developer machine a single `target/` reached 258 GB; `--days 14` would have reclaimed 216 GiB of it.
+Prunes stale Cargo build artifacts so `target/` directories stop growing without bound (Cargo never
+garbage-collects old dependency artifacts on its own).
 
 ```sh
 just chore::tidy-cargo-dry                       # dry run, 7 days  (what `just tidy` would delete)
