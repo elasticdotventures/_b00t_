@@ -1,0 +1,7 @@
+# cargo-sweep in a container. Build context is THIS directory only (never the repo root, which can hold
+# hundreds of GB of target/ output). Pin the version with --build-arg SWEEP_VERSION=...
+FROM docker.io/library/rust:1-slim-bookworm
+ARG SWEEP_VERSION=0.8.0
+RUN cargo install cargo-sweep --version "=${SWEEP_VERSION}" --locked && cargo sweep --version
+WORKDIR /work
+ENTRYPOINT ["cargo", "sweep"]
